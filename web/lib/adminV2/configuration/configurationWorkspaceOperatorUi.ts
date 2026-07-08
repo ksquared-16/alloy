@@ -14,6 +14,31 @@ export const CONFIG_WORKSPACE_ROW_EXPANDED_CLASS = "bg-alloy-bend-pine/[0.03] sh
 export const CONFIG_WORKSPACE_GHOST_ACTION_CLASS =
     "config-ghost-btn shrink-0 px-1.5 py-0.5 text-[11px] font-medium text-alloy-bend-pine opacity-0 transition-opacity group-hover:opacity-100 hover:underline";
 
+/** Compact row inner shell — ~35% tighter than legacy admin spacing. */
+export const CONFIG_WORKSPACE_ROW_INNER_CLASS = "flex items-center gap-1.5 px-2.5 py-1";
+
+export type ConfigurationUnavailableHint = {
+    label: string;
+    title?: string;
+};
+
+/**
+ * Collapsed-row availability: silence when all surfaces are available.
+ * Surfaces only the first unavailable reason for operator scanability.
+ */
+export function configurationFieldUnavailableHint(
+    rows: ReadonlyArray<{ status: "available" | "unavailable"; reason: string }>,
+): ConfigurationUnavailableHint | null {
+    const unavailable = rows.filter((r) => r.status === "unavailable");
+    if (unavailable.length === 0) return null;
+    const first = unavailable[0]!;
+    const extra = unavailable.length > 1 ? ` (+${unavailable.length - 1} more)` : "";
+    return {
+        label: first.reason,
+        title: unavailable.map((r) => r.reason).join(" · "),
+    };
+}
+
 export function configurationOwnershipChipClass(ownership: "platform" | "custom" | "computed"): string {
     const base = "shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-medium";
     switch (ownership) {

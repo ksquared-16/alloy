@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import DataModelComputedSignalsTab from "@/components/admin/fields/DataModelComputedSignalsTab";
 import DataModelEntityHeader from "@/components/admin/fields/DataModelEntityHeader";
 import DataModelFieldsTab from "@/components/admin/fields/DataModelFieldsTab";
+import type { FieldOwnershipFilter } from "@/components/admin/fields/FieldOwnershipFilterTabs";
 import DataModelOverviewTab from "@/components/admin/fields/DataModelOverviewTab";
 import DataModelRelationshipsTab from "@/components/admin/fields/DataModelRelationshipsTab";
 import DataModelWorkspaceTabs, { type DataModelWorkspaceTab } from "@/components/admin/fields/DataModelWorkspaceTabs";
@@ -35,10 +35,17 @@ function normalizeEntity(raw: string | undefined): FieldEntityKey {
 
 function normalizeTab(raw: string | undefined): DataModelWorkspaceTab {
     const t = (raw ?? "").trim().toLowerCase();
-    if (t === "relationships" || t === "fields" || t === "computed_signals" || t === "overview") {
+    if (t === "computed_signals") return "fields";
+    if (t === "relationships" || t === "fields" || t === "overview") {
         return t;
     }
     return "overview";
+}
+
+function normalizeOwnershipFilter(raw: string | undefined): FieldOwnershipFilter {
+    const t = (raw ?? "").trim().toLowerCase();
+    if (t === "platform" || t === "custom" || t === "computed" || t === "all") return t;
+    return "all";
 }
 
 function settingsFieldsBasePath(_pathname: string): string {
@@ -94,20 +101,30 @@ export default function DataModelWorkspaceClient({
         () => normalizeTab(initialTab ?? searchParams.get("tab") ?? undefined),
         [initialTab, searchParams],
     );
+    const ownershipFromUrl = useMemo(() => {
+        const tabRaw = (initialTab ?? searchParams.get("tab") ?? "").trim().toLowerCase();
+        if (tabRaw === "computed_signals") return "computed" as FieldOwnershipFilter;
+        return normalizeOwnershipFilter(searchParams.get("ownership") ?? undefined);
+    }, [initialTab, searchParams]);
     const [totalFieldsByEntity, setTotalFieldsByEntity] = useState<Partial<Record<FieldEntityKey, number>>>({});
     const [catalogEntries, setCatalogEntries] = useState<SettingsFieldCatalogEntry[]>([]);
     const [createFieldSignal, setCreateFieldSignal] = useState(0);
     const [creatingRelationship, setCreatingRelationship] = useState(false);
     const [focusFieldRefKey, setFocusFieldRefKey] = useState<string | null>(null);
+    const [fieldsOwnershipFilter, setFieldsOwnershipFilter] = useState<FieldOwnershipFilter>(ownershipFromUrl);
 
     const entityLabel = useMemo(() => adminFieldEntitySingularLabel(labels, entity), [labels, entity]);
     const primaryEntityType = entity === "inquiry_child" ? "customer_member" : entity;
 
     const replaceWorkspaceUrl = useCallback(
-        (nextEntity: FieldEntityKey, nextTab: DataModelWorkspaceTab) => {
-            router.replace(
-                `${settingsFieldsBasePath(pathname)}?entity=${encodeURIComponent(nextEntity)}&tab=${encodeURIComponent(nextTab)}`,
-            );
+        (nextEntity: FieldEntityKey, nextTab: DataModelWorkspaceTab, ownership?: FieldOwnershipFilter) => {
+            const params = new URLSearchParams();
+            params.set("entity", nextEntity);
+            params.set("tab", nextTab);
+            if (ownership && ownership !== "all" && nextTab === "fields") {
+                params.set("ownership", ownership);
+            }
+            router.replace(`${settingsFieldsBasePath(pathname)}?${params.toString()}`);
         },
         [router, pathname],
     );
@@ -116,6 +133,10 @@ export default function DataModelWorkspaceClient({
         setFocusFieldRefKey(null);
         setCreatingRelationship(false);
     }, [entity, tab]);
+
+    useEffect(() => {
+        setFieldsOwnershipFilter(ownershipFromUrl);
+    }, [ownershipFromUrl, entity]);
 
     useEffect(() => {
         let cancelled = false;
@@ -158,19 +179,25 @@ export default function DataModelWorkspaceClient({
     const stats = useMemo(() => dataModelStatsForEntity(entity, catalogEntries), [entity, catalogEntries]);
 
     const onEntityChange = useCallback(
-        (next: FieldEntityKey) => replaceWorkspaceUrl(next, tab),
-        [replaceWorkspaceUrl, tab],
+        (next: FieldEntityKey) => replaceWorkspaceUrl(next, tab, tab === "fields" ? fieldsOwnershipFilter : undefined),
+        [replaceWorkspaceUrl, tab, fieldsOwnershipFilter],
     );
 
     const onTabChange = useCallback(
-        (next: DataModelWorkspaceTab) => replaceWorkspaceUrl(entity, next),
-        [replaceWorkspaceUrl, entity],
+        (next: DataModelWorkspaceTab, ownership?: FieldOwnershipFilter) => {
+            const nextOwnership = ownership ?? (next === "fields" ? fieldsOwnershipFilter : "all");
+            if (next !== "fields") setFieldsOwnershipFilter("all");
+            else if (ownership) setFieldsOwnershipFilter(ownership);
+            replaceWorkspaceUrl(entity, next, nextOwnership);
+        },
+        [replaceWorkspaceUrl, entity, fieldsOwnershipFilter],
     );
 
     const triggerAddField = () => {
         setCreateFieldSignal((n) => n + 1);
         setFocusFieldRefKey(null);
-        onTabChange("fields");
+        setFieldsOwnershipFilter("all");
+        onTabChange("fields", "all");
     };
 
     const triggerAddRelationship = () => {
@@ -180,11 +207,15 @@ export default function DataModelWorkspaceClient({
 
     const openFieldInline = (entry: SettingsFieldCatalogEntry) => {
         setFocusFieldRefKey(entry.refKey);
-        if (entry.ownership === "computed") {
-            onTabChange("computed_signals");
-        } else {
-            onTabChange("fields");
-        }
+        const ownership = entry.ownership === "computed" ? "computed" : "all";
+        setFieldsOwnershipFilter(ownership);
+        onTabChange("fields", ownership);
+    };
+
+    const viewComputedFields = () => {
+        setFocusFieldRefKey(null);
+        setFieldsOwnershipFilter("computed");
+        onTabChange("fields", "computed");
     };
 
     return (
@@ -207,15 +238,15 @@ export default function DataModelWorkspaceClient({
                         onAddRelationship={triggerAddRelationship}
                     />
 
-                    <DataModelWorkspaceTabs activeTab={tab} onSelect={onTabChange} />
+                    <DataModelWorkspaceTabs activeTab={tab} onSelect={(next) => onTabChange(next)} />
 
                     {tab === "overview" ? (
                         <DataModelOverviewTab
                             hubEntity={entity}
                             entries={catalogEntries}
-                            onViewAllFields={() => onTabChange("fields")}
+                            onViewAllFields={() => onTabChange("fields", "all")}
                             onViewAllRelationships={() => onTabChange("relationships")}
-                            onViewAllComputed={() => onTabChange("computed_signals")}
+                            onViewComputedFields={viewComputedFields}
                             onAddField={triggerAddField}
                             onAddRelationship={triggerAddRelationship}
                             onSelectField={openFieldInline}
@@ -237,15 +268,12 @@ export default function DataModelWorkspaceClient({
                             primaryEntityType={primaryEntityType}
                             createSignal={createFieldSignal}
                             focusRefKey={focusFieldRefKey}
+                            initialOwnershipFilter={fieldsOwnershipFilter}
+                            onOwnershipFilterChange={(next) => {
+                                setFieldsOwnershipFilter(next);
+                                replaceWorkspaceUrl(entity, "fields", next);
+                            }}
                             onCatalogChange={setCatalogEntries}
-                        />
-                    ) : null}
-
-                    {tab === "computed_signals" ? (
-                        <DataModelComputedSignalsTab
-                            hubEntity={entity}
-                            entries={catalogEntries}
-                            focusRefKey={focusFieldRefKey}
                         />
                     ) : null}
                 </div>

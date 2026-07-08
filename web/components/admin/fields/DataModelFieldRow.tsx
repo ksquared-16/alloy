@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
+import ConfigurationAdvancedToggle from "@/components/adminV2/configuration/ConfigurationAdvancedToggle";
 import ConfigurationStatusToggle from "@/components/adminV2/configuration/ConfigurationStatusToggle";
 import FieldSurfaceAvailabilityBadges from "@/components/admin/fields/FieldSurfaceAvailabilityBadges";
+import { configurationFieldUnavailableHint } from "@/lib/adminV2/configuration/configurationWorkspaceOperatorUi";
+import { CONFIG_WORKSPACE_ROW_INNER_CLASS } from "@/lib/adminV2/configuration/configurationWorkspaceOperatorUi";
 import { FIELD_OWNERSHIP_LABELS } from "@/lib/fields/fieldOwnership";
 import { resolveSettingsCatalogEntryAvailability } from "@/lib/fields/fieldSurfaceAvailability";
 import type { SettingsFieldCatalogEntry, SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
@@ -74,9 +77,13 @@ export default function DataModelFieldRow({
     const editable = canMutate && entry.ownership === "custom" && Boolean(entry.fieldDef) && entry.configurable;
     const active = entry.fieldDef ? entry.fieldDef.is_active !== false : true;
     const [draft, setDraft] = useState<FieldInlineEditValues>(() => valuesFromEntry(entry));
+    const [advancedOpen, setAdvancedOpen] = useState(false);
 
     useEffect(() => {
-        if (expanded) setDraft(valuesFromEntry(entry));
+        if (expanded) {
+            setDraft(valuesFromEntry(entry));
+            setAdvancedOpen(false);
+        }
     }, [expanded, entry]);
 
     const availability = resolveSettingsCatalogEntryAvailability({
@@ -100,7 +107,8 @@ export default function DataModelFieldRow({
             : undefined,
     });
 
-    const availableCount = availability.filter((r) => r.status === "available").length;
+    const unavailableHint = configurationFieldUnavailableHint(availability);
+    const internalKey = entry.fieldDef?.field_key ?? entry.refKey;
 
     return (
         <div
@@ -110,12 +118,12 @@ export default function DataModelFieldRow({
             data-expanded={expanded ? "true" : "false"}
             data-ownership={entry.ownership}
         >
-            <div className="flex items-center gap-2 px-2.5 py-2">
+            <div className={CONFIG_WORKSPACE_ROW_INNER_CLASS}>
                 <span className="shrink-0" aria-hidden title={active ? "Active" : "Hidden"}>
                     {active ? (
-                        <Check size={14} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" />
+                        <Check size={13} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" />
                     ) : (
-                        <Circle size={14} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-midnight/25" />
+                        <Circle size={13} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-midnight/25" />
                     )}
                 </span>
                 <TypeIcon fieldType={entry.field_type} />
@@ -136,20 +144,19 @@ export default function DataModelFieldRow({
                 {!active ? (
                     <span className="shrink-0 text-[10px] font-medium text-alloy-midnight/35">Hidden</span>
                 ) : null}
-                <span
-                    className="hidden shrink-0 rounded-md bg-alloy-stone/[0.45] px-1.5 py-0.5 text-[9px] font-medium text-alloy-midnight/45 sm:inline"
-                    title="Surfaces currently available"
-                    data-testid="data-model-field-availability-hint"
-                >
-                    {availableCount} avail
-                </span>
+                {unavailableHint ? (
+                    <span
+                        className="hidden max-w-[9rem] shrink-0 truncate text-[10px] font-medium text-alloy-midnight/45 sm:inline"
+                        title={unavailableHint.title}
+                        data-testid="data-model-field-unavailable-hint"
+                    >
+                        Unavailable · {unavailableHint.label}
+                    </span>
+                ) : null}
                 <button
                     type="button"
                     onClick={expanded ? onCollapse : onExpand}
-                    className={[
-                        CONFIG_WORKSPACE_GHOST_ACTION_CLASS,
-                        expanded ? "opacity-100" : "",
-                    ].join(" ")}
+                    className={[CONFIG_WORKSPACE_GHOST_ACTION_CLASS, expanded ? "opacity-100" : ""].join(" ")}
                     data-testid="data-model-field-edit"
                 >
                     {expanded ? "Close" : editable ? "Edit" : "View"}
@@ -157,12 +164,12 @@ export default function DataModelFieldRow({
             </div>
 
             {expanded ? (
-                <div className="space-y-3 border-t border-alloy-forge/8 px-3 pb-3 pt-2.5" data-testid="data-model-field-editor">
+                <div className="space-y-2 border-t border-alloy-forge/8 px-3 pb-2.5 pt-2" data-testid="data-model-field-editor">
                     {editable ? (
-                        <div className="grid gap-2.5 sm:grid-cols-2">
-                            <label className="block space-y-1 sm:col-span-2">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="block space-y-0.5 sm:col-span-2">
                                 <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                                    Label
+                                    Field name
                                 </span>
                                 <input
                                     value={draft.label}
@@ -171,7 +178,7 @@ export default function DataModelFieldRow({
                                     data-testid="inline-field-label"
                                 />
                             </label>
-                            <label className="block space-y-1">
+                            <label className="block space-y-0.5">
                                 <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
                                     Category
                                 </span>
@@ -191,7 +198,7 @@ export default function DataModelFieldRow({
                                     ))}
                                 </select>
                             </label>
-                            <label className="block space-y-1">
+                            <label className="block space-y-0.5">
                                 <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
                                     Help text
                                 </span>
@@ -203,7 +210,7 @@ export default function DataModelFieldRow({
                                     placeholder="Shown when staff edit records"
                                 />
                             </label>
-                            <label className="block space-y-1 sm:col-span-2">
+                            <label className="block space-y-0.5 sm:col-span-2">
                                 <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
                                     Description
                                 </span>
@@ -221,9 +228,28 @@ export default function DataModelFieldRow({
                                     onChange={(is_active) => setDraft((d) => ({ ...d, is_active }))}
                                 />
                             </div>
+                            <div className="sm:col-span-2">
+                                <ConfigurationAdvancedToggle
+                                    open={advancedOpen}
+                                    onToggle={() => setAdvancedOpen((o) => !o)}
+                                />
+                                {advancedOpen ? (
+                                    <div className="mt-1.5 space-y-1">
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                            Internal key
+                                        </span>
+                                        <p
+                                            className="rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.2] px-2 py-1 font-mono text-[11px] text-alloy-midnight/55"
+                                            data-testid="inline-field-key"
+                                        >
+                                            {internalKey}
+                                        </p>
+                                    </div>
+                                ) : null}
+                            </div>
                         </div>
                     ) : (
-                        <div className="space-y-1.5 text-[12px] text-alloy-midnight/60">
+                        <div className="space-y-1 text-[12px] text-alloy-midnight/60">
                             <p>
                                 <span className="font-medium text-alloy-midnight/75">Type:</span>{" "}
                                 {fieldTypeOperatorLabel(entry.field_type)}
@@ -232,22 +258,33 @@ export default function DataModelFieldRow({
                             {entry.ownership === "platform" || entry.ownership === "computed" ? (
                                 <p className="text-[11px] text-alloy-midnight/45">
                                     {entry.ownership === "computed"
-                                        ? "Computed signals are platform-defined and view-only."
+                                        ? "Computed fields are platform-defined and view-only."
                                         : "Platform fields describe your organization’s model. Placement is configured in Surface Builder."}
                                 </p>
+                            ) : null}
+                            <ConfigurationAdvancedToggle
+                                open={advancedOpen}
+                                onToggle={() => setAdvancedOpen((o) => !o)}
+                            />
+                            {advancedOpen ? (
+                                <div className="mt-1.5">
+                                    <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                        Internal key
+                                    </span>
+                                    <p className="mt-0.5 font-mono text-[11px] text-alloy-midnight/50">{internalKey}</p>
+                                </div>
                             ) : null}
                         </div>
                     )}
 
-                    <div>
-                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                            Availability
-                        </p>
-                        <p className="mb-1.5 text-[11px] text-alloy-midnight/45">
-                            Derived from the field platform — not configured here.
-                        </p>
-                        <FieldSurfaceAvailabilityBadges rows={availability} compact />
-                    </div>
+                    {unavailableHint ? (
+                        <div>
+                            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                Availability
+                            </p>
+                            <FieldSurfaceAvailabilityBadges rows={availability} unavailableOnly />
+                        </div>
+                    ) : null}
 
                     {error ? (
                         <p className="text-xs text-alloy-ember" data-testid="inline-field-error">

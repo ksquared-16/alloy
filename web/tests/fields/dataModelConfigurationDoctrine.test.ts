@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { categoryDisplayLabel } from "@/lib/fields/fieldCatalogForSettings";
+import {
+    buildConfigurationCategoryOptions,
+    resolveConfigurationCategoryLabel,
+} from "@/lib/adminV2/configuration/configurationCategoryCatalog";
 import { platformRelationshipsForHubEntity } from "@/lib/fields/entityRelationshipCatalog";
 import { fieldTypeOperatorLabel } from "@/lib/fields/dataModelWorkspaceOperatorUi";
 
@@ -14,31 +18,62 @@ describe("Configuration workspace doctrine", () => {
         const doc = readFileSync(resolve(root, "../docs/doctrine/configuration-workspace-doctrine.md"), "utf8");
         expect(doc).toContain("canonical reference");
         expect(doc).toContain("Data Model");
+        expect(doc).toContain("Overview summarizes");
+        expect(doc).toContain("Tabs edit");
+        expect(doc).toContain("Business concepts first");
+        expect(doc).toContain("configurable organizational primitives");
+        expect(doc).toContain("Forms");
+        expect(doc).toContain("Surface Builder");
         expect(doc).toContain("Categories");
         expect(doc).toContain("Active");
         expect(doc).toContain("Hidden");
     });
 
-    it("field create hides implementation key by default", () => {
+    it("computed fields live under Fields tab — no Computed Signals tab", () => {
+        const tabs = readFileSync(resolve(root, "components/admin/fields/DataModelWorkspaceTabs.tsx"), "utf8");
+        const client = readFileSync(resolve(root, "app/adminV2/settings/fields/DataModelWorkspaceClient.tsx"), "utf8");
+        expect(tabs).not.toContain("computed_signals");
+        expect(tabs).not.toContain("Computed Signals");
+        expect(client).not.toContain("DataModelComputedSignalsTab");
+        expect(client).toContain("initialOwnershipFilter");
+    });
+
+    it("categories merge org registry with platform seeds", () => {
+        const options = buildConfigurationCategoryOptions(
+            [{ section_key: "licensing", label: "Site Licensing", sort_order: 5 }],
+            ["identity"],
+        );
+        expect(options.some((o) => o.value === "licensing")).toBe(true);
+        expect(options.some((o) => o.value === "identity")).toBe(true);
+        expect(
+            resolveConfigurationCategoryLabel("licensing", [
+                { section_key: "licensing", label: "Site Licensing", sort_order: 5 },
+            ]),
+        ).toBe("Site Licensing");
+    });
+
+    it("field create stays business-first with no Advanced disclosure", () => {
         const create = readFileSync(resolve(root, "components/admin/fields/DataModelFieldCreateRow.tsx"), "utf8");
-        expect(create).toContain("ConfigurationAdvancedToggle");
-        expect(create).toContain("inline-create-key");
-        expect(create).toContain("Internal key");
-        expect(create.split('data-testid="inline-create-key"')[1] ?? "").not.toContain("autoFocus");
+        expect(create).not.toContain("ConfigurationAdvancedToggle");
+        expect(create).not.toContain("inline-create-key");
+        expect(create).toContain("Field name");
         expect(create).toContain("Category");
         expect(create).not.toContain(">Section<");
         expect(create).toContain("ConfigurationStatusToggle");
         expect(create).not.toContain("is_visible_in_form");
     });
 
-    it("field edit uses Category + Status, not visibility checkboxes", () => {
+    it("field edit exposes Advanced + internal key only when editing", () => {
         const row = readFileSync(resolve(root, "components/admin/fields/DataModelFieldRow.tsx"), "utf8");
         expect(row).toContain("inline-field-category");
         expect(row).toContain("ConfigurationStatusToggle");
+        expect(row).toContain("ConfigurationAdvancedToggle");
+        expect(row).toContain("inline-field-key");
+        expect(row).not.toContain("data-model-field-availability-hint");
+        expect(row).toContain("data-model-field-unavailable-hint");
         expect(row).not.toContain('["is_required", "Required"]');
         expect(row).not.toContain('["is_visible_in_form", "Forms"]');
-        expect(row).toContain("Derived from the field platform");
-        expect(row).toContain("CONFIG_WORKSPACE_ROW_CLASS");
+        expect(row).toContain("CONFIG_WORKSPACE_ROW_INNER_CLASS");
         expect(
             readFileSync(
                 resolve(root, "lib/adminV2/configuration/configurationWorkspaceOperatorUi.ts"),

@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
+import ConfigurationCategoryCreateRow from "@/components/adminV2/configuration/ConfigurationCategoryCreateRow";
 import ConfigurationCategoryHeader from "@/components/adminV2/configuration/ConfigurationCategoryHeader";
+import {
+    buildConfigurationCategoryOptions,
+    resolveConfigurationCategoryLabel,
+} from "@/lib/adminV2/configuration/configurationCategoryCatalog";
 import DataModelFieldCreateRow, {
     type FieldInlineCreateValues,
 } from "@/components/admin/fields/DataModelFieldCreateRow";
@@ -11,13 +16,9 @@ import FieldOwnershipFilterTabs, {
     type FieldOwnershipFilter,
 } from "@/components/admin/fields/FieldOwnershipFilterTabs";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import {
-    fetchFieldSectionRegistry,
-    mergeFieldSectionSelectOptions,
-} from "@/lib/admin/fieldSectionSelectOptions";
+import { fetchFieldSectionRegistry, type FieldSectionRegistryRow } from "@/lib/admin/fieldSectionSelectOptions";
 import {
     buildSettingsFieldCatalogEntries,
-    categoryDisplayLabel,
     countFieldsByOwnership,
     filterCatalogByOwnership,
     groupCatalogEntriesBySection,
@@ -63,6 +64,8 @@ type Props = {
     primaryEntityType: string;
     createSignal?: number;
     focusRefKey?: string | null;
+    initialOwnershipFilter?: FieldOwnershipFilter;
+    onOwnershipFilterChange?: (filter: FieldOwnershipFilter) => void;
     onCatalogChange?: (entries: SettingsFieldCatalogEntry[]) => void;
 };
 
@@ -71,20 +74,29 @@ export default function DataModelFieldsTab({
     primaryEntityType,
     createSignal = 0,
     focusRefKey = null,
+    initialOwnershipFilter = "all",
+    onOwnershipFilterChange,
     onCatalogChange,
 }: Props) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<FieldDef[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [ownershipFilter, setOwnershipFilter] = useState<FieldOwnershipFilter>("all");
+    const [ownershipFilter, setOwnershipFilter] = useState<FieldOwnershipFilter>(initialOwnershipFilter);
     const [expandedRefKey, setExpandedRefKey] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
+    const [creatingCategory, setCreatingCategory] = useState(false);
+    const [categoryRegistry, setCategoryRegistry] = useState<FieldSectionRegistryRow[]>([]);
     const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
+    const [categoryCreateError, setCategoryCreateError] = useState<string | null>(null);
     const [rowSaving, setRowSaving] = useState(false);
     const [rowError, setRowError] = useState<string | null>(null);
     const [createSaving, setCreateSaving] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setOwnershipFilter(initialOwnershipFilter);
+    }, [initialOwnershipFilter, hubEntity]);
 
     const fetchItems = useCallback(async () => {
         setLoading(true);
@@ -119,17 +131,22 @@ export default function DataModelFieldsTab({
                 items.map((i) => i.section_key).filter((k): k is string => typeof k === "string" && k.trim().length > 0),
             );
             if (!cancelled) {
-                setCategoryOptions(
-                    mergeFieldSectionSelectOptions(registry, inUse).map((opt) => ({
-                        value: opt.value,
-                        label: categoryDisplayLabel(opt.value),
-                    })),
-                );
+                setCategoryRegistry(registry);
+                setCategoryOptions(buildConfigurationCategoryOptions(registry, inUse));
             }
         })();
         return () => {
             cancelled = true;
         };
+    }, [primaryEntityType, items]);
+
+    const refreshCategories = useCallback(async () => {
+        const registry = await fetchFieldSectionRegistry(primaryEntityType);
+        const inUse = new Set(
+            items.map((i) => i.section_key).filter((k): k is string => typeof k === "string" && k.trim().length > 0),
+        );
+        setCategoryRegistry(registry);
+        setCategoryOptions(buildConfigurationCategoryOptions(registry, inUse));
     }, [primaryEntityType, items]);
 
     useEffect(() => {
@@ -270,11 +287,14 @@ export default function DataModelFieldsTab({
     };
 
     return (
-        <div className="min-w-0 space-y-3" data-testid="data-model-fields-tab">
+        <div className="min-w-0 space-y-2.5" data-testid="data-model-fields-tab">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <FieldOwnershipFilterTabs
                     value={ownershipFilter}
-                    onChange={setOwnershipFilter}
+                    onChange={(next) => {
+                        setOwnershipFilter(next);
+                        onOwnershipFilterChange?.(next);
+                    }}
                     counts={{
                         all: allCounts.total,
                         platform: allCounts.platform,
@@ -282,20 +302,52 @@ export default function DataModelFieldsTab({
                         computed: allCounts.computed,
                     }}
                 />
-                {canMutate ? (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setCreating(true);
-                            setExpandedRefKey(null);
-                        }}
-                        className="config-primary-btn rounded-lg bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-bend-pine/90"
-                        data-testid="fields-tab-add-field"
-                    >
-                        Add Field
-                    </button>
-                ) : null}
+                <div className="flex flex-wrap items-center gap-1.5">
+                    {canMutate ? (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCreatingCategory((o) => !o);
+                                setCategoryCreateError(null);
+                            }}
+                            className="config-secondary-btn rounded-lg border border-alloy-forge/12 px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/[0.35]"
+                            data-testid="fields-tab-add-category"
+                        >
+                            {creatingCategory ? "Cancel category" : "Add category"}
+                        </button>
+                    ) : null}
+                    {canMutate ? (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCreating(true);
+                                setExpandedRefKey(null);
+                            }}
+                            className="config-primary-btn rounded-lg bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-bend-pine/90"
+                            data-testid="fields-tab-add-field"
+                        >
+                            Add Field
+                        </button>
+                    ) : null}
+                </div>
             </div>
+
+            <ConfigurationCategoryCreateRow
+                entityType={primaryEntityType}
+                open={creatingCategory}
+                canMutate={canMutate}
+                error={categoryCreateError}
+                onCancel={() => {
+                    setCreatingCategory(false);
+                    setCategoryCreateError(null);
+                }}
+                onCreated={async () => {
+                    setCreatingCategory(false);
+                    setCategoryCreateError(null);
+                    await refreshCategories();
+                }}
+                onError={setCategoryCreateError}
+            />
 
             {loadError ? <p className="text-xs text-alloy-ember">{loadError}</p> : null}
             {loading ? <p className="text-[12px] text-alloy-midnight/45">Loading fields…</p> : null}
@@ -317,11 +369,11 @@ export default function DataModelFieldsTab({
                 <p className="text-[12px] text-alloy-midnight/55">No fields match this filter.</p>
             ) : null}
 
-            <div className="space-y-4">
+            <div className="space-y-3">
                 {sectionKeys.map((sectionKey) => {
                     const sectionEntries = groups.get(sectionKey) ?? [];
                     if (sectionEntries.length === 0) return null;
-                    const label = categoryDisplayLabel(sectionKey);
+                    const label = resolveConfigurationCategoryLabel(sectionKey, categoryRegistry);
                     return (
                         <section key={sectionKey} data-testid={`field-category-group-${sectionKey}`}>
                             <ConfigurationCategoryHeader label={label} testId={`field-category-${sectionKey}`} />
