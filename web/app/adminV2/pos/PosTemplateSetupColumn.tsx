@@ -399,10 +399,13 @@ export default function PosTemplateSetupColumn({
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-white">
-            <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-3 py-1.5">
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <ProcessingWorkflowStepper active={created ? "edit" : phase === "generate" ? "generate" : "review"} />
-                    <p className="min-w-0 truncate text-[10px] text-alloy-midnight/45">
+            <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-2 py-1">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                    <ProcessingWorkflowStepper
+                        compact
+                        active={created ? "edit" : phase === "generate" ? "generate" : "review"}
+                    />
+                    <p className="min-w-0 truncate text-[9px] text-alloy-midnight/45">
                         <span className="font-medium text-alloy-midnight/70">{docTitle}</span>
                         <span aria-hidden> · </span>
                         {detectionModeLabel(draft)}
@@ -483,7 +486,7 @@ export default function PosTemplateSetupColumn({
                         </div>
                     }
                 >
-                    <div className="min-h-0 flex-1 overflow-y-auto bg-alloy-stone/[0.02] p-2">
+                    <div className="min-h-0 flex-1 overflow-y-auto bg-alloy-stone/[0.02] p-1">
                         <div className="h-full min-h-0">
                         {leftView === "highlights" ? (
                             hasRegions ? (

@@ -63,6 +63,32 @@ export function entityCategorySeeds(hubEntity: SettingsHubEntityKey | string): r
     return ENTITY_CATEGORY_SEEDS[hubEntity as SettingsHubEntityKey] ?? FALLBACK_SEEDS;
 }
 
+/** Seed keys owned by other hub entities but not the current one — never selectable here. */
+export function unrelatedEntityCategoryKeys(hubEntity: SettingsHubEntityKey | string): Set<string> {
+    const allowed = new Set(entityCategorySeeds(hubEntity).map((s) => s.key));
+    const unrelated = new Set<string>();
+    for (const [entity, seeds] of Object.entries(ENTITY_CATEGORY_SEEDS)) {
+        if (entity === hubEntity) continue;
+        for (const seed of seeds) {
+            if (!allowed.has(seed.key)) unrelated.add(seed.key);
+        }
+    }
+    return unrelated;
+}
+
+function isSelectableCategoryKey(
+    hubEntity: SettingsHubEntityKey | string,
+    categoryKey: string,
+    archived: Set<string>,
+    unrelated: Set<string>,
+): boolean {
+    const key = categoryKey.trim();
+    if (!key) return false;
+    if (archived.has(key)) return false;
+    if (unrelated.has(key)) return false;
+    return true;
+}
+
 const SEED_LABEL_BY_ENTITY = new Map<string, Map<string, string>>();
 for (const [entity, seeds] of Object.entries(ENTITY_CATEGORY_SEEDS)) {
     SEED_LABEL_BY_ENTITY.set(entity, new Map(seeds.map((s) => [s.key, s.label])));
@@ -137,13 +163,15 @@ export function buildConfigurationCategoryOptions(
     const seen = new Set<string>();
     const out: ConfigurationCategoryOption[] = [];
     const archived = archivedCategoryKeys(registry);
+    const unrelated = unrelatedEntityCategoryKeys(hubEntity);
 
-    const activeRegistry = registry.filter((r) => !r.is_archived);
+    const activeRegistry = registry.filter((r) => r.is_archived !== true);
     const regSorted = [...activeRegistry].sort(
         (a, b) => a.sort_order - b.sort_order || a.section_key.localeCompare(b.section_key),
     );
     for (const row of regSorted) {
         if (!row.section_key || seen.has(row.section_key)) continue;
+        if (!isSelectableCategoryKey(hubEntity, row.section_key, archived, unrelated)) continue;
         seen.add(row.section_key);
         out.push({
             value: row.section_key,
@@ -153,22 +181,34 @@ export function buildConfigurationCategoryOptions(
 
     const seeds = [...entityCategorySeeds(hubEntity)].sort((a, b) => a.sort_order - b.sort_order);
     for (const seed of seeds) {
-        if (seen.has(seed.key)) continue;
+        if (seen.has(seed.key) || !isSelectableCategoryKey(hubEntity, seed.key, archived, unrelated)) continue;
         seen.add(seed.key);
         out.push({ value: seed.key, label: seed.label });
     }
 
     for (const raw of [...inUseCategoryKeys].map((k) => String(k).trim()).filter(Boolean).sort()) {
-        if (seen.has(raw) || archived.has(raw)) continue;
+        if (seen.has(raw) || !isSelectableCategoryKey(hubEntity, raw, archived, unrelated)) continue;
         seen.add(raw);
         out.push({ value: raw, label: platformCategoryLabel(raw, hubEntity) });
     }
 
-    if (includeSyntheticCustom && !seen.has("custom")) {
+    if (includeSyntheticCustom && !seen.has("custom") && isSelectableCategoryKey(hubEntity, "custom", archived, unrelated)) {
         out.push({ value: "custom", label: "Custom" });
     }
 
     return out;
+}
+
+/**
+ * Active category picker options for Add/Edit Field — active org registry + entity seeds only.
+ * Never includes archived categories or legacy in-use keys.
+ */
+export function buildActiveConfigurationCategoryPickerOptions(
+    hubEntity: SettingsHubEntityKey | string,
+    registry: readonly FieldSectionRegistryRow[],
+    options?: { includeSyntheticCustom?: boolean },
+): ConfigurationCategoryOption[] {
+    return buildConfigurationCategoryOptions(hubEntity, registry, [], options);
 }
 
 /** Sort category group keys for an entity's field list. */

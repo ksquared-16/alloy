@@ -22,8 +22,8 @@ export default function ProcessingParentPanel({
             data-processing-parent-panel={title.toLowerCase().replace(/\s+/g, "-")}
             data-testid={testId}
         >
-            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/12 px-2.5 py-1.5">
-                <h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">{title}</h2>
+            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/12 px-2 py-1">
+                <h2 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">{title}</h2>
                 {headerAction}
             </header>
             <div className="min-h-0 flex-1 overflow-hidden">{children}</div>

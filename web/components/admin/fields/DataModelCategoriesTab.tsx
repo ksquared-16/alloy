@@ -110,8 +110,13 @@ export default function DataModelCategoriesTab({
     }, [createSignal]);
 
     const visibleCategories = useMemo(
-        () => (showArchived ? categories : categories.filter((c) => !c.is_archived)),
-        [categories, showArchived],
+        () =>
+            categories.filter((c) => {
+                if (!c.is_archived) return true;
+                if (!showArchived) return false;
+                return (fieldCounts.get(c.section_key) ?? 0) > 0;
+            }),
+        [categories, showArchived, fieldCounts],
     );
 
     const rowModels: ConfigurationCategoryRowModel[] = useMemo(

@@ -5,7 +5,7 @@ import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 import ConfigurationCategoryHeader from "@/components/adminV2/configuration/ConfigurationCategoryHeader";
 import {
     archivedCategoryKeys,
-    buildConfigurationCategoryOptions,
+    buildActiveConfigurationCategoryPickerOptions,
     orderedEntityCategoryKeys,
     resolveConfigurationCategoryLabel,
 } from "@/lib/adminV2/configuration/configurationCategoryCatalog";
@@ -87,7 +87,6 @@ export default function DataModelFieldsTab({
     const [expandedRefKey, setExpandedRefKey] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
     const [categoryRegistry, setCategoryRegistry] = useState<FieldSectionRegistryRow[]>([]);
-    const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
     const [rowSaving, setRowSaving] = useState(false);
     const [rowError, setRowError] = useState<string | null>(null);
     const [createSaving, setCreateSaving] = useState(false);
@@ -126,18 +125,19 @@ export default function DataModelFieldsTab({
         let cancelled = false;
         (async () => {
             const registry = await fetchFieldSectionRegistry(primaryEntityType);
-            const inUse = new Set(
-                items.map((i) => i.section_key).filter((k): k is string => typeof k === "string" && k.trim().length > 0),
-            );
             if (!cancelled) {
                 setCategoryRegistry(registry);
-                setCategoryOptions(buildConfigurationCategoryOptions(hubEntity, registry, inUse));
             }
         })();
         return () => {
             cancelled = true;
         };
-    }, [hubEntity, primaryEntityType, items]);
+    }, [primaryEntityType]);
+
+    const activeCategoryOptions = useMemo(
+        () => buildActiveConfigurationCategoryPickerOptions(hubEntity, categoryRegistry),
+        [hubEntity, categoryRegistry],
+    );
 
     useEffect(() => {
         if (createSignal > 0) {
@@ -184,8 +184,13 @@ export default function DataModelFieldsTab({
     const allCounts = countFieldsByOwnership(entries);
     const filtered = filterCatalogByOwnership(entries, ownershipFilter);
     const groups = groupCatalogEntriesBySection(filtered);
-    const sectionKeys = orderedEntityCategoryKeys(hubEntity, groups.keys(), categoryRegistry);
     const archivedKeys = archivedCategoryKeys(categoryRegistry);
+    const sectionKeys = orderedEntityCategoryKeys(hubEntity, groups.keys(), categoryRegistry).filter((sectionKey) => {
+        const sectionEntries = groups.get(sectionKey) ?? [];
+        if (sectionEntries.length === 0) return false;
+        if (archivedKeys.has(sectionKey)) return sectionEntries.length > 0;
+        return true;
+    });
 
     const saveEdit = async (entry: SettingsFieldCatalogEntry, values: FieldInlineEditValues) => {
         if (!entry.fieldDef || !canMutate) return;
@@ -205,6 +210,8 @@ export default function DataModelFieldsTab({
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+            const updated = toFieldDef(json as Record<string, unknown>);
+            setItems((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
             setExpandedRefKey(null);
             await fetchItems();
         } catch (e) {
@@ -314,7 +321,7 @@ export default function DataModelFieldsTab({
             <div className={CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS}>
                 <DataModelFieldCreateRow
                     open={creating}
-                    categoryOptions={categoryOptions}
+                    activeCategoryOptions={activeCategoryOptions}
                     saving={createSaving}
                     error={createError}
                     canMutate={canMutate}
@@ -364,7 +371,7 @@ export default function DataModelFieldsTab({
                                             setRowError(null);
                                         }}
                                         canMutate={canMutate}
-                                        categoryOptions={categoryOptions}
+                                        activeCategoryOptions={activeCategoryOptions}
                                         saving={rowSaving && expandedRefKey === entry.refKey}
                                         error={expandedRefKey === entry.refKey ? rowError : null}
                                         onSave={(values) => saveEdit(entry, values)}
