@@ -184,13 +184,13 @@ export default function DataModelFieldsTab({
     const allCounts = countFieldsByOwnership(entries);
     const filtered = filterCatalogByOwnership(entries, ownershipFilter);
     const groups = groupCatalogEntriesBySection(filtered);
+    const archivedKeys = archivedCategoryKeys(categoryRegistry);
     const sectionKeys = orderedEntityCategoryKeys(hubEntity, groups.keys(), categoryRegistry).filter((sectionKey) => {
         const sectionEntries = groups.get(sectionKey) ?? [];
         if (sectionEntries.length === 0) return false;
         if (archivedKeys.has(sectionKey)) return sectionEntries.length > 0;
         return true;
     });
-    const archivedKeys = archivedCategoryKeys(categoryRegistry);
 
     const saveEdit = async (entry: SettingsFieldCatalogEntry, values: FieldInlineEditValues) => {
         if (!entry.fieldDef || !canMutate) return;
