@@ -3,8 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
-import type { FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type { ComposerChannel, FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
+import {
+    resolveWorkspaceModeAvailability,
+    type WorkspaceMode,
+} from "@/lib/communications/v2/workspaceModeAvailability";
 import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
 
@@ -22,7 +26,10 @@ export default function FamilyCommunicationWorkspace(props: {
     entity?: { entityType: string; entityId: string };
     channel?: "email" | "sms";
 }) {
-    const channel = props.channel ?? "email";
+    const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
+        props.channel === "sms" ? "sms" : "email",
+    );
+    const liveChannel: ComposerChannel = workspaceMode === "sms" ? "sms" : "email";
     const [vm, setVm] = useState<FamilyCommunicationWorkspaceVM | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -40,11 +47,11 @@ export default function FamilyCommunicationWorkspace(props: {
             if (props.customerId) base.set("customer_id", props.customerId);
             else if (props.entity?.entityId) { base.set("entity_type", props.entity.entityType); base.set("entity_id", props.entity.entityId); }
             else return null;
-            base.set("composer_channel", channel);
+            base.set("composer_channel", liveChannel);
             if (threadId) base.set("thread_id", threadId);
             return base.toString();
         },
-        [props.customerId, props.entity?.entityType, props.entity?.entityId, channel]
+        [props.customerId, props.entity?.entityType, props.entity?.entityId, liveChannel]
     );
 
     const load = useCallback(
@@ -82,7 +89,7 @@ export default function FamilyCommunicationWorkspace(props: {
                 const res = await fetch("/api/admin/communications/family-send", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ customer_id: cust, recipient_person_ids: selectedRecipientIds, channel, subject: subjectDraft, body: bodyDraft, reply_to_thread_id: selectedThreadId, confirm }),
+                    body: JSON.stringify({ customer_id: cust, recipient_person_ids: selectedRecipientIds, channel: liveChannel, subject: subjectDraft, body: bodyDraft, reply_to_thread_id: selectedThreadId, confirm }),
                 });
                 const data = (await res.json()) as FamilySendResult & { error?: string };
                 if (!res.ok) { setSendError(data.error ?? "Send failed"); return; }
@@ -94,7 +101,12 @@ export default function FamilyCommunicationWorkspace(props: {
                 setSending(false);
             }
         },
-        [vm, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, channel, load]
+        [vm, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel, load]
+    );
+
+    const workspaceModeAvailability = useMemo(
+        () => resolveWorkspaceModeAvailability(vm, vm?.relatedTasks.length ?? 0),
+        [vm],
     );
 
     const events: TimelineEventVM[] = vm ? (selectedThreadId ? vm.messages : vm.timelineEvents) : [];
@@ -131,12 +143,15 @@ export default function FamilyCommunicationWorkspace(props: {
                 healthTone={healthTone}
                 healthDot={healthDot}
                 healthLabel={healthLabel}
+                workspaceMode={workspaceMode}
+                onWorkspaceModeChange={setWorkspaceMode}
+                workspaceModeAvailability={workspaceModeAvailability}
                 LIVE_WORKSPACE={true}
                 selectedThreadId={selectedThreadId}
                 messages={messages}
                 liveRecipientGroups={vm.recipientGroups}
                 selectedRecipientIds={selectedRecipientIds}
-                liveChannel={channel}
+                liveChannel={liveChannel}
                 subjectDraft={subjectDraft}
                 bodyDraft={bodyDraft}
                 sendResult={sendResult}
