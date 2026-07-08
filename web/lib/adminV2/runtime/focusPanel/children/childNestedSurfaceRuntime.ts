@@ -7,6 +7,7 @@ import type { ChildrenEvidenceChild } from "@/lib/adminV2/runtime/focusPanel/chi
 import type { NestedSurfaceFieldMode, NestedSurfaceGroupDisplayOptions } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { readNestedSurfaceConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader";
+import { CHILDREN_FOCUS_GROUP_KEYS } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 
 /** Config keys that cannot be persisted from the child focus panel (computed / header-only). */
 export const CHILD_UNSUPPORTED_SAVE_FIELD_KEYS = new Set<ChildFocusFieldKey>([
@@ -146,10 +147,12 @@ function fieldModesForConfig(config: NestedSurfaceConfig | null): Record<string,
 function orderedFieldKeys(config: NestedSurfaceConfig | null): ChildFocusFieldKey[] {
     if (!config) return DEFAULT_CHILD_FIELD_KEYS;
     const keys: ChildFocusFieldKey[] = [];
-    const placement = config.groups.find((g) => g.key === "placement");
-    for (const key of placement?.selectedFieldKeys ?? []) {
-        if (key in CHILD_FOCUS_FIELD_DEFS && !keys.includes(key as ChildFocusFieldKey)) {
-            keys.push(key as ChildFocusFieldKey);
+    for (const groupKey of CHILDREN_FOCUS_GROUP_KEYS) {
+        const group = config.groups.find((g) => g.key === groupKey);
+        for (const key of group?.selectedFieldKeys ?? []) {
+            if (key in CHILD_FOCUS_FIELD_DEFS && !keys.includes(key as ChildFocusFieldKey)) {
+                keys.push(key as ChildFocusFieldKey);
+            }
         }
     }
     return keys.length > 0 ? keys : DEFAULT_CHILD_FIELD_KEYS;
