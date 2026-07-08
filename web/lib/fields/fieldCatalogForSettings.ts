@@ -16,7 +16,7 @@ import {
 import type { FieldOwnershipKind } from "@/lib/fields/fieldOwnership";
 import {
     platformFieldsForEntity,
-    platformFieldsForEntityExcludingRegistry,
+    isPlatformNativeField,
     type PlatformFieldDefinition,
 } from "@/lib/fields/platformFieldCatalog";
 import { operatorFieldDisplayLabel } from "@/lib/fields/fieldSettingsOperatorUi";
@@ -53,19 +53,30 @@ function layoutRefKey(entityType: string, fieldKey: string): string {
     return `${et}.${fieldKey}`;
 }
 
-function platformEntry(row: PlatformFieldDefinition): SettingsFieldCatalogEntry {
+function platformEntry(row: PlatformFieldDefinition, override?: FieldDef): SettingsFieldCatalogEntry {
+    const entityType = row.entity_type;
+    const section_key = override?.section_key?.trim() || row.section_key;
+    const label = override
+        ? operatorFieldDisplayLabel(entityType, {
+              field_key: override.field_key,
+              is_system: override.is_system,
+              label: override.label,
+              config: override.config,
+          })
+        : row.label;
     return {
         id: `platform:${row.refKey}`,
         ownership: "platform",
         refKey: row.refKey,
-        label: row.label,
+        label,
         field_type: row.field_type,
-        section_key: row.section_key,
-        entity_type: row.entity_type,
+        section_key,
+        entity_type: entityType,
         storage_line: `${row.storage_table}.${row.storage_column}`,
         editable: false,
         configurable: false,
         platformField: row,
+        fieldDef: override,
     };
 }
 
@@ -128,15 +139,16 @@ export function buildSettingsFieldCatalogEntries(input: {
     const seenRefKeys = new Set<string>();
 
     for (const entityType of input.entityTypes) {
-        const existingKeys = new Set(
-            input.customFields
-                .filter((f) => f.entity_type.trim().toLowerCase() === entityType.trim().toLowerCase())
-                .map((f) => f.field_key.trim().toLowerCase()),
+        const defsForEntity = input.customFields.filter(
+            (f) => f.entity_type.trim().toLowerCase() === entityType.trim().toLowerCase(),
         );
-        for (const row of platformFieldsForEntityExcludingRegistry(entityType, existingKeys)) {
+        const defByKey = new Map(defsForEntity.map((f) => [f.field_key.trim().toLowerCase(), f] as const));
+
+        for (const row of platformFieldsForEntity(entityType).filter((f) => f.operator_visible)) {
             if (seenRefKeys.has(row.refKey)) continue;
+            const override = defByKey.get(row.field_key.trim().toLowerCase());
             seenRefKeys.add(row.refKey);
-            entries.push(platformEntry(row));
+            entries.push(platformEntry(row, override));
         }
     }
 
@@ -145,6 +157,7 @@ export function buildSettingsFieldCatalogEntries(input: {
             continue;
         }
         if (!input.includeHiddenCustom && row.is_active === false) continue;
+        if (isPlatformNativeField(row.entity_type, row.field_key)) continue;
         const entry = customEntry(row.entity_type, row);
         if (seenRefKeys.has(entry.refKey)) continue;
         seenRefKeys.add(entry.refKey);
@@ -200,11 +213,8 @@ export function fieldRowEditCapability(
     canMutate: boolean,
 ): FieldEditCapability {
     if (!canMutate) return VIEW_ONLY_CAPABILITY;
-    if (entry.ownership !== "custom" || !entry.fieldDef) return VIEW_ONLY_CAPABILITY;
 
-    const isSystem = entry.fieldDef.is_system === true;
-    if (isSystem) {
-        // Platform/system field: organize safely, never mutate storage/type/ownership.
+    if (entry.fieldDef?.is_system === true) {
         return {
             mode: "presentation",
             canEditLabel: true,
@@ -215,6 +225,8 @@ export function fieldRowEditCapability(
             canDelete: false,
         };
     }
+
+    if (entry.ownership !== "custom" || !entry.fieldDef) return VIEW_ONLY_CAPABILITY;
 
     if (!entry.configurable) return VIEW_ONLY_CAPABILITY;
 
@@ -304,12 +316,17 @@ export function categoryDisplayLabel(categoryKey: string): string {
     return sectionDisplayLabel(categoryKey);
 }
 
+/** Resolved section key for grouping — persisted field_definitions override catalog defaults. */
+export function catalogEntrySectionKey(entry: SettingsFieldCatalogEntry): string {
+    return entry.fieldDef?.section_key?.trim() || entry.section_key?.trim() || "general";
+}
+
 export function groupCatalogEntriesBySection(
     entries: readonly SettingsFieldCatalogEntry[],
 ): Map<string, SettingsFieldCatalogEntry[]> {
     const groups = new Map<string, SettingsFieldCatalogEntry[]>();
     for (const entry of entries) {
-        const key = entry.section_key?.trim() || "general";
+        const key = catalogEntrySectionKey(entry);
         const list = groups.get(key) ?? [];
         list.push(entry);
         groups.set(key, list);

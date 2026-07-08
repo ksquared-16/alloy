@@ -18,7 +18,7 @@ export type FieldInlineCreateValues = {
 
 type Props = {
     open: boolean;
-    categoryOptions: Array<{ value: string; label: string }>;
+    activeCategoryOptions: Array<{ value: string; label: string }>;
     saving?: boolean;
     error?: string | null;
     canMutate?: boolean;
@@ -37,7 +37,7 @@ const EMPTY: FieldInlineCreateValues = {
 
 export default function DataModelFieldCreateRow({
     open,
-    categoryOptions,
+    activeCategoryOptions,
     saving = false,
     error = null,
     canMutate = false,
@@ -52,10 +52,12 @@ export default function DataModelFieldCreateRow({
         setDraft({
             ...EMPTY,
             category_key:
-                categoryOptions.find((o) => o.value === "custom")?.value ?? categoryOptions[0]?.value ?? "custom",
+                activeCategoryOptions.find((o) => o.value === "custom")?.value ??
+                activeCategoryOptions[0]?.value ??
+                "custom",
         });
         keyTouched.current = false;
-    }, [open, categoryOptions]);
+    }, [open, activeCategoryOptions]);
 
     useEffect(() => {
         if (!open || keyTouched.current) return;
@@ -99,8 +101,7 @@ export default function DataModelFieldCreateRow({
                         className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
                         data-testid="inline-create-category"
                     >
-                        {categoryOptions.length === 0 ? <option value="custom">Custom</option> : null}
-                        {categoryOptions.map((opt) => (
+                        {activeCategoryOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>
                                 {opt.label}
                             </option>
