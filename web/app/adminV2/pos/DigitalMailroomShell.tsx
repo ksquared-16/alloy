@@ -3,12 +3,9 @@
 import type { ReactNode } from "react";
 import { FileInput, X } from "lucide-react";
 
-import CommsModalTabBar from "@/app/adminV2/communications/CommsModalTabBar";
-import {
-    COMMS_WORKSPACE_NAV_CLASS,
-} from "@/app/adminV2/communications/commsWorkspaceUi";
+import OperationalWorkspaceModeNav from "@/app/adminV2/components/OperationalWorkspaceModeNav";
+import { COMMS_WORKSPACE_EXECUTION_CLASS } from "@/app/adminV2/communications/commsWorkspaceUi";
 import OperationalModalHeader from "@/app/adminV2/components/OperationalModalHeader";
-import AlloyModeSwitch from "@/components/workspace/AlloyModeSwitch";
 import type { ProcessingStudioTab } from "@/app/adminV2/pos/ProcessingStudioShell";
 
 export type DigitalMailroomMode = "work" | "studio";
@@ -21,7 +18,7 @@ const MAILROOM_MODES = [
 
 const WORK_TABS = [
     { key: "overview" as const, label: "Overview" },
-    { key: "work" as const, label: "Work" },
+    { key: "work" as const, label: "Queue" },
 ];
 
 const STUDIO_TABS: { key: ProcessingStudioTab; label: string }[] = [
@@ -87,30 +84,26 @@ export default function DigitalMailroomShell({
                 closeLabel="Close Digital Mailroom"
             />
 
-            <nav className={COMMS_WORKSPACE_NAV_CLASS} data-mailroom-workspace-nav="true" aria-label="Digital Mailroom views">
-                <AlloyModeSwitch
-                    modes={MAILROOM_MODES}
-                    active={mode}
-                    onChange={onModeChange}
-                    ariaLabel="Digital Mailroom mode"
-                />
-                <div
-                    className="mt-1.5 flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b border-alloy-stone/15"
-                    data-mailroom-mode-sections="true"
-                >
-                    <CommsModalTabBar
-                        tabs={sectionTabs}
-                        activeKey={activeSection}
-                        onSelect={(key) => {
-                            if (mode === "work") onWorkViewChange(key as DigitalMailroomWorkView);
-                            else onStudioTabChange(key as ProcessingStudioTab);
-                        }}
-                        aria-label={mode === "studio" ? "Studio sections" : "Work sections"}
-                    />
-                </div>
-            </nav>
+            <OperationalWorkspaceModeNav
+                modes={MAILROOM_MODES}
+                activeMode={mode}
+                onModeChange={onModeChange}
+                modeAriaLabel="Digital Mailroom mode"
+                sectionTabs={sectionTabs}
+                activeSection={activeSection}
+                onSectionChange={(key) => {
+                    if (mode === "work") onWorkViewChange(key as DigitalMailroomWorkView);
+                    else onStudioTabChange(key as ProcessingStudioTab);
+                }}
+                sectionAriaLabel={mode === "studio" ? "Studio sections" : "Work sections"}
+                navDataAttr="mailroom"
+                sectionsDataAttr="mailroom"
+            />
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-alloy-stone/12 bg-white p-0" data-mailroom-workspace-execution="true">
+            <div
+                className={`${COMMS_WORKSPACE_EXECUTION_CLASS} !min-h-0 !bg-white !p-0`}
+                data-mailroom-workspace-execution="true"
+            >
                 {children}
             </div>
         </div>

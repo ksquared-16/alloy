@@ -144,11 +144,6 @@ export function CommsInlineListReserve({ rows = 2, label = "Loading content" }: 
     );
 }
 
-/** @deprecated use CommunicationsWorkspaceKpiStrip */
-export function CommsWorkspaceKpiBand(_props: { activeTab: CommunicationsModalTab }) {
-    return null;
-}
-
 export function CommsSectionCard({
     title,
     helper,

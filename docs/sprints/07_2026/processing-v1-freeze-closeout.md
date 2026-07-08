@@ -1,7 +1,7 @@
 # Processing V1 — Freeze Closeout
 
 **Date:** 2026-07-08  
-**Branch merged:** `feat/processing-form-composer-v1` → `staging`  
+**Branch:** `feat/processing-form-composer-v1` → `staging`  
 **Product name:** Digital Mailroom  
 **Status:** **Frozen** — shell is canonical; no further shell redesigns unless a functional gap is discovered during real operator use.
 
@@ -14,7 +14,7 @@ Digital Mailroom is a first-class operator product inside AdminV2:
 | Surface | Purpose |
 |---------|---------|
 | **Overview** | Import form, active work, form library; workspace KPI tiles; recent work/forms; folder shortcuts |
-| **Work** | Folder-aware queue + document review (PDF hero + question resolution) |
+| **Work → Queue** | Folder-aware queue + document review (PDF hero + question resolution) |
 | **Studio** | Forms asset library (Packets / Fields / Branding placeholders) |
 | **Builder** | Canvas-first form builder opened from Studio; engine unchanged |
 
@@ -22,15 +22,15 @@ Processing APIs, case model, form-draft pipeline, and question resolution engine
 
 ---
 
-## Final polish (this sprint)
+## Final visual freeze (2026-07-08)
 
-1. **Parent panel hierarchy** — Work review uses three explicit surfaces: Queue, Source document, Review questions (`ProcessingParentPanel`).
-2. **KPI tiles** — Overview activity strip reuses `SurfaceHeaderKpiCard` from `WorkspaceHeader` (compact density).
-3. **Color audit** — Processing shell standardized on Midnight Forge, Bend Pine, Stone, White.
-4. **Queue density** — Outlook-style rows; reduced typography and row height.
-5. **Review inspector** — Each detected question reads as one grouped unit with subtle borders.
-6. **Folder icons** — System folders use `ProcessingFolderIcon` in Work, Studio, and Overview.
-7. **Dev UI removed** — Cleanup banner, build markers, and development hints hidden from production shell.
+1. **Shared navigation** — `OperationalWorkspaceModeNav` mirrors Communications exactly: Work | Studio, divider, Overview | Queue, divider, workspace execution surface. Sub-tab label **Queue** (top-level Work mode unchanged).
+2. **Compact review header** — Stepper, metadata, and status collapsed into one ~28px row; PDF begins immediately below.
+3. **Lightweight question rows** — Review questions use spacing and dividers instead of nested card borders; Bend Pine reserved for confidence only.
+4. **Queue density** — Row height and typography reduced slightly for more visible rows; layout unchanged.
+5. **Parent panel hierarchy** — Work review uses three explicit surfaces: Queue, Source document, Review questions (`ProcessingParentPanel`).
+6. **KPI tiles** — Overview activity strip reuses `SurfaceHeaderKpiCard` from `WorkspaceHeader` (compact density).
+7. **Dev UI removed** — Cleanup banner, build markers, version attributes, and development hints hidden from production shell.
 
 ---
 
@@ -47,6 +47,7 @@ Processing APIs, case model, form-draft pipeline, and question resolution engine
 ## Validation
 
 ```bash
+cd web && npm run verify:module-imports
 cd web && npm run test -- \
   tests/pos/questionResolutionModel.test.ts \
   tests/pos/formComposerV1.test.ts \

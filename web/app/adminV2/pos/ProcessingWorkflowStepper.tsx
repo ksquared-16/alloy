@@ -10,8 +10,46 @@ const STEPS = [
 
 export type ProcessingWorkflowStep = (typeof STEPS)[number]["key"];
 
-export default function ProcessingWorkflowStepper({ active }: { active: ProcessingWorkflowStep }) {
+export default function ProcessingWorkflowStepper({
+    active,
+    compact = false,
+}: {
+    active: ProcessingWorkflowStep;
+    compact?: boolean;
+}) {
     const activeIndex = STEPS.findIndex((s) => s.key === active);
+
+    if (compact) {
+        return (
+            <ol className="flex shrink-0 flex-wrap items-center gap-1" aria-label="Document to form workflow">
+                {STEPS.map((step, i) => {
+                    const done = i < activeIndex;
+                    const current = i === activeIndex;
+                    return (
+                        <li key={step.key} className="flex items-center gap-1">
+                            <span
+                                className={`text-[9px] font-semibold ${
+                                    current
+                                        ? "text-alloy-bend-pine"
+                                        : done
+                                          ? "text-alloy-midnight/55"
+                                          : "text-alloy-midnight/35"
+                                }`}
+                            >
+                                {step.label}
+                            </span>
+                            {i < STEPS.length - 1 ? (
+                                <span className="text-[8px] text-alloy-midnight/20" aria-hidden>
+                                    ·
+                                </span>
+                            ) : null}
+                        </li>
+                    );
+                })}
+            </ol>
+        );
+    }
+
     return (
         <ol className="flex flex-wrap items-center gap-1.5" aria-label="Document to form workflow">
             {STEPS.map((step, i) => {
