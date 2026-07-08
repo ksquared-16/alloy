@@ -21,7 +21,7 @@ import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateL
 /** House loading style: neutral blocks, no spinners. */
 function WorkspaceSurfaceSkeleton() {
     return (
-        <div className="flex flex-col gap-5" aria-busy="true" aria-label="Loading workspace">
+        <div className="flex flex-col gap-5" aria-busy="true" aria-label="Preparing workspace">
             <div className="flex flex-wrap items-start justify-between gap-6">
                 <div className="space-y-1.5">
                     <span className="block h-7 w-56 animate-pulse rounded bg-alloy-stone/16" aria-hidden />
