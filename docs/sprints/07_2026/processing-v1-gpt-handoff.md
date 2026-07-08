@@ -1,88 +1,69 @@
-# GPT Handoff — Processing V2+ (post-freeze)
+# GPT Handoff — Digital Mailroom V2+ (post-lock)
 
-**Paste this into a new ChatGPT / Cursor thread when continuing Processing work.**
+**Paste into a new thread to continue Processing work.**
 
 ---
 
 ## Context
 
-Alloy **Digital Mailroom** (Processing V1) shipped and is **frozen** as of 2026-07-08 on `staging`.
+**Digital Mailroom V1 UI is locked** (2026-07-08). Do not redesign the shell.
 
-- **Product:** Digital Mailroom — “Where operational work happens.”
-- **Modes:** Work (Overview | Work) and Studio (Forms | Packets | Fields | Branding)
-- **Pipeline:** Import form → Review questions → Generate native form → Studio Builder
-- **Rule:** Do **not** redesign the shell. Future work goes **inside** the shell.
-
-Canonical docs:
-
-- `docs/platform/modules/documents-and-forms.md`
-- `docs/sprints/07_2026/processing-v1-freeze-closeout.md`
-- `docs/sprints/07_2026/processing-v1-implementation-handoff.md`
-
-Screenshots: `docs/sprints/07_2026/digital-mailroom-identity-screenshots/`
+- **Product name:** Digital Mailroom — "Where operational work happens."
+- **Engine:** Processing (cases, form-draft, queue APIs)
+- **Canonical UX:** AdminV2 modal via sidebar **Processing** → `ProcessingModal`
 
 ---
 
-## Frozen shell layout
+## Mode pattern (Work vs Studio)
 
-**Work review (document case):**
+| Level | Control | Work mode tabs | Studio mode tabs |
+|-------|---------|----------------|------------------|
+| 1 | `AlloyModeSwitch` | Work | Studio |
+| 2 | `CommsModalTabBar` | Overview · **Queue** | Forms · Packets · Fields · Branding |
 
-- **Queue** (~22%) — `ProcessingParentPanel` + `ProcessingQueueList`
-- **Source document** (~55%) — PDF / region map
-- **Review questions** (~23%) — grouped question cards
+Shared nav: `OperationalWorkspaceModeNav` (Communications + Digital Mailroom).
 
-**Overview:** action cards + compact workspace KPI tiles (`SurfaceHeaderKpiCard`) + folder shortcuts with icons.
-
-**Colors:** Midnight Forge, Bend Pine, Stone, White only.
-
----
-
-## What NOT to do
-
-- No shell redesign, no new top-level tabs, no duplicate heroes
-- No API / engine / workflow changes unless the sprint explicitly says so
-- No amber/emerald/legacy gray palette in Processing UI
-- No dev banners, build markers, or cleanup hints in production surfaces
+**Horizontal divider:** `border-b border-stone-200` under level-2 tabs.  
+**Vertical divider:** `border-r border-stone-200` on Queue panel in `PosProcessingWorkspace`.
 
 ---
 
-## Suggested next threads
-
-Pick **one** per thread:
-
-| Thread | Goal |
-|--------|------|
-| **OCR intake** | Scanned PDF path through existing Work review panels |
-| **AI extraction** | Smarter question detection; same review UX |
-| **Studio Packets** | Replace placeholder tab with packet library |
-| **Studio Fields / Branding** | Config-only tabs inside Studio |
-| **Runtime submission** | Public form submit → processing case linkage |
-| **Family experience** | Parent-facing form completion (outside AdminV2 modal) |
-| **BOS in Work** | Summarize queue / draft follow-ups via Actions rail |
-
----
-
-## Key files (quick reference)
+## Tab hierarchy
 
 ```
-web/app/adminV2/processing/ProcessingModal.tsx
-web/app/adminV2/pos/DigitalMailroomShell.tsx
-web/app/adminV2/pos/PosProcessingWorkspace.tsx
-web/app/adminV2/pos/PosTemplateSetupColumn.tsx
-web/app/adminV2/pos/ProcessingQuestionReviewList.tsx
-web/app/adminV2/processing/ProcessingQueueList.tsx
-web/app/adminV2/pos/ProcessingOverviewLanding.tsx
-web/app/adminV2/pos/ProcessingFormBuilder.tsx
-web/lib/pos/processingCase/formDraft/questionResolutionModel.ts
+ProcessingModal
+└── DigitalMailroomShell
+    ├── OperationalModalHeader
+    ├── OperationalWorkspaceModeNav
+    └── execution
+        ├── Work + Overview  → ProcessingOverviewLanding
+        ├── Work + Queue     → PosProcessingWorkspace
+        └── Studio + *         → ProcessingFormsStudio → ProcessingFormBuilder
 ```
+
+Forms editing stays **in-modal**. Never hand off to `/admin/forms` for operator flow.
 
 ---
 
-## Validation commands
+## Work review (Queue, document case)
 
-```bash
-cd web && npm run test -- tests/pos/questionResolutionModel.test.ts tests/pos/formComposerV1.test.ts
-cd web && NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit
-```
+- Queue ~22% · Source document ~55% · Review questions ~23%
+- `PosTemplateSetupColumn` + `ProcessingQuestionReviewList`
+- Generate form → `openFormInStudio` (mode Studio, tab Forms)
 
-Repo: `/Users/Kelly/Alloy` — branch `staging` after merge.
+---
+
+## Do NOT
+
+- Redesign shell, nav, or three-column review layout
+- Change divider contract without explicit product approval
+- Route operators to `/admin/forms` from Digital Mailroom
+- Mix non-doctrine colors in shell chrome
+
+---
+
+## Next threads (functionality only)
+
+OCR · AI extraction · Studio Packets/Fields/Branding · Runtime submission · BOS in Work surfaces
+
+Docs: `docs/platform/modules/documents-and-forms.md`, `docs/sprints/07_2026/processing-v1-lock-closeout.md`

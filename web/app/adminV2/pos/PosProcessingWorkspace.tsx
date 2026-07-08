@@ -88,7 +88,7 @@ export default function PosProcessingWorkspace({
             <div className="flex min-h-0 flex-1 overflow-hidden bg-white">
                 <ProcessingParentPanel
                     title="Queue"
-                    className="w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 self-stretch border-r border-alloy-stone/20"
+                    className="w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 self-stretch border-0 border-r border-stone-200"
                 >
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         <ProcessingQueueList
