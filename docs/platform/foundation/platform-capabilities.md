@@ -15,6 +15,8 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | Site filter context | **Complete** | Sticky site scope on workspace fetches | Session + URL param |
 | Atomic reveal (Pass 3) | **Complete** | Coordinated above-fold reveal | Locked doctrine |
 | Global search | **Complete** | Header search → drawer swap | V1 shipped May 2026 |
+| **Current Work surface** | **Complete** | Config-driven Focus Panel work owner; outcome completion + handoffs | Canonical July 2026 — PR #95 |
+| Focus Panel card library (Core Four + extensions) | **Complete** | Household, Children, Current Work, Readiness + Billing/Tour/Comms/Timeline | See focus-panel-card-library.md |
 | Dept-first navigation | **Future** | — | Explicitly not canonical |
 
 ## Business processes

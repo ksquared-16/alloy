@@ -1,8 +1,9 @@
 # Alloy Operator Workspace — Final Design Sprint
 
-**Status:** Complete — implementation-ready (July 2026)  
-**Sprint type:** Integrated workspace design — final before implementation  
-**Builds on:** [objective-focus-integration](../objective-focus-integration/)
+**Status:** **CLOSED** — Current Work Phase 1 shipped to staging (PR #95, July 2026)  
+**Sprint type:** Integrated workspace design + Current Work implementation  
+**Builds on:** [objective-focus-integration](../objective-focus-integration/)  
+**Closeout:** [implementation-closeout.md](./implementation-closeout.md)
 
 ---
 

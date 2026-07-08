@@ -1,7 +1,8 @@
 # Current Work Implementation Closeout
 
 **Date:** July 2026  
-**Scope:** Current Work V1-complete operational surface
+**Branch:** `cursor/e58b096e` → `staging` (PR #95)  
+**Status:** **CLOSED — shipped to staging**
 
 ---
 
@@ -78,6 +79,8 @@ PLAYWRIGHT_CURRENT_WORK=1 npm run test:playwright-current-work
 
 ## Status
 
-**V1-complete — ready for staging.**
+**CLOSED — merged to staging (PR #95, commit `06202d599`).**
 
 **CTA doctrine:** Work title names the work (template label, e.g. Contact Family). Primary completion CTA is always **`Record what happened`**; the outcome picker eyebrow answers **What happened?**
+
+Platform docs updated: `docs/platform/operator/current-work-surface.md`, `actions-current-work-alignment.md`, `focus-panel-card-library.md`, `platform-capabilities.md`, `release-history.md`.

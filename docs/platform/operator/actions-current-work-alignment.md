@@ -1,6 +1,6 @@
 # Actions ↔ Current Work Alignment
 
-**Status:** Alignment note (July 2026)  
+**Status:** Canonical (July 2026)  
 **Scope:** Classify existing action surfaces relative to Current Work — no system deletions.  
 **Related:** [current-work-surface.md](./current-work-surface.md), [operational-action-doctrine.md](./operational-action-doctrine.md), [ai-platform.md](../modules/ai-platform.md)
 

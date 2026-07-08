@@ -6,6 +6,10 @@
 
 ## 2026 H1 — Platform maturation
 
+### July 2026
+
+- **Current Work (Focus Panel)** — config-driven operational surface on the Focus Panel: Summary → Focus → outcome completion inside Focus; primary CTA **`Record what happened`**; checklist handoffs (Communications, Household, Children, Documents); queue row current-work hints; action-registry supporting actions; right-rail demotion when Current Work owns completion. Merged to staging via PR #95.
+
 ### June 2026
 
 - **Documentation rebaseline** — canonical platform/schema doc structure; Business Process operator model

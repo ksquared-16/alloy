@@ -1,6 +1,6 @@
 # Focus Panel — Canonical Card Library
 
-> **Status**: V1 — Cards 1–8 implemented. Billing Preview, Tour, Communications, and Timeline joined the Core Four (Household, Children, Current Work, Readiness).
+> **Status**: Canonical (July 2026). Cards 1–8 implemented. Billing Preview, Tour, Communications, and Timeline joined the Core Four (Household, Children, **Current Work**, Readiness). **Current Work** is the canonical operational progression owner on the Focus Panel — see [current-work-surface.md](./current-work-surface.md).
 
 The card library is the authoritative catalog of every Focus Panel card. Each entry names the card's operational question, archetype, lifecycle states, evidence source, and behavioral contract. New experiences are assembled from these primitives — they are not invented per-surface.
 
@@ -64,7 +64,7 @@ Each child row: program · room · schedule · teacher · desired start · enrol
 | **Capabilities** | supportsFocus (no expanded overlay — Focus replaces it) |
 | **Footprint** | full (default row 1; configurable via `/settings/surfaces`) |
 
-Primary work title, purpose, and progress in 2 seconds on Summary. Click or Bend Pine CTA opens Focus — same grammar as Household. Focus holds checklist (work-surface handoffs), blockers, and outcome completion via existing `completeStageWorkWithOutcome` path. Outreach items hand off to Communications; contact-data verification to Household; program/fit to Children; packet work to Documents — never edit truth here.
+Primary work title, purpose, and progress in 2 seconds on Summary. Click or Bend Pine CTA opens Focus — same grammar as Household. Focus holds checklist (work-surface handoffs), blockers, and outcome completion via **`Record what happened`** → **What happened?** picker → `completeStageWorkWithOutcome`. Outreach items hand off to Communications; contact-data verification to Household; program/fit to Children; packet work to Documents — never edit truth here.
 
 See [current-work-surface.md](./current-work-surface.md) and [actions-current-work-alignment.md](./actions-current-work-alignment.md).
 

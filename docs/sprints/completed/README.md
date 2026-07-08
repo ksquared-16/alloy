@@ -30,6 +30,7 @@
 | Area | Closeout |
 |------|----------|
 | Operator Workspace visual freeze | `../07_2026/operator-workspace-visual-freeze-closeout.md` |
+| **Current Work (Focus Panel)** | `../07_2026/alloy-operator-workspace/implementation-closeout.md` |
 
 ### May 2026
 

@@ -1,6 +1,6 @@
 # Current Work Surface
 
-**Status:** Implemented (July 2026)  
+**Status:** Canonical (July 2026) — merged to staging via PR #95  
 **Related:** [actions-current-work-alignment.md](./actions-current-work-alignment.md)
 
 ---
