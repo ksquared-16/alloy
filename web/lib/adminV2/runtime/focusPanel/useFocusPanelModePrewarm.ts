@@ -23,8 +23,8 @@ type Params = {
     subjectId: string | null;
     /**
      * Optional per-mode data prewarm callbacks (reuse existing prefetch helpers).
-     * Summary/Work are VM-derived and typically need no callback; Activity warms tab/comms metadata.
-     * Heavy embedded Communications workspace stays lazy — only its lightweight metadata is warmed here.
+     * Summary/Work are VM-derived and typically need no callback; Activity warms legacy tab metadata
+     * plus family-workspace VM prefetch when V2 flags are on (immediate when active, idle when not).
      */
     prewarm?: Partial<Record<FocusPanelMode, () => void>>;
 };

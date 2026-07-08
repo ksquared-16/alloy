@@ -6,6 +6,12 @@ import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspac
 import type { ComposerChannel, FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import {
+    getDrawerFamilyWorkspaceWarm,
+    invalidateDrawerFamilyWorkspaceCache,
+    prefetchDrawerFamilyWorkspace,
+    type DrawerFamilyWorkspacePrefetchParams,
+} from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
+import {
     resolveWorkspaceModeAvailability,
     type WorkspaceMode,
 } from "@/lib/communications/v2/workspaceModeAvailability";
@@ -21,6 +27,39 @@ const toWorkspaceMessage = (e: TimelineEventVM): WorkspaceTimelineMessage => ({
     id: e.id, direction: e.direction, channel: e.channel, body: e.body, created_at: e.createdAt, kind: e.kind, thread_id: e.threadId, status: e.status,
 });
 
+function resolvePrefetchParams(
+    props: {
+        customerId?: string;
+        entity?: { entityType: string; entityId: string };
+    },
+    composerChannel: ComposerChannel,
+    threadId: string | null
+): DrawerFamilyWorkspacePrefetchParams | null {
+    if (props.customerId) {
+        return { customerId: props.customerId, composerChannel, threadId };
+    }
+    if (props.entity?.entityId) {
+        return {
+            entityType: props.entity.entityType,
+            entityId: props.entity.entityId,
+            composerChannel,
+            threadId,
+        };
+    }
+    return null;
+}
+
+function resolveInvalidateScope(props: {
+    customerId?: string;
+    entity?: { entityType: string; entityId: string };
+}): { customerId?: string; entityType?: string; entityId?: string } | undefined {
+    if (props.customerId) return { customerId: props.customerId };
+    if (props.entity?.entityId) {
+        return { entityType: props.entity.entityType, entityId: props.entity.entityId };
+    }
+    return undefined;
+}
+
 export default function FamilyCommunicationWorkspace(props: {
     customerId?: string;
     entity?: { entityType: string; entityId: string };
@@ -30,8 +69,15 @@ export default function FamilyCommunicationWorkspace(props: {
         props.channel === "sms" ? "sms" : "email",
     );
     const liveChannel: ComposerChannel = workspaceMode === "sms" ? "sms" : "email";
-    const [vm, setVm] = useState<FamilyCommunicationWorkspaceVM | null>(null);
-    const [loading, setLoading] = useState(true);
+    const initialPrefetchParams = useMemo(
+        () => resolvePrefetchParams(props, liveChannel, null),
+        [props.customerId, props.entity?.entityType, props.entity?.entityId, liveChannel]
+    );
+    const [vm, setVm] = useState<FamilyCommunicationWorkspaceVM | null>(() =>
+        initialPrefetchParams ? getDrawerFamilyWorkspaceWarm(initialPrefetchParams) : null
+    );
+    const [loading, setLoading] = useState(() => !vm);
+    const [servedFromWarmCache, setServedFromWarmCache] = useState(() => Boolean(vm));
     const [error, setError] = useState<string | null>(null);
     const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
@@ -41,43 +87,62 @@ export default function FamilyCommunicationWorkspace(props: {
     const [sendError, setSendError] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
 
-    const queryFor = useCallback(
-        (threadId: string | null): string | null => {
-            const base = new URLSearchParams();
-            if (props.customerId) base.set("customer_id", props.customerId);
-            else if (props.entity?.entityId) { base.set("entity_type", props.entity.entityType); base.set("entity_id", props.entity.entityId); }
-            else return null;
-            base.set("composer_channel", liveChannel);
-            if (threadId) base.set("thread_id", threadId);
-            return base.toString();
-        },
-        [props.customerId, props.entity?.entityType, props.entity?.entityId, liveChannel]
-    );
+    const applyWorkspace = useCallback((workspace: FamilyCommunicationWorkspaceVM, resetSelection: boolean) => {
+        setVm(workspace);
+        if (resetSelection) setSelectedRecipientIds(workspace.selectedRecipients);
+        setError(null);
+    }, []);
 
     const load = useCallback(
-        async (threadId: string | null, resetSelection: boolean) => {
-            const qs = queryFor(threadId);
-            if (!qs) { setLoading(false); return; }
+        async (threadId: string | null, resetSelection: boolean, opts?: { force?: boolean }) => {
+            const params = resolvePrefetchParams(props, liveChannel, threadId);
+            if (!params) {
+                setLoading(false);
+                return;
+            }
+
+            const warm = !opts?.force ? getDrawerFamilyWorkspaceWarm(params) : null;
+            if (warm) {
+                applyWorkspace(warm, resetSelection);
+                setLoading(false);
+                setServedFromWarmCache(true);
+                void prefetchDrawerFamilyWorkspace(params, { force: true }).then((fresh) => {
+                    if (fresh) applyWorkspace(fresh, resetSelection);
+                });
+                return;
+            }
+
             setLoading(true);
             setError(null);
             try {
-                const res = await fetch(`/api/admin/communications/family-workspace?${qs}`);
-                const data = (await res.json()) as { workspace?: FamilyCommunicationWorkspaceVM; error?: string };
-                if (!res.ok || !data.workspace) { setError(data.error ?? "Failed to load"); return; }
-                setVm(data.workspace);
-                if (resetSelection) setSelectedRecipientIds(data.workspace.selectedRecipients);
+                const workspace = await prefetchDrawerFamilyWorkspace(params, opts);
+                if (!workspace) {
+                    setError("Failed to load");
+                    return;
+                }
+                applyWorkspace(workspace, resetSelection);
             } catch {
                 setError("Failed to load");
             } finally {
                 setLoading(false);
             }
         },
-        [queryFor]
+        [applyWorkspace, liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId]
     );
 
-    useEffect(() => { setSelectedThreadId(null); setSubjectDraft(""); setBodyDraft(""); setSendResult(null); void load(null, true); }, [load]);
+    useEffect(() => {
+        setSelectedThreadId(null);
+        setSubjectDraft("");
+        setBodyDraft("");
+        setSendResult(null);
+        setServedFromWarmCache(false);
+        void load(null, true);
+    }, [load]);
 
-    const openThread = useCallback((threadId: string) => { setSelectedThreadId(threadId); void load(threadId, false); }, [load]);
+    const openThread = useCallback((threadId: string) => {
+        setSelectedThreadId(threadId);
+        void load(threadId, false);
+    }, [load]);
 
     const runSend = useCallback(
         async (confirm: boolean) => {
@@ -94,14 +159,18 @@ export default function FamilyCommunicationWorkspace(props: {
                 const data = (await res.json()) as FamilySendResult & { error?: string };
                 if (!res.ok) { setSendError(data.error ?? "Send failed"); return; }
                 setSendResult(data);
-                if (confirm) await load(selectedThreadId, false);
+                if (confirm) {
+                    const scope = resolveInvalidateScope(props);
+                    if (scope) invalidateDrawerFamilyWorkspaceCache(scope);
+                    await load(selectedThreadId, false, { force: true });
+                }
             } catch {
                 setSendError("Send failed");
             } finally {
                 setSending(false);
             }
         },
-        [vm, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel, load]
+        [vm, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel, load, props.customerId, props.entity?.entityType, props.entity?.entityId]
     );
 
     const workspaceModeAvailability = useMemo(
@@ -135,7 +204,12 @@ export default function FamilyCommunicationWorkspace(props: {
     const selected = { id: vm.scope.customerId, family_label: vm.family.label, sla_state: null, assignment_state: "unassigned" };
 
     return (
-        <section data-cc-column="workspace" data-cc-drawer-workspace className="flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
+        <section
+            data-cc-column="workspace"
+            data-cc-drawer-workspace
+            data-drawer-family-workspace-warm={servedFromWarmCache ? "true" : undefined}
+            className="flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
+        >
             <FamilyCommunicationWorkspaceView
                 selected={selected}
                 detail={detail}

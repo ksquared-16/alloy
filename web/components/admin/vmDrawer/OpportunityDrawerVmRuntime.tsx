@@ -63,6 +63,8 @@ import OpportunityDrawerOpeningOverlay from "@/components/admin/OpportunityDrawe
 import { AlloyCanonicalLoadingSurface } from "@/lib/adminV2/runtime/alloyCanonicalLoadingSurface";
 import OpportunityDrawerTabBackgroundLoader from "@/components/admin/vmDrawer/OpportunityDrawerTabBackgroundLoader";
 import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
+import { prefetchDrawerFamilyWorkspace } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
+import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
 import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
@@ -322,8 +324,8 @@ export default function OpportunityDrawerVmRuntime() {
         scheduleOpportunityDrawerTabPrefetch(layoutPrefetchId);
     }, [layoutPrefetchId]);
 
-    // Focus Panel mode prewarm: active mode wins; non-active modes warm their metadata after a
-    // short idle so switching feels instant. Heavy embedded Communications stays lazy until opened.
+    // Focus Panel mode prewarm: active mode wins; non-active modes warm after idle. Activity
+    // prefetches family-workspace for the V2 embed; legacy drawer prefetch stays for flag-off path.
     useFocusPanelModePrewarm({
         enabled: Boolean(layoutPrefetchId),
         activeMode: focusPanelMode,
@@ -334,6 +336,16 @@ export default function OpportunityDrawerVmRuntime() {
                     if (!layoutPrefetchId) return;
                     scheduleDeferredCommunicationsDrawerPrefetch("opportunities", layoutPrefetchId);
                     scheduleOpportunityDrawerTabPrefetch(layoutPrefetchId);
+                    if (
+                        isCommsV2FlagEnabled("comms_v2_record_tab") &&
+                        isCommsV2FlagEnabled("comms_v2_live_workspace")
+                    ) {
+                        void prefetchDrawerFamilyWorkspace({
+                            entityType: "opportunities",
+                            entityId: layoutPrefetchId,
+                            composerChannel: "email",
+                        });
+                    }
                 },
             }),
             [layoutPrefetchId],
