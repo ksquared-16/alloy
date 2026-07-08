@@ -40,7 +40,7 @@ type Props = {
     onExpand: () => void;
     onCollapse: () => void;
     canMutate?: boolean;
-    categoryOptions?: Array<{ value: string; label: string }>;
+    activeCategoryOptions?: Array<{ value: string; label: string }>;
     saving?: boolean;
     error?: string | null;
     onSave?: (values: FieldInlineEditValues) => void | Promise<void>;
@@ -63,6 +63,19 @@ function valuesFromEntry(entry: SettingsFieldCatalogEntry): FieldInlineEditValue
     };
 }
 
+function selectableCategoryKey(
+    categoryKey: string,
+    activeCategoryOptions: ReadonlyArray<{ value: string; label: string }>,
+): string {
+    const normalized = categoryKey.trim();
+    if (activeCategoryOptions.some((o) => o.value === normalized)) return normalized;
+    return (
+        activeCategoryOptions.find((o) => o.value === "custom")?.value ??
+        activeCategoryOptions[0]?.value ??
+        "custom"
+    );
+}
+
 export default function DataModelFieldRow({
     entry,
     hubEntity,
@@ -70,7 +83,7 @@ export default function DataModelFieldRow({
     onExpand,
     onCollapse,
     canMutate = false,
-    categoryOptions = [],
+    activeCategoryOptions = [],
     saving = false,
     error = null,
     onSave,
@@ -84,9 +97,13 @@ export default function DataModelFieldRow({
 
     useEffect(() => {
         if (expanded) {
-            setDraft(valuesFromEntry(entry));
+            const values = valuesFromEntry(entry);
+            setDraft({
+                ...values,
+                category_key: selectableCategoryKey(values.category_key, activeCategoryOptions),
+            });
         }
-    }, [expanded, entry]);
+    }, [expanded, entry, activeCategoryOptions]);
 
     const availability = resolveSettingsCatalogEntryAvailability({
         ownership: entry.ownership,
@@ -184,15 +201,12 @@ export default function DataModelFieldRow({
                                     Category
                                 </span>
                                 <select
-                                    value={draft.category_key}
+                                    value={selectableCategoryKey(draft.category_key, activeCategoryOptions)}
                                     onChange={(e) => setDraft((d) => ({ ...d, category_key: e.target.value }))}
                                     className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
                                     data-testid="inline-field-category"
                                 >
-                                    {categoryOptions.length === 0 ? (
-                                        <option value={draft.category_key}>{draft.category_key}</option>
-                                    ) : null}
-                                    {categoryOptions.map((opt) => (
+                                    {activeCategoryOptions.map((opt) => (
                                         <option key={opt.value} value={opt.value}>
                                             {opt.label}
                                         </option>
