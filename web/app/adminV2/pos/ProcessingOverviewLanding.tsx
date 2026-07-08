@@ -37,6 +37,9 @@ function statusTone(label: string): string {
     return "text-alloy-midnight/55";
 }
 
+const OVERVIEW_CARD_CLASS =
+    "rounded-xl border border-alloy-stone/20 bg-white px-4 py-3.5 shadow-[0_1px_4px_rgba(15,23,42,0.06)]";
+
 const OVERVIEW_KPIS = (args: {
     active: number;
     ready: number;
@@ -45,8 +48,8 @@ const OVERVIEW_KPIS = (args: {
 }): WorkspaceHeaderKpiVm[] => [
     { slot: 1, label: "Active work", icon: "clipboard", accent: "midnight", formattedValue: String(args.active), status: "unknown", sourceKey: null, drillHref: null },
     { slot: 2, label: "Ready", icon: "spark", accent: "pine", formattedValue: String(args.ready), status: "healthy", sourceKey: null, drillHref: null },
-    { slot: 3, label: "Forms", icon: "layers", accent: "stone", formattedValue: String(args.forms), status: "unknown", sourceKey: null, drillHref: null },
-    { slot: 4, label: "Published", icon: "book", accent: "stone", formattedValue: String(args.published), status: "unknown", sourceKey: null, drillHref: null },
+    { slot: 3, label: "Forms", icon: "layers", accent: "midnight", formattedValue: String(args.forms), status: "unknown", sourceKey: null, drillHref: null },
+    { slot: 4, label: "Published", icon: "book", accent: "pine", formattedValue: String(args.published), status: "healthy", sourceKey: null, drillHref: null },
 ];
 
 export default function ProcessingOverviewLanding({
@@ -173,14 +176,14 @@ export default function ProcessingOverviewLanding({
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/35">
                         Today&apos;s activity
                     </p>
-                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
                         {OVERVIEW_KPIS({
                             active: active.length,
                             ready: ready.length,
                             forms: forms.length,
                             published: forms.filter((f) => f.has_published_version).length,
                         }).map((kpi) => (
-                            <SurfaceHeaderKpiCard key={kpi.slot} kpi={kpi} interactive={false} variant="work-unit" density="compact" />
+                            <SurfaceHeaderKpiCard key={kpi.slot} kpi={kpi} interactive={false} variant="workspace" density="compact" />
                         ))}
                     </div>
                 </section>
@@ -240,17 +243,17 @@ export default function ProcessingOverviewLanding({
                         )}
                     </ContinuePanel>
 
-                    <section>
-                        <header className="mb-3 flex items-center justify-between gap-2">
-                            <h2 className="text-[13px] font-semibold text-alloy-midnight/70">Folders</h2>
+                    <section className={OVERVIEW_CARD_CLASS}>
+                        <header className="mb-3 flex items-center justify-between gap-2 border-b border-alloy-stone/10 pb-2">
+                            <h2 className="text-[14px] font-semibold text-alloy-midnight">Folders</h2>
                         </header>
-                        <ul className="divide-y divide-alloy-stone/12 overflow-hidden rounded-xl bg-white shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
+                        <ul className="divide-y divide-alloy-stone/10">
                             {navFolders.map((folder) => (
                                 <li key={folder.id}>
                                     <button
                                         type="button"
                                         onClick={onOpenWork}
-                                        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-alloy-stone/[0.03]"
+                                        className="flex w-full items-center justify-between px-1 py-2.5 text-left transition-colors hover:bg-alloy-stone/[0.03]"
                                     >
                                         <span className="flex min-w-0 items-center gap-2">
                                             <ProcessingFolderIcon folderId={folder.id} className="h-3.5 w-3.5 shrink-0 text-alloy-midnight/40" />
@@ -283,9 +286,9 @@ function ContinuePanel({
     children: ReactNode;
 }) {
     return (
-        <section className="rounded-xl border border-alloy-stone/15 bg-white px-4 py-3">
-            <header className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-[13px] font-semibold text-alloy-midnight">{title}</h2>
+        <section className={OVERVIEW_CARD_CLASS}>
+            <header className="mb-3 flex items-center justify-between gap-2 border-b border-alloy-stone/10 pb-2">
+                <h2 className="text-[14px] font-semibold text-alloy-midnight">{title}</h2>
                 <button type="button" onClick={onAction} className="text-[11px] font-semibold text-alloy-bend-pine hover:underline">
                     {action} →
                 </button>

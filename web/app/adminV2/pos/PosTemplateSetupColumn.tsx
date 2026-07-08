@@ -399,22 +399,20 @@ export default function PosTemplateSetupColumn({
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-white">
-            <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-2 py-1">
-                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
-                    <ProcessingWorkflowStepper
-                        compact
-                        active={created ? "edit" : phase === "generate" ? "generate" : "review"}
-                    />
-                    <p className="min-w-0 truncate text-[9px] text-alloy-midnight/45">
-                        <span className="font-medium text-alloy-midnight/70">{docTitle}</span>
-                        <span aria-hidden> · </span>
-                        {detectionModeLabel(draft)}
-                        <span aria-hidden> · </span>
-                        {activeFieldCount} question{activeFieldCount === 1 ? "" : "s"}
-                        <span aria-hidden> · </span>
-                        {quality === "strong" ? "Ready to generate" : "Needs review"}
-                    </p>
-                </div>
+            <div className="shrink-0 border-b border-alloy-stone/12 bg-white px-2 py-0.5">
+                <ProcessingWorkflowStepper
+                    compact
+                    active={created ? "edit" : phase === "generate" ? "generate" : "review"}
+                />
+                <p className="mt-0.5 min-w-0 truncate text-[9px] text-alloy-midnight/50">
+                    <span className="font-medium text-alloy-midnight">{docTitle}</span>
+                    <span aria-hidden> · </span>
+                    {detectionModeLabel(draft)}
+                    <span aria-hidden> · </span>
+                    {activeFieldCount} question{activeFieldCount === 1 ? "" : "s"}
+                    <span aria-hidden> · </span>
+                    {quality === "strong" ? "Ready to generate" : "Needs review"}
+                </p>
             </div>
 
             {phase === "generate" && !created ? (
@@ -461,17 +459,19 @@ export default function PosTemplateSetupColumn({
             <div className="flex min-h-0 flex-1 gap-2 overflow-hidden p-0">
                 <ProcessingParentPanel
                     title="Source document"
-                    className="min-w-0 flex-[55]"
+                    className="min-w-0 flex-[55] rounded-none border-0 border-r border-alloy-stone/12 shadow-none"
                     headerAction={
                         <div className="flex items-center gap-1.5">
-                            <div className="inline-flex rounded-md border border-alloy-stone/20 bg-white p-0.5">
+                            <div className="inline-flex gap-2">
                                 {(["highlights", "pdf"] as const).map((v) => (
                                     <button
                                         key={v}
                                         type="button"
                                         onClick={() => setLeftView(v)}
-                                        className={`rounded px-2 py-0.5 text-[9px] font-semibold ${
-                                            leftView === v ? "bg-alloy-bend-pine text-white" : "text-alloy-midnight/50 hover:text-alloy-midnight"
+                                        className={`text-[9px] font-semibold ${
+                                            leftView === v
+                                                ? "text-alloy-bend-pine underline decoration-alloy-bend-pine/40 underline-offset-2"
+                                                : "text-alloy-midnight/45 hover:text-alloy-midnight/70"
                                         }`}
                                     >
                                         {v === "pdf" ? "PDF" : "Regions"}
@@ -542,7 +542,7 @@ export default function PosTemplateSetupColumn({
 
                 <ProcessingParentPanel
                     title="Review questions"
-                    className="min-w-0 flex-[23]"
+                    className="min-w-0 flex-[23] rounded-none border-0 shadow-none"
                     headerAction={
                         <div className="flex gap-2">
                             {(["questions", "text"] as const).map((t) => (
