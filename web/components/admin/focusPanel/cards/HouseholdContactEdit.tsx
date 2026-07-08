@@ -115,7 +115,11 @@ export default function HouseholdContactEdit({
         acknowledgeMs: SAVED_BEAT_MS,
         onAcknowledge: () => (onSaved ?? onClose)(),
         save: async () => {
-            const patch = householdContactPatch(draftRef.current, baselineRef.current, saveableKeys);
+            const patch = householdContactPatch(
+                draftRef.current,
+                baselineRef.current,
+                new Set(saveableKeys),
+            );
             const result = await save(personId, patch);
             if (result.ok) {
                 // Advance the baseline to the confirmed draft so re-entry (if any before

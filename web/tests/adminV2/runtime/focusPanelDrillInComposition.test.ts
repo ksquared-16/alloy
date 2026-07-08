@@ -90,7 +90,7 @@ describe("Focus Panel drill-in composition model", () => {
         const patch = householdContactPatch(
             { first_name: "A", last_name: "B", email: "new@example.com", phone: "555" },
             { first_name: "A", last_name: "B", email: "old@example.com", phone: "555" },
-            ["first_name", "last_name", "phone"],
+            new Set(["first_name", "last_name", "phone"]),
         );
         expect(patch.email).toBeUndefined();
     });

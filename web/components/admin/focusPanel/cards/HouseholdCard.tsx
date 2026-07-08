@@ -16,6 +16,10 @@ import {
     householdGroupFieldKeys,
     readHouseholdNestedConfigFromDoc,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
+import {
+    applyHouseholdDisplayView,
+    type HouseholdNestedDisplayView,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
 import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
@@ -46,6 +50,15 @@ import {
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
+type HouseholdComposerPreview = {
+    perspective: "expanded" | "focused";
+    focusedGroup?: HouseholdEvidenceGroupKey | null;
+    displayView?: HouseholdNestedDisplayView;
+    onSelectGroup?: (key: HouseholdEvidenceGroupKey) => void;
+    onSelectContact?: (personId: string) => void;
+    onSelectChild?: () => void;
+};
+
 type Props = {
     model: FocusPanelCardModel;
     /** Forward-facing card boundary — Household observes this, never the drawer VM. */
@@ -55,6 +68,8 @@ type Props = {
     coordination?: FocusPanelCoordination;
     /** Injected save seam (Edit depth). Absent → card stays read-only. */
     mutation?: FocusPanelMutation;
+    /** Legacy nested runtime canvas — forces perspective without live save. */
+    composerPreview?: HouseholdComposerPreview;
 };
 
 const COLLAPSED_PREVIEW_GROUPS = 4;
@@ -70,17 +85,26 @@ const COLLAPSED_PREVIEW_GROUPS = 4;
  * @see docs/platform/operator/card-archetypes.md (Identity)
  * @see docs/platform/operator/card-interaction-expansion-doctrine.md (System 5B — Expand)
  */
-export default function HouseholdCard({ model, context, receded = false, coordination, mutation }: Props) {
+export default function HouseholdCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    mutation,
+    composerPreview,
+}: Props) {
     const composer = useFocusPanelComposer();
     const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
     const nestedConfig = useMemo(() => {
         if (composer?.enabled) return composer.configFor(HOUSEHOLD_SURFACE_ID);
         return readHouseholdNestedConfigFromDoc(publishedDoc);
     }, [composer, publishedDoc]);
-    const evidence = useMemo(
-        () => buildHouseholdCardEvidence(context, { nestedConfig }),
-        [context, nestedConfig],
-    );
+    const evidence = useMemo(() => {
+        const base = buildHouseholdCardEvidence(context, { nestedConfig });
+        return composerPreview?.displayView
+            ? applyHouseholdDisplayView(base, composerPreview.displayView)
+            : base;
+    }, [context, nestedConfig, composerPreview?.displayView]);
     const groupFieldKeys = useCallback(
         (groupKey: HouseholdEvidenceGroupKey) => householdGroupFieldKeys(nestedConfig, groupKey),
         [nestedConfig],
@@ -95,6 +119,11 @@ export default function HouseholdCard({ model, context, receded = false, coordin
 
     const [expanded, setExpanded] = useState(false);
     const [focusedGroup, setFocusedGroup] = useState<HouseholdEvidenceGroupKey | null>(null);
+    useEffect(() => {
+        if (!composerPreview) return;
+        setExpanded(true);
+        setFocusedGroup(composerPreview.focusedGroup ?? null);
+    }, [composerPreview]);
     // TARGETED editing: which specific person row is being edited (null = none). Editing
     // is per-row, not card-wide — only the selected contact becomes an edit form.
     const [editingPersonId, setEditingPersonId] = useState<string | null>(null);

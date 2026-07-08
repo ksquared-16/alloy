@@ -20,6 +20,15 @@ import {
     type AvailableField,
     type AvailableFieldEntityNamespace,
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { defaultChildFieldModes } from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+import {
+    defaultContactFieldModes,
+    defaultHouseholdGroupDisplayOptions,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
+import type {
+    NestedSurfaceFieldMode,
+    NestedSurfaceGroupDisplayOptions,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 import { getSurface } from "@/lib/platform/surfaceComposition/surfaceRegistry";
 import { surfaceComponents } from "@/lib/platform/surfaceComposition/universalSurfaceModel";
@@ -90,6 +99,9 @@ export type NestedSurfaceGroupConfig = {
     selectedFieldKeys: string[];
     /** Optional sections (e.g. emergency_contacts) — false hides until operator adds the section. */
     enabled?: boolean;
+    /** Legacy runtime field modes (displayed/editable) — kept for drill-in runtime parity. */
+    displayOptions?: NestedSurfaceGroupDisplayOptions;
+    fieldModes?: Record<string, NestedSurfaceFieldMode>;
     /** Per-field editable / read-only / hidden policy. */
     fieldPolicies?: Record<string, SurfaceFieldVisibility>;
     /** Operator-facing presentation labels (never schema names). */
@@ -162,11 +174,45 @@ export function defaultNestedSurfaceConfig(surfaceId: string): NestedSurfaceConf
         selectedFieldKeys:
             g.key === "roster" && surfaceId === CHILDREN_SURFACE_ID ? [] : [...g.defaultFieldKeys],
         enabled: defaultGroupEnabled(surfaceId, g.key),
+        displayOptions: defaultGroupDisplayOptionsForSurface(surfaceId, g.key),
+        fieldModes: defaultFieldModesForSurfaceGroup(surfaceId, g.key, g.defaultFieldKeys),
     }));
     if (surfaceId === HOUSEHOLD_SURFACE_ID) {
         groups = orderNestedGroupsByCanonicalKeys(groups, HOUSEHOLD_DEFAULT_SECTION_ORDER);
     }
     return { surfaceId, groups };
+}
+
+function defaultGroupDisplayOptionsForSurface(
+    surfaceId: string,
+    groupKey: string,
+): NestedSurfaceGroupDisplayOptions | undefined {
+    if (surfaceId === HOUSEHOLD_SURFACE_ID) {
+        return defaultHouseholdGroupDisplayOptions(groupKey);
+    }
+    if (surfaceId === "child_surface" && groupKey === "identity") {
+        return { showDob: false, showAge: true };
+    }
+    return undefined;
+}
+
+function defaultFieldModesForSurfaceGroup(
+    surfaceId: string,
+    groupKey: string,
+    defaultFieldKeys: readonly string[],
+): Record<string, NestedSurfaceFieldMode> | undefined {
+    if (surfaceId === "household_contact_surface" && groupKey === "contact_fields") {
+        return defaultContactFieldModes();
+    }
+    if (surfaceId === "child_surface") {
+        const all = defaultChildFieldModes();
+        const scoped: Record<string, NestedSurfaceFieldMode> = {};
+        for (const key of defaultFieldKeys) {
+            if (all[key]) scoped[key] = all[key]!;
+        }
+        return scoped;
+    }
+    return undefined;
 }
 
 /** Selected field keys for a group (empty if group not present). */
@@ -308,6 +354,12 @@ export function setNestedGroupEnabled(
                     key: groupKey,
                     selectedFieldKeys: [...def.defaultFieldKeys],
                     enabled,
+                    displayOptions: defaultGroupDisplayOptionsForSurface(config.surfaceId, groupKey),
+                    fieldModes: defaultFieldModesForSurfaceGroup(
+                        config.surfaceId,
+                        groupKey,
+                        def.defaultFieldKeys,
+                    ),
                     sectionSemantic: options?.sectionSemantic,
                     sectionLabel: options?.sectionLabel,
                 },
@@ -373,6 +425,8 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
             key: g.key,
             selectedFieldKeys: [...found.selectedFieldKeys],
             enabled: found.enabled ?? defaultGroupEnabled(surfaceId, g.key),
+            displayOptions: found.displayOptions ?? g.displayOptions,
+            fieldModes: found.fieldModes ?? g.fieldModes,
             fieldPolicies,
             fieldLabels: found.fieldLabels ? { ...found.fieldLabels } : undefined,
             sectionSemantic: found.sectionSemantic,
