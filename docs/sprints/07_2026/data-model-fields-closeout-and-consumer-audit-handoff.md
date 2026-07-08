@@ -25,7 +25,7 @@ Do **not** open another standalone Data Model implementation sprint unless doctr
 ## Final staging hash
 
 ```
-<!-- Updated after merge/push at sprint closeout -->
+cf1de3aa2e052ca59d911dd7a673f6313939c125
 ```
 
 | Artifact | Hash |
