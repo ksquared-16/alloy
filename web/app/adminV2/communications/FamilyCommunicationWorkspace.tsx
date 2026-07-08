@@ -26,6 +26,7 @@ import {
 } from "@/lib/communications/v2/workspaceModeAvailability";
 import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { CommsActivityEmbedHydratingShell, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
+import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
 
 /**
  * UI-6 / UI-6.1 — drawer Family Communication Workspace (no queue). Thin container: fetches the VM by
@@ -118,6 +119,7 @@ export default function FamilyCommunicationWorkspace(props: {
     initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
     /** Activity cockpit embed — compact loading shell while warm cache resolves. */
     compactActivityLoading?: boolean;
+    surfaceVariant?: FamilyWorkspaceSurfaceVariant;
 }) {
     const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
         props.channel === "sms" ? "sms" : "email",
@@ -245,6 +247,17 @@ export default function FamilyCommunicationWorkspace(props: {
         void load(threadId, false);
     }, [load]);
 
+    const startNewMessage = useCallback(() => {
+        setSelectedThreadId(null);
+        setSubjectDraft("");
+        setBodyDraft("");
+        setSendResult(null);
+        setSendError(null);
+        void load(null, false);
+    }, [load]);
+
+    const isActivityEmbed = props.surfaceVariant === "activity_embed";
+
     const runSend = useCallback(
         async (confirm: boolean) => {
             const cust = vm?.scope.customerId;
@@ -323,10 +336,18 @@ export default function FamilyCommunicationWorkspace(props: {
         <section
             data-cc-column="workspace"
             data-cc-drawer-workspace
+            data-cc-surface-variant={props.surfaceVariant ?? "default"}
             data-drawer-family-workspace-warm={servedFromWarmCache ? "true" : undefined}
-            className="flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
+            className={
+                isActivityEmbed
+                    ? "flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
+                    : "flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
+            }
         >
             <FamilyCommunicationWorkspaceView
+                surfaceVariant={props.surfaceVariant}
+                threads={vm.threads}
+                onNewMessage={startNewMessage}
                 selected={selected}
                 detail={detail}
                 childNames={childNames}
