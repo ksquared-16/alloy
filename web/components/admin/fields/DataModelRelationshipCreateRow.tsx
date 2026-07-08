@@ -5,6 +5,7 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import ConfigurationAdvancedToggle from "@/components/adminV2/configuration/ConfigurationAdvancedToggle";
 import ConfigurationStatusToggle from "@/components/adminV2/configuration/ConfigurationStatusToggle";
 import {
+    CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS,
     RELATIONSHIP_KIND_OPERATOR_OPTIONS,
     slugifyOperatorKey,
 } from "@/lib/fields/dataModelWorkspaceOperatorUi";
@@ -113,11 +114,12 @@ export default function DataModelRelationshipCreateRow({ open, hubEntity, onCanc
     };
 
     return (
-        <div
-            className="mb-3 rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.04]"
-            data-testid="data-model-relationship-create-row"
-            data-expanded="true"
-        >
+        <div className={CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS} data-testid="data-model-relationship-create-shell">
+            <div
+                className="mb-2 rounded-lg border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.04]"
+                data-testid="data-model-relationship-create-row"
+                data-expanded="true"
+            >
             <div className="flex items-center gap-2 border-b border-alloy-bend-pine/15 px-2.5 py-2">
                 <Plus size={14} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" aria-hidden />
                 <p className="text-[13px] font-semibold text-alloy-midnight">New custom relationship</p>
@@ -212,6 +214,7 @@ export default function DataModelRelationshipCreateRow({ open, hubEntity, onCanc
                 >
                     {saving ? "Creating…" : "Create"}
                 </button>
+            </div>
             </div>
         </div>
     );

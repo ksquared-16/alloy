@@ -36,13 +36,15 @@ The Overview tab answers **“What is this entity?”** — relationships, field
 
 Operators work with field names, categories, types, descriptions, and status. Internal keys, surface placement, and capability details stay behind **Advanced** on **edit** — never during creation.
 
-### Categories are configurable organizational primitives
+### Categories are entity-owned organizational primitives
 
-Categories (stored as `section_key` in the field platform) are **business organization**, not presentation.
+Categories belong to **one entity at a time**. Person never shows Child Medical; Location never shows Enrollment.
 
-Org-specific category labels and ordering come from `field_section_definitions` via `GET /api/admin/field-sections`. Platform seeds provide defaults when the registry is empty.
+Each entity has default category seeds (Identity, Contact, …) scoped in `configurationCategoryCatalog.ts`. Org-specific labels and ordering come from `field_section_definitions` via `GET /api/admin/field-sections`.
 
-Categories are reused across **Forms**, **Processing**, **Surface Builder**, **Documents**, and future configuration workspaces.
+**Categories tab** is the management surface: view, create, rename, archive, reorder. Fields **consume** categories — category creation does not belong in field creation.
+
+Categories are reused across **Forms**, **Processing**, **Surface Builder**, **Documents**, **Search**, **Reports**, and future configuration workspaces.
 
 ---
 
@@ -53,9 +55,9 @@ Platform Configuration header
 ↓
 Entity / object context (compact)
 ↓
-Tabs: Overview · Relationships · Fields
+Tabs: Overview · Relationships · Categories · Fields
 ↓
-Category groups (business language)
+Category groups (entity-owned business language)
 ↓
 Compact rows
 ↓
@@ -90,7 +92,9 @@ Shared components (reusable Configuration Workspace framework):
 | `ConfigurationCategoryCreateRow` | `web/components/adminV2/configuration/ConfigurationCategoryCreateRow.tsx` |
 | `ConfigurationStatusToggle` | `web/components/adminV2/configuration/ConfigurationStatusToggle.tsx` |
 | `ConfigurationAdvancedToggle` | `web/components/adminV2/configuration/ConfigurationAdvancedToggle.tsx` |
-| Category catalog + merge | `web/lib/adminV2/configuration/configurationCategoryCatalog.ts` |
+| `ConfigurationCategoryRow` | `web/components/adminV2/configuration/ConfigurationCategoryRow.tsx` |
+| Category catalog + entity seeds | `web/lib/adminV2/configuration/configurationCategoryCatalog.ts` |
+| Inline editor shell (~768px centered) | `CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS` |
 | Row shell + hover grammar | `web/lib/adminV2/configuration/configurationWorkspaceOperatorUi.ts` |
 
 Data Model consumes these; it does not own them. Domain-specific copy lives in `web/lib/fields/dataModelWorkspaceOperatorUi.ts`.

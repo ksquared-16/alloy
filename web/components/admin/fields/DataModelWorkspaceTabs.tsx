@@ -1,6 +1,6 @@
 "use client";
 
-export type DataModelWorkspaceTab = "overview" | "relationships" | "fields";
+export type DataModelWorkspaceTab = "overview" | "relationships" | "categories" | "fields";
 
 type Props = {
     activeTab: DataModelWorkspaceTab;
@@ -10,6 +10,7 @@ type Props = {
 const TABS: { id: DataModelWorkspaceTab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "relationships", label: "Relationships" },
+    { id: "categories", label: "Categories" },
     { id: "fields", label: "Fields" },
 ];
 

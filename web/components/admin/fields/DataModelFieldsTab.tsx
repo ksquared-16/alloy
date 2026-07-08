@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
-import ConfigurationCategoryCreateRow from "@/components/adminV2/configuration/ConfigurationCategoryCreateRow";
 import ConfigurationCategoryHeader from "@/components/adminV2/configuration/ConfigurationCategoryHeader";
 import {
     buildConfigurationCategoryOptions,
+    orderedEntityCategoryKeys,
     resolveConfigurationCategoryLabel,
 } from "@/lib/adminV2/configuration/configurationCategoryCatalog";
+import { CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS } from "@/lib/adminV2/configuration/configurationWorkspaceOperatorUi";
 import DataModelFieldCreateRow, {
     type FieldInlineCreateValues,
 } from "@/components/admin/fields/DataModelFieldCreateRow";
@@ -23,7 +24,6 @@ import {
     filterCatalogByOwnership,
     groupCatalogEntriesBySection,
     hubEntityApiTypes,
-    orderedSectionKeys,
     type SettingsFieldCatalogEntry,
     type SettingsHubEntityKey,
 } from "@/lib/fields/fieldCatalogForSettings";
@@ -85,10 +85,8 @@ export default function DataModelFieldsTab({
     const [ownershipFilter, setOwnershipFilter] = useState<FieldOwnershipFilter>(initialOwnershipFilter);
     const [expandedRefKey, setExpandedRefKey] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
-    const [creatingCategory, setCreatingCategory] = useState(false);
     const [categoryRegistry, setCategoryRegistry] = useState<FieldSectionRegistryRow[]>([]);
     const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
-    const [categoryCreateError, setCategoryCreateError] = useState<string | null>(null);
     const [rowSaving, setRowSaving] = useState(false);
     const [rowError, setRowError] = useState<string | null>(null);
     const [createSaving, setCreateSaving] = useState(false);
@@ -132,22 +130,13 @@ export default function DataModelFieldsTab({
             );
             if (!cancelled) {
                 setCategoryRegistry(registry);
-                setCategoryOptions(buildConfigurationCategoryOptions(registry, inUse));
+                setCategoryOptions(buildConfigurationCategoryOptions(hubEntity, registry, inUse));
             }
         })();
         return () => {
             cancelled = true;
         };
-    }, [primaryEntityType, items]);
-
-    const refreshCategories = useCallback(async () => {
-        const registry = await fetchFieldSectionRegistry(primaryEntityType);
-        const inUse = new Set(
-            items.map((i) => i.section_key).filter((k): k is string => typeof k === "string" && k.trim().length > 0),
-        );
-        setCategoryRegistry(registry);
-        setCategoryOptions(buildConfigurationCategoryOptions(registry, inUse));
-    }, [primaryEntityType, items]);
+    }, [hubEntity, primaryEntityType, items]);
 
     useEffect(() => {
         if (createSignal > 0) {
@@ -194,7 +183,7 @@ export default function DataModelFieldsTab({
     const allCounts = countFieldsByOwnership(entries);
     const filtered = filterCatalogByOwnership(entries, ownershipFilter);
     const groups = groupCatalogEntriesBySection(filtered);
-    const sectionKeys = orderedSectionKeys(groups);
+    const sectionKeys = orderedEntityCategoryKeys(hubEntity, groups.keys(), categoryRegistry);
 
     const saveEdit = async (entry: SettingsFieldCatalogEntry, values: FieldInlineEditValues) => {
         if (!entry.fieldDef || !canMutate) return;
@@ -302,78 +291,48 @@ export default function DataModelFieldsTab({
                         computed: allCounts.computed,
                     }}
                 />
-                <div className="flex flex-wrap items-center gap-1.5">
-                    {canMutate ? (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setCreatingCategory((o) => !o);
-                                setCategoryCreateError(null);
-                            }}
-                            className="config-secondary-btn rounded-lg border border-alloy-forge/12 px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/[0.35]"
-                            data-testid="fields-tab-add-category"
-                        >
-                            {creatingCategory ? "Cancel category" : "Add category"}
-                        </button>
-                    ) : null}
-                    {canMutate ? (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setCreating(true);
-                                setExpandedRefKey(null);
-                            }}
-                            className="config-primary-btn rounded-lg bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-bend-pine/90"
-                            data-testid="fields-tab-add-field"
-                        >
-                            Add Field
-                        </button>
-                    ) : null}
-                </div>
+                {canMutate ? (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setCreating(true);
+                            setExpandedRefKey(null);
+                        }}
+                        className="config-primary-btn rounded-lg bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-bend-pine/90"
+                        data-testid="fields-tab-add-field"
+                    >
+                        Add Field
+                    </button>
+                ) : null}
             </div>
-
-            <ConfigurationCategoryCreateRow
-                entityType={primaryEntityType}
-                open={creatingCategory}
-                canMutate={canMutate}
-                error={categoryCreateError}
-                onCancel={() => {
-                    setCreatingCategory(false);
-                    setCategoryCreateError(null);
-                }}
-                onCreated={async () => {
-                    setCreatingCategory(false);
-                    setCategoryCreateError(null);
-                    await refreshCategories();
-                }}
-                onError={setCategoryCreateError}
-            />
 
             {loadError ? <p className="text-xs text-alloy-ember">{loadError}</p> : null}
             {loading ? <p className="text-[12px] text-alloy-midnight/45">Loading fields…</p> : null}
 
-            <DataModelFieldCreateRow
-                open={creating}
-                categoryOptions={categoryOptions}
-                saving={createSaving}
-                error={createError}
-                canMutate={canMutate}
-                onCancel={() => {
-                    setCreating(false);
-                    setCreateError(null);
-                }}
-                onCreate={createField}
-            />
+            <div className={CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS}>
+                <DataModelFieldCreateRow
+                    open={creating}
+                    categoryOptions={categoryOptions}
+                    saving={createSaving}
+                    error={createError}
+                    canMutate={canMutate}
+                    onCancel={() => {
+                        setCreating(false);
+                        setCreateError(null);
+                    }}
+                    onCreate={createField}
+                />
+            </div>
 
             {!loading && filtered.length === 0 ? (
                 <p className="text-[12px] text-alloy-midnight/55">No fields match this filter.</p>
             ) : null}
 
-            <div className="space-y-3">
+            <div className="grid gap-3 lg:grid-cols-2">
                 {sectionKeys.map((sectionKey) => {
                     const sectionEntries = groups.get(sectionKey) ?? [];
                     if (sectionEntries.length === 0) return null;
-                    const label = resolveConfigurationCategoryLabel(sectionKey, categoryRegistry);
+                    const label = resolveConfigurationCategoryLabel(sectionKey, categoryRegistry, hubEntity);
                     return (
                         <section key={sectionKey} data-testid={`field-category-group-${sectionKey}`}>
                             <ConfigurationCategoryHeader label={label} testId={`field-category-${sectionKey}`} />

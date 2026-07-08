@@ -17,6 +17,9 @@ export const CONFIG_WORKSPACE_GHOST_ACTION_CLASS =
 /** Compact row inner shell — ~35% tighter than legacy admin spacing. */
 export const CONFIG_WORKSPACE_ROW_INNER_CLASS = "flex items-center gap-1.5 px-2.5 py-1";
 
+/** Centered inline create/edit shell (~768px) — does not consume full workspace width. */
+export const CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS = "mx-auto w-full max-w-[48rem]";
+
 export type ConfigurationUnavailableHint = {
     label: string;
     title?: string;
