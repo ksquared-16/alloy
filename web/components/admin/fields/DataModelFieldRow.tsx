@@ -1,0 +1,330 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { FieldDef } from "@/app/api/admin/field-definitions/route";
+import FieldSurfaceAvailabilityBadges from "@/components/admin/fields/FieldSurfaceAvailabilityBadges";
+import { FIELD_OWNERSHIP_LABELS } from "@/lib/fields/fieldOwnership";
+import { resolveSettingsCatalogEntryAvailability } from "@/lib/fields/fieldSurfaceAvailability";
+import type { SettingsFieldCatalogEntry, SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
+import {
+    DATA_MODEL_FIELD_TYPE_ICONS,
+    DATA_MODEL_ICON_STROKE,
+} from "@/lib/fields/dataModelWorkspaceIcons";
+import { Check, Circle } from "lucide-react";
+
+export type FieldInlineEditValues = {
+    label: string;
+    description: string;
+    help_text: string;
+    section_key: string;
+    is_required: boolean;
+    is_active: boolean;
+    is_visible_in_form: boolean;
+    is_visible_in_drawer: boolean;
+    is_visible_in_table: boolean;
+};
+
+type Props = {
+    entry: SettingsFieldCatalogEntry;
+    hubEntity: SettingsHubEntityKey;
+    expanded: boolean;
+    onExpand: () => void;
+    onCollapse: () => void;
+    canMutate?: boolean;
+    sectionOptions?: Array<{ value: string; label: string }>;
+    saving?: boolean;
+    error?: string | null;
+    onSave?: (values: FieldInlineEditValues) => void | Promise<void>;
+    onDelete?: () => void;
+};
+
+function ownershipTone(ownership: SettingsFieldCatalogEntry["ownership"]): string {
+    switch (ownership) {
+        case "platform":
+            return "text-alloy-midnight/55";
+        case "custom":
+            return "text-alloy-bend-pine";
+        case "computed":
+            return "text-alloy-forge/70";
+    }
+}
+
+function TypeIcon({ fieldType }: { fieldType: string }) {
+    const Icon = DATA_MODEL_FIELD_TYPE_ICONS[fieldType] ?? DATA_MODEL_FIELD_TYPE_ICONS.text;
+    return <Icon size={13} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-forge/45" aria-hidden />;
+}
+
+function valuesFromEntry(entry: SettingsFieldCatalogEntry): FieldInlineEditValues {
+    const d = entry.fieldDef;
+    return {
+        label: d?.label ?? entry.label,
+        description: d?.description ?? entry.description ?? "",
+        help_text: d?.help_text ?? "",
+        section_key: d?.section_key ?? entry.section_key,
+        is_required: Boolean(d?.is_required),
+        is_active: d?.is_active !== false,
+        is_visible_in_form: d?.is_visible_in_form !== false,
+        is_visible_in_drawer: d?.is_visible_in_drawer !== false,
+        is_visible_in_table: d?.is_visible_in_table !== false,
+    };
+}
+
+export default function DataModelFieldRow({
+    entry,
+    hubEntity,
+    expanded,
+    onExpand,
+    onCollapse,
+    canMutate = false,
+    sectionOptions = [],
+    saving = false,
+    error = null,
+    onSave,
+    onDelete,
+}: Props) {
+    const editable = canMutate && entry.ownership === "custom" && Boolean(entry.fieldDef) && entry.configurable;
+    const active = entry.fieldDef ? entry.fieldDef.is_active !== false : true;
+    const [draft, setDraft] = useState<FieldInlineEditValues>(() => valuesFromEntry(entry));
+
+    useEffect(() => {
+        if (expanded) setDraft(valuesFromEntry(entry));
+    }, [expanded, entry]);
+
+    const availability = resolveSettingsCatalogEntryAvailability({
+        ownership: entry.ownership,
+        platformField: entry.platformField,
+        computedField: entry.computedField,
+        hub_entity: hubEntity,
+        registry: entry.fieldDef
+            ? {
+                  entity_type: entry.entity_type,
+                  field_key: entry.fieldDef.field_key,
+                  field_type: entry.fieldDef.field_type,
+                  label: entry.fieldDef.label,
+                  is_system: entry.fieldDef.is_system,
+                  is_active: entry.fieldDef.is_active,
+                  is_visible_in_form: entry.fieldDef.is_visible_in_form,
+                  is_visible_in_drawer: entry.fieldDef.is_visible_in_drawer,
+                  is_visible_in_table: entry.fieldDef.is_visible_in_table,
+                  config: entry.fieldDef.config,
+              }
+            : undefined,
+    });
+
+    const availableCount = availability.filter((r) => r.status === "available").length;
+
+    return (
+        <div
+            className={[
+                "border-b border-alloy-forge/10 last:border-b-0",
+                expanded ? "bg-alloy-bend-pine/[0.03]" : "hover:bg-alloy-stone/[0.22]",
+            ].join(" ")}
+            data-testid="data-model-field-row"
+            data-field-ref-key={entry.refKey}
+            data-expanded={expanded ? "true" : "false"}
+            data-ownership={entry.ownership}
+        >
+            <div className="flex items-center gap-2 px-2.5 py-2">
+                <span className="shrink-0" aria-hidden>
+                    {active ? (
+                        <Check size={14} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" />
+                    ) : (
+                        <Circle size={14} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-midnight/25" />
+                    )}
+                </span>
+                <TypeIcon fieldType={entry.field_type} />
+                <button
+                    type="button"
+                    onClick={onExpand}
+                    className="min-w-0 flex-1 text-left"
+                    data-testid="data-model-field-row-toggle"
+                >
+                    <span className="block truncate text-[13px] font-medium text-alloy-midnight">{entry.label}</span>
+                </button>
+                <span className={`hidden shrink-0 text-[10px] font-medium sm:inline ${ownershipTone(entry.ownership)}`}>
+                    {FIELD_OWNERSHIP_LABELS[entry.ownership]}
+                </span>
+                <span className="hidden shrink-0 text-[10px] capitalize text-alloy-midnight/45 sm:inline">
+                    {entry.field_type.replace(/_/g, " ")}
+                </span>
+                {!active ? (
+                    <span className="shrink-0 text-[10px] font-medium text-alloy-midnight/35">Inactive</span>
+                ) : null}
+                <span
+                    className="shrink-0 rounded-md bg-alloy-stone/[0.45] px-1.5 py-0.5 text-[9px] font-medium text-alloy-midnight/45"
+                    title="Surfaces currently available"
+                    data-testid="data-model-field-availability-hint"
+                >
+                    {availableCount} avail
+                </span>
+                <button
+                    type="button"
+                    onClick={expanded ? onCollapse : onExpand}
+                    className="config-ghost-btn shrink-0 px-1.5 py-0.5 text-[11px] font-medium text-alloy-bend-pine hover:underline"
+                    data-testid="data-model-field-edit"
+                >
+                    {expanded ? "Close" : editable ? "Edit" : "View"}
+                </button>
+            </div>
+
+            {expanded ? (
+                <div className="space-y-3 border-t border-alloy-forge/8 px-3 pb-3 pt-2.5" data-testid="data-model-field-editor">
+                    {editable ? (
+                        <div className="grid gap-2.5 sm:grid-cols-2">
+                            <label className="block space-y-1 sm:col-span-2">
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                    Label
+                                </span>
+                                <input
+                                    value={draft.label}
+                                    onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
+                                    className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm text-alloy-midnight"
+                                    data-testid="inline-field-label"
+                                />
+                            </label>
+                            <label className="block space-y-1">
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                    Section
+                                </span>
+                                <select
+                                    value={draft.section_key}
+                                    onChange={(e) => setDraft((d) => ({ ...d, section_key: e.target.value }))}
+                                    className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
+                                    data-testid="inline-field-section"
+                                >
+                                    {sectionOptions.length === 0 ? (
+                                        <option value={draft.section_key}>{draft.section_key}</option>
+                                    ) : null}
+                                    {sectionOptions.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="block space-y-1">
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                    Help text
+                                </span>
+                                <input
+                                    value={draft.help_text}
+                                    onChange={(e) => setDraft((d) => ({ ...d, help_text: e.target.value }))}
+                                    className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
+                                    data-testid="inline-field-help"
+                                />
+                            </label>
+                            <label className="block space-y-1 sm:col-span-2">
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                    Description
+                                </span>
+                                <textarea
+                                    value={draft.description}
+                                    onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                                    rows={2}
+                                    className="w-full rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm"
+                                    data-testid="inline-field-description"
+                                />
+                            </label>
+                            <div className="flex flex-wrap gap-3 sm:col-span-2">
+                                {(
+                                    [
+                                        ["is_required", "Required"],
+                                        ["is_active", "Active"],
+                                        ["is_visible_in_form", "Forms"],
+                                        ["is_visible_in_drawer", "Drawers"],
+                                        ["is_visible_in_table", "Tables"],
+                                    ] as const
+                                ).map(([key, label]) => (
+                                    <label key={key} className="inline-flex items-center gap-1.5 text-[12px] text-alloy-midnight/75">
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(draft[key])}
+                                            onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.checked }))}
+                                            data-testid={`inline-field-${key}`}
+                                        />
+                                        {label}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-1.5 text-[12px] text-alloy-midnight/60">
+                            <p>
+                                <span className="font-medium text-alloy-midnight/75">Key:</span>{" "}
+                                <span className="font-mono text-[11px]">{entry.refKey}</span>
+                            </p>
+                            <p>
+                                <span className="font-medium text-alloy-midnight/75">Type:</span> {entry.field_type}
+                            </p>
+                            {entry.description ? <p>{entry.description}</p> : null}
+                            {entry.storage_line ? (
+                                <p>
+                                    <span className="font-medium text-alloy-midnight/75">Source:</span>{" "}
+                                    {entry.storage_line}
+                                </p>
+                            ) : null}
+                            {entry.ownership === "platform" || entry.ownership === "computed" ? (
+                                <p className="text-[11px] text-alloy-midnight/45">
+                                    {entry.ownership === "computed"
+                                        ? "Computed signals are platform-defined and view-only."
+                                        : "Platform fields are viewable here; placement is configured in Surface Builder."}
+                                </p>
+                            ) : null}
+                        </div>
+                    )}
+
+                    <div>
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                            Availability
+                        </p>
+                        <FieldSurfaceAvailabilityBadges rows={availability} compact />
+                    </div>
+
+                    {error ? (
+                        <p className="text-xs text-alloy-ember" data-testid="inline-field-error">
+                            {error}
+                        </p>
+                    ) : null}
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            {editable && onDelete && !(entry.fieldDef as FieldDef | undefined)?.is_system ? (
+                                <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={onDelete}
+                                    className="text-[11px] font-medium text-red-600 hover:underline disabled:opacity-50"
+                                    data-testid="inline-field-delete"
+                                >
+                                    Delete
+                                </button>
+                            ) : null}
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                disabled={saving}
+                                onClick={onCollapse}
+                                className="config-secondary-btn rounded-lg border border-alloy-forge/12 px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/[0.35]"
+                                data-testid="inline-field-cancel"
+                            >
+                                {editable ? "Cancel" : "Close"}
+                            </button>
+                            {editable && onSave ? (
+                                <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => void onSave(draft)}
+                                    className="config-primary-btn rounded-lg bg-alloy-bend-pine px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-50"
+                                    data-testid="inline-field-save"
+                                >
+                                    {saving ? "Saving…" : "Save"}
+                                </button>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+        </div>
+    );
+}

@@ -73,10 +73,11 @@ describe("Data Model workspace", () => {
         expect(entries.some((e) => e.ownership === "computed")).toBe(true);
     });
 
-    it("field detail drawer is overlay-only (not persistent inspector)", () => {
-        const src = readFileSync(resolve(root, "components/admin/fields/FieldDetailDrawer.tsx"), "utf8");
-        expect(src).toContain("field-detail-drawer-backdrop");
-        expect(src).not.toContain("lg:absolute lg:inset-y-0");
+    it("Data Model workspace does not mount legacy field detail drawer", () => {
+        const client = readFileSync(resolve(root, "app/adminV2/settings/fields/DataModelWorkspaceClient.tsx"), "utf8");
+        expect(client).not.toContain("FieldDetailDrawer");
+        expect(client).toContain("DataModelFieldsTab");
+        expect(client).toContain("focusFieldRefKey");
     });
 
     it("uses operator-facing entity labels without internal grains in rendered nav", () => {

@@ -1,18 +1,19 @@
 # Data Model Workspace + Configured Field Availability
 
 **Sprint:** July 2026  
-**Branches:** `feat/fields-registry-audit-wt-p2os` → staging; finish pass `feat/data-model-finish-pass`
+**Branches:** `feat/fields-registry-audit-wt-p2os` → staging; finish pass `feat/data-model-finish-pass`; inline UX `feat/data-model-inline-ux`
 
 ## Workspace UX model
 
-Settings → **Data Model** at **`/settings/fields`** (`?entity=&tab=`) is a single calm workspace. `/settings/data-model` redirects to `/settings/fields`.
+Settings → **Data Model** at **`/settings/fields`** (`?entity=&tab=`) is a single Alloy workspace (Surface Builder grammar). `/settings/data-model` redirects to `/settings/fields`.
 
 | Area | Behavior |
 | --- | --- |
 | Entity rail | Child, Person, Family, Lead / Enrollment, Location + Manage Entities |
-| Entity header | Compact identity, Lucide icon, grain badge, compressed stats, View Usage, Add menu |
+| Entity header | Compact identity + Lucide icon + one-line metrics + View Usage + Add |
 | Tabs (same shell) | Overview · Relationships · Fields · Computed Signals |
-| Field detail | Overlay drawer on click only — no persistent inspector |
+| Fields / relationships | Compact **rows** with **inline expand** edit/create — no drawers, no modals |
+| Field detail | Expand-in-place only (workspace owns the interaction) |
 
 Built on the canonical field platform stack (catalog → resolver → capability → builders).
 
@@ -22,7 +23,7 @@ Built on the canonical field platform stack (catalog → resolver → capability
 - **Relationships** catalog (`entityRelationshipCatalog.ts`) documents how entities connect.
 - **Person roles** (parent, guardian, emergency, billing) are roles on Person — not separate entities.
 
-Relationship vocabulary can be created in-workspace via **Add Relationship** (family roles + person relationship types). Full table management remains in Settings → Relationships.
+Relationship vocabulary can be created in-workspace via **inline Add Relationship** row (family roles + person relationship types). Full table management remains in Settings → Relationships.
 
 ## Context-aware availability rules
 
@@ -84,22 +85,35 @@ Visual + platform completion pass after architecture landed on staging. No stack
 
 ### Platform completion in this pass
 
-1. **Add Relationship** — real in-workspace modal posting to family-role or person-relationship APIs (no route away).
+1. **Add Relationship** — originally a modal; superseded by inline create row (see Final UX Pass).
 2. **Focus Panel builder badges** — library + field inspector use capability engine via `focusPanelFieldAvailability.ts`.
 3. **Usage** — remains on Overview (no separate Usage tab).
+
+## Final UX Pass (inline rows)
+
+Interaction model aligned with Surface Builder / Focus Panel / Queue Builder:
+
+- **Flatten nesting** — Workspace → Field Sections → Rows (no Person Fields card around Identity card around Field cards).
+- **Fields are rows** — label, ownership, type, active/inactive, availability hint, Edit/View.
+- **Inline edit** — Expand row → editor → Save collapses / Cancel restores. No `FieldDetailDrawer`, no `FieldDefinitionEditModal`, no `EntityFieldsClient` in the Data Model workspace.
+- **Inline create** — Add Field inserts a temporary create row at the top of Fields.
+- **Relationships** — same row grammar; Add Relationship inserts inline create (posts family-role / person-relationship APIs). Platform catalog relationships expand for detail (view).
+- **Header** — half-height identity bar; metrics compressed to one secondary line.
+- **Buttons** — Bend Pine primary / outline secondary / ghost Edit · View / danger Delete text.
 
 ### Remaining intentional limitations
 
 1. **Reports builder** — Future in Available In; not fake-available.
 2. **Queue hydration for child profile values** — validator-gated by design; do not broaden Queue Rows.
 3. **Live usage analytics** — Overview tiles use orientation hints, not instrumented counts.
-4. **Computed signal authoring** — platform-defined; Add Computed Signal stays disabled.
-5. **Relationship catalog cards** — informational model; creating vocabulary updates Settings → Relationships APIs, not the static overview catalog until refresh/reseed.
+4. **Computed signal authoring** — platform-defined; Add Computed Signal removed from Add menu (not offered).
+5. **Relationship catalog** — informational model for entity graph; vocabulary create updates Settings → Relationships APIs. Full PATCH/edit of existing role types still lives under Settings → Relationships.
+6. **Legacy field cards/modals** — still used by non-workspace `EntityFieldsClient` paths (legacy Settings field pages if any); Data Model workspace does not open them.
 
 ### Future enhancements
 
 - Instrument real surface usage counts for Used Throughout.
-- Deep-link Overview relationship cards into live family/person relationship rows.
+- Inline PATCH for existing relationship vocabulary types inside Data Model (not only create).
 - Expand Focus Panel concept → registry refKey coverage for more library items.
 - Optional dedicated Usage analytics surface if instrumentation justifies it.
 
@@ -111,6 +125,6 @@ cd web && npm run test -- tests/adminV2/focusPanelComposer.test.ts tests/adminV2
 cd web && NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit
 ```
 
-New: `tests/fields/dataModelFinishPass.test.ts`
+New: `tests/fields/dataModelFinishPass.test.ts`, `tests/fields/dataModelInlineUx.test.ts`
 
 Updated: Data Model workspace tests, Focus Panel builder availability wiring.

@@ -2,16 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import EntityFieldsClient from "@/components/admin/EntityFieldsClient";
-import DataModelAddRelationshipModal from "@/components/admin/fields/DataModelAddRelationshipModal";
 import DataModelComputedSignalsTab from "@/components/admin/fields/DataModelComputedSignalsTab";
 import DataModelEntityHeader from "@/components/admin/fields/DataModelEntityHeader";
+import DataModelFieldsTab from "@/components/admin/fields/DataModelFieldsTab";
 import DataModelOverviewTab from "@/components/admin/fields/DataModelOverviewTab";
 import DataModelRelationshipsTab from "@/components/admin/fields/DataModelRelationshipsTab";
 import DataModelWorkspaceTabs, { type DataModelWorkspaceTab } from "@/components/admin/fields/DataModelWorkspaceTabs";
-import FieldDetailDrawer from "@/components/admin/fields/FieldDetailDrawer";
 import FieldEntityNav, { FIELD_SETTINGS_NAV_ENTITIES } from "@/components/admin/fields/FieldEntityNav";
-import type { FieldOwnershipFilter } from "@/components/admin/fields/FieldOwnershipFilterTabs";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import { isChildcareFieldsHubVisibleEntity } from "@/lib/fields/childcareFieldCatalogDoctrine";
@@ -24,8 +21,6 @@ import {
 import { dataModelStatsForEntity } from "@/lib/fields/dataModelWorkspaceModel";
 import { SETTINGS_ENTITY_FIELD_EXPLANATIONS } from "@/lib/fields/computedFieldCatalog";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
-
-const MANAGE_OPTION_SETS_HREF = "/settings/option-sets";
 
 export type FieldEntityKey = SettingsHubEntityKey;
 
@@ -91,28 +86,35 @@ export default function DataModelWorkspaceClient({
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const { labels } = useEntityLabels();
-    const entity = useMemo(() => normalizeEntity(initialEntity ?? searchParams.get("entity") ?? undefined), [initialEntity, searchParams]);
-    const tab = useMemo(() => normalizeTab(initialTab ?? searchParams.get("tab") ?? undefined), [initialTab, searchParams]);
-    const [ownershipFilter, setOwnershipFilter] = useState<FieldOwnershipFilter>("all");
-    const [selectedEntry, setSelectedEntry] = useState<SettingsFieldCatalogEntry | null>(null);
+    const entity = useMemo(
+        () => normalizeEntity(initialEntity ?? searchParams.get("entity") ?? undefined),
+        [initialEntity, searchParams],
+    );
+    const tab = useMemo(
+        () => normalizeTab(initialTab ?? searchParams.get("tab") ?? undefined),
+        [initialTab, searchParams],
+    );
     const [totalFieldsByEntity, setTotalFieldsByEntity] = useState<Partial<Record<FieldEntityKey, number>>>({});
     const [catalogEntries, setCatalogEntries] = useState<SettingsFieldCatalogEntry[]>([]);
     const [createFieldSignal, setCreateFieldSignal] = useState(0);
-    const [relationshipModalOpen, setRelationshipModalOpen] = useState(false);
+    const [creatingRelationship, setCreatingRelationship] = useState(false);
+    const [focusFieldRefKey, setFocusFieldRefKey] = useState<string | null>(null);
 
     const entityLabel = useMemo(() => adminFieldEntitySingularLabel(labels, entity), [labels, entity]);
     const primaryEntityType = entity === "inquiry_child" ? "customer_member" : entity;
 
     const replaceWorkspaceUrl = useCallback(
         (nextEntity: FieldEntityKey, nextTab: DataModelWorkspaceTab) => {
-            router.replace(`${settingsFieldsBasePath(pathname)}?entity=${encodeURIComponent(nextEntity)}&tab=${encodeURIComponent(nextTab)}`);
+            router.replace(
+                `${settingsFieldsBasePath(pathname)}?entity=${encodeURIComponent(nextEntity)}&tab=${encodeURIComponent(nextTab)}`,
+            );
         },
         [router, pathname],
     );
 
     useEffect(() => {
-        setSelectedEntry(null);
-        setOwnershipFilter("all");
+        setFocusFieldRefKey(null);
+        setCreatingRelationship(false);
     }, [entity, tab]);
 
     useEffect(() => {
@@ -167,21 +169,34 @@ export default function DataModelWorkspaceClient({
 
     const triggerAddField = () => {
         setCreateFieldSignal((n) => n + 1);
+        setFocusFieldRefKey(null);
         onTabChange("fields");
     };
 
-    const openRelationshipModal = () => setRelationshipModalOpen(true);
+    const triggerAddRelationship = () => {
+        setCreatingRelationship(true);
+        onTabChange("relationships");
+    };
+
+    const openFieldInline = (entry: SettingsFieldCatalogEntry) => {
+        setFocusFieldRefKey(entry.refKey);
+        if (entry.ownership === "computed") {
+            onTabChange("computed_signals");
+        } else {
+            onTabChange("fields");
+        }
+    };
 
     return (
         <div className="w-full min-w-0" data-testid="data-model-workspace">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
                 <FieldEntityNav
                     activeEntity={entity}
                     onSelect={onEntityChange}
                     totalFieldsByEntity={totalFieldsByEntity}
                 />
 
-                <div className="min-w-0 flex-1 space-y-3">
+                <div className="min-w-0 flex-1 space-y-2.5">
                     <DataModelEntityHeader
                         hubEntity={entity}
                         entityLabel={entityLabel}
@@ -189,7 +204,7 @@ export default function DataModelWorkspaceClient({
                         explanation={SETTINGS_ENTITY_FIELD_EXPLANATIONS[entity]}
                         onViewUsage={() => onTabChange("overview")}
                         onAddField={triggerAddField}
-                        onAddRelationship={openRelationshipModal}
+                        onAddRelationship={triggerAddRelationship}
                     />
 
                     <DataModelWorkspaceTabs activeTab={tab} onSelect={onTabChange} />
@@ -202,34 +217,27 @@ export default function DataModelWorkspaceClient({
                             onViewAllRelationships={() => onTabChange("relationships")}
                             onViewAllComputed={() => onTabChange("computed_signals")}
                             onAddField={triggerAddField}
-                            onAddRelationship={openRelationshipModal}
-                            onSelectField={setSelectedEntry}
+                            onAddRelationship={triggerAddRelationship}
+                            onSelectField={openFieldInline}
                         />
                     ) : null}
 
                     {tab === "relationships" ? (
                         <DataModelRelationshipsTab
                             hubEntity={entity}
-                            onAddRelationship={openRelationshipModal}
+                            creating={creatingRelationship}
+                            onCreatingChange={setCreatingRelationship}
                         />
                     ) : null}
 
                     {tab === "fields" ? (
-                        <EntityFieldsClient
+                        <DataModelFieldsTab
                             key={`${entity}-fields`}
-                            entityType={primaryEntityType}
                             hubEntity={entity}
-                            title={`${entityLabel} Fields`}
-                            manageOptionSetsHref={MANAGE_OPTION_SETS_HREF}
-                            adminV2Chrome
-                            hideSettingsHeader
-                            workspaceCatalogMode
-                            ownershipFilter={ownershipFilter}
-                            onOwnershipFilterChange={setOwnershipFilter}
-                            selectedRefKey={selectedEntry?.refKey ?? null}
-                            onSelectCatalogEntry={setSelectedEntry}
-                            sectionGroupTitle={entityLabel}
-                            createFieldSignal={createFieldSignal}
+                            primaryEntityType={primaryEntityType}
+                            createSignal={createFieldSignal}
+                            focusRefKey={focusFieldRefKey}
+                            onCatalogChange={setCatalogEntries}
                         />
                     ) : null}
 
@@ -237,31 +245,11 @@ export default function DataModelWorkspaceClient({
                         <DataModelComputedSignalsTab
                             hubEntity={entity}
                             entries={catalogEntries}
-                            selectedRefKey={selectedEntry?.refKey ?? null}
-                            onSelectEntry={setSelectedEntry}
+                            focusRefKey={focusFieldRefKey}
                         />
                     ) : null}
                 </div>
             </div>
-
-            <FieldDetailDrawer
-                entry={selectedEntry}
-                hubEntity={entity}
-                onClose={() => setSelectedEntry(null)}
-                onConfigure={
-                    selectedEntry?.fieldDef
-                        ? () => {
-                              onTabChange("fields");
-                          }
-                        : undefined
-                }
-            />
-
-            <DataModelAddRelationshipModal
-                open={relationshipModalOpen}
-                hubEntity={entity}
-                onClose={() => setRelationshipModalOpen(false)}
-            />
         </div>
     );
 }
