@@ -10,6 +10,7 @@ import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTi
 import { loadEntityLabelsMapForUser, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { loadOperatorLifecycleLandingCardsServer } from "@/lib/admin/loadOperatorLifecycleLandingServer";
 import { composeWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
+import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
 export const dynamic = "force-dynamic";
 
@@ -65,11 +66,7 @@ export default async function AdminV2WorkspaceLayout({
 
     const orgId = auth.orgId;
     if (!orgId) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-admin-page p-6 text-alloy-midnight">
-                Loading context...
-            </div>
-        );
+        return <AlloyOperationalBootShell variant="workspace" />;
     }
 
     const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, lifecycleCards] =

@@ -14,8 +14,8 @@ export type AdminV2RouteLoadingVocabulary = {
 export const ADMIN_V2_ROUTE_LOADING_VOCABULARY: Record<AdminV2RouteLoadingVariant, AdminV2RouteLoadingVocabulary> = {
     workspace: {
         title: "Preparing workspace",
-        description: "Loading departments and organization context…",
-        ribbon: "Loading workspace",
+        description: "Assembling organization context…",
+        ribbon: "Preparing workspace",
     },
     department: {
         title: "Loading department",

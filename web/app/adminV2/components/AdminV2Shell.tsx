@@ -46,6 +46,7 @@ import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDr
 import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
 import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
 import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
+import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
 /**
  * AdminV2 AI command surface is internal/admin-only and should be interactive whenever visible.
@@ -315,7 +316,7 @@ function AdminV2ShellInner({
 
 export default function AdminV2Shell({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm text-alloy-midnight/55">Loading…</div>}>
+    <Suspense fallback={<AlloyOperationalBootShell variant="workspace" />}>
       <AdminV2ShellInner>{children}</AdminV2ShellInner>
     </Suspense>
   );
