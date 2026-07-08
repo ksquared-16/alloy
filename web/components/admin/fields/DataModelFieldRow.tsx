@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { FieldDef } from "@/app/api/admin/field-definitions/route";
-import ConfigurationAdvancedToggle from "@/components/adminV2/configuration/ConfigurationAdvancedToggle";
 import ConfigurationStatusToggle from "@/components/adminV2/configuration/ConfigurationStatusToggle";
 import FieldSurfaceAvailabilityBadges from "@/components/admin/fields/FieldSurfaceAvailabilityBadges";
 import { configurationFieldUnavailableHint } from "@/lib/adminV2/configuration/configurationWorkspaceOperatorUi";
 import { CONFIG_WORKSPACE_ROW_INNER_CLASS } from "@/lib/adminV2/configuration/configurationWorkspaceOperatorUi";
 import { FIELD_OWNERSHIP_LABELS } from "@/lib/fields/fieldOwnership";
 import { resolveSettingsCatalogEntryAvailability } from "@/lib/fields/fieldSurfaceAvailability";
-import type { SettingsFieldCatalogEntry, SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
+import {
+    fieldRowEditCapability,
+    type SettingsFieldCatalogEntry,
+    type SettingsHubEntityKey,
+} from "@/lib/fields/fieldCatalogForSettings";
 import {
     CONFIG_WORKSPACE_GHOST_ACTION_CLASS,
     CONFIG_WORKSPACE_ROW_CLASS,
@@ -74,15 +76,15 @@ export default function DataModelFieldRow({
     onSave,
     onDelete,
 }: Props) {
-    const editable = canMutate && entry.ownership === "custom" && Boolean(entry.fieldDef) && entry.configurable;
+    const capability = fieldRowEditCapability(entry, canMutate);
+    const editable = capability.mode !== "view";
+    const presentationOnly = capability.mode === "presentation";
     const active = entry.fieldDef ? entry.fieldDef.is_active !== false : true;
     const [draft, setDraft] = useState<FieldInlineEditValues>(() => valuesFromEntry(entry));
-    const [advancedOpen, setAdvancedOpen] = useState(false);
 
     useEffect(() => {
         if (expanded) {
             setDraft(valuesFromEntry(entry));
-            setAdvancedOpen(false);
         }
     }, [expanded, entry]);
 
@@ -108,7 +110,6 @@ export default function DataModelFieldRow({
     });
 
     const unavailableHint = configurationFieldUnavailableHint(availability);
-    const internalKey = entry.fieldDef?.field_key ?? entry.refKey;
 
     return (
         <div
@@ -222,31 +223,23 @@ export default function DataModelFieldRow({
                                     data-testid="inline-field-description"
                                 />
                             </label>
-                            <div className="sm:col-span-2">
-                                <ConfigurationStatusToggle
-                                    active={draft.is_active}
-                                    onChange={(is_active) => setDraft((d) => ({ ...d, is_active }))}
-                                />
-                            </div>
-                            <div className="sm:col-span-2">
-                                <ConfigurationAdvancedToggle
-                                    open={advancedOpen}
-                                    onToggle={() => setAdvancedOpen((o) => !o)}
-                                />
-                                {advancedOpen ? (
-                                    <div className="mt-1.5 space-y-1">
-                                        <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                                            Internal key
-                                        </span>
-                                        <p
-                                            className="rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.2] px-2 py-1 font-mono text-[11px] text-alloy-midnight/55"
-                                            data-testid="inline-field-key"
-                                        >
-                                            {internalKey}
-                                        </p>
-                                    </div>
-                                ) : null}
-                            </div>
+                            {capability.canEditStatus ? (
+                                <div className="sm:col-span-2">
+                                    <ConfigurationStatusToggle
+                                        active={draft.is_active}
+                                        onChange={(is_active) => setDraft((d) => ({ ...d, is_active }))}
+                                    />
+                                </div>
+                            ) : null}
+                            {presentationOnly ? (
+                                <p
+                                    className="text-[11px] text-alloy-midnight/45 sm:col-span-2"
+                                    data-testid="inline-field-presentation-note"
+                                >
+                                    This is a platform field. You can rename it and change its category. Type and storage
+                                    stay locked.
+                                </p>
+                            ) : null}
                         </div>
                     ) : (
                         <div className="space-y-1 text-[12px] text-alloy-midnight/60">
@@ -261,18 +254,6 @@ export default function DataModelFieldRow({
                                         ? "Computed fields are platform-defined and view-only."
                                         : "Platform fields describe your organization’s model. Placement is configured in Surface Builder."}
                                 </p>
-                            ) : null}
-                            <ConfigurationAdvancedToggle
-                                open={advancedOpen}
-                                onToggle={() => setAdvancedOpen((o) => !o)}
-                            />
-                            {advancedOpen ? (
-                                <div className="mt-1.5">
-                                    <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                                        Internal key
-                                    </span>
-                                    <p className="mt-0.5 font-mono text-[11px] text-alloy-midnight/50">{internalKey}</p>
-                                </div>
                             ) : null}
                         </div>
                     )}
@@ -294,7 +275,7 @@ export default function DataModelFieldRow({
 
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            {editable && onDelete && !(entry.fieldDef as FieldDef | undefined)?.is_system ? (
+                            {capability.canDelete && onDelete ? (
                                 <button
                                     type="button"
                                     disabled={saving}
