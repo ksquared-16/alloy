@@ -28,7 +28,7 @@ const WORK_TABS: { key: WorkTab; label: string }[] = [
 ];
 
 /** Events surfaced in the compact Recent Activity ribbon (dense strip). */
-const RIBBON_EVENT_COUNT = 7;
+const RIBBON_EVENT_COUNT = 4;
 
 /**
  * Focus Panel Activity mode — one-viewport operational cockpit.
@@ -123,6 +123,7 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
                             initialPreviewVm={displayVm.activity?.communicationsPreviewVm ?? null}
                             embedded
                             embeddedHeaderMode="description_only"
+                            surfaceVariant="activity_embed"
                         />
                     </div>
                 </section>

@@ -2,6 +2,7 @@
 
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import FamilyCommunicationWorkspace from "@/app/adminV2/communications/FamilyCommunicationWorkspace";
+import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
 import {
     buildRecordCommunicationsModel,
     type RecordTimelineEntry,
@@ -19,6 +20,7 @@ export default function RecordCommunicationsTab(props: {
     entityId?: string;
     initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
     compactActivityLoading?: boolean;
+    surfaceVariant?: FamilyWorkspaceSurfaceVariant;
     messages?: { id: string; channel?: string | null; direction?: string | null; created_at?: string | null; body?: string | null }[];
     notes?: { id: string; created_at?: string | null; body?: string | null }[];
     unread?: number;
@@ -35,6 +37,7 @@ export default function RecordCommunicationsTab(props: {
                     entity={{ entityType: props.entityType, entityId: props.entityId }}
                     initialPreviewVm={props.initialPreviewVm}
                     compactActivityLoading={props.compactActivityLoading}
+                    surfaceVariant={props.surfaceVariant}
                 />
             </div>
         );

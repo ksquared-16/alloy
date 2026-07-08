@@ -1724,8 +1724,8 @@ html[data-alloy-os-runtime="on"]
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  gap: 10px;
-  padding: 10px;
+  gap: 8px;
+  padding: 8px;
   background: var(--alloy-os-surface, #fff); /* white, matching Work mode */
 }
 
@@ -1740,8 +1740,8 @@ html[data-alloy-os-runtime="on"]
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 9px 12px 8px;
+  gap: 4px;
+  padding: 5px 10px 5px;
   border: 1px solid var(--alloy-os-border, #e5e9ef);
   border-radius: 10px;
   background: var(--alloy-os-surface, #fff);
@@ -1916,11 +1916,11 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-entry] {
   flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   width: auto;
   min-width: 0;
   max-width: none;
-  padding: 4px 9px;
+  padding: 3px 7px;
 }
 .alloy-os-activity-cockpit__ribbon [data-layout-runtime-activity-timeline-entry] p {
   display: none; /* drop the multi-line detail/actor rows */
@@ -1961,8 +1961,24 @@ html[data-alloy-os-runtime="on"]
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="composer"] {
   flex: 0 0 auto;
 }
+/* Activity embed — thread-first compact layout (Command Center default unchanged) */
+.alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] [data-cc-thread-strip] {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] textarea[aria-label="Message body"] {
+  min-height: 72px;
+}
+.alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] [data-cc-composer-channels] {
+  font-size: 10px;
+}
+.alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] [data-cc-composer-channels] button {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
 .alloy-os-activity-cockpit__comms textarea[aria-label="Message body"] {
-  min-height: 168px; /* larger message body */
+  min-height: 168px; /* legacy activity override when variant attr absent */
 }
 .alloy-os-activity-cockpit__comms .text-alloy-blue {
   color: var(--alloy-os-bend-pine, #00a283) !important;

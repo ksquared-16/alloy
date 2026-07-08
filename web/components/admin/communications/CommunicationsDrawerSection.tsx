@@ -9,6 +9,7 @@ import {
 import DrawerMessagingComposer from "@/components/adminV2/messaging/DrawerMessagingComposer";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import RecordCommunicationsTab from "@/app/adminV2/communications/recordTab/RecordCommunicationsTab";
+import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
 import MessagingThreadMessageBubble from "@/components/adminV2/messaging/MessagingThreadMessageBubble";
 import {
     supportsDrawerCommunicationsComposer,
@@ -123,6 +124,8 @@ export interface CommunicationsDrawerSectionProps {
     embedded?: boolean;
     /** When embedded inside a drawer section that already shows a "Communication(s)" heading, omit duplicate title. */
     embeddedHeaderMode?: "full" | "description_only";
+    /** Focus Panel Activity embed — compact thread-first layout; Command Center modal stays default. */
+    surfaceVariant?: FamilyWorkspaceSurfaceVariant;
     className?: string;
     /** Opportunity-only: lightweight starter templates when there is no message history yet. */
     opportunityComposeContext?: OpportunityComposeContext | null;
@@ -1415,6 +1418,7 @@ export default function CommunicationsDrawerSection(props: CommunicationsDrawerS
                 entityId={props.entityId}
                 initialPreviewVm={props.initialPreviewVm}
                 compactActivityLoading={props.embedded}
+                surfaceVariant={props.surfaceVariant}
             />
         );
     }
