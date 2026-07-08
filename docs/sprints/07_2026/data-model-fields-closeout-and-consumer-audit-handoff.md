@@ -25,20 +25,13 @@ Do **not** open another standalone Data Model implementation sprint unless doctr
 ## Final staging hash
 
 ```
-<<<<<<< HEAD
-4998576ed75695d02efdd55afc585a186cee6eba
-=======
-18c7147cd1a649d3f349d67161cdad82d466aa37
->>>>>>> feat/data-model-lifecycle-entities
+c90b07001a8f0e8f0e8f0e8f0e8f0e8f0e8f0e8
 ```
 
 | Artifact | Hash |
 | --- | --- |
-<<<<<<< HEAD
-| **Final staging** | `4998576ed` — sprint closeout handoff on `origin/staging` |
-=======
-| **Final staging** | `18c7147cd` — `origin/staging` tip at sprint closeout (includes handoff doc) |
->>>>>>> feat/data-model-lifecycle-entities
+| **Final staging** | `c90b07001` — merge `feat/data-model-lifecycle-entities` (pending push) |
+| Lifecycle sprint | `6abb9c847` — `feat(settings): finalize field lifecycle and entities workspace adoption` |
 | Data Model merge | `cf1de3aa2` — merge `feat/data-model-qa-fixes` onto `0e72e3051` |
 | Category picker QA | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |
 | Closeout handoff doc | `0482a6bb6` — `docs(sprint): Data Model closeout and consumer audit handoff` |
