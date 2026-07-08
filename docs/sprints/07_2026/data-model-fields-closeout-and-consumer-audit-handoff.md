@@ -21,7 +21,7 @@ Consumer adoption starts after this merge. No additional standalone Data Model i
 
 **Status:** **FROZEN** — July 2026 (final QA hotfix complete; Field Platform Consumer Audit is next)  
 **Workspace:** Settings → Data Model (`/settings/fields`) · Settings → Entities (`/settings/entities`)  
-**Staging baseline:** update after merge of final Data Model QA hotfix (post-push)
+**Staging baseline:** `a504e075d` — final Data Model QA hotfix merge on `origin/staging`
 
 ---
 
@@ -61,12 +61,13 @@ Do **not** open another standalone Data Model implementation sprint unless doctr
 ## Final staging hash
 
 ```
-c2647eb4f020d2e62ad32f209d6ba1e9b629a8d7
+a504e075d
 ```
 
 | Artifact | Hash |
 | --- | --- |
-| **Final staging** | `c2647eb4f` — merge `feat/data-model-lifecycle-entities` on `origin/staging` |
+| **Final QA hotfix** | `0499c9e20` — `fix(settings): finalize Data Model QA hotfixes` |
+| **Final staging** | `a504e075d` — merge `feat/data-model-lifecycle-entities` on `origin/staging` |
 | Lifecycle sprint | `6abb9c847` — `feat(settings): finalize field lifecycle and entities workspace adoption` |
 | Data Model merge | `cf1de3aa2` — merge `feat/data-model-qa-fixes` onto `0e72e3051` |
 | Category picker QA | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |
