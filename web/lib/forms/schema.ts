@@ -85,6 +85,7 @@ type FormFieldBase = {
 /** Parsed `schema_json` field node (recursive for groups). */
 export type FormField =
     | (FormFieldBase & { type: "text"; multiline?: boolean })
+    | (FormFieldBase & { type: "text_block"; content: string; token_ids?: string[] })
     | (FormFieldBase & { type: "number" })
     | (FormFieldBase & { type: "date" })
     | (FormFieldBase & { type: "boolean" })
@@ -135,6 +136,13 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
             .extend({
                 type: z.literal("text"),
                 multiline: z.boolean().optional(),
+            })
+            .strict(),
+        fieldCoreSchema
+            .extend({
+                type: z.literal("text_block"),
+                content: z.string().default(""),
+                token_ids: z.array(z.string().min(1)).optional(),
             })
             .strict(),
         fieldCoreSchema

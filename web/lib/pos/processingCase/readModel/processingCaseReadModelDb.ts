@@ -20,7 +20,7 @@ import type {
 } from "./types";
 import { deriveDocumentDisplayName } from "../formDraft/deriveDocumentTitle";
 
-const CASE_COLUMNS = "id, status, case_type, created_at, status_changed_at, updated_at, archived_at";
+const CASE_COLUMNS = "id, status, case_type, created_at, status_changed_at, updated_at, archived_at, metadata";
 const SOURCE_COLUMNS = "processing_case_id, source_kind, source_id, role, linked_at";
 
 const ALL_STATUSES: ProcessingCaseStatus[] = [
@@ -120,10 +120,9 @@ export function makeProcessingCaseReadDeps(supabase: SupabaseClient): Processing
         },
 
         async getCase({ orgId, id }) {
-            // Detail read also pulls `metadata` (carries FP9 `metadata.classification`).
             const { data, error } = await supabase
                 .from("processing_cases")
-                .select(`${CASE_COLUMNS}, metadata`)
+                .select(CASE_COLUMNS)
                 .eq("org_id", orgId)
                 .eq("id", id)
                 .maybeSingle();

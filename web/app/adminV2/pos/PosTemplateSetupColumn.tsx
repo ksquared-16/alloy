@@ -2,65 +2,41 @@
 
 /**
  * POS Processing — Document → Form *template setup*, converged into a SINGLE review
- * workspace (Source PDF ↔ Form Definition):
+ * workspace (Source PDF ↔ Question resolution):
  *
- *   ┌ status strip (setup status · extracted text · structure · source · quality) ┐
- *   ├ LEFT: source PDF preview (actual PDF) + highlighted detected fields ──────────┤
- *   ├ RIGHT: Review detected fields — tabs [ Fields | Extracted text ] ─────────────┤
- *   └ Create form from these fields (reviewed list; PDF provenance preserved) ───────┘
+ *   ┌ status strip (setup · extracted text · structure · detection mode · source · quality) ┐
+ *   ├ LEFT: source PDF preview (actual PDF) + highlighted detected regions ────────────────┤
+ *   ├ RIGHT: Resolve detected questions — tabs [ Questions | Extracted text ] ─────────────┤
+ *   └ Generate native form (reviewed questions; PDF provenance preserved) ─────────────────┘
  *
- * Field rows ↔ PDF highlights stay in sync (click either to select). Fields are edited /
- * added / removed in place; manual fields are flagged "Not mapped to PDF". Create uses
- * the reviewed list (preserving pdf_field_name / page / bbox) and then jumps to Studio →
- * Forms with the new form selected — never /admin/forms, never leaving the modal.
+ * Question rows ↔ PDF highlights stay in sync (click either to select). Questions are edited /
+ * added / ignored in place; manual questions are flagged "Not mapped to PDF". Generate uses
+ * expandQuestionsForDraftSave (preserving pdf_field_name / page / bbox) and then jumps to
+ * Studio → Forms with the new form selected — never /admin/forms, never leaving the modal.
  *
  * Reuse-only: `/form-draft` (detect), `/form-draft/save` (reviewed list), `/form-draft/
  * create`, the signed-URL + extracted-text routes. No OCR, no AI, no commit.
- *
- * Feasibility note: the browser's native PDF viewer is an opaque embed, so we can't draw
- * reliable <div> overlays on it. The highlight layer is therefore an SVG schematic built
- * from the AcroForm page+bbox (a faithful, clickable map); the actual PDF is one toggle
- * away in the same pane. True raster overlay needs page rasterization (follow-up).
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pencil, Trash2, Plus, Download, Check, Link2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Plus, Download } from "lucide-react";
 import type { PosCaseState } from "./usePosCase";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import { computePageMaps, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
 import PosPdfFieldMap from "./PosPdfFieldMap";
+import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
+import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
+import ProcessingParentPanel from "./ProcessingParentPanel";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
-import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
-import type { FormFieldSource } from "@/lib/forms/schema";
-
-/** Curated canonical bindings the operator can choose (in addition to the auto-suggestion). */
-const BINDING_OPTIONS: Array<{ value: string; label: string; field_source: FormFieldSource | null }> = [
-    { value: "", label: "Packet-only (unbound)", field_source: null },
-    { value: "customer_member:display_name", label: "Child · Name", field_source: { entity_type: "customer_member", field_key: "display_name" } },
-    { value: "customer_member:first_name", label: "Child · First name", field_source: { entity_type: "customer_member", field_key: "first_name" } },
-    { value: "customer_member:last_name", label: "Child · Last name", field_source: { entity_type: "customer_member", field_key: "last_name" } },
-    { value: "customer_member:dob", label: "Child · Date of birth", field_source: { entity_type: "customer_member", field_key: "dob" } },
-    { value: "customer_member:allergies", label: "Child · Allergies", field_source: { entity_type: "customer_member", field_key: "allergies" } },
-    { value: "customer_member:medical_notes", label: "Child · Medical notes", field_source: { entity_type: "customer_member", field_key: "medical_notes" } },
-    { value: "person:full_name", label: "Parent/guardian · Name", field_source: { entity_type: "person", field_key: "full_name" } },
-    { value: "person:first_name", label: "Parent/guardian · First name", field_source: { entity_type: "person", field_key: "first_name" } },
-    { value: "person:last_name", label: "Parent/guardian · Last name", field_source: { entity_type: "person", field_key: "last_name" } },
-    { value: "person:email", label: "Parent/guardian · Email", field_source: { entity_type: "person", field_key: "email" } },
-    { value: "person:phone", label: "Parent/guardian · Phone", field_source: { entity_type: "person", field_key: "phone" } },
-    { value: "customer:address", label: "Household · Address", field_source: { entity_type: "customer", field_key: "address" } },
-];
-const bindingKey = (fs?: FormFieldSource | null): string => (fs ? `${fs.entity_type}:${fs.field_key}` : "");
-function bindingOptionByKey(key: string): FormFieldSource | null {
-    return BINDING_OPTIONS.find((o) => o.value === key)?.field_source ?? null;
-}
-const BINDING_LABEL_BY_KEY: Record<string, string> = Object.fromEntries(
-    BINDING_OPTIONS.filter((o) => o.value).map((o) => [o.value, o.label])
-);
-/** Friendly record label for a canonical binding, e.g. "Child · Date of birth". */
-function bindingLabel(fs?: FormFieldSource | null): string {
-    const k = bindingKey(fs);
-    return BINDING_LABEL_BY_KEY[k] ?? k;
-}
+import {
+    seedReviewQuestionFromDraftField,
+    expandQuestionsForDraftSave,
+    inferQuestionIntent,
+    defaultSubjectForIntent,
+    deriveFieldSources,
+    type ReviewQuestionInput,
+} from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
+import { detectionModeLabel } from "@/lib/pos/processingCase/formDraft/detectionModeLabel";
 
 function formatWhen(iso: string | null | undefined): string {
     if (!iso) return "—";
@@ -69,79 +45,29 @@ function formatWhen(iso: string | null | undefined): string {
     return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function sourceReason(evidence?: string): string {
-    switch (evidence) {
-        case "pdf_field":
-            return "from PDF field";
-        case "manual_pdf_mapping":
-            return "mapped manually to PDF";
-        case "operator":
-            return "added manually";
-        case "known field label":
-        case "known label (text sweep)":
-            return "from known label";
-        case "column label":
-            return "from PDF layout";
-        case "signature line":
-            return "from signature keyword";
-        default:
-            return evidence ? "from text" : "from text";
-    }
-}
-
-const CONF_PILL: Record<string, string> = {
-    high: "bg-emerald-50 text-emerald-700",
-    medium: "bg-amber-50 text-amber-700",
-    low: "bg-stone-100 text-stone-500",
-};
-
-const TYPE_LABEL: Record<string, string> = {
-    text: "Text",
-    date: "Date",
-    number: "Number",
-    boolean: "Checkbox (Yes/No)",
-    signature: "Signature",
-    file_ref: "File",
-};
-const TYPE_OPTIONS = Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }));
-
-interface ReviewField {
-    id: string;
-    label: string;
-    type: string;
-    section: string;
-    required?: boolean;
-    confidence?: string;
-    evidence?: string;
-    pdf_field_name?: string;
-    page?: number;
-    bbox?: [number, number, number, number];
-    /** Operator-reviewed canonical binding (auto-suggested on load; absent = packet-only). */
-    field_source?: FormFieldSource;
-}
-
-/** Build the editable reviewed list from the stored draft, preserving provenance. */
-function seedReviewFields(draft: StoredFormDraftPreview | null): ReviewField[] {
+/** Build the editable reviewed question list from the stored draft, preserving provenance. */
+function seedReviewQuestions(draft: StoredFormDraftPreview | null): ReviewQuestionInput[] {
     if (!draft) return [];
-    const out: ReviewField[] = [];
+    const out: ReviewQuestionInput[] = [];
     for (const s of draft.sections) {
         for (const fid of s.field_ids) {
             const f = draft.fields.find((x) => x.id === fid);
             if (!f) continue;
-            out.push({
-                id: f.id,
-                label: f.label,
-                type: f.type,
-                section: s.title,
-                required: f.required,
-                confidence: f.confidence,
-                evidence: f.evidence,
-                pdf_field_name: f.pdf_field_name,
-                page: f.page,
-                bbox: f.bbox,
-                // Auto-propose a canonical binding on load (operator-set binding wins).
-                field_source: f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source,
-            });
+            out.push(
+                seedReviewQuestionFromDraftField({
+                    id: f.id,
+                    label: f.label,
+                    type: f.type,
+                    section: s.title,
+                    required: f.required,
+                    confidence: f.confidence,
+                    evidence: f.evidence,
+                    pdf_field_name: f.pdf_field_name,
+                    page: f.page,
+                    bbox: f.bbox,
+                    field_source: f.field_source,
+                })
+            );
         }
     }
     return out;
@@ -158,19 +84,26 @@ export default function PosTemplateSetupColumn({
     const caseId = detail?.id ?? null;
 
     const [draft, setDraft] = useState<StoredFormDraftPreview | null>(detail?.formDraftPreview ?? null);
-    const [reviewFields, setReviewFields] = useState<ReviewField[]>(() => seedReviewFields(detail?.formDraftPreview ?? null));
+    const [reviewQuestions, setReviewQuestions] = useState<ReviewQuestionInput[]>(() =>
+        seedReviewQuestions(detail?.formDraftPreview ?? null)
+    );
+    const reviewQuestionsRef = useRef(reviewQuestions);
+    useEffect(() => {
+        reviewQuestionsRef.current = reviewQuestions;
+    }, [reviewQuestions]);
     const [busy, setBusy] = useState(false);
     const [creating, setCreating] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
     const [pdfErr, setPdfErr] = useState<string | null>(null);
-    const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
-    const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
-    const [tab, setTab] = useState<"fields" | "text">("fields");
+    const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+    const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+    const [tab, setTab] = useState<"questions" | "text">("questions");
     const [leftView, setLeftView] = useState<"highlights" | "pdf">("highlights");
     const [fullText, setFullText] = useState<string | null>(null);
     const [textQuery, setTextQuery] = useState("");
-    const [mappingFieldId, setMappingFieldId] = useState<string | null>(null);
+    const [mappingQuestionId, setMappingQuestionId] = useState<string | null>(null);
+    const [phase, setPhase] = useState<"review" | "generate">("review");
 
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const docId = draft?.source_document_id ?? (primary?.kind === "document" ? (primary?.id ?? null) : null);
@@ -179,10 +112,13 @@ export default function PosTemplateSetupColumn({
     useEffect(() => {
         const next = detail?.formDraftPreview ?? null;
         setDraft(next);
-        setReviewFields(seedReviewFields(next));
+        const seeded = seedReviewQuestions(next);
+        setReviewQuestions(seeded);
+        reviewQuestionsRef.current = seeded;
         setErr(null);
-        setSelectedFieldId(null);
-        setEditingFieldId(null);
+        setSelectedQuestionId(null);
+        setEditingQuestionId(null);
+        setPhase("review");
     }, [detail?.id, detail?.formDraftPreview]);
 
     // Signed URL for the actual PDF.
@@ -225,10 +161,17 @@ export default function PosTemplateSetupColumn({
         };
     }, [tab, fullText, docId, draft?.diagnostics.extracted_text_preview]);
 
-    const pageMaps = useMemo(
-        () => computePageMaps(reviewFields as FieldWithRegion[], draft?.pdf_pages),
-        [reviewFields, draft?.pdf_pages]
-    );
+    const pageMaps = useMemo(() => {
+        const fields: FieldWithRegion[] = reviewQuestions.map((q) => ({
+            id: q.id,
+            label: q.displayLabel || q.evidenceLabel,
+            type: q.type,
+            confidence: q.confidence,
+            page: q.page,
+            bbox: q.bbox,
+        }));
+        return computePageMaps(fields, draft?.pdf_pages);
+    }, [reviewQuestions, draft?.pdf_pages]);
 
     if (!detail) return null;
 
@@ -236,56 +179,132 @@ export default function PosTemplateSetupColumn({
     const docTitle = draft?.title || primary?.display.label || "Untitled document";
     const textLen = draft?.diagnostics.extracted_text_length ?? null;
     const textAvailable = draft ? draft.extracted_text_available : (detail.documentFormPreview?.extracted_text_available ?? null);
-    const sectionCount = new Set(reviewFields.map((f) => f.section)).size;
+    const sectionCount = new Set(reviewQuestions.map((q) => q.section)).size;
+    const activeFieldCount = reviewQuestions.filter((q) => !q.ignored).length;
 
     const detectorWeak = (draft?.warnings ?? []).some((w) => /weak detection/i.test(w));
-    const goodFields = reviewFields.filter((f) => f.confidence !== "low").length;
+    const goodQuestions = reviewQuestions.filter((q) => !q.ignored && q.confidence !== "low").length;
     const quality: "strong" | "weak" | "failed" = !draft
         ? "failed"
-        : reviewFields.length === 0
+        : activeFieldCount === 0
           ? "failed"
-          : reviewFields.length >= 4 && goodFields >= 3 && !detectorWeak
+          : activeFieldCount >= 4 && goodQuestions >= 3 && !detectorWeak
             ? "strong"
             : "weak";
     const hasRegions = pageMaps.some((p) => p.rects.length > 0);
 
-    // ---- field-list editing ----
-    const updateField = (id: string, patch: Partial<ReviewField>) =>
-        setReviewFields((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
-    const removeField = (id: string) => {
-        setReviewFields((fs) => fs.filter((f) => f.id !== id));
-        if (selectedFieldId === id) setSelectedFieldId(null);
-        if (editingFieldId === id) setEditingFieldId(null);
-    };
-    const addField = () => {
-        const id = `new_${Date.now().toString(36)}`;
-        const section = reviewFields[reviewFields.length - 1]?.section ?? "Form fields";
-        setReviewFields((fs) => [...fs, { id, label: "", type: "text", section, evidence: "operator", confidence: "high" }]);
-        setSelectedFieldId(id);
-        setEditingFieldId(id);
+    const summaryCounts = useMemo(() => {
+        let resolved = 0;
+        let processingOnly = 0;
+        let ignored = 0;
+        for (const q of reviewQuestions) {
+            if (q.ignored) {
+                ignored += 1;
+                continue;
+            }
+            if (q.questionSubject === "processing_only") processingOnly += 1;
+            else resolved += 1;
+        }
+        return { resolved, processingOnly, ignored };
+    }, [reviewQuestions]);
+
+    const includedQuestions = useMemo(() => {
+        return expandQuestionsForDraftSave(reviewQuestions).map((f) => ({
+            label: f.label,
+            section: f.section,
+        }));
+    }, [reviewQuestions]);
+
+    // ---- question-list editing ----
+    const updateQuestion = (id: string, patch: Partial<ReviewQuestionInput>) =>
+        setReviewQuestions((qs) => {
+            const next = qs.map((q) => {
+                if (q.id !== id) return q;
+                const merged = { ...q, ...patch };
+                if (
+                    patch.field_source === undefined &&
+                    (patch.questionSubject !== undefined ||
+                        patch.nameRepresentation !== undefined ||
+                        patch.displayLabel !== undefined)
+                ) {
+                    const intent = inferQuestionIntent(merged.evidenceLabel || merged.displayLabel);
+                    const subject = merged.questionSubject ?? defaultSubjectForIntent(intent);
+                    merged.field_source = deriveFieldSources({
+                        subject,
+                        nameRepresentation: merged.nameRepresentation,
+                        intent,
+                        displayLabel: merged.displayLabel,
+                        type: merged.type,
+                    });
+                }
+                return merged;
+            });
+            reviewQuestionsRef.current = next;
+            return next;
+        });
+
+    const removeQuestion = (id: string) => {
+        setReviewQuestions((qs) => {
+            const next = qs.filter((q) => q.id !== id);
+            reviewQuestionsRef.current = next;
+            return next;
+        });
+        if (selectedQuestionId === id) setSelectedQuestionId(null);
+        if (editingQuestionId === id) setEditingQuestionId(null);
     };
 
-    // Manual mapping: a rectangle drawn on the page schematic → a real PDF bbox for the field.
+    const toggleIgnoreQuestion = (id: string) =>
+        setReviewQuestions((qs) => {
+            const next = qs.map((q) => (q.id === id ? { ...q, ignored: !q.ignored } : q));
+            reviewQuestionsRef.current = next;
+            return next;
+        });
+
+    const addQuestion = () => {
+        const id = `new_${Date.now().toString(36)}`;
+        const section = reviewQuestions[reviewQuestions.length - 1]?.section ?? "Form questions";
+        setReviewQuestions((qs) => {
+            const next = [
+                ...qs,
+                {
+                    id,
+                    evidenceLabel: "",
+                    displayLabel: "",
+                    type: "text",
+                    section,
+                    evidence: "operator",
+                    confidence: "high",
+                    questionSubject: "processing_only" as const,
+                },
+            ];
+            reviewQuestionsRef.current = next;
+            return next;
+        });
+        setSelectedQuestionId(id);
+        setEditingQuestionId(id);
+    };
+
     const startMapping = (id: string) => {
-        setMappingFieldId(id);
-        setSelectedFieldId(id);
+        setMappingQuestionId(id);
+        setSelectedQuestionId(id);
         setLeftView("highlights");
     };
+
     const handleDrawRect = (page: number, rect: { x: number; y: number; w: number; h: number }) => {
-        if (!mappingFieldId) return;
+        if (!mappingQuestionId) return;
         const pm = pageMaps.find((p) => p.page === page);
         if (!pm) return;
         const bbox = svgRectToPdfBbox(rect, pm);
-        updateField(mappingFieldId, { page, bbox, evidence: "manual_pdf_mapping" });
-        setSelectedFieldId(mappingFieldId);
-        setMappingFieldId(null);
+        updateQuestion(mappingQuestionId, { page, bbox, evidence: "manual_pdf_mapping" });
+        setSelectedQuestionId(mappingQuestionId);
+        setMappingQuestionId(null);
     };
 
     // ---- endpoints ----
     async function detectDoc(): Promise<StoredFormDraftPreview | null> {
         const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, { method: "POST", credentials: "same-origin" });
         const body = (await res.json().catch(() => ({}))) as { data?: { form_draft_preview?: StoredFormDraftPreview }; error?: string };
-        if (!res.ok) throw new Error(body.error || `Couldn’t read this document (${res.status})`);
+        if (!res.ok) throw new Error(body.error || `Couldn't read this document (${res.status})`);
         return body.data?.form_draft_preview ?? null;
     }
 
@@ -295,20 +314,21 @@ export default function PosTemplateSetupColumn({
         try {
             const next = await detectDoc();
             setDraft(next);
-            setReviewFields(seedReviewFields(next));
+            const seeded = seedReviewQuestions(next);
+            setReviewQuestions(seeded);
+            reviewQuestionsRef.current = seeded;
             await reload();
         } catch (e) {
-            setErr(e instanceof Error ? e.message : "Couldn’t read this document");
+            setErr(e instanceof Error ? e.message : "Couldn't read this document");
         } finally {
             setBusy(false);
         }
     };
 
-    // Create from the REVIEWED list (preserving PDF provenance), then jump to Studio → Forms.
     const handleCreate = async () => {
-        const clean = reviewFields.filter((f) => f.label.trim().length > 0);
-        if (clean.length === 0) {
-            setErr("Add at least one field before creating the form.");
+        const expanded = expandQuestionsForDraftSave(reviewQuestionsRef.current);
+        if (expanded.length === 0) {
+            setErr("Add at least one active question before generating the form.");
             return;
         }
         setCreating(true);
@@ -320,7 +340,7 @@ export default function PosTemplateSetupColumn({
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
                     title: draft?.title || docTitle,
-                    fields: clean.map((f) => ({
+                    fields: expanded.map((f) => ({
                         label: f.label,
                         type: f.type,
                         required: f.required,
@@ -334,34 +354,34 @@ export default function PosTemplateSetupColumn({
                 }),
             });
             const saveBody = (await saveRes.json().catch(() => ({}))) as { error?: string };
-            if (!saveRes.ok) throw new Error(saveBody.error || `Couldn’t save fields (${saveRes.status})`);
+            if (!saveRes.ok) throw new Error(saveBody.error || `Couldn't save questions (${saveRes.status})`);
 
             const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/create`, { method: "POST", credentials: "same-origin" });
             const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string }; error?: string };
-            if (!res.ok) throw new Error(body.error || `Couldn’t create the form (${res.status})`);
+            if (!res.ok) throw new Error(body.error || `Couldn't create the form (${res.status})`);
             await reload();
             const formId = body.data?.form_id ?? null;
             if (formId && onOpenForm) onOpenForm(formId);
         } catch (e) {
-            setErr(e instanceof Error ? e.message : "Couldn’t create the form");
+            setErr(e instanceof Error ? e.message : "Couldn't create the form");
         } finally {
             setCreating(false);
         }
     };
 
-    // ---- no draft yet: simple set-up prompt ----
+    // ---- no draft yet: question-first detect prompt ----
     if (!draft) {
         return (
             <div className="flex h-full min-h-0 flex-col items-center justify-center bg-white p-6 text-center">
                 <div className="max-w-sm">
                     <div className="text-[14px] font-semibold text-alloy-midnight">{docTitle}</div>
-                    <p className="mt-1 text-[12px] text-stone-500">
-                        Set this document up once: Alloy reads the PDF’s form fields, you review them against the document, then
-                        create a reusable template. Nothing is created or published until you review it.
+                    <p className="mt-1 text-[12px] text-alloy-midnight/50">
+                        Alloy reads questions from the uploaded document. Review what each question means, then generate a
+                        native form. Nothing is created or published until you confirm.
                     </p>
-                    {err ? <div className="mt-2 text-[11px] text-amber-700">{err}</div> : null}
+                    {err ? <div className="mt-2 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                     <button type="button" disabled={busy} onClick={() => void handleDetect()} className={`${WS_ACTION_PRIMARY} mt-3`}>
-                        {busy ? "Reading document…" : "Set up this document"}
+                        {busy ? "Detecting questions…" : "Detect questions"}
                     </button>
                 </div>
             </div>
@@ -379,321 +399,190 @@ export default function PosTemplateSetupColumn({
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-white">
-            {/* Status strip */}
-            <div className="grid shrink-0 grid-cols-2 gap-x-6 gap-y-1.5 border-b border-alloy-stone/12 px-4 py-2.5 sm:grid-cols-5">
-                <StatusCell label="Setup status">
-                    {created ? (
-                        <span className="font-semibold text-emerald-700">Draft created</span>
-                    ) : (
-                        <span className="font-semibold text-alloy-midnight">Ready to review</span>
-                    )}
-                    <span className="ml-1 text-[10px] text-stone-400">
-                        {draft.generator_version} · {formatWhen(draft.generated_at)}
-                    </span>
-                </StatusCell>
-                <StatusCell label="Extracted text">
-                    {textAvailable ? `${textLen ?? "—"} characters` : "Unavailable"}
-                </StatusCell>
-                <StatusCell label="Detected structure">
-                    {sectionCount} section{sectionCount === 1 ? "" : "s"} · {reviewFields.length} field{reviewFields.length === 1 ? "" : "s"}
-                </StatusCell>
-                <StatusCell label="Source">
-                    <span className="truncate">{docTitle}</span>
-                </StatusCell>
-                <StatusCell label="Draft quality">
-                    <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
-                            quality === "strong" ? "bg-emerald-50 text-emerald-700" : quality === "weak" ? "bg-amber-50 text-amber-700" : "bg-stone-100 text-stone-500"
-                        }`}
-                    >
-                        {quality === "strong" ? "High" : quality === "weak" ? "Low" : "None"}
-                    </span>
-                </StatusCell>
+            <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-3 py-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <ProcessingWorkflowStepper active={created ? "edit" : phase === "generate" ? "generate" : "review"} />
+                    <p className="min-w-0 truncate text-[10px] text-alloy-midnight/45">
+                        <span className="font-medium text-alloy-midnight/70">{docTitle}</span>
+                        <span aria-hidden> · </span>
+                        {detectionModeLabel(draft)}
+                        <span aria-hidden> · </span>
+                        {activeFieldCount} question{activeFieldCount === 1 ? "" : "s"}
+                        <span aria-hidden> · </span>
+                        {quality === "strong" ? "Ready to generate" : "Needs review"}
+                    </p>
+                </div>
             </div>
 
-            {/* Two-pane review — PDF ↔ field definition, both visible, independent scroll */}
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-                {/* LEFT — the source document, viewed as recognized-field highlights or the raw PDF.
-                    These are two VIEWS OF THE SAME DOCUMENT, not separate sources: "Recognized fields"
-                    is the clickable map of what Alloy found; "Original PDF" is the untouched file.
-                    TODO (follow-up): once pages are rasterized, render the highlights as a true overlay
-                    on the PDF and sync field-row selection to the highlighted region (see feasibility
-                    note above) so the toggle becomes a single layered view. */}
-                <div className="flex min-w-0 flex-1 flex-col border-r border-alloy-stone/12">
-                    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/10 px-3 py-1.5">
-                        <span className="text-[11px] font-semibold text-alloy-midnight">Source document</span>
-                        <div className="flex items-center gap-2">
-                            <div className="flex overflow-hidden rounded-md border border-stone-200" title="Two views of the same document">
+            {phase === "generate" && !created ? (
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                    <div className="grid gap-3 lg:grid-cols-3">
+                        <SummaryPanel title="Summary">
+                            <SummaryRow label="Resolved" value={summaryCounts.resolved} tone="pine" />
+                            <SummaryRow label="Processing only" value={summaryCounts.processingOnly} tone="midnight" />
+                            <SummaryRow label="Ignored" value={summaryCounts.ignored} tone="muted" />
+                        </SummaryPanel>
+                        <SummaryPanel title="What will be included">
+                            {includedQuestions.length === 0 ? (
+                                <p className="text-[11px] text-alloy-midnight/40">No active questions to include.</p>
+                            ) : (
+                                <ul className="space-y-1.5">
+                                    {includedQuestions.map((q) => (
+                                        <li key={`${q.section}-${q.label}`} className="flex items-start gap-2 text-[11px]" data-testid={`generate-included-${q.label.replace(/\s+/g, "-").toLowerCase()}`}>
+                                            <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-bend-pine" aria-hidden />
+                                            <span>
+                                                <span className="font-medium text-alloy-midnight">{q.label}</span>
+                                                <span className="block text-alloy-midnight/40">{q.section}</span>
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </SummaryPanel>
+                        <SummaryPanel title="Document details">
+                            <dl className="space-y-1.5 text-[11px]">
+                                <DetailRow label="Filename" value={docTitle} />
+                                <DetailRow label="Detection mode" value={detectionModeLabel(draft)} />
+                                <DetailRow
+                                    label="Detection quality"
+                                    value={quality === "strong" ? "High" : quality === "weak" ? "Needs review" : "Low"}
+                                />
+                                <DetailRow label="Sections" value={String(sectionCount)} />
+                                <DetailRow label="Questions" value={String(activeFieldCount)} />
+                            </dl>
+                        </SummaryPanel>
+                    </div>
+                </div>
+            ) : (
+            <>
+            <div className="flex min-h-0 flex-1 gap-2 overflow-hidden p-0">
+                <ProcessingParentPanel
+                    title="Source document"
+                    className="min-w-0 flex-[55]"
+                    headerAction={
+                        <div className="flex items-center gap-1.5">
+                            <div className="inline-flex rounded-md border border-alloy-stone/20 bg-white p-0.5">
                                 {(["highlights", "pdf"] as const).map((v) => (
                                     <button
                                         key={v}
                                         type="button"
                                         onClick={() => setLeftView(v)}
-                                        className={`px-2 py-0.5 text-[10.5px] font-medium ${
-                                            leftView === v ? "bg-alloy-juniper text-white" : "bg-white text-stone-500 hover:bg-stone-50"
+                                        className={`rounded px-2 py-0.5 text-[9px] font-semibold ${
+                                            leftView === v ? "bg-alloy-bend-pine text-white" : "text-alloy-midnight/50 hover:text-alloy-midnight"
                                         }`}
                                     >
-                                        {v === "pdf" ? "Original PDF" : "Recognized fields"}
+                                        {v === "pdf" ? "PDF" : "Regions"}
                                     </button>
                                 ))}
                             </div>
                             {pdfUrl ? (
-                                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" title="Open the PDF" className="text-stone-400 hover:text-alloy-juniper">
+                                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" title="Open the PDF" className="text-alloy-midnight/35 hover:text-alloy-bend-pine">
                                     <Download className="h-3.5 w-3.5" aria-hidden />
                                 </a>
                             ) : null}
                         </div>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto bg-stone-50 p-3">
+                    }
+                >
+                    <div className="min-h-0 flex-1 overflow-y-auto bg-alloy-stone/[0.02] p-2">
+                        <div className="h-full min-h-0">
                         {leftView === "highlights" ? (
                             hasRegions ? (
                                 <>
-                                    {mappingFieldId ? (
-                                        <div className="mb-2 flex items-center justify-between rounded-md border border-alloy-juniper/30 bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
-                                            <span>Drag a rectangle on the page to map this field.</span>
-                                            <button type="button" onClick={() => setMappingFieldId(null)} className="font-medium text-stone-500 hover:underline">
+                                    {mappingQuestionId ? (
+                                        <div className="mb-1 flex items-center justify-between rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] px-2 py-0.5 text-[10px] text-alloy-bend-pine">
+                                            <span>Drag a rectangle on the page to map this question.</span>
+                                            <button type="button" onClick={() => setMappingQuestionId(null)} className="font-medium text-alloy-midnight/45 hover:underline">
                                                 Cancel
                                             </button>
                                         </div>
                                     ) : null}
                                     <PosPdfFieldMap
                                         pages={pageMaps}
-                                        selectedId={selectedFieldId}
-                                        onSelect={setSelectedFieldId}
-                                        mapping={!!mappingFieldId}
+                                        selectedId={selectedQuestionId}
+                                        onSelect={setSelectedQuestionId}
+                                        mapping={!!mappingQuestionId}
                                         onDrawRect={handleDrawRect}
                                     />
-                                    <div className="mt-2 flex items-center gap-3 text-[10px] text-stone-500">
+                                    <div className="mt-1 flex items-center gap-3 text-[9px] text-alloy-midnight/40">
                                         <span className="flex items-center gap-1">
-                                            <span className="inline-block h-2.5 w-3 rounded-sm border border-alloy-juniper/40 bg-alloy-juniper/15" /> Recognized field
+                                            <span className="inline-block h-2 w-2.5 rounded-sm border border-alloy-bend-pine/40 bg-alloy-bend-pine/15" /> Question
                                         </span>
                                         <span className="flex items-center gap-1">
-                                            <span className="inline-block h-2.5 w-3 rounded-sm border-2 border-alloy-juniper bg-alloy-juniper/30" /> Selected
+                                            <span className="inline-block h-2 w-2.5 rounded-sm border-2 border-alloy-bend-pine bg-alloy-bend-pine/30" /> Selected
                                         </span>
-                                        <span className="ml-auto text-stone-400">Click a field or row to select</span>
                                     </div>
                                 </>
                             ) : (
-                                <div className="rounded-md border border-dashed border-stone-300 bg-white p-4 text-center text-[11.5px] text-stone-400">
-                                    No recognized field regions — this draft came from text. Switch to Original PDF to view the
-                                    document, and add fields on the right.
+                                <div className="rounded border border-dashed border-alloy-stone/25 bg-white p-3 text-center text-[11px] text-alloy-midnight/40">
+                                    No recognized question regions — this draft came from text. Switch to Original PDF to view the
+                                    document, and add questions on the right.
                                 </div>
                             )
                         ) : pdfUrl ? (
-                            <object data={pdfUrl} type="application/pdf" className="h-full min-h-[24rem] w-full rounded-md border border-stone-200 bg-white">
-                                <iframe src={pdfUrl} title="Source PDF" className="h-full min-h-[24rem] w-full rounded-md border border-stone-200" />
-                                <div className="p-2 text-[11.5px] text-stone-500">
+                            <object data={pdfUrl} type="application/pdf" className="h-full min-h-[28rem] w-full rounded border border-alloy-stone/15 bg-white">
+                                <iframe src={pdfUrl} title="Source PDF" className="h-full min-h-[28rem] w-full rounded border border-alloy-stone/15" />
+                                <div className="p-2 text-[11px] text-alloy-midnight/45">
                                     Inline preview unavailable.{" "}
-                                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-alloy-juniper underline">
+                                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-alloy-bend-pine underline">
                                         Open the PDF
                                     </a>
                                 </div>
                             </object>
                         ) : pdfErr ? (
-                            <div className="text-[11.5px] text-stone-400">{pdfErr}</div>
+                            <div className="text-[11px] text-alloy-midnight/40">{pdfErr}</div>
                         ) : (
-                            <div className="h-full min-h-[24rem] w-full animate-pulse rounded-md bg-stone-100" />
+                            <div className="h-full min-h-[28rem] w-full animate-pulse rounded bg-alloy-stone/10" />
                         )}
+                        </div>
                     </div>
-                </div>
+                </ProcessingParentPanel>
 
-                {/* RIGHT — review detected fields, tabbed */}
-                <div className="flex w-[22rem] shrink-0 flex-col">
-                    <div className="shrink-0 border-b border-alloy-stone/10 px-3 pt-2">
-                        <div className="text-[12.5px] font-semibold text-alloy-midnight">Alloy recognized your fields</div>
-                        <p className="mt-0.5 text-[10.5px] text-stone-500">Mapped fields stay synchronized with your records. Review anything uncertain below.</p>
-                        <div className="mt-1.5 flex gap-3">
-                            {(["fields", "text"] as const).map((t) => (
+                <ProcessingParentPanel
+                    title="Review questions"
+                    className="min-w-0 flex-[23]"
+                    headerAction={
+                        <div className="flex gap-2">
+                            {(["questions", "text"] as const).map((t) => (
                                 <button
                                     key={t}
                                     type="button"
                                     onClick={() => setTab(t)}
-                                    className={`border-b-2 px-0.5 pb-1.5 text-[12px] font-medium ${
-                                        tab === t ? "border-alloy-juniper text-alloy-juniper" : "border-transparent text-stone-500 hover:text-alloy-midnight"
+                                    className={`text-[10px] font-semibold ${
+                                        tab === t ? "text-alloy-bend-pine" : "text-alloy-midnight/45 hover:text-alloy-midnight/70"
                                     }`}
                                 >
-                                    {t === "fields" ? "Fields" : "Extracted text"}
+                                    {t === "questions" ? "Questions" : "Text"}
                                 </button>
                             ))}
                         </div>
-                    </div>
-
-                    <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                        {tab === "fields" ? (
+                    }
+                >
+                    <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
+                        {tab === "questions" ? (
                             <>
-                                {(() => {
-                                    const recognized = Array.from(
-                                        new Set(reviewFields.filter((f) => f.field_source).map((f) => bindingLabel(f.field_source)))
-                                    );
-                                    const unmappedSuggested = reviewFields.filter(
-                                        (f) => !f.field_source && suggestFieldBinding(f.label, f.type)?.field_source
-                                    ).length;
-                                    if (recognized.length === 0 && unmappedSuggested === 0) return null;
-                                    return (
-                                        <div className="mb-3 rounded-lg border border-emerald-100 bg-emerald-50/50 px-2.5 py-2">
-                                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800">
-                                                <Link2 className="h-3.5 w-3.5" aria-hidden />
-                                                {recognized.length > 0
-                                                    ? `Alloy recognized ${recognized.length} field${recognized.length === 1 ? "" : "s"}`
-                                                    : "Alloy has suggestions"}
-                                            </div>
-                                            {recognized.length > 0 ? (
-                                                <ul className="mt-1.5 space-y-0.5">
-                                                    {recognized.slice(0, 6).map((label) => (
-                                                        <li key={label} className="flex items-center gap-1.5 text-[11px] text-emerald-900">
-                                                            <Check className="h-3 w-3 shrink-0 text-emerald-600" strokeWidth={3} aria-hidden />
-                                                            {label}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : null}
-                                            <p className="mt-1.5 text-[10px] text-emerald-700/80">
-                                                These stay synchronized with your records.
-                                                {unmappedSuggested > 0 ? ` ${unmappedSuggested} more need your review.` : ""}
-                                            </p>
-                                        </div>
-                                    );
-                                })()}
-                                <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-stone-400">
-                                    {reviewFields.length} field{reviewFields.length === 1 ? "" : "s"}
-                                </div>
-                                <ol className="space-y-1.5">
-                                    {reviewFields.map((f, i) => {
-                                        const sel = selectedFieldId === f.id;
-                                        const isEditing = editingFieldId === f.id;
-                                        const mapped = typeof f.page === "number" && Array.isArray(f.bbox);
-                                        return (
-                                            <li
-                                                key={f.id}
-                                                className={`rounded-md border ${sel ? "border-alloy-juniper bg-emerald-50/60" : "border-stone-200 bg-white"}`}
-                                            >
-                                                <div className="flex items-start gap-2 px-2 py-1.5">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setSelectedFieldId(sel ? null : f.id)}
-                                                        className="flex min-w-0 flex-1 items-start gap-2 text-left"
-                                                    >
-                                                        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-100 text-[9px] font-semibold text-stone-500">
-                                                            {i + 1}
-                                                        </span>
-                                                        <span className="min-w-0 flex-1">
-                                                            <span className="block truncate text-[12px] font-medium text-alloy-midnight">
-                                                                {f.label || <span className="text-stone-400">Untitled field</span>}
-                                                            </span>
-                                                            <span className="block text-[10px] text-stone-400">
-                                                                {TYPE_LABEL[f.type] ?? f.type} · {mapped ? sourceReason(f.evidence) : "Not mapped to PDF"}
-                                                            </span>
-                                                        </span>
-                                                    </button>
-                                                    {f.confidence ? (
-                                                        <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${CONF_PILL[f.confidence] ?? "bg-stone-100 text-stone-500"}`}>
-                                                            {f.confidence === "high" ? "High" : f.confidence === "medium" ? "Med" : "Low"}
-                                                        </span>
-                                                    ) : null}
-                                                    {!mapped && pageMaps.length > 0 && !created ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => startMapping(f.id)}
-                                                            title="Map this field to an area on the PDF"
-                                                            className={`shrink-0 rounded border px-1 py-0.5 text-[9px] font-medium ${
-                                                                mappingFieldId === f.id ? "border-alloy-juniper text-alloy-juniper" : "border-stone-200 text-stone-500 hover:border-alloy-juniper hover:text-alloy-juniper"
-                                                            }`}
-                                                        >
-                                                            {mappingFieldId === f.id ? "Mapping…" : "Map"}
-                                                        </button>
-                                                    ) : null}
-                                                    <button
-                                                        type="button"
-                                                        aria-label="Edit field"
-                                                        onClick={() => {
-                                                            setEditingFieldId(isEditing ? null : f.id);
-                                                            setSelectedFieldId(f.id);
-                                                        }}
-                                                        className="shrink-0 text-stone-400 hover:text-alloy-juniper"
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5" aria-hidden />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        aria-label="Delete field"
-                                                        onClick={() => removeField(f.id)}
-                                                        className="shrink-0 text-stone-400 hover:text-amber-700"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                                                    </button>
-                                                </div>
-                                                <div className="space-y-1 border-t border-stone-100 px-2 py-1.5">
-                                                    <div className="flex items-center gap-1.5">
-                                                        {f.field_source ? (
-                                                            <span className="inline-flex min-w-0 items-center gap-1 text-[10.5px] font-medium text-emerald-700">
-                                                                <Check className="h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
-                                                                <span className="truncate">Syncs to {bindingLabel(f.field_source)}</span>
-                                                            </span>
-                                                        ) : (() => {
-                                                            const sug = suggestFieldBinding(f.label, f.type);
-                                                            if (sug?.field_source) {
-                                                                return (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => updateField(f.id, { field_source: sug.field_source })}
-                                                                        className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100"
-                                                                    >
-                                                                        <Check className="h-3 w-3" strokeWidth={3} aria-hidden /> Accept: {bindingLabel(sug.field_source)}
-                                                                    </button>
-                                                                );
-                                                            }
-                                                            return <span className="text-[10px] text-stone-400">Packet-only field</span>;
-                                                        })()}
-                                                        <select
-                                                            value={bindingKey(f.field_source)}
-                                                            onChange={(e) => updateField(f.id, { field_source: bindingOptionByKey(e.target.value) ?? undefined })}
-                                                            aria-label="Change record binding"
-                                                            className="ml-auto min-w-0 max-w-[9rem] shrink-0 rounded border border-stone-200 px-1.5 py-0.5 text-[10.5px] text-stone-600"
-                                                        >
-                                                            {BINDING_OPTIONS.map((o) => (
-                                                                <option key={o.value} value={o.value}>{f.field_source ? o.label : o.value ? `Override → ${o.label}` : o.label}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                {isEditing ? (
-                                                    <div className="space-y-1.5 border-t border-stone-100 px-2 py-2">
-                                                        <input
-                                                            value={f.label}
-                                                            onChange={(e) => updateField(f.id, { label: e.target.value })}
-                                                            placeholder="Field label"
-                                                            className="w-full rounded-md border border-stone-300 px-2 py-1 text-[12px] text-alloy-midnight focus:border-alloy-juniper focus:outline-none"
-                                                        />
-                                                        <div className="flex gap-1.5">
-                                                            <select
-                                                                value={f.type}
-                                                                onChange={(e) => updateField(f.id, { type: e.target.value })}
-                                                                className="flex-1 rounded-md border border-stone-300 px-1.5 py-1 text-[11.5px] text-stone-700"
-                                                            >
-                                                                {TYPE_OPTIONS.map((o) => (
-                                                                    <option key={o.value} value={o.value}>
-                                                                        {o.label}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                            <input
-                                                                value={f.section}
-                                                                onChange={(e) => updateField(f.id, { section: e.target.value })}
-                                                                placeholder="Section"
-                                                                className="w-28 rounded-md border border-stone-300 px-2 py-1 text-[11.5px] text-stone-600 focus:border-alloy-juniper focus:outline-none"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                ) : null}
-                                            </li>
-                                        );
-                                    })}
-                                </ol>
-                                <button type="button" onClick={addField} className="mt-2 inline-flex items-center gap-1 rounded-md border border-stone-200 px-2.5 py-1 text-[11.5px] font-medium text-stone-600 hover:bg-stone-50">
-                                    <Plus className="h-3.5 w-3.5" aria-hidden /> Add field
+                                <ProcessingQuestionReviewList
+                                    questions={reviewQuestions}
+                                    selectedId={selectedQuestionId}
+                                    editingId={editingQuestionId}
+                                    created={!!created}
+                                    hasPageMaps={pageMaps.length > 0}
+                                    mappingFieldId={mappingQuestionId}
+                                    onSelect={setSelectedQuestionId}
+                                    onEdit={setEditingQuestionId}
+                                    onUpdate={updateQuestion}
+                                    onIgnore={toggleIgnoreQuestion}
+                                    onRemove={removeQuestion}
+                                    onStartMapping={startMapping}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={addQuestion}
+                                    className="mt-1.5 inline-flex items-center gap-1 rounded border border-alloy-stone/20 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-stone/[0.04]"
+                                >
+                                    <Plus className="h-3.5 w-3.5" aria-hidden /> Add question
                                 </button>
-                                <p className="mt-2 text-[10px] text-stone-400">
-                                    Fields without a highlighted area can still be captured, but won’t yet map back to the official PDF.
+                                <p className="mt-1.5 text-[9px] text-alloy-midnight/35">
+                                    Questions without a highlighted area can still be captured, but won't yet map back to the official PDF.
                                 </p>
                             </>
                         ) : (
@@ -702,56 +591,70 @@ export default function PosTemplateSetupColumn({
                                     value={textQuery}
                                     onChange={(e) => setTextQuery(e.target.value)}
                                     placeholder="Search extracted text…"
-                                    className="mb-2 w-full rounded-md border border-stone-300 px-2 py-1 text-[12px] focus:border-alloy-juniper focus:outline-none"
+                                    className="mb-1.5 w-full rounded border border-alloy-stone/20 px-2 py-1 text-[11px] focus:border-alloy-bend-pine/40 focus:outline-none"
                                 />
                                 {textQuery.trim() ? (
-                                    <div className="mb-1 text-[10px] text-stone-400">{matchedTextLines.matches} matching line(s)</div>
+                                    <div className="mb-1 text-[9px] text-alloy-midnight/35">{matchedTextLines.matches} matching line(s)</div>
                                 ) : null}
                                 {fullText === null ? (
-                                    <div className="text-[11.5px] text-stone-400">Loading…</div>
+                                    <div className="text-[11px] text-alloy-midnight/40">Loading…</div>
                                 ) : (fullText || draft.diagnostics.extracted_text_preview) ? (
-                                    <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-md border border-stone-200 bg-stone-50 p-2 text-[11px] leading-snug text-stone-600">
+                                    <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/15 bg-alloy-stone/[0.03] p-2 text-[10px] leading-snug text-alloy-midnight/65">
                                         {matchedTextLines.lines.join("\n")}
                                     </pre>
                                 ) : (
-                                    <div className="text-[11.5px] text-stone-400">No extracted text available.</div>
+                                    <div className="text-[11px] text-alloy-midnight/40">No extracted text available.</div>
                                 )}
                             </div>
                         )}
                     </div>
-                </div>
+                </ProcessingParentPanel>
             </div>
+            </>
+            )}
 
-            {/* Create bar — footer action row: helper text left, Alloy-sized actions right. */}
-            <div className="shrink-0 border-t border-alloy-stone/12 bg-white px-3 py-2.5">
-                {err ? <div className="mb-2 text-[11px] text-amber-700">{err}</div> : null}
+            {/* Footer */}
+            <div className="shrink-0 border-t border-alloy-stone/12 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
+                {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                 <div className="flex items-center justify-between gap-3">
-                    <p className={`min-w-0 text-[10.5px] ${created ? "text-emerald-700" : "text-stone-400"}`}>
+                    <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
                         {created
-                            ? "Form created — opens in Forms; this case stays here."
-                            : "Creates an unpublished draft form from the reviewed fields (PDF mapping preserved)."}
+                            ? "Processing complete — your native form is ready. Continue in Studio → Forms to edit and publish."
+                            : phase === "generate"
+                              ? "Alloy will create an unpublished native form from your reviewed questions."
+                              : "When you're done reviewing, continue to generate your native form."}
                     </p>
                     <div className="flex shrink-0 items-center gap-2">
-                        {!created ? (
+                        {!created && phase === "generate" ? (
+                            <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
+                                Back to review
+                            </button>
+                        ) : !created ? (
                             <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
-                                {busy ? "Re-reading…" : "Re-detect fields"}
+                                {busy ? "Re-detecting…" : "Re-detect questions"}
                             </button>
                         ) : null}
-                        <button type="button" onClick={() => setTab("text")} className={WS_ACTION_SECONDARY}>
-                            Review extracted text
-                        </button>
                         {created ? (
                             <button type="button" onClick={() => created.form_id && onOpenForm?.(created.form_id)} className={WS_ACTION_PRIMARY}>
-                                Open in Forms builder
+                                Edit form in Studio
+                            </button>
+                        ) : phase === "review" ? (
+                            <button
+                                type="button"
+                                disabled={activeFieldCount === 0}
+                                onClick={() => setPhase("generate")}
+                                className={WS_ACTION_PRIMARY}
+                            >
+                                Continue to generate
                             </button>
                         ) : (
                             <button
                                 type="button"
-                                disabled={creating || busy || reviewFields.filter((f) => f.label.trim()).length === 0}
+                                disabled={creating || busy || activeFieldCount === 0}
                                 onClick={() => void handleCreate()}
                                 className={WS_ACTION_PRIMARY}
                             >
-                                {creating ? "Creating…" : "Create form"}
+                                {creating ? "Generating…" : "Generate native form"}
                             </button>
                         )}
                     </div>
@@ -761,11 +664,32 @@ export default function PosTemplateSetupColumn({
     );
 }
 
-function StatusCell({ label, children }: { label: string; children: ReactNode }) {
+function SummaryPanel({ title, children }: { title: string; children: ReactNode }) {
     return (
-        <div className="min-w-0">
-            <div className="text-[9px] font-semibold uppercase tracking-wide text-stone-400">{label}</div>
-            <div className="truncate text-[12px] text-alloy-midnight">{children}</div>
+        <section className="rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-alloy-bend-pine bg-white p-3">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{title}</h3>
+            <div className="mt-2">{children}</div>
+        </section>
+    );
+}
+
+function SummaryRow({ label, value, tone }: { label: string; value: number; tone: "pine" | "midnight" | "muted" }) {
+    const cls =
+        tone === "pine" ? "text-alloy-bend-pine" : tone === "midnight" ? "text-alloy-midnight" : "text-alloy-midnight/45";
+    return (
+        <div className="flex items-center justify-between text-[12px]">
+            <span className="text-alloy-midnight/55">{label}</span>
+            <span className={`font-semibold tabular-nums ${cls}`}>{value}</span>
         </div>
     );
 }
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div>
+            <dt className="text-alloy-midnight/40">{label}</dt>
+            <dd className="font-medium text-alloy-midnight">{value}</dd>
+        </div>
+    );
+}
+

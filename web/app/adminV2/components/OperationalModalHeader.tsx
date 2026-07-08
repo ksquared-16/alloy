@@ -24,7 +24,7 @@ import { X } from "lucide-react";
 
 /** Primary action (Bend Pine / juniper). Matches comms Compose New + OIP primary. */
 export const OPERATIONAL_PRIMARY_ACTION_CLASS =
-    "inline-flex items-center gap-1.5 rounded-lg bg-alloy-juniper px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-alloy-juniper/90 disabled:opacity-50";
+    "inline-flex items-center gap-1.5 rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-alloy-bend-pine/90 disabled:opacity-50";
 /** Secondary action (calm outline). */
 export const OPERATIONAL_SECONDARY_ACTION_CLASS =
     "inline-flex items-center gap-1.5 rounded-lg border border-alloy-stone/25 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight/75 shadow-sm hover:bg-alloy-stone/[0.08] disabled:opacity-50";
@@ -37,6 +37,7 @@ export default function OperationalModalHeader({
     secondaryActions,
     onClose,
     closeLabel = "Close",
+    subtitle,
 }: {
     icon: ReactNode;
     title: string;
@@ -47,10 +48,12 @@ export default function OperationalModalHeader({
     secondaryActions?: ReactNode;
     onClose: () => void;
     closeLabel?: string;
+    /** Optional product tagline beneath the module title. */
+    subtitle?: string;
 }) {
     return (
         <header
-            className="flex w-full shrink-0 items-center justify-between gap-4 border-b border-alloy-stone/15 border-l-[3px] border-l-alloy-juniper bg-gradient-to-b from-alloy-juniper/[0.06] to-white px-4 py-2.5"
+            className="flex w-full shrink-0 items-center justify-between gap-4 border-b border-alloy-stone/15 border-l-[3px] border-l-alloy-bend-pine bg-gradient-to-b from-alloy-bend-pine/[0.06] to-white px-4 py-2.5"
             data-operational-modal-header="true"
         >
             <div className="flex min-w-0 items-center gap-2.5">
@@ -61,9 +64,14 @@ export default function OperationalModalHeader({
                 >
                     {icon}
                 </span>
-                <h2 id={titleId} className="truncate text-[15px] font-bold leading-tight text-alloy-midnight">
-                    {title}
-                </h2>
+                <div className="min-w-0">
+                    <h2 id={titleId} className="truncate text-[15px] font-bold leading-tight text-alloy-midnight">
+                        {title}
+                    </h2>
+                    {subtitle ? (
+                        <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/50">{subtitle}</p>
+                    ) : null}
+                </div>
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-1.5" data-operational-modal-header-actions="true">
                 {secondaryActions}

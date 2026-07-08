@@ -102,7 +102,7 @@ function PageSvg({
                     Page {pg.page} · {pg.rects.length} field{pg.rects.length === 1 ? "" : "s"}
                 </span>
                 {!pg.hasPageDims ? <span className="italic">Context unavailable — relative layout only</span> : null}
-                {mapping ? <span className="font-medium text-alloy-juniper">Drag to map the field</span> : null}
+                {mapping ? <span className="font-medium text-alloy-bend-pine">Drag to map the field</span> : null}
             </div>
             <svg
                 ref={svgRef}

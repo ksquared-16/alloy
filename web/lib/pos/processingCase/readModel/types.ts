@@ -15,6 +15,7 @@ import type { StoredProcessingClassification } from "../classification/types";
 import type { StoredProcessingExtraction } from "../extraction/types";
 import type { StoredDocumentFormPreview } from "../structure/types";
 import type { StoredFormDraftPreview } from "../formDraft/types";
+import type { DetectionModeKind } from "../formDraft/detectionModeLabel";
 import type { FormDraftCreatedLink } from "../formDraft/createFormFromCaseDraft";
 
 export type { ProcessingCaseSourceKind, ProcessingCaseSourceRole, ProcessingCaseStatus };
@@ -47,6 +48,13 @@ export interface ProcessingCaseQueueRow {
     primarySource: SourceRef | null;
     relatedSourceCount: number;
     sourceDisplay: SourceDisplayDescriptor | null;
+    /** Display-only document→form state for queue rows. Derived from metadata, never authoritative. */
+    formDraftSummary?: {
+        detectionMode: DetectionModeKind | "unknown";
+        questionCount: number;
+        sectionCount: number;
+        generatedFormId: string | null;
+    } | null;
 }
 
 /** Deliverable 2 — the case detail projection: case fields + sources (no extraction/match/resolution/outcome — later). */

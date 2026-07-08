@@ -107,22 +107,25 @@ function OpenDocumentButton({ documentId }: { documentId: string }) {
     );
 }
 
-/** FP12 — Workflow A: "Create form from document" → draft form outline. Preview only; no form created/published. */
+/** Generate handoff — opens Form Builder inside Processing Studio. Never /admin/forms. */
 function FormDraftSection({
     caseId,
     primarySourceKind,
     initial,
     created,
+    onOpenForm,
 }: {
     caseId: string;
     primarySourceKind: string | null;
     initial: StoredFormDraftPreview | null;
     created: { form_id: string; form_version_id: string; created_at: string } | null;
+    onOpenForm?: (formId: string) => void;
 }) {
     const [draft, setDraft] = useState<StoredFormDraftPreview | null>(initial);
     const [busy, setBusy] = useState(false);
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [localCreatedId, setLocalCreatedId] = useState<string | null>(created?.form_id ?? null);
 
     if (primarySourceKind !== "document") return null;
 
@@ -152,10 +155,13 @@ function FormDraftSection({
                 method: "POST",
                 credentials: "same-origin",
             });
-            const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string; builder_path?: string }; error?: string };
+            const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string }; error?: string };
             if (!res.ok) throw new Error(body.error || `Couldn’t create form (${res.status})`);
-            const path = body.data?.builder_path ?? (body.data?.form_id ? `/admin/forms/${body.data.form_id}` : null);
-            if (path) window.location.href = path; // open the unpublished form in the builder
+            const formId = body.data?.form_id ?? null;
+            if (formId) {
+                setLocalCreatedId(formId);
+                onOpenForm?.(formId);
+            }
         } catch (e) {
             setError(e instanceof Error ? e.message : "Couldn’t create form");
         } finally {
@@ -164,7 +170,7 @@ function FormDraftSection({
     };
 
     const fieldById = (id: string) => draft?.fields.find((f) => f.id === id);
-    const builderPath = created ? `/admin/forms/${created.form_id}` : null;
+    const readyFormId = localCreatedId ?? created?.form_id ?? null;
 
     return (
         <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
@@ -178,15 +184,16 @@ function FormDraftSection({
             </div>
 
             <div className="mb-2 flex flex-wrap items-center gap-2">
-                {created ? (
+                {readyFormId ? (
                     <>
-                        <a
-                            href={builderPath ?? "#"}
+                        <button
+                            type="button"
+                            onClick={() => onOpenForm?.(readyFormId)}
                             className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276]"
                         >
-                            Open in Forms builder
-                        </a>
-                        <span className="text-[11px] text-emerald-700">Reusable template created (draft) — tweak &amp; publish in the builder.</span>
+                            Open in Studio
+                        </button>
+                        <span className="text-[11px] text-emerald-700">Form created — continue in Studio Form Builder.</span>
                     </>
                 ) : (
                     <>
@@ -205,7 +212,7 @@ function FormDraftSection({
                                 onClick={() => void createForm()}
                                 className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:opacity-50"
                             >
-                                {creating ? "Creating…" : "Create reusable template"}
+                                {creating ? "Generating…" : "Generate form"}
                             </button>
                         ) : null}
                     </>
@@ -215,8 +222,7 @@ function FormDraftSection({
 
             {!draft ? (
                 <p className="text-[12px] text-stone-500">
-                    Set this document up once: Alloy detects what it can, you review the detected fields and tweak them in the
-                    Forms builder, then save it as a reusable template for future uploads. Nothing is created or published until you review it.
+                    Alloy detects questions on this document. Review them, generate a native form, then finish in Studio.
                 </p>
             ) : (
                 <div>
@@ -521,7 +527,13 @@ function ExtractionSection({
     );
 }
 
-export default function ProcessingCaseDetailContent({ caseId }: { caseId: string }) {
+export default function ProcessingCaseDetailContent({
+    caseId,
+    onOpenForm,
+}: {
+    caseId: string;
+    onOpenForm?: (formId: string) => void;
+}) {
     const [data, setData] = useState<DetailResponse["data"] | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -675,6 +687,7 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     primarySourceKind={primary?.kind ?? null}
                     initial={detail.formDraftPreview}
                     created={detail.formDraftCreated}
+                    onOpenForm={onOpenForm}
                 />
 
                 {/* What Alloy found (facts) + what it maps to (candidates) — proposals only. */}

@@ -26,6 +26,9 @@ export function dispatchAdminV2OpenTasksPanel(): void {
 }
 
 export function dispatchAdminV2OpenProcessingModal(): void {
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(ADMIN_V2_OPEN_PROCESSING_MODAL));
+    }
     openWorkspaceModal("processing");
 }
 

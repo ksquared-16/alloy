@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { dbGetFormDefinition, dbListVersionsForForm, dbUpdateFormDefinition } from "@/lib/admin/forms/formsAdminDb";
+import { deleteFormDefinitionForAdmin } from "@/lib/admin/forms/deleteFormDefinitionForAdmin";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 
 /** GET /api/admin/forms/[formId] */
@@ -81,4 +82,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ error: error.message }, { status: 400 });
     }
     return jsonData(data);
+}
+
+/** DELETE /api/admin/forms/[formId] — hard-delete draft-only forms (admin). Published → use archive. */
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
+    const ctx = await getAdminContextCached();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+
+    const { formId: rawId } = await params;
+    const formId = parseUuidParam(rawId, "formId");
+    if (formId instanceof NextResponse) return formId;
+
+    const supabase = createAdminClient();
+    try {
+        const result = await deleteFormDefinitionForAdmin(supabase, ctx.orgId, formId);
+        if (!result.ok) return jsonError(result.message, result.status);
+        return jsonData({ deleted: true, ...result.deleted });
+    } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : "Delete failed" }, { status: 500 });
+    }
 }

@@ -1,87 +1,157 @@
 "use client";
 
 /**
- * Processing → Work mode → Incoming — the command-center, left-to-right:
- *   Column 1: incoming queue (existing ProcessingQueueList)
- *   Column 2: what came in (the selected item: submitted content / preview)
- *   Column 3: what Alloy found + what to do next (recommendation → approve)
- * The sticky BOS rail lives OUTSIDE this content (owned by the modal shell).
- *
- * Canonical chrome: white canvas + kit primitives (WorkspaceSectionHeader,
- * WorkspaceEmptyState). Reuses the queue list, the shared case hook, and
- * ReviewDecideCard. The approve path is unchanged.
+ * Work — active operational information requiring attention.
+ * Folder rail + queue lanes + source-document-first review.
  */
 
-import WorkspaceSectionHeader from "@/components/workspace/WorkspaceSectionHeader";
+import { useCallback, useRef, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import ProcessingQueueList from "@/app/adminV2/processing/ProcessingQueueList";
+import ProcessingImportAction from "./ProcessingImportAction";
 import { usePosCase } from "./usePosCase";
 import PosCaseWorkColumn from "./PosCaseWorkColumn";
 import PosCaseDecisionColumn from "./PosCaseDecisionColumn";
 import PosTemplateSetupColumn from "./PosTemplateSetupColumn";
-import ProcessingKpiStrip from "./ProcessingKpiStrip";
+import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import ProcessingParentPanel from "./ProcessingParentPanel";
 
 export default function PosProcessingWorkspace({
     selectedCaseId,
     onSelectCase,
-    onGoToSources,
     onOpenForm,
-    title = "Incoming",
-    subtitle,
 }: {
     selectedCaseId: string | null;
-    onSelectCase: (caseId: string) => void;
-    onGoToSources?: () => void;
+    onSelectCase: (caseId: string | null) => void;
     onOpenForm?: (formId: string) => void;
-    title?: string;
-    subtitle?: string;
 }) {
     const state = usePosCase(selectedCaseId);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [dropActive, setDropActive] = useState(false);
+    const [uploading, setUploading] = useState(false);
 
-    // Case purpose splits the work/decision surface:
-    //   • Document → Form (primary source is an uploaded document): guided TEMPLATE SETUP,
-    //     not record commit — recreate the document as a reusable form.
-    //   • Record / intake case: the existing review → recommendation → commit flow.
     const primary = state.detail?.sources.find((s) => s.role === "primary") ?? state.detail?.sources[0] ?? null;
-    const isDocumentCase = primary?.kind === "document";
+    const isDocumentCase =
+        primary?.kind === "document" || primary?.kind === "upload" || primary?.kind === "recreated_document";
     const detailLoading = !!selectedCaseId && state.loading && !state.detail;
 
+    const uploadPdf = useCallback(
+        async (file: File) => {
+            setUploading(true);
+            try {
+                const form = new FormData();
+                form.append("file", file);
+                form.append("open_processing_case", "true");
+                const res = await fetch("/api/admin/documents/upload", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    body: form,
+                });
+                const body = (await res.json().catch(() => ({}))) as { processing_case_id?: string | null; error?: string };
+                if (!res.ok) throw new Error(body.error || "Upload failed");
+                void warmProcessingQueueCache({ force: true });
+                if (body.processing_case_id) onSelectCase(body.processing_case_id);
+            } finally {
+                setUploading(false);
+                setDropActive(false);
+            }
+        },
+        [onSelectCase]
+    );
+
     return (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <WorkspaceSectionHeader title={title} subtitle={subtitle} />
-
-            <ProcessingKpiStrip />
-
-            <div className="flex min-h-0 flex-1 overflow-x-auto">
-                {/* Column 1 — queue (always) */}
-                <div className="flex w-[16rem] shrink-0 flex-col overflow-y-auto border-r border-alloy-stone/12 bg-white">
-                    <ProcessingQueueList
-                        selectedCaseId={selectedCaseId}
-                        onSelectCase={onSelectCase}
-                        onGoToSources={onGoToSources}
-                        showFolders
-                    />
-                </div>
-
-                {!selectedCaseId ? (
-                    <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden bg-white">
-                        <WorkspaceEmptyState
-                            title="Pick something that came in"
-                            body="Submissions open for your approval. Uploaded documents open so Alloy can turn them into a reusable form."
+        <div
+            className={`flex min-h-0 flex-1 flex-col overflow-hidden ${dropActive ? "ring-2 ring-inset ring-alloy-bend-pine/40" : ""}`}
+            onDragOver={(e) => {
+                e.preventDefault();
+                setDropActive(true);
+            }}
+            onDragLeave={() => setDropActive(false)}
+            onDrop={(e) => {
+                e.preventDefault();
+                const file = e.dataTransfer.files?.[0];
+                if (file && file.type === "application/pdf") void uploadPdf(file);
+                else setDropActive(false);
+            }}
+        >
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadPdf(f);
+                    e.target.value = "";
+                }}
+            />
+            <div className="flex min-h-0 flex-1 gap-2 overflow-hidden bg-alloy-stone/[0.03] p-2">
+                <ProcessingParentPanel title="Queue" className="w-[22%] min-w-[11rem] max-w-[15rem] shrink-0">
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                        <ProcessingQueueList
+                            selectedCaseId={selectedCaseId}
+                            onSelectCase={onSelectCase}
+                            showFolders
+                            panelMode
+                            headerAction={<ProcessingImportAction compact onImported={onSelectCase} />}
+                            onCaseRemoved={(caseId) => {
+                                if (selectedCaseId === caseId) onSelectCase(null);
+                            }}
                         />
                     </div>
+                </ProcessingParentPanel>
+
+                {!selectedCaseId ? (
+                    <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden bg-white p-6">
+                        <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center">
+                            <div className="text-center">
+                                <WorkspaceEmptyState
+                                    title="Select an import"
+                                    body="Choose a document from the work queue."
+                                />
+                                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/70 hover:border-alloy-bend-pine/30"
+                                    >
+                                        Import form
+                                    </button>
+                                </div>
+                                {dropActive ? (
+                                    <p className="mt-4 text-[12px] font-semibold text-alloy-bend-pine">Drop PDF to import</p>
+                                ) : uploading ? (
+                                    <p className="mt-4 text-[12px] text-alloy-midnight/50">Importing…</p>
+                                ) : null}
+                            </div>
+                        </div>
+                    </div>
                 ) : detailLoading ? (
-                    <div className="flex min-w-[20rem] flex-1 flex-col gap-3 overflow-hidden bg-white p-3" aria-busy="true">
-                        <div className="h-16 animate-pulse rounded-lg bg-stone-100" />
-                        <div className="h-24 animate-pulse rounded-lg bg-stone-100" />
+                    <div className="flex min-w-[28rem] flex-1 flex-col overflow-hidden bg-white" aria-busy="true">
+                        <div className="shrink-0 border-b border-alloy-stone/12 px-4 py-3">
+                            <div className="h-5 w-48 animate-pulse rounded bg-alloy-stone/10" />
+                            <div className="mt-2 h-3 w-72 animate-pulse rounded bg-alloy-stone/10" />
+                        </div>
+                        <div className="flex min-h-0 flex-1">
+                            <div className="flex min-w-0 flex-[55] flex-col border-r border-alloy-stone/12 p-2">
+                                <div className="h-3 w-28 animate-pulse rounded bg-alloy-stone/10" />
+                                <div className="mt-2 min-h-[20rem] flex-1 animate-pulse rounded bg-alloy-stone/10" />
+                            </div>
+                            <div className="flex min-w-0 flex-[23] p-2">
+                                <div className="h-4 w-40 animate-pulse rounded bg-alloy-stone/10" />
+                                <div className="mt-3 space-y-2">
+                                    <div className="h-12 animate-pulse rounded bg-alloy-stone/10" />
+                                    <div className="h-12 animate-pulse rounded bg-alloy-stone/10" />
+                                    <div className="h-12 animate-pulse rounded bg-alloy-stone/10" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 ) : isDocumentCase ? (
-                    /* Document → Form: one focused template-setup surface (work + decision together) */
-                    <div className="flex min-w-[24rem] flex-1 flex-col overflow-hidden bg-white">
+                    <div className="flex min-w-[28rem] flex-1 flex-col overflow-hidden">
                         <PosTemplateSetupColumn state={state} onOpenForm={onOpenForm} />
                     </div>
                 ) : (
-                    /* Record / intake case: the existing two-column review + commit flow */
                     <>
                         <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden border-r border-alloy-stone/12 bg-white">
                             <PosCaseWorkColumn state={state} />

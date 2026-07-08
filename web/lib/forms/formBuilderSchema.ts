@@ -9,11 +9,14 @@
  */
 
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
+import { formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
+import type { SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
 
 /** Builder-facing field type menu (maps to FormField discriminants + a "section" pseudo-type). */
 export type BuilderFieldType =
     | "short_text"
     | "long_text"
+    | "text_block"
     | "date"
     | "number"
     | "select"
@@ -31,6 +34,9 @@ export interface BuilderFieldSpec {
     options?: Array<{ value: string; label: string }>;
     /** Optional canonical binding; unbound fields are allowed. */
     field_source?: { entity_type: string; field_key: string; shared_value_key?: string };
+    /** Inline authorization / explanatory content for text blocks. */
+    content?: string;
+    token_ids?: string[];
     /** Target section id; defaults to the first section. */
     sectionId?: string;
 }
@@ -81,6 +87,14 @@ function fieldFromSpec(id: string, spec: BuilderFieldSpec): FormField {
             return { ...base, type: "text" };
         case "long_text":
             return { ...base, type: "text", multiline: true };
+        case "text_block":
+            return {
+                ...base,
+                type: "text_block",
+                required: false,
+                content: spec.content?.trim() || "I, {Primary contact}, hereby authorize…",
+                token_ids: spec.token_ids ?? [],
+            };
         case "number":
             return { ...base, type: "number" };
         case "date":
@@ -96,6 +110,23 @@ function fieldFromSpec(id: string, spec: BuilderFieldSpec): FormField {
         case "multiselect":
             return { ...base, type: "multiselect", static_options: (spec.options ?? []).filter((o) => o.value && o.label) };
     }
+}
+
+/** Add a registry-backed canonical field to a section. */
+export function addRegistryField(
+    schema: FormSchemaV1,
+    entry: SystemFieldRegistryEntry,
+    sectionId: string,
+    overrides?: { label?: string }
+): { schema: FormSchemaV1; fieldId: string } {
+    const base = formFieldFromRegistryEntry(entry, overrides?.label ? { label: overrides.label } : {});
+    const id = uniqueFieldId(schema, base.id);
+    const field: FormField = { ...base, id, layout_width: "full" };
+    const targetSectionId = schema.sections.some((s) => s.id === sectionId) ? sectionId : schema.sections[0]?.id;
+    const sections = targetSectionId
+        ? schema.sections.map((s) => (s.id === targetSectionId ? { ...s, field_ids: [...s.field_ids, id] } : s))
+        : [{ id: uid("sec"), title: "Section 1", field_ids: [id] }];
+    return { schema: { ...schema, fields: [...schema.fields, field], sections }, fieldId: id };
 }
 
 /** Add a field to a section (defaults to first section). Returns a new schema + the new id. */
@@ -128,6 +159,12 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
             const fs = patch.field_source;
             if (fs && fs.entity_type && fs.field_key) (next as { field_source?: unknown }).field_source = { entity_type: fs.entity_type, field_key: fs.field_key, ...(fs.shared_value_key ? { shared_value_key: fs.shared_value_key } : {}) };
             else delete (next as { field_source?: unknown }).field_source;
+        }
+        if (patch.content !== undefined && next.type === "text_block") {
+            (next as { content: string }).content = patch.content;
+        }
+        if (patch.token_ids !== undefined && next.type === "text_block") {
+            (next as { token_ids?: string[] }).token_ids = patch.token_ids;
         }
         return next;
     });

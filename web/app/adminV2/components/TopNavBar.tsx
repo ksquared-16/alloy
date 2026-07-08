@@ -21,6 +21,7 @@ import InboxModal from "@/app/adminV2/components/InboxModal";
 import AnalyticsModal from "@/app/adminV2/components/AnalyticsModal";
 import ProcessingModal from "@/app/adminV2/processing/ProcessingModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
 import {
@@ -174,13 +175,19 @@ export default function TopNavBar() {
     const onOpenAnalytics = () => {
       openWorkspaceModal("analytics");
     };
+    const onOpenProcessing = () => {
+      void warmProcessingQueueCache();
+      openWorkspaceModal("processing");
+    };
     window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
     window.addEventListener("adminv2:open-inbox-modal", onOpenInbox);
     window.addEventListener("adminv2:open-analytics-modal", onOpenAnalytics);
+    window.addEventListener("adminv2:open-processing-modal", onOpenProcessing);
     return () => {
       window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
       window.removeEventListener("adminv2:open-inbox-modal", onOpenInbox);
       window.removeEventListener("adminv2:open-analytics-modal", onOpenAnalytics);
+      window.removeEventListener("adminv2:open-processing-modal", onOpenProcessing);
     };
   }, []);
 
