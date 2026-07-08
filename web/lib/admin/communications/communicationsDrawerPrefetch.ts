@@ -182,7 +182,12 @@ export function scheduleDeferredCommunicationsDrawerPrefetch(apiEntityType: stri
                     })(),
                     (async (): Promise<BindingsResult> => {
                         try {
-                            const result = await fetchCommunicationsBindingsChannelsCached({ signal });
+                            // Force past module-level TTL so drawer prefetch cannot revive an
+                            // email-only channels_available list after SMS binding activation.
+                            const result = await fetchCommunicationsBindingsChannelsCached({
+                                signal,
+                                force: true,
+                            });
                             tBindingsEnd =
                                 typeof performance !== "undefined" && typeof performance.now === "function"
                                     ? performance.now()

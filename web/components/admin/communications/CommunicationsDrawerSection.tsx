@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchCommunicationsBindingsChannelsCached } from "@/lib/communications/communicationsBindingsCache";
+import {
+    isReusableOutboundBindingsSnapshot,
+    resolveDrawerComposerSmsAvailability,
+} from "@/lib/communications/drawerComposerChannelAvailability";
 import DrawerMessagingComposer from "@/components/adminV2/messaging/DrawerMessagingComposer";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import RecordCommunicationsTab from "@/app/adminV2/communications/recordTab/RecordCommunicationsTab";
@@ -359,8 +363,19 @@ function CommunicationsDrawerSectionLegacy({
 
     const emailOutboundReady =
         channelsAvailable.includes("email") && !bindingsErr && !loadingBindings;
-    const smsOutboundReady =
+    const smsProviderReady =
         channelsAvailable.includes("sms") && !bindingsErr && !loadingBindings;
+    const smsAvailability = resolveDrawerComposerSmsAvailability({
+        smsProviderReady,
+        loadingBindings,
+        bindingsError: bindingsErr,
+        recipients,
+        selectedRecipientIds,
+    });
+    /** Provider-level gate for recipient fetch / send plumbing (not the SMS tab). */
+    const smsOutboundReady = smsProviderReady;
+    /** SMS channel toggle — provider + selected/available recipient phone. */
+    const smsComposerReady = smsAvailability.available;
     const anyOutboundReady = emailOutboundReady || smsOutboundReady;
 
     const effectiveComposer = useMemo((): "email" | "sms" => {
@@ -765,15 +780,12 @@ function CommunicationsDrawerSectionLegacy({
                     applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
                     return;
                 }
-                // Require a complete outbound channel list — email-only snapshots (taken before SMS
-                // was activated) must not lock SMS off for the rest of the session.
-                const hasEmail = bsnap.channels.includes("email");
-                const hasSms = bsnap.channels.includes("sms");
-                if (hasEmail && hasSms) {
+                // Email-only snapshots (taken before SMS activation) must not lock SMS off.
+                if (!bsnap.error && isReusableOutboundBindingsSnapshot(bsnap.channels)) {
                     applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
                     return;
                 }
-                // Empty / partial outbound snapshot — fetch fresh.
+                // Empty / email-only outbound snapshot — fetch fresh (force past stale module cache).
             }
 
             setLoadingBindings(true);
@@ -783,8 +795,11 @@ function CommunicationsDrawerSectionLegacy({
                     try {
                         const pb = await peekB.bindings;
                         if (cancelled) return;
-                        applyBindingsPayload(pb, { event: "prefetch_reused", path: "promise" });
-                        return;
+                        if (!pb.error && isReusableOutboundBindingsSnapshot(pb.channels)) {
+                            applyBindingsPayload(pb, { event: "prefetch_reused", path: "promise" });
+                            return;
+                        }
+                        // Partial / email-only promise — fall through to forced network fetch.
                     } catch (e) {
                         if (e instanceof Error && e.name === "AbortError") {
                             if (!cancelled) setLoadingBindings(false);
@@ -795,7 +810,7 @@ function CommunicationsDrawerSectionLegacy({
                 }
                 const peekLate = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
                 const lateSnap = peekLate?.bindings_snapshot;
-                if (lateSnap) {
+                if (lateSnap && !lateSnap.error && isReusableOutboundBindingsSnapshot(lateSnap.channels)) {
                     if (cancelled) return;
                     applyBindingsPayload(lateSnap, {
                         event: "duplicate_prevented",
@@ -805,7 +820,7 @@ function CommunicationsDrawerSectionLegacy({
                     return;
                 }
 
-                const pb = await fetchCommunicationsBindingsChannelsCached();
+                const pb = await fetchCommunicationsBindingsChannelsCached({ force: true });
                 if (!cancelled) applyBindingsPayload(pb, { event: "network_fallback", path: "direct" });
             } catch (e) {
                 if (!cancelled) setBindingsErr(e instanceof Error ? e.message : "Failed to load bindings");
@@ -1178,7 +1193,8 @@ function CommunicationsDrawerSectionLegacy({
                     else onViewFilter(ch);
                 }}
                 emailReady={emailOutboundReady}
-                smsReady={smsOutboundReady}
+                smsReady={smsComposerReady}
+                smsDisabledTitle={smsAvailability.reason ?? "SMS is not available"}
                 bindingsErr={bindingsErr}
                 loadingBindings={loadingBindings}
                 recipients={recipients}

@@ -23,6 +23,8 @@ type DrawerMessagingComposerProps = {
     onChannelChange: (channel: "email" | "sms") => void;
     emailReady: boolean;
     smsReady: boolean;
+    /** Prefer specific reason (provider vs no phone) over the generic outbound title. */
+    smsDisabledTitle?: string;
     bindingsErr: string | null;
     loadingBindings: boolean;
     recipients: DrawerMessagingRecipient[];
@@ -60,6 +62,7 @@ export default function DrawerMessagingComposer({
     onChannelChange,
     emailReady,
     smsReady,
+    smsDisabledTitle = "SMS outbound is not configured for this org yet",
     bindingsErr,
     loadingBindings,
     recipients,
@@ -173,7 +176,7 @@ export default function DrawerMessagingComposer({
                     emailDisabled={!emailReady}
                     smsDisabled={!smsReady}
                     emailDisabledTitle="Outbound email is not configured for this org"
-                    smsDisabledTitle="SMS outbound is not configured for this org yet"
+                    smsDisabledTitle={smsDisabledTitle}
                     channelHint={channelHint}
                     subject={subject}
                     onSubjectChange={setSubject}
