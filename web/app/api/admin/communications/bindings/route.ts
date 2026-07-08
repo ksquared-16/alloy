@@ -47,26 +47,6 @@ export async function GET() {
     const list = (data ?? []) as BindingSummary[];
     const channels_available = availableComposerChannels(list);
 
-    // TEMP(staging-debug): remove after Kurzman drawer SMS validation — surfaces in Vercel runtime logs.
-    const smsBinding = list.find((b) => b.channel === "sms");
-    console.info(
-        "[comms-bindings-staging-debug]",
-        JSON.stringify({
-            org_id: ctx.orgId,
-            channels_available,
-            sms: smsBinding
-                ? {
-                      provider: smsBinding.provider ?? null,
-                      status: smsBinding.status ?? null,
-                      ready_for_composer: bindingEligibleForOutboundComposer(smsBinding),
-                      has_inbound_to_e164: Boolean(smsBinding.inbound_to_e164),
-                  }
-                : null,
-            email_ready: channels_available.includes("email"),
-            sms_ready: channels_available.includes("sms"),
-        }),
-    );
-
     return NextResponse.json({
         bindings: sanitizeBindings(list),
         channels_available,
