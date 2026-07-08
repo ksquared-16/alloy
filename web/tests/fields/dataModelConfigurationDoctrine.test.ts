@@ -21,7 +21,7 @@ describe("Configuration workspace doctrine", () => {
         expect(doc).toContain("Overview summarizes");
         expect(doc).toContain("Tabs edit");
         expect(doc).toContain("Business concepts first");
-        expect(doc).toContain("configurable organizational primitives");
+        expect(doc).toContain("entity-owned");
         expect(doc).toContain("Forms");
         expect(doc).toContain("Surface Builder");
         expect(doc).toContain("Categories");
@@ -29,22 +29,36 @@ describe("Configuration workspace doctrine", () => {
         expect(doc).toContain("Hidden");
     });
 
-    it("computed fields live under Fields tab — no Computed Signals tab", () => {
+    it("categories tab is first-class — entity-owned, not in field create", () => {
         const tabs = readFileSync(resolve(root, "components/admin/fields/DataModelWorkspaceTabs.tsx"), "utf8");
+        const fieldsTab = readFileSync(resolve(root, "components/admin/fields/DataModelFieldsTab.tsx"), "utf8");
         const client = readFileSync(resolve(root, "app/adminV2/settings/fields/DataModelWorkspaceClient.tsx"), "utf8");
+        expect(tabs).toContain('"categories"');
+        expect(tabs).toContain("Categories");
         expect(tabs).not.toContain("computed_signals");
-        expect(tabs).not.toContain("Computed Signals");
-        expect(client).not.toContain("DataModelComputedSignalsTab");
-        expect(client).toContain("initialOwnershipFilter");
+        expect(client).toContain("DataModelCategoriesTab");
+        expect(fieldsTab).not.toContain("ConfigurationCategoryCreateRow");
+        expect(fieldsTab).not.toContain("fields-tab-add-category");
     });
 
-    it("categories merge org registry with platform seeds", () => {
+    it("categories are entity-scoped — person does not inherit child medical", () => {
+        const personOptions = buildConfigurationCategoryOptions("person", [], []);
+        const childOptions = buildConfigurationCategoryOptions("inquiry_child", [], []);
+        expect(personOptions.some((o) => o.value === "medical")).toBe(false);
+        expect(childOptions.some((o) => o.value === "medical")).toBe(true);
+        expect(personOptions.some((o) => o.value === "employment")).toBe(true);
+        expect(childOptions.some((o) => o.value === "employment")).toBe(false);
+    });
+
+    it("categories merge org registry with entity seeds", () => {
         const options = buildConfigurationCategoryOptions(
+            "location",
             [{ section_key: "licensing", label: "Site Licensing", sort_order: 5 }],
             ["identity"],
         );
         expect(options.some((o) => o.value === "licensing")).toBe(true);
-        expect(options.some((o) => o.value === "identity")).toBe(true);
+        expect(options.some((o) => o.value === "programs")).toBe(true);
+        expect(options.some((o) => o.value === "medical")).toBe(false);
         expect(
             resolveConfigurationCategoryLabel("licensing", [
                 { section_key: "licensing", label: "Site Licensing", sort_order: 5 },

@@ -17,16 +17,17 @@ import {
     type DataModelBuilderId,
     type DataModelUsageSurfaceId,
 } from "@/lib/fields/dataModelWorkspaceIcons";
-import { ArrowRight } from "lucide-react";
 
 type Props = {
     hubEntity: SettingsHubEntityKey;
     entries: readonly SettingsFieldCatalogEntry[];
     onViewAllFields: () => void;
     onViewAllRelationships: () => void;
+    onViewAllCategories?: () => void;
     onViewComputedFields?: () => void;
     onAddField?: () => void;
     onAddRelationship?: () => void;
+    onAddCategory?: () => void;
     onSelectField?: (entry: SettingsFieldCatalogEntry) => void;
 };
 
@@ -39,7 +40,7 @@ function OverviewCard({
     testId,
 }: {
     title: string;
-    icon: typeof ArrowRight;
+    icon: typeof DATA_MODEL_SECTION_ICONS.fields;
     action?: ReactNode;
     children: ReactNode;
     className?: string;
@@ -47,13 +48,13 @@ function OverviewCard({
 }) {
     return (
         <section
-            className={["rounded-lg border border-alloy-forge/10 bg-white px-2.5 py-2", className].join(" ")}
+            className={["rounded-lg border border-alloy-forge/10 bg-white px-2 py-1.5", className].join(" ")}
             data-testid={testId}
         >
-            <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="mb-0.5 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
-                    <Icon size={12} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" aria-hidden />
-                    <h2 className="text-[11px] font-semibold text-alloy-midnight">{title}</h2>
+                    <Icon size={11} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" aria-hidden />
+                    <h2 className="text-[10px] font-semibold text-alloy-midnight">{title}</h2>
                 </div>
                 {action}
             </div>
@@ -67,7 +68,7 @@ function TextAction({ label, onClick, testId }: { label: string; onClick: () => 
         <button
             type="button"
             onClick={onClick}
-            className="text-[10px] font-medium text-alloy-bend-pine hover:underline"
+            className="text-[9px] font-medium text-alloy-bend-pine hover:underline"
             data-testid={testId}
         >
             {label}
@@ -80,17 +81,18 @@ export default function DataModelOverviewTab({
     entries,
     onViewAllFields,
     onViewAllRelationships,
+    onViewAllCategories,
     onViewComputedFields,
     onAddField,
     onAddRelationship,
     onSelectField,
 }: Props) {
-    const relationships = relationshipsForHubEntity(hubEntity).slice(0, 4);
-    const fieldSections = previewFieldSections(entries, 2, 3);
+    const relationships = relationshipsForHubEntity(hubEntity).slice(0, 3);
+    const fieldPreview = previewFieldSections(entries, 6, 2).flatMap((s) => s.shown).slice(0, 6);
     const counts = countFieldsByOwnership(entries);
 
     return (
-        <div className="grid gap-2 xl:grid-cols-2" data-testid="data-model-overview-tab">
+        <div className="grid gap-1.5 xl:grid-cols-2" data-testid="data-model-overview-tab">
             <OverviewCard
                 title="Relationships"
                 icon={DATA_MODEL_SECTION_ICONS.relationships}
@@ -101,26 +103,21 @@ export default function DataModelOverviewTab({
                     ) : null
                 }
             >
-                <ul className="space-y-0.5">
+                <ul className="space-y-0">
                     {relationships.map((rel) => (
                         <li
                             key={rel.id}
-                            className="flex items-center justify-between gap-2 rounded-md px-1 py-1 hover:bg-alloy-stone/[0.28]"
+                            className="truncate px-0.5 py-0.5 text-[11px] text-alloy-midnight"
                             data-testid="overview-relationship-row"
                         >
-                            <span className="min-w-0 truncate text-[12px] font-medium text-alloy-midnight">
-                                {rel.label}
-                            </span>
-                            <span className="shrink-0 text-[9px] text-alloy-midnight/35">
-                                {rel.required ? "Required" : "Optional"}
-                            </span>
+                            {rel.label}
                         </li>
                     ))}
                 </ul>
                 <button
                     type="button"
                     onClick={onViewAllRelationships}
-                    className="mt-1.5 text-[10px] font-medium text-alloy-bend-pine hover:underline"
+                    className="mt-1 text-[9px] font-medium text-alloy-bend-pine hover:underline"
                 >
                     View all
                 </button>
@@ -132,57 +129,48 @@ export default function DataModelOverviewTab({
                 testId="overview-fields-card"
                 action={onAddField ? <TextAction label="+ Add" onClick={onAddField} testId="overview-add-field" /> : null}
             >
-                <p className="mb-1 text-[10px] text-alloy-midnight/40">
+                <p className="mb-0.5 text-[9px] text-alloy-midnight/40">
                     {counts.platform} platform · {counts.custom} custom
                     {counts.computed > 0 ? ` · ${counts.computed} computed` : ""}
                 </p>
-                <div className="space-y-2">
-                    {fieldSections.map((section) => (
-                        <div key={section.sectionKey} data-testid={`overview-field-section-${section.sectionKey}`}>
-                            <p className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-forge/55">
-                                {section.label}
-                            </p>
-                            <ul className="space-y-0">
-                                {section.shown.map((entry) => (
-                                    <li key={entry.id}>
-                                        <button
-                                            type="button"
-                                            onClick={() => onSelectField?.(entry)}
-                                            className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[11px] text-alloy-midnight hover:bg-alloy-bend-pine/[0.06]"
-                                        >
-                                            <span className="truncate">{entry.label}</span>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                            {section.remaining > 0 ? (
-                                <button
-                                    type="button"
-                                    onClick={onViewAllFields}
-                                    className="mt-0.5 px-1 text-[9px] font-medium text-alloy-midnight/40 hover:text-alloy-bend-pine"
-                                >
-                                    +{section.remaining} more
-                                </button>
-                            ) : null}
-                        </div>
+                <ul className="space-y-0">
+                    {fieldPreview.map((entry) => (
+                        <li key={entry.id}>
+                            <button
+                                type="button"
+                                onClick={() => onSelectField?.(entry)}
+                                className="block w-full truncate px-0.5 py-0.5 text-left text-[11px] text-alloy-midnight hover:text-alloy-bend-pine"
+                            >
+                                {entry.label}
+                            </button>
+                        </li>
                     ))}
-                </div>
-                <div className="mt-1.5 flex flex-wrap gap-3">
+                </ul>
+                <div className="mt-1 flex flex-wrap gap-2">
                     <button
                         type="button"
                         onClick={onViewAllFields}
-                        className="text-[10px] font-medium text-alloy-bend-pine hover:underline"
+                        className="text-[9px] font-medium text-alloy-bend-pine hover:underline"
                     >
                         View all fields
                     </button>
+                    {onViewAllCategories ? (
+                        <button
+                            type="button"
+                            onClick={onViewAllCategories}
+                            className="text-[9px] font-medium text-alloy-midnight/45 hover:text-alloy-bend-pine"
+                        >
+                            Categories
+                        </button>
+                    ) : null}
                     {counts.computed > 0 && onViewComputedFields ? (
                         <button
                             type="button"
                             onClick={onViewComputedFields}
-                            className="text-[10px] font-medium text-alloy-midnight/45 hover:text-alloy-bend-pine"
+                            className="text-[9px] font-medium text-alloy-midnight/45 hover:text-alloy-bend-pine"
                             data-testid="overview-view-computed"
                         >
-                            View computed ({counts.computed})
+                            {counts.computed} computed
                         </button>
                     ) : null}
                 </div>
@@ -193,21 +181,17 @@ export default function DataModelOverviewTab({
                 icon={DATA_MODEL_SECTION_ICONS.usage}
                 testId="overview-usage-card"
             >
-                <ul className="grid gap-1 sm:grid-cols-2">
-                    {DATA_MODEL_USAGE_SURFACES.map((surface) => {
-                        const Icon = DATA_MODEL_USAGE_ICONS[surface.id as DataModelUsageSurfaceId];
+                <ul className="flex flex-wrap gap-1">
+                    {DATA_MODEL_USAGE_SURFACES.slice(0, 4).map((surface) => {
                         const hint = usageSurfaceCountHint(surface.id, hubEntity);
                         return (
                             <li
                                 key={surface.id}
-                                className="flex items-center gap-1.5 rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.18] px-2 py-1.5"
+                                className="rounded border border-alloy-forge/10 bg-alloy-stone/[0.15] px-1.5 py-0.5 text-[10px] text-alloy-midnight/70"
                                 data-testid={`overview-usage-${surface.id}`}
                             >
-                                <Icon size={12} strokeWidth={DATA_MODEL_ICON_STROKE} className="shrink-0 text-alloy-bend-pine" aria-hidden />
-                                <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-alloy-midnight">
-                                    {surface.label}
-                                </span>
-                                {hint ? <span className="shrink-0 text-[9px] text-alloy-midnight/35">{hint}</span> : null}
+                                {surface.label}
+                                {hint ? <span className="text-alloy-midnight/35"> · {hint}</span> : null}
                             </li>
                         );
                     })}
@@ -217,35 +201,23 @@ export default function DataModelOverviewTab({
             <OverviewCard
                 title="Available In"
                 icon={DATA_MODEL_SECTION_ICONS.available}
-                className="xl:col-span-2"
                 testId="overview-available-in-card"
             >
-                <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                    {DATA_MODEL_BUILDER_AVAILABILITY.map((builder) => {
-                        const Icon = DATA_MODEL_BUILDER_ICONS[builder.id as DataModelBuilderId];
-                        return (
-                            <div
-                                key={builder.id}
-                                className="flex items-center gap-1.5 rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.15] px-2 py-1.5"
-                                data-testid={`overview-builder-${builder.id}`}
-                                title={"reason" in builder ? builder.reason : undefined}
-                            >
-                                <Icon size={12} strokeWidth={DATA_MODEL_ICON_STROKE} className="shrink-0 text-alloy-bend-pine" aria-hidden />
-                                <span className="min-w-0 flex-1 truncate text-[11px] text-alloy-midnight">{builder.label}</span>
-                                <span
-                                    className={[
-                                        "shrink-0 rounded-full px-1 py-px text-[8px] font-semibold uppercase",
-                                        builder.available
-                                            ? "bg-alloy-bend-pine/[0.1] text-alloy-bend-pine"
-                                            : "bg-alloy-forge/[0.06] text-alloy-midnight/40",
-                                    ].join(" ")}
-                                >
-                                    {builder.available ? "Yes" : "Future"}
-                                </span>
-                            </div>
-                        );
-                    })}
-                </div>
+                <ul className="flex flex-wrap gap-1">
+                    {DATA_MODEL_BUILDER_AVAILABILITY.map((builder) => (
+                        <li
+                            key={builder.id}
+                            className="rounded border border-alloy-forge/10 px-1.5 py-0.5 text-[10px] text-alloy-midnight/65"
+                            data-testid={`overview-builder-${builder.id}`}
+                        >
+                            {builder.label}
+                            <span className={builder.available ? " text-alloy-bend-pine" : " text-alloy-midnight/35"}>
+                                {" "}
+                                · {builder.available ? "Yes" : "Future"}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
             </OverviewCard>
         </div>
     );

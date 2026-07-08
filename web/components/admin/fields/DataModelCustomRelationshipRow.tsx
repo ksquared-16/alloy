@@ -86,29 +86,25 @@ export default function DataModelCustomRelationshipRow({
         >
             <div className={CONFIG_WORKSPACE_ROW_INNER_CLASS}>
                 <Link2 size={13} strokeWidth={DATA_MODEL_ICON_STROKE} className="shrink-0 text-alloy-bend-pine" aria-hidden />
-                <div className="flex min-w-0 max-w-xl flex-1 items-center gap-2">
-                    <button type="button" onClick={onExpand} className="min-w-0 flex-1 text-left">
-                        <span className="block truncate text-[13px] font-semibold text-alloy-midnight">{item.label}</span>
-                        <span className="mt-0.5 block truncate text-[10px] text-alloy-midnight/45">{kindLabel}</span>
-                    </button>
-                </div>
-                <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                    {!item.is_active ? (
-                        <span className="shrink-0 text-[10px] font-medium text-alloy-midnight/35">Hidden</span>
-                    ) : null}
-                    <button
-                        type="button"
-                        onClick={expanded ? onCollapse : onExpand}
-                        className={[CONFIG_WORKSPACE_GHOST_ACTION_CLASS, expanded ? "opacity-100" : ""].join(" ")}
-                        data-testid="data-model-custom-relationship-edit"
-                    >
-                        {expanded ? "Close" : "Edit"}
-                    </button>
-                </div>
+                <button type="button" onClick={onExpand} className="min-w-0 flex-1 text-left">
+                    <span className="block truncate text-[13px] font-semibold text-alloy-midnight">{item.label}</span>
+                    <span className="mt-0.5 block truncate text-[10px] text-alloy-midnight/45">{kindLabel}</span>
+                </button>
+                <span className="shrink-0 text-[10px] font-medium text-alloy-midnight/40">
+                    {item.is_active ? "Active" : "Hidden"}
+                </span>
+                <button
+                    type="button"
+                    onClick={expanded ? onCollapse : onExpand}
+                    className={[CONFIG_WORKSPACE_GHOST_ACTION_CLASS, expanded ? "opacity-100" : ""].join(" ")}
+                    data-testid="data-model-custom-relationship-edit"
+                >
+                    {expanded ? "Close" : "Edit"}
+                </button>
             </div>
             {expanded ? (
                 <div
-                    className="mx-auto max-w-xl space-y-2 border-t border-alloy-forge/8 px-3 pb-2.5 pt-2"
+                    className="space-y-2 border-t border-alloy-forge/8 px-3 pb-2.5 pt-2"
                     data-testid="data-model-custom-relationship-editor"
                 >
                     <p className="text-[11px] leading-snug text-alloy-midnight/50">

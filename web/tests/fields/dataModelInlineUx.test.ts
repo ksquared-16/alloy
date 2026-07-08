@@ -58,6 +58,15 @@ describe("Data Model inline UX pass", () => {
         expect(header).not.toContain("grid-cols-4");
     });
 
+    it("inline create rows use centered editor shell", () => {
+        const fieldCreate = readFileSync(resolve(root, "components/admin/fields/DataModelFieldCreateRow.tsx"), "utf8");
+        const fieldsTab = readFileSync(resolve(root, "components/admin/fields/DataModelFieldsTab.tsx"), "utf8");
+        const relCreate = readFileSync(resolve(root, "components/admin/fields/DataModelRelationshipCreateRow.tsx"), "utf8");
+        expect(fieldsTab).toContain("CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS");
+        expect(relCreate).toContain("CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS");
+        expect(fieldCreate).toContain("Field name");
+    });
+
     it("field type icons share Lucide language", () => {
         expect(DATA_MODEL_FIELD_TYPE_ICONS.text).toBeTruthy();
         expect(DATA_MODEL_FIELD_TYPE_ICONS.select).toBeTruthy();

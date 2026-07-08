@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import DataModelCategoriesTab from "@/components/admin/fields/DataModelCategoriesTab";
 import DataModelEntityHeader from "@/components/admin/fields/DataModelEntityHeader";
 import DataModelFieldsTab from "@/components/admin/fields/DataModelFieldsTab";
 import type { FieldOwnershipFilter } from "@/components/admin/fields/FieldOwnershipFilterTabs";
@@ -36,7 +37,7 @@ function normalizeEntity(raw: string | undefined): FieldEntityKey {
 function normalizeTab(raw: string | undefined): DataModelWorkspaceTab {
     const t = (raw ?? "").trim().toLowerCase();
     if (t === "computed_signals") return "fields";
-    if (t === "relationships" || t === "fields" || t === "overview") {
+    if (t === "relationships" || t === "categories" || t === "fields" || t === "overview") {
         return t;
     }
     return "overview";
@@ -109,6 +110,7 @@ export default function DataModelWorkspaceClient({
     const [totalFieldsByEntity, setTotalFieldsByEntity] = useState<Partial<Record<FieldEntityKey, number>>>({});
     const [catalogEntries, setCatalogEntries] = useState<SettingsFieldCatalogEntry[]>([]);
     const [createFieldSignal, setCreateFieldSignal] = useState(0);
+    const [createCategorySignal, setCreateCategorySignal] = useState(0);
     const [creatingRelationship, setCreatingRelationship] = useState(false);
     const [focusFieldRefKey, setFocusFieldRefKey] = useState<string | null>(null);
     const [fieldsOwnershipFilter, setFieldsOwnershipFilter] = useState<FieldOwnershipFilter>(ownershipFromUrl);
@@ -193,6 +195,11 @@ export default function DataModelWorkspaceClient({
         [replaceWorkspaceUrl, entity, fieldsOwnershipFilter],
     );
 
+    const triggerAddCategory = () => {
+        setCreateCategorySignal((n) => n + 1);
+        onTabChange("categories");
+    };
+
     const triggerAddField = () => {
         setCreateFieldSignal((n) => n + 1);
         setFocusFieldRefKey(null);
@@ -246,10 +253,20 @@ export default function DataModelWorkspaceClient({
                             entries={catalogEntries}
                             onViewAllFields={() => onTabChange("fields", "all")}
                             onViewAllRelationships={() => onTabChange("relationships")}
+                            onViewAllCategories={() => onTabChange("categories")}
                             onViewComputedFields={viewComputedFields}
                             onAddField={triggerAddField}
                             onAddRelationship={triggerAddRelationship}
                             onSelectField={openFieldInline}
+                        />
+                    ) : null}
+
+                    {tab === "categories" ? (
+                        <DataModelCategoriesTab
+                            key={`${entity}-categories`}
+                            hubEntity={entity}
+                            primaryEntityType={primaryEntityType}
+                            createSignal={createCategorySignal}
                         />
                     ) : null}
 

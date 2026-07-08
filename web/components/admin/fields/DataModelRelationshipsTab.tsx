@@ -9,7 +9,7 @@ import {
     platformRelationshipsForHubEntity,
     type CustomRelationshipVocabulary,
 } from "@/lib/fields/entityRelationshipCatalog";
-import { PERSON_ROLE_EXAMPLES, PERSON_ROLES_TEACHING } from "@/lib/fields/dataModelWorkspaceOperatorUi";
+import { PERSON_ROLE_EXAMPLES, PERSON_ROLES_TEACHING, CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS } from "@/lib/fields/dataModelWorkspaceOperatorUi";
 import type { SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
 
 type Props = {
@@ -132,14 +132,17 @@ export default function DataModelRelationshipsTab({
                 </button>
             </div>
 
-            <DataModelRelationshipCreateRow
-                open={isCreating}
-                hubEntity={hubEntity}
-                onCancel={() => setCreating(false)}
-                onCreated={() => void fetchCustom()}
-            />
+            <div className={CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS}>
+                <DataModelRelationshipCreateRow
+                    open={isCreating}
+                    hubEntity={hubEntity}
+                    onCancel={() => setCreating(false)}
+                    onCreated={() => void fetchCustom()}
+                />
+            </div>
 
-            <section className="space-y-1.5" data-testid="platform-relationships-section">
+            <div className="grid gap-3 lg:grid-cols-2">
+                <section className="space-y-1.5" data-testid="platform-relationships-section">
                 <ConfigurationCategoryHeader label="Platform relationships" testId="platform-relationships-header" />
                 <div
                     className="overflow-hidden rounded-lg border border-alloy-forge/12 bg-white"
@@ -161,7 +164,7 @@ export default function DataModelRelationshipsTab({
                 </div>
             </section>
 
-            <section className="space-y-1.5" data-testid="custom-relationships-section">
+                <section className="space-y-1.5" data-testid="custom-relationships-section">
                 <ConfigurationCategoryHeader label="Custom relationships" testId="custom-relationships-header" />
                 {customLoading ? (
                     <p className="text-[12px] text-alloy-midnight/45">Loading custom relationships…</p>
@@ -187,7 +190,8 @@ export default function DataModelRelationshipsTab({
                         ))}
                     </div>
                 )}
-            </section>
+                </section>
+            </div>
         </div>
     );
 }
