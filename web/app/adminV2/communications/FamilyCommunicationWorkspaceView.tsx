@@ -67,6 +67,11 @@ function sortThreadsForStrip(threads: ThreadVM[]): ThreadVM[] {
     });
 }
 
+/** Activity embed thread list — hide orphaned zero-message threads (not real conversations). */
+function threadsForActivityEmbed(threads: ThreadVM[]): ThreadVM[] {
+    return sortThreadsForStrip(threads).filter((thread) => thread.messageCount > 0);
+}
+
 const toolbarBtn = "rounded-md p-1.5 text-alloy-midnight/55 transition hover:bg-alloy-stone/12 hover:text-alloy-midnight";
 type IconType = typeof Mail;
 const channelIcon = (m: WorkspaceTimelineMessage): IconType => {
@@ -576,7 +581,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     );
 
     if (isActivityEmbed) {
-        const activityThreadList = sortThreadsForStrip(threads);
+        const activityThreadList = threadsForActivityEmbed(threads);
         return (
             <div data-cc-surface-variant={surfaceVariant} className="flex h-full min-h-0 flex-1 overflow-hidden">
                 {/* THREAD LIST — recent conversations rollup (channel · count · timestamp) */}

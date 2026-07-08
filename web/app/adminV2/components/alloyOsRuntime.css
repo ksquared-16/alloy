@@ -685,27 +685,51 @@ html[data-alloy-os-runtime-split="true"] [data-component="WorkUnitSurface"] {
   min-height: 0;
 }
 
+html[data-alloy-os-runtime-split="true"] [data-component="WorkUnitSurface"] > div {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-alloy-os-runtime-split="true"] [data-component="WorkUnitSurface"] > div > div:first-child {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 html[data-alloy-os-runtime-split="true"] [data-alloy-section="FP.SURFACE"] {
   flex: 1 1 auto;
   min-height: 0;
 }
 
 html[data-alloy-os-runtime-split="true"] [data-alloy-section="FP.SURFACE"] > div {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
+  display: flex;
 }
 
 html[data-alloy-os-runtime-split="true"] [data-queue-region-boundary],
 html[data-alloy-os-runtime-split="true"] [data-focus-panel-boundary] {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-alloy-os-runtime-split="true"] [data-focus-panel-boundary] > [data-inline-focus-panel="true"] {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Activity mode — cockpit fills the panel body; internal panes scroll (no page double-scroll) */
 html[data-alloy-os-runtime-split="true"]
   [data-inline-focus-panel="true"][data-inline-focus-panel-mode="activity"] {
   min-height: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
 }
 
 html[data-alloy-os-runtime-split="true"]
@@ -714,7 +738,7 @@ html[data-alloy-os-runtime-split="true"]
   display: flex;
   flex-direction: column;
   overflow: hidden !important;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
   padding: 8px 8px 8px !important;
 }
@@ -723,26 +747,23 @@ html[data-alloy-os-runtime-split="true"]
   [data-inline-focus-panel-mode="activity"]
   [data-adminv2-record-modal-scroll]
   > div {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
-  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* height:100% (not auto) — grid 1fr rows need a definite parent height to fill the shell */
+/* flex:1 1 0% (not height:100%) — percentage height fails when parent flex used size is indefinite */
 html[data-alloy-os-runtime-split="true"] [data-focus-panel-cockpit="true"],
 html[data-alloy-os-runtime-split="true"] .alloy-os-activity-cockpit {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
-  height: 100%;
 }
 
 html[data-alloy-os-runtime-split="true"] .alloy-os-activity-cockpit__body {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
-  height: 100%;
   overflow: hidden;
 }
 
@@ -1843,7 +1864,7 @@ html[data-alloy-os-runtime="on"]
 }
 
 .alloy-os-activity-cockpit__body {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
   display: grid;
   /* Communications hero ~72–75%; Work/Documents rail ~25–28% */
