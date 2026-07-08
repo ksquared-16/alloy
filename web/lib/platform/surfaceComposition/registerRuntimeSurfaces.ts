@@ -13,7 +13,6 @@ import {
     resolveOpenSurface,
 } from "@/lib/platform/surfaceComposition/surfaceRegistry";
 import {
-    CHILD_SURFACE_ID,
     FOCUS_PANEL_SURFACE_ID,
     V3_PROOF_SURFACES,
     focusPanelSurface,
@@ -28,7 +27,7 @@ import {
  * keyed on the registry's own state (not a private flag) so a registry reset re-registers.
  */
 export function ensureRuntimeSurfacesRegistered(): void {
-    if (getSurface(FOCUS_PANEL_SURFACE_ID) && getSurface(CHILD_SURFACE_ID)) return;
+    if (getSurface(FOCUS_PANEL_SURFACE_ID)) return;
     registerSurfaces(V3_PROOF_SURFACES);
 }
 

@@ -16,6 +16,10 @@ import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChi
 import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
+import {
+    formatFocusPanelDate,
+    formatFocusPanelDobAgeLine,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type ChildStatusTone = "positive" | "work" | "risk" | "neutral";
@@ -28,6 +32,14 @@ export type ChildEvidenceFlag = {
 export type ChildrenEvidenceChild = {
     id: string;
     name: string;
+    /** Optional identity parts for composed display (Surface Composer identity group). */
+    firstName?: string | null;
+    lastName?: string | null;
+    preferredName?: string | null;
+    nickname?: string | null;
+    /** ISO date-only when present; display via dobAge. */
+    dob?: string | null;
+    age?: string | null;
     initial: string;
     /** Identity profile image (evidence model); null → initials fallback. */
     imageUrl: string | null;
@@ -37,6 +49,7 @@ export type ChildrenEvidenceChild = {
     schedule: string | null;
     /** Placement evidence — assigned teacher (no source yet → null → "Not set"). */
     teacher: string | null;
+    /** Human-readable start date (Focus Panel date doctrine). */
     startDate: string | null;
     status: string | null;
     statusTone: ChildStatusTone;
@@ -67,33 +80,10 @@ export type ChildrenCardEvidence = {
     hasAttention: boolean;
 };
 
-const MONTHS = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
 function trimOrNull(value: unknown): string | null {
     if (value == null) return null;
     const text = String(value).trim();
     return text.length > 0 ? text : null;
-}
-
-/** "2020-03-03" → "Mar 3, 2020". Returns null when unparseable. */
-function formatDob(dob: string | null): string | null {
-    if (!dob) return null;
-    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dob.trim());
-    if (!match) return trimOrNull(dob);
-    const [, y, m, d] = match;
-    const month = MONTHS[Number(m) - 1];
-    if (!month) return trimOrNull(dob);
-    return `${month} ${Number(d)}, ${y}`;
-}
-
-function dobAgeLine(dob: string | null, age: string | null): string | null {
-    const dobLabel = formatDob(dob);
-    const ageLabel = trimOrNull(age);
-    if (dobLabel && ageLabel) return `${dobLabel} · ${ageLabel}`;
-    return dobLabel ?? ageLabel;
 }
 
 function statusTone(statusKey: string | null): ChildStatusTone {
@@ -143,7 +133,9 @@ export function buildChildrenCardEvidence(
         const room = trimOrNull(row.program_room_cohort_label) ?? trimOrNull(row.location_label);
         const schedule = trimOrNull(row.desired_schedule_label);
         const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
-        const startDate = trimOrNull(row.start_date);
+        const startDateIso = trimOrNull(row.start_date)?.slice(0, 10) ?? null;
+        const startDate = formatFocusPanelDate(startDateIso);
+        const dobAge = formatFocusPanelDobAgeLine(row.dob, row.age);
         // Operator-facing value is the child's PROCESS STAGE (the retired "Participation Status" is
         // gone). Sourced from stage_key where present, else mapped from the stage-equivalent
         // disposition. `statusKey` is retained ONLY to drive tone + the declined attention gate.
@@ -154,7 +146,7 @@ export function buildChildrenCardEvidence(
         });
         const declined = statusKey?.toLowerCase().includes("declin") ?? false;
         // Active children need the enrollment essentials; declined children do not.
-        const needsAttention = !declined && (!program || !schedule || !startDate);
+        const needsAttention = !declined && (!program || !schedule || !startDateIso);
 
         // Answer-first evidence sentence (present facts only, no labels). When the
         // published Children Surface config names an explicit field order, honor it;
@@ -167,7 +159,7 @@ export function buildChildrenCardEvidence(
             "inquiry_child.desired_schedule_type": schedule,
             "child.start_date": startsLabel,
             "child.desired_start_date": startsLabel,
-            "child.date_of_birth": dobAgeLine(row.dob, row.age),
+            "child.date_of_birth": dobAge,
         };
         const configuredKeys = (options.childDetailFieldKeys ?? []).filter(
             (k) => k in detailValueByKey,
@@ -183,7 +175,7 @@ export function buildChildrenCardEvidence(
         const missing = [
             !program ? "program" : null,
             !schedule ? "schedule" : null,
-            !startDate ? "start date" : null,
+            !startDateIso ? "start date" : null,
         ].filter(Boolean) as string[];
         const missingLine =
             !declined && missing.length > 0
@@ -197,11 +189,17 @@ export function buildChildrenCardEvidence(
         return {
             id: trimOrNull(row.id) ?? trimOrNull(row.person_id) ?? `child-${index}`,
             name,
+            firstName: trimOrNull(row.first_name),
+            lastName: trimOrNull(row.last_name),
+            preferredName: trimOrNull((row as { preferred_name?: unknown }).preferred_name),
+            nickname: trimOrNull((row as { nickname?: unknown }).nickname),
+            dob: trimOrNull(row.dob)?.slice(0, 10) ?? null,
+            age: trimOrNull(row.age),
             initial: name.charAt(0).toUpperCase(),
             // No child photo source today → null → CardAvatar renders the initials
             // fallback. The seam is here for when child photos land (no fabricated image).
             imageUrl: null,
-            dobAge: dobAgeLine(row.dob, row.age),
+            dobAge,
             program,
             room,
             schedule,

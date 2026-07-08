@@ -8,7 +8,7 @@ import {
     ConfigurationQueueItem,
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import FocusPanelSurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSurfaceEditor";
+import FocusPanelSummarySurfaceEditor from "@/components/adminV2/settings/surfaces/FocusPanelSummarySurfaceEditor";
 import OperationalIntelligenceSurfaceBuilder from "@/components/adminV2/settings/surfaces/OperationalIntelligenceSurfaceBuilder";
 import WorkUnitHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkUnitHeaderSurfaceEditor";
 import WorkspaceHeaderSurfaceEditor from "@/components/adminV2/settings/surfaces/WorkspaceHeaderSurfaceEditor";
@@ -19,8 +19,9 @@ import {
     catalogIdFromQueueRowSurfaceId,
 } from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
 import NestedSurfaceEditor from "@/components/adminV2/settings/surfaces/NestedSurfaceEditor";
-import { nestedSurfaceLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { useMemo, useState as useReactState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState as useReactState } from "react";
+
 import { sectionLabel } from "@/lib/adminV2/settings/surfaces/surfacesNavigationModel";
 import {
     useSurfacesConfigurationSettings,
@@ -81,6 +82,8 @@ function SurfacesCategoryNav({
 }
 
 export default function SurfacesConfigurationPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const [pendingCatalogIds, setPendingCatalogIds] = useReactState<string[]>([]);
     const {
         loading: workspaceCatalogLoading,
@@ -102,15 +105,49 @@ export default function SurfacesConfigurationPage() {
         setSection,
         selectedId,
         setSelectedId,
-        goHome,
+        openSurface,
+        goHome: clearSelection,
         sections,
         listItems,
         selectedObject,
     } = useSurfacesConfigurationSettings(configuredSurfaces, queueRowSurfaces);
 
     const activeSectionLabel = sectionLabel(section);
-    const [nestedStack, setNestedStack] = useReactState<{ surfaceId: string; cardLabel?: string }[]>([]);
-    const activeNested = nestedStack[nestedStack.length - 1] ?? null;
+    const [nestedSurfaceId, setNestedSurfaceId] = useReactState<string | null>(null);
+
+    /** Experience Builder studio URL — full-bleed shell (hides Surfaces IA + BOS chrome). */
+    const enterFocusPanelStudio = (surfaceId: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("editor", "1");
+        params.set("layout", surfaceId);
+        router.replace(`/settings/surfaces?${params.toString()}`);
+    };
+
+    const exitStudio = () => {
+        setNestedSurfaceId(null);
+        clearSelection();
+        router.replace("/settings/surfaces");
+    };
+
+    // Restore studio selection from URL (refresh / deep link).
+    useEffect(() => {
+        const layout = searchParams.get("layout")?.trim();
+        if (searchParams.get("editor") === "1" && layout) {
+            openSurface(layout);
+        }
+        // Only when the studio URL changes — not on every list reload.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
+
+    // Opening the Focus Panel always enters studio (wide builder shell).
+    useEffect(() => {
+        if (selectedObject?.editor === "focus-panel-summary" && selectedId) {
+            if (searchParams.get("editor") !== "1" || searchParams.get("layout") !== selectedId) {
+                enterFocusPanelStudio(selectedId);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedObject?.editor, selectedId]);
 
     const isWorkspaceProcessEditor = selectedObject?.editor === "workspace-processes";
     const isWorkspaceHeaderEditor = selectedObject?.editor === "workspace-header";
@@ -122,8 +159,7 @@ export default function SurfacesConfigurationPage() {
         isWorkspaceHeaderEditor ||
         isWorkUnitHeaderEditor ||
         isQueueRowEditor ||
-        isFocusPanelEditor ||
-        nestedStack.length > 0;
+        isFocusPanelEditor;
     const selectedCatalogEntry =
         selectedObject?.catalogId
             ? catalog.find((e) => e.id === selectedObject.catalogId) ??
@@ -155,10 +191,7 @@ export default function SurfacesConfigurationPage() {
             <button
                 type="button"
                 data-testid="surfaces-back-home"
-                onClick={() => {
-                    setNestedStack([]);
-                    goHome();
-                }}
+                onClick={exitStudio}
                 className="rounded-lg border border-alloy-forge/20 bg-white px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:border-alloy-pine/35 hover:text-alloy-pine"
             >
                 Surfaces
@@ -249,7 +282,9 @@ export default function SurfacesConfigurationPage() {
         if (selectedObject.editor === "operational-intelligence") {
             return <OperationalIntelligenceSurfaceBuilder />;
         }
-
+        if (nestedSurfaceId) {
+            return <NestedSurfaceEditor surfaceId={nestedSurfaceId} />;
+        }
         return (
             <ConfigurationEmptyState
                 testId="surfaces-workspace-unconfigured"
@@ -259,45 +294,26 @@ export default function SurfacesConfigurationPage() {
         );
     }
 
+    // Focus Panel — full-bleed builder stage (runtime-shaped canvas, not Surfaces IA chrome).
+    if (isFocusPanelEditor) {
+        return (
+            <div
+                className="process-config-page flex min-h-0 flex-1 flex-col"
+                data-testid="surfaces-configuration-page"
+                data-focus-panel-builder-wide="true"
+            >
+                <FocusPanelSummarySurfaceEditor onBack={exitStudio} />
+            </div>
+        );
+    }
+
     if (isQueueRowEditor && selectedQueueRowCatalogEntry) {
         return (
             <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
                 <QueueRowSurfaceEditor
                     catalogEntry={selectedQueueRowCatalogEntry}
-                    onBack={goHome}
+                    onBack={clearSelection}
                     onPublished={() => void reloadQueueRowCatalog()}
-                />
-            </div>
-        );
-    }
-
-    if (activeNested) {
-        const parentRoute = nestedStack.length > 1 ? nestedStack[nestedStack.length - 2]! : null;
-        return (
-            <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
-                <NestedSurfaceEditor
-                    surfaceId={activeNested.surfaceId}
-                    cardLabel={activeNested.cardLabel}
-                    parentLabel={parentRoute ? nestedSurfaceLabel(parentRoute.surfaceId) : "Enrollment Focus Panel"}
-                    onBack={() => {
-                        setNestedStack((prev) => prev.slice(0, -1));
-                    }}
-                    onDrillInSurface={(surfaceId) => {
-                        setNestedStack((prev) => [...prev, { surfaceId }]);
-                    }}
-                />
-            </div>
-        );
-    }
-
-    if (isFocusPanelEditor) {
-        return (
-            <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
-                <FocusPanelSurfaceEditor
-                    onBack={goHome}
-                    onOpenNestedSurface={(surfaceId, cardLabel) => {
-                        setNestedStack([{ surfaceId, cardLabel }]);
-                    }}
                 />
             </div>
         );
@@ -306,7 +322,7 @@ export default function SurfacesConfigurationPage() {
     if (isWorkspaceHeaderEditor) {
         return (
             <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
-                <WorkspaceHeaderSurfaceEditor onBack={goHome} />
+                <WorkspaceHeaderSurfaceEditor onBack={clearSelection} />
             </div>
         );
     }
@@ -314,7 +330,7 @@ export default function SurfacesConfigurationPage() {
     if (isWorkUnitHeaderEditor) {
         return (
             <div className="process-config-page flex min-h-0 flex-1 flex-col" data-testid="surfaces-configuration-page">
-                <WorkUnitHeaderSurfaceEditor onBack={goHome} />
+                <WorkUnitHeaderSurfaceEditor onBack={clearSelection} />
             </div>
         );
     }
@@ -325,7 +341,7 @@ export default function SurfacesConfigurationPage() {
                 <WorkspaceProcessesSurfaceEditor
                     catalogEntry={selectedCatalogEntry}
                     configuredEntries={configuredCatalogEntries}
-                    onBack={goHome}
+                    onBack={clearSelection}
                     onSelectProcess={setSelectedId}
                     onPublished={() => {
                         setPendingCatalogIds([]);
