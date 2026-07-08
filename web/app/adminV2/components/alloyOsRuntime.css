@@ -3029,9 +3029,10 @@ html[data-alloy-os-runtime-split="true"]
   width: min(560px, calc(100% - 32px));
   display: flex;
   flex-direction: column;
-  height: min(80vh, calc(100% - 32px));
-  min-height: min(70vh, calc(100% - 32px));
-  max-height: min(80vh, calc(100% - 32px));
+  /* Viewport-anchored — never % of the reserved collapsed cell (that caused ~0px height). */
+  min-height: min(70vh, calc(100dvh - 64px));
+  max-height: min(80vh, calc(100dvh - 48px));
+  height: max-content;
   overflow: hidden;
   z-index: 60;
   pointer-events: auto;
@@ -3056,9 +3057,8 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-ucard {
   width: min(560px, calc(100% - 32px));
   max-width: 560px;
-  height: min(80vh, calc(100% - 32px));
-  min-height: min(70vh, calc(100% - 32px));
-  max-height: min(80vh, calc(100% - 32px));
+  min-height: min(70vh, calc(100dvh - 64px));
+  max-height: min(80vh, calc(100dvh - 48px));
 }
 
 /* Surface Composer V3.5 — runtime-shaped nested surfaces with quiet edit affordances. */

@@ -502,8 +502,9 @@ describe("Final Focus Panel Composer ship fixes", () => {
 
     it("gives elevated drill-ins workspace height with internal body scroll", () => {
         expect(runtimeCss).toContain("[data-fp-composer-edit-mode=\"true\"]");
-        expect(runtimeCss).toContain("min-height: min(70vh, calc(100% - 32px))");
-        expect(runtimeCss).toContain("max-height: min(80vh, calc(100% - 32px))");
+        expect(runtimeCss).toContain("min-height: min(70vh, calc(100dvh - 64px))");
+        expect(runtimeCss).toContain("max-height: min(80vh, calc(100dvh - 48px))");
+        expect(runtimeCss).not.toContain("min-height: min(70vh, calc(100% - 32px))");
         expect(runtimeCss).toContain(".alloy-os-ucard__body");
         expect(runtimeCss).toContain("overflow-y: auto");
         expect(runtimeCss).toContain("width: min(560px, calc(100% - 32px));");
