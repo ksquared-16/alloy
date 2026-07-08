@@ -765,13 +765,15 @@ function CommunicationsDrawerSectionLegacy({
                     applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
                     return;
                 }
-                const hasOutbound =
-                    bsnap.channels.includes("email") || bsnap.channels.includes("sms");
-                if (hasOutbound) {
+                // Require a complete outbound channel list — email-only snapshots (taken before SMS
+                // was activated) must not lock SMS off for the rest of the session.
+                const hasEmail = bsnap.channels.includes("email");
+                const hasSms = bsnap.channels.includes("sms");
+                if (hasEmail && hasSms) {
                     applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
                     return;
                 }
-                // Empty outbound snapshot (e.g. prefetch before credentials existed) — fetch fresh.
+                // Empty / partial outbound snapshot — fetch fresh.
             }
 
             setLoadingBindings(true);

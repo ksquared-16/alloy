@@ -16,6 +16,8 @@ export type BindingSummary = {
 
 function isSmsBindingReady(b: BindingSummary): boolean {
     if ((b.channel || "").toLowerCase() !== "sms") return false;
+    const prov = String(b.provider ?? "").toLowerCase();
+    if (prov !== "twilio") return false;
     const ref = String(b.secret_ref ?? "").trim().toLowerCase();
     if (ref === "unconfigured" || ref === "") return false;
     return true;

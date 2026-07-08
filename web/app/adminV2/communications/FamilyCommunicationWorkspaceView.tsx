@@ -160,8 +160,12 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 type="button"
                 data-cc-workspace-mode={mode}
                 aria-pressed={active}
-                onClick={() => onWorkspaceModeChange?.(mode)}
-                className={`border-l border-alloy-stone/15 px-2.5 py-1 first:border-l-0 ${active ? "bg-alloy-juniper font-semibold text-white" : status.available ? "text-alloy-midnight/70 hover:bg-alloy-stone/[0.04]" : "text-alloy-midnight/45 hover:bg-alloy-stone/[0.04]"}`}
+                disabled={!status.available}
+                title={!status.available ? status.reason ?? `${label} is unavailable` : undefined}
+                onClick={() => {
+                    if (status.available) onWorkspaceModeChange?.(mode);
+                }}
+                className={`border-l border-alloy-stone/15 px-2.5 py-1 first:border-l-0 disabled:cursor-not-allowed disabled:opacity-45 ${active ? "bg-alloy-juniper font-semibold text-white" : status.available ? "text-alloy-midnight/70 hover:bg-alloy-stone/[0.04]" : "text-alloy-midnight/45"}`}
             >
                 {label}
             </button>
