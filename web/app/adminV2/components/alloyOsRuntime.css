@@ -1169,6 +1169,17 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
 }
 
+/* Inline Focus Panel on /work-unit — no dismiss control; identity aligns left */
+.alloy-os-fp-header-compact--no-close .alloy-os-fp-header-compact__band,
+[data-inline-focus-panel-header="true"] .alloy-os-fp-header-compact__band {
+  padding-left: 10px;
+  gap: 10px;
+}
+
+[data-inline-focus-panel-header="true"] [data-focus-panel-close="true"] {
+  display: none;
+}
+
 .alloy-os-fp-header-compact__identity {
   flex: 1 1 auto;
   min-width: 0;
@@ -3035,6 +3046,17 @@ html[data-alloy-os-runtime-split="true"]
     0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
   animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
+
+/* Surface Composer V3 — drill-in edit mode uses most of the viewport as workspace. */
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard {
+  width: min(92%, calc(100% - 24px));
+  max-width: 720px;
+  max-height: min(78vh, calc(100% - 24px));
+  min-height: min(68vh, 520px);
+}
 /* Focused card typography + spacing step up so it reads as a different layer. */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -3624,18 +3646,78 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-children__summary-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .alloy-os-children__summary-meta { display: flex; flex-direction: column; gap: 2px; }
 .alloy-os-children__summary-line { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--alloy-os-text-secondary, #4b5563); }
+.alloy-os-children__summary-wrap { display: flex; flex-direction: column; gap: 2px; }
+.alloy-os-children__details-toggle {
+  align-self: flex-start; margin: 0 0 2px 54px; padding: 0; border: 0; background: transparent;
+  font-size: 11px; font-weight: 500; color: var(--alloy-os-accent, #2f6f4f); cursor: pointer;
+}
+.alloy-os-children__details-toggle:hover { text-decoration: underline; }
+.alloy-os-children__summary-details {
+  display: flex; flex-direction: column; gap: 2px; margin: 0 0 4px 54px; padding: 6px 8px;
+  border-radius: 8px; background: color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 35%, #fff);
+}
+.alloy-os-children__detail-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--alloy-os-text-tertiary, #9ca3af); min-width: 4.5rem; }
 
 /* ── Child lifecycle: Focus / Edit shared structure ── */
 .alloy-os-child-focus__header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .alloy-os-child-focus__id { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; }
 .alloy-os-child-focus__id .alloy-os-household__group-title { display: block; }
 .alloy-os-child-focus__sub { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--alloy-os-text-tertiary, #9ca3af); margin-top: 1px; }
-.alloy-os-child-truth__row { display: grid; grid-template-columns: 17px 80px 1fr; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 55%, transparent); }
+.alloy-os-child-truth__row { display: grid; grid-template-columns: 17px 80px 1fr auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 55%, transparent); width: 100%; text-align: left; background: transparent; border-left: 0; border-right: 0; border-top: 0; }
 .alloy-os-child-truth__row:last-child { border-bottom: 0; }
 .alloy-os-child-truth__icon { display: inline-flex; align-items: center; justify-content: center; color: var(--alloy-os-text-tertiary, #9ca3af); }
 .alloy-os-child-truth__label { font-size: 10.5px; font-weight: 600; color: var(--alloy-os-text-tertiary, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
 .alloy-os-child-truth__value { font-size: 12.5px; color: var(--alloy-os-text-primary, #111827); font-weight: 500; }
 .alloy-os-child-truth__value--empty { color: var(--alloy-os-danger, #b45309); font-style: italic; opacity: 0.9; }
+/* Per-field inline action — the action lives next to the field it affects. Subtle until hover. */
+.alloy-os-child-truth__edit {
+  border: 0; background: transparent; cursor: pointer; padding: 0 2px;
+  font-size: 11px; font-weight: 600; color: var(--alloy-os-accent, #2f6f4f);
+  opacity: 0; transition: opacity 120ms ease;
+}
+.alloy-os-child-truth__row:hover .alloy-os-child-truth__edit,
+button.alloy-os-child-truth__row:hover .alloy-os-child-truth__edit,
+.alloy-os-child-truth__row:focus-within .alloy-os-child-truth__edit { opacity: 1; }
+.alloy-os-child-truth__value--empty ~ .alloy-os-child-truth__edit { opacity: 1; }
+
+/* Inline schedule editor — start/end times appear where the schedule is (no detached form). */
+.alloy-os-child-schedule-inline { display: inline-flex; align-items: flex-end; gap: 8px; margin-top: 6px; }
+.alloy-os-child-schedule-inline__field { display: inline-flex; flex-direction: column; gap: 2px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--alloy-os-text-tertiary, #9ca3af); }
+.alloy-os-child-schedule-inline__field input { font-size: 12px; padding: 3px 6px; border: 1px solid var(--alloy-os-border, #e5e7eb); border-radius: 6px; color: var(--alloy-os-text-primary, #111827); }
+.alloy-os-child-schedule-inline__dash { padding-bottom: 6px; color: var(--alloy-os-text-tertiary, #9ca3af); }
+.alloy-os-child-schedule-inline__done { margin-bottom: 1px; border: 0; background: transparent; cursor: pointer; font-size: 11px; font-weight: 700; color: var(--alloy-os-accent, #2f6f4f); }
+
+/* Archive entry point — quiet, bottom-right. Evidence never competes with operations. */
+.alloy-os-child-archive { display: flex; justify-content: flex-end; margin-top: 14px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 55%, transparent); }
+.alloy-os-child-archive .alloy-os-child-history-link { margin-top: 0; color: var(--alloy-os-text-tertiary, #9ca3af); font-weight: 600; }
+.alloy-os-child-truth__history {
+  border: 0; background: transparent; cursor: pointer; padding: 0 2px;
+  font-size: 11px; font-weight: 600; color: var(--alloy-os-text-tertiary, #9ca3af);
+  opacity: 0; transition: opacity 120ms ease;
+}
+.alloy-os-child-truth__row:hover .alloy-os-child-truth__history,
+.alloy-os-child-truth__row:focus-within .alloy-os-child-truth__history { opacity: 1; }
+.alloy-os-child-truth__locked {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  text-transform: uppercase;
+}
+.alloy-os-household__empty-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 2px 8px;
+}
+.alloy-os-card-edit__hint {
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-child-egroup__head { display: flex; align-items: center; gap: 6px; }
 
 .alloy-os-child-edit { display: flex; flex-direction: column; gap: 2px; }
 .alloy-os-child-edit__section { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 8px; }
@@ -3646,6 +3728,8 @@ html[data-alloy-os-runtime-split="true"]
   border-radius: 8px; font-size: 11.5px; font-weight: 700; cursor: default;
   border: 1px solid var(--alloy-os-border, #e5e7eb); color: var(--alloy-os-text-tertiary, #9ca3af); background: #fff;
 }
+button.alloy-os-child-edit__chip { cursor: pointer; padding: 0; }
+button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-child-edit__chip--on { border-color: var(--alloy-os-accent, #2f6f4f); background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 12%, #fff); color: var(--alloy-os-accent, #2f6f4f); }
 .alloy-os-child-edit__times { border-top: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 55%, transparent); }
 
@@ -3770,6 +3854,95 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-grid-builder__tray-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--alloy-os-text-tertiary, #9ca3af); margin-right: 4px; }
 .alloy-os-grid-builder__chip { padding: 4px 10px; border-radius: 999px; background: var(--alloy-os-surface, #fff); border: 1px solid var(--alloy-os-border, #e5e7eb); font-size: 12px; font-weight: 600; color: var(--alloy-os-text-secondary, #4b5563); cursor: grab; }
 .alloy-os-grid-builder__chip:hover { border-color: var(--alloy-os-accent, #2f6f4f); color: var(--alloy-os-accent, #2f6f4f); }
+
+/* ── Focus Panel Runtime Composer — runtime surface first, subtle affordances second ── */
+.alloy-os-fp-composer { display: flex; flex-direction: column; gap: 10px; width: 100%; min-height: 0; flex: 1 1 auto; }
+.alloy-os-fp-composer .alloy-os-fp-header-compact__close { display: none; }
+.alloy-os-fp-composer__panel { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; min-height: 520px; }
+.alloy-os-fp-composer__body { flex: 1 1 auto; min-height: 0; }
+.alloy-os-fp-composer__body { position: relative; }
+.alloy-os-fp-composer__ghost {
+  position: absolute; z-index: 20; pointer-events: none; border-radius: 12px;
+  background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 10%, transparent);
+  outline: 2px dashed color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 45%, transparent);
+}
+.alloy-os-fp-composer__tray {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 12%, #fff);
+  border: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 80%, transparent);
+}
+.alloy-os-fp-composer__tray-label { font-size: 11px; font-weight: 600; color: var(--alloy-os-text-tertiary, #9ca3af); margin-right: 2px; }
+.alloy-os-fp-composer__chip {
+  padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+  background: var(--alloy-os-surface, #fff); border: 1px solid var(--alloy-os-border, #e5e7eb);
+  color: var(--alloy-os-text-secondary, #4b5563); cursor: pointer;
+}
+.alloy-os-fp-composer__chip:hover { border-color: var(--alloy-os-accent, #2f6f4f); color: var(--alloy-os-accent, #2f6f4f); }
+
+.alloy-os-fp-composer-cell { position: relative; }
+.alloy-os-fp-composer-cell__chrome {
+  position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  border-radius: inherit; transition: box-shadow 120ms, outline 120ms;
+}
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__chrome,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__chrome {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 55%, transparent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 12%, transparent);
+}
+.alloy-os-fp-composer-cell__configure,
+.alloy-os-fp-composer-cell__grip,
+.alloy-os-fp-composer-cell__remove {
+  position: absolute; top: 6px; display: flex; align-items: center; justify-content: center;
+  height: 22px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 80%, transparent);
+  background: color-mix(in srgb, #fff 92%, transparent); color: var(--alloy-os-text-tertiary, #9ca3af);
+  pointer-events: auto; opacity: 0; transition: opacity 100ms;
+}
+.alloy-os-fp-composer-cell__configure {
+  right: 34px; padding: 0 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  text-transform: uppercase; cursor: pointer; color: var(--alloy-os-accent, #2f6f4f);
+}
+.alloy-os-fp-composer-cell__grip { left: 6px; width: 22px; cursor: grab; touch-action: none; }
+.alloy-os-fp-composer-cell__remove { right: 6px; width: 22px; cursor: pointer; }
+.alloy-os-fp-composer-cell__remove:hover { color: var(--alloy-os-danger, #b91c1c); border-color: color-mix(in srgb, var(--alloy-os-danger, #b91c1c) 40%, transparent); }
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__configure,
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__grip,
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__remove,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__configure,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__grip,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__remove,
+.alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__grip,
+.alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__remove { opacity: 1; }
+
+.alloy-os-fp-composer-cell__handle {
+  position: absolute; background: transparent; transition: background 100ms;
+  touch-action: none; pointer-events: auto; opacity: 0; z-index: 6;
+}
+.alloy-os-fp-composer-cell__handle--w { top: 0; right: 0; width: 8px; height: 100%; cursor: col-resize; }
+.alloy-os-fp-composer-cell__handle--h { left: 0; bottom: 0; height: 8px; width: 100%; cursor: row-resize; }
+.alloy-os-fp-composer-cell__handle--corner { right: 0; bottom: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__handle,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__handle,
+.alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__handle { opacity: 1; }
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__handle--w,
+.alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__handle--w {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 28%, transparent));
+}
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__handle--h,
+.alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__handle--h {
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 28%, transparent));
+}
+
+.alloy-os-fp-composer-cell__expansion {
+  position: absolute; left: 8px; right: 8px; bottom: -2px; transform: translateY(100%);
+  padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 600;
+  color: var(--alloy-os-accent, #2f6f4f); background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 6%, #fff);
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 30%, transparent);
+  opacity: 0; pointer-events: none; transition: opacity 100ms; z-index: 4;
+}
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__expansion,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__expansion { opacity: 1; pointer-events: auto; }
 
 /* ── Household Summary: primary-contact row with badge ── */
 .alloy-os-household__primary-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }

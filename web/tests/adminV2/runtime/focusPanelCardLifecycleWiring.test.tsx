@@ -81,8 +81,9 @@ describe("Children card — Universal Card Lifecycle wiring", () => {
         expect(caps.supportsWorkspace).toBe(false);
         const src = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
         expect(src).toContain("cardCapabilities(\"children\")");
-        expect(src).toContain("CAPS.supportsInlineEdit"); // edit trigger gated on capability
         expect(src).toContain("CAPS.supportsExpanded"); // expand gated on capability
+        expect(src).toContain("data-children-edit-trigger"); // contextual footer edit
+        expect(src).toContain("mutation?.canEdit"); // edit gated on mutation seam
         expect(src).toContain('data-children-action="expand-evidence"'); // Expanded = more evidence
         expect(src).toContain("cardRelatedViews(\"children\")"); // Related Views drill-downs
         expect(src).toContain("data-related-view"); // related-report links
@@ -93,25 +94,23 @@ describe("Children card — Universal Card Lifecycle wiring", () => {
         // Expanded renders configured evidence groups for the child.
         expect(src).toContain("ChildExpandedEvidence");
         expect(src).toContain('<EvidenceGroup title="Placement">');
-        expect(src).toContain('<EvidenceGroup title="Medical">');
-        expect(src).toContain('<EvidenceGroup title="Documents">');
+        expect(src).toContain('<EvidenceGroup title="Notes">');
+        expect(src).toContain('<EvidenceGroup title="Readiness">');
         // History lives in a Related View report, not in Expanded.
         expect(src).toContain("ChildRelatedReport");
         expect(src).toContain("data-children-related-report");
         expect(src).toContain("placement_history");
     });
 
-    it("Child inline edit is a READ-ONLY PREVIEW — never fakes persistence", () => {
+    it("Child inline edit uses staging ChildFocusEdit + saveInquiryChild", () => {
         const src = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
-        // The edit surface is explicitly read-only with a clear notice.
-        expect(src).toContain('data-children-edit-readonly="true"');
-        expect(src).toContain("isn’t saveable yet");
-        // No save adapter is wired into Children — no mutation prop or save call.
-        expect(src).not.toContain("mutation:"); // not in the Props type
-        expect(src).not.toContain("mutation."); // never invokes a mutation adapter
-        expect(src).not.toContain("mutation?."); // nor optionally
+        expect(src).toContain("ChildFocusEdit");
+        expect(src).toContain("saveInquiryChild");
+        expect(src).toContain("mutation?: FocusPanelMutation");
+        expect(src).not.toContain("ChildEnrollmentEdit");
+        expect(src).not.toContain("isn’t saveable yet");
+        // Contact person PATCH remains Household-owned.
         expect(src).not.toContain("savePersonContact");
-        expect(src).not.toContain("onSave");
     });
 
     it("uses the shared CardAvatar (profile image with initials fallback)", () => {

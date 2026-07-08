@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
@@ -12,6 +12,27 @@ import {
     type HouseholdEvidenceGroup,
     type HouseholdEvidenceGroupKey,
 } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
+import {
+    householdGroupFieldKeys,
+    readHouseholdNestedConfigFromDoc,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
+import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
+import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
+import ComposableFieldShell from "@/components/admin/focusPanel/drillIn/ComposableFieldShell";
+import InlineRuntimeFieldList from "@/components/admin/focusPanel/drillIn/InlineRuntimeFieldList";
+import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
+import InlineSectionControls from "@/components/admin/focusPanel/drillIn/InlineSectionControls";
+import {
+    renderChildFields,
+    renderContactFields,
+    type HouseholdEvidenceChildExtended,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
+import {
+    nestedGroupLabel,
+    type NestedSurfaceConfig,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { seedHouseholdContactValuesForPerson } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
@@ -24,19 +45,6 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
-import {
-    applyHouseholdDisplayView,
-    type HouseholdNestedDisplayView,
-} from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
-
-type HouseholdComposerPreview = {
-    perspective: "expanded" | "focused";
-    focusedGroup?: HouseholdEvidenceGroupKey | null;
-    displayView?: HouseholdNestedDisplayView;
-    onSelectGroup?: (key: HouseholdEvidenceGroupKey) => void;
-    onSelectContact?: (personId: string) => void;
-    onSelectChild?: () => void;
-};
 
 type Props = {
     model: FocusPanelCardModel;
@@ -47,8 +55,6 @@ type Props = {
     coordination?: FocusPanelCoordination;
     /** Injected save seam (Edit depth). Absent → card stays read-only. */
     mutation?: FocusPanelMutation;
-    /** Surface composer runtime canvas — forces perspective without live save. */
-    composerPreview?: HouseholdComposerPreview;
 };
 
 const COLLAPSED_PREVIEW_GROUPS = 4;
@@ -64,24 +70,20 @@ const COLLAPSED_PREVIEW_GROUPS = 4;
  * @see docs/platform/operator/card-archetypes.md (Identity)
  * @see docs/platform/operator/card-interaction-expansion-doctrine.md (System 5B — Expand)
  */
-export default function HouseholdCard({
-    model,
-    context,
-    receded = false,
-    coordination,
-    mutation,
-    composerPreview,
-}: Props) {
-    const baseEvidence = useMemo(
-        () => buildHouseholdCardEvidence(context),
-        [context],
-    );
+export default function HouseholdCard({ model, context, receded = false, coordination, mutation }: Props) {
+    const composer = useFocusPanelComposer();
+    const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
+    const nestedConfig = useMemo(() => {
+        if (composer?.enabled) return composer.configFor(HOUSEHOLD_SURFACE_ID);
+        return readHouseholdNestedConfigFromDoc(publishedDoc);
+    }, [composer, publishedDoc]);
     const evidence = useMemo(
-        () =>
-            composerPreview?.displayView
-                ? applyHouseholdDisplayView(baseEvidence, composerPreview.displayView)
-                : baseEvidence,
-        [baseEvidence, composerPreview?.displayView],
+        () => buildHouseholdCardEvidence(context, { nestedConfig }),
+        [context, nestedConfig],
+    );
+    const groupFieldKeys = useCallback(
+        (groupKey: HouseholdEvidenceGroupKey) => householdGroupFieldKeys(nestedConfig, groupKey),
+        [nestedConfig],
     );
 
     // Permission outcome is resolved upstream and observed here — the card never
@@ -115,7 +117,13 @@ export default function HouseholdCard({
         [editingPersonId, context.truth],
     );
     const editing = Boolean(editingPersonId && editingSeed);
-    const onEditContact = canEdit ? (personId: string) => setEditingPersonId(personId) : undefined;
+    const onEditContact = canEdit
+        ? (personId: string) => {
+              composer?.setDrillDepth({ kind: "contact-edit", personId });
+              composer?.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: "contact_edit" });
+              setEditingPersonId(personId);
+          }
+        : undefined;
 
     // Cross-card handoff: when another card points here (e.g. Readiness "primary
     // contact"), open the requested evidence group as a Perspective Change. No fetch.
@@ -129,12 +137,6 @@ export default function HouseholdCard({
         setFocusedGroup((request.focus as HouseholdEvidenceGroupKey | null) ?? null);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
     }, [requestNonce]);
-
-    useEffect(() => {
-        if (!composerPreview) return;
-        setExpanded(true);
-        setFocusedGroup(composerPreview.focusedGroup ?? null);
-    }, [composerPreview]);
 
     const focused = !isEmpty && focusedGroup
         ? evidence.groups.find((g) => g.key === focusedGroup) ?? null
@@ -222,6 +224,7 @@ export default function HouseholdCard({
                 save={mutation!.savePersonContact}
                 onClose={() => setEditingPersonId(null)}
                 onSaved={handleContactSaved}
+                nestedConfig={nestedConfig}
             />
         );
     } else if (focused) {
@@ -232,6 +235,12 @@ export default function HouseholdCard({
                 masked={maskedChannels}
                 onOpenChild={openChild}
                 onEditContact={onEditContact}
+                onAddEmergencyContact={
+                    canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
+                }
+                resolveFieldKeys={groupFieldKeys}
+                composing={composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false}
+                nestedConfig={nestedConfig}
             />
         );
     } else if (expanded) {
@@ -243,6 +252,12 @@ export default function HouseholdCard({
                 onFocusGroup={(key) => setFocusedGroup(key)}
                 onOpenChild={openChild}
                 onEditContact={onEditContact}
+                onAddEmergencyContact={
+                    canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
+                }
+                resolveFieldKeys={groupFieldKeys}
+                composing={composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false}
+                nestedConfig={nestedConfig}
             />
         );
     } else {
@@ -255,6 +270,9 @@ export default function HouseholdCard({
                     setExpanded(true);
                     setFocusedGroup(key);
                 }}
+                onAddEmergencyContact={
+                    canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
+                }
             />
         );
     }
@@ -316,10 +334,12 @@ function CollapsedBody({
     evidence,
     masked,
     onPreviewGroup,
+    onAddEmergencyContact,
 }: {
     evidence: ReturnType<typeof buildHouseholdCardEvidence>;
     masked: boolean;
     onPreviewGroup: (key: HouseholdEvidenceGroupKey) => void;
+    onAddEmergencyContact?: () => void;
 }) {
     const allStats: { key: HouseholdEvidenceGroupKey; label: string; count: number }[] = [
         { key: "children", label: "Children", count: evidence.childCount },
@@ -416,9 +436,21 @@ function CollapsedBody({
                     type="button"
                     className="alloy-os-household__warning alloy-os-household__warning--action"
                     data-household-warning="true"
-                    onClick={() => onPreviewGroup(warningTarget)}
+                    onClick={() => {
+                        if (
+                            warningTarget === "emergency_contacts"
+                            && evidence.emergencyContactCount === 0
+                            && onAddEmergencyContact
+                        ) {
+                            onAddEmergencyContact();
+                            return;
+                        }
+                        onPreviewGroup(warningTarget);
+                    }}
                 >
-                    {evidence.missingCriticalWarning} →
+                    {evidence.emergencyContactCount === 0 && evidence.primaryContact
+                        ? "Add emergency contact →"
+                        : `${evidence.missingCriticalWarning} →`}
                 </button>
             ) : null}
         </div>
@@ -439,29 +471,46 @@ function ExpandedBody({
     onFocusGroup,
     onOpenChild,
     onEditContact,
+    onAddEmergencyContact,
+    resolveFieldKeys,
+    composing,
+    nestedConfig,
 }: {
     groups: HouseholdEvidenceGroup[];
     masked: boolean;
     onFocusGroup: (key: HouseholdEvidenceGroupKey) => void;
     onOpenChild?: (childId: string) => void;
     onEditContact?: (personId: string) => void;
+    onAddEmergencyContact?: () => void;
+    resolveFieldKeys: (groupKey: HouseholdEvidenceGroupKey) => string[];
+    composing: boolean;
+    nestedConfig: NestedSurfaceConfig | null;
 }) {
     return (
         <div className="alloy-os-household__groups" data-household-groups>
             {groups.map((group) => (
-                <section
+                <ComposableRegionShell
                     key={group.key}
+                    as="section"
+                    surfaceId={HOUSEHOLD_SURFACE_ID}
+                    groupKey={group.key}
+                    label={group.title}
                     className="alloy-os-household__group"
-                    data-household-evidence-group={group.key}
+                    dataAttrs={{ "data-household-evidence-group": group.key }}
                 >
                     <button
                         type="button"
                         className="alloy-os-household__group-header"
-                        onClick={() => onFocusGroup(group.key)}
+                        onClick={() => !composing && onFocusGroup(group.key)}
                         data-household-group-focus={group.key}
                     >
-                        <span className="alloy-os-household__group-title">{group.title}</span>
-                        <span className="alloy-os-household__group-count">{group.count} →</span>
+                        {composing ? (
+                            <InlineSectionControls surfaceId={HOUSEHOLD_SURFACE_ID} groupKey={group.key} />
+                        ) : null}
+                        <span className="alloy-os-household__group-title">
+                            {(composing && nestedConfig ? nestedGroupLabel(nestedConfig, group.key) : null) ?? group.title}
+                        </span>
+                        <span className="alloy-os-household__group-count">{`${group.count} →`}</span>
                     </button>
                     <GroupRows
                         group={group}
@@ -469,9 +518,21 @@ function ExpandedBody({
                         limit={COLLAPSED_PREVIEW_GROUPS}
                         onOpenChild={onOpenChild}
                         onEditContact={onEditContact}
+                        onAddEmergencyContact={onAddEmergencyContact}
+                        fieldKeys={resolveFieldKeys(group.key)}
+                        nestedConfig={nestedConfig}
+                        composing={composing}
                     />
-                </section>
+                    {composing ? (
+                        <RegionEditLayer
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={group.key}
+                            composing={composing}
+                        />
+                    ) : null}
+                </ComposableRegionShell>
             ))}
+            {composing ? <AddSectionMenu surfaceId={HOUSEHOLD_SURFACE_ID} /> : null}
         </div>
     );
 }
@@ -481,22 +542,99 @@ function FocusedGroupBody({
     masked,
     onOpenChild,
     onEditContact,
+    onAddEmergencyContact,
+    resolveFieldKeys,
+    composing,
+    nestedConfig,
 }: {
     group: HouseholdEvidenceGroup;
     masked: boolean;
     onOpenChild?: (childId: string) => void;
     onEditContact?: (personId: string) => void;
+    onAddEmergencyContact?: () => void;
+    resolveFieldKeys: (groupKey: HouseholdEvidenceGroupKey) => string[];
+    composing: boolean;
+    nestedConfig: NestedSurfaceConfig | null;
 }) {
     return (
-        <div
+        <ComposableRegionShell
+            as="div"
+            surfaceId={HOUSEHOLD_SURFACE_ID}
+            groupKey={group.key}
+            label={group.title}
             className="alloy-os-household__focused"
-            data-household-focused-group={group.key}
+            dataAttrs={{ "data-household-focused-group": group.key }}
         >
             <div className="alloy-os-household__focused-header">
                 <span className="alloy-os-household__group-title">{group.title}</span>
                 <span className="alloy-os-household__group-count">{group.count}</span>
             </div>
-            <GroupRows group={group} masked={masked} onOpenChild={onOpenChild} onEditContact={onEditContact} />
+            <GroupRows
+                group={group}
+                masked={masked}
+                onOpenChild={onOpenChild}
+                onEditContact={onEditContact}
+                onAddEmergencyContact={onAddEmergencyContact}
+                fieldKeys={resolveFieldKeys(group.key)}
+                nestedConfig={nestedConfig}
+                composing={composing}
+            />
+            {composing ? (
+                <RegionEditLayer
+                    surfaceId={HOUSEHOLD_SURFACE_ID}
+                    groupKey={group.key}
+                    composing={composing}
+                />
+            ) : null}
+        </ComposableRegionShell>
+    );
+}
+
+/** Edit-layer field controls — runtime rows stay visible above (Final Surface Composer doctrine). */
+function RegionEditLayer({
+    surfaceId,
+    groupKey,
+    composing,
+}: {
+    surfaceId: string;
+    groupKey: string;
+    composing: boolean;
+}) {
+    if (!composing) return null;
+    return (
+        <InlineRuntimeFieldList
+            surfaceId={surfaceId}
+            groupKey={groupKey}
+            suppressPreview
+            whenRegionSelectedOnly
+        />
+    );
+}
+
+function EmergencyEmptyState({
+    onAdd,
+    composing,
+}: {
+    onAdd?: () => void;
+    composing: boolean;
+}) {
+    return (
+        <div className="alloy-os-household__empty-action" data-household-emergency-empty="true">
+            <p className="alloy-os-household__row-detail">No emergency contacts on file</p>
+            {onAdd && !composing ? (
+                <button
+                    type="button"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    data-household-add-emergency="true"
+                    onClick={onAdd}
+                >
+                    Add emergency contact →
+                </button>
+            ) : composing ? (
+                <p className="alloy-os-household__row-detail" data-household-emergency-compose-hint="true">
+                    Configure fields below · operators add contacts from runtime
+                </p>
+            ) : null}
         </div>
     );
 }
@@ -507,29 +645,76 @@ function GroupRows({
     limit,
     onOpenChild,
     onEditContact,
+    onAddEmergencyContact,
+    fieldKeys = [],
+    nestedConfig = null,
+    composing = false,
 }: {
     group: HouseholdEvidenceGroup;
     masked: boolean;
     limit?: number;
     onOpenChild?: (childId: string) => void;
     onEditContact?: (personId: string) => void;
+    onAddEmergencyContact?: () => void;
+    fieldKeys?: string[];
+    nestedConfig?: NestedSurfaceConfig | null;
+    composing?: boolean;
 }) {
     if (group.key === "address" && group.addressLine) {
         return <AddressLine address={group.addressLine} />;
     }
 
+    if (group.key === "emergency_contacts" && group.contacts.length === 0) {
+        return <EmergencyEmptyState onAdd={onAddEmergencyContact} composing={composing} />;
+    }
+
     if (group.children.length > 0) {
         const visible = limit ? group.children.slice(0, limit) : group.children;
         const overflow = group.children.length - visible.length;
-        // Children are belonging-only here: name + reachability. Operational truth
-        // (program/schedule/status) lives in the Children card — clicking hands off.
+        const useConfiguredFields = fieldKeys.length > 0;
         return (
             <div className="alloy-os-household__rows">
-                <p className="alloy-os-household__group-caption" data-household-children-caption="true">
-                    Belonging only — open Children for enrollment detail
-                </p>
-                {visible.map((child) =>
-                    onOpenChild ? (
+                {!useConfiguredFields ? (
+                    <p className="alloy-os-household__group-caption" data-household-children-caption="true">
+                        Belonging only — open Children for enrollment detail
+                    </p>
+                ) : null}
+                {visible.map((child) => {
+                    const fields = useConfiguredFields
+                        ? renderChildFields(child as HouseholdEvidenceChildExtended, fieldKeys, {
+                              config: nestedConfig,
+                              groupKey: group.key,
+                          })
+                        : [{ key: "child.name", label: "Name", value: child.name, isName: true }];
+                    const nameField = fields.find((f) => f.isName) ?? fields[0];
+                    const detailFields = fields.filter((f) => f !== nameField);
+                    const rowInner = (
+                        <>
+                            <CardAvatar name={child.name} imageUrl={child.imageUrl ?? null} size={26} />
+                            <span className="alloy-os-household__row-main min-w-0">
+                                {nameField ? (
+                                    <span className="alloy-os-household__row-name">{nameField.value}</span>
+                                ) : null}
+                                {detailFields.map((f) => (
+                                    <ComposableFieldShell
+                                        key={f.key}
+                                        surfaceId={HOUSEHOLD_SURFACE_ID}
+                                        groupKey={group.key}
+                                        fieldKey={f.key}
+                                        className="alloy-os-household__row-detail"
+                                    >
+                                        {f.value}
+                                    </ComposableFieldShell>
+                                ))}
+                            </span>
+                            {onOpenChild ? (
+                                <span className="alloy-os-readiness__pointer" aria-hidden>
+                                    Children →
+                                </span>
+                            ) : null}
+                        </>
+                    );
+                    return onOpenChild ? (
                         <button
                             key={child.id}
                             type="button"
@@ -537,23 +722,14 @@ function GroupRows({
                             onClick={() => onOpenChild(child.id)}
                             data-household-child={child.id}
                         >
-                            <CardAvatar name={child.name} imageUrl={child.imageUrl ?? null} size={26} />
-                            <span className="alloy-os-household__row-main min-w-0">
-                                <span className="alloy-os-household__row-name">{child.name}</span>
-                            </span>
-                            <span className="alloy-os-readiness__pointer" aria-hidden>
-                                Children →
-                            </span>
+                            {rowInner}
                         </button>
                     ) : (
                         <div key={child.id} className="alloy-os-household__row">
-                            <CardAvatar name={child.name} imageUrl={child.imageUrl ?? null} size={26} />
-                            <span className="alloy-os-household__row-main min-w-0">
-                                <span className="alloy-os-household__row-name">{child.name}</span>
-                            </span>
+                            {rowInner}
                         </div>
-                    ),
-                )}
+                    );
+                })}
                 {overflow > 0 ? (
                     <div className="alloy-os-household__overflow">+{overflow} more</div>
                 ) : null}
@@ -570,7 +746,10 @@ function GroupRows({
                     key={contact.personId || contact.name}
                     contact={contact}
                     masked={masked}
-                    onEdit={onEditContact}
+                    onEdit={composing ? undefined : onEditContact}
+                    fieldKeys={fieldKeys}
+                    groupKey={group.key}
+                    nestedConfig={nestedConfig}
                 />
             ))}
             {overflow > 0 ? (
@@ -590,19 +769,57 @@ function ContactRow({
     contact,
     masked,
     onEdit,
+    fieldKeys = [],
+    groupKey = "household_members",
+    nestedConfig = null,
 }: {
     contact: HouseholdEvidenceContact;
     masked: boolean;
     onEdit?: (personId: string) => void;
+    fieldKeys?: string[];
+    groupKey?: HouseholdEvidenceGroupKey;
+    nestedConfig?: NestedSurfaceConfig | null;
 }) {
+    const configured = fieldKeys.length > 0;
+    const fields = configured
+        ? renderContactFields(contact, fieldKeys, { masked }, { config: nestedConfig, groupKey })
+        : [];
     const channel = contact.phone ?? contact.email;
     const editable = isEditableContact(contact, masked, onEdit);
+    const nameField = configured
+        ? fields.find((f) => f.isName)
+        : null;
+    const detailFields = configured ? fields.filter((f) => !f.isName) : [];
     return (
         <div className="alloy-os-household__row" data-household-contact={contact.personId || undefined}>
             <CardAvatar name={contact.name} imageUrl={contact.imageUrl ?? null} size={26} />
             <span className="alloy-os-household__row-main min-w-0">
-                <span className="alloy-os-household__row-name">{contact.name}</span>
-                {masked ? (
+                <span className="alloy-os-household__row-name">
+                    {configured && nameField ? (
+                        <ComposableFieldShell
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={groupKey}
+                            fieldKey={nameField.key}
+                        >
+                            {nameField.value}
+                        </ComposableFieldShell>
+                    ) : (
+                        contact.name
+                    )}
+                </span>
+                {configured ? (
+                    detailFields.map((f) => (
+                        <ComposableFieldShell
+                            key={f.key}
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={groupKey}
+                            fieldKey={f.key}
+                            className="alloy-os-household__row-detail"
+                        >
+                            {f.value}
+                        </ComposableFieldShell>
+                    ))
+                ) : masked ? (
                     <span className="alloy-os-household__row-detail alloy-os-household__row-detail--locked">
                         Contact details restricted
                     </span>

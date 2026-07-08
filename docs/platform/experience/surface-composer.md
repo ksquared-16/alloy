@@ -108,6 +108,21 @@ Some expanded evidence groups remain **domain-locked** — owned by vertical/dom
 
 The composer canvas must render the **same runtime-shaped surface** the operator sees in production. No preview-only state. No builder-only fields that runtime ignores.
 
+## Focus Panel — runtime sacred / composer overlay (July 2026)
+
+Canonical Focus Panel Surface Composer rules (see also
+[`../operator/focus-panel-composition-v2-and-editing.md`](../operator/focus-panel-composition-v2-and-editing.md)
+§ Final Surface Composer Doctrine):
+
+1. **Runtime is the source of truth.** Composer is an overlay / Edit Mode — not a second renderer.
+2. **Fixed structure + configurable fields/sections.** Do not invent parallel card layouts in Settings.
+3. **Domain-locked fields must not fake editability.** If a field cannot save through an existing
+   mutation path, mark it domain-locked (or read-only); never present a preview-only “Edit”.
+4. **Runtime parity required before ship.** Side-by-side `/workspace/work-unit` and
+   `/settings/surfaces` Focus Panel composer must match except for editing affordances.
+5. **Empty enabled sections must be actionable** (e.g. Emergency Contacts → Add emergency contact).
+6. **Queue Row stays frozen** — Surface Composer consumers must not reopen Queue Row builder work.
+
 ## Related docs
 
 - [`presentation-runtime-v2.md`](./presentation-runtime-v2.md) — runtime tree and surfaces

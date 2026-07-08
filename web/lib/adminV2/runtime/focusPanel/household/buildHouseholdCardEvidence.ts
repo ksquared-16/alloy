@@ -37,6 +37,22 @@ import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHo
 import { resolveLeadDrawerHeaderContext } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    householdEmergencySectionEnabled,
+    householdDrillInGroups,
+    householdGroupFieldKeys,
+    HOUSEHOLD_FIXED_GROUP_KEYS,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
+import {
+    HOUSEHOLD_SURFACE_ID,
+    isNestedGroupEnabled,
+    reconcileNestedSurfaceConfig,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    formatFocusPanelDate,
+    formatFocusPanelDobAgeLine,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 
 /** Display-format a phone for the card (e.g. "(541) 654-3217"); raw fallback if unparseable. */
 function formatPhoneForDisplay(raw: unknown): string | null {
@@ -70,6 +86,13 @@ export type HouseholdEvidenceChild = {
     name: string;
     /** Identity profile image (evidence model); null → initials fallback. */
     imageUrl?: string | null;
+    dob?: string | null;
+    dobAge?: string | null;
+    age?: string | null;
+    program?: string | null;
+    schedule?: string | null;
+    startDate?: string | null;
+    status?: string | null;
 };
 
 /** Stable focusable evidence-group identifiers. */
@@ -227,10 +250,21 @@ function buildPrimaryContact(
 }
 
 /**
+ * Options for household evidence assembly. When `nestedConfig` is published, fixed
+ * drill-in groups honor enabled flags and field selections from the Household Surface.
+ */
+export type BuildHouseholdCardEvidenceOptions = {
+    nestedConfig?: NestedSurfaceConfig | null;
+};
+
+/**
  * Assemble the Household operational answer by observing the Operational Context.
  * Pure projection over `context.truth` — safe inside render/useMemo; no I/O.
  */
-export function buildHouseholdCardEvidence(context: OperationalContext): HouseholdCardEvidence {
+export function buildHouseholdCardEvidence(
+    context: OperationalContext,
+    options: BuildHouseholdCardEvidenceOptions = {},
+): HouseholdCardEvidence {
     const record = context.truth;
     const header = resolveLeadDrawerHeaderContext(record);
     const householdLabel =
@@ -284,13 +318,33 @@ export function buildHouseholdCardEvidence(context: OperationalContext): Househo
         }
     }
 
-    // Children are belonging-only: names + count. No age/program/room/schedule/status.
+    const nestedConfig = options.nestedConfig
+        ? reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, options.nestedConfig)
+        : null;
+
+    // Children rows — belonging-first; optional operational facts only when configured.
+    const childFieldKeys = nestedConfig ? householdGroupFieldKeys(nestedConfig, "children") : [];
+    const includeChildOperationalFields = childFieldKeys.length > 0;
     const childRows = mapRawInquiryChildrenToDrawerRows(
         (record._inquiry_children as unknown[]) ?? [],
-    ).map<HouseholdEvidenceChild>((row) => ({
-        id: row.id || row.display_name || "child",
-        name: trimOrNull(row.display_name) ?? trimOrNull(row.first_name) ?? "Child",
-    }));
+    ).map<HouseholdEvidenceChild>((row) => {
+        const id = row.id || row.display_name || "child";
+        const name = trimOrNull(row.display_name) ?? trimOrNull(row.first_name) ?? "Child";
+        if (!includeChildOperationalFields) {
+            return { id, name };
+        }
+        return {
+            id,
+            name,
+            dob: trimOrNull(row.dob)?.slice(0, 10) ?? null,
+            dobAge: formatFocusPanelDobAgeLine(row.dob, row.age),
+            age: trimOrNull(row.age),
+            program: trimOrNull(row.desired_program_label),
+            schedule: trimOrNull(row.desired_schedule_label),
+            startDate: formatFocusPanelDate(row.start_date),
+            status: trimOrNull(row.outcome_status_label) ?? trimOrNull(row.outcome_status_key),
+        };
+    });
 
     const primaryPhone = primaryContact?.phone ?? formatPhoneForDisplay(record["person.primary_phone"]);
     const primaryEmail = primaryContact?.email ?? trimOrNull(record["person.primary_email"]);
@@ -301,18 +355,43 @@ export function buildHouseholdCardEvidence(context: OperationalContext): Househo
 
     const address = buildAddressLine(record);
 
+    const published = Boolean(nestedConfig);
+    const emergencyEnabled = published
+        ? householdEmergencySectionEnabled(nestedConfig)
+        : emergencyRows.length > 0;
+
     const groups: HouseholdEvidenceGroup[] = [];
-    if (primaryContact) {
-        groups.push({
+    const pushGroup = (group: HouseholdEvidenceGroup) => {
+        if (published) {
+            const fixed = (HOUSEHOLD_FIXED_GROUP_KEYS as readonly string[]).includes(group.key);
+            if (fixed) {
+                groups.push(group);
+                return;
+            }
+            if (group.key === "other_parent_guardian" && group.count > 0) {
+                groups.push(group);
+                return;
+            }
+            if (group.key === "emergency_contacts") {
+                if (emergencyEnabled) groups.push(group);
+                return;
+            }
+            if (!isNestedGroupEnabled(nestedConfig!, group.key) && group.count === 0) return;
+        }
+        if (group.count > 0 || group.addressLine) groups.push(group);
+    };
+
+    if (primaryContact || (published && (HOUSEHOLD_FIXED_GROUP_KEYS as readonly string[]).includes("primary_contact"))) {
+        pushGroup({
             key: "primary_contact",
             title: "Primary contact",
-            contacts: [primaryContact],
+            contacts: primaryContact ? [primaryContact] : [],
             children: [],
-            count: 1,
+            count: primaryContact ? 1 : 0,
         });
     }
     if (otherParentGuardianRows.length > 0) {
-        groups.push({
+        pushGroup({
             key: "other_parent_guardian",
             title: "Other parent / guardian",
             contacts: otherParentGuardianRows,
@@ -320,17 +399,15 @@ export function buildHouseholdCardEvidence(context: OperationalContext): Househo
             count: otherParentGuardianRows.length,
         });
     }
-    if (additionalRows.length > 0) {
-        groups.push({
-            key: "household_members",
-            title: "Additional contacts",
-            contacts: additionalRows,
-            children: [],
-            count: additionalRows.length,
-        });
-    }
-    if (emergencyRows.length > 0) {
-        groups.push({
+    pushGroup({
+        key: "household_members",
+        title: "Additional contacts",
+        contacts: additionalRows,
+        children: [],
+        count: additionalRows.length,
+    });
+    if (emergencyEnabled) {
+        pushGroup({
             key: "emergency_contacts",
             title: "Emergency contacts",
             contacts: emergencyRows,
@@ -339,7 +416,7 @@ export function buildHouseholdCardEvidence(context: OperationalContext): Househo
         });
     }
     if (pickupRows.length > 0) {
-        groups.push({
+        pushGroup({
             key: "authorized_pickups",
             title: "Authorized pickups",
             contacts: pickupRows,
@@ -347,17 +424,15 @@ export function buildHouseholdCardEvidence(context: OperationalContext): Househo
             count: pickupRows.length,
         });
     }
-    if (childRows.length > 0) {
-        groups.push({
-            key: "children",
-            title: "Children",
-            contacts: [],
-            children: childRows,
-            count: childRows.length,
-        });
-    }
+    pushGroup({
+        key: "children",
+        title: "Children",
+        contacts: [],
+        children: childRows,
+        count: childRows.length,
+    });
     if (address) {
-        groups.push({
+        pushGroup({
             key: "address",
             title: "Address",
             contacts: [],
@@ -367,7 +442,7 @@ export function buildHouseholdCardEvidence(context: OperationalContext): Househo
         });
     }
     if (billingRows.length > 0) {
-        groups.push({
+        pushGroup({
             key: "billing_contact",
             title: "Billing contact",
             contacts: billingRows,
@@ -407,7 +482,7 @@ export function buildHouseholdCardEvidence(context: OperationalContext): Househo
         additionalContactCount,
         emergencyContactCount,
         authorizedPickupCount,
-        groups,
+        groups: householdDrillInGroups(groups, nestedConfig),
         missingCriticalWarning,
         lastUpdatedLabel,
     };

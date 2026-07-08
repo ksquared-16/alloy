@@ -3,14 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import SurfaceFieldInspector from "@/components/adminV2/settings/surfaces/composer/SurfaceFieldInspector";
-import SurfaceHeaderSummaryEditor, { addSurfaceHeaderRenderer } from "@/components/adminV2/settings/surfaces/composer/SurfaceHeaderSummaryEditor";
-import SurfaceItemLibraryPanel from "@/components/adminV2/settings/surfaces/composer/SurfaceItemLibraryPanel";
-import FocusPanelCardFieldComposer from "@/components/adminV2/settings/surfaces/FocusPanelCardFieldComposer";
-import FocusPanelHeaderPreview from "@/components/adminV2/settings/surfaces/FocusPanelHeaderPreview";
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
-import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
-import FocusPanelGridCanvasBuilder from "@/components/admin/focusPanel/FocusPanelGridCanvasBuilder";
+import FocusPanelRuntimeComposerCanvas from "@/components/admin/focusPanel/FocusPanelRuntimeComposerCanvas";
 import { gridFromPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import {
     readFocusPanelPublishedLayout,
@@ -41,49 +35,123 @@ import {
     saveFocusPanelSummaryDraft,
     type FocusPanelSummaryLayoutState,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryLayoutService";
-import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import FocusPanelDrillInInspector from "@/components/admin/focusPanel/drillIn/FocusPanelDrillInInspector";
+import { FocusPanelComposerProvider, useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { focusPanelNestedSurfaceByCardKey } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 import {
-    SURFACE_COMPOSER_EMPTY_HINT,
-    defaultSurfaceHeaderSummaryConfig,
-    readSurfaceHeaderSummaryConfig,
-    surfaceComposerInlineFromPlacementMode,
-    withSurfaceHeaderSummaryMetadata,
-    type SurfaceFieldSectionKey,
-    type SurfaceHeaderSummaryConfig,
-} from "@/lib/adminV2/settings/surfaces/surfaceComposer";
-import {
-    buildFocusPanelHeaderLibrary,
-    buildFocusPanelLibraryForCard,
-    focusPanelLibraryCategories,
-    type FocusPanelLibraryItem,
-} from "@/lib/adminV2/settings/surfaces/focusPanelBuilderLibrary";
-import { focusPanelSurfaceStatus } from "@/lib/adminV2/settings/surfaces/focusPanelFieldAvailability";
-import {
-    addFocusPanelFieldFromLibrary,
-    listPlacedFocusPanelFields,
-    moveFocusPanelFieldToSection,
-    moveFocusPanelPlacedField,
-    patchFocusPanelFieldLabel,
-    removeFocusPanelPlacedField,
-    reorderFocusPanelPlacedField,
-    resolveDefaultAppendPlacement,
-    seedFocusPanelComposerConfig,
-    toSurfaceComposerPlacedItemRef,
-    type FocusPanelPlacedFieldRef,
-} from "@/lib/adminV2/settings/surfaces/focusPanelComposerModel";
-import { resolveSurfaceHeaderSummaryFromConfig } from "@/lib/adminV2/runtime/surfaceHeader/resolveSurfaceHeaderSummary";
-import { evidenceGroupsFromConfig } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
+    reconcileNestedSurfaceConfig,
+    type NestedSurfaceConfig,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 
-type LibraryTarget =
-    | { kind: "identity" }
-    | { kind: "card"; cardKey: FocusPanelCardKey; section: SurfaceFieldSectionKey; groupId: string };
-
+/**
+ * Surfaces editor for the Enrollment Focus Panel (Experience Builder Alpha).
+ *
+ * Opens as a full-bleed builder stage (studio shell). The canvas is the REAL runtime
+ * Focus Panel through FocusPanelRuntimeComposerCanvas — same header, grid, cards, and
+ * drill-in coordination as /work-unit — with subtle composer affordances layered on top.
+ */
 type Props = {
-    onOpenNestedSurface?: (surfaceId: string) => void;
+    onBack?: () => void;
 };
 
-export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: Props) {
+function readNestedSurfacesFromDoc(doc: { metadata?: Record<string, unknown> } | null): Record<string, NestedSurfaceConfig> {
+    const raw = doc?.metadata?.nestedSurfaces;
+    if (!raw || typeof raw !== "object") return {};
+    const stored = raw as Record<string, NestedSurfaceConfig>;
+    return Object.fromEntries(
+        Object.entries(stored).map(([surfaceId, config]) => [
+            surfaceId,
+            reconcileNestedSurfaceConfig(surfaceId, config ?? null),
+        ]),
+    );
+}
+
+function reconcileNestedConfigsForPublish(
+    configs: Record<string, NestedSurfaceConfig>,
+): Record<string, NestedSurfaceConfig> {
+    return Object.fromEntries(
+        Object.entries(configs).map(([surfaceId, config]) => [
+            surfaceId,
+            reconcileNestedSurfaceConfig(surfaceId, config),
+        ]),
+    );
+}
+
+function FocusPanelComposerInspectorSlot({
+    selectedEntry,
+    selectedBaseModel,
+    selectedInstanceId,
+    onConfigChange,
+    onClose,
+    history,
+    order,
+    cards,
+}: {
+    selectedEntry: SummaryCardOrderEntry | null;
+    selectedBaseModel: FocusPanelCardModel | null;
+    selectedInstanceId: string | null;
+    onConfigChange: (instanceId: string, config: FocusPanelCardConfig) => void;
+    onClose: () => void;
+    history: { publishedVersion: number | null; hasDraft: boolean; dirty: boolean };
+    order: SummaryCardOrderEntry[];
+    cards: Map<FocusPanelCardKey, FocusPanelCardModel>;
+}) {
+    const composer = useFocusPanelComposer();
+    if (composer?.drillIn) {
+        const drillEntry = order.find((e) => e.key === composer.drillIn!.cardKey) ?? null;
+        const drillModel = cards.get(composer.drillIn.cardKey) ?? null;
+        if (drillEntry && drillModel) {
+            return (
+                <FocusPanelDrillInInspector
+                    drillCardKey={composer.drillIn.cardKey}
+                    drillEntry={drillEntry}
+                    drillModel={drillModel}
+                    onConfigChange={onConfigChange}
+                    history={history}
+                />
+            );
+        }
+    }
+    if (selectedEntry && selectedBaseModel) {
+        return (
+            <FocusPanelCardInspector
+                baseModel={selectedBaseModel}
+                instanceId={selectedInstanceId!}
+                config={selectedEntry.config ?? {}}
+                onChange={(config) => onConfigChange(selectedInstanceId!, config)}
+                onClose={onClose}
+                history={history}
+            />
+        );
+    }
+    return (
+        <div className="flex h-full items-center justify-center p-6 text-center" data-surface-inspector-empty="true">
+            <p className="config-typo-sublabel">
+                Select a card on the canvas, or click Configure on a card to compose its drill-in surface in place.
+            </p>
+        </div>
+    );
+}
+
+function FocusPanelInspectorColumn(props: Parameters<typeof FocusPanelComposerInspectorSlot>[0]) {
+    const composer = useFocusPanelComposer();
+    const drillIn = Boolean(composer?.drillIn);
+    return (
+        <div
+            className={[
+                "shrink-0 overflow-y-auto rounded-xl border border-alloy-stone/15 bg-white",
+                drillIn ? "w-[300px]" : "w-[380px]",
+            ].join(" ")}
+            data-surface-inspector="true"
+            data-surface-inspector-mode={drillIn ? "drill-in-metadata" : "card"}
+        >
+            <FocusPanelComposerInspectorSlot {...props} />
+        </div>
+    );
+}
+
+export default function FocusPanelSummarySurfaceEditor({ onBack }: Props) {
     const { vm, record } = useMemo(() => buildDemoFocusPanelSummaryViewModel(), []);
 
     const cards = useMemo(
@@ -94,11 +162,12 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
                 record,
                 title: vm.header.title,
                 perspective: null,
-                statusLabel: "Open",
+                statusLabel: "Tour scheduled",
             }).cards,
         [vm, record],
     );
 
+    // Preview canvas observes the same Operational Context boundary the runtime uses.
     const previewContext = useMemo(
         () =>
             buildOperationalContext({
@@ -107,7 +176,7 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
                 subjectVm: vm,
                 truth: record,
                 perspective: null,
-                statusLabel: "Open",
+                statusLabel: "Tour scheduled",
                 canMutate: false,
             }),
         [vm, record],
@@ -116,24 +185,21 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
     const defaultOrder = useMemo(() => readSummaryCardOrder(FOCUS_PANEL_SUMMARY_DEFAULT_DOC), []);
 
     const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
-    const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
-    const [headerSelected, setHeaderSelected] = useState(false);
-    const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null);
     const [order, setOrder] = useState<SummaryCardOrderEntry[]>(defaultOrder);
     const [past, setPast] = useState<SummaryCardOrderEntry[][]>([]);
-    const [identityConfig, setIdentityConfig] = useState<SurfaceHeaderSummaryConfig>(
-        defaultSurfaceHeaderSummaryConfig(),
-    );
 
+    // Publish loop state (configure → publish → operate).
     const [layoutState, setLayoutState] = useState<FocusPanelSummaryLayoutState>({ draft: null, published: null });
     const [loaded, setLoaded] = useState(false);
     const [dirty, setDirty] = useState(false);
+    // Published row/width layout (Composition V2). Null → runtime keeps its auto
+    // composition default; once authored, the runtime renders exactly this.
     const [rowLayout, setRowLayout] = useState<FocusPanelPublishedLayout | null>(null);
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
     const [statusNote, setStatusNote] = useState<string | null>(null);
-    const [libraryOpen, setLibraryOpen] = useState(false);
-    const [libraryTarget, setLibraryTarget] = useState<LibraryTarget | null>(null);
+    const [nestedConfigs, setNestedConfigs] = useState<Record<string, NestedSurfaceConfig>>({});
+    const [nestedConfigsSeed, setNestedConfigsSeed] = useState<Record<string, NestedSurfaceConfig>>({});
 
     useEffect(() => {
         let active = true;
@@ -146,8 +212,9 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
                     const seeded = readSummaryCardOrder(seedDoc);
                     if (seeded.length > 0) setOrder(seeded);
                     setRowLayout(readFocusPanelPublishedLayout(seedDoc));
-                    const identity = readSurfaceHeaderSummaryConfig(seedDoc);
-                    if (identity) setIdentityConfig(identity);
+                    const nested = readNestedSurfacesFromDoc(seedDoc);
+                    setNestedConfigs(nested);
+                    setNestedConfigsSeed(nested);
                 }
                 setLoaded(true);
             })
@@ -170,15 +237,30 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
         [order],
     );
 
+    // The summary doc carries the card instances/config (from order) AND, when the
+    // operator has composed one, the published row/width layout in metadata that the
+    // runtime renders exactly. No authored layout → no metadata → auto fallback.
     const buildDocWithLayout = useCallback(() => {
         const doc = buildSummaryDocFromOrder(order);
-        const withLayout = rowLayout ? { ...doc, metadata: withPublishedLayoutMetadata(doc.metadata, rowLayout) } : doc;
+        const layoutMeta = rowLayout ? withPublishedLayoutMetadata(doc.metadata, rowLayout) : doc.metadata ?? {};
         return {
-            ...withLayout,
-            metadata: withSurfaceHeaderSummaryMetadata(withLayout.metadata, identityConfig),
+            ...doc,
+            metadata: {
+                ...layoutMeta,
+                nestedSurfaces: reconcileNestedConfigsForPublish(nestedConfigs),
+            },
         };
-    }, [order, rowLayout, identityConfig]);
+    }, [order, rowLayout, nestedConfigs]);
 
+    const handleNestedConfigsChange = useCallback((configs: Record<string, NestedSurfaceConfig>) => {
+        setNestedConfigs(configs);
+        setDirty(true);
+    }, []);
+
+    // The CANVAS is the single source of truth for which cards exist + their composition.
+    // Keep the doc SECTIONS (order) in sync with the cards placed on the canvas: a newly
+    // dropped card gets a default section (so its per-card config + the Inspector exist),
+    // and a card removed from the canvas drops its section. Existing config is preserved.
     const reconcileOrderToLayout = useCallback(
         (layout: FocusPanelPublishedLayout) => {
             const keys = cardsInLayout(layout);
@@ -273,32 +355,10 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
 
     const selectedEntry = selectedInstanceId ? byInstance.get(selectedInstanceId) ?? null : null;
     const selectedBaseModel = selectedEntry ? cards.get(selectedEntry.key) ?? null : null;
-    const selectedCardConfig = useMemo(
-        () => seedFocusPanelComposerConfig(selectedEntry?.key ?? "household", selectedEntry?.config ?? {}),
-        [selectedEntry?.config, selectedEntry?.key],
-    );
 
-    const placedFields = useMemo(() => {
-        if (!selectedEntry) return [];
-        return listPlacedFocusPanelFields(selectedEntry.key, selectedCardConfig);
-    }, [selectedCardConfig, selectedEntry]);
 
-    const selectedPlacedField: FocusPanelPlacedFieldRef | null = useMemo(
-        () => placedFields.find((f) => f.fieldId === selectedFieldId) ?? null,
-        [placedFields, selectedFieldId],
-    );
-
-    const identityPreviewSegments = useMemo(
-        () =>
-            resolveSurfaceHeaderSummaryFromConfig(identityConfig, {
-                record,
-                statusLabel: "Open",
-                processLabel: "Enrollment",
-                locationLabel: "North Campus",
-            }),
-        [identityConfig, record],
-    );
-
+    // Row-based composition builder (Composition V2): catalog from the catalog'd cards,
+    // seeded from the loaded layout or a default arrangement of the present cards.
     const builderCatalog = useMemo(
         () =>
             FOCUS_PANEL_CARD_CATALOG.filter((e) => e.cardKey).map((e) => ({
@@ -309,9 +369,12 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
     );
     const builderInitial = useMemo(
         () => rowLayout ?? defaultRowLayoutFromCards(order.map((o) => o.key)),
+        // Seeded once on load; the builder is uncontrolled after mount (gated on `loaded`).
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [loaded],
     );
+    // EB V5: the canvas authors a responsive GRID. Seed it from the loaded layout's grid,
+    // or convert its rows → grid placement (so an existing row layout opens cleanly).
     const builderInitialGrid = useMemo(
         () => gridFromPublishedLayout(builderInitial),
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -319,114 +382,31 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
     );
     const nestedSurfaceByCard = useMemo(() => focusPanelNestedSurfaceByCardKey(), []);
 
-    const libraryItems: FocusPanelLibraryItem[] = useMemo(() => {
-        if (!libraryTarget) return [];
-        if (libraryTarget.kind === "identity") return buildFocusPanelHeaderLibrary();
-        return buildFocusPanelLibraryForCard(libraryTarget.cardKey);
-    }, [libraryTarget]);
-
-    const libraryCategories = useMemo(
-        () => focusPanelLibraryCategories(libraryItems),
-        [libraryItems],
-    );
-
-    const openLibrary = useCallback((target: LibraryTarget) => {
-        setLibraryTarget(target);
-        setLibraryOpen(true);
-    }, []);
-
-    const handleLibraryPick = useCallback(
-        (item: FocusPanelLibraryItem) => {
-            if (!libraryTarget) return;
-            if (libraryTarget.kind === "identity" && item.kind === "header_renderer") {
-                setIdentityConfig((c) => addSurfaceHeaderRenderer(c, item.rendererKey));
-                setDirty(true);
-                setHeaderSelected(true);
-                setSelectedInstanceId(null);
-                setSelectedFieldId(null);
-            } else if (libraryTarget.kind === "card" && item.kind === "field" && selectedInstanceId) {
-                const placement = resolveDefaultAppendPlacement(placedFields, libraryTarget.section);
-                const groups = evidenceGroupsFromConfig(selectedCardConfig);
-                const groupId = groups.find((g) => g.id === libraryTarget.groupId)?.id ?? groups[0]?.id;
-                if (!groupId) return;
-                const next = addFocusPanelFieldFromLibrary(selectedCardConfig, selectedEntry!.key, {
-                    groupId,
-                    concept: item.concept,
-                    label: item.label,
-                    placement,
-                });
-                handleConfigChange(selectedInstanceId, next);
-                setSelectedFieldId(next.fields?.slice(-1)[0]?.id ?? null);
-            }
-            setLibraryOpen(false);
-            setLibraryTarget(null);
-        },
-        [
-            handleConfigChange,
-            libraryTarget,
-            placedFields,
-            selectedCardConfig,
-            selectedEntry,
-            selectedInstanceId,
-        ],
-    );
-
-    const renderBuilderCard = useCallback(
-        (key: FocusPanelCardKey) => {
-            const model = cards.get(key);
-            const entry = order.find((o) => o.key === key);
-            const isSelected = selectedEntry?.key === key;
-            const cardConfig = seedFocusPanelComposerConfig(key, entry?.config ?? {});
-            const cardPlaced = listPlacedFocusPanelFields(key, cardConfig);
-            return model ?
-                <div className="relative h-full min-h-[4rem]">
-                    <FocusPanelCardRenderer
-                        model={model}
-                        context={previewContext}
-                        focusPanelMode="summary"
-                        compat={{ subjectVm: vm, onSelectTab: () => {} }}
-                    />
-                    {isSelected ?
-                        <FocusPanelCardFieldComposer
-                            placed={cardPlaced}
-                            selectedFieldId={selectedFieldId}
-                            onSelectField={(fieldId) => {
-                                setSelectedFieldId(fieldId);
-                                setHeaderSelected(false);
-                            }}
-                            onAddToSection={(section) => {
-                                const groups = evidenceGroupsFromConfig(cardConfig);
-                                openLibrary({
-                                    kind: "card",
-                                    cardKey: key,
-                                    section,
-                                    groupId: groups[0]?.id ?? "details",
-                                });
-                            }}
-                            onClickEmpty={() => {
-                                const groups = evidenceGroupsFromConfig(cardConfig);
-                                openLibrary({
-                                    kind: "card",
-                                    cardKey: key,
-                                    section: "identity",
-                                    groupId: groups[0]?.id ?? "details",
-                                });
-                            }}
-                        />
-                    :   null}
-                </div>
-            :   null;
-        },
-        [cards, openLibrary, order, previewContext, selectedEntry?.key, selectedFieldId, vm],
-    );
-
     return (
-        <div className="flex h-full min-h-0 flex-col gap-3" data-testid="focus-panel-summary-surface-editor">
+        <FocusPanelComposerProvider
+            initialNestedConfigs={nestedConfigsSeed}
+            onNestedConfigsChange={handleNestedConfigsChange}
+        >
+        <div
+            className="flex h-full min-h-0 flex-1 flex-col gap-3 bg-white p-4"
+            data-testid="focus-panel-summary-surface-editor"
+            data-focus-panel-builder-wide="true"
+        >
             <div
                 className="process-config-workspace-toolbar flex flex-wrap items-center justify-between gap-3"
                 data-testid="surface-publish-toolbar"
             >
-                <div className="flex items-baseline gap-2">
+                <div className="flex min-w-0 flex-wrap items-baseline gap-3">
+                    {onBack ?
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="text-sm font-medium text-alloy-pine hover:underline"
+                            data-testid="focus-panel-surface-back"
+                        >
+                            ← Surfaces
+                        </button>
+                    :   null}
                     <span className="config-typo-workspace-title">Enrollment Focus Panel</span>
                     <span
                         data-testid="surface-publish-status"
@@ -465,46 +445,31 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
                 </p>
             :   null}
 
-            <FocusPanelSummaryEditBar onUndo={undo} canUndo={past.length > 0} onReset={reset} />
+            <div className="flex flex-wrap items-center gap-3">
+                <FocusPanelSummaryEditBar onUndo={undo} canUndo={past.length > 0} onReset={reset} />
+            </div>
 
-            {loaded ?
+            {loaded ? (
                 <div className="flex min-h-0 flex-1 gap-4">
-                    <div className="process-config-setup-card min-w-0 flex-1 overflow-auto p-3" data-surface-canvas-builder="true">
-                        <div className="mb-3 max-w-2xl">
-                            <FocusPanelHeaderPreview
-                                subjectTitle={vm.header.title}
-                                identitySegments={identityPreviewSegments}
-                                selected={headerSelected}
-                                onClickHeader={() => {
-                                    setHeaderSelected(true);
-                                    setSelectedInstanceId(null);
-                                    setSelectedFieldId(null);
-                                }}
-                            />
-                        </div>
-
-                        {!selectedInstanceId && !headerSelected ?
-                            <p className="mb-2 text-[12px] text-alloy-midnight/45" data-focus-panel-composer-hint="true">
-                                {SURFACE_COMPOSER_EMPTY_HINT}
-                            </p>
-                        :   null}
-
-                        <FocusPanelGridCanvasBuilder
+                    {/* Wide builder stage — runtime-shaped Focus Panel sits in the full canvas. */}
+                    <div className="process-config-setup-card flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-4">
+                        <FocusPanelRuntimeComposerCanvas
                             initialGrid={builderInitialGrid}
                             catalog={builderCatalog}
-                            renderCard={renderBuilderCard}
+                            order={order}
+                            cards={cards}
+                            vm={vm}
+                            record={record}
+                            previewContext={previewContext}
+                            title={vm.header.title}
+                            statusLabel="Tour scheduled"
                             selectedCard={selectedEntry?.key ?? null}
                             nestedSurfaceByCard={nestedSurfaceByCard}
-                            onOpenNestedSurface={onOpenNestedSurface}
                             onSelectCard={(key) => {
                                 const entry = order.find((o) => o.key === key);
-                                if (entry) {
-                                    setSelectedInstanceId(entry.instanceId);
-                                    setHeaderSelected(false);
-                                    setSelectedFieldId(null);
-                                }
+                                if (entry) setSelectedInstanceId(entry.instanceId);
                             }}
-                            onChange={(l) => {
+                            onLayoutChange={(l) => {
                                 setRowLayout(l);
                                 reconcileOrderToLayout(l);
                                 setDirty(true);
@@ -512,118 +477,23 @@ export default function FocusPanelSummarySurfaceEditor({ onOpenNestedSurface }: 
                         />
                     </div>
 
-                    <div className="w-[360px] shrink-0 overflow-y-auto" data-surface-inspector="true">
-                        {headerSelected ?
-                            <div className="process-config-setup-card p-4">
-                                <SurfaceHeaderSummaryEditor
-                                    config={identityConfig}
-                                    selectedId={selectedIdentityId}
-                                    sectionTitle="Identity Summary"
-                                    onSelect={setSelectedIdentityId}
-                                    onChange={(next) => {
-                                        setIdentityConfig(next);
-                                        setDirty(true);
-                                    }}
-                                    onOpenLibrary={() => openLibrary({ kind: "identity" })}
-                                />
-                            </div>
-                        : selectedPlacedField && selectedInstanceId ?
-                            <div className="process-config-setup-card p-4">
-                                <p className="config-typo-workspace-title mb-3 text-sm">Field</p>
-                                <SurfaceFieldInspector
-                                    field={toSurfaceComposerPlacedItemRef(selectedPlacedField)}
-                                    availabilityConcept={selectedPlacedField.concept}
-                                    onChangeSection={(section) => {
-                                        const next = moveFocusPanelFieldToSection(
-                                            selectedCardConfig,
-                                            selectedPlacedField.fieldId,
-                                            section,
-                                            placedFields,
-                                        );
-                                        handleConfigChange(selectedInstanceId, next);
-                                    }}
-                                    onChangePlacement={(mode) => {
-                                        const next = moveFocusPanelPlacedField(selectedCardConfig, selectedPlacedField.fieldId, {
-                                            inlineWithPrevious: surfaceComposerInlineFromPlacementMode(mode),
-                                        });
-                                        handleConfigChange(selectedInstanceId, next);
-                                    }}
-                                    onChangeLabel={(label) => {
-                                        handleConfigChange(
-                                            selectedInstanceId,
-                                            patchFocusPanelFieldLabel(selectedCardConfig, selectedPlacedField.fieldId, label),
-                                        );
-                                    }}
-                                    onMoveEarlier={() =>
-                                        handleConfigChange(
-                                            selectedInstanceId,
-                                            reorderFocusPanelPlacedField(selectedCardConfig, selectedPlacedField.fieldId, "earlier"),
-                                        )
-                                    }
-                                    onMoveLater={() =>
-                                        handleConfigChange(
-                                            selectedInstanceId,
-                                            reorderFocusPanelPlacedField(selectedCardConfig, selectedPlacedField.fieldId, "later"),
-                                        )
-                                    }
-                                    onRemove={() => {
-                                        handleConfigChange(
-                                            selectedInstanceId,
-                                            removeFocusPanelPlacedField(selectedCardConfig, selectedPlacedField.fieldId),
-                                        );
-                                        setSelectedFieldId(null);
-                                    }}
-                                />
-                            </div>
-                        : selectedEntry && selectedBaseModel ?
-                            <FocusPanelCardInspector
-                                baseModel={selectedBaseModel}
-                                instanceId={selectedInstanceId!}
-                                config={selectedEntry.config ?? {}}
-                                onChange={(config) => handleConfigChange(selectedInstanceId!, config)}
-                                onClose={() => {
-                                    setSelectedInstanceId(null);
-                                    setSelectedFieldId(null);
-                                }}
-                                history={{
-                                    publishedVersion: layoutState.published?.version ?? null,
-                                    hasDraft: Boolean(layoutState.draft),
-                                    dirty,
-                                }}
-                            />
-                        :   <div className="process-config-setup-card flex h-full items-center justify-center p-6 text-center" data-surface-inspector-empty="true">
-                                <p className="config-typo-sublabel">
-                                    {SURFACE_COMPOSER_EMPTY_HINT} Select a placed field to edit Section and Placement.
-                                </p>
-                            </div>
-                        }
-                    </div>
+                    <FocusPanelInspectorColumn
+                        selectedEntry={selectedEntry}
+                        selectedBaseModel={selectedBaseModel}
+                        selectedInstanceId={selectedInstanceId}
+                        onConfigChange={handleConfigChange}
+                        onClose={() => setSelectedInstanceId(null)}
+                        history={{
+                            publishedVersion: layoutState.published?.version ?? null,
+                            hasDraft: Boolean(layoutState.draft),
+                            dirty,
+                        }}
+                        order={order}
+                        cards={cards}
+                    />
                 </div>
-            :   null}
-
-            <SurfaceItemLibraryPanel
-                open={libraryOpen}
-                categories={focusPanelLibraryCategories(libraryItems)}
-                sectionLabel={
-                    libraryTarget?.kind === "identity" ? "Add to Header Summary"
-                    : libraryTarget?.kind === "card" ? "Add to card"
-                    :   undefined
-                }
-                subtitle="Choose a component to place on the surface."
-                itemKey={(item) =>
-                    item.kind === "header_renderer" ? item.rendererKey : `${item.cardKey}:${item.concept}`
-                }
-                itemLabel={(item) => item.label}
-                itemMeta={(item) => (item.kind === "field" ? item.groupLabel : null)}
-                itemAvailability={(item) =>
-                    item.kind === "field" ? focusPanelSurfaceStatus(item.concept).status : null
-                }
-                onPick={handleLibraryPick}
-                onClose={() => {
-                    setLibraryOpen(false);
-                    setLibraryTarget(null);
-                }}
-            />
+            ) : null}
         </div>
+        </FocusPanelComposerProvider>
     );
 }

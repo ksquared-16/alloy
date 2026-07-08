@@ -17,16 +17,158 @@
  */
 
 import type { SurfaceSpec } from "@/lib/platform/surfaceComposition/universalSurfaceModel";
-import {
-    CHILD_SURFACE_ID,
-    HOUSEHOLD_CONTACT_SURFACE_ID,
-    HOUSEHOLD_SURFACE_ID,
-} from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 
+export const HOUSEHOLD_SURFACE_ID = "household_surface";
 export const CHILDREN_SURFACE_ID = "children_surface";
 export const FINANCIAL_CONFIG_SURFACE_ID = "financial_configuration_surface";
 export const FOCUS_PANEL_SURFACE_ID = "focus_panel_surface";
-export { CHILD_SURFACE_ID, HOUSEHOLD_CONTACT_SURFACE_ID, HOUSEHOLD_SURFACE_ID };
+
+// ── 0. Household Surface (Record → Household drill-in) ───────────────────────────
+
+export const householdSurface: SurfaceSpec = {
+    id: HOUSEHOLD_SURFACE_ID,
+    label: "Household",
+    category: "focus_panel",
+    grain: "case",
+    version: 1,
+    canvas: {
+        rows: [
+            {
+                id: "row-household",
+                components: [
+                    {
+                        id: "household_component",
+                        label: "Household",
+                        componentType: "card",
+                        width: "full",
+                        evidenceGroups: [
+                            {
+                                key: "primary_contact",
+                                label: "Primary Contact",
+                                purpose: "Who is the primary household contact?",
+                                owner: "household_component",
+                                items: [
+                                    { key: "person.primary_contact_name", label: "Name", kind: "field", namespace: "person" },
+                                    { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
+                                    { key: "person.email", label: "Email", kind: "field", namespace: "person" },
+                                    { key: "person.date_of_birth", label: "Date of Birth", kind: "field", namespace: "person" },
+                                    { key: "person.address_line", label: "Address", kind: "field", namespace: "person" },
+                                ],
+                            },
+                            {
+                                key: "other_parent_guardian",
+                                label: "Other Parent / Guardian",
+                                purpose: "Additional parent or guardian adults linked to this household.",
+                                owner: "household_component",
+                                items: [
+                                    { key: "person.primary_contact_name", label: "Name", kind: "field", namespace: "person" },
+                                    { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
+                                    { key: "person.email", label: "Email", kind: "field", namespace: "person" },
+                                    { key: "person.role_label", label: "Role", kind: "field", namespace: "person" },
+                                ],
+                            },
+                            {
+                                key: "household_members",
+                                label: "Additional Contacts",
+                                purpose: "Other adults linked to this household.",
+                                owner: "household_component",
+                                items: [
+                                    { key: "person.primary_contact_name", label: "Name", kind: "field", namespace: "person" },
+                                    { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
+                                    { key: "person.email", label: "Email", kind: "field", namespace: "person" },
+                                    { key: "person.role_label", label: "Role", kind: "field", namespace: "person" },
+                                    { key: "person.date_of_birth", label: "Date of Birth", kind: "field", namespace: "person" },
+                                    { key: "person.address_line", label: "Address", kind: "field", namespace: "person" },
+                                ],
+                            },
+                            {
+                                key: "children",
+                                label: "Children",
+                                purpose: "Children belonging to this household (belonging-only).",
+                                owner: "household_component",
+                                items: [
+                                    { key: "child.name", label: "Name", kind: "field", namespace: "child" },
+                                    { key: "child.date_of_birth", label: "Date of Birth", kind: "field", namespace: "child" },
+                                    { key: "child.dob_age", label: "Age", kind: "field", namespace: "child" },
+                                    { key: "child.age", label: "Age (years)", kind: "field", namespace: "child" },
+                                    { key: "inquiry_child.program", label: "Program", kind: "field", namespace: "inquiry_child" },
+                                    { key: "inquiry_child.schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
+                                    { key: "child.start_date", label: "Start Date", kind: "field", namespace: "child" },
+                                    { key: "child.status", label: "Status", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "emergency_contacts",
+                                label: "Emergency Contact",
+                                purpose: "Emergency contacts for this household.",
+                                owner: "household_component",
+                                items: [
+                                    { key: "person.primary_contact_name", label: "Name", kind: "field", namespace: "person" },
+                                    { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
+                                    { key: "person.email", label: "Email", kind: "field", namespace: "person" },
+                                    { key: "person.role_label", label: "Role", kind: "field", namespace: "person" },
+                                ],
+                            },
+                            {
+                                key: "authorized_pickups",
+                                label: "Authorized Pickup",
+                                purpose: "People authorized to pick up children.",
+                                owner: "household_component",
+                                items: [
+                                    { key: "person.primary_contact_name", label: "Name", kind: "field", namespace: "person" },
+                                    { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
+                                    { key: "person.role_label", label: "Relationship", kind: "field", namespace: "person" },
+                                ],
+                            },
+                            {
+                                key: "billing_contact",
+                                label: "Billing Contact",
+                                purpose: "Who receives billing communications for this household?",
+                                owner: "household_component",
+                                items: [
+                                    { key: "person.primary_contact_name", label: "Name", kind: "field", namespace: "person" },
+                                    { key: "person.email", label: "Email", kind: "field", namespace: "person" },
+                                    { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
+                                ],
+                            },
+                            {
+                                key: "emergency_medical",
+                                label: "Emergency Medical",
+                                purpose: "Emergency medical information for the household.",
+                                owner: "household_component",
+                                items: [
+                                    { key: "person.primary_contact_name", label: "Physician", kind: "field", namespace: "person" },
+                                    { key: "person.phone", label: "Physician Phone", kind: "field", namespace: "person" },
+                                ],
+                            },
+                            {
+                                key: "custom_notes",
+                                label: "Custom Notes",
+                                purpose: "Freeform notes for this household.",
+                                owner: "household_component",
+                                items: [
+                                    { key: "person.role_label", label: "Note", kind: "field", namespace: "person" },
+                                ],
+                            },
+                            {
+                                key: "contact_edit",
+                                label: "Contact Edit",
+                                purpose: "Fields on the contact edit form.",
+                                owner: "household_component",
+                                items: [
+                                    { key: "contact.first_name", label: "First name", kind: "field", namespace: "person" },
+                                    { key: "contact.last_name", label: "Last name", kind: "field", namespace: "person" },
+                                    { key: "contact.email", label: "Email", kind: "field", namespace: "person" },
+                                    { key: "contact.phone", label: "Phone", kind: "field", namespace: "person" },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
 
 // ── 1. Children Surface (Record → Record Surface, recursive) ───────────────────
 
@@ -50,25 +192,35 @@ export const childrenSurface: SurfaceSpec = {
                             {
                                 key: "identity",
                                 label: "Identity",
-                                purpose: "Who is this child?",
+                                purpose: "Who is this child? Composed from presentation fields — never a single schema name.",
                                 owner: "child_component",
                                 items: [
-                                    {
-                                        key: "child.name",
-                                        label: "Name",
-                                        kind: "field",
-                                        namespace: "child",
-                                        // Recursion: selecting a child re-composes THIS surface
-                                        // for that child — a Record Surface opening itself.
-                                        actions: [
-                                            {
-                                                kind: "handoff",
-                                                label: "View child",
-                                                openSurfaceId: CHILD_SURFACE_ID,
-                                            },
-                                        ],
-                                    },
+                                    { key: "child.first_name", label: "First Name", kind: "field", namespace: "child" },
+                                    { key: "child.last_name", label: "Last Name", kind: "field", namespace: "child" },
+                                    { key: "child.preferred_name", label: "Preferred Name", kind: "field", namespace: "child" },
+                                    { key: "child.nickname", label: "Nickname", kind: "field", namespace: "child" },
+                                    { key: "child.date_of_birth", label: "DOB", kind: "field", namespace: "child" },
+                                    { key: "child.dob_age", label: "Age", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "roster",
+                                label: "Collapsed roster details",
+                                purpose: "Extra fields per child row — collapsed until the operator expands View details.",
+                                owner: "child_component",
+                                items: [
+                                    { key: "child.nickname", label: "Nickname", kind: "field", namespace: "child" },
                                     { key: "child.date_of_birth", label: "Date of Birth", kind: "field", namespace: "child" },
+                                    { key: "child.dob_age", label: "Age", kind: "field", namespace: "child" },
+                                    { key: "inquiry_child.program", label: "Program", kind: "field", namespace: "inquiry_child" },
+                                    { key: "child.room", label: "Room", kind: "field", namespace: "child" },
+                                    { key: "inquiry_child.schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
+                                    { key: "inquiry_child.desired_schedule_type", label: "Desired Schedule", kind: "field", namespace: "inquiry_child" },
+                                    { key: "child.start_date", label: "Start Date", kind: "field", namespace: "child" },
+                                    { key: "child.desired_start_date", label: "Desired Start", kind: "field", namespace: "child" },
+                                    { key: "child.medical_summary", label: "Medical", kind: "field", namespace: "child" },
+                                    { key: "child.documents_summary", label: "Documents", kind: "field", namespace: "child" },
+                                    { key: "child.notes_summary", label: "Notes", kind: "field", namespace: "child" },
                                 ],
                             },
                             {
@@ -79,8 +231,8 @@ export const childrenSurface: SurfaceSpec = {
                                 items: [
                                     { key: "inquiry_child.program", label: "Program", kind: "field", namespace: "inquiry_child" },
                                     { key: "child.room", label: "Room", kind: "field", namespace: "child" },
-                                    { key: "inquiry_child.schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
-                                    { key: "child.start_date", label: "Start date", kind: "field", namespace: "child" },
+                                    { key: "inquiry_child.desired_schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
+                                    { key: "child.desired_start_date", label: "Desired Start", kind: "field", namespace: "child" },
                                 ],
                             },
                             {
@@ -92,140 +244,79 @@ export const childrenSurface: SurfaceSpec = {
                                     { key: "child.readiness_summary", label: "Readiness", kind: "calculation", namespace: "child" },
                                 ],
                             },
-                        ],
-                    },
-                ],
-            },
-        ],
-    },
-};
-
-// ── Child drill-in surface (per-child focus/edit) ─────────────────────────────
-
-export const childSurface: SurfaceSpec = {
-    id: CHILD_SURFACE_ID,
-    label: "Child Detail",
-    category: "focus_panel",
-    grain: "child",
-    version: 1,
-    canvas: {
-        rows: [
-            {
-                id: "row-child-focus",
-                components: [
-                    {
-                        id: "child_focus_component",
-                        label: "Child",
-                        componentType: "card",
-                        width: "full",
-                        evidenceGroups: [
                             {
-                                key: "identity",
-                                label: "Identity",
-                                purpose: "Child identity header",
-                                owner: "child_focus_component",
-                                items: [
-                                    { key: "child.display_name", label: "Name", kind: "field", namespace: "child" },
-                                    { key: "child.date_of_birth", label: "Date of birth", kind: "field", namespace: "child" },
-                                    { key: "child.age", label: "Age", kind: "field", namespace: "child" },
-                                ],
-                            },
-                            {
-                                key: "placement",
-                                label: "Placement",
-                                purpose: "Program, schedule, and start",
-                                owner: "child_focus_component",
+                                key: "child_edit",
+                                label: "Child Edit",
+                                purpose: "Fields on the child edit form.",
+                                owner: "child_component",
                                 items: [
                                     { key: "inquiry_child.program", label: "Program", kind: "field", namespace: "inquiry_child" },
-                                    { key: "child.room", label: "Room", kind: "field", namespace: "child" },
                                     { key: "inquiry_child.schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
-                                    { key: "child.start_date", label: "Start date", kind: "field", namespace: "child" },
+                                    { key: "child.start_date", label: "Start Date", kind: "field", namespace: "child" },
+                                    { key: "child.date_of_birth", label: "Date of Birth", kind: "field", namespace: "child" },
                                 ],
                             },
                             {
-                                key: "readiness",
-                                label: "Readiness",
-                                purpose: "Enrollment readiness summary",
-                                owner: "child_focus_component",
+                                key: "medical",
+                                label: "Medical",
+                                purpose: "Medical evidence for this child.",
+                                owner: "child_component",
                                 items: [
-                                    { key: "child.readiness_summary", label: "Readiness", kind: "calculation", namespace: "child" },
+                                    { key: "child.medical_summary", label: "Medical", kind: "field", namespace: "child" },
                                 ],
                             },
-                        ],
-                    },
-                ],
-            },
-        ],
-    },
-};
-
-// ── Household detail surface ───────────────────────────────────────────────────
-
-export const householdSurface: SurfaceSpec = {
-    id: HOUSEHOLD_SURFACE_ID,
-    label: "Household Detail",
-    category: "focus_panel",
-    grain: "case",
-    version: 1,
-    canvas: {
-        rows: [
-            {
-                id: "row-household",
-                components: [
-                    {
-                        id: "household_component",
-                        label: "Household",
-                        componentType: "card",
-                        width: "full",
-                        depth: { expanded: { openSurfaceId: HOUSEHOLD_CONTACT_SURFACE_ID } },
-                        evidenceGroups: [
-                            { key: "primary_contact", label: "Primary contact", purpose: "Primary household contact", items: [] },
-                            { key: "other_parent_guardian", label: "Other parent / guardian", purpose: "Secondary guardians", items: [] },
-                            { key: "household_members", label: "Household members", purpose: "Other household members", items: [] },
-                            { key: "emergency_contacts", label: "Emergency contacts", purpose: "Emergency contacts", items: [] },
-                            { key: "authorized_pickups", label: "Authorized pickups", purpose: "Pickup authorization", items: [] },
-                            { key: "children", label: "Children", purpose: "Children belonging to household", items: [] },
-                            { key: "address", label: "Address", purpose: "Household address", items: [] },
-                            { key: "billing_contact", label: "Billing contact", purpose: "Billing contact", items: [] },
-                        ],
-                    },
-                ],
-            },
-        ],
-    },
-};
-
-// ── Household contact edit surface ─────────────────────────────────────────────
-
-export const householdContactSurface: SurfaceSpec = {
-    id: HOUSEHOLD_CONTACT_SURFACE_ID,
-    label: "Contact Detail",
-    category: "focus_panel",
-    grain: "case",
-    version: 1,
-    canvas: {
-        rows: [
-            {
-                id: "row-contact",
-                components: [
-                    {
-                        id: "household_contact_component",
-                        label: "Contact",
-                        componentType: "card",
-                        width: "full",
-                        evidenceGroups: [
                             {
-                                key: "contact_fields",
-                                label: "Contact fields",
-                                purpose: "Editable contact fields",
-                                owner: "household_contact_component",
+                                key: "documents",
+                                label: "Documents",
+                                purpose: "Document evidence for this child.",
+                                owner: "child_component",
                                 items: [
-                                    { key: "person.first_name", label: "First name", kind: "field", namespace: "person" },
-                                    { key: "person.last_name", label: "Last name", kind: "field", namespace: "person" },
-                                    { key: "person.email", label: "Email", kind: "field", namespace: "person" },
-                                    { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
-                                    { key: "person.date_of_birth", label: "Date of birth", kind: "field", namespace: "person" },
-                                    { key: "person.address", label: "Address", kind: "field", namespace: "person" },
+                                    { key: "child.documents_summary", label: "Documents", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "pickup",
+                                label: "Pickup",
+                                purpose: "Pickup authorization evidence.",
+                                owner: "child_component",
+                                items: [
+                                    { key: "child.pickup_summary", label: "Pickup", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "communications",
+                                label: "Communications",
+                                purpose: "Communications evidence for this child.",
+                                owner: "child_component",
+                                items: [
+                                    { key: "child.communications_summary", label: "Communications", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "notes",
+                                label: "Notes",
+                                purpose: "Notes evidence for this child.",
+                                owner: "child_component",
+                                items: [
+                                    { key: "child.notes_summary", label: "Notes", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "nickname",
+                                label: "Nickname",
+                                purpose: "Preferred nickname evidence.",
+                                owner: "child_component",
+                                items: [
+                                    { key: "child.nickname", label: "Nickname", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "custom_notes",
+                                label: "Custom Notes",
+                                purpose: "Operator-defined evidence section.",
+                                owner: "child_component",
+                                items: [
+                                    { key: "child.notes_summary", label: "Note", kind: "field", namespace: "child" },
                                 ],
                             },
                         ],
@@ -287,6 +378,22 @@ export const financialConfigurationSurface: SurfaceSpec = {
                                     },
                                 ],
                             },
+                            {
+                                key: "billing_periods",
+                                label: "Billing Periods",
+                                purpose: "Domain-locked — billing periods are not configurable yet.",
+                                items: [
+                                    { key: "billing.periods", label: "Periods", kind: "related_list", namespace: "opportunity" },
+                                ],
+                            },
+                            {
+                                key: "line_items",
+                                label: "Line Items",
+                                purpose: "Domain-locked — line items are not configurable yet.",
+                                items: [
+                                    { key: "billing.line_items", label: "Line Items", kind: "related_list", namespace: "opportunity" },
+                                ],
+                            },
                         ],
                     },
                 ],
@@ -320,7 +427,7 @@ export const focusPanelSurface: SurfaceSpec = {
                                 label: "Household Summary",
                                 purpose: "Who belongs to this household?",
                                 items: [
-                                    { key: "household.summary", label: "Household", kind: "field", namespace: "person" },
+                                    { key: "person.primary_contact_name", label: "Primary Contact", kind: "field", namespace: "person" },
                                 ],
                             },
                         ],
@@ -338,7 +445,7 @@ export const focusPanelSurface: SurfaceSpec = {
                                 label: "Children Summary",
                                 purpose: "Who are the children and their status?",
                                 items: [
-                                    { key: "children", label: "Children", kind: "field", namespace: "child" },
+                                    { key: "children.summary", label: "Children", kind: "field", namespace: "child" },
                                 ],
                             },
                         ],
@@ -371,8 +478,6 @@ export const focusPanelSurface: SurfaceSpec = {
 export const V3_PROOF_SURFACES: readonly SurfaceSpec[] = [
     focusPanelSurface,
     householdSurface,
-    householdContactSurface,
     childrenSurface,
-    childSurface,
     financialConfigurationSurface,
 ];
