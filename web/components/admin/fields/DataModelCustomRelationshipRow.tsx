@@ -7,6 +7,7 @@ import {
     CONFIG_WORKSPACE_GHOST_ACTION_CLASS,
     CONFIG_WORKSPACE_ROW_CLASS,
     CONFIG_WORKSPACE_ROW_EXPANDED_CLASS,
+    CONFIG_WORKSPACE_ROW_INNER_CLASS,
 } from "@/lib/fields/dataModelWorkspaceOperatorUi";
 import type { CustomRelationshipVocabulary } from "@/lib/fields/entityRelationshipCatalog";
 import { DATA_MODEL_ICON_STROKE } from "@/lib/fields/dataModelWorkspaceIcons";
@@ -83,29 +84,36 @@ export default function DataModelCustomRelationshipRow({
             data-relationship-kind="custom"
             data-expanded={expanded ? "true" : "false"}
         >
-            <div className="flex items-center gap-2 px-2.5 py-2">
-                <Link2 size={14} strokeWidth={DATA_MODEL_ICON_STROKE} className="shrink-0 text-alloy-bend-pine" aria-hidden />
-                <button type="button" onClick={onExpand} className="min-w-0 flex-1 text-left">
-                    <span className="block truncate text-[13px] font-semibold text-alloy-midnight">{item.label}</span>
-                    <span className="mt-0.5 block truncate text-[10px] text-alloy-midnight/45">{kindLabel}</span>
-                </button>
-                <span className="hidden shrink-0 rounded-full border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.06] px-1.5 py-0.5 text-[9px] font-medium text-alloy-bend-pine sm:inline">
-                    Custom
-                </span>
-                {!item.is_active ? (
-                    <span className="shrink-0 text-[10px] font-medium text-alloy-midnight/35">Hidden</span>
-                ) : null}
-                <button
-                    type="button"
-                    onClick={expanded ? onCollapse : onExpand}
-                    className={[CONFIG_WORKSPACE_GHOST_ACTION_CLASS, expanded ? "opacity-100" : ""].join(" ")}
-                    data-testid="data-model-custom-relationship-edit"
-                >
-                    {expanded ? "Close" : "Edit"}
-                </button>
+            <div className={CONFIG_WORKSPACE_ROW_INNER_CLASS}>
+                <Link2 size={13} strokeWidth={DATA_MODEL_ICON_STROKE} className="shrink-0 text-alloy-bend-pine" aria-hidden />
+                <div className="flex min-w-0 max-w-xl flex-1 items-center gap-2">
+                    <button type="button" onClick={onExpand} className="min-w-0 flex-1 text-left">
+                        <span className="block truncate text-[13px] font-semibold text-alloy-midnight">{item.label}</span>
+                        <span className="mt-0.5 block truncate text-[10px] text-alloy-midnight/45">{kindLabel}</span>
+                    </button>
+                </div>
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                    {!item.is_active ? (
+                        <span className="shrink-0 text-[10px] font-medium text-alloy-midnight/35">Hidden</span>
+                    ) : null}
+                    <button
+                        type="button"
+                        onClick={expanded ? onCollapse : onExpand}
+                        className={[CONFIG_WORKSPACE_GHOST_ACTION_CLASS, expanded ? "opacity-100" : ""].join(" ")}
+                        data-testid="data-model-custom-relationship-edit"
+                    >
+                        {expanded ? "Close" : "Edit"}
+                    </button>
+                </div>
             </div>
             {expanded ? (
-                <div className="space-y-2.5 border-t border-alloy-forge/8 px-3 pb-3 pt-2.5" data-testid="data-model-custom-relationship-editor">
+                <div
+                    className="mx-auto max-w-xl space-y-2 border-t border-alloy-forge/8 px-3 pb-2.5 pt-2"
+                    data-testid="data-model-custom-relationship-editor"
+                >
+                    <p className="text-[11px] leading-snug text-alloy-midnight/50">
+                        Created by your organization. Available throughout Alloy in forms, drawers, and family workflows.
+                    </p>
                     <label className="block space-y-1">
                         <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Label</span>
                         <input

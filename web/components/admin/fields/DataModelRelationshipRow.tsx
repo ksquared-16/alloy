@@ -5,6 +5,7 @@ import {
     CONFIG_WORKSPACE_GHOST_ACTION_CLASS,
     CONFIG_WORKSPACE_ROW_CLASS,
     CONFIG_WORKSPACE_ROW_EXPANDED_CLASS,
+    CONFIG_WORKSPACE_ROW_INNER_CLASS,
 } from "@/lib/fields/dataModelWorkspaceOperatorUi";
 import { DATA_MODEL_ICON_STROKE } from "@/lib/fields/dataModelWorkspaceIcons";
 import { Link2 } from "lucide-react";
@@ -25,54 +26,68 @@ export default function DataModelRelationshipRow({ relationship, expanded, onExp
             data-relationship-kind="platform"
             data-expanded={expanded ? "true" : "false"}
         >
-            <div className="flex items-center gap-2 px-2.5 py-2">
-                <Link2 size={14} strokeWidth={DATA_MODEL_ICON_STROKE} className="shrink-0 text-alloy-bend-pine" aria-hidden />
-                <button type="button" onClick={onExpand} className="min-w-0 flex-1 text-left">
-                    <span className="block truncate text-[13px] font-semibold text-alloy-midnight">
-                        {relationship.label}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[10px] text-alloy-midnight/45">
-                        {relationship.connection_label}
-                    </span>
-                </button>
-                <span className="hidden shrink-0 rounded-full border border-alloy-forge/12 bg-alloy-stone/[0.35] px-1.5 py-0.5 text-[9px] font-medium text-alloy-midnight/50 sm:inline">
-                    Platform
-                </span>
-                <span className="shrink-0 text-[10px] text-alloy-midnight/40">{relationship.cardinality}</span>
-                <span
-                    className={[
-                        "shrink-0 text-[10px] font-medium",
-                        relationship.required ? "text-alloy-bend-pine" : "text-alloy-midnight/35",
-                    ].join(" ")}
-                >
-                    {relationship.required ? "Required" : "Optional"}
-                </span>
-                <button
-                    type="button"
-                    onClick={expanded ? onCollapse : onExpand}
-                    className={[CONFIG_WORKSPACE_GHOST_ACTION_CLASS, expanded ? "opacity-100" : ""].join(" ")}
-                    data-testid="data-model-relationship-edit"
-                >
-                    {expanded ? "Close" : "View"}
-                </button>
+            <div className={CONFIG_WORKSPACE_ROW_INNER_CLASS}>
+                <Link2 size={13} strokeWidth={DATA_MODEL_ICON_STROKE} className="shrink-0 text-alloy-bend-pine" aria-hidden />
+                <div className="flex min-w-0 max-w-xl flex-1 items-center gap-2">
+                    <button type="button" onClick={onExpand} className="min-w-0 flex-1 text-left">
+                        <span className="block truncate text-[13px] font-semibold text-alloy-midnight">
+                            {relationship.label}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[10px] text-alloy-midnight/45">
+                            {relationship.connection_label}
+                        </span>
+                    </button>
+                </div>
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={expanded ? onCollapse : onExpand}
+                        className={[CONFIG_WORKSPACE_GHOST_ACTION_CLASS, expanded ? "opacity-100" : ""].join(" ")}
+                        data-testid="data-model-relationship-edit"
+                    >
+                        {expanded ? "Close" : "View"}
+                    </button>
+                </div>
             </div>
             {expanded ? (
                 <div
-                    className="space-y-2 border-t border-alloy-forge/8 px-3 pb-3 pt-2.5"
+                    className="mx-auto max-w-xl space-y-2 border-t border-alloy-forge/8 px-3 pb-2.5 pt-2"
                     data-testid="data-model-relationship-detail"
                 >
-                    <p className="text-[12px] leading-snug text-alloy-midnight/65">{relationship.meaning}</p>
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                            What this is
+                        </p>
+                        <p className="text-[12px] leading-snug text-alloy-midnight/65">{relationship.meaning}</p>
+                    </div>
                     {relationship.role_note ? (
-                        <p className="rounded-md border border-alloy-bend-pine/15 bg-alloy-bend-pine/[0.04] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/55">
+                        <p className="rounded-md border border-alloy-bend-pine/15 bg-alloy-bend-pine/[0.04] px-2 py-1.5 text-[11px] leading-snug text-alloy-midnight/55">
                             {relationship.role_note}
                         </p>
                     ) : null}
-                    <p className="text-[11px] text-alloy-midnight/40">
-                        Used in: {relationship.where_used.join(" · ")}
-                    </p>
-                    <p className="text-[11px] text-alloy-midnight/40">
-                        Platform relationships describe how Alloy models your organization. They are view-only here.
-                    </p>
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                            Why it exists
+                        </p>
+                        <p className="text-[12px] leading-snug text-alloy-midnight/60">
+                            Alloy uses this connection so {relationship.connection_label.toLowerCase()} records stay
+                            consistent across your organization.
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                            Where it&apos;s used
+                        </p>
+                        <p className="text-[11px] text-alloy-midnight/50">{relationship.where_used.join(" · ")}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[10px] text-alloy-midnight/40">
+                        <span className="rounded-full border border-alloy-forge/12 bg-alloy-stone/[0.35] px-1.5 py-0.5">
+                            Platform
+                        </span>
+                        <span>{relationship.cardinality}</span>
+                        <span>{relationship.required ? "Required" : "Optional"}</span>
+                    </div>
+                    <p className="text-[11px] text-alloy-midnight/40">View-only — part of Alloy&apos;s core model.</p>
                     <div className="flex justify-end">
                         <button
                             type="button"

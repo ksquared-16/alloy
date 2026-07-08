@@ -6,6 +6,7 @@
  */
 
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
+import { platformCategoryLabel } from "@/lib/adminV2/configuration/configurationCategoryCatalog";
 import {
     computedFieldsForChildSettingsTab,
     computedFieldsForSettingsEntity,
@@ -203,10 +204,14 @@ export const FIELD_SECTION_DISPLAY_ORDER = [
     "child_profile",
     "profile",
     "requirements",
-    "scheduling",
     "attendance",
+    "scheduling",
     "communications",
     "billing",
+    "licensing",
+    "transportation",
+    "behavior",
+    "nutrition",
     "runtime_signals",
     "placement",
     "lifecycle",
@@ -218,29 +223,14 @@ export const FIELD_SECTION_DISPLAY_ORDER = [
 
 export function sectionDisplayLabel(sectionKey: string): string {
     const key = sectionKey.trim().toLowerCase();
-    const labels: Record<string, string> = {
-        identity: "Identity",
-        contact: "Contact",
-        enrollment: "Enrollment",
-        health: "Health",
-        medical: "Medical",
+    if (!key) return "General";
+    const aliases: Record<string, string> = {
         child_profile: "Profile",
         enrollment_profile: "Enrollment",
         profile: "Profile",
-        requirements: "Requirements",
-        scheduling: "Scheduling",
-        attendance: "Attendance",
-        runtime_signals: "Runtime Signals",
-        communications: "Communications",
-        billing: "Billing",
-        placement: "Placement",
-        lifecycle: "Lifecycle",
-        system: "System",
-        custom: "Custom",
-        general: "General",
-        site: "Site",
     };
-    return labels[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    if (aliases[key]) return aliases[key];
+    return platformCategoryLabel(key);
 }
 
 /** Operator-facing alias — categories are business concepts, not presentation sections. */

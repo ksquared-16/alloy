@@ -26,6 +26,26 @@ Configuration workspaces should feel:
 
 ---
 
+## Core principles
+
+### Overview summarizes. Tabs edit.
+
+The Overview tab answers **“What is this entity?”** — relationships, field counts, and where data is used. It does not duplicate editing workflows. All mutation lives in the editing tabs (Relationships, Fields).
+
+### Business concepts first. Implementation details only under Advanced.
+
+Operators work with field names, categories, types, descriptions, and status. Internal keys, surface placement, and capability details stay behind **Advanced** on **edit** — never during creation.
+
+### Categories are configurable organizational primitives
+
+Categories (stored as `section_key` in the field platform) are **business organization**, not presentation.
+
+Org-specific category labels and ordering come from `field_section_definitions` via `GET /api/admin/field-sections`. Platform seeds provide defaults when the registry is empty.
+
+Categories are reused across **Forms**, **Processing**, **Surface Builder**, **Documents**, and future configuration workspaces.
+
+---
+
 ## Workspace hierarchy
 
 ```
@@ -33,7 +53,7 @@ Platform Configuration header
 ↓
 Entity / object context (compact)
 ↓
-Tabs: Overview · Relationships · Fields · Computed Signals
+Tabs: Overview · Relationships · Fields
 ↓
 Category groups (business language)
 ↓
@@ -41,10 +61,12 @@ Compact rows
 ↓
 Inline expand (view / edit / create)
 ↓
-Usage + Availability (derived, read-only here)
+Availability (derived, read-only — only when unavailable)
 ```
 
 Everything stays inside one workspace.
+
+**Computed fields** are an ownership type within Fields (Platform · Custom · Computed filters) — not a separate tab. Operators cannot configure computed fields today; a dedicated tab would imply a workflow that does not exist.
 
 ---
 
@@ -65,8 +87,10 @@ Shared components (reusable Configuration Workspace framework):
 | Component | Path |
 | --- | --- |
 | `ConfigurationCategoryHeader` | `web/components/adminV2/configuration/ConfigurationCategoryHeader.tsx` |
+| `ConfigurationCategoryCreateRow` | `web/components/adminV2/configuration/ConfigurationCategoryCreateRow.tsx` |
 | `ConfigurationStatusToggle` | `web/components/adminV2/configuration/ConfigurationStatusToggle.tsx` |
 | `ConfigurationAdvancedToggle` | `web/components/adminV2/configuration/ConfigurationAdvancedToggle.tsx` |
+| Category catalog + merge | `web/lib/adminV2/configuration/configurationCategoryCatalog.ts` |
 | Row shell + hover grammar | `web/lib/adminV2/configuration/configurationWorkspaceOperatorUi.ts` |
 
 Data Model consumes these; it does not own them. Domain-specific copy lives in `web/lib/fields/dataModelWorkspaceOperatorUi.ts`.
@@ -84,22 +108,23 @@ Future configuration pages should adopt:
 
 ## Operator language
 
-### Never ask for implementation details by default
+### Never ask for implementation details during creation
 
-| Hide by default | Show in Advanced only |
+| Create flow | Edit + Advanced only |
 | --- | --- |
-| Field key | Internal key (auto-generated from label) |
-| Relationship key | Internal key (auto-generated from label) |
-| Forms / Drawers / Tables checkboxes | — |
-| Required checkbox in Data Model | — |
+| Field name | Internal key (read-only or auto-generated) |
+| Category | — |
+| Field type | — |
+| Description | Help text |
+| Status | — |
+
+Relationship create: label, kind, description, status — key behind Advanced.
 
 ### Categories (not Sections)
 
 **Category** is the operator-facing organizational language.
 
-Examples: Identity, Contact, Enrollment, Health, Medical, Requirements, Scheduling, Attendance, Communications, Billing, System, Custom.
-
-Categories are **business concepts**. They will eventually drive grouping in Surface Builder, Processing, Forms, Documents, and Search.
+Examples: Identity, Contact, Enrollment, Health, Medical, Requirements, Attendance, Scheduling, Communications, Billing, Licensing, Transportation, Behavior, Nutrition, Custom.
 
 API/storage may still use `section_key`; UI says **Category**.
 
@@ -112,6 +137,8 @@ Operators set **Status**:
 
 **Availability** (Forms, Drawers, Focus Panel, Queue Rows, Business Processes, etc.) is **derived** from the canonical field platform capability engine — not configured with checkboxes in the Data Model workspace.
 
+**Silence is success:** collapsed rows show availability only when something is unavailable (e.g. “Needs Child Context”, “Runtime-only”). Do not show availability counts on normal rows.
+
 ### Relationships
 
 Use **business connection language**, not API grains:
@@ -122,7 +149,9 @@ Use **business connection language**, not API grains:
 - Household
 - Lead / enrollment
 
-Each platform relationship includes a plain-language **meaning** underneath the label.
+**Platform relationships** explain what they are, why they exist, and where they are used. View-only.
+
+**Custom relationships** explain: created by your organization, available throughout Alloy.
 
 **Person roles** (Parent, Guardian, Emergency contact, Pickup contact, Billing contact) are roles on Person — **not separate entities**. The Relationships tab teaches this explicitly.
 
@@ -151,6 +180,8 @@ Quiet chips on rows:
 - **No new colors** — lean on existing Alloy tokens
 - **Category headers** — `┃ Identity` style via left Bend Pine rail
 - **Row hover** — soft Bend Pine wash + inset left accent; Edit fades in on hover
+- **Row density** — Surface Builder rhythm (~35% tighter than legacy admin spacing)
+- **Relationship rows** — full-width row, constrained content width; implementation detail in expanded state
 - **Buttons** — Primary (Bend Pine) · Secondary (outline) · Ghost (Edit/View) · Danger text (Delete)
 
 Reference: Surface Builder row rhythm.
@@ -164,11 +195,14 @@ Import from these paths — do not duplicate in domain workspaces:
 | Primitive | Path |
 | --- | --- |
 | Category header (Bend Pine rail) | `@/components/adminV2/configuration/ConfigurationCategoryHeader` |
+| Category create (inline) | `@/components/adminV2/configuration/ConfigurationCategoryCreateRow` |
 | Status toggle (Active / Hidden) | `@/components/adminV2/configuration/ConfigurationStatusToggle` |
 | Advanced disclosure | `@/components/adminV2/configuration/ConfigurationAdvancedToggle` |
+| Category catalog + labels | `@/lib/adminV2/configuration/configurationCategoryCatalog` |
 | Row hover + ghost Edit grammar | `@/lib/adminV2/configuration/configurationWorkspaceOperatorUi` |
 | Ownership chips | `configurationOwnershipChipClass()` |
 | Key slugify helper | `slugifyConfigurationKey()` |
+| Unavailable-only row hint | `configurationFieldUnavailableHint()` |
 
 Button hierarchy: Primary (Bend Pine) · Secondary (outline) · Ghost (Edit/View) · Danger text (Delete).
 
@@ -178,7 +212,7 @@ When building a new Configuration workspace:
 
 1. Start from Data Model workspace components under `web/components/admin/fields/DataModel*`
 2. Reuse `ConfigurationCategoryHeader`, `ConfigurationStatusToggle`, row shell classes
-3. Keep Overview → Objects → Inline editing → Usage → Availability structure
+3. Keep Overview → Objects → Inline editing structure; availability only when blocked
 4. Do not reintroduce legacy Settings field cards, drawers, or modals
 
 ---
@@ -188,7 +222,7 @@ When building a new Configuration workspace:
 1. Platform field placement remains in Surface Builder
 2. Reports builder shown as Future — not fake-available
 3. Queue row hydration stays validator-gated
-4. Computed signals are platform-defined (view-only)
+4. Computed fields are platform-defined (view-only) — filtered under Fields, not a separate tab
 5. Full relationship vocabulary table management remains in Settings → Relationships for advanced ops
 
 ---

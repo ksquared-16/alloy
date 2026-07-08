@@ -1,6 +1,6 @@
 "use client";
 
-export type DataModelWorkspaceTab = "overview" | "relationships" | "fields" | "computed_signals";
+export type DataModelWorkspaceTab = "overview" | "relationships" | "fields";
 
 type Props = {
     activeTab: DataModelWorkspaceTab;
@@ -11,7 +11,6 @@ const TABS: { id: DataModelWorkspaceTab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "relationships", label: "Relationships" },
     { id: "fields", label: "Fields" },
-    { id: "computed_signals", label: "Computed Signals" },
 ];
 
 export default function DataModelWorkspaceTabs({ activeTab, onSelect }: Props) {

@@ -33,7 +33,7 @@ describe("Data Model inline UX pass", () => {
         expect(fieldRow).toContain('data-testid="data-model-field-editor"');
         expect(createRow).toContain('data-testid="data-model-field-create-row"');
         expect(createRow).toContain("Category");
-        expect(createRow).toContain("ConfigurationAdvancedToggle");
+        expect(createRow).not.toContain("ConfigurationAdvancedToggle");
     });
 
     it("relationships use rows + inline create (no modal)", () => {

@@ -7,6 +7,7 @@ import {
     CONFIG_WORKSPACE_GHOST_ACTION_CLASS,
     CONFIG_WORKSPACE_ROW_CLASS,
     CONFIG_WORKSPACE_ROW_EXPANDED_CLASS,
+    CONFIG_WORKSPACE_ROW_INNER_CLASS,
     configurationOwnershipChipClass,
     slugifyConfigurationKey,
 } from "@/lib/adminV2/configuration/configurationWorkspaceOperatorUi";
@@ -15,6 +16,7 @@ export {
     CONFIG_WORKSPACE_GHOST_ACTION_CLASS,
     CONFIG_WORKSPACE_ROW_CLASS,
     CONFIG_WORKSPACE_ROW_EXPANDED_CLASS,
+    CONFIG_WORKSPACE_ROW_INNER_CLASS,
 };
 
 export const ownershipChipClass = configurationOwnershipChipClass;
