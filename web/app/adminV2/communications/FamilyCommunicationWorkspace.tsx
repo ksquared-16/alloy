@@ -89,7 +89,7 @@ export default function FamilyCommunicationWorkspace(props: {
                 const res = await fetch("/api/admin/communications/family-send", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ customer_id: cust, recipient_person_ids: selectedRecipientIds, channel, subject: subjectDraft, body: bodyDraft, reply_to_thread_id: selectedThreadId, confirm }),
+                    body: JSON.stringify({ customer_id: cust, recipient_person_ids: selectedRecipientIds, channel: liveChannel, subject: subjectDraft, body: bodyDraft, reply_to_thread_id: selectedThreadId, confirm }),
                 });
                 const data = (await res.json()) as FamilySendResult & { error?: string };
                 if (!res.ok) { setSendError(data.error ?? "Send failed"); return; }
