@@ -3029,9 +3029,9 @@ html[data-alloy-os-runtime-split="true"]
   width: min(560px, calc(100% - 32px));
   display: flex;
   flex-direction: column;
-  /* Viewport-anchored — never % of the reserved collapsed cell (that caused ~0px height). */
-  min-height: min(70vh, calc(100dvh - 64px));
-  max-height: min(80vh, calc(100dvh - 48px));
+  /* Content-sized between a readable floor and a viewport ceiling — never forced 70vh. */
+  min-height: 0;
+  max-height: min(75vh, calc(100dvh - 48px));
   height: max-content;
   overflow: hidden;
   z-index: 60;
@@ -3057,8 +3057,8 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-ucard {
   width: min(560px, calc(100% - 32px));
   max-width: 560px;
-  min-height: min(70vh, calc(100dvh - 64px));
-  max-height: min(80vh, calc(100dvh - 48px));
+  min-height: 0;
+  max-height: min(75vh, calc(100dvh - 48px));
 }
 
 /* Surface Composer V3.5 — runtime-shaped nested surfaces with quiet edit affordances. */
@@ -3282,6 +3282,30 @@ html[data-alloy-os-runtime-split="true"]
 .fp-inline-section-controls__btn:disabled {
   opacity: 0.28;
   cursor: default;
+}
+.fp-composer-tier-label {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.fp-composer-tier-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-children__focus-tier,
+.alloy-os-children__evidence-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alloy-os-children__evidence-tier {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 22%, transparent);
 }
 /* Focused card typography + spacing step up so it reads as a different layer. */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]

@@ -20,24 +20,28 @@ import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import ChildFocusEdit from "@/components/admin/focusPanel/cards/ChildFocusEdit";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
 import InlineRuntimeFieldList from "@/components/admin/focusPanel/drillIn/InlineRuntimeFieldList";
+import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
 import {
     buildChildrenCardEvidence,
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import {
     CHILD_SURFACE_ID,
-    CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS,
     childFocusViewFromConfig,
     readChildNestedConfigFromDoc,
-    type ChildFocusFieldKey,
     type ChildFocusView,
 } from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
 import { seedChildFocusEditValues } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import {
-    childrenRosterCollapsedFieldKeysFromNestedConfig,
+    CHILDREN_FOCUS_GROUP_KEYS,
     childrenDetailFieldKeysFromNestedConfig,
+    childrenEvidenceSectionsFromNestedConfig,
+    childrenFocusRowsFromNestedConfig,
+    childrenRosterCollapsedFieldKeysFromNestedConfig,
     readChildrenNestedConfigFromDoc,
+    type ChildrenEvidenceSectionView,
+    type ChildrenFocusFieldRow,
 } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 import { CHILDREN_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { cardCapabilities, cardRelatedViews } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle";
@@ -118,6 +122,14 @@ export default function ChildrenCard({
         () => composerPreview?.childFocusView ?? childFocusViewFromConfig(childrenSurfaceConfig),
         [composerPreview?.childFocusView, childrenSurfaceConfig],
     );
+    const focusRows = useMemo(
+        () => childrenFocusRowsFromNestedConfig(childrenSurfaceConfig),
+        [childrenSurfaceConfig],
+    );
+    const evidenceSections = useMemo(
+        () => childrenEvidenceSectionsFromNestedConfig(childrenSurfaceConfig),
+        [childrenSurfaceConfig],
+    );
     const childDetailFieldKeys = useMemo(
         () => childrenDetailFieldKeysFromNestedConfig(childrenSurfaceConfig),
         [childrenSurfaceConfig],
@@ -188,7 +200,7 @@ export default function ChildrenCard({
         setRelatedViewId(null);
         if (composingChildrenSurface) {
             composer?.setDrillDepth({ kind: "child-focus", childId: id });
-            composer?.select({ kind: "region", surfaceId: CHILDREN_SURFACE_ID, groupKey: "placement" });
+            composer?.select({ kind: "region", surfaceId: CHILDREN_SURFACE_ID, groupKey: "identity" });
         }
     };
     const backToFocus = () => {
@@ -316,6 +328,8 @@ export default function ChildrenCard({
                 expandedOpen={expandedOpen}
                 relatedViewId={relatedViewId}
                 childFocusView={childFocusView}
+                focusRows={focusRows}
+                evidenceSections={evidenceSections}
                 childSurfaceConfig={childSurfaceConfig}
                 opportunityStartDate={opportunityStartDate}
                 mutation={mutation}
@@ -566,18 +580,26 @@ function ChildScheduleBlock({ child }: { child: ChildrenEvidenceChild }) {
 /** Placement truth — config-driven fields for Focus + read-only Edit preview. */
 function ConfiguredChildEnrollmentBody({
     child,
-    focusView,
+    focusRows,
 }: {
     child: ChildrenEvidenceChild;
-    focusView: ChildFocusView;
+    focusRows: ChildrenFocusFieldRow[];
 }) {
+    const bodyRows = focusRows.filter(
+        (row) =>
+            !(
+                row.groupKey === "identity"
+                && (row.fieldKey === "child.display_name" || row.fieldKey === "child.name")
+            ),
+    );
+
     return (
         <div className="alloy-os-child-edit" data-children-enrollment={child.id}>
-            {focusView.focusFields.map((field) => {
+            {bodyRows.map((field) => {
                 if (field.fieldKey === "inquiry_child.schedule_type") {
                     return <ChildScheduleBlock key={field.fieldKey} child={child} />;
                 }
-                const meta = FOCUS_FIELD_TRUTH_META[field.fieldKey];
+                const meta = CHILDREN_FIELD_TRUTH_META[field.fieldKey];
                 if (!meta) return null;
                 return (
                     <TruthRow
@@ -592,17 +614,31 @@ function ConfiguredChildEnrollmentBody({
     );
 }
 
-const FOCUS_FIELD_TRUTH_META: Partial<
-    Record<ChildFocusFieldKey, { icon: LucideIcon; get: (c: ChildrenEvidenceChild) => string | null }>
-> = {
+const CHILDREN_FIELD_TRUTH_META: Record<string, { icon: LucideIcon; get: (c: ChildrenEvidenceChild) => string | null }> = {
+    "child.display_name": { icon: User, get: (c) => c.name },
+    "child.first_name": { icon: User, get: (c) => c.firstName ?? null },
+    "child.last_name": { icon: User, get: (c) => c.lastName ?? null },
+    "child.preferred_name": { icon: User, get: (c) => c.preferredName ?? null },
+    "child.nickname": { icon: User, get: (c) => c.nickname ?? null },
+    "child.date_of_birth": { icon: Cake, get: (c) => c.dobAge },
+    "child.dob_age": { icon: Cake, get: (c) => c.dobAge },
+    "child.age": { icon: Cake, get: (c) => c.dobAge },
     "inquiry_child.program": { icon: GraduationCap, get: (c) => c.program },
     "child.room": { icon: DoorOpen, get: (c) => c.room },
     "child.start_date": { icon: CalendarClock, get: (c) => c.startDate },
-    "child.date_of_birth": { icon: Cake, get: (c) => c.dobAge },
+    "child.desired_start_date": { icon: CalendarClock, get: (c) => c.startDate },
+    "inquiry_child.schedule_type": { icon: CalendarDays, get: (c) => c.schedule },
+    "inquiry_child.desired_schedule_type": { icon: CalendarDays, get: (c) => c.schedule },
+    "child.status": { icon: BadgeCheck, get: (c) => c.status },
     "child.readiness_summary": {
         icon: BadgeCheck,
         get: (c) => (c.needsAttention ? c.missingLine : "Ready"),
     },
+    "child.medical_summary": { icon: BadgeCheck, get: () => null },
+    "child.documents_summary": { icon: FileText, get: () => null },
+    "child.pickup_summary": { icon: User, get: () => null },
+    "child.communications_summary": { icon: FileText, get: () => null },
+    "child.notes_summary": { icon: FileText, get: () => null },
 };
 
 /** One evidence group in the Expanded overlay. */
@@ -619,47 +655,47 @@ function EmptyEvidence({ text }: { text: string }) {
     return <p className="alloy-os-child-egroup__empty">{text}</p>;
 }
 
-/** Expanded: the SAME question with ADDITIONAL configured evidence groups (not history). */
-function ChildExpandedEvidence({ child }: { child: ChildrenEvidenceChild }) {
-    const readiness = [
-        { label: "Program selected", ok: Boolean(child.program) },
-        { label: "Schedule set", ok: Boolean(child.schedule) },
-        { label: "Desired start set", ok: Boolean(child.startDate) },
-    ];
+/** Expanded: configured evidence archive sections (not the operational Focus tier). */
+function ChildExpandedEvidence({
+    child,
+    sections,
+}: {
+    child: ChildrenEvidenceChild;
+    sections: ChildrenEvidenceSectionView[];
+}) {
+    if (sections.length === 0) {
+        return (
+            <div className="alloy-os-child-expanded" data-children-expanded={child.id}>
+                <EvidenceGroup title="Evidence">
+                    <EmptyEvidence text="No evidence sections configured" />
+                </EvidenceGroup>
+            </div>
+        );
+    }
+
     return (
         <div className="alloy-os-child-expanded" data-children-expanded={child.id}>
-            <EvidenceGroup title="Placement">
-                <TruthRow icon={GraduationCap} label="Program" value={child.program} />
-                <TruthRow icon={DoorOpen} label="Room" value={child.room} />
-                <TruthRow icon={CalendarDays} label="Schedule" value={child.schedule} />
-                <TruthRow icon={User} label="Teacher" value={child.teacher} />
-                <TruthRow icon={CalendarClock} label="Desired start" value={child.startDate} />
-            </EvidenceGroup>
-            {CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS.map((section) => (
+            {sections.map((section) => (
                 <EvidenceGroup key={section.key} title={section.label}>
-                    <div data-domain-locked={section.key}>
+                    {section.fieldKeys.length === 0 ? (
                         <EmptyEvidence text={`No ${section.label.toLowerCase()} on file`} />
-                    </div>
+                    ) : (
+                        section.fieldKeys.map((fieldKey) => {
+                            const meta = CHILDREN_FIELD_TRUTH_META[fieldKey];
+                            if (!meta) return null;
+                            const value = meta.get(child);
+                            return (
+                                <TruthRow
+                                    key={fieldKey}
+                                    icon={meta.icon}
+                                    label={fieldKey.replace(/^[a-z_]+\./, "").replace(/_/g, " ")}
+                                    value={value}
+                                />
+                            );
+                        })
+                    )}
                 </EvidenceGroup>
             ))}
-            <EvidenceGroup title="Notes">
-                <EmptyEvidence text="No notes" />
-            </EvidenceGroup>
-            <EvidenceGroup title="Readiness">
-                <div data-domain-locked="readiness">
-                    <div className="alloy-os-child-readiness">
-                        {readiness.map((r) => (
-                            <span
-                                key={r.label}
-                                className={clsx("alloy-os-child-readiness__row", r.ok && "alloy-os-child-readiness__row--ok")}
-                            >
-                                <BadgeCheck size={13} strokeWidth={1.75} /> {r.label}
-                                <span className="alloy-os-child-readiness__state">{r.ok ? "Ready" : "Needed"}</span>
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            </EvidenceGroup>
         </div>
     );
 }
@@ -714,10 +750,12 @@ function RegionEditLayer({
     surfaceId,
     groupKey,
     composing,
+    discoverable = false,
 }: {
     surfaceId: string;
     groupKey: string;
     composing: boolean;
+    discoverable?: boolean;
 }) {
     if (!composing) return null;
     return (
@@ -725,7 +763,7 @@ function RegionEditLayer({
             surfaceId={surfaceId}
             groupKey={groupKey}
             suppressPreview
-            whenRegionSelectedOnly
+            whenRegionSelectedOnly={!discoverable}
         />
     );
 }
@@ -737,6 +775,8 @@ function FocusedChild({
     expandedOpen,
     relatedViewId,
     childFocusView,
+    focusRows,
+    evidenceSections,
     childSurfaceConfig,
     opportunityStartDate,
     mutation,
@@ -752,6 +792,8 @@ function FocusedChild({
     expandedOpen: boolean;
     relatedViewId: string | null;
     childFocusView: ChildFocusView;
+    focusRows: ChildrenFocusFieldRow[];
+    evidenceSections: ChildrenEvidenceSectionView[];
     childSurfaceConfig: ReturnType<typeof readChildNestedConfigFromDoc>;
     opportunityStartDate: string | null;
     mutation?: FocusPanelMutation;
@@ -769,38 +811,23 @@ function FocusedChild({
             data-children-focused-child={child.id}
             data-children-edit={editing ? "true" : undefined}
         >
-            <ComposableRegionShell
-                surfaceId={CHILDREN_SURFACE_ID}
-                groupKey="identity"
-                label="Identity"
-                className="alloy-os-children__composer-region"
-                dataAttrs={{ "data-children-identity-region": "true" }}
-            >
-                <div className="alloy-os-child-focus__header">
-                    <CardAvatar name={child.name} imageUrl={child.imageUrl} size={40} />
-                    <div className="alloy-os-child-focus__id min-w-0">
-                        <span className="alloy-os-household__group-title">{child.name}</span>
-                        {headerDob ? (
-                            <span className="alloy-os-child-focus__sub">
-                                <Cake size={13} strokeWidth={1.75} /> {headerDob}
-                            </span>
-                        ) : null}
-                    </div>
-                    <StatusPill child={child} />
+            <div className="alloy-os-child-focus__header">
+                <CardAvatar name={child.name} imageUrl={child.imageUrl} size={40} />
+                <div className="alloy-os-child-focus__id min-w-0">
+                    <span className="alloy-os-household__group-title">{child.name}</span>
+                    {headerDob ? (
+                        <span className="alloy-os-child-focus__sub">
+                            <Cake size={13} strokeWidth={1.75} /> {headerDob}
+                        </span>
+                    ) : null}
                 </div>
-                {composingChildrenSurface ? (
-                    <RegionEditLayer
-                        surfaceId={CHILDREN_SURFACE_ID}
-                        groupKey="identity"
-                        composing={composingChildrenSurface}
-                    />
-                ) : null}
-            </ComposableRegionShell>
+                <StatusPill child={child} />
+            </div>
 
             {relatedViewId ? (
                 <ChildRelatedReport child={child} viewId={relatedViewId} />
             ) : expandedOpen ? (
-                <ChildExpandedEvidence child={child} />
+                <ChildExpandedEvidence child={child} sections={evidenceSections} />
             ) : editing && editSeed ? (
                 <ChildFocusEdit
                     seed={editSeed}
@@ -862,23 +889,59 @@ function FocusedChild({
                 />
             ) : (
                 <>
-                    <ComposableRegionShell
-                        surfaceId={CHILDREN_SURFACE_ID}
-                        groupKey="placement"
-                        label="Placement"
-                        className="alloy-os-children__composer-region"
-                        dataAttrs={{ "data-children-placement-region": "true" }}
+                    <div
+                        className="alloy-os-children__focus-tier"
+                        data-children-focus-tier="true"
                     >
-                        <ConfiguredChildEnrollmentBody child={child} focusView={childFocusView} />
                         {composingChildrenSurface ? (
-                            <RegionEditLayer
-                                surfaceId={CHILDREN_SURFACE_ID}
-                                groupKey="placement"
-                                composing={composingChildrenSurface}
-                            />
+                            <p className="fp-composer-tier-label">Focus fields</p>
                         ) : null}
-                    </ComposableRegionShell>
+                        <ConfiguredChildEnrollmentBody child={child} focusRows={focusRows} />
+                        {composingChildrenSurface
+                            ? CHILDREN_FOCUS_GROUP_KEYS.map((groupKey) => (
+                                  <RegionEditLayer
+                                      key={groupKey}
+                                      surfaceId={CHILDREN_SURFACE_ID}
+                                      groupKey={groupKey}
+                                      composing={composingChildrenSurface}
+                                      discoverable
+                                  />
+                              ))
+                            : null}
+                    </div>
                     <ChildFlags child={child} />
+                    {composingChildrenSurface ? (
+                        <div
+                            className="alloy-os-children__evidence-tier"
+                            data-children-evidence-tier="true"
+                        >
+                            <p className="fp-composer-tier-label">Evidence sections</p>
+                            <p className="fp-composer-tier-hint">Archive fields shown behind View all evidence</p>
+                            <AddSectionMenu
+                                surfaceId={CHILDREN_SURFACE_ID}
+                                variant="evidence"
+                                triggerLabel="+ Add evidence section"
+                            />
+                            {evidenceSections.map((section) => (
+                                <ComposableRegionShell
+                                    key={section.key}
+                                    surfaceId={CHILDREN_SURFACE_ID}
+                                    groupKey={section.key}
+                                    label={section.label}
+                                    className="alloy-os-children__composer-region"
+                                    dataAttrs={{ "data-children-evidence-region": section.key }}
+                                >
+                                    <p className="alloy-os-child-egroup__title">{section.label}</p>
+                                    <RegionEditLayer
+                                        surfaceId={CHILDREN_SURFACE_ID}
+                                        groupKey={section.key}
+                                        composing={composingChildrenSurface}
+                                        discoverable
+                                    />
+                                </ComposableRegionShell>
+                            ))}
+                        </div>
+                    ) : null}
                     {onExpand ? (
                         <button
                             type="button"
