@@ -176,4 +176,29 @@ describe("CurrentWorkCard", () => {
         expect(focusedBlock).toBeTruthy();
         expect(focusedBlock).not.toContain("bend-pine");
     });
+
+    it("renders without AdminDrawerProvider (dev builder / static prerender)", async () => {
+        vi.resetModules();
+        vi.doUnmock("@/components/workIntent/useWorkIntentOutcomeCompletion");
+        const { default: UnmockedCurrentWorkCard } = await import(
+            "@/components/admin/focusPanel/cards/CurrentWorkCard"
+        );
+        expect(() =>
+            renderToStaticMarkup(
+                <UnmockedCurrentWorkCard
+                    model={{
+                        key: "current_work",
+                        title: "Current Work",
+                        insight: "Contact Family",
+                        tier: "work",
+                        span: "row",
+                        density: "compact",
+                        visible: true,
+                        archetype: "status",
+                    }}
+                    context={context()}
+                />,
+            ),
+        ).not.toThrow();
+    });
 });
