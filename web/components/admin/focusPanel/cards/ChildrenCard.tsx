@@ -112,9 +112,11 @@ export default function ChildrenCard({
         () => (composer?.isComposingSurface(CHILD_SURFACE_ID) ? composer.configFor(CHILD_SURFACE_ID) : readChildNestedConfigFromDoc(publishedDoc)),
         [composer, publishedDoc],
     );
+    // Focus read layout is authored on `children_surface` (same surface as composer drill-in).
+    // `child_surface` remains the edit/save policy seam — untouched by this card boundary.
     const childFocusView = useMemo(
-        () => composerPreview?.childFocusView ?? childFocusViewFromConfig(childSurfaceConfig),
-        [composerPreview?.childFocusView, childSurfaceConfig],
+        () => composerPreview?.childFocusView ?? childFocusViewFromConfig(childrenSurfaceConfig),
+        [composerPreview?.childFocusView, childrenSurfaceConfig],
     );
     const childDetailFieldKeys = useMemo(
         () => childrenDetailFieldKeysFromNestedConfig(childrenSurfaceConfig),
@@ -184,6 +186,10 @@ export default function ChildrenCard({
         setEditing(false);
         setExpandedOpen(false);
         setRelatedViewId(null);
+        if (composingChildrenSurface) {
+            composer?.setDrillDepth({ kind: "child-focus", childId: id });
+            composer?.select({ kind: "region", surfaceId: CHILDREN_SURFACE_ID, groupKey: "placement" });
+        }
     };
     const backToFocus = () => {
         setEditing(false);
@@ -314,6 +320,7 @@ export default function ChildrenCard({
                 opportunityStartDate={opportunityStartDate}
                 mutation={mutation}
                 composerPreview={composerPreview}
+                composingChildrenSurface={composingChildrenSurface}
                 onExpand={CAPS.supportsExpanded ? () => setExpandedOpen(true) : undefined}
                 onOpenRelated={(id) => setRelatedViewId(id)}
                 onEditClose={() => setEditing(false)}
@@ -339,12 +346,13 @@ export default function ChildrenCard({
                         />
                     ))}
                 </div>
-                <InlineRuntimeFieldList
-                    surfaceId={CHILDREN_SURFACE_ID}
-                    groupKey="roster"
-                    suppressPreview
-                    whenRegionSelectedOnly
-                />
+                {composingChildrenSurface ? (
+                    <RegionEditLayer
+                        surfaceId={CHILDREN_SURFACE_ID}
+                        groupKey="roster"
+                        composing={composingChildrenSurface}
+                    />
+                ) : null}
             </ComposableRegionShell>
         );
     }
@@ -701,6 +709,27 @@ function RelatedViewsRow({ onOpen }: { onOpen: (id: string) => void }) {
     );
 }
 
+/** Edit-layer field controls — runtime rows stay visible above (Final Surface Composer doctrine). */
+function RegionEditLayer({
+    surfaceId,
+    groupKey,
+    composing,
+}: {
+    surfaceId: string;
+    groupKey: string;
+    composing: boolean;
+}) {
+    if (!composing) return null;
+    return (
+        <InlineRuntimeFieldList
+            surfaceId={surfaceId}
+            groupKey={groupKey}
+            suppressPreview
+            whenRegionSelectedOnly
+        />
+    );
+}
+
 function FocusedChild({
     child,
     editing,
@@ -712,6 +741,7 @@ function FocusedChild({
     opportunityStartDate,
     mutation,
     composerPreview,
+    composingChildrenSurface,
     onExpand,
     onOpenRelated,
     onEditClose,
@@ -726,6 +756,7 @@ function FocusedChild({
     opportunityStartDate: string | null;
     mutation?: FocusPanelMutation;
     composerPreview?: ChildrenComposerPreview;
+    composingChildrenSurface: boolean;
     onExpand?: () => void;
     onOpenRelated: (id: string) => void;
     onEditClose: () => void;
@@ -738,18 +769,33 @@ function FocusedChild({
             data-children-focused-child={child.id}
             data-children-edit={editing ? "true" : undefined}
         >
-            <div className="alloy-os-child-focus__header">
-                <CardAvatar name={child.name} imageUrl={child.imageUrl} size={40} />
-                <div className="alloy-os-child-focus__id min-w-0">
-                    <span className="alloy-os-household__group-title">{child.name}</span>
-                    {headerDob ? (
-                        <span className="alloy-os-child-focus__sub">
-                            <Cake size={13} strokeWidth={1.75} /> {headerDob}
-                        </span>
-                    ) : null}
+            <ComposableRegionShell
+                surfaceId={CHILDREN_SURFACE_ID}
+                groupKey="identity"
+                label="Identity"
+                className="alloy-os-children__composer-region"
+                dataAttrs={{ "data-children-identity-region": "true" }}
+            >
+                <div className="alloy-os-child-focus__header">
+                    <CardAvatar name={child.name} imageUrl={child.imageUrl} size={40} />
+                    <div className="alloy-os-child-focus__id min-w-0">
+                        <span className="alloy-os-household__group-title">{child.name}</span>
+                        {headerDob ? (
+                            <span className="alloy-os-child-focus__sub">
+                                <Cake size={13} strokeWidth={1.75} /> {headerDob}
+                            </span>
+                        ) : null}
+                    </div>
+                    <StatusPill child={child} />
                 </div>
-                <StatusPill child={child} />
-            </div>
+                {composingChildrenSurface ? (
+                    <RegionEditLayer
+                        surfaceId={CHILDREN_SURFACE_ID}
+                        groupKey="identity"
+                        composing={composingChildrenSurface}
+                    />
+                ) : null}
+            </ComposableRegionShell>
 
             {relatedViewId ? (
                 <ChildRelatedReport child={child} viewId={relatedViewId} />
@@ -816,7 +862,22 @@ function FocusedChild({
                 />
             ) : (
                 <>
-                    <ConfiguredChildEnrollmentBody child={child} focusView={childFocusView} />
+                    <ComposableRegionShell
+                        surfaceId={CHILDREN_SURFACE_ID}
+                        groupKey="placement"
+                        label="Placement"
+                        className="alloy-os-children__composer-region"
+                        dataAttrs={{ "data-children-placement-region": "true" }}
+                    >
+                        <ConfiguredChildEnrollmentBody child={child} focusView={childFocusView} />
+                        {composingChildrenSurface ? (
+                            <RegionEditLayer
+                                surfaceId={CHILDREN_SURFACE_ID}
+                                groupKey="placement"
+                                composing={composingChildrenSurface}
+                            />
+                        ) : null}
+                    </ComposableRegionShell>
                     <ChildFlags child={child} />
                     {onExpand ? (
                         <button

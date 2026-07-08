@@ -491,13 +491,21 @@ describe("Final Focus Panel Composer ship fixes", () => {
     it("keeps Children drill-in runtime-shaped while exposing selected-region field controls", () => {
         expect(childrenCard).toContain("ComposableRegionShell");
         expect(childrenCard).toContain('groupKey="roster"');
-        expect(childrenCard).toContain("InlineRuntimeFieldList");
+        expect(childrenCard).toContain('groupKey="placement"');
+        expect(childrenCard).toContain('groupKey="identity"');
+        expect(childrenCard).toContain("RegionEditLayer");
+        expect(childrenCard).toContain("whenRegionSelectedOnly");
         expect(childrenCard).toContain("childrenRosterCollapsedFieldKeysFromNestedConfig");
+        expect(childrenCard).toContain("childFocusViewFromConfig(childrenSurfaceConfig)");
         expect(childrenCard).not.toContain("ChildEnrollmentEdit");
     });
 
-    it("keeps composer drill-ins on the runtime focus-card footprint", () => {
+    it("gives elevated drill-ins workspace height with internal body scroll", () => {
         expect(runtimeCss).toContain("[data-fp-composer-edit-mode=\"true\"]");
+        expect(runtimeCss).toContain("min-height: min(70vh, calc(100% - 32px))");
+        expect(runtimeCss).toContain("max-height: min(80vh, calc(100% - 32px))");
+        expect(runtimeCss).toContain(".alloy-os-ucard__body");
+        expect(runtimeCss).toContain("overflow-y: auto");
         expect(runtimeCss).toContain("width: min(560px, calc(100% - 32px));");
         expect(runtimeCss).toContain(".fp-composable-field__grip");
         expect(runtimeCss).toContain(".fp-composable-region.is-selected");
