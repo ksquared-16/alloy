@@ -5,6 +5,7 @@ import { logAdminAudit } from "@/lib/adminAuth";
 import { validateSelectLikeConfig, mergeFieldDefinitionConfigForWrite } from "@/lib/fields/fieldDefinitionConfig";
 import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
 import { resolveDrawerFieldPolicy } from "@/lib/fields/drawerFieldPolicyAdapter";
+import { assessFieldDefinitionDeleteSafety } from "@/lib/fields/fieldDeleteSafety";
 
 const ALLOWED_PATCH_KEYS = [
     "label",
@@ -106,6 +107,12 @@ export async function PATCH(
                     { status: 400 }
                 );
             }
+        }
+        if (body.is_active !== undefined) {
+            return NextResponse.json(
+                { error: "Cannot change is_active on a system field" },
+                { status: 400 }
+            );
         }
     }
 
@@ -255,7 +262,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("field_definitions")
-        .select("id, org_id, is_system, field_key")
+        .select("id, org_id, is_system, field_key, entity_type")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -266,6 +273,22 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
 
     if (Boolean((existing as { is_system: boolean }).is_system)) {
         return NextResponse.json({ error: "Cannot delete a system field definition" }, { status: 400 });
+    }
+
+    const safety = await assessFieldDefinitionDeleteSafety(supabase, {
+        id: String((existing as { id: string }).id),
+        org_id: ctx.orgId,
+        entity_type: String((existing as { entity_type: string }).entity_type),
+        field_key: String((existing as { field_key: string }).field_key),
+    });
+    if (!safety.safe) {
+        return NextResponse.json(
+            {
+                error: "Field cannot be deleted safely. Archive or hide instead.",
+                safety,
+            },
+            { status: 409 },
+        );
     }
 
     const { error: delErr } = await supabase.from("field_definitions").delete().eq("id", id).eq("org_id", ctx.orgId);

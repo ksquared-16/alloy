@@ -1,8 +1,8 @@
 # Data Model / Fields Sprint — Closeout & Consumer Audit Handoff
 
-**Status:** Closed — July 2026  
-**Workspace:** Settings → Data Model (`/settings/fields`)  
-**Staging baseline:** see [Final staging hash](#final-staging-hash) below (updated at closeout)
+**Status:** Closed — July 2026 (final controls + entities adoption)  
+**Workspace:** Settings → Data Model (`/settings/fields`) · Settings → Entities (`/settings/entities`)  
+**Staging baseline:** `c2647eb4f` — lifecycle + entities adoption on `origin/staging`
 
 ---
 
@@ -25,12 +25,13 @@ Do **not** open another standalone Data Model implementation sprint unless doctr
 ## Final staging hash
 
 ```
-4998576ed75695d02efdd55afc585a186cee6eba
+c2647eb4f020d2e62ad32f209d6ba1e9b629a8d7
 ```
 
 | Artifact | Hash |
 | --- | --- |
-| **Final staging** | `4998576ed` — sprint closeout handoff on `origin/staging` |
+| **Final staging** | `c2647eb4f` — merge `feat/data-model-lifecycle-entities` on `origin/staging` |
+| Lifecycle sprint | `6abb9c847` — `feat(settings): finalize field lifecycle and entities workspace adoption` |
 | Data Model merge | `cf1de3aa2` — merge `feat/data-model-qa-fixes` onto `0e72e3051` |
 | Category picker QA | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |
 | Closeout handoff doc | `0482a6bb6` — `docs(sprint): Data Model closeout and consumer audit handoff` |
@@ -96,6 +97,45 @@ Data Model **consumes** these; it does not own them.
 5. **Platform/system fields** — presentation-editable (label, category, description); storage/type/resolver locked
 6. **Computed fields** — ownership filter within Fields tab, not a separate tab
 7. **Inline everything** — rows expand; no navigation away for ordinary edit
+8. **Field lifecycle** — Active · Hidden · Archived · Delete-when-safe via compact row actions
+9. **Entities page** — adopts Configuration Workspace row grammar; shares `configurationEntityCatalog.ts` with Data Model rail
+
+---
+
+## Field lifecycle rules (final controls sprint)
+
+| Ownership | Active | Hidden | Archived | Delete |
+| --- | --- | --- | --- | --- |
+| **Platform** (`is_system`) | ✓ | ✓ (visibility flags) | ✗ | ✗ |
+| **Custom** | ✓ | ✓ | ✓ | ✓ when safe |
+| **Computed** | view-only | ✗ | ✗ | ✗ |
+
+- **Hidden** — not offered for new builder/form/process usage; existing `field_values` remain
+- **Archived** — `config.lifecycle_state: "archived"`; excluded from pickers; shown in Fields tab with status chip
+- **Deleted** — only when `assessFieldDefinitionDeleteSafety` passes (field values, forms, drawer layouts scanned)
+
+**Delete safety API:** `GET /api/admin/field-definitions/[id]/delete-safety`  
+**Uncovered checks (documented):** focus panel, queue rows, business process requirements, documents/packets, processing mappings
+
+**Key files:** `fieldLifecycleModel.ts`, `fieldDeleteSafety.ts`, `DataModelFieldRow.tsx`, `DataModelFieldsTab.tsx`
+
+---
+
+## Entity model (Entities workspace adoption)
+
+| Hub key (internal) | Operator label | Labels API key |
+| --- | --- | --- |
+| `person` | Person | `persons` |
+| `customer` | Family | `customers` |
+| `inquiry_child` | Child | `customer_members` |
+| `opportunity` | Lead / Enrollment | `opportunities` |
+| `location` | Location / Site | `locations` |
+
+**Shared catalog:** `web/lib/adminV2/configuration/configurationEntityCatalog.ts`  
+**Entities workspace:** `web/components/adminV2/settings/entities/EntitiesWorkspaceClient.tsx`  
+**Data Model rail:** `FieldEntityNav.tsx` uses same catalog resolver
+
+Internal grains (`inquiry_child`, `customer_member`, `placement_candidate`) do not appear in operator UI.
 
 ---
 

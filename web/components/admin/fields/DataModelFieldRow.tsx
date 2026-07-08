@@ -23,6 +23,12 @@ import {
     DATA_MODEL_FIELD_TYPE_ICONS,
     DATA_MODEL_ICON_STROKE,
 } from "@/lib/fields/dataModelWorkspaceIcons";
+import {
+    fieldLifecycleActions,
+    readFieldLifecycleState,
+    type FieldDeleteSafetySummary,
+    type FieldLifecycleState,
+} from "@/lib/fields/fieldLifecycleModel";
 import { Check, Circle } from "lucide-react";
 
 export type FieldInlineEditValues = {
@@ -43,7 +49,9 @@ type Props = {
     activeCategoryOptions?: Array<{ value: string; label: string }>;
     saving?: boolean;
     error?: string | null;
+    deleteSafety?: FieldDeleteSafetySummary | null;
     onSave?: (values: FieldInlineEditValues) => void | Promise<void>;
+    onLifecycle?: (state: FieldLifecycleState) => void | Promise<void>;
     onDelete?: () => void;
 };
 
@@ -54,12 +62,13 @@ function TypeIcon({ fieldType }: { fieldType: string }) {
 
 function valuesFromEntry(entry: SettingsFieldCatalogEntry): FieldInlineEditValues {
     const d = entry.fieldDef;
+    const lifecycle = readFieldLifecycleState(d);
     return {
         label: d?.label ?? entry.label,
         description: d?.description ?? entry.description ?? "",
         help_text: d?.help_text ?? "",
         category_key: d?.section_key ?? entry.section_key,
-        is_active: d?.is_active !== false,
+        is_active: lifecycle === "active",
     };
 }
 
@@ -76,6 +85,38 @@ function selectableCategoryKey(
     );
 }
 
+function LifecycleActionButton({
+    label,
+    disabled,
+    title,
+    onClick,
+    testId,
+    danger = false,
+}: {
+    label: string;
+    disabled?: boolean;
+    title?: string;
+    onClick: () => void;
+    testId: string;
+    danger?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            disabled={disabled}
+            title={title}
+            onClick={onClick}
+            className={[
+                "text-[10px] font-medium disabled:cursor-not-allowed disabled:opacity-40",
+                danger ? "text-red-600 hover:underline" : "text-alloy-midnight/55 hover:text-alloy-midnight hover:underline",
+            ].join(" ")}
+            data-testid={testId}
+        >
+            {label}
+        </button>
+    );
+}
+
 export default function DataModelFieldRow({
     entry,
     hubEntity,
@@ -86,13 +127,15 @@ export default function DataModelFieldRow({
     activeCategoryOptions = [],
     saving = false,
     error = null,
+    deleteSafety = null,
     onSave,
+    onLifecycle,
     onDelete,
 }: Props) {
     const capability = fieldRowEditCapability(entry, canMutate);
+    const lifecycle = fieldLifecycleActions(entry, capability, canMutate, deleteSafety);
     const editable = capability.mode !== "view";
     const presentationOnly = capability.mode === "presentation";
-    const active = entry.fieldDef ? entry.fieldDef.is_active !== false : true;
     const [draft, setDraft] = useState<FieldInlineEditValues>(() => valuesFromEntry(entry));
 
     useEffect(() => {
@@ -127,6 +170,7 @@ export default function DataModelFieldRow({
     });
 
     const unavailableHint = configurationFieldUnavailableHint(availability);
+    const statusIsActive = lifecycle.state === "active";
 
     return (
         <div
@@ -135,10 +179,11 @@ export default function DataModelFieldRow({
             data-field-ref-key={entry.refKey}
             data-expanded={expanded ? "true" : "false"}
             data-ownership={entry.ownership}
+            data-lifecycle={lifecycle.state}
         >
             <div className={CONFIG_WORKSPACE_ROW_INNER_CLASS}>
-                <span className="shrink-0" aria-hidden title={active ? "Active" : "Hidden"}>
-                    {active ? (
+                <span className="shrink-0" aria-hidden title={lifecycle.statusLabel}>
+                    {statusIsActive ? (
                         <Check size={13} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-bend-pine" />
                     ) : (
                         <Circle size={13} strokeWidth={DATA_MODEL_ICON_STROKE} className="text-alloy-midnight/25" />
@@ -159,8 +204,13 @@ export default function DataModelFieldRow({
                 <span className="hidden shrink-0 text-[10px] text-alloy-midnight/45 sm:inline">
                     {fieldTypeOperatorLabel(entry.field_type)}
                 </span>
-                {!active ? (
-                    <span className="shrink-0 text-[10px] font-medium text-alloy-midnight/35">Hidden</span>
+                {lifecycle.state !== "active" ? (
+                    <span
+                        className="shrink-0 text-[10px] font-medium text-alloy-midnight/35"
+                        data-testid="data-model-field-lifecycle-status"
+                    >
+                        {lifecycle.statusLabel}
+                    </span>
                 ) : null}
                 {unavailableHint ? (
                     <span
@@ -170,6 +220,35 @@ export default function DataModelFieldRow({
                     >
                         Unavailable · {unavailableHint.label}
                     </span>
+                ) : null}
+                {!expanded && canMutate ? (
+                    <div className="hidden shrink-0 items-center gap-2 sm:flex">
+                        {lifecycle.canHide ? (
+                            <LifecycleActionButton
+                                label="Hide"
+                                disabled={saving}
+                                onClick={() => void onLifecycle?.("hidden")}
+                                testId="data-model-field-hide"
+                            />
+                        ) : null}
+                        {lifecycle.canShow ? (
+                            <LifecycleActionButton
+                                label="Show"
+                                disabled={saving}
+                                onClick={() => void onLifecycle?.("active")}
+                                testId="data-model-field-show"
+                            />
+                        ) : null}
+                        {lifecycle.canArchive ? (
+                            <LifecycleActionButton
+                                label="Archive"
+                                disabled={saving}
+                                title={lifecycle.archiveDisabledReason}
+                                onClick={() => void onLifecycle?.("archived")}
+                                testId="data-model-field-archive"
+                            />
+                        ) : null}
+                    </div>
                 ) : null}
                 <button
                     type="button"
@@ -287,9 +366,48 @@ export default function DataModelFieldRow({
                         </p>
                     ) : null}
 
+                    {canMutate ? (
+                        <div className="flex flex-wrap items-center gap-3" data-testid="data-model-field-lifecycle-actions">
+                            {lifecycle.canHide ? (
+                                <LifecycleActionButton
+                                    label="Hide"
+                                    disabled={saving}
+                                    title={lifecycle.hideDisabledReason}
+                                    onClick={() => void onLifecycle?.("hidden")}
+                                    testId="data-model-field-hide-expanded"
+                                />
+                            ) : null}
+                            {lifecycle.canShow ? (
+                                <LifecycleActionButton
+                                    label="Show"
+                                    disabled={saving}
+                                    onClick={() => void onLifecycle?.("active")}
+                                    testId="data-model-field-show-expanded"
+                                />
+                            ) : null}
+                            {lifecycle.canArchive ? (
+                                <LifecycleActionButton
+                                    label="Archive"
+                                    disabled={saving}
+                                    title={lifecycle.archiveDisabledReason}
+                                    onClick={() => void onLifecycle?.("archived")}
+                                    testId="data-model-field-archive-expanded"
+                                />
+                            ) : null}
+                            {lifecycle.canRestore ? (
+                                <LifecycleActionButton
+                                    label="Restore"
+                                    disabled={saving}
+                                    onClick={() => void onLifecycle?.("active")}
+                                    testId="data-model-field-restore-expanded"
+                                />
+                            ) : null}
+                        </div>
+                    ) : null}
+
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            {capability.canDelete && onDelete ? (
+                            {lifecycle.canDelete && onDelete ? (
                                 <button
                                     type="button"
                                     disabled={saving}
@@ -299,6 +417,10 @@ export default function DataModelFieldRow({
                                 >
                                     Delete
                                 </button>
+                            ) : lifecycle.deleteDisabledReason && entry.ownership === "custom" ? (
+                                <p className="text-[10px] text-alloy-midnight/45" data-testid="inline-field-delete-blocked">
+                                    {lifecycle.deleteDisabledReason}
+                                </p>
                             ) : null}
                         </div>
                         <div className="flex gap-2">

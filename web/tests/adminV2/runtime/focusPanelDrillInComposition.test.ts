@@ -450,6 +450,7 @@ describe("Final Focus Panel ship blockers — empty emergency / child edit / dat
 describe("Final Focus Panel Composer ship fixes", () => {
     const householdSpec = readSrc("lib/platform/surfaceComposition/definitions/recursiveSurfaceProofs.ts");
     const childrenCard = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
+    const inlineFieldList = readSrc("components/admin/focusPanel/drillIn/InlineRuntimeFieldList.tsx");
     const runtimeCss = readSrc("app/adminV2/components/alloyOsRuntime.css");
 
     it("registers other_parent_guardian directly after primary_contact on household surface", () => {
@@ -533,5 +534,14 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(runtimeCss).toContain("overflow-y: auto");
         expect(runtimeCss).toContain("width: min(560px, calc(100% - 32px));");
         expect(runtimeCss).toContain(".fp-composer-tier-label");
+    });
+
+    it("renders inline child focus field rows from layout width config", () => {
+        expect(childrenCard).toContain("chunkNestedSurfaceFieldsForHalfRowLayout");
+        expect(childrenCard).toContain("alloy-os-child-truth__inline-row--pair");
+        expect(childrenCard).toContain("data-children-inline-row");
+        expect(inlineFieldList).toContain("setFieldLayoutWidthInNestedGroup");
+        expect(inlineFieldList).toContain("fp-inline-field-row__layout");
+        expect(inlineFieldList).toContain("Half row");
     });
 });

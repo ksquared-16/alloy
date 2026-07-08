@@ -43,6 +43,7 @@ import {
     type ChildrenEvidenceSectionView,
     type ChildrenFocusFieldRow,
 } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
+import { chunkNestedSurfaceFieldsForHalfRowLayout } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import { CHILDREN_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { cardCapabilities, cardRelatedViews } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -592,24 +593,41 @@ function ConfiguredChildEnrollmentBody({
                 && (row.fieldKey === "child.display_name" || row.fieldKey === "child.name")
             ),
     );
+    const rowChunks = chunkNestedSurfaceFieldsForHalfRowLayout(
+        bodyRows.map((row) => row.fieldKey),
+        (fieldKey) => bodyRows.find((row) => row.fieldKey === fieldKey)?.layoutWidth ?? "full",
+    );
 
     return (
         <div className="alloy-os-child-edit" data-children-enrollment={child.id}>
-            {bodyRows.map((field) => {
-                if (field.fieldKey === "inquiry_child.schedule_type") {
-                    return <ChildScheduleBlock key={field.fieldKey} child={child} />;
-                }
-                const meta = CHILDREN_FIELD_TRUTH_META[field.fieldKey];
-                if (!meta) return null;
-                return (
-                    <TruthRow
-                        key={field.fieldKey}
-                        icon={meta.icon}
-                        label={field.label}
-                        value={meta.get(child)}
-                    />
-                );
-            })}
+            {rowChunks.map((chunk, chunkIndex) => (
+                <div
+                    key={`${chunk.join("-")}-${chunkIndex}`}
+                    className={clsx(
+                        "alloy-os-child-truth__inline-row",
+                        chunk.length === 2 && "alloy-os-child-truth__inline-row--pair",
+                    )}
+                    data-children-inline-row={chunk.length === 2 ? "pair" : "single"}
+                >
+                    {chunk.map((fieldKey) => {
+                        const field = bodyRows.find((row) => row.fieldKey === fieldKey);
+                        if (!field) return null;
+                        if (field.fieldKey === "inquiry_child.schedule_type") {
+                            return <ChildScheduleBlock key={field.fieldKey} child={child} />;
+                        }
+                        const meta = CHILDREN_FIELD_TRUTH_META[field.fieldKey];
+                        if (!meta) return null;
+                        return (
+                            <TruthRow
+                                key={field.fieldKey}
+                                icon={meta.icon}
+                                label={field.label}
+                                value={meta.get(child)}
+                            />
+                        );
+                    })}
+                </div>
+            ))}
         </div>
     );
 }
