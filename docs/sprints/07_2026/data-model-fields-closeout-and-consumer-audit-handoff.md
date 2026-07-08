@@ -2,7 +2,7 @@
 
 **Status:** Closed — July 2026 (final controls + entities adoption)  
 **Workspace:** Settings → Data Model (`/settings/fields`) · Settings → Entities (`/settings/entities`)  
-**Staging baseline:** update after merge of `feat(settings): finalize field lifecycle and entities workspace adoption`
+**Staging baseline:** `cacec5bea` — lifecycle + entities adoption merge on `f1c87c31b`
 
 ---
 
@@ -25,12 +25,12 @@ Do **not** open another standalone Data Model implementation sprint unless doctr
 ## Final staging hash
 
 ```
-c90b07001a8f0e8f0e8f0e8f0e8f0e8f0e8f0e8
+cacec5bea95f9c0a3ccc07217af3804cad3c182e
 ```
 
 | Artifact | Hash |
 | --- | --- |
-| **Final staging** | `c90b07001` — merge `feat/data-model-lifecycle-entities` (pending push) |
+| **Final staging** | `cacec5bea` — merge `feat/data-model-lifecycle-entities` onto `f1c87c31b` |
 | Lifecycle sprint | `6abb9c847` — `feat(settings): finalize field lifecycle and entities workspace adoption` |
 | Data Model merge | `cf1de3aa2` — merge `feat/data-model-qa-fixes` onto `0e72e3051` |
 | Category picker QA | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |
