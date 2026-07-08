@@ -53,6 +53,8 @@ import {
  */
 type Props = {
     onBack?: () => void;
+    /** Legacy shell — drill-in now opens in-place on the runtime canvas. */
+    onOpenNestedSurface?: (surfaceId: string, cardLabel?: string) => void;
 };
 
 function readNestedSurfacesFromDoc(doc: { metadata?: Record<string, unknown> } | null): Record<string, NestedSurfaceConfig> {
@@ -151,7 +153,8 @@ function FocusPanelInspectorColumn(props: Parameters<typeof FocusPanelComposerIn
     );
 }
 
-export default function FocusPanelSummarySurfaceEditor({ onBack }: Props) {
+export default function FocusPanelSummarySurfaceEditor({ onBack, onOpenNestedSurface }: Props) {
+    void onOpenNestedSurface;
     const { vm, record } = useMemo(() => buildDemoFocusPanelSummaryViewModel(), []);
 
     const cards = useMemo(

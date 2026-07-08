@@ -104,10 +104,11 @@ export function householdContactDirty(draft: PersonContactValues, baseline: Pers
 export function householdContactPatch(
     draft: PersonContactValues,
     baseline: PersonContactValues,
-    allowedFields: readonly (keyof PersonContactValues)[] = CONTACT_FIELDS,
+    editableKeys?: ReadonlySet<keyof PersonContactValues>,
 ): PersonContactPatch {
     const patch: PersonContactPatch = {};
-    for (const key of allowedFields) {
+    for (const key of CONTACT_FIELDS) {
+        if (editableKeys && !editableKeys.has(key)) continue;
         const next = draft[key].trim();
         if (next === baseline[key].trim()) continue;
         patch[key] = next === "" ? null : next;
