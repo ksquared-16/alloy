@@ -58,6 +58,9 @@ type FocusPanelComposerContextValue = {
     isComposingGroup: (surfaceId: string, groupKey: string) => boolean;
     /** Edit Mode = composing a nested surface in-place (Surface Composer V3.5). */
     isEditMode: (surfaceId: string) => boolean;
+    /** Composer-session child avatar previews (until person photo field persists). */
+    childAvatarPreviewUrl: (childId: string) => string | null;
+    setChildAvatarPreviewUrl: (childId: string, url: string | null) => void;
 };
 
 const FocusPanelComposerContext = createContext<FocusPanelComposerContextValue | null>(null);
@@ -88,6 +91,7 @@ export function FocusPanelComposerProvider({
     const [drillIn, setDrillIn] = useState<FocusPanelComposerDrillIn | null>(null);
     const [selection, setSelection] = useState<FocusPanelComposerSelection | null>(null);
     const [nestedConfigs, setNestedConfigs] = useState<Record<string, NestedSurfaceConfig>>(initialNestedConfigs);
+    const [childAvatarPreviewUrls, setChildAvatarPreviewUrls] = useState<Record<string, string>>({});
 
     const configFor = useCallback(
         (surfaceId: string) =>
@@ -140,6 +144,22 @@ export function FocusPanelComposerProvider({
 
     const isEditMode = isComposingSurface;
 
+    const childAvatarPreviewUrl = useCallback(
+        (childId: string) => childAvatarPreviewUrls[childId] ?? null,
+        [childAvatarPreviewUrls],
+    );
+
+    const setChildAvatarPreviewUrl = useCallback((childId: string, url: string | null) => {
+        setChildAvatarPreviewUrls((prev) => {
+            if (!url) {
+                const next = { ...prev };
+                delete next[childId];
+                return next;
+            }
+            return { ...prev, [childId]: url };
+        });
+    }, []);
+
     const value = useMemo(
         (): FocusPanelComposerContextValue => ({
             enabled,
@@ -155,6 +175,8 @@ export function FocusPanelComposerProvider({
             isComposingSurface,
             isComposingGroup,
             isEditMode,
+            childAvatarPreviewUrl,
+            setChildAvatarPreviewUrl,
         }),
         [
             enabled,
@@ -169,6 +191,8 @@ export function FocusPanelComposerProvider({
             isComposingSurface,
             isComposingGroup,
             isEditMode,
+            childAvatarPreviewUrl,
+            setChildAvatarPreviewUrl,
         ],
     );
 

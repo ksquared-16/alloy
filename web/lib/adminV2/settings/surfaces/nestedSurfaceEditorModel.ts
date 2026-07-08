@@ -45,7 +45,12 @@ import {
     normalizeFieldVisibility,
     type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
-import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
+import type { NestedSurfaceFieldLayoutWidth, NestedSurfaceFieldDropZone } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
+import {
+    chunkNestedSurfaceFieldsForHalfRowLayout,
+    isNestedSurfaceFieldHalfWidth,
+    nestedSurfaceFieldMustFullRow,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 
 export const HOUSEHOLD_SURFACE_ID = "household_surface";
 export const CHILDREN_SURFACE_ID = "children_surface";
@@ -195,6 +200,9 @@ function defaultGroupDisplayOptionsForSurface(
     }
     if (surfaceId === "child_surface" && groupKey === "identity") {
         return { showDob: false, showAge: true };
+    }
+    if (surfaceId === CHILDREN_SURFACE_ID && groupKey === "identity") {
+        return { showAvatar: true };
     }
     return undefined;
 }
@@ -354,6 +362,144 @@ export function setFieldLayoutWidthInNestedGroup(
                 ? {
                       ...g,
                       fieldLayoutWidths: { ...(g.fieldLayoutWidths ?? {}), [fieldKey]: layoutWidth },
+                  }
+                : g,
+        ),
+    };
+}
+
+function patchGroupFieldKeys(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    keys: string[],
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) => (g.key === groupKey ? { ...g, selectedFieldKeys: keys } : g)),
+    };
+}
+
+function unpairOrphanedHalfFields(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    keys: readonly string[],
+): NestedSurfaceConfig {
+    let next = config;
+    const layoutFor = (fieldKey: string) => fieldLayoutWidthForNestedGroup(next, groupKey, fieldKey);
+    const chunks = chunkNestedSurfaceFieldsForHalfRowLayout(keys, layoutFor);
+    for (const chunk of chunks) {
+        if (chunk.length === 1) {
+            const key = chunk[0]!;
+            if (isNestedSurfaceFieldHalfWidth(layoutFor(key))) {
+                next = setFieldLayoutWidthInNestedGroup(next, groupKey, key, "full");
+            }
+        }
+    }
+    return next;
+}
+
+/**
+ * Apply a visual drag-drop onto the layout surface.
+ * - `beside` — pair dragged field with target on the same row (both half).
+ * - `below` — move dragged field to a new full row after target's row.
+ */
+export function applyNestedSurfaceFieldDrop(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    draggedKey: string,
+    targetKey: string,
+    zone: NestedSurfaceFieldDropZone,
+): NestedSurfaceConfig {
+    if (draggedKey === targetKey) return config;
+    const keys = selectedFieldKeys(config, groupKey);
+    if (keys.indexOf(draggedKey) < 0 || keys.indexOf(targetKey) < 0) return config;
+
+    if (zone === "beside") {
+        if (nestedSurfaceFieldMustFullRow(draggedKey) || nestedSurfaceFieldMustFullRow(targetKey)) {
+            return config;
+        }
+        const withoutDragged = keys.filter((k) => k !== draggedKey);
+        const targetPos = withoutDragged.indexOf(targetKey);
+        if (targetPos < 0) return config;
+        const reordered = [...withoutDragged];
+        reordered.splice(targetPos + 1, 0, draggedKey);
+        let next = patchGroupFieldKeys(config, groupKey, reordered);
+        next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "half");
+        next = setFieldLayoutWidthInNestedGroup(next, groupKey, targetKey, "half");
+        return unpairOrphanedHalfFields(next, groupKey, reordered);
+    }
+
+    const layoutFor = (fieldKey: string) => fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey);
+    const rowChunks = chunkNestedSurfaceFieldsForHalfRowLayout(keys, layoutFor);
+    const targetRow = rowChunks.find((chunk) => chunk.includes(targetKey));
+    if (!targetRow) return config;
+
+    const withoutDragged = keys.filter((k) => k !== draggedKey);
+    const anchorKey = targetRow[targetRow.length - 1]!;
+    const insertAfter = withoutDragged.indexOf(anchorKey);
+    if (insertAfter < 0) return config;
+    const reordered = [...withoutDragged];
+    reordered.splice(insertAfter + 1, 0, draggedKey);
+
+    let next = patchGroupFieldKeys(config, groupKey, reordered);
+    next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "full");
+    return unpairOrphanedHalfFields(next, groupKey, reordered);
+}
+
+export function fieldShowLabelForNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+): boolean {
+    return config.groups.find((g) => g.key === groupKey)?.fieldModes?.[fieldKey]?.showLabel !== false;
+}
+
+export function fieldShowIconForNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+): boolean {
+    return config.groups.find((g) => g.key === groupKey)?.fieldModes?.[fieldKey]?.showIcon !== false;
+}
+
+export function setFieldPresentationModeInNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    patch: Partial<NestedSurfaceFieldMode>,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey
+                ? {
+                      ...g,
+                      fieldModes: {
+                          ...(g.fieldModes ?? {}),
+                          [fieldKey]: { ...(g.fieldModes?.[fieldKey] ?? {}), ...patch },
+                      },
+                  }
+                : g,
+        ),
+    };
+}
+
+export function groupShowAvatarForNestedGroup(config: NestedSurfaceConfig, groupKey: string): boolean {
+    return config.groups.find((g) => g.key === groupKey)?.displayOptions?.showAvatar !== false;
+}
+
+export function setGroupShowAvatarInNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    showAvatar: boolean,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey
+                ? {
+                      ...g,
+                      displayOptions: { ...(g.displayOptions ?? {}), showAvatar },
                   }
                 : g,
         ),
