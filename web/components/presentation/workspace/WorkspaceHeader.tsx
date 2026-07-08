@@ -148,51 +148,54 @@ function HeaderKpiCard({
     kpi,
     interactive,
     variant,
+    density = "standard",
 }: {
     kpi: WorkspaceHeaderKpiVm;
     /** False in the builder (parent owns clicks). */
     interactive: boolean;
     variant: SurfaceHeaderVariant;
+    density?: "standard" | "compact";
 }) {
     const meta = VARIANT_META[variant];
+    const compact = density === "compact";
     const kpiAttr = variant === "work-unit" ? "data-work-unit-header-kpi" : "data-workspace-header-kpi";
     const valueAttr = variant === "work-unit" ? "data-work-unit-header-kpi-value" : "data-workspace-header-kpi-value";
     const labelAttr = variant === "work-unit" ? "data-work-unit-header-kpi-label" : "data-workspace-header-kpi-label";
     const statusAttr = variant === "work-unit" ? "data-work-unit-header-kpi-status" : "data-workspace-header-kpi-status";
     const iconWellAttr =
         variant === "work-unit" ? "data-work-unit-header-kpi-icon-well" : "data-workspace-header-kpi-icon-well";
-    const tileClass = `flex h-full min-w-[9.5rem] items-center gap-3.5 px-4 py-3.5 ${WS_KPI_CARD_CHROME}`;
+    const tileClass = `flex h-full ${compact ? "min-w-[7rem] items-center gap-2 px-2.5 py-2" : "min-w-[9.5rem] items-center gap-3.5 px-4 py-3.5"} ${WS_KPI_CARD_CHROME}`;
     const body = (
         <div className={tileClass} {...{ [kpiAttr]: kpi.slot }} data-calculation-key={kpi.sourceKey ?? undefined}>
             <span
                 aria-hidden
                 {...{ [iconWellAttr]: true }}
-                className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${workspaceHeaderKpiIconWellClass(
+                className={`inline-flex shrink-0 items-center justify-center rounded-xl ${compact ? "h-9 w-9 rounded-lg" : "h-12 w-12"} ${workspaceHeaderKpiIconWellClass(
                     { accent: kpi.accent, status: kpi.status },
                 )}`}
             >
                 <KpiGlyph
                     icon={kpi.icon}
-                    className={workspaceHeaderKpiIconClass({ accent: kpi.accent, status: kpi.status })}
+                    className={`${workspaceHeaderKpiIconClass({ accent: kpi.accent, status: kpi.status })} ${compact ? "opacity-90" : ""}`}
                     iconAttr={meta.kpiIconAttr}
-                    size="md"
+                    size={compact ? "sm" : "md"}
                 />
             </span>
             <div className="min-w-0">
                 <span
-                    className="block text-[26px] font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight"
+                    className={`block font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight ${compact ? "text-[18px]" : "text-[26px]"}`}
                     {...{ [valueAttr]: true }}
                 >
                     {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
                 </span>
-                <span className="mt-2 flex items-center gap-1.5">
+                <span className={`flex items-center gap-1.5 ${compact ? "mt-1" : "mt-2"}`}>
                     <span
                         aria-hidden
                         className={`h-2 w-2 shrink-0 rotate-45 ${gemClass(kpi)}`}
                         {...{ [statusAttr]: kpi.status }}
                     />
                     <span
-                        className="truncate text-[12px] font-medium leading-none text-alloy-midnight/42"
+                        className={`truncate font-medium leading-none text-alloy-midnight/42 ${compact ? "text-[10px]" : "text-[12px]"}`}
                         {...{ [labelAttr]: true }}
                         title={kpi.label}
                     >
@@ -319,3 +322,6 @@ export function WorkspaceHeader({
         </header>
     );
 }
+
+/** Shared workspace / work-unit KPI tile — reuse outside presentation runtime headers. */
+export { HeaderKpiCard as SurfaceHeaderKpiCard };

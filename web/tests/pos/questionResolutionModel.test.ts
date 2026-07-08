@@ -80,7 +80,7 @@ describe("questionResolutionModel", () => {
             displayLabel: "Child's name",
             type: "text",
         });
-        expect(storageSummaryLabel(source)).toBe("Stored on Child");
+        expect(storageSummaryLabel(source)).toBe("Store on Child");
         expect(storageSummaryLabel(undefined)).toMatch(/Processing only/i);
     });
 

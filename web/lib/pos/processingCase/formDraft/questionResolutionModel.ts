@@ -191,7 +191,7 @@ export function storageSummaryLabel(fieldSource?: FormFieldSource | null): strin
                 : fieldSource.entity_type === "enrollment"
                   ? "Enrollment"
                   : "Record";
-    return `Stored on ${subject}`;
+    return `Store on ${subject}`;
 }
 
 /** Expand resolved questions into draft field rows (splits name representations). */
@@ -204,7 +204,16 @@ export function expandQuestionsForDraftSave(questions: readonly ReviewQuestionIn
         if (!label) continue;
 
         const intent = inferQuestionIntent(question.evidenceLabel || label);
-        const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
+        let subject = question.questionSubject ?? defaultSubjectForIntent(intent);
+        if (
+            question.nameRepresentation &&
+            (question.nameRepresentation === "first_last" || question.nameRepresentation === "first_middle_last") &&
+            supportsNameRepresentation(intent) &&
+            subject === "processing_only"
+        ) {
+            subject = defaultSubjectForIntent(intent);
+        }
+        const nameRep = question.nameRepresentation ?? defaultNameRepresentation(intent, question.evidenceLabel);
         const fieldSource = question.field_source ?? deriveFieldSources({
             subject,
             nameRepresentation: question.nameRepresentation,
@@ -221,9 +230,13 @@ export function expandQuestionsForDraftSave(questions: readonly ReviewQuestionIn
         };
 
         const splitName =
-            supportsNameRepresentation(intent) &&
             subject !== "processing_only" &&
-            (question.nameRepresentation === "first_last" || question.nameRepresentation === "first_middle_last");
+            (nameRep === "first_last" || nameRep === "first_middle_last") &&
+            (supportsNameRepresentation(intent) ||
+                subject === "child" ||
+                subject === "parent" ||
+                subject === "guardian" ||
+                subject === "other_adult");
 
         if (splitName && subject === "child") {
             out.push({
@@ -234,7 +247,7 @@ export function expandQuestionsForDraftSave(questions: readonly ReviewQuestionIn
                 field_source: registrySource("child", "child_first_name", "child_first_name"),
                 ...pdfProvenance,
             });
-            if (question.nameRepresentation === "first_middle_last") {
+            if (nameRep === "first_middle_last") {
                 out.push({
                     label: "Child middle name",
                     type: "text",

@@ -76,7 +76,7 @@ function formGroup(f: FormOption): string {
     return typeof cat === "string" && cat.trim() ? cat.trim() : "Forms";
 }
 
-export default function PosPacketsPanel() {
+export default function PosPacketsPanel({ embedded = false }: { embedded?: boolean }) {
     const [packets, setPackets] = useState<PosPacketSummary[] | null>(null);
     const [err, setErr] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -222,10 +222,12 @@ export default function PosPacketsPanel() {
     const grouped = groupForms(formOptions);
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <WorkspaceSectionHeader title="Packets" subtitle="Reusable packets built from your forms. Build one, choose who it's for, and send a link per child + recipient." />
+        <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${embedded ? "bg-alloy-stone/[0.04]" : ""}`}>
+            {embedded ? null : (
+                <WorkspaceSectionHeader title="Packets" subtitle="Reusable packets built from your forms. Build one, choose who it's for, and send a link per child + recipient." />
+            )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className={`min-h-0 flex-1 overflow-y-auto ${embedded ? "p-5" : "p-3"}`}>
                 <div className="mb-2 flex items-center justify-between">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
                         {packets ? `${packets.length} packet${packets.length === 1 ? "" : "s"}` : "Packets"}

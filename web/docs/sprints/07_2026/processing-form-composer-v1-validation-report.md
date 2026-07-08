@@ -1,20 +1,21 @@
 # Processing Form Composer V1 — E2E Validation Report
 
-**Date:** 2026-07-07T20:13:40.908Z
+**Date:** 2026-07-07T22:48:41.179Z
 **Branch:** feat/processing-form-composer-v1
-**Form ID:** 45d89a07-2305-46c8-be21-cb5c9354c7e3
-**Processing case ID:** 44620bc5-ba18-49f7-a5a4-98600763c3d0
+**Form ID:** f054aec0-022b-4072-9f42-a1d6f5c9321f
+**Processing case ID:** dfbb662e-7798-47d1-b759-441ce8936d12
 
 ## PDF used
 tests/fixtures/processing/mo500-3313-school-age-child-health-report.pdf (MO500-style AcroForm generated fixture — official DESE URL returns HTML, not PDF)
 
 ## What detected cleanly
-- Upload opened processing case 44620bc5-ba18-49f7-a5a4-98600763c3d0
+- Upload opened review for dfbb662e-7798-47d1-b759-441ce8936d12
 - Detection mode: AcroForm fields detected
 - Ignored routing_code absent from generated schema
 - Child name split into first + last fields
-- Save draft + publish succeeded
-- Preview opened: http://127.0.0.1:3000/forms/embed/a6vrZzK5QwAdEIZW7ZLtcZM1H_WkUCHwkqnBoeu_AvA?preview=1
+- Save draft from Processing Form Builder
+- Preview mode in Processing Form Builder
+- Publish from Processing Form Builder
 
 ## What required operator review
 - Allergy notes → Enrollment subject (health/allergy intent)
@@ -27,7 +28,7 @@ tests/fixtures/processing/mo500-3313-school-age-child-health-report.pdf (MO500-s
 
 ## Builder handoff
 - Status: **pass**
-- Opens `/adminV2/forms/[id]`: yes
+- Opens in Processing Studio Form Builder (in-modal): yes
 
 ## Schema checks
 - Ignored field absent from schema: **pass**
@@ -42,14 +43,11 @@ See `docs/sprints/07_2026/processing-form-composer-v1-screenshots/`
 - Screenshot: 03-questions-detected.png
 - Screenshot: 04-questions-resolved.png
 - Screenshot: 04b-generate-summary.png
-- Posted save field labels: Child first name | Child last name | Birthdate | Allergy Notes | Health Good | Parent Signature | Signature Date
-- Saved draft field labels: Child first name | Child last name | Birthdate | Allergy Notes | Health Good | Parent Signature | Signature Date
-- Screenshot: 05-form-workspace-opened.png
+- Screenshot: 05-form-builder-in-processing.png
 - Generated field labels: Child first name | Child last name | Birthdate | Allergy Notes | Health Good | Parent Signature | Signature Date
-- Edited first field label in rich builder
-- Added one field via document composer
-- Screenshot: 06-form-published.png
-- Screenshot: 07-form-preview.png
+- Edited first field label in Processing Form Builder
+- Screenshot: 06-form-preview-in-processing.png
+- Screenshot: 07-form-published-in-processing.png
 
 ## Unrelated WIP in commit diff
 Focus-panel composer files are **not** in the tracked diff (verified separately).

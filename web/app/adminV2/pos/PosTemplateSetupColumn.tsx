@@ -26,6 +26,7 @@ import { computePageMaps, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/p
 import PosPdfFieldMap from "./PosPdfFieldMap";
 import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
 import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
+import ProcessingParentPanel from "./ProcessingParentPanel";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 import {
     seedReviewQuestionFromDraftField,
@@ -262,19 +263,23 @@ export default function PosTemplateSetupColumn({
     const addQuestion = () => {
         const id = `new_${Date.now().toString(36)}`;
         const section = reviewQuestions[reviewQuestions.length - 1]?.section ?? "Form questions";
-        setReviewQuestions((qs) => [
-            ...qs,
-            {
-                id,
-                evidenceLabel: "",
-                displayLabel: "",
-                type: "text",
-                section,
-                evidence: "operator",
-                confidence: "high",
-                questionSubject: "processing_only",
-            },
-        ]);
+        setReviewQuestions((qs) => {
+            const next = [
+                ...qs,
+                {
+                    id,
+                    evidenceLabel: "",
+                    displayLabel: "",
+                    type: "text",
+                    section,
+                    evidence: "operator",
+                    confidence: "high",
+                    questionSubject: "processing_only" as const,
+                },
+            ];
+            reviewQuestionsRef.current = next;
+            return next;
+        });
         setSelectedQuestionId(id);
         setEditingQuestionId(id);
     };
@@ -370,11 +375,11 @@ export default function PosTemplateSetupColumn({
             <div className="flex h-full min-h-0 flex-col items-center justify-center bg-white p-6 text-center">
                 <div className="max-w-sm">
                     <div className="text-[14px] font-semibold text-alloy-midnight">{docTitle}</div>
-                    <p className="mt-1 text-[12px] text-stone-500">
+                    <p className="mt-1 text-[12px] text-alloy-midnight/50">
                         Alloy reads questions from the uploaded document. Review what each question means, then generate a
                         native form. Nothing is created or published until you confirm.
                     </p>
-                    {err ? <div className="mt-2 text-[11px] text-amber-700">{err}</div> : null}
+                    {err ? <div className="mt-2 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                     <button type="button" disabled={busy} onClick={() => void handleDetect()} className={`${WS_ACTION_PRIMARY} mt-3`}>
                         {busy ? "Detecting questions…" : "Detect questions"}
                     </button>
@@ -394,67 +399,40 @@ export default function PosTemplateSetupColumn({
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-white">
-            <div className="shrink-0 border-b border-alloy-stone/12 bg-white px-4 py-3">
-                <div className="mb-2">
+            <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-3 py-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <ProcessingWorkflowStepper active={created ? "edit" : phase === "generate" ? "generate" : "review"} />
+                    <p className="min-w-0 truncate text-[10px] text-alloy-midnight/45">
+                        <span className="font-medium text-alloy-midnight/70">{docTitle}</span>
+                        <span aria-hidden> · </span>
+                        {detectionModeLabel(draft)}
+                        <span aria-hidden> · </span>
+                        {activeFieldCount} question{activeFieldCount === 1 ? "" : "s"}
+                        <span aria-hidden> · </span>
+                        {quality === "strong" ? "Ready to generate" : "Needs review"}
+                    </p>
                 </div>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <div className="text-[10px] font-semibold uppercase tracking-wide text-alloy-juniper">
-                            {created ? "Step 4 · Edit form" : phase === "generate" ? "Step 3 · Generate native form" : "Step 2 · Review detected questions"}
-                        </div>
-                        <h2 className="mt-0.5 text-[16px] font-semibold text-alloy-midnight">
-                            {phase === "generate" ? "Generate native form" : "Review detected questions"}
-                        </h2>
-                        <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-stone-500">
-                            {phase === "generate"
-                                ? "Confirm what Alloy will include in your native form before generation."
-                                : "Alloy found questions in your document. Confirm what each question means."}
-                        </p>
-                    </div>
-                    <div className="min-w-[15rem] rounded-lg border border-alloy-stone/18 bg-alloy-stone/30 px-3 py-2">
-                        <div className="text-[9px] font-semibold uppercase tracking-wide text-stone-400">Source evidence</div>
-                        <div className="mt-0.5 truncate text-[12px] font-medium text-alloy-midnight">{docTitle}</div>
-                        <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]">
-                            <span className="rounded-full bg-white px-2 py-0.5 font-medium text-stone-600">{detectionModeLabel(draft)}</span>
-                            <span className="rounded-full bg-white px-2 py-0.5 font-medium text-stone-600">
-                                {activeFieldCount} question{activeFieldCount === 1 ? "" : "s"}
-                            </span>
-                            <span className={`rounded-full px-2 py-0.5 font-medium ${quality === "strong" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                                {quality === "strong" ? "Ready to generate" : "Needs review"}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                <details className="mt-2 text-[10.5px] text-stone-400">
-                    <summary className="cursor-pointer font-medium text-stone-500">Advanced detection details</summary>
-                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                        <span>{sectionCount} section{sectionCount === 1 ? "" : "s"}</span>
-                        <span>{textAvailable ? `${textLen ?? "—"} extracted characters` : "Extracted text unavailable"}</span>
-                        <span>{draft.generator_version} · {formatWhen(draft.generated_at)}</span>
-                    </div>
-                </details>
             </div>
 
             {phase === "generate" && !created ? (
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
                     <div className="grid gap-3 lg:grid-cols-3">
                         <SummaryPanel title="Summary">
-                            <SummaryRow label="Resolved" value={summaryCounts.resolved} tone="emerald" />
-                            <SummaryRow label="Processing only" value={summaryCounts.processingOnly} tone="sky" />
-                            <SummaryRow label="Ignored" value={summaryCounts.ignored} tone="stone" />
+                            <SummaryRow label="Resolved" value={summaryCounts.resolved} tone="pine" />
+                            <SummaryRow label="Processing only" value={summaryCounts.processingOnly} tone="midnight" />
+                            <SummaryRow label="Ignored" value={summaryCounts.ignored} tone="muted" />
                         </SummaryPanel>
                         <SummaryPanel title="What will be included">
                             {includedQuestions.length === 0 ? (
-                                <p className="text-[11px] text-stone-400">No active questions to include.</p>
+                                <p className="text-[11px] text-alloy-midnight/40">No active questions to include.</p>
                             ) : (
                                 <ul className="space-y-1.5">
                                     {includedQuestions.map((q) => (
-                                        <li key={`${q.section}-${q.label}`} className="flex items-start gap-2 text-[11px]">
-                                            <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />
+                                        <li key={`${q.section}-${q.label}`} className="flex items-start gap-2 text-[11px]" data-testid={`generate-included-${q.label.replace(/\s+/g, "-").toLowerCase()}`}>
+                                            <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-bend-pine" aria-hidden />
                                             <span>
                                                 <span className="font-medium text-alloy-midnight">{q.label}</span>
-                                                <span className="block text-stone-400">{q.section}</span>
+                                                <span className="block text-alloy-midnight/40">{q.section}</span>
                                             </span>
                                         </li>
                                     ))}
@@ -477,41 +455,43 @@ export default function PosTemplateSetupColumn({
                 </div>
             ) : (
             <>
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-                {/* LEFT — source document: recognized regions or original PDF */}
-                <div className="flex min-w-0 flex-1 flex-col border-r border-alloy-stone/12">
-                    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/10 px-3 py-1.5">
-                        <span className="text-[11px] font-semibold text-alloy-midnight">Source document</span>
-                        <div className="flex items-center gap-2">
-                            <div className="flex overflow-hidden rounded-md border border-stone-200" title="Two views of the same document">
+            <div className="flex min-h-0 flex-1 gap-2 overflow-hidden p-0">
+                <ProcessingParentPanel
+                    title="Source document"
+                    className="min-w-0 flex-[55]"
+                    headerAction={
+                        <div className="flex items-center gap-1.5">
+                            <div className="inline-flex rounded-md border border-alloy-stone/20 bg-white p-0.5">
                                 {(["highlights", "pdf"] as const).map((v) => (
                                     <button
                                         key={v}
                                         type="button"
                                         onClick={() => setLeftView(v)}
-                                        className={`px-2 py-0.5 text-[10.5px] font-medium ${
-                                            leftView === v ? "bg-alloy-juniper text-white" : "bg-white text-stone-500 hover:bg-stone-50"
+                                        className={`rounded px-2 py-0.5 text-[9px] font-semibold ${
+                                            leftView === v ? "bg-alloy-bend-pine text-white" : "text-alloy-midnight/50 hover:text-alloy-midnight"
                                         }`}
                                     >
-                                        {v === "pdf" ? "Original PDF" : "Recognized regions"}
+                                        {v === "pdf" ? "PDF" : "Regions"}
                                     </button>
                                 ))}
                             </div>
                             {pdfUrl ? (
-                                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" title="Open the PDF" className="text-stone-400 hover:text-alloy-juniper">
+                                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" title="Open the PDF" className="text-alloy-midnight/35 hover:text-alloy-bend-pine">
                                     <Download className="h-3.5 w-3.5" aria-hidden />
                                 </a>
                             ) : null}
                         </div>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto bg-stone-50 p-3">
+                    }
+                >
+                    <div className="min-h-0 flex-1 overflow-y-auto bg-alloy-stone/[0.02] p-2">
+                        <div className="h-full min-h-0">
                         {leftView === "highlights" ? (
                             hasRegions ? (
                                 <>
                                     {mappingQuestionId ? (
-                                        <div className="mb-2 flex items-center justify-between rounded-md border border-alloy-juniper/30 bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
+                                        <div className="mb-1 flex items-center justify-between rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] px-2 py-0.5 text-[10px] text-alloy-bend-pine">
                                             <span>Drag a rectangle on the page to map this question.</span>
-                                            <button type="button" onClick={() => setMappingQuestionId(null)} className="font-medium text-stone-500 hover:underline">
+                                            <button type="button" onClick={() => setMappingQuestionId(null)} className="font-medium text-alloy-midnight/45 hover:underline">
                                                 Cancel
                                             </button>
                                         </div>
@@ -523,64 +503,61 @@ export default function PosTemplateSetupColumn({
                                         mapping={!!mappingQuestionId}
                                         onDrawRect={handleDrawRect}
                                     />
-                                    <div className="mt-2 flex items-center gap-3 text-[10px] text-stone-500">
+                                    <div className="mt-1 flex items-center gap-3 text-[9px] text-alloy-midnight/40">
                                         <span className="flex items-center gap-1">
-                                            <span className="inline-block h-2.5 w-3 rounded-sm border border-alloy-juniper/40 bg-alloy-juniper/15" /> Recognized question
+                                            <span className="inline-block h-2 w-2.5 rounded-sm border border-alloy-bend-pine/40 bg-alloy-bend-pine/15" /> Question
                                         </span>
                                         <span className="flex items-center gap-1">
-                                            <span className="inline-block h-2.5 w-3 rounded-sm border-2 border-alloy-juniper bg-alloy-juniper/30" /> Selected
+                                            <span className="inline-block h-2 w-2.5 rounded-sm border-2 border-alloy-bend-pine bg-alloy-bend-pine/30" /> Selected
                                         </span>
-                                        <span className="ml-auto text-stone-400">Click a region or question row to select</span>
                                     </div>
                                 </>
                             ) : (
-                                <div className="rounded-md border border-dashed border-stone-300 bg-white p-4 text-center text-[11.5px] text-stone-400">
+                                <div className="rounded border border-dashed border-alloy-stone/25 bg-white p-3 text-center text-[11px] text-alloy-midnight/40">
                                     No recognized question regions — this draft came from text. Switch to Original PDF to view the
                                     document, and add questions on the right.
                                 </div>
                             )
                         ) : pdfUrl ? (
-                            <object data={pdfUrl} type="application/pdf" className="h-full min-h-[24rem] w-full rounded-md border border-stone-200 bg-white">
-                                <iframe src={pdfUrl} title="Source PDF" className="h-full min-h-[24rem] w-full rounded-md border border-stone-200" />
-                                <div className="p-2 text-[11.5px] text-stone-500">
+                            <object data={pdfUrl} type="application/pdf" className="h-full min-h-[28rem] w-full rounded border border-alloy-stone/15 bg-white">
+                                <iframe src={pdfUrl} title="Source PDF" className="h-full min-h-[28rem] w-full rounded border border-alloy-stone/15" />
+                                <div className="p-2 text-[11px] text-alloy-midnight/45">
                                     Inline preview unavailable.{" "}
-                                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-alloy-juniper underline">
+                                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-alloy-bend-pine underline">
                                         Open the PDF
                                     </a>
                                 </div>
                             </object>
                         ) : pdfErr ? (
-                            <div className="text-[11.5px] text-stone-400">{pdfErr}</div>
+                            <div className="text-[11px] text-alloy-midnight/40">{pdfErr}</div>
                         ) : (
-                            <div className="h-full min-h-[24rem] w-full animate-pulse rounded-md bg-stone-100" />
+                            <div className="h-full min-h-[28rem] w-full animate-pulse rounded bg-alloy-stone/10" />
                         )}
+                        </div>
                     </div>
-                </div>
+                </ProcessingParentPanel>
 
-                {/* RIGHT — resolve detected questions, tabbed */}
-                <div className="flex w-[22rem] shrink-0 flex-col">
-                    <div className="shrink-0 border-b border-alloy-stone/10 px-3 pt-2">
-                        <div className="text-[12.5px] font-semibold text-alloy-midnight">Detected questions</div>
-                        <p className="mt-0.5 text-[10.5px] text-stone-500">
-                            Alloy found questions in your document. Confirm what each question means.
-                        </p>
-                        <div className="mt-1.5 flex gap-3">
+                <ProcessingParentPanel
+                    title="Review questions"
+                    className="min-w-0 flex-[23]"
+                    headerAction={
+                        <div className="flex gap-2">
                             {(["questions", "text"] as const).map((t) => (
                                 <button
                                     key={t}
                                     type="button"
                                     onClick={() => setTab(t)}
-                                    className={`border-b-2 px-0.5 pb-1.5 text-[12px] font-medium ${
-                                        tab === t ? "border-alloy-juniper text-alloy-juniper" : "border-transparent text-stone-500 hover:text-alloy-midnight"
+                                    className={`text-[10px] font-semibold ${
+                                        tab === t ? "text-alloy-bend-pine" : "text-alloy-midnight/45 hover:text-alloy-midnight/70"
                                     }`}
                                 >
-                                    {t === "questions" ? "Questions" : "Extracted text"}
+                                    {t === "questions" ? "Questions" : "Text"}
                                 </button>
                             ))}
                         </div>
-                    </div>
-
-                    <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                    }
+                >
+                    <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
                         {tab === "questions" ? (
                             <>
                                 <ProcessingQuestionReviewList
@@ -600,11 +577,11 @@ export default function PosTemplateSetupColumn({
                                 <button
                                     type="button"
                                     onClick={addQuestion}
-                                    className="mt-2 inline-flex items-center gap-1 rounded-md border border-stone-200 px-2.5 py-1 text-[11.5px] font-medium text-stone-600 hover:bg-stone-50"
+                                    className="mt-1.5 inline-flex items-center gap-1 rounded border border-alloy-stone/20 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-stone/[0.04]"
                                 >
                                     <Plus className="h-3.5 w-3.5" aria-hidden /> Add question
                                 </button>
-                                <p className="mt-2 text-[10px] text-stone-400">
+                                <p className="mt-1.5 text-[9px] text-alloy-midnight/35">
                                     Questions without a highlighted area can still be captured, but won't yet map back to the official PDF.
                                 </p>
                             </>
@@ -614,35 +591,35 @@ export default function PosTemplateSetupColumn({
                                     value={textQuery}
                                     onChange={(e) => setTextQuery(e.target.value)}
                                     placeholder="Search extracted text…"
-                                    className="mb-2 w-full rounded-md border border-stone-300 px-2 py-1 text-[12px] focus:border-alloy-juniper focus:outline-none"
+                                    className="mb-1.5 w-full rounded border border-alloy-stone/20 px-2 py-1 text-[11px] focus:border-alloy-bend-pine/40 focus:outline-none"
                                 />
                                 {textQuery.trim() ? (
-                                    <div className="mb-1 text-[10px] text-stone-400">{matchedTextLines.matches} matching line(s)</div>
+                                    <div className="mb-1 text-[9px] text-alloy-midnight/35">{matchedTextLines.matches} matching line(s)</div>
                                 ) : null}
                                 {fullText === null ? (
-                                    <div className="text-[11.5px] text-stone-400">Loading…</div>
+                                    <div className="text-[11px] text-alloy-midnight/40">Loading…</div>
                                 ) : (fullText || draft.diagnostics.extracted_text_preview) ? (
-                                    <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-md border border-stone-200 bg-stone-50 p-2 text-[11px] leading-snug text-stone-600">
+                                    <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/15 bg-alloy-stone/[0.03] p-2 text-[10px] leading-snug text-alloy-midnight/65">
                                         {matchedTextLines.lines.join("\n")}
                                     </pre>
                                 ) : (
-                                    <div className="text-[11.5px] text-stone-400">No extracted text available.</div>
+                                    <div className="text-[11px] text-alloy-midnight/40">No extracted text available.</div>
                                 )}
                             </div>
                         )}
                     </div>
-                </div>
+                </ProcessingParentPanel>
             </div>
             </>
             )}
 
-            {/* Footer — generate / re-detect / open workspace */}
-            <div className="shrink-0 border-t border-alloy-stone/12 bg-white px-3 py-2.5">
-                {err ? <div className="mb-2 text-[11px] text-amber-700">{err}</div> : null}
+            {/* Footer */}
+            <div className="shrink-0 border-t border-alloy-stone/12 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
+                {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                 <div className="flex items-center justify-between gap-3">
-                    <p className={`min-w-0 text-[10.5px] ${created ? "text-emerald-700" : "text-stone-400"}`}>
+                    <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
                         {created
-                            ? "Native form created — open the form workspace to edit and publish."
+                            ? "Processing complete — your native form is ready. Continue in Studio → Forms to edit and publish."
                             : phase === "generate"
                               ? "Alloy will create an unpublished native form from your reviewed questions."
                               : "When you're done reviewing, continue to generate your native form."}
@@ -659,7 +636,7 @@ export default function PosTemplateSetupColumn({
                         ) : null}
                         {created ? (
                             <button type="button" onClick={() => created.form_id && onOpenForm?.(created.form_id)} className={WS_ACTION_PRIMARY}>
-                                Open form workspace
+                                Edit form in Studio
                             </button>
                         ) : phase === "review" ? (
                             <button
@@ -689,19 +666,19 @@ export default function PosTemplateSetupColumn({
 
 function SummaryPanel({ title, children }: { title: string; children: ReactNode }) {
     return (
-        <section className="rounded-lg border border-alloy-stone/18 bg-alloy-stone/20 p-3">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">{title}</h3>
+        <section className="rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-alloy-bend-pine bg-white p-3">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{title}</h3>
             <div className="mt-2">{children}</div>
         </section>
     );
 }
 
-function SummaryRow({ label, value, tone }: { label: string; value: number; tone: "emerald" | "sky" | "stone" }) {
+function SummaryRow({ label, value, tone }: { label: string; value: number; tone: "pine" | "midnight" | "muted" }) {
     const cls =
-        tone === "emerald" ? "text-emerald-700" : tone === "sky" ? "text-sky-700" : "text-stone-600";
+        tone === "pine" ? "text-alloy-bend-pine" : tone === "midnight" ? "text-alloy-midnight" : "text-alloy-midnight/45";
     return (
         <div className="flex items-center justify-between text-[12px]">
-            <span className="text-stone-600">{label}</span>
+            <span className="text-alloy-midnight/55">{label}</span>
             <span className={`font-semibold tabular-nums ${cls}`}>{value}</span>
         </div>
     );
@@ -710,7 +687,7 @@ function SummaryRow({ label, value, tone }: { label: string; value: number; tone
 function DetailRow({ label, value }: { label: string; value: string }) {
     return (
         <div>
-            <dt className="text-stone-400">{label}</dt>
+            <dt className="text-alloy-midnight/40">{label}</dt>
             <dd className="font-medium text-alloy-midnight">{value}</dd>
         </div>
     );
