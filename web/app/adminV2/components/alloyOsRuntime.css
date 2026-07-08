@@ -667,6 +667,64 @@ html[data-alloy-os-runtime-split="true"] .adminv2-bos-rail-overlay {
   bottom: var(--alloy-os-op-surface-bottom) !important;
 }
 
+/* ══ Presentation Runtime V2 — peer height fill (split mode) ═══════════════════════
+ *
+ * PR V2 Work Unit surfaces use inline QueueRegion + FocusPanelSurface instead of the
+ * legacy dept-v2 primary column + modal drawer. Activity mode content is shorter than
+ * Work mode; the structural shell must still stretch to the same bottom edge as the BOS
+ * rail (flex chain + min-height:0, no content-sized shrink). */
+html[data-alloy-os-runtime-split="true"] .adminv2-workspace-scroll-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+html[data-alloy-os-runtime-split="true"] [data-component="WorkUnitSurface"] {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+html[data-alloy-os-runtime-split="true"] [data-alloy-section="FP.SURFACE"] {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+html[data-alloy-os-runtime-split="true"] [data-alloy-section="FP.SURFACE"] > div {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+html[data-alloy-os-runtime-split="true"] [data-queue-region-boundary],
+html[data-alloy-os-runtime-split="true"] [data-focus-panel-boundary] {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Activity mode — cockpit fills the panel body; internal panes scroll (no page double-scroll) */
+html[data-alloy-os-runtime-split="true"]
+  [data-inline-focus-panel-mode="activity"]
+  [data-adminv2-record-modal-scroll] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+html[data-alloy-os-runtime-split="true"]
+  [data-inline-focus-panel-mode="activity"]
+  [data-adminv2-record-modal-scroll]
+  > div {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-alloy-os-runtime-split="true"] .alloy-os-activity-cockpit {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* ── Compressed queue row presentation — Queue UX Concept B (State 2 only) ──────────
  *
  * APPROVED DESIGN: "Two-line selection list" (queue-ux-system canvas, Deliverable 9/10).
@@ -1740,8 +1798,8 @@ html[data-alloy-os-runtime="on"]
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 5px 10px 5px;
+  gap: 3px;
+  padding: 4px 8px 4px;
   border: 1px solid var(--alloy-os-border, #e5e9ef);
   border-radius: 10px;
   background: var(--alloy-os-surface, #fff);

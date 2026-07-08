@@ -299,6 +299,7 @@ export function InlineOpportunityFocusPanel() {
         <>
             <section
                 data-inline-focus-panel="true"
+                data-inline-focus-panel-mode={focusPanelMode}
                 data-inline-focus-panel-subject={selectedSubjectId ?? undefined}
                 data-inline-focus-panel-resolved={resolved ? "true" : "false"}
                 aria-label="Focus Panel"

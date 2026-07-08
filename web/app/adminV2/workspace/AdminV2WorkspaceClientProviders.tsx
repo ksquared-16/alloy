@@ -104,7 +104,7 @@ export default function AdminV2WorkspaceClientProviders({
                   <AdminV2ClickDebugInstaller />
                   <PlatformSurfacePerfDebugInstaller />
                   <div
-                    className="adminv2-workspace-scroll-surface relative z-0 min-h-0 flex-1 px-4 py-3 sm:px-5"
+                    className="adminv2-workspace-scroll-surface relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 sm:px-5"
                     style={workspaceScrollStyle}
                   >
                     <WorkspaceRouteVmProvider value={workspaceRouteVm}>

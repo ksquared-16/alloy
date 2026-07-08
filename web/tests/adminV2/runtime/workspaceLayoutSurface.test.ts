@@ -232,6 +232,49 @@ describe("evaluateAlloyOsLayoutSurface — peer-alignment predicates (pixel proo
     });
 });
 
+describe("Presentation Runtime V2 — split-mode peer height fill (Activity shell)", () => {
+    it("establishes a flex fill chain on the workspace scroll surface + WorkUnitSurface", () => {
+        const scrollRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            ".adminv2-workspace-scroll-surface {"
+        );
+        expect(scrollRule.selector).toContain('data-alloy-os-runtime-split="true"');
+        expect(scrollRule.body).toContain("flex-direction: column");
+
+        const wuRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            '[data-component="WorkUnitSurface"] {'
+        );
+        expect(wuRule.selector).toContain('data-alloy-os-runtime-split="true"');
+        expect(wuRule.body).toContain("min-height: 0");
+    });
+
+    it("stretches FP.SURFACE, queue boundary, and focus panel boundary in split mode", () => {
+        const fpRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            '[data-alloy-section="FP.SURFACE"] {'
+        );
+        expect(fpRule.selector).toContain('data-alloy-os-runtime-split="true"');
+        expect(fpRule.body).toContain("min-height: 0");
+
+        expect(RUNTIME_CSS).toMatch(
+            /html\[data-alloy-os-runtime-split="true"\][\s\S]*?\[data-queue-region-boundary\][\s\S]*?\[data-focus-panel-boundary\][\s\S]*?min-height:\s*0/
+        );
+    });
+
+    it("fills Activity mode body with the cockpit (internal scroll, no page double-scroll)", () => {
+        const bodyRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            '[data-adminv2-record-modal-scroll] {'
+        );
+        expect(bodyRule.selector).toContain('data-inline-focus-panel-mode="activity"');
+        expect(bodyRule.body).toContain("overflow: hidden");
+
+        const cockpitRule = extractRule(RUNTIME_CSS, ".alloy-os-activity-cockpit {");
+        expect(cockpitRule).toContain("flex: 1 1 auto");
+    });
+});
+
 /** Returns the declaration body for the first rule whose selector ends with `anchor`. */
 function extractRule(css: string, anchor: string): string {
     return extractRuleWithSelector(css, anchor).body;

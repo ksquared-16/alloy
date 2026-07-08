@@ -28,7 +28,7 @@ const WORK_TABS: { key: WorkTab; label: string }[] = [
 ];
 
 /** Events surfaced in the compact Recent Activity ribbon (dense strip). */
-const RIBBON_EVENT_COUNT = 4;
+const RIBBON_EVENT_COUNT = 3;
 
 /**
  * Focus Panel Activity mode — one-viewport operational cockpit.

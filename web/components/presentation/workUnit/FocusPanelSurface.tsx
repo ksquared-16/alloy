@@ -95,6 +95,7 @@ export function FocusPanelSurface({
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.focusPanelSurface)}
+            className="flex min-h-0 flex-1 flex-col"
             data-alloy-section="FP.SURFACE"
             data-focus-panel-open={isOpen ? "true" : "false"}
         >
@@ -107,7 +108,7 @@ export function FocusPanelSurface({
                 {/* items-stretch: the queue column and the Focus Panel boundary stretch to the SAME
                     row height, so both panels share one structural shell regardless of content —
                     the empty state fills the same height as an open record with NO viewport math. */}
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
+                <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row xl:items-stretch">
                     {/* Queue column: full-width while stacked (below xl), then a FIXED-width rail
                         at xl. `xl:flex-none` cancels the stacked `flex-1` grow so `xl:w-[24rem]`
                         actually pins the width — without it the column stretches and the queue pane

@@ -116,8 +116,8 @@ function WorkUnitSurfaceBody({
         null;
     return (
         <>
-            <div className="min-w-0 flex-1 space-y-1">
-                <div className="space-y-1">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1">
+                <div className="shrink-0 space-y-1">
                     <WorkUnitHeader model={model.header} />
                     <WorkViewPillStrip
                         workViews={model.workViews}
@@ -189,6 +189,7 @@ export function WorkUnitSurface() {
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitSurface)}
+            className="flex min-h-0 flex-1 flex-col"
             data-component="WorkUnitSurface"
             data-build-sha={BUILD_SHA}
             data-surface-ready={model.ready ? "true" : "false"}
@@ -205,7 +206,7 @@ export function WorkUnitSurface() {
                 // destination establishes. Loading stays inside the surface.
                 <div
                     key={shownModel.workUnitId ?? "wu-surface"}
-                    className={`motion-surface-enter-forward flex flex-col gap-5 lg:flex-row lg:items-start${
+                    className={`motion-surface-enter-forward flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:items-stretch${
                         mode === "held" ? " pointer-events-none" : ""
                     }`}
                     aria-busy={mode === "held" ? true : undefined}
