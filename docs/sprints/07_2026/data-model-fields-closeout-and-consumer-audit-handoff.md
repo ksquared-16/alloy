@@ -25,13 +25,16 @@ Do **not** open another standalone Data Model implementation sprint unless doctr
 ## Final staging hash
 
 ```
-cf1de3aa2e052ca59d911dd7a673f6313939c125
+18b589c0fbc539e6ed5a9ea9156d3930537b0999
 ```
 
 | Artifact | Hash |
 | --- | --- |
-| Feature branch tip | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |
-| Prior QA merge | `fc2b3a071` — `fix(settings): finalize Data Model QA cleanup` |
+| **Final staging** | `18b589c0f` — merge `origin/staging` + Data Model closeout onto `fdf7f5d7a` |
+| Data Model merge | `cf1de3aa2` — merge `feat/data-model-qa-fixes` onto `0e72e3051` |
+| Category picker QA | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |
+| Closeout handoff doc | `0482a6bb6` — `docs(sprint): Data Model closeout and consumer audit handoff` |
+| Prior QA cleanup | `fc2b3a071` — `fix(settings): finalize Data Model QA cleanup` |
 | IA sprint | `a560cc8b3` — `polish(settings): finalize Data Model information architecture` |
 
 ---
