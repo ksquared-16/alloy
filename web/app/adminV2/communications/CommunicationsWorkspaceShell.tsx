@@ -1,14 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { MessageSquare, Settings2 } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 
 import CommunicationsWorkspaceKpiStrip from "@/app/adminV2/communications/CommunicationsWorkspaceKpiStrip";
 import OperationalWorkspaceModeNav from "@/app/adminV2/components/OperationalWorkspaceModeNav";
 import OperationalModalHeader from "@/app/adminV2/components/OperationalModalHeader";
 import {
     COMMS_PRIMARY_BTN_CLASS,
-    COMMS_SECONDARY_BTN_CLASS,
     COMMS_WORKSPACE_EXECUTION_CLASS,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import {
@@ -33,7 +32,7 @@ export type CommunicationsWorkspaceShellProps = {
 };
 
 /**
- * Stable Communications workspace chrome — header, KPI reserve, navigation, execution surface.
+ * Stable Communications workspace chrome - header, KPI reserve, navigation, execution surface.
  * Tab execution bodies mount inside the execution region only.
  */
 export default function CommunicationsWorkspaceShell({
@@ -52,10 +51,12 @@ export default function CommunicationsWorkspaceShell({
         <div
             className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
             data-comms-workspace-shell="true"
+            data-comms-modal-version="workspace-inc2c"
         >
             <OperationalModalHeader
                 icon={<MessageSquare className="h-4 w-4" aria-hidden strokeWidth={2} />}
                 title="Communications"
+                subtitle="Where conversations happen."
                 titleId="adminv2-inbox-modal-title"
                 onClose={onClose}
                 closeLabel="Close communications"
@@ -73,7 +74,7 @@ export default function CommunicationsWorkspaceShell({
                 }
             />
 
-            <CommunicationsWorkspaceKpiStrip activeTab={activeTab} />
+            {activeTab !== "overview" ? <CommunicationsWorkspaceKpiStrip activeTab={activeTab} /> : null}
 
             <OperationalWorkspaceModeNav
                 modes={COMMUNICATIONS_MODES}
@@ -86,21 +87,12 @@ export default function CommunicationsWorkspaceShell({
                 sectionAriaLabel={mode === "studio" ? "Studio sections" : "Work sections"}
                 navDataAttr="comms"
                 sectionsDataAttr="comms"
-                sectionTrailing={
-                    mode === "studio" ? (
-                        <a
-                            href="/adminV2/settings/communications"
-                            className={`${COMMS_SECONDARY_BTN_CLASS} mb-1.5 inline-flex items-center gap-1.5 !px-2.5 !py-1 text-[11px]`}
-                            data-comms-studio-settings-link="true"
-                        >
-                            <Settings2 className="h-3.5 w-3.5" aria-hidden strokeWidth={2} />
-                            Channels, signatures &amp; rules
-                        </a>
-                    ) : null
-                }
             />
 
-            <div className={COMMS_WORKSPACE_EXECUTION_CLASS} data-comms-workspace-execution="true">
+            <div
+                className={`${COMMS_WORKSPACE_EXECUTION_CLASS} !min-h-0 !border-t-0 !bg-white !p-0`}
+                data-comms-workspace-execution="true"
+            >
                 {children}
             </div>
         </div>
