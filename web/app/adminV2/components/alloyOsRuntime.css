@@ -3441,6 +3441,15 @@ html[data-alloy-os-runtime-split="true"]
   opacity: 1;
   transform: translateY(0);
 }
+.fp-layout-field--composing:hover .fp-field-instance__remove,
+.fp-layout-field--composing.is-selected .fp-field-instance__remove {
+  opacity: 1;
+  pointer-events: auto;
+}
+.fp-layout-field--composing:hover .fp-field-instance__chrome,
+.fp-layout-field--composing.is-selected .fp-field-instance__chrome {
+  z-index: 8;
+}
 .fp-layout-field--composing.is-selected .fp-field-instance__remove {
   opacity: 1;
   pointer-events: auto;
@@ -3532,10 +3541,13 @@ html[data-alloy-os-runtime-split="true"]
   position: absolute;
   z-index: 6;
   border-radius: 4px;
-  pointer-events: auto;
+  pointer-events: none;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.fp-layout-surface--dragging .fp-layout-drop-zone {
+  pointer-events: auto;
 }
 .fp-layout-drop-zone--beside {
   top: 0;
@@ -4698,6 +4710,23 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-fp-composer__panel { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; min-height: 520px; }
 .alloy-os-fp-composer__body { flex: 1 1 auto; min-height: 0; }
 .alloy-os-fp-composer__body { position: relative; }
+[data-fp-composer-depth-active="true"] .alloy-os-fp-composer__body {
+  overflow: hidden;
+}
+[data-fp-composer-depth-active="true"] .alloy-os-fp-composer__body > .relative {
+  min-height: min(520px, 72vh);
+}
+[data-fp-composer-depth-active="true"] .alloy-os-fp-composer__panel {
+  position: relative;
+}
+[data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard {
+  width: min(560px, calc(100% - 32px));
+  max-width: 560px;
+  max-height: min(75vh, calc(100dvh - 120px));
+}
 .alloy-os-fp-composer__ghost {
   position: absolute; z-index: 20; pointer-events: none; border-radius: 12px;
   background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 10%, transparent);

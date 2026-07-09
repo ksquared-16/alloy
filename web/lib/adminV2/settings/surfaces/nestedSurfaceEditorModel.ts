@@ -267,7 +267,10 @@ export function addFieldToNestedGroup(config: NestedSurfaceConfig, groupKey: str
 }
 
 export function removeFieldFromNestedGroup(config: NestedSurfaceConfig, groupKey: string, fieldKey: string): NestedSurfaceConfig {
-    return patchGroup(config, groupKey, (keys) => keys.filter((k) => k !== fieldKey));
+    const keys = selectedFieldKeys(config, groupKey).filter((k) => k !== fieldKey);
+    let next = patchGroupFieldKeys(config, groupKey, keys);
+    next = unpairOrphanedHalfFields(next, groupKey, keys);
+    return next;
 }
 
 /** Reorder a field within its group by delta (-1 up, +1 down). */

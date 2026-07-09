@@ -21,13 +21,28 @@ export default function ComposerFloatingPopover({
 }: Props) {
     const [pos, setPos] = useState<{ top: number; left: number; minWidth: number } | null>(null);
 
-    useLayoutEffect(() => {
+    const updatePosition = () => {
         if (!open || !anchorRef.current) {
             setPos(null);
             return;
         }
         const rect = anchorRef.current.getBoundingClientRect();
         setPos({ top: rect.bottom + 4, left: rect.left, minWidth: Math.max(rect.width, 200) });
+    };
+
+    useLayoutEffect(() => {
+        updatePosition();
+    }, [open, anchorRef]);
+
+    useEffect(() => {
+        if (!open) return;
+        const onScrollOrResize = () => updatePosition();
+        window.addEventListener("resize", onScrollOrResize);
+        window.addEventListener("scroll", onScrollOrResize, true);
+        return () => {
+            window.removeEventListener("resize", onScrollOrResize);
+            window.removeEventListener("scroll", onScrollOrResize, true);
+        };
     }, [open, anchorRef]);
 
     useEffect(() => {
@@ -51,7 +66,7 @@ export default function ComposerFloatingPopover({
                 top: pos.top,
                 left: pos.left,
                 minWidth: pos.minWidth,
-                zIndex: 200,
+                zIndex: 300,
             }}
         >
             {children}

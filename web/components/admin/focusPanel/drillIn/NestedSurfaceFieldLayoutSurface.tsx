@@ -126,7 +126,12 @@ export default function NestedSurfaceFieldLayoutSurface({
 
     return (
         <div
-            className={clsx("fp-layout-surface", composing && "fp-layout-surface--composing", className)}
+            className={clsx(
+                "fp-layout-surface",
+                composing && "fp-layout-surface--composing",
+                draggingKey && "fp-layout-surface--dragging",
+                className,
+            )}
             data-nested-layout-surface={groupKey}
             onClick={(e) => {
                 e.stopPropagation();
@@ -183,6 +188,9 @@ export default function NestedSurfaceFieldLayoutSurface({
                                     }}
                                     onDropZone={(zone) => handleDrop(fieldKey, zone)}
                                     onDropHint={(zone) => setDropHint(zone ? { targetKey: fieldKey, zone } : null)}
+                                    onAfterRemove={() =>
+                                        composer?.select({ kind: "region", surfaceId, groupKey })
+                                    }
                                     className="fp-layout-field--block"
                                 >
                                     {meta.renderBlock()}
@@ -225,6 +233,9 @@ export default function NestedSurfaceFieldLayoutSurface({
                                 }}
                                 onDropZone={(zone) => handleDrop(fieldKey, zone)}
                                 onDropHint={(zone) => setDropHint(zone ? { targetKey: fieldKey, zone } : null)}
+                                onAfterRemove={() =>
+                                    composer?.select({ kind: "region", surfaceId, groupKey })
+                                }
                             >
                                 <RuntimeFieldRow
                                     field={{ ...meta, label }}
@@ -290,6 +301,7 @@ function FieldInstance({
     onDragEnd,
     onDropZone,
     onDropHint,
+    onAfterRemove,
     className = "",
     children,
 }: {
@@ -311,6 +323,7 @@ function FieldInstance({
     onDragEnd: () => void;
     onDropZone: (zone: NestedSurfaceFieldDropZone) => void;
     onDropHint: (zone: NestedSurfaceFieldDropZone | null) => void;
+    onAfterRemove: () => void;
     className?: string;
     children: React.ReactNode;
 }) {
@@ -473,7 +486,11 @@ function FieldInstance({
                             type="button"
                             className="fp-field-instance__remove"
                             aria-label={`Remove ${label}`}
-                            onClick={() => onMutate(removeFieldFromNestedGroup(config, groupKey, fieldKey))}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onMutate(removeFieldFromNestedGroup(config, groupKey, fieldKey));
+                                onAfterRemove();
+                            }}
                         >
                             <X className="h-3.5 w-3.5" />
                         </button>

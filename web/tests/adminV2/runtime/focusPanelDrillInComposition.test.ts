@@ -615,4 +615,30 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(available.some((f) => f.key === "child.documents_summary")).toBe(true);
         expect(available.some((f) => f.key === "inquiry_child.program")).toBe(true);
     });
+
+    it("composer canvas resolves elevated cell keys like runtime work-unit", () => {
+        const canvas = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
+        expect(canvas).toContain("resolveElevatedCellKey");
+        expect(canvas).toContain("data-fp-composer-depth-active");
+        expect(canvas).not.toContain("const elevatedCellKey = activeDepth?.card ?? null");
+    });
+
+    it("field removal promotes orphan half rows and exposes reliable remove chrome", () => {
+        const layoutSurface = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceFieldLayoutSurface.tsx");
+        const runtimeCss = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(layoutSurface).toContain("onAfterRemove");
+        expect(layoutSurface).toContain("e.stopPropagation()");
+        expect(layoutSurface).toContain("fp-layout-surface--dragging");
+        expect(runtimeCss).toContain(".fp-layout-surface--dragging .fp-layout-drop-zone");
+        expect(runtimeCss).toContain("[data-fp-composer-depth-active=\"true\"]");
+    });
+
+    it("composer drill-in auto-opens household and child focus surfaces", () => {
+        const householdCard = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
+        const childrenCard = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
+        expect(householdCard).toContain("composingHouseholdSurface");
+        expect(householdCard).toContain("setExpanded(true)");
+        expect(childrenCard).toContain("composingChildrenSurface");
+        expect(childrenCard).toContain("setDrillDepth({ kind: \"child-focus\"");
+    });
 });
