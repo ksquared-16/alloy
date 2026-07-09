@@ -99,6 +99,7 @@ export default function HouseholdCard({
         if (composer?.enabled) return composer.configFor(HOUSEHOLD_SURFACE_ID);
         return readHouseholdNestedConfigFromDoc(publishedDoc);
     }, [composer, publishedDoc]);
+    const composingHouseholdSurface = composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false;
     const evidence = useMemo(() => {
         const base = buildHouseholdCardEvidence(context, { nestedConfig });
         return composerPreview?.displayView
@@ -109,6 +110,13 @@ export default function HouseholdCard({
         (groupKey: HouseholdEvidenceGroupKey) => householdGroupFieldKeys(nestedConfig, groupKey),
         [nestedConfig],
     );
+
+    useEffect(() => {
+        if (!composingHouseholdSurface) return;
+        setExpanded(true);
+        setFocusedGroup(null);
+        setEditingPersonId(null);
+    }, [composingHouseholdSurface]);
 
     // Permission outcome is resolved upstream and observed here — the card never
     // authorizes independently (no card-level permission fetch).

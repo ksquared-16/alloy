@@ -41,6 +41,7 @@ import { withPublishedLayoutMetadata } from "@/lib/adminV2/runtime/focusPanel/co
 import { buildOpportunityFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import {
     isElevatedLevel,
+    resolveElevatedCellKey,
     type FocusPanelActiveDepth,
     type FocusPanelCoordination,
     type FocusPanelDepthEntry,
@@ -218,7 +219,10 @@ export default function FocusPanelRuntimeComposerCanvas({
         }),
         [focusRequest, requestFocus, activeDepth, reportPerspective, dismissed, dismiss, previousFocus, back],
     );
-    const elevatedCellKey = activeDepth?.card ?? null;
+    const elevatedCellKey = useMemo(
+        () => resolveElevatedCellKey(activeDepth?.card ?? null, summaryInputs.cellResolution),
+        [activeDepth?.card, summaryInputs.cellResolution],
+    );
 
     useEffect(() => {
         if (!activeDepth) return;
@@ -404,6 +408,7 @@ export default function FocusPanelRuntimeComposerCanvas({
             data-focus-panel-runtime-composer="true"
             data-fp-composer-arranging={arranging ? "true" : undefined}
             data-fp-composer-edit-mode={composer?.drillIn ? "true" : undefined}
+            data-fp-composer-depth-active={activeDepth ? "true" : undefined}
         >
             <section
                 className="alloy-os-fp-composer__panel flex min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-sm"

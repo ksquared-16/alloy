@@ -5,8 +5,12 @@ import {
     applyNestedSurfaceFieldDrop,
     fieldLayoutWidthForNestedGroup,
     reconcileNestedSurfaceConfig,
+    removeFieldFromNestedGroup,
+    selectedFieldKeys,
     setFieldLayoutWidthInNestedGroup,
     CHILDREN_SURFACE_ID,
+    addFieldToNestedGroup,
+    setNestedGroupEnabled,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { chunkNestedSurfaceFieldsForHalfRowLayout } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import { childrenFocusRowsFromNestedConfig } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
@@ -99,5 +103,31 @@ describe("nestedSurfaceFieldLayout", () => {
         config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.last_name", "half");
         config = applyNestedSurfaceFieldDrop(config, "identity", "child.dob_age", "child.last_name", "below");
         expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.dob_age")).toBe("full");
+    });
+
+    it("removes a full-width field from a group", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = removeFieldFromNestedGroup(config, "identity", "child.date_of_birth");
+        const keys = selectedFieldKeys(config, "identity");
+        expect(keys).not.toContain("child.date_of_birth");
+    });
+
+    it("removes one half-row field and promotes the survivor to full width", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.first_name", "child.last_name", "beside");
+        config = removeFieldFromNestedGroup(config, "identity", "child.last_name");
+        expect(selectedFieldKeys(config, "identity")).toContain("child.first_name");
+        expect(selectedFieldKeys(config, "identity")).not.toContain("child.last_name");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.first_name")).toBe("full");
+    });
+
+    it("removes evidence section fields without leaving orphan half widths", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setNestedGroupEnabled(config, "medical", true, { sectionSemantic: "medical" });
+        config = setFieldLayoutWidthInNestedGroup(config, "medical", "child.medical_summary", "half");
+        config = addFieldToNestedGroup(config, "medical", "child.nickname");
+        config = setFieldLayoutWidthInNestedGroup(config, "medical", "child.nickname", "half");
+        config = removeFieldFromNestedGroup(config, "medical", "child.nickname");
+        expect(fieldLayoutWidthForNestedGroup(config, "medical", "child.medical_summary")).toBe("full");
     });
 });
