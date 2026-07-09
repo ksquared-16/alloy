@@ -1,20 +1,11 @@
 /**
  * Current Work ViewModel — pure projection from Operational Context + stage runtime.
  *
- * Derivation (no enrollment hardcoding; all labels from config/runtime):
- *   title            → primary open stage-work item label (operating-plan template)
- *   purpose          → stageWorkRuntime.purpose (stage operating plan)
- *   checklist        → runtime.primary + runtime.additional work templates
- *   blockers         → signals.attention (requirements / attention reasons)
- *   primaryAction    → "Record what happened" when outcomes exist; else nextActionLabel
- *   supportingActions→ reserved for action-registry labels (empty until wired)
- *   outcomes         → existing StageWorkOutcomePicker → completeStageWorkWithOutcome
- *
- * Fallbacks only: "No open work", "Open work →", empty-state copy.
- * Cards observe this; they never read the drawer VM or write stage_key.
+ * Presentation VM: `buildCurrentWorkSurfaceVM` — config-driven surface with action tiers.
+ * Legacy fields retained for queue projection and gradual migration.
  *
  * @see docs/platform/operator/current-work-surface.md
- * @see docs/platform/operator/actions-current-work-alignment.md
+ * @see docs/platform/operator/action-system.md
  */
 
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -24,15 +15,11 @@ import type {
     StageWorkRuntimeProjection,
 } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
-import { workIntentProjectionForStageWorkItem } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
-import { inferWorkItemOwner } from "./inferWorkItemOwner";
-import { deriveCurrentWorkSupportingActions } from "./deriveCurrentWorkSupportingActions";
-import { resolveStageWorkOutcomeCompletionState } from "./resolveStageWorkOutcomeCompletionState";
-import { completionOutcomesForPicker } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
-import { CURRENT_WORK_RECORD_OUTCOME_CTA } from "./currentWorkCopy";
+import { buildCurrentWorkSurfaceVM } from "./buildCurrentWorkSurfaceVM";
+import type { CurrentWorkSurfaceVM } from "./currentWorkSurfaceTypes";
 
 export type CurrentWorkChecklistItem = {
     id: string;
@@ -41,7 +28,6 @@ export type CurrentWorkChecklistItem = {
     state: "complete" | "open" | "planned";
     ownerCard: FocusPanelCardKey | null;
     ownerFocus: string | null;
-    /** Outreach vs verification vs generic navigation — drives action row styling. */
     handoffKind: "outreach" | "verification" | "navigation" | null;
 };
 
@@ -67,12 +53,13 @@ export type CurrentWorkViewModel = {
     completedCount: number;
     totalCount: number;
     showOutcomeCompletion: boolean;
-    /** When open work has outcomes but completion CTA is hidden — honest operator copy. */
     outcomeCompletionBlockReason: string | null;
     completionOutcomes: StageCompletionOutcomeV1[];
     primaryWorkItem: StageWorkItemProjection | null;
     primaryProjection: WorkIntentRuntimeProjection | null;
     runtime: StageWorkRuntimeProjection | null;
+    /** Config-driven operational surface — canonical presentation VM. */
+    surface: CurrentWorkSurfaceVM;
 };
 
 export function formatCurrentWorkProgress(completed: number, total: number): string | null {
@@ -88,185 +75,74 @@ function progressVerdict(completed: number, total: number): string | null {
     return "In progress";
 }
 
-function checklistFromRuntime(runtime: StageWorkRuntimeProjection | null): CurrentWorkChecklistItem[] {
-    if (!runtime) return [];
-    const items = [runtime.primary, ...runtime.additional].filter(
-        (item): item is StageWorkItemProjection => item != null,
-    );
-    return items.map((item) => {
-        const operationalItem = {
-            id: item.work_id ?? item.template_key,
-            label: item.label,
-            state: item.state === "completed" ? "completed" as const : item.state === "open" ? "open" as const : "planned" as const,
-            dueLabel: null,
-            dueAt: item.due_at,
-            urgency: null,
-            source: null,
-            kind: "stage_work" as const,
-        };
-        const owner = inferWorkItemOwner(operationalItem);
-        const handoffKind =
-            owner?.card === "communications" ? "outreach" as const
-            : owner?.card === "household" ? "verification" as const
-            : owner?.card != null ? "navigation" as const
-            : null;
-        return {
-            id: item.work_id ?? item.template_key,
-            label: item.label,
-            description: item.description?.trim() || null,
-            state:
-                item.state === "completed" ? "complete"
-                : item.state === "open" ? "open"
-                : "planned",
-            ownerCard: owner?.card ?? null,
-            ownerFocus: owner?.focus ?? null,
-            handoffKind,
-        };
-    });
-}
-
-function pickPrimaryOpenItem(runtime: StageWorkRuntimeProjection | null): StageWorkItemProjection | null {
-    if (!runtime) return null;
-    const items = [runtime.primary, ...runtime.additional].filter(
-        (item): item is StageWorkItemProjection => item != null,
-    );
-    const open = items.find((item) => item.state === "open");
-    if (open) return open;
-    const planned = items.find((item) => item.state === "planned");
-    return planned ?? null;
-}
-
-/** Open work item for the same template — bridges task bind when primary display is still planned. */
-function findOpenItemForTemplate(
-    runtime: StageWorkRuntimeProjection | null,
-    templateKey: string,
-): StageWorkItemProjection | null {
-    if (!runtime) return null;
-    const items = [runtime.primary, ...runtime.additional].filter(
-        (item): item is StageWorkItemProjection => item != null,
-    );
-    return items.find((item) => item.template_key === templateKey && item.state === "open") ?? null;
-}
-
-function resolveActionableWorkItem(
-    runtime: StageWorkRuntimeProjection | null,
-    primaryWorkItem: StageWorkItemProjection | null,
-): StageWorkItemProjection | null {
-    if (!primaryWorkItem) return null;
-    if (primaryWorkItem.state === "open") return primaryWorkItem;
-    return findOpenItemForTemplate(runtime, primaryWorkItem.template_key);
-}
-
-/**
- * Primary CTA label when configured outcomes exist for the open work item.
- * Title names the work; CTA records the result.
- */
-function primaryActionLabelForItem(item: StageWorkItemProjection | null): string | null {
-    if (!item || item.state !== "open") return null;
-    const outcomes = completionOutcomesForPicker(item);
-    if (!item.requires_outcome_picker || outcomes.length === 0) return null;
-    return CURRENT_WORK_RECORD_OUTCOME_CTA;
-}
-
-function outcomeCompletionBlockReason(
-    item: StageWorkItemProjection | null,
-    outcomes: StageCompletionOutcomeV1[],
-    canMutate: boolean,
-): string | null {
-    if (!item || item.state !== "open") return null;
-    if (outcomes.length === 0) {
-        return "No completion outcomes configured for this work.";
-    }
-    if (!item.requires_outcome_picker) {
-        return "This work item does not use outcome completion.";
-    }
-    if (!canMutate) {
-        return "Read-only — completion requires edit access.";
-    }
-    return null;
+function legacyChecklistFromSurface(surface: CurrentWorkSurfaceVM): CurrentWorkChecklistItem[] {
+    return surface.checklist.map((item) => ({
+        id: item.handoffItemId ?? item.key,
+        label: item.label,
+        description: item.description ?? null,
+        state:
+            item.status === "complete" ? "complete"
+            : item.status === "blocked" ? "open"
+            : "open",
+        ownerCard:
+            item.targetLabel === "Household" ? "household"
+            : item.targetLabel === "Children" ? "children"
+            : item.targetLabel === "Communications" ? "communications"
+            : item.targetLabel === "Documents" ? "documents"
+            : null,
+        ownerFocus: null,
+        handoffKind:
+            item.targetLabel === "Communications" ? "outreach"
+            : item.targetLabel === "Household" ? "verification"
+            : item.targetLabel != null ? "navigation"
+            : null,
+    }));
 }
 
 /** Project Current Work from Operational Context (pure, no I/O). */
 export function projectCurrentWork(context: OperationalContext): CurrentWorkViewModel {
-    const runtime = context.stageWorkRuntime ?? null;
+    const surface = buildCurrentWorkSurfaceVM({ context });
     const work = context.signals.work;
     const attention = context.signals.attention;
-    const checklist = checklistFromRuntime(runtime);
-    const totalCount = checklist.length;
-    const completedCount = checklist.filter((item) => item.state === "complete").length;
-    const primaryWorkItem = pickPrimaryOpenItem(runtime);
-    const actionableWorkItem = resolveActionableWorkItem(runtime, primaryWorkItem);
-    const primaryProjection =
-        runtime && actionableWorkItem ?
-            workIntentProjectionForStageWorkItem(runtime, actionableWorkItem)
-        :   null;
 
     const blockers: CurrentWorkBlocker[] = [];
     if (attention.needsAttention && attention.primaryReason) {
         blockers.push({ label: attention.primaryReason });
     }
 
-    const title =
-        primaryWorkItem?.label?.trim()
-        ?? (runtime && totalCount > 0 ? runtime.stage_label?.trim() : null)
-        ?? "No current work configured";
-
-    const purpose = runtime?.purpose?.trim() ?? null;
-    const progressLabel = formatCurrentWorkProgress(completedCount, totalCount);
-    const configuredPrimaryActionLabel = primaryActionLabelForItem(actionableWorkItem);
-    const pickerOutcomes =
-        actionableWorkItem
-            ? completionOutcomesForPicker(actionableWorkItem)
-            : [];
-
-    const completionState = resolveStageWorkOutcomeCompletionState({
-        stageWorkRuntime: runtime,
-        canMutate: context.capabilities.canMutate,
-    });
-
-    const showOutcomeCompletion = completionState.ownsPrimaryCompletion;
-
-    const completionBlockReason = showOutcomeCompletion
-        ? null
-        : outcomeCompletionBlockReason(
-            actionableWorkItem,
-            pickerOutcomes,
-            context.capabilities.canMutate,
-        );
-
-    const isEmpty = !runtime || totalCount === 0;
-    const primaryActionLabel =
-        isEmpty ? null
-        : configuredPrimaryActionLabel;
-
-    const supportingActions = deriveCurrentWorkSupportingActions({
-        recordHeaderSlots: context.recordHeaderActions ?? null,
-        showOutcomeCompletion,
-        primaryActionLabel,
-    });
+    const progressLabel = formatCurrentWorkProgress(surface.progress.completed, surface.progress.total);
+    const supportingActions = surface.supportingActions
+        .map((action) => action.resolved)
+        .filter((action): action is ResolvedActionForClient => action != null);
 
     return {
         microLabel: "Current Work",
-        title: isEmpty ? "No current work configured" : title,
-        purpose,
+        title: surface.title,
+        purpose: surface.description ?? null,
         progressLabel,
-        progressVerdict: progressVerdict(completedCount, totalCount),
-        primaryActionLabel,
-        supportingActionLabels: supportingActions.map((action) => action.label),
+        progressVerdict: progressVerdict(surface.progress.completed, surface.progress.total),
+        primaryActionLabel:
+            surface.isEmpty ? null : (surface.recordOutcomeAction?.label ?? surface.primaryAction?.label ?? null),
+        supportingActionLabels: surface.supportingActions.map((a) => a.label),
         supportingActions,
         blockers,
-        checklist,
-        isEmpty,
-        isReady: !isEmpty && blockers.length === 0 && completedCount === totalCount && totalCount > 0,
+        checklist: legacyChecklistFromSurface(surface),
+        isEmpty: surface.isEmpty,
+        isReady:
+            !surface.isEmpty
+            && blockers.length === 0
+            && surface.progress.completed === surface.progress.total
+            && surface.progress.total > 0,
         hasOverdue: work.overdueCount > 0,
         openCount: work.openCount,
-        completedCount,
-        totalCount,
-        showOutcomeCompletion,
-        outcomeCompletionBlockReason: completionBlockReason,
-        completionOutcomes: pickerOutcomes,
-        primaryWorkItem: actionableWorkItem ?? primaryWorkItem,
-        primaryProjection,
-        runtime,
+        completedCount: surface.progress.completed,
+        totalCount: surface.progress.total,
+        showOutcomeCompletion: surface.showOutcomeCompletion,
+        outcomeCompletionBlockReason: surface.outcomeCompletionBlockReason,
+        completionOutcomes: surface.completionOutcomes,
+        primaryWorkItem: surface.primaryWorkItem,
+        primaryProjection: surface.primaryProjection,
+        runtime: surface.runtime,
+        surface,
     };
 }

@@ -4,6 +4,8 @@
 
 Event spine, workflow execution, admin action router, and the canonical action catalog.
 
+**Operator inventory & Current Work alignment:** [action-system.md](../operator/action-system.md), [actions-current-work-alignment.md](../operator/actions-current-work-alignment.md).
+
 ---
 
 ## Spine

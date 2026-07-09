@@ -240,6 +240,7 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
         signals: buildOperationalContextSignals(subjectVm, truth, new Date()),
         stageWorkRuntime: subjectVm.workspace.stage_work_runtime ?? null,
         recordHeaderActions: subjectVm.actions.record_header ?? null,
+        publishedStageInputs: subjectVm.workspace.published_stage_inputs ?? null,
         capabilities: {
             canMutate,
             maskedChannels: input.maskedChannels ?? false,

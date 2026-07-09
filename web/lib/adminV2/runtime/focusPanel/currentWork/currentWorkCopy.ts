@@ -1,5 +1,4 @@
 /**
- * Primary completion CTA when configured outcomes exist.
- * Work title names the work; this CTA records the result.
+ * Primary completion CTA when configured outcomes exist (expanded view).
  */
-export const CURRENT_WORK_RECORD_OUTCOME_CTA = "Record what happened";
+export const CURRENT_WORK_RECORD_OUTCOME_CTA = "Record outcome";

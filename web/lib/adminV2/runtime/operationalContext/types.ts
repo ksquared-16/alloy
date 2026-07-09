@@ -1,5 +1,6 @@
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
 
 /**
  * Operational Context — the forward-facing runtime boundary for cards.
@@ -187,6 +188,11 @@ export type OperationalContext = {
      * Populated by `buildOperationalContext`; cards never fetch separately.
      */
     recordHeaderActions?: ResolvedActionsBySlot | null;
+    /**
+     * Published process/stage configuration from lifecycle builder — drives Current Work overlay.
+     * Same source as /processes stage bootstrap (operating plan + action catalog + field rules).
+     */
+    publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
     capabilities: OperationalContextCapabilities;
     status: OperationalContextStatus;
 };

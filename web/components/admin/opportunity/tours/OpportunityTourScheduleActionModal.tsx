@@ -18,6 +18,8 @@ export type OpportunityTourScheduleActionModalProps = {
     initialTourTime?: string | null;
     onSlotBooked: (result?: { booking?: TourBookingRow }) => void | Promise<void>;
     onLegacySubmit: (payload: { tour_date: string; tour_time: string }) => Promise<void>;
+    /** When embedded, renders inline (e.g. Current Work action panel) without a full-screen scrim. */
+    variant?: "modal" | "embedded";
 };
 
 type SlotPhase = "bootstrapping" | "duplicate_guard" | "schedule" | "reschedule";
@@ -68,7 +70,10 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
         initialTourTime,
         onSlotBooked,
         onLegacySubmit,
+        variant = "modal",
     } = props;
+
+    const isEmbedded = variant === "embedded";
 
     const loc = String(locationId ?? "").trim();
     const hasSite = Boolean(loc);
@@ -145,29 +150,45 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
 
     if (!open) return null;
 
+    const successBody = (
+        <>
+            <div className="text-base font-semibold text-alloy-midnight">{title}</div>
+            <div className="mt-4 space-y-3">
+                <ActionModalStatusMessage type="success" message={successMessage!} />
+                <p className="text-xs text-alloy-midnight/65">
+                    Tour date in the inquiry summary has been updated.
+                </p>
+                <div className="flex justify-end pt-1">
+                    <button
+                        type="button"
+                        className="rounded-lg bg-alloy-midnight px-3 py-2 text-sm font-medium text-white"
+                        onClick={onClose}
+                    >
+                        Done
+                    </button>
+                </div>
+            </div>
+        </>
+    );
+
     if (successMessage) {
+        if (isEmbedded) {
+            return (
+                <div
+                    className="w-full overflow-hidden rounded-xl border border-alloy-stone/25 bg-white p-5"
+                    data-tour-schedule-inline="success"
+                >
+                    {successBody}
+                </div>
+            );
+        }
         return (
             <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
                 <div
                     className="w-full max-w-md overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white p-5 shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="text-base font-semibold text-alloy-midnight">{title}</div>
-                    <div className="mt-4 space-y-3">
-                        <ActionModalStatusMessage type="success" message={successMessage} />
-                        <p className="text-xs text-alloy-midnight/65">
-                            Tour date in the inquiry summary has been updated.
-                        </p>
-                        <div className="flex justify-end pt-1">
-                            <button
-                                type="button"
-                                className="rounded-lg bg-alloy-midnight px-3 py-2 text-sm font-medium text-white"
-                                onClick={onClose}
-                            >
-                                Done
-                            </button>
-                        </div>
-                    </div>
+                    {successBody}
                 </div>
             </div>
         );
@@ -175,12 +196,8 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
 
     const showSlotChrome = hasSite && panel === "slots";
 
-    return (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-            <div
-                className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-            >
+    const scheduleBody = (
+            <>
                 {showSlotChrome && slotPhase === "bootstrapping" ? (
                     <div className="px-5 py-6" aria-busy="true">
                         <BosExecutionLoader
@@ -321,6 +338,27 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                         />
                     </div>
                 ) : null}
+            </>
+    );
+
+    if (isEmbedded) {
+        return (
+            <div
+                className="max-h-[min(70vh,520px)] w-full overflow-auto rounded-xl border border-alloy-stone/25 bg-white shadow-sm"
+                data-tour-schedule-inline="true"
+            >
+                {scheduleBody}
+            </div>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+            <div
+                className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {scheduleBody}
             </div>
         </div>
     );

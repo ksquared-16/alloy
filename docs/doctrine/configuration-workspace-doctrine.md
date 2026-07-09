@@ -5,7 +5,9 @@
 
 The Data Model workspace is the **canonical reference** for how Alloy Configuration workspaces should look, feel, and behave. Future configuration areas — Surface Builder, Business Processes, Processing, Documents, Communications, Automation — should adopt this grammar unless a domain-specific exception is documented.
 
-This doctrine covers **interaction and visual language only**. It does not change the field platform, capability engine, resolver registry, computed fields, or business process integration.
+This doctrine covers **interaction and visual language only**. It does not change the field platform, capability engine, resolver registry, or business process integration.
+
+**Field concepts (July 2026):** Business Fields, Calculated Fields (planned), and Runtime Signals are defined in `docs/platform/modules/field-concepts.md`. Data Model is **closed** after the clarification sprint; consumer adoption is next.
 
 ---
 
@@ -60,12 +62,14 @@ Platform fields may be **Hidden** via visibility metadata (`is_visible_in_form`,
 
 ### Field lifecycle (Active · Hidden · Archived · Deleted)
 
-| State | Meaning | Custom | Platform (`is_system`) | Computed |
+| State | Meaning | Custom | Platform (`is_system`) | Runtime Signals / Calculated |
 | --- | --- | --- | --- | --- |
 | **Active** | Normal workflow; offered for new builder/form/process usage where capability allows | ✓ | ✓ | view-only |
 | **Hidden** | Not offered for new usage; existing stored data remains | ✓ (`is_active` + visibility) | ✓ (visibility flags only) | — |
 | **Archived** | Retired from normal workflow; excluded from pickers; historical data retained | ✓ (`config.lifecycle_state`) | — | — |
 | **Deleted** | Removed only when dependency checks pass | ✓ when safe | — | — |
+
+**Terminology:** the Fields tab filter **Runtime Signals** and **Calculated** replace the legacy **Computed** label. Custom fields are labeled **Business** in the UI.
 
 **Hidden** maps to `is_active: false` and cleared visibility flags for custom fields. **Archived** maps to `config.lifecycle_state: "archived"` plus inactive visibility. **Deleted** requires `GET /api/admin/field-definitions/[id]/delete-safety` and server-side guards (field values, forms, drawer layouts implemented; focus panel, queue rows, business processes, documents, processing documented as uncovered).
 

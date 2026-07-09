@@ -3,6 +3,7 @@
 type Props = {
     outcomeLabel: string;
     effectLines: string[];
+    workTitle?: string | null;
     busy?: boolean;
     onConfirm: () => void;
     onCancel: () => void;
@@ -12,19 +13,25 @@ type Props = {
 export default function StageWorkOutcomeConfirm({
     outcomeLabel,
     effectLines,
+    workTitle,
     busy = false,
     onConfirm,
     onCancel,
 }: Props) {
+    const uniqueEffects = [...new Set(effectLines.map((line) => line.trim()).filter(Boolean))];
+
     return (
         <div className="alloy-os-outcome-confirm" data-testid="stage-work-outcome-confirm">
-            <p className="alloy-os-outcome-picker__eyebrow">Confirm result</p>
+            <p className="alloy-os-outcome-picker__eyebrow">Review outcome</p>
+            {workTitle ?
+                <p className="alloy-os-outcome-picker__hint">{workTitle}</p>
+            :   null}
             <p className="alloy-os-outcome-picker__title">{outcomeLabel}</p>
-            {effectLines.length > 0 ?
+            {uniqueEffects.length > 0 ?
                 <div className="alloy-os-outcome-confirm__effects">
-                    <p className="alloy-os-outcome-confirm__effects-title">Will</p>
+                    <p className="alloy-os-outcome-confirm__effects-title">What changes</p>
                     <ul className="alloy-os-outcome-confirm__list">
-                        {effectLines.map((line) => (
+                        {uniqueEffects.map((line) => (
                             <li key={line}>{line}</li>
                         ))}
                     </ul>
@@ -47,7 +54,7 @@ export default function StageWorkOutcomeConfirm({
                     data-testid="stage-work-outcome-confirm-submit"
                     onClick={onConfirm}
                 >
-                    {busy ? "Working…" : "Confirm"}
+                    {busy ? "Applying outcome…" : "Record outcome"}
                 </button>
             </div>
         </div>

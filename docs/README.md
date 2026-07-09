@@ -87,6 +87,9 @@ Start here: **`platform/foundation/system-overview.md`**
 28. `platform/operator/drawer-system.md`
 29. `platform/operator/drawer-sunset-roadmap.md` — **Drawer Sunset & Focus Panel Convergence** (sunset status matrix, freeze rule, editing-gap blocker, Household-then-Children targets — convergence lock)
 30. `platform/operator/operational-action-doctrine.md` — **Operational Actions** (status via action pipeline; Manage/rail catalog alignment; invariant example)
+30a. `platform/operator/action-system.md` — **Action System** (canonical entry-point inventory, registry alignment, Current Work consumption contract)
+30b. `platform/operator/current-work-surface.md` — **Current Work Surface** (Summary/Focus operational progression; V1 merged staging)
+30c. `platform/operator/actions-current-work-alignment.md` — **Actions ↔ Current Work Alignment** (surface roles, V1/P2 plan)
 31. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
 32. `platform/operator/presentation-runtime-doctrine.md` — **Presentation Runtime** (unifying umbrella: Design Surfaces, Experience Builder, renderer-first model, three axes — composition/Perspective/Viewpoint, Analytics-as-Dashboard, ownership + lifecycle; design stage)
 33. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing

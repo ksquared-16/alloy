@@ -4,6 +4,7 @@ import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
+import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
 import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type {
@@ -141,6 +142,8 @@ export type OpportunityDrawerViewModel = {
         work_intent_runtime: WorkIntentRuntimeProjection | null;
         /** Full stage work runtime — primary + additional configured work items. */
         stage_work_runtime: StageWorkRuntimeProjection | null;
+        /** Published builder stage config for Current Work (operating plan + catalog + field rules). */
+        published_stage_inputs?: PublishedStageInputsForCurrentWork | null;
     };
     first_paint: OpportunityDrawerFirstPaintContract;
     header: {

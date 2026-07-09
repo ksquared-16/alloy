@@ -21,14 +21,17 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { fetchFieldSectionRegistry, type FieldSectionRegistryRow } from "@/lib/admin/fieldSectionSelectOptions";
 import {
     buildSettingsFieldCatalogEntries,
-    countFieldsByOwnership,
-    filterCatalogByOwnership,
     groupCatalogEntriesBySection,
     hubEntityApiTypes,
     type SettingsFieldCatalogEntry,
     type SettingsHubEntityKey,
 } from "@/lib/fields/fieldCatalogForSettings";
+import { countFieldsByConcept, filterCatalogByConcept } from "@/lib/fields/fieldConceptModel";
 import { isOperatorHiddenField } from "@/lib/fields/fieldSettingsOperatorUi";
+import {
+    buildConfigWithInlineOptions,
+    fieldSupportsInlineOptions,
+} from "@/lib/fields/fieldDefinitionInlineOptions";
 import {
     buildFieldLifecyclePatch,
     readFieldLifecycleState,
@@ -190,8 +193,8 @@ export default function DataModelFieldsTab({
         onCatalogChange?.(entries);
     }, [entries, onCatalogChange]);
 
-    const allCounts = countFieldsByOwnership(entries);
-    const filtered = filterCatalogByOwnership(entries, ownershipFilter);
+    const allCounts = countFieldsByConcept(entries);
+    const filtered = filterCatalogByConcept(entries, ownershipFilter);
     const groups = groupCatalogEntriesBySection(filtered);
     const archivedKeys = archivedCategoryKeys(categoryRegistry);
     const sectionKeys = orderedEntityCategoryKeys(hubEntity, groups.keys(), categoryRegistry).filter((sectionKey) => {
@@ -208,16 +211,24 @@ export default function DataModelFieldsTab({
         try {
             const lifecycle = values.is_active ? "active" : readFieldLifecycleState(entry.fieldDef) === "archived" ? "archived" : "hidden";
             const lifecyclePatch = buildFieldLifecyclePatch(lifecycle, entry.fieldDef);
+            const body: Record<string, unknown> = {
+                label: values.label.trim() || null,
+                description: values.description.trim() || null,
+                help_text: values.help_text.trim() || null,
+                section_key: values.category_key.trim() || "custom",
+                ...lifecyclePatch,
+            };
+            if (fieldSupportsInlineOptions(entry.fieldDef.field_type) && values.options) {
+                body.config = buildConfigWithInlineOptions(
+                    entry.fieldDef.config,
+                    values.options,
+                    values.default_option_value ?? "",
+                );
+            }
             const res = await fetch(`/api/admin/field-definitions/${entry.fieldDef.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    label: values.label.trim() || null,
-                    description: values.description.trim() || null,
-                    help_text: values.help_text.trim() || null,
-                    section_key: values.category_key.trim() || "custom",
-                    ...lifecyclePatch,
-                }),
+                body: JSON.stringify(body),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
@@ -311,23 +322,27 @@ export default function DataModelFieldsTab({
         setCreateSaving(true);
         setCreateError(null);
         try {
+            const payload: Record<string, unknown> = {
+                entity_type: primaryEntityType,
+                field_key: key,
+                label: values.label.trim() || key,
+                description: values.description.trim() || null,
+                field_type: values.field_type,
+                section_key: values.category_key.trim() || "custom",
+                sort_order: 100,
+                is_required: false,
+                is_active: values.is_active,
+                is_visible_in_form: values.is_active,
+                is_visible_in_drawer: values.is_active,
+                is_visible_in_table: values.is_active,
+            };
+            if (fieldSupportsInlineOptions(values.field_type) && values.options && values.options.length > 0) {
+                payload.config = buildConfigWithInlineOptions(null, values.options, values.default_option_value ?? "");
+            }
             const res = await fetch("/api/admin/field-definitions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    entity_type: primaryEntityType,
-                    field_key: key,
-                    label: values.label.trim() || key,
-                    description: values.description.trim() || null,
-                    field_type: values.field_type,
-                    section_key: values.category_key.trim() || "custom",
-                    sort_order: 100,
-                    is_required: false,
-                    is_active: values.is_active,
-                    is_visible_in_form: values.is_active,
-                    is_visible_in_drawer: values.is_active,
-                    is_visible_in_table: values.is_active,
-                }),
+                body: JSON.stringify(payload),
             });
             const json = await res.json().catch(() => ({}));
             if (res.status === 409) {
@@ -354,10 +369,11 @@ export default function DataModelFieldsTab({
                         onOwnershipFilterChange?.(next);
                     }}
                     counts={{
-                        all: allCounts.total,
+                        all: allCounts.all,
                         platform: allCounts.platform,
                         custom: allCounts.custom,
-                        computed: allCounts.computed,
+                        runtime_signals: allCounts.runtime_signals,
+                        calculated_fields: allCounts.calculated_fields,
                     }}
                 />
                 {canMutate ? (

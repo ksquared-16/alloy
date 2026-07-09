@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import ConfigurationStatusToggle from "@/components/adminV2/configuration/ConfigurationStatusToggle";
+import ConfigurationFieldOptionsEditor from "@/components/adminV2/configuration/ConfigurationFieldOptionsEditor";
 import FieldSurfaceAvailabilityBadges from "@/components/admin/fields/FieldSurfaceAvailabilityBadges";
-import { configurationFieldUnavailableHint } from "@/lib/adminV2/configuration/configurationWorkspaceOperatorUi";
 import { CONFIG_WORKSPACE_ROW_INNER_CLASS } from "@/lib/adminV2/configuration/configurationWorkspaceOperatorUi";
-import { FIELD_OWNERSHIP_LABELS } from "@/lib/fields/fieldOwnership";
+import { fieldConceptChipLabel, resolveConfigurationFieldRowHint } from "@/lib/fields/fieldConceptModel";
 import { resolveSettingsCatalogEntryAvailability } from "@/lib/fields/fieldSurfaceAvailability";
 import {
     fieldRowEditCapability,
@@ -24,6 +24,12 @@ import {
     DATA_MODEL_ICON_STROKE,
 } from "@/lib/fields/dataModelWorkspaceIcons";
 import {
+    fieldSupportsInlineOptions,
+    getDefaultOptionValueFromConfig,
+    readInlineOptionsFromFieldConfig,
+} from "@/lib/fields/fieldDefinitionInlineOptions";
+import type { FieldOption } from "@/lib/fields/fieldDefinitionConfig";
+import {
     fieldLifecycleActions,
     readFieldLifecycleState,
     type FieldDeleteSafetySummary,
@@ -37,6 +43,8 @@ export type FieldInlineEditValues = {
     help_text: string;
     category_key: string;
     is_active: boolean;
+    options?: FieldOption[];
+    default_option_value?: string;
 };
 
 type Props = {
@@ -63,12 +71,17 @@ function TypeIcon({ fieldType }: { fieldType: string }) {
 function valuesFromEntry(entry: SettingsFieldCatalogEntry): FieldInlineEditValues {
     const d = entry.fieldDef;
     const lifecycle = readFieldLifecycleState(d);
+    const options = d && fieldSupportsInlineOptions(d.field_type) ? readInlineOptionsFromFieldConfig(d.config) : undefined;
+    const default_option_value =
+        d && fieldSupportsInlineOptions(d.field_type) ? getDefaultOptionValueFromConfig(d.config) : undefined;
     return {
         label: d?.label ?? entry.label,
         description: d?.description ?? entry.description ?? "",
         help_text: d?.help_text ?? "",
         category_key: d?.section_key ?? entry.section_key,
         is_active: lifecycle === "active",
+        options,
+        default_option_value,
     };
 }
 
@@ -169,9 +182,12 @@ export default function DataModelFieldRow({
             : undefined,
     });
 
-    const unavailableHint = configurationFieldUnavailableHint(availability);
+    const unavailableHint = resolveConfigurationFieldRowHint({
+        entry,
+        availability,
+        lifecycle: lifecycle.state,
+    });
     const statusIsActive = lifecycle.state === "active";
-
     return (
         <div
             className={[CONFIG_WORKSPACE_ROW_CLASS, expanded ? CONFIG_WORKSPACE_ROW_EXPANDED_CLASS : ""].join(" ")}
@@ -199,7 +215,7 @@ export default function DataModelFieldRow({
                     <span className="block truncate text-[13px] font-medium text-alloy-midnight">{entry.label}</span>
                 </button>
                 <span className={`hidden sm:inline ${ownershipChipClass(entry.ownership)}`}>
-                    {FIELD_OWNERSHIP_LABELS[entry.ownership]}
+                    {fieldConceptChipLabel(entry)}
                 </span>
                 <span className="hidden shrink-0 text-[10px] text-alloy-midnight/45 sm:inline">
                     {fieldTypeOperatorLabel(entry.field_type)}
@@ -218,7 +234,7 @@ export default function DataModelFieldRow({
                         title={unavailableHint.title}
                         data-testid="data-model-field-unavailable-hint"
                     >
-                        Unavailable · {unavailableHint.label}
+                        {unavailableHint.label}
                     </span>
                 ) : null}
                 {!expanded && canMutate ? (
@@ -333,6 +349,24 @@ export default function DataModelFieldRow({
                                     stay locked.
                                 </p>
                             ) : null}
+                            {editable &&
+                            entry.fieldDef &&
+                            fieldSupportsInlineOptions(entry.fieldDef.field_type) ? (
+                                <div className="sm:col-span-2">
+                                    <ConfigurationFieldOptionsEditor
+                                        options={draft.options ?? []}
+                                        defaultOptionValue={draft.default_option_value ?? ""}
+                                        disabled={!editable || saving}
+                                        onChange={({ options, defaultOptionValue }) =>
+                                            setDraft((d) => ({
+                                                ...d,
+                                                options,
+                                                default_option_value: defaultOptionValue,
+                                            }))
+                                        }
+                                    />
+                                </div>
+                            ) : null}
                         </div>
                     ) : (
                         <div className="space-y-1 text-[12px] text-alloy-midnight/60">
@@ -344,8 +378,10 @@ export default function DataModelFieldRow({
                             {entry.ownership === "platform" || entry.ownership === "computed" ? (
                                 <p className="text-[11px] text-alloy-midnight/45">
                                     {entry.ownership === "computed"
-                                        ? "Computed fields are platform-defined and view-only."
-                                        : "Platform fields describe your organization’s model. Placement is configured in Surface Builder."}
+                                        ? entry.computedField?.concept_kind === "calculated_field"
+                                            ? "Calculated fields use operator-defined formulas (builder planned). View-only today."
+                                            : "Runtime signals are platform projections, not configurable business fields."
+                                        : "Platform fields describe your organization's model. Placement is configured in Surface Builder."}
                                 </p>
                             ) : null}
                         </div>
