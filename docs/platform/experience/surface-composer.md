@@ -1,7 +1,8 @@
 # Surface Composer
 
-**Status:** Canonical (July 2026)  
-**Scope:** All configurable runtime surfaces in Alloy — Queue Row, Focus Panel, nested expansion surfaces, and future surfaces.
+**Status:** Canonical · **Frozen** (July 2026) — extend, do not replace  
+**Scope:** All configurable runtime surfaces in Alloy — Queue Row, Focus Panel, nested expansion surfaces, and future surfaces.  
+**Closeout:** [`../presentation-runtime-v2-closeout.md`](../presentation-runtime-v2-closeout.md) · **Retrospective:** [`../presentation-runtime-v2-retrospective.md`](../presentation-runtime-v2-retrospective.md)
 
 ## Doctrine
 
@@ -31,6 +32,21 @@ Individual surfaces contribute only:
 - runtime renderer
 - default layout
 - placement constraints
+
+## Runtime First Rule
+
+Every future operational capability should **first** attempt to use:
+
+- **Runtime Surface**
+- **Nested Surface**
+- **Section**
+- **Field**
+- **Evidence Surface**
+- **Edit Mode**
+
+Only introduce new presentation concepts when existing runtime composition cannot reasonably express the workflow.
+
+Scheduling, Attendance, Billing, Documents, Communications, and Processing should extend Surface Composer — not invent parallel builders or renderers. See [`../presentation-runtime-v2-closeout.md`](../presentation-runtime-v2-closeout.md) § Future roadmap.
 
 ## Reference implementations
 
@@ -123,8 +139,14 @@ Canonical Focus Panel Surface Composer rules (see also
 5. **Empty enabled sections must be actionable** (e.g. Emergency Contacts → Add emergency contact).
 6. **Queue Row stays frozen** — Surface Composer consumers must not reopen Queue Row builder work.
 
+## Freeze (July 2026)
+
+Presentation Runtime V2 is **complete and frozen**. Queue Row remains the canonical interaction reference. Focus Panel and nested surfaces are the proof that depth extends through shared composer primitives. Do not reopen architecture; ship business workflows on this model.
+
 ## Related docs
 
+- [`../presentation-runtime-v2-closeout.md`](../presentation-runtime-v2-closeout.md) — what shipped, doctrine, limitations, freeze
+- [`../presentation-runtime-v2-retrospective.md`](../presentation-runtime-v2-retrospective.md) — engineering retrospective
 - [`presentation-runtime-v2.md`](./presentation-runtime-v2.md) — runtime tree and surfaces
 - [`../operator/universal-nested-surface-drill-in.md`](../operator/universal-nested-surface-drill-in.md) — nested drill-in persistence and runtime
 - [`../../sprints/07_2026/queue-row-builder-runtime-vocabulary-handoff.md`](../../sprints/07_2026/queue-row-builder-runtime-vocabulary-handoff.md) — Queue Row freeze
