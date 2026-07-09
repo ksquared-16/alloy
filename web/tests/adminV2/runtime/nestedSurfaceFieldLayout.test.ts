@@ -80,6 +80,17 @@ describe("nestedSurfaceFieldLayout", () => {
         expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.last_name")).toBe("half");
         const keys = config.groups.find((g) => g.key === "identity")?.selectedFieldKeys ?? [];
         expect(keys.indexOf("child.first_name")).toBeGreaterThan(keys.indexOf("child.last_name"));
+        const rows = chunkNestedSurfaceFieldsForHalfRowLayout(keys, (k) =>
+            fieldLayoutWidthForNestedGroup(config, "identity", k),
+        );
+        expect(rows).toContainEqual(["child.last_name", "child.first_name"]);
+    });
+
+    it("pairs DOB and age when dragged beside each other", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.dob_age", "child.date_of_birth", "beside");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.date_of_birth")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.dob_age")).toBe("half");
     });
 
     it("stacks a field on a new full row when dropped below", () => {

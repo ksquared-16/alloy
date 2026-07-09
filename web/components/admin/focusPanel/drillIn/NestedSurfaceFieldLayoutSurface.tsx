@@ -358,25 +358,35 @@ function FieldInstance({
         >
             {children}
             {composing ? (
-                <div className="fp-field-instance__chrome" onClick={(e) => e.stopPropagation()}>
+                <>
                     {canPairBeside ? (
                         <div
-                            className={clsx("fp-layout-drop-zone fp-layout-drop-zone--beside", dropHint === "beside" && "is-active")}
+                            className={clsx(
+                                "fp-layout-drop-zone fp-layout-drop-zone--beside",
+                                dropHint === "beside" && "is-active",
+                            )}
                             data-drop-zone="beside"
                             onDragOver={(e) => onDragOver(e, "beside")}
                             onDragLeave={() => onDropHint(null)}
                             onDrop={(e) => onDrop(e, "beside")}
-                        />
+                        >
+                            <span className="fp-layout-drop-hint">Place beside</span>
+                        </div>
                     ) : null}
                     <div
-                        className={clsx("fp-layout-drop-zone fp-layout-drop-zone--below", dropHint === "below" && "is-active")}
+                        className={clsx(
+                            "fp-layout-drop-zone fp-layout-drop-zone--below",
+                            dropHint === "below" && "is-active",
+                        )}
                         data-drop-zone="below"
                         onDragOver={(e) => onDragOver(e, "below")}
                         onDragLeave={() => onDropHint(null)}
                         onDrop={(e) => onDrop(e, "below")}
-                    />
-
-                    <div className="fp-field-instance__toolbar">
+                    >
+                        <span className="fp-layout-drop-hint">Place below</span>
+                    </div>
+                    <div className="fp-field-instance__chrome" onClick={(e) => e.stopPropagation()}>
+                        <div className="fp-field-instance__toolbar">
                         <button
                             type="button"
                             className="fp-layout-field__grip"
@@ -469,6 +479,7 @@ function FieldInstance({
                         </button>
                     </div>
                 </div>
+                </>
             ) : null}
         </div>
     );
