@@ -47,7 +47,16 @@ function normalizeTab(raw: string | undefined): DataModelWorkspaceTab {
 
 function normalizeOwnershipFilter(raw: string | undefined): FieldOwnershipFilter {
     const t = (raw ?? "").trim().toLowerCase();
-    if (t === "platform" || t === "custom" || t === "computed" || t === "all") return t;
+    if (
+        t === "platform" ||
+        t === "custom" ||
+        t === "computed" ||
+        t === "runtime_signals" ||
+        t === "calculated_fields" ||
+        t === "all"
+    ) {
+        return t === "computed" ? "runtime_signals" : (t as FieldOwnershipFilter);
+    }
     return "all";
 }
 
@@ -106,7 +115,7 @@ export default function DataModelWorkspaceClient({
     );
     const ownershipFromUrl = useMemo(() => {
         const tabRaw = (initialTab ?? searchParams.get("tab") ?? "").trim().toLowerCase();
-        if (tabRaw === "computed_signals") return "computed" as FieldOwnershipFilter;
+        if (tabRaw === "computed_signals") return "runtime_signals" as FieldOwnershipFilter;
         return normalizeOwnershipFilter(searchParams.get("ownership") ?? undefined);
     }, [initialTab, searchParams]);
     const [totalFieldsByEntity, setTotalFieldsByEntity] = useState<Partial<Record<FieldEntityKey, number>>>({});
@@ -223,15 +232,20 @@ export default function DataModelWorkspaceClient({
 
     const openFieldInline = (entry: SettingsFieldCatalogEntry) => {
         setFocusFieldRefKey(entry.refKey);
-        const ownership = entry.ownership === "computed" ? "computed" : "all";
+        const ownership =
+            entry.ownership === "computed"
+                ? entry.computedField?.concept_kind === "calculated_field"
+                    ? "calculated_fields"
+                    : "runtime_signals"
+                : "all";
         setFieldsOwnershipFilter(ownership);
         onTabChange("fields", ownership);
     };
 
     const viewComputedFields = () => {
         setFocusFieldRefKey(null);
-        setFieldsOwnershipFilter("computed");
-        onTabChange("fields", "computed");
+        setFieldsOwnershipFilter("runtime_signals");
+        onTabChange("fields", "runtime_signals");
     };
 
     return (

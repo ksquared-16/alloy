@@ -13,6 +13,7 @@ import {
     type ComputedFieldDefinition,
     type ComputedFieldSettingsEntity,
 } from "@/lib/fields/computedFieldCatalog";
+import { conceptKindForComputedField } from "@/lib/fields/fieldConceptModel";
 import type { FieldOwnershipKind } from "@/lib/fields/fieldOwnership";
 import {
     platformFieldsForEntity,
@@ -105,6 +106,10 @@ function customEntry(entityType: string, row: FieldDef): SettingsFieldCatalogEnt
 }
 
 function computedEntry(row: ComputedFieldDefinition): SettingsFieldCatalogEntry {
+    const withConcept: ComputedFieldDefinition = {
+        ...row,
+        concept_kind: conceptKindForComputedField(row),
+    };
     return {
         id: `computed:${row.refKey}`,
         ownership: "computed",
@@ -117,7 +122,7 @@ function computedEntry(row: ComputedFieldDefinition): SettingsFieldCatalogEntry 
         storage_line: row.source_derivation,
         editable: false,
         configurable: false,
-        computedField: row,
+        computedField: withConcept,
     };
 }
 

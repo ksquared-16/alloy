@@ -4,14 +4,13 @@ import FieldCatalogCard from "@/components/admin/fields/FieldCatalogCard";
 import FieldOwnershipFilterTabs, { type FieldOwnershipFilter } from "@/components/admin/fields/FieldOwnershipFilterTabs";
 import FieldSettingsEntityHeader from "@/components/admin/fields/FieldSettingsEntityHeader";
 import {
-    countFieldsByOwnership,
-    filterCatalogByOwnership,
     groupCatalogEntriesBySection,
     orderedSectionKeys,
     sectionDisplayLabel,
     type SettingsFieldCatalogEntry,
     type SettingsHubEntityKey,
 } from "@/lib/fields/fieldCatalogForSettings";
+import { countFieldsByConcept, filterCatalogByConcept } from "@/lib/fields/fieldConceptModel";
 import {
     SETTINGS_ENTITY_FIELD_EXPLANATIONS,
     SETTINGS_ENTITY_SURFACES,
@@ -46,17 +45,18 @@ export default function FieldsSettingsWorkspaceView({
     canMutate,
     headerActions,
 }: Props) {
-    const allCounts = countFieldsByOwnership(entries);
-    const filtered = filterCatalogByOwnership(entries, ownershipFilter);
-    const filteredCounts = countFieldsByOwnership(filtered);
+    const allCounts = countFieldsByConcept(entries);
+    const filtered = filterCatalogByConcept(entries, ownershipFilter);
+    const filteredCounts = countFieldsByConcept(filtered);
     const groups = groupCatalogEntriesBySection(filtered);
     const sectionKeys = orderedSectionKeys(groups);
 
     const tabCounts = {
-        all: allCounts.total,
+        all: allCounts.all,
         platform: allCounts.platform,
         custom: allCounts.custom,
-        computed: allCounts.computed,
+        runtime_signals: allCounts.runtime_signals,
+        calculated_fields: allCounts.calculated_fields,
     };
 
     return (
@@ -64,7 +64,7 @@ export default function FieldsSettingsWorkspaceView({
             <FieldSettingsEntityHeader
                 entityType={hubEntity}
                 entityLabel={entityLabel}
-                fieldCount={filteredCounts.total}
+                fieldCount={filteredCounts.all}
                 platformCount={allCounts.platform}
                 customCount={allCounts.custom}
                 computedCount={allCounts.computed}

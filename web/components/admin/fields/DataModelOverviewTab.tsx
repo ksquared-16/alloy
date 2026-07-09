@@ -8,7 +8,8 @@ import {
     DATA_MODEL_USAGE_SURFACES,
 } from "@/lib/fields/dataModelWorkspaceModel";
 import { relationshipsForHubEntity } from "@/lib/fields/entityRelationshipCatalog";
-import { countFieldsByOwnership, type SettingsFieldCatalogEntry, type SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
+import { countFieldsByConcept } from "@/lib/fields/fieldConceptModel";
+import type { SettingsFieldCatalogEntry, SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
 import {
     DATA_MODEL_BUILDER_ICONS,
     DATA_MODEL_ICON_STROKE,
@@ -89,7 +90,7 @@ export default function DataModelOverviewTab({
 }: Props) {
     const relationships = relationshipsForHubEntity(hubEntity).slice(0, 3);
     const fieldPreview = previewFieldSections(entries, 6, 2).flatMap((s) => s.shown).slice(0, 6);
-    const counts = countFieldsByOwnership(entries);
+    const counts = countFieldsByConcept(entries);
 
     return (
         <div className="grid gap-1.5 xl:grid-cols-2" data-testid="data-model-overview-tab">
@@ -130,8 +131,9 @@ export default function DataModelOverviewTab({
                 action={onAddField ? <TextAction label="+ Add" onClick={onAddField} testId="overview-add-field" /> : null}
             >
                 <p className="mb-0.5 text-[9px] text-alloy-midnight/40">
-                    {counts.platform} platform · {counts.custom} custom
-                    {counts.computed > 0 ? ` · ${counts.computed} computed` : ""}
+                    {counts.platform} platform · {counts.custom} business
+                    {counts.runtime_signals > 0 ? ` · ${counts.runtime_signals} runtime signals` : ""}
+                    {counts.calculated_fields > 0 ? ` · ${counts.calculated_fields} calculated` : ""}
                 </p>
                 <ul className="space-y-0">
                     {fieldPreview.map((entry) => (
@@ -163,14 +165,14 @@ export default function DataModelOverviewTab({
                             Categories
                         </button>
                     ) : null}
-                    {counts.computed > 0 && onViewComputedFields ? (
+                    {counts.runtime_signals > 0 && onViewComputedFields ? (
                         <button
                             type="button"
                             onClick={onViewComputedFields}
                             className="text-[9px] font-medium text-alloy-midnight/45 hover:text-alloy-bend-pine"
                             data-testid="overview-view-computed"
                         >
-                            {counts.computed} computed
+                            {counts.runtime_signals} runtime signals
                         </button>
                     ) : null}
                 </div>
