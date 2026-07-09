@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type {
@@ -30,7 +30,7 @@ import {
     deriveThreadReplyRecipientIds,
     threadChannelToWorkspaceMode,
 } from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
-import { AdminAuthContext } from "@/contexts/AdminAuthContext";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
 
 /**
@@ -171,7 +171,7 @@ export default function FamilyCommunicationWorkspace(props: {
     const [sendError, setSendError] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
     const mountedRef = useRef(false);
-    const adminAuth = useContext(AdminAuthContext);
+    const adminAuth = useAdminAuthOptional();
     const isActivityEmbed = props.surfaceVariant === "activity_embed";
 
     const syncActivityThreadContext = useCallback(
