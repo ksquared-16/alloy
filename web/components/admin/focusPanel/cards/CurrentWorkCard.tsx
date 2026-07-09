@@ -6,6 +6,7 @@ import clsx from "clsx";
 import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
 import StageWorkOutcomeConfirm from "@/components/workIntent/StageWorkOutcomeConfirm";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
 import { useWorkIntentOutcomeCompletion } from "@/components/workIntent/useWorkIntentOutcomeCompletion";
 import { buildCurrentWorkCardEvidence } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
 import { buildOutcomeCompletionSummary } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildOutcomeCompletionSummary";
@@ -18,11 +19,13 @@ import type {
     CurrentWorkCompletionSummary,
     CurrentWorkSurfaceVM,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
+import { resolveCurrentWorkActionSurface } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionSurface";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
     FocusPanelCoordination,
     FocusPanelPerspectiveLevel,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import {
     useDismissSignal,
     useReportPerspective,
@@ -35,11 +38,12 @@ type Props = {
     context: OperationalContext;
     receded?: boolean;
     coordination?: FocusPanelCoordination;
+    mutation?: FocusPanelMutation;
 };
 
 type CompletionPhase = "working" | "select_result" | "confirm" | "processing" | "complete";
 
-export default function CurrentWorkCard({ model, context, receded = false, coordination }: Props) {
+export default function CurrentWorkCard({ model, context, receded = false, coordination, mutation }: Props) {
     const evidence = useMemo(() => buildCurrentWorkCardEvidence(context), [context]);
     const vm = evidence.viewModel;
     const surface = vm.surface;
@@ -51,6 +55,15 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     const [pendingOutcomeKey, setPendingOutcomeKey] = useState<string | null>(null);
     const [completionSummary, setCompletionSummary] = useState<CurrentWorkCompletionSummary | null>(null);
     const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+    const [activePanelAction, setActivePanelAction] = useState<CurrentWorkActionVM | null>(null);
+
+    const closeActionPanel = useCallback(() => {
+        setActivePanelAction(null);
+    }, []);
+
+    const handleActionPanelComplete = useCallback(() => {
+        closeActionPanel();
+    }, [closeActionPanel]);
 
     const pendingOutcome =
         vm.completionOutcomes.find((row) => row.outcome_key === pendingOutcomeKey) ?? null;
@@ -68,6 +81,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
         if (request?.card !== "current_work") return;
         setFocused(true);
         resetCompletion();
+        closeActionPanel();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
     }, [requestNonce]);
 
@@ -76,22 +90,16 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     useDismissSignal(coordination, "current_work", () => {
         setFocused(false);
         resetCompletion();
+        closeActionPanel();
     });
 
     const openFocus = () => {
         setFocused(true);
         resetCompletion();
+        closeActionPanel();
     };
 
-    const invokeAction = (action: CurrentWorkActionVM) => {
-        if (action.handlerKey === "record_outcome") {
-            setCompletionPhase("select_result");
-            return;
-        }
-        if (action.handlerKey === "expand_work") {
-            openFocus();
-            return;
-        }
+    const invokeHeaderDelegate = (action: CurrentWorkActionVM) => {
         const resolved = action.resolved;
         if (resolved && coordination?.invokeHeaderAction) {
             coordination.invokeHeaderAction(resolved);
@@ -109,6 +117,57 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 payload: {},
                 workflow_id: null,
             });
+        }
+    };
+
+    const invokeCommunicationsComposer = () => {
+        const composer = coordination?.resolveCommunicationsComposerAction?.();
+        if (composer && coordination?.invokeHeaderAction) {
+            setHandoffNotice(null);
+            coordination.invokeHeaderAction(composer);
+            return;
+        }
+        if (coordination?.focusTargets?.has("communications") && coordination.requestFocus) {
+            setHandoffNotice(null);
+            coordination.requestFocus("communications", null, { card: "current_work", focus: null });
+            return;
+        }
+        setHandoffNotice(
+            "No communications composer is available — open Activity or add Communications to this panel.",
+        );
+    };
+
+    const invokeAction = (action: CurrentWorkActionVM) => {
+        if (action.handlerKey === "record_outcome") {
+            closeActionPanel();
+            setCompletionPhase("select_result");
+            return;
+        }
+        if (action.handlerKey === "expand_work") {
+            openFocus();
+            return;
+        }
+
+        const surface = resolveCurrentWorkActionSurface(action);
+        switch (surface) {
+            case "inline_form":
+                setHandoffNotice(null);
+                setFocused(true);
+                setActivePanelAction(action);
+                return;
+            case "communications_composer":
+                invokeCommunicationsComposer();
+                return;
+            case "header_delegate":
+                setHandoffNotice(null);
+                invokeHeaderDelegate(action);
+                return;
+            case "unsupported":
+            default:
+                setHandoffNotice(null);
+                setFocused(true);
+                setActivePanelAction(action);
+                return;
         }
     };
 
@@ -159,10 +218,10 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 coordination?.openFocusPanelMode?.("activity");
                 return;
             case "header_action": {
-                const action = coordination?.resolveCommunicationsComposerAction?.();
-                if (action && coordination?.invokeHeaderAction) {
+                const composerAction = coordination?.resolveCommunicationsComposerAction?.();
+                if (composerAction && coordination?.invokeHeaderAction) {
                     setHandoffNotice(null);
-                    coordination.invokeHeaderAction(action);
+                    coordination.invokeHeaderAction(composerAction);
                     return;
                 }
                 setHandoffNotice(
@@ -201,6 +260,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     const closeFocus = () => {
         setFocused(false);
         resetCompletion();
+        closeActionPanel();
     };
 
     const statusChip = (
@@ -247,32 +307,43 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 }}
             />
         : focused ?
-            <FocusedBody
-                surface={surface}
-                completionPhase={completionPhase}
-                pendingOutcome={pendingOutcome}
-                pendingOutcomeKey={pendingOutcomeKey}
-                primaryWorkItem={vm.primaryWorkItem}
-                busy={busy}
-                error={error}
-                onChecklistItem={handleChecklistItem}
-                handoffNotice={handoffNotice}
-                onSelectOutcome={(key) => {
-                    clearError();
-                    setPendingOutcomeKey(key);
-                    setCompletionPhase("confirm");
-                }}
-                onCancelOutcome={() => {
-                    setPendingOutcomeKey(null);
-                    setCompletionPhase("select_result");
-                }}
-                onConfirmOutcome={handleConfirmOutcome}
-                onCancelPicker={() => {
-                    setPendingOutcomeKey(null);
-                    setCompletionPhase("working");
-                }}
-                onAction={invokeAction}
-            />
+            <>
+                <FocusedBody
+                    surface={surface}
+                    completionPhase={completionPhase}
+                    pendingOutcome={pendingOutcome}
+                    pendingOutcomeKey={pendingOutcomeKey}
+                    primaryWorkItem={vm.primaryWorkItem}
+                    busy={busy}
+                    error={error}
+                    onChecklistItem={handleChecklistItem}
+                    handoffNotice={handoffNotice}
+                    onSelectOutcome={(key) => {
+                        clearError();
+                        setPendingOutcomeKey(key);
+                        setCompletionPhase("confirm");
+                    }}
+                    onCancelOutcome={() => {
+                        setPendingOutcomeKey(null);
+                        setCompletionPhase("select_result");
+                    }}
+                    onConfirmOutcome={handleConfirmOutcome}
+                    onCancelPicker={() => {
+                        setPendingOutcomeKey(null);
+                        setCompletionPhase("working");
+                    }}
+                    onAction={invokeAction}
+                />
+                {activePanelAction ?
+                    <CurrentWorkActionPanel
+                        action={activePanelAction}
+                        context={context}
+                        mutation={mutation}
+                        onClose={closeActionPanel}
+                        onComplete={handleActionPanelComplete}
+                    />
+                :   null}
+            </>
         :   <SummaryBody
                 surface={surface}
                 onChecklistItem={handleChecklistItem}

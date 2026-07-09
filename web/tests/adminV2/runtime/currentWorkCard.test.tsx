@@ -161,6 +161,37 @@ describe("CurrentWorkCard", () => {
         expect(src).not.toContain("Communications is not on this panel");
         expect(src).toContain('openFocusPanelMode?.("activity")');
         expect(src).toContain("invokeHeaderAction");
+        expect(src).toContain("resolveCurrentWorkActionSurface");
+        expect(src).toContain("CurrentWorkActionPanel");
+        expect(src).not.toMatch(/\benrollment\b/i);
+        expect(src).not.toMatch(/\bwaitlist\b/i);
+    });
+
+    it("wires supporting actions through action surface resolver and inline panel shell", () => {
+        const cardSrc = readFileSync(
+            path.join(process.cwd(), "components/admin/focusPanel/cards/CurrentWorkCard.tsx"),
+            "utf8",
+        );
+        const panelSrc = readFileSync(
+            path.join(process.cwd(), "components/admin/focusPanel/cards/CurrentWorkActionPanel.tsx"),
+            "utf8",
+        );
+        expect(cardSrc).toContain('case "inline_form"');
+        expect(cardSrc).toContain('case "header_delegate"');
+        expect(cardSrc).toContain('case "communications_composer"');
+        expect(cardSrc).toContain("CurrentWorkActionPanel");
+        expect(panelSrc).toContain('data-work-action-panel="true"');
+        expect(panelSrc).toContain('variant="embedded"');
+        expect(panelSrc).toContain('data-work-action-panel-state="unsupported"');
+        expect(panelSrc).not.toMatch(/\benrollment\b/i);
+    });
+
+    it("passes mutation seam into Current Work card from FocusPanelCardRenderer", () => {
+        const src = readFileSync(
+            path.join(process.cwd(), "components/admin/focusPanel/FocusPanelCardRenderer.tsx"),
+            "utf8",
+        );
+        expect(src).toMatch(/model\.key === "current_work"[\s\S]*mutation=\{mutation\}/);
     });
 
     it("uses neutral focused elevation CSS — no double Bend Pine ring on focused card", () => {

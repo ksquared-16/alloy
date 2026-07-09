@@ -129,7 +129,15 @@ export default function FocusPanelCardRenderer({
         );
     }
     if (model.key === "current_work") {
-        return <CurrentWorkCard model={model} context={context} receded={receded} coordination={coordination} />;
+        return (
+            <CurrentWorkCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+                mutation={mutation}
+            />
+        );
     }
     if (model.key === "readiness_kpi") {
         return <ReadinessCard model={model} context={context} receded={receded} coordination={coordination} />;

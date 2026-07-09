@@ -11,7 +11,10 @@ import { lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBin
 import type { StageActionCatalogV1, StageActionRecommendation } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
-import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import {
+    lifecycleFieldRequirementById,
+    type LifecycleStageFieldRules,
+} from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import { getPlatformAction } from "@/lib/platform/actions/platformActionCatalog";
 
 import { actionCompetesWithCurrentWorkCompletion } from "./currentWorkActionSurfacePolicy";
@@ -116,11 +119,12 @@ function checklistFromFieldRules(fieldRules: LifecycleStageFieldRules | null): C
         if (!ruleId || seen.has(ruleId)) continue;
         seen.add(ruleId);
         const binding = lifecycleFieldRuleBinding(ruleId);
+        const catalog = lifecycleFieldRequirementById(ruleId);
         items.push({
             key: ruleId,
-            label: binding?.field_label ?? ruleId,
+            label: catalog?.field_label ?? ruleId,
             required: required.has(ruleId),
-            scope: entityScope(binding?.entity),
+            scope: entityScope(binding?.entity ?? catalog?.entity),
         });
     }
 

@@ -5280,6 +5280,72 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
 }
 
+/* Current Work — supporting action slide-in panel (focused view only). */
+.alloy-os-currentwork__action-panel {
+  margin-top: 12px;
+  padding: 12px 14px 14px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 2%, #fff);
+  box-shadow: 0 10px 28px -18px rgba(15, 23, 42, 0.35);
+}
+
+.alloy-os-currentwork__action-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.alloy-os-currentwork__action-panel-eyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+}
+
+.alloy-os-currentwork__action-panel-title {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-currentwork__action-panel-desc {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 68%, transparent);
+}
+
+.alloy-os-currentwork__action-panel-close {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 72%, transparent);
+  cursor: pointer;
+}
+
+.alloy-os-currentwork__action-panel-close:hover {
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-currentwork__action-panel-body {
+  padding-top: 2px;
+}
+
+.alloy-os-currentwork__action-panel-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 58%, transparent);
+}
+
 /* Focused Current Work — neutral elevated card; green emphasis via status pill only. */
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]

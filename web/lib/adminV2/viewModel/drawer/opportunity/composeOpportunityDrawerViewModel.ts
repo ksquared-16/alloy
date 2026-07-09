@@ -371,7 +371,7 @@ export async function composeOpportunityDrawerViewModel(
         communicationsPreviewP,
     ]);
     const published_stage_inputs = resolvePublishedStageInputsForCurrentWork({
-        departmentMetadata: deptMetadata,
+        departmentMetadata: deptMetadata as Record<string, unknown> | null,
         builderStageKey: currentStageKey,
     });
     const work_intent_runtime = primaryWorkIntentProjectionFromStageWork(stage_work_runtime);
