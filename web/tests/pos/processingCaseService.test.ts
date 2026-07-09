@@ -132,4 +132,11 @@ describe("shouldOpenProcessingCaseForSurface — marker gating / legacy non-inte
         expect(shouldOpenProcessingCaseForSurface({ definitionMetadata: {}, versionMetadata: {} })).toBe(false);
         expect(shouldOpenProcessingCaseForSurface({})).toBe(false);
     });
+    it("opens for processing intake public link metadata", () => {
+        expect(
+            shouldOpenProcessingCaseForSurface({
+                linkMetadata: { form_context_mode: "processing_intake", pos_connected: true },
+            })
+        ).toBe(true);
+    });
 });

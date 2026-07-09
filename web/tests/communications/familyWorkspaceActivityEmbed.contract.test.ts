@@ -29,11 +29,15 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(view).toMatch(/data-cc-thread-strip/);
         expect(view).toMatch(/data-cc-ws-column="threadlist"/);
         expect(view).toMatch(/data-cc-thread-chip/);
+        expect(view).toMatch(/data-cc-thread-header/);
+        expect(view).toMatch(/data-cc-thread-avatars/);
+        expect(view).toMatch(/onOpenThread\(thread\.id\)/);
         // Selected conversation + pinned composer on the right pane.
         expect(view).toMatch(/data-cc-ws-column="conversation"/);
         expect(view).toMatch(/data-cc-new-message/);
         expect(view).toMatch(/data-cc-recipient-compact/);
         expect(view).toMatch(/onNewMessage\?\.\(\)/);
+        expect(view).toMatch(/isNewMessageMode/);
     });
 
     it("Activity cockpit uses fill-height grid body and stretchable embed chain", () => {
@@ -43,6 +47,8 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(css).toMatch(/\.alloy-os-activity-cockpit__body[\s\S]*grid-template-columns/);
         expect(css).toMatch(/grid-template-rows: minmax\(0, 1fr\)/);
         expect(css).toMatch(/\.alloy-os-activity-cockpit__stack[\s\S]*height: 100%/);
+        expect(css).toMatch(/\.alloy-os-activity-cockpit__work[\s\S]*flex: 1\.6 1 0/);
+        expect(css).toMatch(/\.alloy-os-activity-cockpit__docs[\s\S]*flex: 1\.2 1 0/);
         // Split-mode cockpit fill uses flex (not height:100% — parent flex used size may be indefinite).
         expect(css).toMatch(
             /html\[data-alloy-os-runtime-split="true"\][\s\S]*\.alloy-os-activity-cockpit[\s\S]*flex: 1 1 0%/
@@ -57,6 +63,23 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(view).toMatch(/function threadsForActivityEmbed/);
         expect(view).toMatch(/thread\.messageCount > 0/);
         expect(view).toMatch(/threadsForActivityEmbed\(threads\)/);
+    });
+
+    it("activity_embed composer uses header-matched BOS control and formatting toolbar", () => {
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        const ui = read("app/adminV2/communications/commsWorkspaceUi.tsx");
+        expect(view).toMatch(/data-bos-assist-button="true"/);
+        expect(view).toMatch(/COMMS_BOS_HEADER_BTN_CLASS/);
+        expect(view).toMatch(/applyBodyFormat\("bold"\)/);
+        expect(view).toMatch(/applyBodyFormat\("link"\)/);
+        expect(ui).toMatch(/COMMS_BOS_HEADER_BTN_CLASS/);
+    });
+
+    it("activity embed bootstraps first thread and isolates new-message timeline", () => {
+        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
+        expect(workspace).toMatch(/activityEmbedBootstrappedRef/);
+        expect(workspace).toMatch(/isActivityEmbed[\s\S]*selectedThreadId[\s\S]*vm\.messages/);
+        expect(workspace).toMatch(/selectedThread=\{/);
     });
 
     it("Recent Activity ribbon uses compact event count", () => {

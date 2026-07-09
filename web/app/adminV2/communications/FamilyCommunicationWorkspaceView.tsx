@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send, Clock, Check, UserPlus, ChevronDown, Plus } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, Underline, List, Link2, Smile, Paperclip, FileText, Send, Clock, Check, UserPlus, ChevronDown, Plus } from "lucide-react";
 import { relTime, statusDisplay } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import CommunicationPreferencesEditor from "@/components/admin/communications/CommunicationPreferencesEditor";
-import type { PersonPreferenceProfile, ThreadVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type { PersonPreferenceProfile, RecipientVM, ThreadVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
 import { TRIAGE_OPERATOR_ACTIONS, conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
 import type { WorkspaceMode, WorkspaceModeAvailability } from "@/lib/communications/v2/workspaceModeAvailability";
@@ -14,12 +14,19 @@ import type { ConsentState, RecipientGroup, ComposerChannel } from "@/lib/commun
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import type { CommandCenterRecordLink } from "@/lib/communications/v2/commandCenterRecordLinks";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
+import {
+    insertTextareaLink,
+    prefixTextareaLines,
+    wrapTextareaSelection,
+} from "@/app/adminV2/communications/activityEmbedTextFormatting";
 import {
     COMMS_ACCENT_BG_SUBTLE_CLASS,
     COMMS_ACCENT_BORDER_CLASS,
+    COMMS_BOS_HEADER_BTN_CLASS,
     COMMS_NOTE_BANNER_CLASS,
     COMMS_OUTBOUND_BUBBLE_CLASS,
-    COMMS_OUTLINE_ACCENT_SOFT_BTN_CLASS,
     COMMS_PRIMARY_BTN_CLASS,
     COMMS_SECONDARY_BTN_CLASS,
     COMMS_SURFACE_MUTED_CLASS,
@@ -70,6 +77,38 @@ function sortThreadsForStrip(threads: ThreadVM[]): ThreadVM[] {
 /** Activity embed thread list — hide orphaned zero-message threads (not real conversations). */
 function threadsForActivityEmbed(threads: ThreadVM[]): ThreadVM[] {
     return sortThreadsForStrip(threads).filter((thread) => thread.messageCount > 0);
+}
+
+function threadParticipantsForAvatars(thread: ThreadVM, recipients: RecipientVM[]): RecipientVM[] {
+    const primary = recipients.filter((r) => r.tier === "primary");
+    const pool = primary.length > 0 ? primary : recipients;
+    if (pool.length <= 2) return pool;
+    return pool.slice(0, 2);
+}
+
+function ThreadParticipantAvatars({ thread, recipients }: { thread: ThreadVM; recipients: RecipientVM[] }) {
+    const participants = threadParticipantsForAvatars(thread, recipients);
+    if (participants.length === 0) {
+        const ChannelIcon = thread.channel === "sms" ? MessageSquare : Mail;
+        return (
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-alloy-stone/20 bg-alloy-stone/[0.06] text-alloy-juniper">
+                <ChannelIcon className="h-3.5 w-3.5" aria-hidden />
+            </span>
+        );
+    }
+    return (
+        <span className="relative flex shrink-0 items-center" data-cc-thread-avatars={thread.id}>
+            {participants.map((person, index) => (
+                <span
+                    key={person.id}
+                    className={index > 0 ? "-ml-2.5 ring-2 ring-white rounded-full" : "ring-2 ring-white rounded-full"}
+                    style={{ zIndex: participants.length - index }}
+                >
+                    <CardAvatar name={person.displayName} size={28} />
+                </span>
+            ))}
+        </span>
+    );
 }
 
 const toolbarBtn = "rounded-md p-1.5 text-alloy-midnight/55 transition hover:bg-alloy-stone/12 hover:text-alloy-midnight";
@@ -123,6 +162,7 @@ export type FamilyCommunicationWorkspaceViewProps = {
     onNewMessage?: () => void;
     LIVE_WORKSPACE: boolean;
     selectedThreadId: string | null;
+    selectedThread?: ThreadVM | null;
     messages: WorkspaceTimelineMessage[];
     liveRecipientGroups: RecipientGroup[] | null;
     selectedRecipientIds: string[];
@@ -153,12 +193,22 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         noteDraft = "", onNoteDraftChange, onAddNote, noteSaving = false, noteError,
         taskTitleDraft = "", taskDueDraft = "", onTaskTitleChange, onTaskDueChange, onCreateTask, onCompleteTask, taskSaving = false, taskError,
         surfaceVariant = "default", threads = [], onNewMessage,
-        LIVE_WORKSPACE, selectedThreadId, messages,
+        LIVE_WORKSPACE, selectedThreadId, selectedThread = null, messages,
         liveRecipientGroups, selectedRecipientIds, liveChannel, subjectDraft, bodyDraft, sendResult, sendError, sending, assignBusy,
         onClaim, onAllMessages, onOpenThread, onToggleRecipient, onSubjectChange, onBodyChange, onSendNow, onConfirmSend, onDismissSend,
     } = props;
     const isActivityEmbed = surfaceVariant === "activity_embed";
+    const isNewMessageMode = isActivityEmbed && selectedThreadId == null;
     const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
+    const [showCcBcc, setShowCcBcc] = useState(false);
+    const [showManualEmailInput, setShowManualEmailInput] = useState(false);
+    const [manualEmailDraft, setManualEmailDraft] = useState("");
+    const [ccEmailDraft, setCcEmailDraft] = useState("");
+    const [bccEmailDraft, setBccEmailDraft] = useState("");
+    const [composerLocalEmails, setComposerLocalEmails] = useState<string[]>([]);
+    const [composerCcEmails, setComposerCcEmails] = useState<string[]>([]);
+    const [composerBccEmails, setComposerBccEmails] = useState<string[]>([]);
+    const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const allLiveRecipients = liveRecipientGroups ? liveRecipientGroups.flatMap((g) => g.recipients) : [];
     const resolvedPreferenceProfile = preferenceProfile ?? detail?.preferenceProfile;
     const familyLink = recordLinks?.find((l) => l.type === "customers");
@@ -178,6 +228,41 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const composeMode = workspaceMode === "email" || workspaceMode === "sms";
     const activeModeReason =
         workspaceMode === "note" || workspaceMode === "tasks" ? null : modeAvailability[workspaceMode]?.reason ?? null;
+
+    const applyBodyFormat = useCallback(
+        (kind: "bold" | "italic" | "underline" | "list" | "link") => {
+            const el = bodyTextareaRef.current;
+            if (!el) return;
+            const start = el.selectionStart ?? 0;
+            const end = el.selectionEnd ?? 0;
+            let result: { next: string; cursorStart: number; cursorEnd: number } | null = null;
+            if (kind === "bold") result = wrapTextareaSelection(bodyDraft, start, end, "**", "**");
+            else if (kind === "italic") result = wrapTextareaSelection(bodyDraft, start, end, "_", "_");
+            else if (kind === "underline") result = wrapTextareaSelection(bodyDraft, start, end, "__", "__");
+            else if (kind === "list") result = prefixTextareaLines(bodyDraft, start, end, "- ");
+            else result = insertTextareaLink(bodyDraft, start, end);
+            if (!result) return;
+            onBodyChange(result.next);
+            requestAnimationFrame(() => {
+                el.focus();
+                el.setSelectionRange(result!.cursorStart, result!.cursorEnd);
+            });
+        },
+        [bodyDraft, onBodyChange],
+    );
+
+    const addComposerLocalEmail = useCallback((raw: string, target: "to" | "cc" | "bcc") => {
+        const email = raw.trim();
+        if (!email || !email.includes("@")) return;
+        const append = (prev: string[]) => (prev.includes(email) ? prev : [...prev, email]);
+        if (target === "to") setComposerLocalEmails((prev) => append(prev));
+        else if (target === "cc") setComposerCcEmails((prev) => append(prev));
+        else setComposerBccEmails((prev) => append(prev));
+    }, []);
+
+    const selectedRecipientRows = selectedRecipientIds
+        .map((id) => allLiveRecipients.find((r) => r.id === id))
+        .filter((r): r is RecipientVM => Boolean(r));
 
     const renderRecipientTiers = (compact?: boolean) =>
         liveRecipientGroups?.map((g) => (
@@ -399,7 +484,11 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     );
 
     const composerColumn = (
-        <div data-cc-ws-column="composer" data-cc-ws-section="composer" className="flex min-h-0 flex-col bg-white px-4 py-3">
+        <div
+            data-cc-ws-column="composer"
+            data-cc-ws-section="composer"
+            className={`flex min-h-0 flex-col bg-white ${isActivityEmbed ? "shrink-0 border-t-2 border-alloy-stone/20 px-3 py-2.5" : "px-4 py-3"}`}
+        >
                 <div data-cc-composer-channels className="inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
                     {renderModeTab("email", "Email")}
                     {renderModeTab("sms", "SMS")}
@@ -470,22 +559,145 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 <>
                 {LIVE_WORKSPACE && liveRecipientGroups ? (
                     isActivityEmbed ? (
-                        <div className="relative mt-2" data-cc-recipient-compact>
-                            <button
-                                type="button"
-                                data-cc-recipient-compact-trigger
-                                aria-expanded={recipientPickerOpen}
-                                onClick={() => setRecipientPickerOpen((open) => !open)}
-                                className="flex w-full items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-left text-[10px] shadow-sm"
-                            >
-                                <span className="font-medium text-alloy-midnight/45">To</span>
-                                <span className="min-w-0 flex-1 truncate text-alloy-midnight/75">{selectionSummary(selectedRecipientIds, allLiveRecipients)}</span>
-                                <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-alloy-midnight/35 transition ${recipientPickerOpen ? "rotate-180" : ""}`} />
-                            </button>
+                        <div className="relative mt-2 space-y-1.5" data-cc-recipient-compact>
+                            <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5 shadow-sm">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">To</span>
+                                    {selectedRecipientRows.slice(0, 2).map((r) => (
+                                        <button
+                                            key={r.id}
+                                            type="button"
+                                            data-cc-recipient={r.id}
+                                            aria-pressed
+                                            onClick={() => onToggleRecipient(r.id)}
+                                            className="inline-flex items-center gap-1 rounded-full bg-alloy-juniper px-2 py-0.5 text-[10px] font-medium text-white"
+                                        >
+                                            <Check className="h-3 w-3" aria-hidden />
+                                            {r.displayName}
+                                        </button>
+                                    ))}
+                                    {selectedRecipientRows.length > 2 ? (
+                                        <button
+                                            type="button"
+                                            data-cc-recipient-overflow
+                                            aria-expanded={recipientPickerOpen}
+                                            onClick={() => setRecipientPickerOpen((open) => !open)}
+                                            className="inline-flex items-center rounded-full border border-alloy-stone/25 bg-alloy-stone/[0.04] px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/70"
+                                        >
+                                            +{selectedRecipientRows.length - 2}
+                                        </button>
+                                    ) : null}
+                                    {composerLocalEmails.map((email) => (
+                                        <span
+                                            key={email}
+                                            data-cc-recipient-manual={email}
+                                            className="inline-flex items-center rounded-full border border-alloy-juniper/35 bg-alloy-juniper/10 px-2 py-0.5 text-[10px] font-medium text-alloy-juniper"
+                                        >
+                                            {email}
+                                        </span>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        data-cc-recipient-compact-trigger
+                                        aria-expanded={recipientPickerOpen}
+                                        onClick={() => setRecipientPickerOpen((open) => !open)}
+                                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/55 hover:border-alloy-juniper/45 hover:text-alloy-juniper"
+                                    >
+                                        <UserPlus className="h-3 w-3" />
+                                        Add
+                                        <ChevronDown className={`h-3 w-3 transition ${recipientPickerOpen ? "rotate-180" : ""}`} />
+                                    </button>
+                                </div>
+                                {workspaceMode === "email" ? (
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-alloy-stone/12 pt-1.5">
+                                        <button
+                                            type="button"
+                                            data-cc-add-email
+                                            onClick={() => setShowManualEmailInput((v) => !v)}
+                                            className="text-[10px] font-medium text-alloy-juniper hover:underline"
+                                        >
+                                            Add another email
+                                        </button>
+                                        <button
+                                            type="button"
+                                            data-cc-toggle-cc-bcc
+                                            aria-expanded={showCcBcc}
+                                            onClick={() => setShowCcBcc((v) => !v)}
+                                            className="text-[10px] font-medium text-alloy-midnight/55 hover:text-alloy-juniper"
+                                        >
+                                            CC/BCC
+                                        </button>
+                                    </div>
+                                ) : null}
+                                {workspaceMode === "email" && showCcBcc ? (
+                                    <div className="mt-1.5 space-y-1 border-t border-alloy-stone/12 pt-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="w-8 text-[10px] font-medium text-alloy-midnight/45">CC</span>
+                                            <input
+                                                aria-label="CC email"
+                                                value={ccEmailDraft}
+                                                onChange={(e) => setCcEmailDraft(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        addComposerLocalEmail(ccEmailDraft, "cc");
+                                                        setCcEmailDraft("");
+                                                    }
+                                                }}
+                                                placeholder="Add CC email"
+                                                className="min-w-0 flex-1 rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px]"
+                                            />
+                                        </div>
+                                        <div className="flex flex-wrap gap-1">
+                                            {composerCcEmails.map((email) => (
+                                                <span key={`cc-${email}`} className="rounded-full border border-alloy-stone/20 px-2 py-0.5 text-[10px] text-alloy-midnight/70">{email}</span>
+                                            ))}
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="w-8 text-[10px] font-medium text-alloy-midnight/45">BCC</span>
+                                            <input
+                                                aria-label="BCC email"
+                                                value={bccEmailDraft}
+                                                onChange={(e) => setBccEmailDraft(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        addComposerLocalEmail(bccEmailDraft, "bcc");
+                                                        setBccEmailDraft("");
+                                                    }
+                                                }}
+                                                placeholder="Add BCC email"
+                                                className="min-w-0 flex-1 rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px]"
+                                            />
+                                        </div>
+                                        <div className="flex flex-wrap gap-1">
+                                            {composerBccEmails.map((email) => (
+                                                <span key={`bcc-${email}`} className="rounded-full border border-alloy-stone/20 px-2 py-0.5 text-[10px] text-alloy-midnight/70">{email}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : null}
+                            </div>
                             {recipientPickerOpen ? (
-                                <div data-cc-recipient-popover className="absolute left-0 right-0 z-20 mt-1 max-h-40 overflow-auto rounded-lg border border-alloy-stone/20 bg-white px-2 py-2 shadow-md">
+                                <div data-cc-recipient-popover className="absolute left-0 right-0 z-20 mt-1 max-h-40 overflow-auto rounded-lg border border-alloy-stone/25 bg-white px-2 py-2 shadow-md">
                                     {renderRecipientTiers(true)}
                                 </div>
+                            ) : null}
+                            {workspaceMode === "email" && showManualEmailInput && !showCcBcc ? (
+                                <input
+                                    aria-label="Manual recipient email"
+                                    value={manualEmailDraft}
+                                    onChange={(e) => setManualEmailDraft(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            addComposerLocalEmail(manualEmailDraft, "to");
+                                            setManualEmailDraft("");
+                                        }
+                                    }}
+                                    placeholder="name@example.com — Enter to add"
+                                    className="w-full rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px]"
+                                />
                             ) : null}
                         </div>
                     ) : (
@@ -515,13 +727,14 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     className={`mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35 ${workspaceMode === "sms" ? "hidden" : ""}`}
                 />
 
-                <div className={`mt-2 flex min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-sm ${isActivityEmbed ? "min-h-[120px] flex-none" : "min-h-[240px] flex-1"}`}>
-                    <div className={`flex items-center gap-0.5 border-b border-alloy-stone/12 ${COMMS_SURFACE_MUTED_CLASS} px-1.5 py-1`}>
-                        <button type="button" aria-label="Bold" className={toolbarBtn}><Bold className="h-3.5 w-3.5" /></button>
-                        <button type="button" aria-label="Italic" className={toolbarBtn}><Italic className="h-3.5 w-3.5" /></button>
+                <div className={`mt-2 flex min-h-0 flex-col overflow-hidden rounded-lg border bg-white shadow-sm ${isActivityEmbed ? "min-h-[148px] flex-none border-alloy-stone/30 ring-1 ring-alloy-stone/10" : "min-h-[240px] flex-1 border-alloy-stone/20"}`}>
+                    <div className={`flex items-center gap-0.5 border-b border-alloy-stone/20 ${COMMS_SURFACE_MUTED_CLASS} px-1.5 py-1`}>
+                        <button type="button" aria-label="Bold" className={toolbarBtn} onClick={() => applyBodyFormat("bold")}><Bold className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Italic" className={toolbarBtn} onClick={() => applyBodyFormat("italic")}><Italic className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Underline" className={toolbarBtn} onClick={() => applyBodyFormat("underline")}><Underline className="h-3.5 w-3.5" /></button>
                         <span className="mx-1 h-4 w-px bg-alloy-stone/20" />
-                        <button type="button" aria-label="Bulleted list" className={toolbarBtn}><List className="h-3.5 w-3.5" /></button>
-                        <button type="button" aria-label="Insert link" className={toolbarBtn}><Link2 className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Bulleted list" className={toolbarBtn} onClick={() => applyBodyFormat("list")}><List className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Insert link" className={toolbarBtn} onClick={() => applyBodyFormat("link")}><Link2 className="h-3.5 w-3.5" /></button>
                         <button type="button" aria-label="Emoji" className={toolbarBtn}><Smile className="h-3.5 w-3.5" /></button>
                         <span className="ml-auto flex items-center gap-0.5">
                             <button type="button" aria-label="Attach" className={toolbarBtn}><Paperclip className="h-3.5 w-3.5" /></button>
@@ -529,11 +742,16 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         </span>
                     </div>
                     <textarea
+                        ref={bodyTextareaRef}
                         aria-label="Message body"
-                        placeholder={`Write a message to ${detail ? detail.contactName : (selected.family_label ?? "the family")}…`}
+                        placeholder={
+                            isNewMessageMode
+                                ? `Write a new message to ${detail ? detail.contactName : (selected.family_label ?? "the family")}…`
+                                : `Reply in ${selectedThread ? threadChipLabel(selectedThread) : "this thread"}…`
+                        }
                         value={bodyDraft}
                         onChange={(e) => onBodyChange(e.target.value)}
-                        className={`w-full resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none ${isActivityEmbed ? "min-h-[72px]" : "min-h-0 flex-1"}`}
+                        className={`w-full resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none ${isActivityEmbed ? "min-h-[108px]" : "min-h-0 flex-1"}`}
                     />
                 </div>
 
@@ -570,9 +788,12 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     </div>
                 ) : null}
                 <div className="mt-2.5 flex items-center gap-1.5">
-                    <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${COMMS_PRIMARY_BTN_CLASS} !px-3 !py-2 !text-sm disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : "Send now"}</button>
+                    <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${COMMS_PRIMARY_BTN_CLASS} !px-3 !py-2 !text-sm disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send now" : "Send reply"}</button>
                     <button type="button" aria-label="Send later" className={`inline-flex shrink-0 items-center gap-1 ${COMMS_SECONDARY_BTN_CLASS} !px-2.5 !py-2 !text-sm`}><Clock className="h-3.5 w-3.5" />Later</button>
-                    <button type="button" className={COMMS_OUTLINE_ACCENT_SOFT_BTN_CLASS}><Sparkles className="h-3.5 w-3.5" />BOS Enhance</button>
+                    <button type="button" data-bos-assist-button="true" className={COMMS_BOS_HEADER_BTN_CLASS}>
+                        <BosMark size="sm" horizon />
+                        BOS
+                    </button>
                     <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />manual send only</span>
                 </div>
                 </>
@@ -582,33 +803,33 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
 
     if (isActivityEmbed) {
         const activityThreadList = threadsForActivityEmbed(threads);
+        const activeThread = selectedThread ?? activityThreadList.find((t) => t.id === selectedThreadId) ?? null;
         return (
             <div data-cc-surface-variant={surfaceVariant} className="flex h-full min-h-0 flex-1 overflow-hidden">
-                {/* THREAD LIST — recent conversations rollup (channel · count · timestamp) */}
+                {/* THREAD LIST — conversation browser */}
                 <div
                     data-cc-ws-column="threadlist"
                     data-cc-thread-strip
-                    className="flex min-h-0 w-[40%] min-w-[8.5rem] max-w-[13.5rem] shrink-0 flex-col border-r border-alloy-stone/15 bg-white"
+                    className="flex min-h-0 w-[40%] min-w-[8.5rem] max-w-[13.5rem] shrink-0 flex-col border-r-2 border-alloy-stone/20 bg-alloy-stone/[0.015]"
                 >
-                    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/12 px-2.5 py-1.5">
+                    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/20 bg-white px-2.5 py-1.5">
                         <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Conversations</span>
                         <button
                             type="button"
                             data-cc-new-message
-                            aria-pressed={selectedThreadId == null}
+                            aria-pressed={isNewMessageMode}
                             onClick={() => onNewMessage?.()}
-                            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${selectedThreadId == null ? "bg-alloy-juniper/15 text-alloy-juniper ring-1 ring-alloy-juniper/50" : "text-alloy-juniper hover:bg-alloy-juniper/10"}`}
+                            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${isNewMessageMode ? "bg-alloy-juniper/15 text-alloy-juniper ring-1 ring-alloy-juniper/50" : "text-alloy-juniper hover:bg-alloy-juniper/10"}`}
                         >
                             <Plus className="h-3 w-3" /> New
                         </button>
                     </div>
                     <div className="min-h-0 flex-1 overflow-auto px-1.5 py-1.5">
                         {activityThreadList.length === 0 ? (
-                            <p className="px-1 py-1.5 text-[10px] text-alloy-midnight/45">No threads yet</p>
+                            <p className="px-1 py-1.5 text-[10px] leading-snug text-alloy-midnight/45">No conversations yet. Use New to start a message.</p>
                         ) : (
                             activityThreadList.map((thread) => {
                                 const active = selectedThreadId === thread.id;
-                                const ChannelIcon = thread.channel === "sms" ? MessageSquare : Mail;
                                 return (
                                     <button
                                         key={thread.id}
@@ -616,16 +837,18 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                         data-cc-thread-chip={thread.id}
                                         aria-pressed={active}
                                         onClick={() => onOpenThread(thread.id)}
-                                        className={`mb-1 flex w-full flex-col gap-0.5 rounded-lg border px-2 py-1.5 text-left transition ${active ? "border-alloy-juniper/45 bg-alloy-juniper/10 ring-1 ring-alloy-juniper/20" : "border-alloy-stone/15 bg-white hover:border-alloy-juniper/40"}`}
+                                        className={`mb-1 flex w-full items-start gap-2 rounded-lg border px-2 py-1.5 text-left transition ${active ? "border-alloy-juniper/45 bg-alloy-juniper/10 ring-1 ring-alloy-juniper/20" : "border-alloy-stone/20 bg-white hover:border-alloy-juniper/40"}`}
                                     >
-                                        <span className="flex items-center gap-1.5">
-                                            <ChannelIcon className="h-3 w-3 shrink-0 text-alloy-juniper" />
-                                            <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-alloy-midnight">{threadChipLabel(thread)}</span>
-                                            {thread.unread > 0 ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-juniper" aria-label="Unread" /> : null}
-                                        </span>
-                                        <span className="flex items-center justify-between gap-1 text-[9.5px] text-alloy-midnight/45">
-                                            <span className="truncate">{thread.channel === "sms" ? "SMS" : "Email"} · {thread.messageCount} msg</span>
-                                            <span className="shrink-0">{relTime(thread.lastActivityAt)}</span>
+                                        <ThreadParticipantAvatars thread={thread} recipients={allLiveRecipients} />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-alloy-midnight">{threadChipLabel(thread)}</span>
+                                                {thread.unread > 0 ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-juniper" aria-label="Unread" /> : null}
+                                            </span>
+                                            <span className="mt-0.5 flex items-center justify-between gap-1 text-[9.5px] text-alloy-midnight/45">
+                                                <span className="truncate">{thread.channel === "sms" ? "SMS" : "Email"} · {thread.messageCount} msg</span>
+                                                <span className="shrink-0">{relTime(thread.lastActivityAt)}</span>
+                                            </span>
                                         </span>
                                     </button>
                                 );
@@ -636,8 +859,41 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
 
                 {/* CONVERSATION + COMPOSER — selected thread detail, composer pinned below */}
                 <div data-cc-ws-column="conversation" className="flex min-h-0 flex-1 flex-col bg-white">
-                    <div data-cc-ws-section="timeline" className={`min-h-0 flex-1 overflow-auto ${COMMS_SURFACE_MUTED_CLASS} px-3 py-2.5`}>
-                        {messageListBody}
+                    <div
+                        data-cc-thread-header
+                        className="shrink-0 border-b border-alloy-stone/20 bg-white px-3 py-2"
+                    >
+                        {isNewMessageMode ? (
+                            <>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-alloy-juniper">New message</div>
+                                <p className="mt-0.5 text-[11px] text-alloy-midnight/55">Compose a new conversation — separate from thread replies.</p>
+                            </>
+                        ) : activeThread ? (
+                            <>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-[13px] font-semibold text-alloy-midnight">{threadChipLabel(activeThread)}</span>
+                                    <span className="rounded-full border border-alloy-stone/20 bg-alloy-stone/[0.04] px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60">
+                                        {activeThread.channel === "sms" ? "SMS" : "Email"}
+                                    </span>
+                                    <span className="text-[10px] text-alloy-midnight/45">{activeThread.messageCount} messages · {relTime(activeThread.lastActivityAt)}</span>
+                                </div>
+                                <p className="mt-0.5 text-[10px] text-alloy-midnight/45">Reading selected thread — replies stay in this conversation.</p>
+                            </>
+                        ) : (
+                            <p className="text-[11px] text-alloy-midnight/55">Select a conversation on the left to read messages.</p>
+                        )}
+                    </div>
+                    <div data-cc-ws-section="timeline" className={`min-h-0 flex-1 overflow-auto border-b border-alloy-stone/15 ${COMMS_SURFACE_MUTED_CLASS} px-3 py-2.5`}>
+                        {isNewMessageMode ? (
+                            <div className="flex h-full min-h-[6rem] flex-col items-center justify-center rounded-lg border border-dashed border-alloy-stone/25 bg-white/70 px-4 py-6 text-center">
+                                <p className="text-[12px] font-medium text-alloy-midnight/70">Start a new message</p>
+                                <p className="mt-1 max-w-[16rem] text-[10px] leading-snug text-alloy-midnight/45">Choose recipients and write below. Select a conversation on the left to read an existing thread.</p>
+                            </div>
+                        ) : messages.length === 0 ? (
+                            <div className="text-[11px] text-alloy-midnight/45">No messages in this thread yet.</div>
+                        ) : (
+                            messageListBody
+                        )}
                     </div>
                     {composerColumn}
                 </div>

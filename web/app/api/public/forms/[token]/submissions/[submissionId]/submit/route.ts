@@ -128,10 +128,11 @@ export async function POST(
 
     const { data: ver } = await supabase
         .from("form_definition_versions")
-        .select("schema_json")
+        .select("schema_json, metadata")
         .eq("id", ctx.formDefinitionVersionId)
         .maybeSingle();
-    const schemaJson = (ver as { schema_json?: unknown } | null)?.schema_json ?? ctx.schemaJson;
+    const versionRow = ver as { schema_json?: unknown; metadata?: unknown } | null;
+    const schemaJson = versionRow?.schema_json ?? ctx.schemaJson;
 
     let schema: FormSchemaV1;
     try {
@@ -385,24 +386,15 @@ export async function POST(
         await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
     }
 
-    // POS-FP5: best-effort, marker-gated. A POS-connected SINGLE form submitted through
-    // the public UI opens one Processing Case (the submission as primary source). Packet
-    // steps are excluded (packets open one case on completion below). Never throws.
-    // [POS_FORM_SUBMIT_TRACE] TEMPORARY diagnostic — remove after root-causing the missing case.
-    const posTraceFormDefinitionId = String((submittedRow as { form_definition_id?: string }).form_definition_id ?? "");
-    console.log("[POS_FORM_SUBMIT_TRACE] public submit reached producer gate", {
-        route: "public/forms/[token]/submissions/[submissionId]/submit",
-        submissionId,
-        orgId: ctx.orgId,
-        formDefinitionId: posTraceFormDefinitionId,
-        isPacket: Boolean(ctx.packet),
-        willCallProducer: !ctx.packet,
-    });
+    // POS-FP5: best-effort, marker-gated. Processing-intake and POS-connected forms open
+    // one Processing Case (submission as primary source). Packet steps excluded. Never throws.
     if (!ctx.packet) {
         await maybeOpenProcessingCaseFromFormSubmissionSafe(supabase, {
             orgId: ctx.orgId,
             submissionId,
-            formDefinitionId: posTraceFormDefinitionId,
+            formDefinitionId: String((submittedRow as { form_definition_id?: string }).form_definition_id ?? ""),
+            versionMetadata: versionRow?.metadata,
+            linkMetadata: ctx.linkMetadata,
         });
     }
 

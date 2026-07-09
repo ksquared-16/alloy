@@ -44,7 +44,7 @@ const UUID_RE =
 export function linkRequiresLeadCapture(metadata: Record<string, unknown> | null | undefined): boolean {
     if (!metadata || typeof metadata !== "object") return false;
     const mode = (metadata as { form_context_mode?: unknown }).form_context_mode;
-    if (mode === "existing_record") {
+    if (mode === "processing_intake" || mode === "existing_record") {
         return false;
     }
     if (mode === "packet") {
