@@ -35,6 +35,7 @@ function stageRuntime(overrides?: Partial<StageWorkRuntimeProjection>): StageWor
         primary: {
             template_key: "contact_family",
             label: "Contact Family",
+            description: "Make contact and record outcome.",
             role: "primary",
             state: "open",
             requires_outcome_picker: true,
@@ -142,12 +143,13 @@ describe("CurrentWorkCard", () => {
             />,
         );
         expect(html).toContain("Contact Family");
-        expect(html).toContain("Record what happened");
+        expect(html).toContain("Make contact and record outcome");
+        expect(html).toContain("View all activity");
         expect(html).not.toContain("Review Lead");
-        expect(html).not.toContain("alloy-os-ucard__action--cta");
         expect(html).toContain('data-current-work-surface="true"');
         expect(html).toContain('data-work-card-perspective="summary"');
-        expect(html).toContain('data-work-action="open"');
+        expect(html).toContain('data-work-action="details"');
+        expect(html).not.toContain("Open work");
     });
 
     it("routes Contact Family through resolveWorkItemHandoff — not dead panel copy", () => {

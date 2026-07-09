@@ -2752,6 +2752,14 @@ html[data-alloy-os-runtime="on"]
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, #fff);
   font-weight: 600;
 }
+.alloy-os-card-pill--subtle[data-work-status-pill="summary"],
+.alloy-os-card-pill--subtle[data-work-status-pill="focused"] {
+  border: none;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, #fff);
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 72%, #64748b);
+  font-weight: 500;
+  font-size: 0.72rem;
+}
 .alloy-os-card-pill--risk {
   background: color-mix(in srgb, #dc2626 12%, #fff);
   color: #dc2626;
@@ -4934,6 +4942,330 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 .alloy-os-currentwork__supporting-action:hover {
   color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alloy-os-currentwork__header-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alloy-os-currentwork__header-percent {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+
+.alloy-os-card-pill--complete {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 14%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+  border: none;
+}
+
+.alloy-os-currentwork__progress-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alloy-os-currentwork__progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  overflow: hidden;
+}
+
+.alloy-os-currentwork__progress-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__progress-copy {
+  margin: 0;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+
+.alloy-os-currentwork__stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alloy-os-currentwork__stepper-item {
+  display: flex;
+  align-items: center;
+}
+
+.alloy-os-currentwork__stepper-button,
+.alloy-os-currentwork__stepper-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-currentwork__stepper-button {
+  cursor: pointer;
+}
+
+.alloy-os-currentwork__stepper-button:hover {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__stepper-mark {
+  width: 1rem;
+  text-align: center;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 50%, #64748b);
+}
+
+.alloy-os-currentwork__stepper-mark--complete {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__stepper-target {
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-currentwork__stepper-connector {
+  width: 12px;
+  height: 1px;
+  margin: 0 4px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+}
+
+.alloy-os-currentwork__work-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 28%, transparent);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 5%, #fff);
+  cursor: pointer;
+  text-align: left;
+}
+
+.alloy-os-currentwork__work-primary:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 9%, #fff);
+}
+
+.alloy-os-currentwork__work-primary-label {
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-currentwork__work-primary-desc {
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+
+.alloy-os-currentwork__supporting-grid-items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.alloy-os-currentwork__grid-action {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.alloy-os-currentwork__grid-action:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 35%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__record-outcome {
+  align-self: flex-start;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+  background: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-currentwork__expanded-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.alloy-os-currentwork__expanded-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alloy-os-currentwork__expanded-side {
+  border-left: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+  padding-left: 14px;
+}
+
+.alloy-os-currentwork__path-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alloy-os-currentwork__path-action {
+  border: 0;
+  background: transparent;
+  padding: 6px 0;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: var(--alloy-os-midnight, #273f52);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.alloy-os-currentwork__activity-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+
+.alloy-os-currentwork__activity-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__complete {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alloy-os-currentwork__complete-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.alloy-os-currentwork__complete-outcome {
+  margin: 0;
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 72%, #64748b);
+}
+
+.alloy-os-currentwork__complete-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alloy-os-currentwork__complete-change,
+.alloy-os-currentwork__complete-summary {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.alloy-os-currentwork__complete-next-label {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.alloy-os-currentwork__checklist--rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.alloy-os-currentwork__checklist--rail .alloy-os-currentwork__row {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 4%, #fff);
+}
+
+.alloy-os-currentwork__checklist-mark {
+  flex-shrink: 0;
+  width: 1.1rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-currentwork__checklist-mark--complete {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alloy-os-currentwork__actions-eyebrow {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-currentwork__primary-action {
+  align-self: flex-start;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__primary-action:hover {
+  filter: brightness(0.96);
+}
+
+.alloy-os-currentwork__last-activity {
+  margin: 0;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
 }
 
 .alloy-os-currentwork__row--action {

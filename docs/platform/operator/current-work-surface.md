@@ -30,21 +30,29 @@ Operators open a record to **complete work**. Current Work answers:
 
 | Surface field | Config-derived source | Code fallback only |
 |---------------|----------------------|-------------------|
-| **Title** | Open (or actionable) primary stage-work item `label` from operating-plan template via `projectStageWorkRuntime` | `"No current work configured"` when runtime has no templates |
-| **Purpose** | `stageWorkRuntime.purpose` (stage operating plan) | omitted |
-| **Progress** | Checklist completion count from `runtime.primary` + `runtime.additional` states | `"Getting started"` / `"In progress"` verdict strings |
-| **Checklist items** | `runtime.primary` + `runtime.additional` template labels + descriptions | empty list |
-| **Checklist handoff** | `inferWorkItemOwner()` + `handoffKind` (`outreach` / `verification` / `navigation`) | blocked operator copy — never silent no-op |
-| **Primary CTA (Summary)** | `"Record what happened"` when `showOutcomeCompletion` | `"Open work →"` when outcomes unavailable |
-| **Primary CTA (Focus footer)** | Same configured label | disabled + `outcomeCompletionBlockReason` |
+| **Title** | Active work template `label` from published `stage_operating_plan_v1` (via `resolveCurrentWorkTemplateFromPublishedPlan`) | Open stage-work runtime item label |
+| **Purpose** | Work template description or stage plan `purpose` | `stageWorkRuntime.purpose` |
+| **Progress** | Checklist completion from published work templates + field rules + readiness gaps | Stage-runtime template states only when no published overlay |
+| **Checklist completion** | Published field rules via `evaluateFieldRulesForStage` + readiness gaps; work templates via stage-work runtime | Stage-runtime template states when no published overlay |
+
+**Checklist truth:** `resolveCurrentWorkChecklistTruthFromPublishedRules` maps published field-rule keys to record/readiness evaluation. Labels and order remain config-owned; `complete | missing | blocked` status comes from truth (blocked only when readiness gap is blocking).
+| **Checklist handoff** | `inferWorkItemOwner()` + scope from field-rule entity | blocked operator copy — never silent no-op |
+| **Primary CTA (Summary)** | Work-primary card (`expand_work`) from template title | `"No current work configured"` |
+| **Record outcome CTA** | `"Record outcome"` when `showOutcomeCompletion` | disabled + `outcomeCompletionBlockReason` |
 | **Outcomes list** | `item.outcomes` from `projectStageWorkRuntime` via `completionOutcomesForPicker` | honest gap copy — **never invent lists** |
-| **Outcome effect copy** | `outcome_automation_preview` from plan `outcome_rules`, normalized (`Continue {work} work` — no `Reopen:`) | `"Continue {work label} work"` or `"Keep open · record attempt"` |
+| **Helpful actions** | Published `action_catalog_v1` (`recommended` / `ready`) | `record_header` registry classification |
+| **Alternate paths** | Published `action_catalog_v1` (`context_dependent`) + status-lifecycle category | `record_header` registry classification |
+| **Communication actions** | Published catalog + registry communication category | registry classification |
 | **Blockers** | `signals.attention` primary reason | empty |
 | **Queue row line** | `projectCurrentWorkFromStageRuntime` → `buildQueueCurrentWorkSummary` | task-preview / work-intent fallbacks |
-| **Supporting actions** | `recordHeaderActions` (`record_header` primary/secondary/header) via `deriveCurrentWorkSupportingActions` | empty |
-| **BOS assist** | Existing BOS hooks on drawer VM | none fabricated by Current Work |
 
-**Projection entry:** `projectCurrentWork(context)` → `buildCurrentWorkCardEvidence(context)` for Summary evidence.
+**Production path:** `departments.metadata.lifecycle_builder_v1` → `resolvePublishedStageInputsForCurrentWork` → `resolveCurrentWorkTemplateFromPublishedPlan` → `buildCurrentWorkSurfaceVM`. Attached on drawer compose as `workspace.published_stage_inputs` and bridged through `OperationalContext.publishedStageInputs`.
+
+**Projection entry:** `buildCurrentWorkSurfaceVM({ context })` → `projectCurrentWork(context).surface` for UI.
+
+**Action tiers on surface VM:** primary · supporting · communication · alternate paths · administrative (Manage) · BOS recommendations.
+
+**Summary card:** checklist + progress + primary + helpful actions visible without opening Details. Expanded view is inline — no navigation detour.
 
 The UI **never writes `stage_key` directly**. Outcome execution uses `useWorkIntentOutcomeCompletion` → `completeStageWorkWithOutcome` only.
 
@@ -54,22 +62,26 @@ The UI **never writes `stage_key` directly**. Outcome execution uses `useWorkInt
 
 ### Summary (compact)
 
-- Micro-label: **Current Work**
-- Title from primary open work item (config template label — e.g. Contact Family, not hardcoded)
-- One-line purpose from stage operating plan
-- Progress (`2 of 3 complete`) and blocker count
-- Primary CTA — `Record what happened` when outcomes exist; otherwise `Open work →`
-- Bend Pine left accent rail on Summary only
+- Micro-label: **Current Work** · subtle status badge (**Open** / **In progress** / **Completed**) + progress **percent**
+- Title + description from work template (config/runtime — not hardcoded)
+- **Progress bar** + `N of M complete`
+- **Horizontal checklist stepper** (readiness/config requirements — clickable when actionRef or handoff exists)
+- **Work primary card** — large bordered CTA with work title + description (expands inline on summary)
+- **Helpful actions** — 2-column grid on summary (supporting + communication from config/registry)
+- **Footer** — last activity + View all activity →
+- Footer control: **Details →** (not “Open work”)
 
-### Focus (expanded)
+### Focus (expanded inline)
 
-- Neutral elevated card shadow — **no double Bend Pine ring**
-- Subtle **Open work** status pill (no border)
-- Full purpose and progress
-- Interactive checklist (navigation, not checkboxes)
-- Blockers in operator language ("You can't finish until…")
-- Completion phases inside Focus shell
-- Supporting actions from action registry (wired V1 — secondary assist buttons)
+- Same progress + stepper
+- Work primary card + **Record outcome** button (when outcomes configured)
+- Helpful actions (left column)
+- **Other paths** + **Recommended** (right column — alternate paths + BOS)
+- **Hide details** to collapse
+
+### Outcome complete (inline)
+
+- Completed badge, outcome label, change summary, What's next, **Continue Work** / View Activity
 
 ### Completion flow
 

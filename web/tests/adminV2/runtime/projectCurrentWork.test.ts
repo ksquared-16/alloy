@@ -143,10 +143,11 @@ describe("projectCurrentWork", () => {
     it("projects title, purpose, progress, and checklist from stage runtime", () => {
         const vm = projectCurrentWork(context({ runtime: stageRuntime() }));
         expect(vm.title).toBe("Review Lead");
-        expect(vm.purpose).toContain("reach the family");
+        expect(vm.purpose).toContain("Review inbound lead");
         expect(vm.progressLabel).toBe("1 of 3 complete");
         expect(vm.checklist).toHaveLength(3);
-        expect(vm.primaryActionLabel).toBe("Record what happened");
+        expect(vm.primaryActionLabel).toBe("Record outcome");
+        expect(vm.surface.primaryAction?.label).toBe("Review Lead");
         expect(vm.showOutcomeCompletion).toBe(true);
     });
 

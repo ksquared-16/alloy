@@ -26,6 +26,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { resolveStageOperatingPlanPurpose } from "@/lib/lifecycle/resolveStageOperatingPlanPurpose";
+import { resolvePublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
 import { projectStageWorkRuntime, primaryWorkIntentProjectionFromStageWork } from "@/lib/lifecycle/projectStageWorkRuntime";
 import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
 import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
@@ -369,6 +370,10 @@ export async function composeOpportunityDrawerViewModel(
         }),
         communicationsPreviewP,
     ]);
+    const published_stage_inputs = resolvePublishedStageInputsForCurrentWork({
+        departmentMetadata: deptMetadata,
+        builderStageKey: currentStageKey,
+    });
     const work_intent_runtime = primaryWorkIntentProjectionFromStageWork(stage_work_runtime);
     const rawTasksSummary = parseInquirySummaryTasksFromRecord(record);
     const filteredTasksSummary = filterResidualOperationalTasks(rawTasksSummary, stage_work_runtime);
@@ -406,6 +411,7 @@ export async function composeOpportunityDrawerViewModel(
             stage_context,
             work_intent_runtime,
             stage_work_runtime,
+            published_stage_inputs,
         },
         first_paint,
         header: {
