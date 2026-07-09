@@ -162,7 +162,7 @@ cd web && npm run test -- \
 | Check | Status |
 |-------|--------|
 | Merge to `origin/staging` | `7773bec43` |
-| Orphan thread migration committed | `20260709120000_delete_orphan_empty_communication_threads.sql` |
+| Orphan thread migration committed | `20260709140000_delete_orphan_empty_communication_threads.sql` (renamed from `20260709120000` — timestamp collision with draft obligation slice) |
 | Focused comms tests | Pass |
 | Typecheck | Run locally — `cd web && npm run typecheck` |
 | Vercel staging deploy | Triggered on push to `staging` |

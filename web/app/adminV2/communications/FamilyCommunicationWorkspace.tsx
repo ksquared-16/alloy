@@ -172,8 +172,13 @@ export default function FamilyCommunicationWorkspace(props: {
     const [sending, setSending] = useState(false);
     const [sendCompleteToken, setSendCompleteToken] = useState(0);
     const mountedRef = useRef(false);
+    const activityEmbedBootstrappedRef = useRef(false);
     const adminAuth = useAdminAuthOptional();
     const isActivityEmbed = props.surfaceVariant === "activity_embed";
+    const familyScopeKey = useMemo(
+        () => `${props.customerId ?? ""}|${props.entity?.entityType ?? ""}|${props.entity?.entityId ?? ""}`,
+        [props.customerId, props.entity?.entityType, props.entity?.entityId],
+    );
 
     const syncActivityThreadContext = useCallback(
         (threadId: string | null, workspace: FamilyCommunicationWorkspaceVM) => {
@@ -257,16 +262,21 @@ export default function FamilyCommunicationWorkspace(props: {
         [applyWorkspace, liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId]
     );
 
+    const loadRef = useRef(load);
+    loadRef.current = load;
+
     useEffect(() => {
         setSelectedThreadId(null);
         setSubjectDraft("");
         setBodyDraft("");
         setSendResult(null);
+        activityEmbedBootstrappedRef.current = false;
         const params = resolvePrefetchParams(props, liveChannel, null);
         const warm = params ? getDrawerFamilyWorkspaceWarm(params) : null;
         setServedFromWarmCache(Boolean(warm || props.initialPreviewVm));
-        void load(null, true);
-    }, [load, props.initialPreviewVm]);
+        void loadRef.current(null, true);
+        // Scope reset only — must not re-run when liveChannel/load identity changes (thread switch).
+    }, [familyScopeKey, props.initialPreviewVm]);
 
     useEffect(() => {
         const params = resolvePrefetchParams(props, liveChannel, selectedThreadId);
@@ -290,6 +300,9 @@ export default function FamilyCommunicationWorkspace(props: {
 
     const openThread = useCallback((threadId: string) => {
         setSelectedThreadId(threadId);
+        setBodyDraft("");
+        setSendResult(null);
+        setSendError(null);
         if (vm) syncActivityThreadContext(threadId, vm);
         void load(threadId, false);
     }, [load, syncActivityThreadContext, vm]);
@@ -299,7 +312,6 @@ export default function FamilyCommunicationWorkspace(props: {
         syncActivityThreadContext(selectedThreadId, vm);
     }, [isActivityEmbed, selectedThreadId, syncActivityThreadContext, vm]);
 
-    const activityEmbedBootstrappedRef = useRef(false);
     useEffect(() => {
         if (!isActivityEmbed || !vm || activityEmbedBootstrappedRef.current) return;
         activityEmbedBootstrappedRef.current = true;

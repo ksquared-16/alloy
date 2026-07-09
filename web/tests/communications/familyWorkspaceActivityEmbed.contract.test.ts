@@ -129,6 +129,13 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(view).toMatch(/sendCompleteToken/);
     });
 
+    it("activity_embed scope reset does not clear selectedThreadId on thread switch", () => {
+        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
+        expect(workspace).toMatch(/familyScopeKey/);
+        expect(workspace).toMatch(/loadRef\.current\(null, true\)/);
+        expect(workspace).not.toMatch(/void load\(null, true\);\n    \}, \[load, props\.initialPreviewVm\]/);
+    });
+
     it("activity_embed selected thread header shows topic, participants, channel, delivery", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
         expect(view).toMatch(/data-cc-thread-header-summary/);
