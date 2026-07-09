@@ -79,6 +79,24 @@ Opportunity VM is canonical; Person/Child VM cutover in progress. The composed p
 
 ---
 
+## Embedded workspace pattern (Preview VM)
+
+Record-scoped embedded workspaces inside the Focus Panel (Communications Activity, and future Processing/Documents/Scheduling embeds) use a **Preview VM → immediate render → background hydrate → full VM** load path. This avoids a second loading shell when the operator switches tabs inside an already-selected record.
+
+```
+Selected record
+  → Preview VM on selection payload (first paint)
+  → Embedded workspace renders immediately
+  → Background prefetch → full workspace VM
+  → Warm cache on revisit
+```
+
+**Canonical reference:** Communications Activity (`surfaceVariant="activity_embed"`) — see [`../../sprints/2026-07/communications-preview-vm-doctrine.md`](../../sprints/2026-07/communications-preview-vm-doctrine.md) and [`../modules/communications-platform.md`](../modules/communications-platform.md) § Focus Panel Activity embed.
+
+**Reuse intent:** Processing, Documents, Scheduling, Billing, Attendance, and future embedded workspaces should adopt the same pattern — not fork parallel load paths.
+
+---
+
 ## Business process runtime mapping
 
 | Operator concept | Runtime construct |

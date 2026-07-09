@@ -51,6 +51,24 @@ These modules **remain authoritative**; only surrounding owners changed:
 
 ---
 
+## Focus Panel Activity communications (July 2026) — **frozen**
+
+| Concern | Owner | Notes |
+| ------- | ----- | ----- |
+| Activity cockpit layout / flex height chain | `InlineOpportunityFocusPanel.tsx`, `OpportunityFocusPanelEmbeddedWorkspace.tsx`, `alloyOsRuntime.css` | Protected flex chain — see `adminv2-runtime-performance-doctrine.md` |
+| Communications **presentation** in Activity | `FamilyCommunicationWorkspaceView.tsx` (`activity_embed` branch only) | Topic rail + read pane + collapsed reply composer; Command Center modal path unchanged |
+| Communications **data + send** | `FamilyCommunicationWorkspace.tsx`, `resolveFamilyCommunicationWorkspace`, `family-send` API | Preview VM → warm cache → full VM; post-send thread lifecycle via `sendCompleteToken` |
+| Topic title / participant derivation | `threadTopicPresentation.ts` | Pure helpers; transport thread → business topic; email subject vs SMS session |
+| Preview VM first paint | `resolveFamilyCommunicationWorkspacePreview.ts`, drawer VM compose | Path C — `communicationsPreviewVm` on selected record |
+| Preview VM doctrine (canonical embed pattern) | `docs/sprints/2026-07/communications-preview-vm-doctrine.md` | Reuse for Processing, Documents, Scheduling, Billing, Attendance embeds |
+| Performance timing marks | `drawerFamilyWorkspacePrefetchTiming.ts` | Dev-only `performance.mark` — retained infrastructure |
+
+Do **not** move send eligibility, provider bindings, or compliance into Activity embed UI-only work. **Sprint frozen** — next Communications work is a new sprint on a new branch.
+
+Closeout: `docs/sprints/2026-07/communications-activity-sprint-closeout.md`.
+
+---
+
 ## Protected doctrine test suite
 
 When updating tests after an ownership migration:

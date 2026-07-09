@@ -26,6 +26,11 @@ import {
 } from "@/lib/communications/v2/workspaceModeAvailability";
 import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { CommsActivityEmbedHydratingShell, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
+import {
+    deriveThreadReplyRecipientIds,
+    threadChannelToWorkspaceMode,
+} from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
 
 /**
@@ -34,7 +39,28 @@ import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/fami
  * markup the full Communications modal uses). All timeline/composer UI lives in the View, once.
  */
 const toWorkspaceMessage = (e: TimelineEventVM): WorkspaceTimelineMessage => ({
-    id: e.id, direction: e.direction, channel: e.channel, body: e.body, created_at: e.createdAt, kind: e.kind, thread_id: e.threadId, status: e.status,
+    id: e.id,
+    direction: e.direction,
+    channel: e.channel,
+    body: e.body,
+    created_at: e.createdAt,
+    kind: e.kind,
+    thread_id: e.threadId,
+    status: e.status,
+    recipient_person_id: e.recipientPersonId ?? null,
+    sender_user_id: e.senderUserId ?? null,
+    sender_display_name: e.senderDisplayName ?? null,
+    opened_at: e.openedAt ?? null,
+    delivered_at: e.deliveredAt ?? null,
+});
+
+const toThreadPreviewMessage = (e: TimelineEventVM) => ({
+    thread_id: e.threadId,
+    body: e.body,
+    created_at: e.createdAt,
+    kind: e.kind,
+    direction: e.direction,
+    recipient_person_id: e.recipientPersonId ?? null,
 });
 
 const UNSET_PREFERENCE_PROFILE: PersonPreferenceProfile = {
@@ -144,7 +170,32 @@ export default function FamilyCommunicationWorkspace(props: {
     const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
     const [sendError, setSendError] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
+    const [sendCompleteToken, setSendCompleteToken] = useState(0);
     const mountedRef = useRef(false);
+    const activityEmbedBootstrappedRef = useRef(false);
+    const adminAuth = useAdminAuthOptional();
+    const isActivityEmbed = props.surfaceVariant === "activity_embed";
+    const familyScopeKey = useMemo(
+        () => `${props.customerId ?? ""}|${props.entity?.entityType ?? ""}|${props.entity?.entityId ?? ""}`,
+        [props.customerId, props.entity?.entityType, props.entity?.entityId],
+    );
+
+    const syncActivityThreadContext = useCallback(
+        (threadId: string | null, workspace: FamilyCommunicationWorkspaceVM) => {
+            if (!isActivityEmbed) return;
+            if (!threadId) {
+                setSelectedRecipientIds(workspace.selectedRecipients);
+                return;
+            }
+            const thread = workspace.threads.find((t) => t.id === threadId);
+            if (!thread) return;
+            setWorkspaceMode(threadChannelToWorkspaceMode(thread.channel));
+            const threadMessages = workspace.timelineEvents.filter((e) => e.threadId === threadId).map(toThreadPreviewMessage);
+            const recipientIds = deriveThreadReplyRecipientIds(thread, threadMessages);
+            if (recipientIds.length > 0) setSelectedRecipientIds(recipientIds);
+        },
+        [isActivityEmbed],
+    );
 
     useEffect(() => {
         if (mountedRef.current) return;
@@ -211,16 +262,21 @@ export default function FamilyCommunicationWorkspace(props: {
         [applyWorkspace, liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId]
     );
 
+    const loadRef = useRef(load);
+    loadRef.current = load;
+
     useEffect(() => {
         setSelectedThreadId(null);
         setSubjectDraft("");
         setBodyDraft("");
         setSendResult(null);
+        activityEmbedBootstrappedRef.current = false;
         const params = resolvePrefetchParams(props, liveChannel, null);
         const warm = params ? getDrawerFamilyWorkspaceWarm(params) : null;
         setServedFromWarmCache(Boolean(warm || props.initialPreviewVm));
-        void load(null, true);
-    }, [load, props.initialPreviewVm]);
+        void loadRef.current(null, true);
+        // Scope reset only — must not re-run when liveChannel/load identity changes (thread switch).
+    }, [familyScopeKey, props.initialPreviewVm]);
 
     useEffect(() => {
         const params = resolvePrefetchParams(props, liveChannel, selectedThreadId);
@@ -244,12 +300,18 @@ export default function FamilyCommunicationWorkspace(props: {
 
     const openThread = useCallback((threadId: string) => {
         setSelectedThreadId(threadId);
+        setBodyDraft("");
+        setSendResult(null);
+        setSendError(null);
+        if (vm) syncActivityThreadContext(threadId, vm);
         void load(threadId, false);
-    }, [load]);
+    }, [load, syncActivityThreadContext, vm]);
 
-    const isActivityEmbed = props.surfaceVariant === "activity_embed";
+    useEffect(() => {
+        if (!isActivityEmbed || !vm || !selectedThreadId) return;
+        syncActivityThreadContext(selectedThreadId, vm);
+    }, [isActivityEmbed, selectedThreadId, syncActivityThreadContext, vm]);
 
-    const activityEmbedBootstrappedRef = useRef(false);
     useEffect(() => {
         if (!isActivityEmbed || !vm || activityEmbedBootstrappedRef.current) return;
         activityEmbedBootstrappedRef.current = true;
@@ -263,8 +325,9 @@ export default function FamilyCommunicationWorkspace(props: {
         setBodyDraft("");
         setSendResult(null);
         setSendError(null);
+        if (vm) syncActivityThreadContext(null, vm);
         void load(null, false);
-    }, [load]);
+    }, [load, syncActivityThreadContext, vm]);
 
     const runSend = useCallback(
         async (confirm: boolean) => {
@@ -284,7 +347,21 @@ export default function FamilyCommunicationWorkspace(props: {
                 if (confirm) {
                     const scope = resolveInvalidateScope(props);
                     if (scope) invalidateDrawerFamilyWorkspaceCache(scope);
-                    await load(selectedThreadId, false, { force: true });
+                    const priorThreadId = selectedThreadId;
+                    const createdThreadId =
+                        data.results.find((r) => r.status === "sent" && r.thread_id)?.thread_id ?? null;
+                    const threadToOpen = priorThreadId ?? createdThreadId;
+                    if (threadToOpen) {
+                        setSelectedThreadId(threadToOpen);
+                        await load(threadToOpen, false, { force: true });
+                    } else {
+                        await load(null, false, { force: true });
+                    }
+                    setBodyDraft("");
+                    if (!priorThreadId) setSubjectDraft("");
+                    setSendResult(null);
+                    setSendError(null);
+                    setSendCompleteToken((n) => n + 1);
                 }
             } catch {
                 setSendError("Send failed");
@@ -347,6 +424,7 @@ export default function FamilyCommunicationWorkspace(props: {
         consent: vm.consentSummary.household,
     };
     const selected = { id: vm.scope.customerId, family_label: vm.family.label, sla_state: null, assignment_state: "unassigned" };
+    const timelineMessages = vm.timelineEvents.map(toWorkspaceMessage);
 
     return (
         <section
@@ -377,6 +455,7 @@ export default function FamilyCommunicationWorkspace(props: {
                 selectedThreadId={selectedThreadId}
                 selectedThread={vm.threads.find((t) => t.id === selectedThreadId) ?? null}
                 messages={messages}
+                timelineMessages={isActivityEmbed ? timelineMessages : undefined}
                 liveRecipientGroups={vm.recipientGroups}
                 selectedRecipientIds={selectedRecipientIds}
                 liveChannel={liveChannel}
@@ -395,6 +474,8 @@ export default function FamilyCommunicationWorkspace(props: {
                 onSendNow={() => void runSend(false)}
                 onConfirmSend={() => void runSend(true)}
                 onDismissSend={() => { setSendResult(null); setSendError(null); }}
+                viewerUserId={adminAuth?.userId ?? null}
+                sendCompleteToken={sendCompleteToken}
             />
         </section>
     );
