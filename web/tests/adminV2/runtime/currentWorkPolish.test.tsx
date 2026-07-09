@@ -158,13 +158,13 @@ describe("Current Work polish contracts", () => {
         expect(src).not.toMatch(/onCancel=\{\(\) => onBack\(\)\}/);
     });
 
-    it("Open work status pill has no border", () => {
+    it("status pill uses subtle variant without border", () => {
         const css = readFileSync(
             path.join(process.cwd(), "app/adminV2/components/alloyOsRuntime.css"),
             "utf8",
         );
         expect(css).toMatch(
-            /\[data-work-status-pill="open"\][\s\S]*border:\s*none/,
+            /\[data-work-status-pill="summary"\][\s\S]*border:\s*none/,
         );
     });
 });

@@ -38,8 +38,8 @@ describe("deriveCurrentWorkSupportingActions", () => {
                 ],
             }),
             showOutcomeCompletion: true,
-            primaryActionLabel: "Record what happened",
+            primaryActionLabel: "Record outcome",
         });
-        expect(actions.map((a) => a.key)).toEqual(["quick_message", "schedule_tour"]);
+        expect(actions.map((a) => a.key)).toEqual(["schedule_tour"]);
     });
 });
