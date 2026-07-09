@@ -68,6 +68,23 @@ Pure presentation: `web/lib/communications/v2/familyWorkspace/threadTopicPresent
 | `0d87198ea` | Conversation topic rail + read pane |
 | `a01921be5` | Correct participants, sender, channel defaults |
 | *(final)* | Conversation topics + rich thread header + sprint closeout |
+| *(final polish)* | Collapsed reply composer; post-send thread lifecycle; unified activity buttons; email subject topics / SMS session titles; orphan thread cleanup migration |
+
+---
+
+## Final operator polish (July 2026)
+
+| Requirement | Implementation |
+|-------------|----------------|
+| **Thread lifecycle after send** | Confirm send keeps `selectedThreadId` (or opens `createdThreadId` for new message); clears composer; reloads timeline; `sendCompleteToken` collapses reply bar |
+| **Email vs SMS topics** | Email: subject line as topic; SMS: session continuity, no day/week grouping, no message-subject fallback |
+| **Thread rows** | Gmail-style: avatars, topic, participant names, preview, activity time, channel icon, unread dot, message count |
+| **Thread header** | Topic, participants, channel, delivery state, relative time |
+| **Composer** | Selected thread: timeline primary, collapsed Reply affordance; expand to compose; collapse after send. New Message: composer expanded immediately |
+| **New Message mode** | Header + recipients + subject (email) + body + Send only — no empty-state panel |
+| **Button doctrine** | `COMMS_ACTIVITY_PRIMARY_BTN_CLASS` / `COMMS_ACTIVITY_SECONDARY_BTN_CLASS` — Send, Later, BOS same height/radius |
+| **Recipients** | First two chips + overflow; email CC/BCC; reply uses thread recipients only |
+| **Staging cleanup** | `20260709120000_delete_orphan_empty_communication_threads.sql` removes zero-message orphan threads |
 
 ---
 
@@ -80,8 +97,8 @@ Pure presentation: `web/lib/communications/v2/familyWorkspace/threadTopicPresent
 | Activity performance | Preview first paint; warm cache hit; flex fill height |
 | Preview VM | Attached on row select; `workspaceFromPreview` bootstrap |
 | Thread browsing | Topic rail; zero-message hidden; meaningful titles |
-| Reply | Stays in thread; Send reply; transport recipients |
-| New Message | + New clears selection; Send now; household recipients |
+| Reply | Stays in thread; collapsed Reply → expand → Send reply → collapse; transport recipients |
+| New Message | + New clears selection; Send; household recipients; opens created thread after first send |
 
 **Automated:** `familyWorkspaceActivityEmbed.contract.test.ts`, `threadTopicPresentation.test.ts`, `timelinePresentation.test.ts`, `activityEmbedTextFormatting.test.ts`, `drawerFamilyWorkspacePrefetchTiming.contract.test.ts`, `npx tsc --noEmit`.
 

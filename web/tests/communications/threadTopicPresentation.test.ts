@@ -68,13 +68,22 @@ describe("threadTopicPresentation", () => {
         expect(deriveThreadTopicFallback("sms")).toBe("General");
     });
 
-    it("uses message subject when thread subject missing", () => {
+    it("uses message subject when thread subject missing (email only)", () => {
         expect(
             deriveThreadTopicTitle({
                 thread: baseThread({ subject: null }),
                 messageSubject: "Enrollment paperwork",
             }),
         ).toBe("Enrollment paperwork");
+    });
+
+    it("SMS threads do not use message subject as topic title", () => {
+        expect(
+            deriveThreadTopicTitle({
+                thread: baseThread({ subject: null, channel: "sms" }),
+                messageSubject: "Enrollment Packet",
+            }),
+        ).toBe("General");
     });
 
     it("uses workflow label before message subject", () => {

@@ -170,6 +170,7 @@ export default function FamilyCommunicationWorkspace(props: {
     const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
     const [sendError, setSendError] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
+    const [sendCompleteToken, setSendCompleteToken] = useState(0);
     const mountedRef = useRef(false);
     const adminAuth = useAdminAuthOptional();
     const isActivityEmbed = props.surfaceVariant === "activity_embed";
@@ -293,6 +294,11 @@ export default function FamilyCommunicationWorkspace(props: {
         void load(threadId, false);
     }, [load, syncActivityThreadContext, vm]);
 
+    useEffect(() => {
+        if (!isActivityEmbed || !vm || !selectedThreadId) return;
+        syncActivityThreadContext(selectedThreadId, vm);
+    }, [isActivityEmbed, selectedThreadId, syncActivityThreadContext, vm]);
+
     const activityEmbedBootstrappedRef = useRef(false);
     useEffect(() => {
         if (!isActivityEmbed || !vm || activityEmbedBootstrappedRef.current) return;
@@ -329,7 +335,21 @@ export default function FamilyCommunicationWorkspace(props: {
                 if (confirm) {
                     const scope = resolveInvalidateScope(props);
                     if (scope) invalidateDrawerFamilyWorkspaceCache(scope);
-                    await load(selectedThreadId, false, { force: true });
+                    const priorThreadId = selectedThreadId;
+                    const createdThreadId =
+                        data.results.find((r) => r.status === "sent" && r.thread_id)?.thread_id ?? null;
+                    const threadToOpen = priorThreadId ?? createdThreadId;
+                    if (threadToOpen) {
+                        setSelectedThreadId(threadToOpen);
+                        await load(threadToOpen, false, { force: true });
+                    } else {
+                        await load(null, false, { force: true });
+                    }
+                    setBodyDraft("");
+                    if (!priorThreadId) setSubjectDraft("");
+                    setSendResult(null);
+                    setSendError(null);
+                    setSendCompleteToken((n) => n + 1);
                 }
             } catch {
                 setSendError("Send failed");
@@ -443,6 +463,7 @@ export default function FamilyCommunicationWorkspace(props: {
                 onConfirmSend={() => void runSend(true)}
                 onDismissSend={() => { setSendResult(null); setSendError(null); }}
                 viewerUserId={adminAuth?.userId ?? null}
+                sendCompleteToken={sendCompleteToken}
             />
         </section>
     );

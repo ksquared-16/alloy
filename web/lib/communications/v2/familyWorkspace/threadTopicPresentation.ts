@@ -65,17 +65,21 @@ function deriveConversationMetadataTopic(
 
 /**
  * Conversation topic title for Activity embed — business context first, channel icon carries transport.
- * Priority: explicit thread title → workflow/action → message subject → metadata → General.
+ * Priority: explicit thread title → workflow/action → (email: message subject) → metadata → General.
+ * Email threads keep subject lines; SMS sessions fall back to General when no business context exists.
  */
 export function deriveThreadTopicTitle(input: ThreadTopicTitleInput): string {
+    const channel = input.thread.channel;
     const fromThread = input.thread.subject?.trim();
     if (fromThread && !isGenericChannelTitle(fromThread)) return fromThread;
 
     const workflow = input.workflowLabel?.trim();
     if (workflow && !isGenericChannelTitle(workflow)) return workflow;
 
-    const fromMessage = input.messageSubject?.trim();
-    if (fromMessage && !isGenericChannelTitle(fromMessage)) return fromMessage;
+    if (channel === "email") {
+        const fromMessage = input.messageSubject?.trim();
+        if (fromMessage && !isGenericChannelTitle(fromMessage)) return fromMessage;
+    }
 
     const fromMetadata = deriveConversationMetadataTopic(input.thread, input.conversationMetadata);
     if (fromMetadata) return fromMetadata;

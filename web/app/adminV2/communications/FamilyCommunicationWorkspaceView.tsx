@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, Underline, List, Link2, Smile, Paperclip, FileText, Send, Clock, Check, UserPlus, ChevronDown, Plus } from "lucide-react";
 import { relTime, messageDeliveryDisplay } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import CommunicationPreferencesEditor from "@/components/admin/communications/CommunicationPreferencesEditor";
@@ -35,6 +35,8 @@ import {
 import {
     COMMS_ACCENT_BG_SUBTLE_CLASS,
     COMMS_ACCENT_BORDER_CLASS,
+    COMMS_ACTIVITY_PRIMARY_BTN_CLASS,
+    COMMS_ACTIVITY_SECONDARY_BTN_CLASS,
     COMMS_BOS_HEADER_BTN_CLASS,
     COMMS_NOTE_BANNER_CLASS,
     COMMS_OUTBOUND_BUBBLE_CLASS,
@@ -193,6 +195,8 @@ export type FamilyCommunicationWorkspaceViewProps = {
     onDismissSend: () => void;
     /** Current operator user id for outbound "Sent by you" labeling (activity embed). */
     viewerUserId?: string | null;
+    /** Increments after a confirmed send — collapses Activity reply composer. */
+    sendCompleteToken?: number;
 };
 
 export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicationWorkspaceViewProps) {
@@ -207,10 +211,11 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         LIVE_WORKSPACE, selectedThreadId, selectedThread = null, messages, timelineMessages = [],
         liveRecipientGroups, selectedRecipientIds, liveChannel, subjectDraft, bodyDraft, sendResult, sendError, sending, assignBusy,
         onClaim, onAllMessages, onOpenThread, onToggleRecipient, onSubjectChange, onBodyChange, onSendNow, onConfirmSend, onDismissSend,
-        viewerUserId = null,
+        viewerUserId = null, sendCompleteToken = 0,
     } = props;
     const isActivityEmbed = surfaceVariant === "activity_embed";
     const isNewMessageMode = isActivityEmbed && selectedThreadId == null;
+    const [replyComposerExpanded, setReplyComposerExpanded] = useState(false);
     const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
     const [showCcBcc, setShowCcBcc] = useState(false);
     const [showManualEmailInput, setShowManualEmailInput] = useState(false);
@@ -221,6 +226,25 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const [composerCcEmails, setComposerCcEmails] = useState<string[]>([]);
     const [composerBccEmails, setComposerBccEmails] = useState<string[]>([]);
     const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!isActivityEmbed) return;
+        setReplyComposerExpanded(isNewMessageMode);
+    }, [isActivityEmbed, selectedThreadId, isNewMessageMode]);
+
+    useEffect(() => {
+        if (!isActivityEmbed || sendCompleteToken === 0) return;
+        setReplyComposerExpanded(false);
+        window.requestAnimationFrame(() => {
+            timelineScrollRef.current?.scrollTo({ top: timelineScrollRef.current.scrollHeight, behavior: "smooth" });
+        });
+    }, [isActivityEmbed, sendCompleteToken]);
+
+    const expandReplyComposer = useCallback(() => {
+        setReplyComposerExpanded(true);
+        window.requestAnimationFrame(() => bodyTextareaRef.current?.focus());
+    }, []);
     const allLiveRecipients = liveRecipientGroups ? liveRecipientGroups.flatMap((g) => g.recipients) : [];
     const resolvedPreferenceProfile = preferenceProfile ?? detail?.preferenceProfile;
     const familyLink = recordLinks?.find((l) => l.type === "customers");
@@ -238,6 +262,9 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     };
     const noteMessages = messages.filter((m) => m.kind === "note");
     const composeMode = workspaceMode === "email" || workspaceMode === "sms";
+    const activityPrimaryBtnClass = isActivityEmbed ? COMMS_ACTIVITY_PRIMARY_BTN_CLASS : `${COMMS_PRIMARY_BTN_CLASS} !px-3 !py-2 !text-sm`;
+    const activitySecondaryBtnClass = isActivityEmbed ? COMMS_ACTIVITY_SECONDARY_BTN_CLASS : `${COMMS_SECONDARY_BTN_CLASS} !px-2.5 !py-2 !text-sm`;
+    const showActivityComposer = !isActivityEmbed || isNewMessageMode || replyComposerExpanded;
     const activeModeReason =
         workspaceMode === "note" || workspaceMode === "tasks" ? null : modeAvailability[workspaceMode]?.reason ?? null;
 
@@ -528,11 +555,11 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     : "px-4 py-3"
             }`}
         >
-                <div data-cc-composer-channels className="inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
+                <div data-cc-composer-channels className={`inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm ${isActivityEmbed && !isNewMessageMode ? "hidden" : ""}`}>
                     {renderModeTab("email", "Email")}
                     {renderModeTab("sms", "SMS")}
-                    {renderModeTab("note", "Notes")}
-                    {renderModeTab("tasks", "Tasks")}
+                    {!isActivityEmbed ? renderModeTab("note", "Notes") : null}
+                    {!isActivityEmbed ? renderModeTab("tasks", "Tasks") : null}
                 </div>
                 {activeModeReason ? (
                     <div data-cc-mode-unavailable className={`mt-2 ${COMMS_UTILITY_CARD_CLASS} text-[11px] text-alloy-midnight/60`}>
@@ -763,7 +790,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     placeholder="Subject"
                     value={subjectDraft}
                     onChange={(e) => onSubjectChange(e.target.value)}
-                    className={`mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35 ${workspaceMode === "sms" ? "hidden" : ""}`}
+                    className={`mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35 ${workspaceMode === "sms" || (isActivityEmbed && !isNewMessageMode) ? "hidden" : ""}`}
                 />
 
                 <div
@@ -832,22 +859,28 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 </ul>
                                 <div className="mt-1.5 flex items-center gap-1.5">
                                     {sendResult.mode === "preflight" && sendResult.summary.ready > 0 ? (
-                                        <button type="button" disabled={sending} onClick={onConfirmSend} className="rounded-md bg-alloy-juniper px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40">Confirm send ({sendResult.summary.ready})</button>
+                                        <button type="button" disabled={sending} onClick={onConfirmSend} className={isActivityEmbed ? COMMS_ACTIVITY_PRIMARY_BTN_CLASS : "rounded-md bg-alloy-juniper px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"}>Confirm send ({sendResult.summary.ready})</button>
                                     ) : null}
-                                    <button type="button" onClick={onDismissSend} className="rounded-md border border-alloy-stone/25 bg-white px-2.5 py-1 text-[11px] text-alloy-midnight">{sendResult.mode === "sent" ? "Done" : "Cancel"}</button>
+                                    <button type="button" onClick={onDismissSend} className={isActivityEmbed ? COMMS_ACTIVITY_SECONDARY_BTN_CLASS : "rounded-md border border-alloy-stone/25 bg-white px-2.5 py-1 text-[11px] text-alloy-midnight"}>{sendResult.mode === "sent" ? "Done" : "Cancel"}</button>
                                 </div>
                             </>
                         ) : null}
                     </div>
                 ) : null}
                 <div className="mt-2.5 flex items-center gap-1.5">
-                    <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${COMMS_PRIMARY_BTN_CLASS} !px-3 !py-2 !text-sm disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send now" : "Send reply"}</button>
-                    <button type="button" aria-label="Send later" className={`inline-flex shrink-0 items-center gap-1 ${COMMS_SECONDARY_BTN_CLASS} !px-2.5 !py-2 !text-sm`}><Clock className="h-3.5 w-3.5" />Later</button>
-                    <button type="button" data-bos-assist-button="true" className={COMMS_BOS_HEADER_BTN_CLASS}>
-                        <BosMark size="sm" horizon />
-                        BOS
-                    </button>
-                    <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />manual send only</span>
+                    <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
+                    {!isNewMessageMode ? (
+                        <>
+                            <button type="button" aria-label="Send later" className={`inline-flex shrink-0 items-center gap-1 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Later</button>
+                            <button type="button" data-bos-assist-button="true" className={isActivityEmbed ? `${COMMS_ACTIVITY_SECONDARY_BTN_CLASS} min-w-[4.5rem]` : COMMS_BOS_HEADER_BTN_CLASS}>
+                                <BosMark size="sm" horizon />
+                                BOS
+                            </button>
+                        </>
+                    ) : null}
+                    {!isActivityEmbed ? (
+                        <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />manual send only</span>
+                    ) : null}
                 </div>
                 </>
                 ) : null}
@@ -976,6 +1009,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     ) : (
                         <>
                             <div
+                                ref={timelineScrollRef}
                                 data-cc-ws-section="timeline"
                                 className={`min-h-0 flex-1 overflow-auto border-b border-alloy-stone/15 ${COMMS_SURFACE_MUTED_CLASS} px-3 py-2.5`}
                             >
@@ -985,7 +1019,24 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     messageListBody
                                 )}
                             </div>
-                            {composerColumn}
+                            {showActivityComposer ? (
+                                composerColumn
+                            ) : (
+                                <div
+                                    data-cc-reply-collapsed
+                                    className="flex shrink-0 items-center border-t-2 border-alloy-stone/20 bg-white px-3 py-2"
+                                >
+                                    <button
+                                        type="button"
+                                        data-cc-reply-expand
+                                        onClick={expandReplyComposer}
+                                        className={`inline-flex items-center gap-1.5 ${COMMS_ACTIVITY_SECONDARY_BTN_CLASS}`}
+                                    >
+                                        <Send className="h-3.5 w-3.5" />
+                                        Reply
+                                    </button>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>

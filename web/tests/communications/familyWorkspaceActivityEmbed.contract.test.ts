@@ -108,14 +108,25 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(view).not.toMatch(/Start a new message/);
         expect(view).not.toMatch(/border-dashed border-alloy-stone\/25 bg-white\/70/);
         expect(view).toMatch(/New Message/);
-        expect(view).toMatch(/Send now/);
+        expect(view).toMatch(/isNewMessageMode \? "Send"/);
     });
 
-    it("activity_embed selected thread shows history + reply composer", () => {
+    it("activity_embed selected thread shows history with collapsed reply affordance", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
         expect(view).toMatch(/data-cc-ws-section="timeline"/);
+        expect(view).toMatch(/data-cc-reply-collapsed/);
+        expect(view).toMatch(/data-cc-reply-expand/);
+        expect(view).toMatch(/replyComposerExpanded/);
         expect(view).toMatch(/Send reply/);
-        expect(view).toMatch(/\{composerColumn\}/);
+    });
+
+    it("activity_embed post-send stays in thread and collapses composer", () => {
+        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        expect(workspace).toMatch(/sendCompleteToken/);
+        expect(workspace).toMatch(/threadToOpen = priorThreadId \?\? createdThreadId/);
+        expect(workspace).toMatch(/setSendCompleteToken/);
+        expect(view).toMatch(/sendCompleteToken/);
     });
 
     it("activity_embed selected thread header shows topic, participants, channel, delivery", () => {
@@ -124,14 +135,16 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(view).toMatch(/deriveThreadHeaderSummary/);
     });
 
-    it("activity_embed composer uses header-matched BOS control and formatting toolbar", () => {
+    it("activity_embed composer uses unified activity buttons and formatting toolbar", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
         const ui = read("app/adminV2/communications/commsWorkspaceUi.tsx");
+        expect(view).toMatch(/COMMS_ACTIVITY_PRIMARY_BTN_CLASS/);
+        expect(view).toMatch(/COMMS_ACTIVITY_SECONDARY_BTN_CLASS/);
         expect(view).toMatch(/data-bos-assist-button="true"/);
-        expect(view).toMatch(/COMMS_BOS_HEADER_BTN_CLASS/);
         expect(view).toMatch(/applyBodyFormat\("bold"\)/);
         expect(view).toMatch(/applyBodyFormat\("link"\)/);
-        expect(ui).toMatch(/COMMS_BOS_HEADER_BTN_CLASS/);
+        expect(ui).toMatch(/COMMS_ACTIVITY_PRIMARY_BTN_CLASS/);
+        expect(ui).toMatch(/COMMS_ACTIVITY_SECONDARY_BTN_CLASS/);
     });
 
     it("activity embed bootstraps first thread and isolates new-message timeline", () => {
