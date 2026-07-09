@@ -21,7 +21,7 @@ Consumer adoption starts after this merge. No additional standalone Data Model i
 
 **Status:** **FROZEN** — July 2026 (clarification sprint complete; Field Platform Consumer Audit is next)  
 **Workspace:** Settings → Data Model (`/settings/fields`) · Settings → Entities (`/settings/entities`)  
-**Staging baseline:** `3068b53a2` — final Data Model QA hotfix on `origin/staging` (pre-clarification)
+**Staging baseline:** `c6c362fcf` — field concept clarification sprint on `origin/staging`
 
 ---
 
@@ -86,7 +86,7 @@ Data Model is frozen while Field Platform continues evolving through consumer ad
 ## Final staging hash
 
 ```
-PENDING_CLARIFICATION_MERGE
+c6c362fcf
 ```
 
 | Artifact | Hash |
@@ -95,8 +95,8 @@ PENDING_CLARIFICATION_MERGE
 | **QA hotfix merge** | `a504e075d` — merge `feat/data-model-final-qa-hotfix` (QA pass) |
 | **Pre-clarification staging** | `3068b53a2` — `origin/staging` tip after QA hotfix promotion |
 | **Clarification sprint** | `d19f9b5a5` — `refactor(fields): finalize field concepts and runtime taxonomy` |
-| **Clarification merge** | `PENDING_CLARIFICATION_MERGE` — merge clarification sprint to `staging` |
-| **Final staging** | `PENDING_CLARIFICATION_MERGE` — `origin/staging` tip after clarification promotion |
+| **Clarification merge** | `c6c362fcf` — merge clarification sprint to `staging` |
+| **Final staging** | `c6c362fcf` — `origin/staging` tip after clarification promotion |
 | Lifecycle sprint | `6abb9c847` — `feat(settings): finalize field lifecycle and entities workspace adoption` |
 | Data Model merge | `cf1de3aa2` — merge `feat/data-model-qa-fixes` onto `0e72e3051` |
 | Category picker QA | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |
