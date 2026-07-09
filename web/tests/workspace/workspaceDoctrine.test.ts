@@ -100,18 +100,35 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(processing).not.toContain("WS_METRIC_EYEBROW_INLINE");
     });
 
+    it("WorkspaceShell separates nav chrome from workspace body", () => {
+        const shell = read("components/workspace/WorkspaceShell.tsx");
+        expect(shell).toContain("WorkspaceDivider");
+        expect(shell).toContain('data-testid="workspace-shell-body-divider"');
+        const tokens = read("components/workspace/workspaceTokens.ts");
+        expect(tokens).toContain("WS_SHELL_BODY_SEPARATOR");
+    });
+
+    it("Processing uses artifact viewport with zoom controls", () => {
+        const viewport = read("app/adminV2/pos/ProcessingSourceDocumentViewport.tsx");
+        expect(viewport).toContain("WorkspaceArtifactZoomControls");
+        expect(viewport).toContain("data-workspace-artifact-viewport");
+        const setup = read("app/adminV2/pos/PosTemplateSetupColumn.tsx");
+        expect(setup).toContain("ProcessingSourceDocumentViewport");
+    });
+
     it("Processing uses artifact canvas containment for source document", () => {
         const setup = read("app/adminV2/pos/PosTemplateSetupColumn.tsx");
-        expect(setup).toContain("WS_ARTIFACT_CANVAS");
-        expect(setup).toContain('data-workspace-artifact-canvas="true"');
+        expect(setup).toContain("ProcessingSourceDocumentViewport");
         const tokens = read("components/workspace/workspaceTokens.ts");
         expect(tokens).toContain("export const WS_ARTIFACT_CANVAS");
     });
 
     it("Processing uses artifact viewport and queue doctrine primitives", () => {
         const setup = read("app/adminV2/pos/PosTemplateSetupColumn.tsx");
-        expect(setup).toContain("WS_ARTIFACT_CANVAS");
-        expect(setup).toContain('data-workspace-artifact-viewport="true"');
+        expect(setup).toContain("ProcessingSourceDocumentViewport");
+        const viewport = read("app/adminV2/pos/ProcessingSourceDocumentViewport.tsx");
+        expect(viewport).toContain("WS_ARTIFACT_CANVAS");
+        expect(viewport).toContain('data-workspace-artifact-viewport="true"');
         const workspace = read("app/adminV2/pos/PosProcessingWorkspace.tsx");
         expect(workspace).toContain("WorkspaceDivider");
         expect(workspace).toContain("WS_QUEUE_RAIL");

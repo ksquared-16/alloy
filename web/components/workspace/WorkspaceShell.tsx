@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import WorkspaceModeNav from "@/components/workspace/WorkspaceModeNav";
+import WorkspaceDivider from "@/components/workspace/WorkspaceDivider";
 import type { WorkspaceMode } from "@/components/workspace/WorkspaceModeTabs";
 import { WS_FIELD_CANVAS, WS_SHELL_INSET } from "@/components/workspace/workspaceTokens";
 
@@ -126,6 +127,8 @@ export default function WorkspaceShell<M extends string, S extends string>({
                 navDataAttr={navDataAttr}
                 sectionsDataAttr={sectionsDataAttr}
             />
+
+            <WorkspaceDivider orientation="horizontal" className="shrink-0" data-testid="workspace-shell-body-divider" />
 
             <div className={WS_SHELL_INSET} data-workspace-shell-inset="true">
                 <div

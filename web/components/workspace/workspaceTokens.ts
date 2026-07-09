@@ -110,8 +110,12 @@ export const WS_ACTION_SECONDARY =
 /** Stone workspace field — white cards float above this layer. */
 export const WS_FIELD = "bg-alloy-stone/[0.07]";
 
+/** Nav band → workspace body separator (full-width under shell chrome). */
+export const WS_SHELL_BODY_SEPARATOR = "border-t border-alloy-stone/25";
+
 /** White gutter inset between modal shell chrome and the stone workspace field (~16px). */
-export const WS_SHELL_INSET = "flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 pb-4 pt-3";
+export const WS_SHELL_INSET =
+    `flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 pb-4 pt-3 ${WS_SHELL_BODY_SEPARATOR}`;
 
 /** Rounded stone operational canvas inside the shell inset (Layer 2). */
 export const WS_FIELD_CANVAS =
@@ -159,7 +163,7 @@ export const WS_ARTIFACT_VIEWPORT = "flex min-h-0 flex-1 flex-col overflow-hidde
 
 /** Internal scroll region for stacked artifact pages (bottom padding avoids clipped edge). */
 export const WS_ARTIFACT_VIEWPORT_SCROLL =
-    "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2 pb-5 pt-2";
+    "min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-y-contain px-2 pb-6 pt-1.5";
 
 /* ── Typography hierarchy (three levels only — Workspace Doctrine V2 freeze) ─── */
 

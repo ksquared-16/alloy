@@ -26,8 +26,9 @@ import { computePageMaps, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/p
 import PosPdfFieldMap from "./PosPdfFieldMap";
 import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
 import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
+import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
-import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY, WS_ARTIFACT_CANVAS, WS_ARTIFACT_VIEWPORT, WS_ARTIFACT_VIEWPORT_SCROLL } from "@/components/workspace/workspaceTokens";
+import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 import {
     seedReviewQuestionFromDraftField,
     expandQuestionsForDraftSave,
@@ -398,7 +399,7 @@ export default function PosTemplateSetupColumn({
     })();
 
     return (
-        <div className="flex h-full min-h-0 flex-col bg-white">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
             <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-1.5 py-0.5">
                 <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                     <ProcessingWorkflowStepper
@@ -418,6 +419,7 @@ export default function PosTemplateSetupColumn({
             </div>
 
             {phase === "generate" && !created ? (
+                <>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
                     <div className="grid gap-3 lg:grid-cols-3">
                         <SummaryPanel title="Summary">
@@ -456,12 +458,34 @@ export default function PosTemplateSetupColumn({
                         </SummaryPanel>
                     </div>
                 </div>
+                <div className="shrink-0 border-t border-alloy-stone/12 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
+                    {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
+                    <div className="flex items-center justify-between gap-3">
+                        <p className="min-w-0 text-[10px] text-alloy-midnight/40">
+                            Alloy will create an unpublished native form from your reviewed questions.
+                        </p>
+                        <div className="flex shrink-0 items-center gap-2">
+                            <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
+                                Back to review
+                            </button>
+                            <button
+                                type="button"
+                                disabled={creating || busy || activeFieldCount === 0}
+                                onClick={() => void handleCreate()}
+                                className={WS_ACTION_PRIMARY}
+                            >
+                                {creating ? "Generating…" : "Generate native form"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                </>
             ) : (
-            <>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="flex min-h-0 flex-1 gap-4 overflow-hidden p-2 pt-0">
                 <WorkspaceZonePanel
                     title="Source document"
-                    className="min-w-0 flex-[55]"
+                    className="min-h-0 min-w-0 flex-[55] self-stretch"
                     headerAction={
                         <div className="flex items-center gap-1.5">
                             <div className="inline-flex rounded-md border border-alloy-stone/20 bg-white p-0.5">
@@ -486,75 +510,65 @@ export default function PosTemplateSetupColumn({
                         </div>
                     }
                 >
-                    <div className="flex min-h-0 flex-1 flex-col px-1.5 pb-1.5">
-                        <div
-                            className={WS_ARTIFACT_CANVAS}
-                            data-workspace-artifact-canvas="true"
-                        >
-                            {leftView === "highlights" ? (
-                                hasRegions ? (
-                                    <>
-                                        {mappingQuestionId ? (
-                                            <div className="mx-1.5 mt-1.5 flex shrink-0 items-center justify-between rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] px-2 py-0.5 text-[10px] text-alloy-bend-pine">
-                                                <span>Drag a rectangle on the page to map this question.</span>
-                                                <button type="button" onClick={() => setMappingQuestionId(null)} className="font-medium text-alloy-midnight/45 hover:underline">
-                                                    Cancel
-                                                </button>
-                                            </div>
-                                        ) : null}
-                                        <div
-                                            className={`${WS_ARTIFACT_VIEWPORT} ${WS_ARTIFACT_VIEWPORT_SCROLL}`}
-                                            data-workspace-artifact-viewport="true"
-                                        >
-                                            <PosPdfFieldMap
-                                                pages={pageMaps}
-                                                selectedId={selectedQuestionId}
-                                                onSelect={setSelectedQuestionId}
-                                                mapping={!!mappingQuestionId}
-                                                onDrawRect={handleDrawRect}
-                                            />
-                                            <div className="mt-2 flex items-center gap-3 pb-1 text-[9px] text-alloy-midnight/40">
-                                                <span className="flex items-center gap-1">
-                                                    <span className="inline-block h-2 w-2.5 rounded-sm border border-alloy-bend-pine/40 bg-alloy-bend-pine/15" /> Question
-                                                </span>
-                                                <span className="flex items-center gap-1">
-                                                    <span className="inline-block h-2 w-2.5 rounded-sm border-2 border-alloy-bend-pine bg-alloy-bend-pine/30" /> Selected
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className={`${WS_ARTIFACT_VIEWPORT} ${WS_ARTIFACT_VIEWPORT_SCROLL} flex items-center justify-center`}>
-                                        <div className="rounded border border-dashed border-alloy-stone/25 bg-white p-3 text-center text-[11px] text-alloy-midnight/40">
-                                            No recognized question regions — this draft came from text. Switch to Original PDF to view the
-                                            document, and add questions on the right.
-                                        </div>
-                                    </div>
-                                )
-                            ) : pdfUrl ? (
-                                <div className={`${WS_ARTIFACT_VIEWPORT} p-1`}>
-                                    <iframe
-                                        src={pdfUrl}
-                                        title="Source PDF"
-                                        className="min-h-0 flex-1 w-full rounded border border-alloy-stone/15 bg-white"
+                    <ProcessingSourceDocumentViewport
+                        pdfMode={leftView === "pdf" && !!pdfUrl}
+                        mappingBanner={
+                            leftView === "highlights" && mappingQuestionId ? (
+                                <div className="mx-1.5 mt-1.5 flex shrink-0 items-center justify-between rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] px-2 py-0.5 text-[10px] text-alloy-bend-pine">
+                                    <span>Drag a rectangle on the page to map this question.</span>
+                                    <button type="button" onClick={() => setMappingQuestionId(null)} className="font-medium text-alloy-midnight/45 hover:underline">
+                                        Cancel
+                                    </button>
+                                </div>
+                            ) : null
+                        }
+                    >
+                        {leftView === "highlights" ? (
+                            hasRegions ? (
+                                <>
+                                    <PosPdfFieldMap
+                                        pages={pageMaps}
+                                        selectedId={selectedQuestionId}
+                                        onSelect={setSelectedQuestionId}
+                                        mapping={!!mappingQuestionId}
+                                        onDrawRect={handleDrawRect}
                                     />
-                                </div>
-                            ) : pdfErr ? (
-                                <div className={`${WS_ARTIFACT_VIEWPORT} ${WS_ARTIFACT_VIEWPORT_SCROLL} px-2 text-[11px] text-alloy-midnight/40`}>
-                                    {pdfErr}
-                                </div>
+                                    <div className="mt-2 flex items-center gap-3 pb-2 text-[9px] text-alloy-midnight/40">
+                                        <span className="flex items-center gap-1">
+                                            <span className="inline-block h-2 w-2.5 rounded-sm border border-alloy-bend-pine/40 bg-alloy-bend-pine/15" /> Question
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <span className="inline-block h-2 w-2.5 rounded-sm border-2 border-alloy-bend-pine bg-alloy-bend-pine/30" /> Selected
+                                        </span>
+                                    </div>
+                                </>
                             ) : (
-                                <div className={`${WS_ARTIFACT_VIEWPORT} ${WS_ARTIFACT_VIEWPORT_SCROLL} flex items-center px-2`}>
-                                    <div className="h-64 w-full animate-pulse rounded bg-alloy-stone/10" />
+                                <div className="flex min-h-[12rem] items-center justify-center p-4">
+                                    <div className="rounded border border-dashed border-alloy-stone/25 bg-white p-3 text-center text-[11px] text-alloy-midnight/40">
+                                        No recognized question regions — this draft came from text. Switch to Original PDF to view the
+                                        document, and add questions on the right.
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-                    </div>
+                            )
+                        ) : pdfUrl ? (
+                            <iframe
+                                src={pdfUrl}
+                                title="Source PDF"
+                                className="min-h-[48rem] w-full flex-1 rounded border border-alloy-stone/15 bg-white"
+                            />
+                        ) : pdfErr ? (
+                            <div className="p-2 text-[11px] text-alloy-midnight/40">{pdfErr}</div>
+                        ) : (
+                            <div className="flex items-center p-2">
+                                <div className="h-64 w-full animate-pulse rounded bg-alloy-stone/10" />
+                            </div>
+                        )}
+                    </ProcessingSourceDocumentViewport>
                 </WorkspaceZonePanel>
 
                 <WorkspaceZonePanel
                     title="Review questions"
-                    className="min-w-0 flex-[23]"
+                    className="min-h-0 min-w-0 flex-[23] self-stretch"
                     headerAction={
                         <div className="flex gap-2">
                             {(["questions", "text"] as const).map((t) => (
@@ -625,26 +639,18 @@ export default function PosTemplateSetupColumn({
                     </div>
                 </WorkspaceZonePanel>
             </div>
-            </>
-            )}
 
-            {/* Footer */}
+            {/* Footer — below review workspace; document scroll stays above */}
             <div className="shrink-0 border-t border-alloy-stone/12 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
                 {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                 <div className="flex items-center justify-between gap-3">
                     <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
                         {created
                             ? "Processing complete — your native form is ready. Continue in Studio → Forms to edit and publish."
-                            : phase === "generate"
-                              ? "Alloy will create an unpublished native form from your reviewed questions."
-                              : "When you're done reviewing, continue to generate your native form."}
+                            : "When you're done reviewing, continue to generate your native form."}
                     </p>
                     <div className="flex shrink-0 items-center gap-2">
-                        {!created && phase === "generate" ? (
-                            <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
-                                Back to review
-                            </button>
-                        ) : !created ? (
+                        {!created ? (
                             <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
                                 {busy ? "Re-detecting…" : "Re-detect questions"}
                             </button>
@@ -653,7 +659,7 @@ export default function PosTemplateSetupColumn({
                             <button type="button" onClick={() => created.form_id && onOpenForm?.(created.form_id)} className={WS_ACTION_PRIMARY}>
                                 Edit form in Studio
                             </button>
-                        ) : phase === "review" ? (
+                        ) : (
                             <button
                                 type="button"
                                 disabled={activeFieldCount === 0}
@@ -662,19 +668,12 @@ export default function PosTemplateSetupColumn({
                             >
                                 Continue to generate
                             </button>
-                        ) : (
-                            <button
-                                type="button"
-                                disabled={creating || busy || activeFieldCount === 0}
-                                onClick={() => void handleCreate()}
-                                className={WS_ACTION_PRIMARY}
-                            >
-                                {creating ? "Generating…" : "Generate native form"}
-                            </button>
                         )}
                     </div>
                 </div>
             </div>
+            </div>
+            )}
         </div>
     );
 }
