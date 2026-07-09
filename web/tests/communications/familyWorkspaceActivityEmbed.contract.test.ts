@@ -43,13 +43,20 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(css).toMatch(/\.alloy-os-activity-cockpit__body[\s\S]*grid-template-columns/);
         expect(css).toMatch(/grid-template-rows: minmax\(0, 1fr\)/);
         expect(css).toMatch(/\.alloy-os-activity-cockpit__stack[\s\S]*height: 100%/);
-        // Split-mode override must NOT cap cockpit to content height (breaks grid 1fr fill).
-        expect(css).not.toMatch(
-            /html\[data-alloy-os-runtime-split="true"\] \.alloy-os-activity-cockpit[\s\S]*height: auto/
+        // Split-mode cockpit fill uses flex (not height:100% — parent flex used size may be indefinite).
+        expect(css).toMatch(
+            /html\[data-alloy-os-runtime-split="true"\][\s\S]*\.alloy-os-activity-cockpit[\s\S]*flex: 1 1 0%/
         );
         expect(css).toMatch(
-            /html\[data-alloy-os-runtime-split="true"\][\s\S]*\.alloy-os-activity-cockpit[\s\S]*height: 100%/
+            /html\[data-alloy-os-runtime-split="true"\][\s\S]*\.alloy-os-activity-cockpit__body[\s\S]*flex: 1 1 0%/
         );
+    });
+
+    it("activity_embed hides zero-message threads from the conversation list", () => {
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        expect(view).toMatch(/function threadsForActivityEmbed/);
+        expect(view).toMatch(/thread\.messageCount > 0/);
+        expect(view).toMatch(/threadsForActivityEmbed\(threads\)/);
     });
 
     it("Recent Activity ribbon uses compact event count", () => {

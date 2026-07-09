@@ -13,6 +13,7 @@
  */
 
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
+import { resolveChildPhotoUrlFromRaw } from "@/lib/adminV2/runtime/focusPanel/children/resolveChildPhotoUrl";
 import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
@@ -32,6 +33,7 @@ export type ChildEvidenceFlag = {
 export type ChildrenEvidenceChild = {
     id: string;
     name: string;
+    personId?: string | null;
     /** Optional identity parts for composed display (Surface Composer identity group). */
     firstName?: string | null;
     lastName?: string | null;
@@ -126,6 +128,9 @@ export function buildChildrenCardEvidence(
     const rows = mapRawInquiryChildrenToDrawerRows(
         (context.truth._inquiry_children as unknown[]) ?? [],
     );
+    const rawRows = ((context.truth._inquiry_children as unknown[]) ?? []).map((x) =>
+        x && typeof x === "object" ? (x as Record<string, unknown>) : {},
+    );
 
     const children: ChildrenEvidenceChild[] = rows.map((row, index) => {
         const name = childName(row);
@@ -189,6 +194,7 @@ export function buildChildrenCardEvidence(
         return {
             id: trimOrNull(row.id) ?? trimOrNull(row.person_id) ?? `child-${index}`,
             name,
+            personId: trimOrNull(row.person_id),
             firstName: trimOrNull(row.first_name),
             lastName: trimOrNull(row.last_name),
             preferredName: trimOrNull((row as { preferred_name?: unknown }).preferred_name),
@@ -196,9 +202,7 @@ export function buildChildrenCardEvidence(
             dob: trimOrNull(row.dob)?.slice(0, 10) ?? null,
             age: trimOrNull(row.age),
             initial: name.charAt(0).toUpperCase(),
-            // No child photo source today → null → CardAvatar renders the initials
-            // fallback. The seam is here for when child photos land (no fabricated image).
-            imageUrl: null,
+            imageUrl: resolveChildPhotoUrlFromRaw(rawRows[index] ?? {}),
             dobAge,
             program,
             room,
