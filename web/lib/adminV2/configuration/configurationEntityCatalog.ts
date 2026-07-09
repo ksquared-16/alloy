@@ -5,7 +5,6 @@
 import type { LucideIcon } from "lucide-react";
 import { ADMIN_FIELD_ENTITY_TYPE_TO_LABELS_KEY } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import type { EntityLabelsMap } from "@/lib/admin/entityLabelDisplay";
-import { adminFieldEntitySingularLabel, adminFieldEntityPluralLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import { CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import type { SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
 import { hubEntityApiTypes } from "@/lib/fields/fieldCatalogForSettings";
@@ -111,15 +110,25 @@ export function configurationPrimaryHubEntities(): readonly ConfigurationHubEnti
     return HUB_ENTITY_DEFINITIONS.filter((d) => primary.has(d.hubKey));
 }
 
+function resolveConfigurationEntityLabel(
+    labels: EntityLabelsMap,
+    hubKey: SettingsHubEntityKey,
+    form: "singular" | "plural",
+): string {
+    const def = configurationHubEntity(hubKey);
+    if (!def) return hubKey;
+    const entry = labels[def.labelsKey];
+    const value = form === "singular" ? entry?.singular : entry?.plural;
+    if (value != null && value.trim() !== "") return value.trim();
+    return form === "singular" ? def.canonicalSingularLabel : def.canonicalPluralLabel;
+}
+
 /** Resolve operator singular label for Configuration workspaces (Data Model rail + Entities). */
 export function resolveConfigurationEntitySingularLabel(
     labels: EntityLabelsMap,
     hubKey: SettingsHubEntityKey,
 ): string {
-    const def = configurationHubEntity(hubKey);
-    if (!def) return hubKey;
-    if (hubKey === "opportunity" || hubKey === "location") return def.canonicalSingularLabel;
-    return adminFieldEntitySingularLabel(labels, hubKey);
+    return resolveConfigurationEntityLabel(labels, hubKey, "singular");
 }
 
 /** Resolve operator plural label for Configuration workspaces. */
@@ -127,10 +136,7 @@ export function resolveConfigurationEntityPluralLabel(
     labels: EntityLabelsMap,
     hubKey: SettingsHubEntityKey,
 ): string {
-    const def = configurationHubEntity(hubKey);
-    if (!def) return hubKey;
-    if (hubKey === "opportunity" || hubKey === "location") return def.canonicalPluralLabel;
-    return adminFieldEntityPluralLabel(labels, hubKey);
+    return resolveConfigurationEntityLabel(labels, hubKey, "plural");
 }
 
 export function canonicalSingularLabel(hubKey: SettingsHubEntityKey): string {

@@ -49,8 +49,8 @@ type Props = {
 };
 
 /**
- * Surface Composer V3 — inline runtime field editor.
- * Fields are configured exactly where they render: grip, label, behavior, remove, + add field.
+ * Legacy inline field list for household surfaces.
+ * Children drill-in uses NestedSurfaceFieldLayoutSurface (visual drag layout).
  */
 export default function InlineRuntimeFieldList({
     surfaceId,

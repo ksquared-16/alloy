@@ -247,6 +247,16 @@ export default function FamilyCommunicationWorkspace(props: {
         void load(threadId, false);
     }, [load]);
 
+    const isActivityEmbed = props.surfaceVariant === "activity_embed";
+
+    const activityEmbedBootstrappedRef = useRef(false);
+    useEffect(() => {
+        if (!isActivityEmbed || !vm || activityEmbedBootstrappedRef.current) return;
+        activityEmbedBootstrappedRef.current = true;
+        const firstThread = vm.threads.find((t) => t.messageCount > 0);
+        if (firstThread) openThread(firstThread.id);
+    }, [isActivityEmbed, vm, openThread]);
+
     const startNewMessage = useCallback(() => {
         setSelectedThreadId(null);
         setSubjectDraft("");
@@ -255,8 +265,6 @@ export default function FamilyCommunicationWorkspace(props: {
         setSendError(null);
         void load(null, false);
     }, [load]);
-
-    const isActivityEmbed = props.surfaceVariant === "activity_embed";
 
     const runSend = useCallback(
         async (confirm: boolean) => {
@@ -292,7 +300,15 @@ export default function FamilyCommunicationWorkspace(props: {
         [vm],
     );
 
-    const events: TimelineEventVM[] = vm ? (selectedThreadId ? vm.messages : vm.timelineEvents) : [];
+    const events: TimelineEventVM[] = vm
+        ? isActivityEmbed
+            ? selectedThreadId
+                ? vm.messages
+                : []
+            : selectedThreadId
+              ? vm.messages
+              : vm.timelineEvents
+        : [];
     const messages = useMemo(() => events.map(toWorkspaceMessage), [events]);
     const health = useMemo(
         () => computeCommunicationHealth({ messages: events.filter((e) => !e.kind || e.kind === "message").map((e) => ({ direction: e.direction, created_at: e.createdAt, channel: e.channel, opened_at: e.openedAt, replied_at: e.repliedAt })) }),
@@ -340,7 +356,7 @@ export default function FamilyCommunicationWorkspace(props: {
             data-drawer-family-workspace-warm={servedFromWarmCache ? "true" : undefined}
             className={
                 isActivityEmbed
-                    ? "flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
+                    ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
                     : "flex h-full min-h-[520px] flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
             }
         >
@@ -359,6 +375,7 @@ export default function FamilyCommunicationWorkspace(props: {
                 workspaceModeAvailability={workspaceModeAvailability}
                 LIVE_WORKSPACE={true}
                 selectedThreadId={selectedThreadId}
+                selectedThread={vm.threads.find((t) => t.id === selectedThreadId) ?? null}
                 messages={messages}
                 liveRecipientGroups={vm.recipientGroups}
                 selectedRecipientIds={selectedRecipientIds}

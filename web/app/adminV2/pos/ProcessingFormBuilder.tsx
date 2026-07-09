@@ -35,6 +35,7 @@ import type { FormField, FormFieldSource, FormSchemaV1 } from "@/lib/forms/schem
 import ProcessingFormBuilderLibraryPanel from "./ProcessingFormBuilderLibraryPanel";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
 import ProcessingFormCanvas, { type CanvasDropTarget } from "./ProcessingFormCanvas";
+import ProcessingFormDistributionPanel from "./ProcessingFormDistributionPanel";
 import ProcessingInspectorCard from "./ProcessingInspectorCard";
 import ProcessingCollapsibleInspectorSection from "./ProcessingCollapsibleInspectorSection";
 import ProcessingSectionNameDialog from "./ProcessingSectionNameDialog";
@@ -122,7 +123,16 @@ export default function ProcessingFormBuilder({
     formMeta: ProcessingFormRow | null;
     onBack: () => void;
 }) {
-    const { loadFormSchema, saveDraft: persistDraft, publishForm, loadForms } = useProcessingFormApi();
+    const {
+        loadFormSchema,
+        saveDraft: persistDraft,
+        publishForm,
+        loadForms,
+        listPublicLinks,
+        loadPublishedVersionId,
+        mintProcessingPublicLink,
+        unpublishProcessingPublicLinks,
+    } = useProcessingFormApi();
     const [schema, setSchema] = useState<FormSchemaV1 | null>(null);
     const [editVersionId, setEditVersionId] = useState<string | null>(null);
     const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -144,7 +154,13 @@ export default function ProcessingFormBuilder({
         parseFormBranding(formMeta)
     );
     const [formMetaSnapshot, setFormMetaSnapshot] = useState<Record<string, unknown>>(formMeta?.metadata ?? {});
+    const [hasPublishedVersion, setHasPublishedVersion] = useState(Boolean(formMeta?.has_published_version));
+
     const [inspectorSection, setInspectorSection] = useState<string>("branding");
+
+    useEffect(() => {
+        setHasPublishedVersion(Boolean(formMeta?.has_published_version));
+    }, [formMeta?.has_published_version]);
 
     useEffect(() => {
         if (selectedFieldId) setInspectorSection("question");
@@ -164,6 +180,7 @@ export default function ProcessingFormBuilder({
         setSelectedSectionId(result.schema.sections[0]?.id ?? null);
         setBranding(parseFormBranding(result.formRow ?? formMeta));
         setFormMetaSnapshot(result.formRow?.metadata ?? formMeta?.metadata ?? {});
+        setHasPublishedVersion(Boolean(result.formRow?.has_published_version ?? formMeta?.has_published_version));
         setLoadState("ready");
         setDirty(false);
     }, [loadFormSchema, formId, formMeta]);
@@ -261,8 +278,15 @@ export default function ProcessingFormBuilder({
         setPublishing(true);
         setBuilderErr(null);
         try {
-            await publishForm(formId, editVersionId, schema, { branding, existingMeta: formMetaSnapshot, formName: schema.title });
+            const patchedMeta = await publishForm(formId, editVersionId, schema, {
+                branding,
+                existingMeta: formMetaSnapshot,
+                formName: schema.title,
+                formKey: formMeta?.key ?? formId,
+            });
+            setFormMetaSnapshot(patchedMeta);
             setDirty(false);
+            setHasPublishedVersion(true);
             await load();
             await loadForms();
         } catch (e) {
@@ -408,6 +432,20 @@ export default function ProcessingFormBuilder({
                                 setBranding((b) => ({ ...b, ...patch }));
                                 setDirty(true);
                             }}
+                        />
+                        <ProcessingFormDistributionPanel
+                            formId={formId}
+                            formKey={formMeta?.key ?? formId}
+                            formName={formMeta?.name || schema.title}
+                            hasPublishedVersion={hasPublishedVersion}
+                            existingMeta={formMetaSnapshot}
+                            canMutate={editable || hasPublishedVersion}
+                            listPublicLinks={listPublicLinks}
+                            loadPublishedVersionId={loadPublishedVersionId}
+                            mintProcessingPublicLink={mintProcessingPublicLink}
+                            unpublishProcessingPublicLinks={unpublishProcessingPublicLinks}
+                            onPublishRepublish={editable ? () => publish() : undefined}
+                            publishBusy={publishing}
                         />
                         {selectedField ? (
                             <div data-surface-composer-inspector="field">

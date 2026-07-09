@@ -23,6 +23,10 @@ export type NestedSurfaceFieldMode = {
     displayed?: boolean;
     /** When false the field is read-only even when the card supports edit. Default true for contact fields. */
     editable?: boolean;
+    /** When false the field label is hidden in runtime. Default true. */
+    showLabel?: boolean;
+    /** When false the field icon is hidden in runtime. Default true. */
+    showIcon?: boolean;
 };
 
 /** Group-level display options for household / children drill-in surfaces. */
@@ -33,6 +37,8 @@ export type NestedSurfaceGroupDisplayOptions = {
     showEmail?: boolean;
     showDob?: boolean;
     showAge?: boolean;
+    /** Child identity header — profile image when URL is available. Default true. */
+    showAvatar?: boolean;
 };
 
 export type NestedSurfaceDefinition = {

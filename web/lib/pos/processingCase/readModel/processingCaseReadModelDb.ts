@@ -7,6 +7,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isProcessingIntakeLink } from "@/lib/pos/processingPublicLinkMetadata";
 import type {
     BatchedSourceResolver,
     ProcessingCaseCountQuery,
@@ -154,7 +155,7 @@ function makeFormSubmissionResolver(supabase: SupabaseClient, orgId: string): Ba
         if (ids.length === 0) return out;
         const { data: subs } = await supabase
             .from("form_submissions")
-            .select("id, form_definition_id, submitted_at, created_at")
+            .select("id, form_definition_id, submitted_at, created_at, created_via_public_link_id")
             .eq("org_id", orgId)
             .in("id", ids);
         const rows = (subs ?? []) as {
@@ -162,6 +163,7 @@ function makeFormSubmissionResolver(supabase: SupabaseClient, orgId: string): Ba
             form_definition_id: string | null;
             submitted_at: string | null;
             created_at: string;
+            created_via_public_link_id: string | null;
         }[];
         const defIds = [...new Set(rows.map((r) => r.form_definition_id).filter((x): x is string => Boolean(x)))];
         const defNames = new Map<string, string>();
@@ -173,9 +175,25 @@ function makeFormSubmissionResolver(supabase: SupabaseClient, orgId: string): Ba
                 .in("id", defIds);
             for (const d of (defs ?? []) as { id: string; name: string }[]) defNames.set(d.id, d.name);
         }
+        const linkIds = [
+            ...new Set(rows.map((r) => r.created_via_public_link_id).filter((x): x is string => Boolean(x))),
+        ];
+        const linkMetaById = new Map<string, Record<string, unknown>>();
+        if (linkIds.length > 0) {
+            const { data: links } = await supabase
+                .from("form_public_links")
+                .select("id, metadata")
+                .eq("org_id", orgId)
+                .in("id", linkIds);
+            for (const link of (links ?? []) as { id: string; metadata: Record<string, unknown> | null }[]) {
+                linkMetaById.set(link.id, (link.metadata ?? {}) as Record<string, unknown>);
+            }
+        }
         for (const r of rows) {
             const label = (r.form_definition_id ? defNames.get(r.form_definition_id) : undefined) ?? "Form submission";
-            out.set(r.id, { label, receivedAt: r.submitted_at ?? r.created_at, channel: "form" });
+            const linkMeta = r.created_via_public_link_id ? linkMetaById.get(r.created_via_public_link_id) : undefined;
+            const channel = isProcessingIntakeLink(linkMeta) ? "Public form" : "form";
+            out.set(r.id, { label, receivedAt: r.submitted_at ?? r.created_at, channel });
         }
         return out;
     };

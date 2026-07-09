@@ -71,6 +71,10 @@ export const COMMS_OUTBOUND_BUBBLE_CLASS = "rounded-tr-sm bg-alloy-juniper/10 te
 export const COMMS_OUTLINE_ACCENT_SOFT_BTN_CLASS =
     "inline-flex shrink-0 items-center gap-1 rounded-lg border border-alloy-juniper/40 bg-alloy-juniper/10 px-2.5 py-2 text-sm font-semibold text-alloy-juniper shadow-sm hover:bg-alloy-juniper/15";
 
+/** Matches Focus Panel header BOS control (outline Bend Pine, compact height). */
+export const COMMS_BOS_HEADER_BTN_CLASS =
+    "inline-flex shrink-0 items-center justify-center gap-[5px] rounded-md border border-alloy-juniper bg-white px-2.5 text-[11px] font-semibold leading-none text-alloy-juniper shadow-none hover:bg-alloy-juniper/5 disabled:opacity-50 h-7 min-h-7";
+
 const COMMS_LIST_RESERVE_ROW_COUNT = 5;
 
 /** Quiet reserve for library list columns while warm data is unresolved. */

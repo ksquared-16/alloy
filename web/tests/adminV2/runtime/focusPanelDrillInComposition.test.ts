@@ -450,6 +450,9 @@ describe("Final Focus Panel ship blockers — empty emergency / child edit / dat
 describe("Final Focus Panel Composer ship fixes", () => {
     const householdSpec = readSrc("lib/platform/surfaceComposition/definitions/recursiveSurfaceProofs.ts");
     const childrenCard = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
+    const layoutSurface = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceFieldLayoutSurface.tsx");
+    const avatarComposer = readSrc("components/admin/focusPanel/drillIn/ChildProfileAvatarComposer.tsx");
+    const inlineFieldList = readSrc("components/admin/focusPanel/drillIn/InlineRuntimeFieldList.tsx");
     const runtimeCss = readSrc("app/adminV2/components/alloyOsRuntime.css");
 
     it("registers other_parent_guardian directly after primary_contact on household surface", () => {
@@ -500,10 +503,9 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(childrenCard).toContain("data-children-evidence-tier");
         expect(childrenCard).toContain("Focus fields");
         expect(childrenCard).toContain("Evidence sections");
-        expect(childrenCard).toContain("discoverable");
+        expect(childrenCard).toContain("NestedSurfaceFieldLayoutSurface");
         expect(childrenCard).toContain("childrenFocusRowsFromNestedConfig");
         expect(childrenCard).toContain("childrenEvidenceSectionsFromNestedConfig");
-        expect(childrenCard).toContain("whenRegionSelectedOnly");
         expect(childrenCard).not.toContain("ChildEnrollmentEdit");
     });
 
@@ -533,5 +535,25 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(runtimeCss).toContain("overflow-y: auto");
         expect(runtimeCss).toContain("width: min(560px, calc(100% - 32px));");
         expect(runtimeCss).toContain(".fp-composer-tier-label");
+    });
+
+    it("uses visual drag layout surface for child focus fields (no row dropdown)", () => {
+        expect(childrenCard).toContain("NestedSurfaceFieldLayoutSurface");
+        expect(childrenCard).not.toContain("function RegionEditLayer");
+        expect(layoutSurface).toContain("applyNestedSurfaceFieldDrop");
+        expect(layoutSurface).toContain("data-drop-zone=\"beside\"");
+        expect(layoutSurface).toContain("data-drop-zone=\"below\"");
+        expect(layoutSurface).not.toContain("Half row");
+        expect(layoutSurface).not.toContain("fp-inline-field-row__layout");
+        expect(inlineFieldList).not.toContain("fp-inline-field-row__layout");
+        expect(childrenCard).toContain("chunkNestedSurfaceFieldsForHalfRowLayout");
+        expect(childrenCard).toContain("alloy-os-child-truth__inline-row--pair");
+    });
+
+    it("exposes child profile avatar composer on identity header", () => {
+        expect(childrenCard).toContain("ChildProfileAvatarComposer");
+        expect(avatarComposer).toContain("Set image");
+        expect(avatarComposer).toContain("groupShowAvatarForNestedGroup");
+        expect(childrenCard).toContain("imageUrl={previewImageUrl}");
     });
 });

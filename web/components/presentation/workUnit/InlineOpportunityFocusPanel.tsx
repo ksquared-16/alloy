@@ -294,6 +294,8 @@ export function InlineOpportunityFocusPanel() {
     const bodyRenderKey = String(
         resolved?.displayVm.entity.id ?? heldPrior?.displayVm.entity.id ?? "pending",
     );
+    const isActivityMode = focusPanelMode === "activity";
+    const activityBodyFillClass = "flex min-h-0 flex-1 flex-col overflow-hidden";
 
     return (
         <>
@@ -353,12 +355,22 @@ export function InlineOpportunityFocusPanel() {
                 <div
                     ref={bodyScrollRef}
                     data-adminv2-record-modal-scroll
-                    className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [scrollbar-gutter:stable]"
+                    className={
+                        isActivityMode
+                            ? `${activityBodyFillClass} px-2 py-2 [scrollbar-gutter:stable]`
+                            : "min-h-0 flex-1 overflow-y-auto px-4 py-3 [scrollbar-gutter:stable]"
+                    }
                 >
                     {/* Keyed `swap` wrapper — remounts + settles the body on a record switch. */}
                     <div
                         key={bodyRenderKey}
-                        className={bodyRenderKey === "pending" ? undefined : MOTION_SETTLE.className}
+                        className={
+                            bodyRenderKey === "pending"
+                                ? isActivityMode
+                                    ? activityBodyFillClass
+                                    : undefined
+                                : `${MOTION_SETTLE.className}${isActivityMode ? ` ${activityBodyFillClass}` : ""}`
+                        }
                     >
                     {error && !resolved && !holdPriorPayload ?
                         <div

@@ -19,6 +19,10 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import ChildFocusEdit from "@/components/admin/focusPanel/cards/ChildFocusEdit";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
+import NestedSurfaceFieldLayoutSurface, {
+    type LayoutSurfaceFieldMeta,
+} from "@/components/admin/focusPanel/drillIn/NestedSurfaceFieldLayoutSurface";
+import ChildProfileAvatarComposer from "@/components/admin/focusPanel/drillIn/ChildProfileAvatarComposer";
 import InlineRuntimeFieldList from "@/components/admin/focusPanel/drillIn/InlineRuntimeFieldList";
 import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
 import {
@@ -43,7 +47,13 @@ import {
     type ChildrenEvidenceSectionView,
     type ChildrenFocusFieldRow,
 } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
-import { CHILDREN_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { chunkNestedSurfaceFieldsForHalfRowLayout } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
+import {
+    CHILDREN_SURFACE_ID,
+    fieldShowIconForNestedGroup,
+    fieldShowLabelForNestedGroup,
+    groupShowAvatarForNestedGroup,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { cardCapabilities, cardRelatedViews } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
@@ -331,6 +341,7 @@ export default function ChildrenCard({
                 focusRows={focusRows}
                 evidenceSections={evidenceSections}
                 childSurfaceConfig={childSurfaceConfig}
+                childrenSurfaceConfig={childrenSurfaceConfig}
                 opportunityStartDate={opportunityStartDate}
                 mutation={mutation}
                 composerPreview={composerPreview}
@@ -361,10 +372,11 @@ export default function ChildrenCard({
                     ))}
                 </div>
                 {composingChildrenSurface ? (
-                    <RegionEditLayer
+                    <InlineRuntimeFieldList
                         surfaceId={CHILDREN_SURFACE_ID}
                         groupKey="roster"
-                        composing={composingChildrenSurface}
+                        suppressPreview
+                        whenRegionSelectedOnly={false}
                     />
                 ) : null}
             </ComposableRegionShell>
@@ -520,11 +532,27 @@ function deeperEditLabel(child: ChildrenEvidenceChild): string {
     return "Edit schedule";
 }
 
-function TruthRow({ icon, label, value }: { icon: LucideIcon; label: string; value: string | null }) {
+function TruthRow({
+    icon,
+    label,
+    value,
+    showLabel = true,
+    showIcon = true,
+}: {
+    icon: LucideIcon;
+    label: string;
+    value: string | null;
+    showLabel?: boolean;
+    showIcon?: boolean;
+}) {
     return (
         <div className="alloy-os-child-truth__row" data-child-truth={label}>
-            <Ico icon={icon} />
-            <span className="alloy-os-child-truth__label">{label}</span>
+            {showIcon ? (
+                <Ico icon={icon} />
+            ) : (
+                <span className="alloy-os-child-truth__icon" aria-hidden />
+            )}
+            {showLabel ? <span className="alloy-os-child-truth__label">{label}</span> : null}
             <span className={clsx("alloy-os-child-truth__value", !value && "alloy-os-child-truth__value--empty")}>
                 {value ?? "Not set"}
             </span>
@@ -581,10 +609,63 @@ function ChildScheduleBlock({ child }: { child: ChildrenEvidenceChild }) {
 function ConfiguredChildEnrollmentBody({
     child,
     focusRows,
+    childrenSurfaceConfig,
+    composingChildrenSurface,
 }: {
     child: ChildrenEvidenceChild;
     focusRows: ChildrenFocusFieldRow[];
+    childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
+    composingChildrenSurface: boolean;
 }) {
+    const composer = useFocusPanelComposer();
+    const fieldsByGroup = useMemo(() => {
+        const map = new Map<(typeof CHILDREN_FOCUS_GROUP_KEYS)[number], LayoutSurfaceFieldMeta[]>();
+        for (const groupKey of CHILDREN_FOCUS_GROUP_KEYS) {
+            const groupRows = focusRows.filter(
+                (row) =>
+                    row.groupKey === groupKey
+                    && !(
+                        groupKey === "identity"
+                        && (row.fieldKey === "child.display_name" || row.fieldKey === "child.name")
+                    ),
+            );
+            const layoutFields: LayoutSurfaceFieldMeta[] = groupRows.map((row) => {
+                if (row.fieldKey === "inquiry_child.schedule_type") {
+                    return {
+                        fieldKey: row.fieldKey,
+                        label: row.label,
+                        value: child.schedule,
+                        renderBlock: () => <ChildScheduleBlock child={child} />,
+                    };
+                }
+                const meta = CHILDREN_FIELD_TRUTH_META[row.fieldKey];
+                return {
+                    fieldKey: row.fieldKey,
+                    label: row.label,
+                    icon: meta?.icon,
+                    value: meta?.get(child) ?? null,
+                };
+            });
+            map.set(groupKey, layoutFields);
+        }
+        return map;
+    }, [child, focusRows]);
+
+    if (composingChildrenSurface && childrenSurfaceConfig) {
+        return (
+            <div className="alloy-os-child-edit" data-children-enrollment={child.id}>
+                {CHILDREN_FOCUS_GROUP_KEYS.map((groupKey) => (
+                    <NestedSurfaceFieldLayoutSurface
+                        key={groupKey}
+                        surfaceId={CHILDREN_SURFACE_ID}
+                        groupKey={groupKey}
+                        fields={fieldsByGroup.get(groupKey) ?? []}
+                    />
+                ))}
+            </div>
+        );
+    }
+
     const bodyRows = focusRows.filter(
         (row) =>
             !(
@@ -592,24 +673,49 @@ function ConfiguredChildEnrollmentBody({
                 && (row.fieldKey === "child.display_name" || row.fieldKey === "child.name")
             ),
     );
+    const rowChunks = chunkNestedSurfaceFieldsForHalfRowLayout(
+        bodyRows.map((row) => row.fieldKey),
+        (fieldKey) => bodyRows.find((row) => row.fieldKey === fieldKey)?.layoutWidth ?? "full",
+    );
 
     return (
         <div className="alloy-os-child-edit" data-children-enrollment={child.id}>
-            {bodyRows.map((field) => {
-                if (field.fieldKey === "inquiry_child.schedule_type") {
-                    return <ChildScheduleBlock key={field.fieldKey} child={child} />;
-                }
-                const meta = CHILDREN_FIELD_TRUTH_META[field.fieldKey];
-                if (!meta) return null;
-                return (
-                    <TruthRow
-                        key={field.fieldKey}
-                        icon={meta.icon}
-                        label={field.label}
-                        value={meta.get(child)}
-                    />
-                );
-            })}
+            {rowChunks.map((chunk, chunkIndex) => (
+                <div
+                    key={`${chunk.join("-")}-${chunkIndex}`}
+                    className={clsx(
+                        "alloy-os-child-truth__inline-row",
+                        chunk.length === 2 && "alloy-os-child-truth__inline-row--pair",
+                    )}
+                    data-children-inline-row={chunk.length === 2 ? "pair" : "single"}
+                >
+                    {chunk.map((fieldKey) => {
+                        const field = bodyRows.find((row) => row.fieldKey === fieldKey);
+                        if (!field) return null;
+                        if (field.fieldKey === "inquiry_child.schedule_type") {
+                            return <ChildScheduleBlock key={field.fieldKey} child={child} />;
+                        }
+                        const meta = CHILDREN_FIELD_TRUTH_META[field.fieldKey];
+                        if (!meta) return null;
+                        const showLabel = childrenSurfaceConfig
+                            ? fieldShowLabelForNestedGroup(childrenSurfaceConfig, field.groupKey, field.fieldKey)
+                            : true;
+                        const showIcon = childrenSurfaceConfig
+                            ? fieldShowIconForNestedGroup(childrenSurfaceConfig, field.groupKey, field.fieldKey)
+                            : true;
+                        return (
+                            <TruthRow
+                                key={field.fieldKey}
+                                icon={meta.icon}
+                                label={field.label}
+                                value={meta.get(child)}
+                                showLabel={showLabel}
+                                showIcon={showIcon}
+                            />
+                        );
+                    })}
+                </div>
+            ))}
         </div>
     );
 }
@@ -745,28 +851,7 @@ function RelatedViewsRow({ onOpen }: { onOpen: (id: string) => void }) {
     );
 }
 
-/** Edit-layer field controls — runtime rows stay visible above (Final Surface Composer doctrine). */
-function RegionEditLayer({
-    surfaceId,
-    groupKey,
-    composing,
-    discoverable = false,
-}: {
-    surfaceId: string;
-    groupKey: string;
-    composing: boolean;
-    discoverable?: boolean;
-}) {
-    if (!composing) return null;
-    return (
-        <InlineRuntimeFieldList
-            surfaceId={surfaceId}
-            groupKey={groupKey}
-            suppressPreview
-            whenRegionSelectedOnly={!discoverable}
-        />
-    );
-}
+/** Fields are the layout surface via NestedSurfaceFieldLayoutSurface. */
 
 function FocusedChild({
     child,
@@ -778,6 +863,7 @@ function FocusedChild({
     focusRows,
     evidenceSections,
     childSurfaceConfig,
+    childrenSurfaceConfig,
     opportunityStartDate,
     mutation,
     composerPreview,
@@ -795,6 +881,7 @@ function FocusedChild({
     focusRows: ChildrenFocusFieldRow[];
     evidenceSections: ChildrenEvidenceSectionView[];
     childSurfaceConfig: ReturnType<typeof readChildNestedConfigFromDoc>;
+    childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
     opportunityStartDate: string | null;
     mutation?: FocusPanelMutation;
     composerPreview?: ChildrenComposerPreview;
@@ -804,6 +891,11 @@ function FocusedChild({
     onEditClose: () => void;
 }) {
     const headerDob = childFocusView.headerShowDob || childFocusView.headerShowAge ? child.dobAge : null;
+    const composer = useFocusPanelComposer();
+    const previewImageUrl = composer?.childAvatarPreviewUrl(child.id) ?? child.imageUrl;
+    const showHeaderAvatar = childrenSurfaceConfig
+        ? groupShowAvatarForNestedGroup(childrenSurfaceConfig, "identity")
+        : true;
 
     return (
         <div
@@ -812,7 +904,21 @@ function FocusedChild({
             data-children-edit={editing ? "true" : undefined}
         >
             <div className="alloy-os-child-focus__header">
-                <CardAvatar name={child.name} imageUrl={child.imageUrl} size={40} />
+                {showHeaderAvatar ? (
+                    composingChildrenSurface ? (
+                        <ChildProfileAvatarComposer
+                            surfaceId={CHILDREN_SURFACE_ID}
+                            groupKey="identity"
+                            childId={child.id}
+                            childName={child.name}
+                            imageUrl={previewImageUrl}
+                            personId={child.personId ?? null}
+                            size={40}
+                        />
+                    ) : (
+                        <CardAvatar name={child.name} imageUrl={previewImageUrl} size={40} />
+                    )
+                ) : null}
                 <div className="alloy-os-child-focus__id min-w-0">
                     <span className="alloy-os-household__group-title">{child.name}</span>
                     {headerDob ? (
@@ -896,18 +1002,12 @@ function FocusedChild({
                         {composingChildrenSurface ? (
                             <p className="fp-composer-tier-label">Focus fields</p>
                         ) : null}
-                        <ConfiguredChildEnrollmentBody child={child} focusRows={focusRows} />
-                        {composingChildrenSurface
-                            ? CHILDREN_FOCUS_GROUP_KEYS.map((groupKey) => (
-                                  <RegionEditLayer
-                                      key={groupKey}
-                                      surfaceId={CHILDREN_SURFACE_ID}
-                                      groupKey={groupKey}
-                                      composing={composingChildrenSurface}
-                                      discoverable
-                                  />
-                              ))
-                            : null}
+                        <ConfiguredChildEnrollmentBody
+                            child={child}
+                            focusRows={focusRows}
+                            childrenSurfaceConfig={childrenSurfaceConfig}
+                            composingChildrenSurface={composingChildrenSurface}
+                        />
                     </div>
                     <ChildFlags child={child} />
                     {composingChildrenSurface ? (
@@ -932,11 +1032,18 @@ function FocusedChild({
                                     dataAttrs={{ "data-children-evidence-region": section.key }}
                                 >
                                     <p className="alloy-os-child-egroup__title">{section.label}</p>
-                                    <RegionEditLayer
+                                    <NestedSurfaceFieldLayoutSurface
                                         surfaceId={CHILDREN_SURFACE_ID}
                                         groupKey={section.key}
-                                        composing={composingChildrenSurface}
-                                        discoverable
+                                        fields={section.fieldKeys.map((fieldKey) => {
+                                            const meta = CHILDREN_FIELD_TRUTH_META[fieldKey];
+                                            return {
+                                                fieldKey,
+                                                label: fieldKey.replace(/^[a-z_]+\./, "").replace(/_/g, " "),
+                                                icon: meta?.icon,
+                                                value: meta?.get(child) ?? null,
+                                            };
+                                        })}
                                     />
                                 </ComposableRegionShell>
                             ))}

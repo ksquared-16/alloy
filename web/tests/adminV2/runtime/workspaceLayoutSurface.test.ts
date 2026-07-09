@@ -270,8 +270,18 @@ describe("Presentation Runtime V2 — split-mode peer height fill (Activity shel
         expect(bodyRule.selector).toContain('data-inline-focus-panel-mode="activity"');
         expect(bodyRule.body).toContain("overflow: hidden");
 
-        const cockpitRule = extractRule(RUNTIME_CSS, ".alloy-os-activity-cockpit {");
-        expect(cockpitRule).toContain("flex: 1 1 auto");
+        const splitCockpitRule = extractRuleWithSelector(
+            RUNTIME_CSS,
+            '[data-alloy-os-runtime-split="true"] .alloy-os-activity-cockpit {'
+        );
+        expect(splitCockpitRule.body).toContain("flex: 1 1 0%");
+
+        expect(RUNTIME_CSS).toMatch(
+            /html\[data-alloy-os-runtime-split="true"\][\s\S]*\[data-component="WorkUnitSurface"\] > div[\s\S]*flex: 1 1 0%/
+        );
+        expect(RUNTIME_CSS).toMatch(
+            /html\[data-alloy-os-runtime-split="true"\][\s\S]*\[data-focus-panel-boundary\] > \[data-inline-focus-panel="true"\][\s\S]*flex: 1 1 0%/
+        );
     });
 });
 
