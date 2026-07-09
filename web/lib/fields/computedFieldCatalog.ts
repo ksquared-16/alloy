@@ -44,6 +44,8 @@ export type ComputedFieldDefinition = {
     description: string;
     field_type: string;
     ownership: Extract<FieldOwnershipKind, "computed">;
+    /** Set at catalog merge from field concept audit. */
+    concept_kind?: import("@/lib/fields/fieldConceptModel").FieldConceptKind;
     /** Human-readable derivation path. */
     source_derivation: string;
     /** Runtime resolver refKeys checked for surface support (aliases allowed). */

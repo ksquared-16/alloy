@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
 import ConfigurationStatusToggle from "@/components/adminV2/configuration/ConfigurationStatusToggle";
+import ConfigurationFieldOptionsEditor from "@/components/adminV2/configuration/ConfigurationFieldOptionsEditor";
 import { fieldTypeOperatorLabel, slugifyOperatorKey } from "@/lib/fields/dataModelWorkspaceOperatorUi";
+import type { FieldOption } from "@/lib/fields/fieldDefinitionConfig";
+import { fieldSupportsInlineOptions } from "@/lib/fields/fieldDefinitionInlineOptions";
 import { DATA_MODEL_ICON_STROKE } from "@/lib/fields/dataModelWorkspaceIcons";
 import { Plus } from "lucide-react";
 
@@ -14,6 +17,8 @@ export type FieldInlineCreateValues = {
     category_key: string;
     description: string;
     is_active: boolean;
+    options?: FieldOption[];
+    default_option_value?: string;
 };
 
 type Props = {
@@ -144,6 +149,22 @@ export default function DataModelFieldCreateRow({
                         onChange={(is_active) => setDraft((d) => ({ ...d, is_active }))}
                     />
                 </div>
+                {fieldSupportsInlineOptions(draft.field_type) ? (
+                    <div className="sm:col-span-2">
+                        <ConfigurationFieldOptionsEditor
+                            options={draft.options ?? []}
+                            defaultOptionValue={draft.default_option_value ?? ""}
+                            disabled={!canMutate || saving}
+                            onChange={({ options, defaultOptionValue }) =>
+                                setDraft((d) => ({
+                                    ...d,
+                                    options,
+                                    default_option_value: defaultOptionValue,
+                                }))
+                            }
+                        />
+                    </div>
+                ) : null}
             </div>
             {error ? (
                 <p className="px-3 text-xs text-alloy-ember" data-testid="inline-create-error">

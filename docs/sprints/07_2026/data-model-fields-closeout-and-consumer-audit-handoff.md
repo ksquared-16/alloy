@@ -19,9 +19,9 @@ Consumer adoption starts after this merge. No additional standalone Data Model i
 
 ---
 
-**Status:** **FROZEN** — July 2026 (final QA hotfix complete; Field Platform Consumer Audit is next)  
+**Status:** **FROZEN** — July 2026 (clarification sprint complete; Field Platform Consumer Audit is next)  
 **Workspace:** Settings → Data Model (`/settings/fields`) · Settings → Entities (`/settings/entities`)  
-**Staging baseline:** `a504e075d` — final Data Model QA hotfix merge on `origin/staging`
+**Staging baseline:** `3068b53a2` — final Data Model QA hotfix on `origin/staging` (pre-clarification)
 
 ---
 
@@ -46,7 +46,7 @@ Last standalone Data Model sprint before consumer audit. Fixes only — no redes
 
 **Data Model is frozen.**
 
-The Data Model workspace is the **canonical reference implementation** for the Configuration Workspace Doctrine. Future changes must come from the **consumer adoption audit**, not from standalone Data Model redesign sprints.
+The Data Model workspace is the **canonical reference implementation** for the Configuration Workspace Doctrine. Future changes must come from the **Field Platform Consumer Audit**, not from standalone Data Model redesign sprints.
 
 Any gap discovered during audit should be classified as:
 
@@ -58,16 +58,45 @@ Do **not** open another standalone Data Model implementation sprint unless doctr
 
 ---
 
+## Clarification sprint final status
+
+| Layer | Status |
+| --- | --- |
+| **Data Model Workspace** | **FROZEN** |
+| **Field Platform** | **ACTIVE** |
+| **Configuration Workspace Doctrine** | **REFERENCE IMPLEMENTATION** |
+
+Next phase: **Field Platform Consumer Audit**.
+
+Data Model is frozen while Field Platform continues evolving through consumer adoption.
+
+### Clarification sprint deliverables (July 2026)
+
+| Deliverable | Outcome |
+| --- | --- |
+| Business vs Calculated vs Runtime Signal taxonomy | `web/lib/fields/fieldConceptModel.ts` + `docs/platform/modules/field-concepts.md` |
+| Computed catalog audit (24 entries) | 3 Calculated (planned), 21 Runtime Signals |
+| Ownership filter relabel | Platform · Business · Runtime Signals · Calculated |
+| Availability noise reduction | Silence by default; only Archived, Hidden, Coming soon, Requires Child Context |
+| Inline choice option management | `ConfigurationFieldOptionsEditor` on create/edit for select/multiselect |
+| Calculated field builder | **Not implemented** — documented only |
+
+---
+
 ## Final staging hash
 
 ```
-a504e075d
+PENDING_CLARIFICATION_MERGE
 ```
 
 | Artifact | Hash |
 | --- | --- |
 | **Final QA hotfix** | `0499c9e20` — `fix(settings): finalize Data Model QA hotfixes` |
-| **Final staging** | `a504e075d` — merge `feat/data-model-lifecycle-entities` on `origin/staging` |
+| **QA hotfix merge** | `a504e075d` — merge `feat/data-model-final-qa-hotfix` (QA pass) |
+| **Pre-clarification staging** | `3068b53a2` — `origin/staging` tip after QA hotfix promotion |
+| **Clarification sprint** | `d19f9b5a5` — `refactor(fields): finalize field concepts and runtime taxonomy` |
+| **Clarification merge** | `PENDING_CLARIFICATION_MERGE` — merge clarification sprint to `staging` |
+| **Final staging** | `PENDING_CLARIFICATION_MERGE` — `origin/staging` tip after clarification promotion |
 | Lifecycle sprint | `6abb9c847` — `feat(settings): finalize field lifecycle and entities workspace adoption` |
 | Data Model merge | `cf1de3aa2` — merge `feat/data-model-qa-fixes` onto `0e72e3051` |
 | Category picker QA | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |

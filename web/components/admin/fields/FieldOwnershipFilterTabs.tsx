@@ -1,21 +1,36 @@
 "use client";
 
-import type { FieldOwnershipKind } from "@/lib/fields/fieldOwnership";
+import type { FieldOwnershipFilterKind } from "@/lib/fields/fieldConceptModel";
 import { FIELD_OWNERSHIP_LABELS } from "@/lib/fields/fieldOwnership";
 
-export type FieldOwnershipFilter = FieldOwnershipKind | "all";
+export type FieldOwnershipFilter = Exclude<FieldOwnershipFilterKind, "computed">;
 
 type Props = {
     value: FieldOwnershipFilter;
     onChange: (next: FieldOwnershipFilter) => void;
-    counts: { all: number; platform: number; custom: number; computed: number };
+    counts: {
+        all: number;
+        platform: number;
+        custom: number;
+        runtime_signals: number;
+        calculated_fields: number;
+    };
 };
 
-const FILTERS: FieldOwnershipFilter[] = ["all", "platform", "custom", "computed"];
+const FILTERS: FieldOwnershipFilter[] = [
+    "all",
+    "platform",
+    "custom",
+    "runtime_signals",
+    "calculated_fields",
+];
 
 const FILTER_LABELS: Record<FieldOwnershipFilter, string> = {
     all: "All",
-    ...FIELD_OWNERSHIP_LABELS,
+    platform: FIELD_OWNERSHIP_LABELS.platform,
+    custom: FIELD_OWNERSHIP_LABELS.custom,
+    runtime_signals: "Runtime Signals",
+    calculated_fields: "Calculated",
 };
 
 export default function FieldOwnershipFilterTabs({ value, onChange, counts }: Props) {
