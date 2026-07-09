@@ -21,7 +21,7 @@ Consumer adoption starts after this merge. No additional standalone Data Model i
 
 **Status:** **FROZEN** — July 2026 (final QA hotfix complete; Field Platform Consumer Audit is next)  
 **Workspace:** Settings → Data Model (`/settings/fields`) · Settings → Entities (`/settings/entities`)  
-**Staging baseline:** update after merge of final Data Model QA hotfix
+**Staging baseline:** `3068b53a2` — final Data Model QA hotfix on `origin/staging`
 
 ---
 
@@ -61,12 +61,14 @@ Do **not** open another standalone Data Model implementation sprint unless doctr
 ## Final staging hash
 
 ```
-18c7147cd1a649d3f349d67161cdad82d466aa37
+3068b53a2
 ```
 
 | Artifact | Hash |
 | --- | --- |
-| **Final staging** | `18c7147cd` — `origin/staging` tip at sprint closeout (includes handoff doc) |
+| **Final QA hotfix** | `0499c9e20` — `fix(settings): finalize Data Model QA hotfixes` |
+| **Feature merge** | `a504e075d` — merge `feat/data-model-final-qa-hotfix` |
+| **Final staging** | `3068b53a2` — `origin/staging` tip after final QA hotfix promotion |
 | Data Model merge | `cf1de3aa2` — merge `feat/data-model-qa-fixes` onto `0e72e3051` |
 | Category picker QA | `3e0511a9e` — `fix(settings): Data Model category picker and reassignment QA` |
 | Closeout handoff doc | `0482a6bb6` — `docs(sprint): Data Model closeout and consumer audit handoff` |
