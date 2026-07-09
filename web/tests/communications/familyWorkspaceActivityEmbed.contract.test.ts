@@ -71,13 +71,35 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(view).toMatch(/threadsForActivityTopicRail\(threads\)/);
     });
 
-    it("activity_embed thread title uses meaningful fallback helper", () => {
+    it("activity_embed thread title uses General fallback and channel icon", () => {
         const helper = read("lib/communications/v2/familyWorkspace/threadTopicPresentation.ts");
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
-        expect(helper).toMatch(/deriveThreadTopicTitle/);
-        expect(helper).toMatch(/SMS Conversation/);
-        expect(view).toMatch(/threadDisplayTitle/);
-        expect(view).toMatch(/deriveThreadMessageSubject/);
+        expect(helper).toMatch(/deriveThreadTopicFallback/);
+        expect(helper).toMatch(/return "General"/);
+        expect(view).toMatch(/ThreadChannelIcon/);
+        expect(view).toMatch(/data-cc-thread-channel/);
+        expect(view).not.toMatch(/SMS Conversation/);
+    });
+
+    it("activity_embed resolves thread participants from transport thread not household", () => {
+        const helper = read("lib/communications/v2/familyWorkspace/threadTopicPresentation.ts");
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
+        expect(helper).toMatch(/resolveThreadRecipients/);
+        expect(helper).toMatch(/deriveThreadParticipantPersonIds/);
+        expect(view).toMatch(/resolveThreadRecipients\(thread, timelineMessages, allLiveRecipients\)/);
+        expect(workspace).toMatch(/deriveThreadReplyRecipientIds/);
+        expect(workspace).toMatch(/syncActivityThreadContext/);
+        expect(workspace).toMatch(/threadChannelToWorkspaceMode/);
+    });
+
+    it("activity_embed message sender uses Sent from Alloy not Unassigned", () => {
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        const helper = read("lib/communications/v2/familyWorkspace/threadTopicPresentation.ts");
+        expect(helper).toMatch(/deriveMessageSenderLabel/);
+        expect(helper).toMatch(/Sent from Alloy/);
+        expect(view).toMatch(/deriveMessageSenderLabel/);
+        expect(view).toMatch(/viewerUserId/);
     });
 
     it("activity_embed new-message mode shows compact compose pane without dashed empty panel", () => {

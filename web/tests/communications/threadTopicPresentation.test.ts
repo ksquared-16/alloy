@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+    deriveMessageSenderLabel,
     deriveThreadChannelLabel,
     deriveThreadLastPreview,
     deriveThreadMessageSubject,
+    deriveThreadParticipantPersonIds,
+    deriveThreadReplyRecipientIds,
     deriveThreadTopicFallback,
     deriveThreadTopicTitle,
     formatThreadParticipantNames,
+    resolveThreadRecipients,
+    threadChannelToWorkspaceMode,
     threadsForActivityTopicRail,
 } from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
-import type { ThreadVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type { RecipientVM, ThreadVM } from "@/lib/communications/v2/familyWorkspace/types";
 
 const baseThread = (over: Partial<ThreadVM>): ThreadVM => ({
     id: "t-1",
@@ -25,6 +30,25 @@ const baseThread = (over: Partial<ThreadVM>): ThreadVM => ({
     ...over,
 });
 
+const kelly: RecipientVM = {
+    id: "person-kelly",
+    displayName: "Kelly Smith",
+    roleType: "parent",
+    roleLabel: "Parent",
+    isPrimary: true,
+    tier: "primary",
+    email: "kelly@example.com",
+    phone: "+15551234567",
+    channels: { email: { hasAddress: true, providerBound: true, available: true, unavailableReason: null, marketing: "unset", transactional: "unset", canSendTransactional: true, canSendMarketing: true }, sms: { hasAddress: true, providerBound: true, available: true, unavailableReason: null, marketing: "unset", transactional: "unset", canSendTransactional: true, canSendMarketing: true } },
+};
+
+const kristi: RecipientVM = {
+    ...kelly,
+    id: "person-kristi",
+    displayName: "Kristi Smith",
+    isPrimary: true,
+};
+
 describe("threadTopicPresentation", () => {
     it("derives title from thread subject when meaningful", () => {
         expect(
@@ -34,12 +58,13 @@ describe("threadTopicPresentation", () => {
         ).toBe("Tour confirmation");
     });
 
-    it("falls back to SMS Conversation instead of raw SMS", () => {
+    it("falls back to General instead of SMS Conversation title text", () => {
         expect(
             deriveThreadTopicTitle({
                 thread: baseThread({ subject: "SMS", channel: "sms" }),
             }),
-        ).toBe("SMS Conversation");
+        ).toBe("General");
+        expect(deriveThreadTopicFallback("sms")).toBe("General");
     });
 
     it("uses message subject when thread subject missing", () => {
@@ -51,7 +76,7 @@ describe("threadTopicPresentation", () => {
         ).toBe("Enrollment paperwork");
     });
 
-    it("uses workflow label before channel fallback", () => {
+    it("uses workflow label before General fallback", () => {
         expect(
             deriveThreadTopicTitle({
                 thread: baseThread({ subject: null, channel: "sms" }),
@@ -60,17 +85,51 @@ describe("threadTopicPresentation", () => {
         ).toBe("Waitlist follow-up");
     });
 
-    it("deriveThreadTopicFallback returns General Questions for unknown channel", () => {
-        expect(deriveThreadTopicFallback(null)).toBe("General Questions");
-        expect(deriveThreadTopicFallback("email")).toBe("Email Conversation");
-    });
-
     it("filters zero-message threads from activity rail", () => {
         const rows = threadsForActivityTopicRail([
             baseThread({ id: "a", messageCount: 2 }),
             baseThread({ id: "b", messageCount: 0 }),
         ]);
         expect(rows.map((t) => t.id)).toEqual(["a"]);
+    });
+
+    it("SMS-to-Kelly-only thread does not include Kristi as participant", () => {
+        const smsThread = baseThread({
+            id: "sms-kelly",
+            channel: "sms",
+            primaryEntity: { type: "persons", id: "person-kelly" },
+        });
+        const messages = [
+            {
+                thread_id: "sms-kelly",
+                direction: "outbound",
+                recipient_person_id: "person-kelly",
+                body: "Hi Kelly",
+                created_at: "2026-07-08T12:00:00Z",
+                kind: "message",
+            },
+        ];
+        const participants = resolveThreadRecipients(smsThread, messages, [kelly, kristi]);
+        expect(participants.map((p) => p.id)).toEqual(["person-kelly"]);
+        expect(formatThreadParticipantNames(participants)).toBe("Kelly Smith");
+    });
+
+    it("deriveThreadReplyRecipientIds returns thread transport recipient only", () => {
+        const thread = baseThread({
+            id: "sms-kelly",
+            channel: "sms",
+            primaryEntity: { type: "persons", id: "person-kelly" },
+        });
+        const ids = deriveThreadReplyRecipientIds(thread, [
+            { thread_id: "sms-kelly", recipient_person_id: "person-kelly", direction: "outbound" },
+        ]);
+        expect(ids).toEqual(["person-kelly"]);
+    });
+
+    it("threadChannelToWorkspaceMode defaults reply channel from thread", () => {
+        expect(threadChannelToWorkspaceMode("sms")).toBe("sms");
+        expect(threadChannelToWorkspaceMode("email")).toBe("email");
+        expect(threadChannelToWorkspaceMode(null)).toBe("email");
     });
 
     it("derives latest message preview for a thread", () => {
@@ -103,5 +162,34 @@ describe("threadTopicPresentation", () => {
     it("maps channel pill label", () => {
         expect(deriveThreadChannelLabel("sms")).toBe("SMS");
         expect(deriveThreadChannelLabel("email")).toBe("Email");
+    });
+
+    it("deriveMessageSenderLabel distinguishes sender from thread assignment", () => {
+        expect(
+            deriveMessageSenderLabel(
+                { direction: "outbound", senderUserId: "user-1", senderDisplayName: null },
+                { currentUserId: "user-1" },
+            ),
+        ).toBe("Sent by you");
+        expect(
+            deriveMessageSenderLabel(
+                { direction: "outbound", senderUserId: null, senderDisplayName: null },
+                { currentUserId: "user-1" },
+            ),
+        ).toBe("Sent from Alloy");
+        expect(
+            deriveMessageSenderLabel(
+                { direction: "inbound", recipientPersonId: "person-kelly" },
+                { recipientDisplayName: "Kelly Smith" },
+            ),
+        ).toBe("Kelly Smith");
+    });
+
+    it("deriveThreadParticipantPersonIds reads metadata recipient_person_id", () => {
+        const thread = baseThread({ id: "t-x", primaryEntity: { type: "customers", id: "c-1" } });
+        const ids = deriveThreadParticipantPersonIds(thread, [
+            { thread_id: "t-x", metadata: { recipient_person_id: "person-kelly" }, direction: "outbound" },
+        ]);
+        expect(ids).toEqual(["person-kelly"]);
     });
 });

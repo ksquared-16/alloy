@@ -43,6 +43,23 @@ export function statusDisplay(status: string | null | undefined): { label: strin
         case "delivered": return { label: "Delivered", cls: "text-alloy-midnight/45" };
         case "sent": return { label: "Sent", cls: "text-alloy-midnight/45" };
         case "queued": return { label: "Queued", cls: "text-alloy-midnight/40" };
+        case "received": return { label: "Received", cls: "text-alloy-midnight/45" };
         default: return null;
     }
+}
+
+/** Lightweight delivery/read copy for message metadata — never fakes SMS read. */
+export function messageDeliveryDisplay(
+    status: string | null | undefined,
+    channel: string | null | undefined,
+    opts?: { openedAt?: string | null; deliveredAt?: string | null },
+): { label: string; cls: string } | null {
+    if (channel === "sms" && (status === "opened" || status === "replied") && !opts?.openedAt) {
+        return null;
+    }
+    return statusDisplay(status);
+}
+
+export function threadReadAvailabilityHint(channel: string | null | undefined): string | null {
+    return channel === "sms" ? "Read unavailable for SMS" : null;
 }

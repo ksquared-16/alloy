@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type {
@@ -26,6 +26,11 @@ import {
 } from "@/lib/communications/v2/workspaceModeAvailability";
 import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { CommsActivityEmbedHydratingShell, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
+import {
+    deriveThreadReplyRecipientIds,
+    threadChannelToWorkspaceMode,
+} from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
+import { AdminAuthContext } from "@/contexts/AdminAuthContext";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
 
 /**
@@ -34,7 +39,28 @@ import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/fami
  * markup the full Communications modal uses). All timeline/composer UI lives in the View, once.
  */
 const toWorkspaceMessage = (e: TimelineEventVM): WorkspaceTimelineMessage => ({
-    id: e.id, direction: e.direction, channel: e.channel, body: e.body, created_at: e.createdAt, kind: e.kind, thread_id: e.threadId, status: e.status,
+    id: e.id,
+    direction: e.direction,
+    channel: e.channel,
+    body: e.body,
+    created_at: e.createdAt,
+    kind: e.kind,
+    thread_id: e.threadId,
+    status: e.status,
+    recipient_person_id: e.recipientPersonId ?? null,
+    sender_user_id: e.senderUserId ?? null,
+    sender_display_name: e.senderDisplayName ?? null,
+    opened_at: e.openedAt ?? null,
+    delivered_at: e.deliveredAt ?? null,
+});
+
+const toThreadPreviewMessage = (e: TimelineEventVM) => ({
+    thread_id: e.threadId,
+    body: e.body,
+    created_at: e.createdAt,
+    kind: e.kind,
+    direction: e.direction,
+    recipient_person_id: e.recipientPersonId ?? null,
 });
 
 const UNSET_PREFERENCE_PROFILE: PersonPreferenceProfile = {
@@ -145,6 +171,25 @@ export default function FamilyCommunicationWorkspace(props: {
     const [sendError, setSendError] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
     const mountedRef = useRef(false);
+    const adminAuth = useContext(AdminAuthContext);
+    const isActivityEmbed = props.surfaceVariant === "activity_embed";
+
+    const syncActivityThreadContext = useCallback(
+        (threadId: string | null, workspace: FamilyCommunicationWorkspaceVM) => {
+            if (!isActivityEmbed) return;
+            if (!threadId) {
+                setSelectedRecipientIds(workspace.selectedRecipients);
+                return;
+            }
+            const thread = workspace.threads.find((t) => t.id === threadId);
+            if (!thread) return;
+            setWorkspaceMode(threadChannelToWorkspaceMode(thread.channel));
+            const threadMessages = workspace.timelineEvents.filter((e) => e.threadId === threadId).map(toThreadPreviewMessage);
+            const recipientIds = deriveThreadReplyRecipientIds(thread, threadMessages);
+            if (recipientIds.length > 0) setSelectedRecipientIds(recipientIds);
+        },
+        [isActivityEmbed],
+    );
 
     useEffect(() => {
         if (mountedRef.current) return;
@@ -244,10 +289,9 @@ export default function FamilyCommunicationWorkspace(props: {
 
     const openThread = useCallback((threadId: string) => {
         setSelectedThreadId(threadId);
+        if (vm) syncActivityThreadContext(threadId, vm);
         void load(threadId, false);
-    }, [load]);
-
-    const isActivityEmbed = props.surfaceVariant === "activity_embed";
+    }, [load, syncActivityThreadContext, vm]);
 
     const activityEmbedBootstrappedRef = useRef(false);
     useEffect(() => {
@@ -263,8 +307,9 @@ export default function FamilyCommunicationWorkspace(props: {
         setBodyDraft("");
         setSendResult(null);
         setSendError(null);
+        if (vm) syncActivityThreadContext(null, vm);
         void load(null, false);
-    }, [load]);
+    }, [load, syncActivityThreadContext, vm]);
 
     const runSend = useCallback(
         async (confirm: boolean) => {
@@ -397,6 +442,7 @@ export default function FamilyCommunicationWorkspace(props: {
                 onSendNow={() => void runSend(false)}
                 onConfirmSend={() => void runSend(true)}
                 onDismissSend={() => { setSendResult(null); setSendError(null); }}
+                viewerUserId={adminAuth?.userId ?? null}
             />
         </section>
     );

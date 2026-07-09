@@ -8,10 +8,16 @@ export type ThreadTopicTitleInput = {
     workflowLabel?: string | null;
 };
 
-const GENERIC_CHANNEL_TITLES = new Set(["sms", "email", "in_app", "in-app"]);
+const GENERIC_CHANNEL_TITLES = new Set(["sms", "email", "in_app", "in-app", "sms conversation", "email conversation", "general questions", "general"]);
+
+const PERSON_ENTITY_TYPES = new Set(["person", "persons", "child"]);
 
 function isGenericChannelTitle(value: string): boolean {
     return GENERIC_CHANNEL_TITLES.has(value.trim().toLowerCase());
+}
+
+export function isPersonPrimaryEntity(type: string | null | undefined): boolean {
+    return PERSON_ENTITY_TYPES.has((type ?? "").trim().toLowerCase());
 }
 
 /** Meaningful conversation topic title for Activity embed thread rows. */
@@ -30,17 +36,19 @@ export function deriveThreadTopicTitle(input: ThreadTopicTitleInput): string {
         if (!isGenericChannelTitle(attention)) return attention;
     }
 
-    return deriveThreadTopicFallback(input.thread.channel);
+    return deriveThreadTopicFallback();
 }
 
-export function deriveThreadTopicFallback(channel: string | null | undefined): string {
-    if (channel === "sms") return "SMS Conversation";
-    if (channel === "email") return "Email Conversation";
-    return "General Questions";
+export function deriveThreadTopicFallback(_channel?: string | null | undefined): string {
+    return "General";
 }
 
 export function deriveThreadChannelLabel(channel: string | null | undefined): "SMS" | "Email" {
     return channel === "sms" ? "SMS" : "Email";
+}
+
+export function threadChannelToWorkspaceMode(channel: string | null | undefined): "email" | "sms" {
+    return channel === "sms" ? "sms" : "email";
 }
 
 /** Hide orphaned / empty threads from Activity topic rail. */
@@ -55,7 +63,59 @@ export type ThreadPreviewMessage = {
     body?: string | null;
     created_at?: string | null;
     kind?: string | null;
+    direction?: string | null;
+    recipient_person_id?: string | null;
+    metadata?: Record<string, unknown> | null;
 };
+
+function readMetadataPersonId(metadata: Record<string, unknown> | null | undefined, keys: readonly string[]): string | null {
+    if (!metadata) return null;
+    for (const key of keys) {
+        const v = metadata[key];
+        if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    return null;
+}
+
+/** Actual participant person ids for a transport thread (not whole household). */
+export function deriveThreadParticipantPersonIds(
+    thread: ThreadVM,
+    messages: ReadonlyArray<ThreadPreviewMessage>,
+): string[] {
+    const ids = new Set<string>();
+    if (isPersonPrimaryEntity(thread.primaryEntity.type) && thread.primaryEntity.id) {
+        ids.add(thread.primaryEntity.id);
+    }
+    for (const m of messages) {
+        if (m.thread_id && m.thread_id !== thread.id) continue;
+        const recipientId =
+            (typeof m.recipient_person_id === "string" && m.recipient_person_id.trim()) ||
+            readMetadataPersonId(m.metadata ?? null, ["recipient_person_id"]);
+        if (recipientId) ids.add(recipientId);
+    }
+    return [...ids];
+}
+
+export function resolveThreadRecipients(
+    thread: ThreadVM,
+    messages: ReadonlyArray<ThreadPreviewMessage>,
+    recipients: ReadonlyArray<RecipientVM>,
+): RecipientVM[] {
+    const byId = new Map(recipients.map((r) => [r.id, r]));
+    const threadMessages = messages.filter((m) => !m.thread_id || m.thread_id === thread.id);
+    return deriveThreadParticipantPersonIds(thread, threadMessages)
+        .map((id) => byId.get(id))
+        .filter((r): r is RecipientVM => Boolean(r));
+}
+
+/** @deprecated Use resolveThreadRecipients — kept for call-site clarity during migration. */
+export function threadParticipantsForTopicRow(
+    thread: ThreadVM,
+    messages: ReadonlyArray<ThreadPreviewMessage>,
+    recipients: ReadonlyArray<RecipientVM>,
+): RecipientVM[] {
+    return resolveThreadRecipients(thread, messages, recipients);
+}
 
 /** Latest message preview for a thread (plain text, single line). */
 export function deriveThreadLastPreview(
@@ -84,15 +144,6 @@ export function deriveThreadMessageSubject(
     return null;
 }
 
-export function threadParticipantsForTopicRow(
-    thread: ThreadVM,
-    recipients: ReadonlyArray<RecipientVM>,
-): RecipientVM[] {
-    const primary = recipients.filter((r) => r.tier === "primary");
-    const pool = primary.length > 0 ? primary : recipients;
-    return pool.slice(0, 2);
-}
-
 /** Participant summary for thread header / row subtitle. */
 export function formatThreadParticipantNames(recipients: ReadonlyArray<RecipientVM>, maxVisible = 2): string {
     if (recipients.length === 0) return "Family";
@@ -100,4 +151,37 @@ export function formatThreadParticipantNames(recipients: ReadonlyArray<Recipient
     const overflow = recipients.length - visible.length;
     if (overflow > 0) return `${visible.join(", ")} +${overflow}`;
     return visible.join(", ");
+}
+
+export type MessageSenderInput = {
+    direction?: string | null;
+    senderUserId?: string | null;
+    senderDisplayName?: string | null;
+    recipientPersonId?: string | null;
+};
+
+export function deriveMessageSenderLabel(
+    message: MessageSenderInput,
+    opts: {
+        currentUserId?: string | null;
+        inboundContactName?: string | null;
+        recipientDisplayName?: string | null;
+    },
+): string {
+    const out = message.direction === "outbound";
+    if (out) {
+        if (message.senderUserId && opts.currentUserId && message.senderUserId === opts.currentUserId) {
+            return "Sent by you";
+        }
+        if (message.senderDisplayName?.trim()) return message.senderDisplayName.trim();
+        return "Sent from Alloy";
+    }
+    return opts.recipientDisplayName ?? opts.inboundContactName ?? "Family";
+}
+
+export function deriveThreadReplyRecipientIds(
+    thread: ThreadVM,
+    messages: ReadonlyArray<ThreadPreviewMessage>,
+): string[] {
+    return deriveThreadParticipantPersonIds(thread, messages);
 }
