@@ -2,6 +2,12 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { brandingMetadataPatch, type ProcessingFormBranding } from "@/lib/forms/processingFormBranding";
+import {
+    buildProcessingPublicLinkMetadata,
+    isProcessingIntakeLink,
+    processingPublishMetadataPatch,
+} from "@/lib/pos/processingPublicLinkMetadata";
+import { resolveProcessingPublicSlug } from "@/lib/pos/processingPublicRuntime";
 import { safeParseFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import { createBlankSchema } from "@/lib/forms/formBuilderSchema";
 
@@ -22,7 +28,30 @@ export interface ProcessingFormVersionRow {
     status: string;
 }
 
+export interface ProcessingFormPublicLinkRow {
+    id: string;
+    is_active: boolean;
+    created_at: string;
+    token_prefix: string | null;
+    pinned_form_definition_version_id: string | null;
+    metadata?: Record<string, unknown>;
+}
+
+export type ProcessingMintedPublicLink = {
+    id: string;
+    plaintext_token: string;
+    embed_path: string;
+    embed_url: string | null;
+    token_prefix: string | null;
+    metadata?: Record<string, unknown>;
+};
+
 export type FormLoadState = "idle" | "loading" | "empty" | "error" | "ready";
+
+async function readJsonError(res: Response, fallback: string): Promise<string> {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    return body.error || `${fallback} (${res.status})`;
+}
 
 export function useProcessingFormApi() {
     const [forms, setForms] = useState<ProcessingFormRow[]>([]);
@@ -230,24 +259,134 @@ export function useProcessingFormApi() {
         [syncFormStats]
     );
 
+    const patchProcessingPublishMetadata = useCallback(
+        async (
+            formId: string,
+            args: { formKey: string; formName: string; existingMeta?: Record<string, unknown> }
+        ) => {
+            const existingMeta = args.existingMeta ?? {};
+            const publicSlug = resolveProcessingPublicSlug(args.formKey, args.formName, existingMeta);
+            const metadata = processingPublishMetadataPatch(existingMeta, {
+                formId,
+                formKey: args.formKey,
+                formName: args.formName,
+                publicSlug,
+            });
+            const res = await fetch(`/api/admin/forms/${formId}`, {
+                method: "PATCH",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ metadata }),
+            });
+            if (!res.ok) throw new Error(await readJsonError(res, "Failed to update publish metadata"));
+            return metadata;
+        },
+        []
+    );
+
+    const listPublicLinks = useCallback(async (formId: string): Promise<ProcessingFormPublicLinkRow[]> => {
+        const res = await fetch(`/api/admin/forms/${formId}/public-links`, { credentials: "same-origin" });
+        if (!res.ok) throw new Error(await readJsonError(res, "Failed to load public links"));
+        const body = (await res.json()) as { data?: Record<string, unknown>[] };
+        return (body.data ?? []).map((row) => {
+            const { token_hash: _h, plaintext_token: _p, ...rest } = row;
+            void _h;
+            void _p;
+            return rest as unknown as ProcessingFormPublicLinkRow;
+        });
+    }, []);
+
+    const loadPublishedVersionId = useCallback(async (formId: string): Promise<string | null> => {
+        const res = await fetch(`/api/admin/forms/${formId}`, { credentials: "same-origin" });
+        if (!res.ok) return null;
+        const body = (await res.json()) as { data?: { versions?: ProcessingFormVersionRow[] } };
+        const published = (body.data?.versions ?? []).filter((v) => v.status === "published");
+        if (published.length === 0) return null;
+        const latest = [...published].sort((a, b) => b.version_number - a.version_number)[0];
+        return latest?.id ?? null;
+    }, []);
+
+    const mintProcessingPublicLink = useCallback(
+        async (
+            formId: string,
+            args: { formName: string; formKey: string; existingMeta?: Record<string, unknown>; publishedVersionId?: string | null }
+        ): Promise<ProcessingMintedPublicLink> => {
+            const publicSlug = resolveProcessingPublicSlug(args.formKey, args.formName, args.existingMeta);
+            const metadata = buildProcessingPublicLinkMetadata({ formName: args.formName, publicSlug });
+            const res = await fetch(`/api/admin/forms/${formId}/public-links`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    metadata,
+                    ...(args.publishedVersionId ? { pinned_form_definition_version_id: args.publishedVersionId } : {}),
+                }),
+            });
+            if (!res.ok) throw new Error(await readJsonError(res, "Failed to create public link"));
+            const body = (await res.json()) as { data?: ProcessingMintedPublicLink };
+            const data = body.data;
+            if (!data?.plaintext_token || !data.embed_path) throw new Error("Public link response incomplete");
+            return data;
+        },
+        []
+    );
+
+    const setPublicLinkActive = useCallback(
+        async (formId: string, linkId: string, isActive: boolean) => {
+            const res = await fetch(`/api/admin/forms/${formId}/public-links/${linkId}`, {
+                method: "PATCH",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ is_active: isActive }),
+            });
+            if (!res.ok) throw new Error(await readJsonError(res, "Failed to update public link"));
+        },
+        []
+    );
+
+    const unpublishProcessingPublicLinks = useCallback(async (formId: string, links: ProcessingFormPublicLinkRow[]) => {
+        const active = links.filter((l) => l.is_active && isProcessingIntakeLink(l.metadata));
+        await Promise.all(active.map((l) => setPublicLinkActive(formId, l.id, false)));
+    }, [setPublicLinkActive]);
+
     const publishForm = useCallback(
         async (
             formId: string,
             versionId: string,
             schema: FormSchemaV1,
-            opts?: { branding?: ProcessingFormBranding; existingMeta?: Record<string, unknown>; formName?: string }
+            opts?: {
+                branding?: ProcessingFormBranding;
+                existingMeta?: Record<string, unknown>;
+                formName?: string;
+                formKey?: string;
+            }
         ) => {
             await saveDraft(formId, versionId, schema, opts);
+            const existingMeta = opts?.existingMeta ?? {};
+            const formName = opts?.formName ?? schema.title;
+            const formKey = opts?.formKey ?? formId;
+            const branding = opts?.branding ?? {
+                brand_name: typeof existingMeta.brand_name === "string" ? existingMeta.brand_name : "",
+                accent_color:
+                    typeof existingMeta.accent_color === "string" ? existingMeta.accent_color : "#00A283",
+                logo_url: typeof existingMeta.logo_url === "string" ? existingMeta.logo_url : null,
+                description: "",
+            };
+            const patchedMeta = await patchProcessingPublishMetadata(formId, {
+                formKey,
+                formName,
+                existingMeta: brandingMetadataPatch(branding, existingMeta),
+            });
             const res = await fetch(`/api/admin/forms/${formId}/versions/${versionId}/publish`, {
                 method: "POST",
                 credentials: "same-origin",
             });
             if (!res.ok) {
-                const b = (await res.json().catch(() => ({}))) as { error?: string };
-                throw new Error(b.error || `Publish failed (${res.status})`);
+                throw new Error(await readJsonError(res, "Publish failed"));
             }
+            return patchedMeta;
         },
-        [saveDraft]
+        [saveDraft, patchProcessingPublishMetadata]
     );
 
     const archiveForm = useCallback(
@@ -286,8 +425,32 @@ export function useProcessingFormApi() {
             archiveForm,
             deleteForm,
             patchFormBranding,
+            patchProcessingPublishMetadata,
+            listPublicLinks,
+            loadPublishedVersionId,
+            mintProcessingPublicLink,
+            setPublicLinkActive,
+            unpublishProcessingPublicLinks,
             setListErr,
         }),
-        [forms, listErr, listLoaded, loadForms, loadFormSchema, createBlankForm, saveDraft, publishForm, archiveForm, deleteForm, patchFormBranding]
+        [
+            forms,
+            listErr,
+            listLoaded,
+            loadForms,
+            loadFormSchema,
+            createBlankForm,
+            saveDraft,
+            publishForm,
+            archiveForm,
+            deleteForm,
+            patchFormBranding,
+            patchProcessingPublishMetadata,
+            listPublicLinks,
+            loadPublishedVersionId,
+            mintProcessingPublicLink,
+            setPublicLinkActive,
+            unpublishProcessingPublicLinks,
+        ]
     );
 }

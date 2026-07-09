@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isProcessingIntakeLink } from "@/lib/pos/processingPublicLinkMetadata";
 import { MEDICATION_AUTHORIZATION_DEMO_FORM_KEY } from "@/lib/forms/seeds/medicationAuthorizationDemo";
 import {
     buildOperationalIntentLinkMetadataPatch,
@@ -73,6 +74,9 @@ export async function mergePublicLinkMetadataForCreate(
     supabase: SupabaseClient,
     params: MergePublicLinkMetadataParams
 ): Promise<Record<string, unknown>> {
+    if (isProcessingIntakeLink(params.clientMetadata)) {
+        return { ...params.clientMetadata };
+    }
     const formDefaults = await intakeDefaultsForFormPublicLink(supabase, params.formKey);
     const withIntent = await applyOperationalIntentToLinkMetadata(supabase, {
         orgId: params.orgId,

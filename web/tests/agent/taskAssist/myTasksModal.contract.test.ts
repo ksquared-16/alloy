@@ -9,6 +9,11 @@ const navBadge = join(
     "../../../app/adminV2/components/OperationalTasksNavBadge.tsx"
 );
 const modal = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/MyTasksModal.tsx");
+const workItemsShell = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/tasks/WorkItemsShell.tsx");
+const workItemsOverview = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../app/adminV2/tasks/WorkItemsOverviewLanding.tsx"
+);
 const panel = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/MyTasksPanel.tsx");
 const taskCard = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/MyTasksTaskCard.tsx");
 const createTaskCard = join(
@@ -57,11 +62,15 @@ describe("My tasks modal UX", () => {
             join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/AdminV2WorkspaceBosModalShell.tsx"),
             "utf8"
         );
+        const workItemsShellSrc = readFileSync(workItemsShell, "utf8");
+        const overviewSrc = readFileSync(workItemsOverview, "utf8");
         expect(src).toContain("AdminV2WorkspaceBosModalShell");
+        expect(src).toContain("WorkItemsShell");
+        expect(src).toContain("WorkItemsOverviewLanding");
         expect(src).toContain("MyTasksPanel");
-        expect(src).toContain('data-adminv2-tasks-modal="true"');
-        expect(src).toContain("fetchOperationalTasksSummary");
-        expect(src).toContain('data-adminv2-tasks-summary="true"');
+        expect(workItemsShellSrc).toContain('data-adminv2-tasks-modal="true"');
+        expect(overviewSrc).toContain("fetchOperationalTasksSummary");
+        expect(overviewSrc).toContain('data-adminv2-tasks-summary="true"');
         expect(shell).toContain("adminv2-drawer-modal-panel--bos-rail");
         expect(shell).toContain("useOperationalWorkspaceGeometry");
     });
