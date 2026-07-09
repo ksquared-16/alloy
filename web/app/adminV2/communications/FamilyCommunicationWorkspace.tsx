@@ -138,6 +138,17 @@ function resolveInvalidateScope(props: {
     return undefined;
 }
 
+function resolveLoadComposerChannel(
+    threadId: string | null,
+    workspace: FamilyCommunicationWorkspaceVM | null,
+    fallback: ComposerChannel,
+): ComposerChannel {
+    if (!threadId || !workspace) return fallback;
+    const thread = workspace.threads.find((t) => t.id === threadId);
+    if (!thread) return fallback;
+    return threadChannelToWorkspaceMode(thread.channel) === "sms" ? "sms" : "email";
+}
+
 export default function FamilyCommunicationWorkspace(props: {
     customerId?: string;
     entity?: { entityType: string; entityId: string };
@@ -173,6 +184,10 @@ export default function FamilyCommunicationWorkspace(props: {
     const [sendCompleteToken, setSendCompleteToken] = useState(0);
     const mountedRef = useRef(false);
     const activityEmbedBootstrappedRef = useRef(false);
+    const hasUserThreadSelectionRef = useRef(false);
+    const loadRequestSeqRef = useRef(0);
+    const selectedThreadIdRef = useRef<string | null>(null);
+    selectedThreadIdRef.current = selectedThreadId;
     const adminAuth = useAdminAuthOptional();
     const isActivityEmbed = props.surfaceVariant === "activity_embed";
     const familyScopeKey = useMemo(
@@ -225,47 +240,70 @@ export default function FamilyCommunicationWorkspace(props: {
     }, []);
 
     const load = useCallback(
-        async (threadId: string | null, resetSelection: boolean, opts?: { force?: boolean }) => {
-            const params = resolvePrefetchParams(props, liveChannel, threadId);
+        async (
+            threadId: string | null,
+            resetSelection: boolean,
+            opts?: { force?: boolean; channel?: ComposerChannel },
+        ) => {
+            const requestSeq = ++loadRequestSeqRef.current;
+            const requestThreadId = threadId;
+            const channel = opts?.channel ?? resolveLoadComposerChannel(threadId, vm, liveChannel);
+            const shouldApply = () => {
+                if (requestSeq !== loadRequestSeqRef.current) return false;
+                if (isActivityEmbed && requestThreadId !== selectedThreadIdRef.current) return false;
+                return true;
+            };
+            const applyIfCurrent = (workspace: FamilyCommunicationWorkspaceVM, reset: boolean) => {
+                if (!shouldApply()) return;
+                applyWorkspace(workspace, reset);
+            };
+
+            const params = resolvePrefetchParams(props, channel, threadId);
             if (!params) {
-                setLoading(false);
+                if (shouldApply()) setLoading(false);
                 return;
             }
 
             const warm = !opts?.force ? getDrawerFamilyWorkspaceWarm(params) : null;
             if (warm) {
-                applyWorkspace(warm, resetSelection);
-                setLoading(false);
-                setServedFromWarmCache(true);
+                applyIfCurrent(warm, resetSelection);
+                if (shouldApply()) {
+                    setLoading(false);
+                    setServedFromWarmCache(true);
+                }
                 void prefetchDrawerFamilyWorkspace(params, { force: true }).then((fresh) => {
-                    if (fresh) applyWorkspace(fresh, resetSelection);
+                    if (fresh) applyIfCurrent(fresh, resetSelection);
                 });
                 return;
             }
 
-            setLoading(true);
-            setError(null);
+            if (shouldApply()) {
+                setLoading(true);
+                setError(null);
+            }
             try {
                 const pending = !opts?.force ? getDrawerFamilyWorkspaceInflight(params) : null;
                 const workspace = pending ? await pending : await prefetchDrawerFamilyWorkspace(params, opts);
                 if (!workspace) {
-                    setError("Failed to load");
+                    if (shouldApply()) setError("Failed to load");
                     return;
                 }
-                applyWorkspace(workspace, resetSelection);
+                applyIfCurrent(workspace, resetSelection);
             } catch {
-                setError("Failed to load");
+                if (shouldApply()) setError("Failed to load");
             } finally {
-                setLoading(false);
+                if (shouldApply()) setLoading(false);
             }
         },
-        [applyWorkspace, liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId]
+        [applyWorkspace, isActivityEmbed, liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId, vm]
     );
 
     const loadRef = useRef(load);
     loadRef.current = load;
 
     useEffect(() => {
+        loadRequestSeqRef.current += 1;
+        hasUserThreadSelectionRef.current = false;
         setSelectedThreadId(null);
         setSubjectDraft("");
         setBodyDraft("");
@@ -299,13 +337,16 @@ export default function FamilyCommunicationWorkspace(props: {
     ]);
 
     const openThread = useCallback((threadId: string) => {
+        hasUserThreadSelectionRef.current = true;
         setSelectedThreadId(threadId);
+        selectedThreadIdRef.current = threadId;
         setBodyDraft("");
         setSendResult(null);
         setSendError(null);
+        const channel = resolveLoadComposerChannel(threadId, vm, liveChannel);
         if (vm) syncActivityThreadContext(threadId, vm);
-        void load(threadId, false);
-    }, [load, syncActivityThreadContext, vm]);
+        void load(threadId, false, { channel });
+    }, [load, liveChannel, syncActivityThreadContext, vm]);
 
     useEffect(() => {
         if (!isActivityEmbed || !vm || !selectedThreadId) return;
@@ -314,13 +355,21 @@ export default function FamilyCommunicationWorkspace(props: {
 
     useEffect(() => {
         if (!isActivityEmbed || !vm || activityEmbedBootstrappedRef.current) return;
+        if (hasUserThreadSelectionRef.current || selectedThreadId) return;
         activityEmbedBootstrappedRef.current = true;
         const firstThread = vm.threads.find((t) => t.messageCount > 0);
-        if (firstThread) openThread(firstThread.id);
-    }, [isActivityEmbed, vm, openThread]);
+        if (!firstThread) return;
+        selectedThreadIdRef.current = firstThread.id;
+        setSelectedThreadId(firstThread.id);
+        syncActivityThreadContext(firstThread.id, vm);
+        const channel = resolveLoadComposerChannel(firstThread.id, vm, liveChannel);
+        void load(firstThread.id, false, { channel });
+    }, [isActivityEmbed, liveChannel, load, selectedThreadId, syncActivityThreadContext, vm]);
 
     const startNewMessage = useCallback(() => {
+        hasUserThreadSelectionRef.current = true;
         setSelectedThreadId(null);
+        selectedThreadIdRef.current = null;
         setSubjectDraft("");
         setBodyDraft("");
         setSendResult(null);
@@ -353,7 +402,9 @@ export default function FamilyCommunicationWorkspace(props: {
                     const threadToOpen = priorThreadId ?? createdThreadId;
                     if (threadToOpen) {
                         setSelectedThreadId(threadToOpen);
-                        await load(threadToOpen, false, { force: true });
+                        selectedThreadIdRef.current = threadToOpen;
+                        const channel = resolveLoadComposerChannel(threadToOpen, vm, liveChannel);
+                        await load(threadToOpen, false, { force: true, channel });
                     } else {
                         await load(null, false, { force: true });
                     }

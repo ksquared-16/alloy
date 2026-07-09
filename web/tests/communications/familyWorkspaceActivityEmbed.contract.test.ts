@@ -136,6 +136,14 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(workspace).not.toMatch(/void load\(null, true\);\n    \}, \[load, props\.initialPreviewVm\]/);
     });
 
+    it("activity_embed load ignores stale family-workspace responses", () => {
+        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
+        expect(workspace).toMatch(/loadRequestSeqRef/);
+        expect(workspace).toMatch(/selectedThreadIdRef/);
+        expect(workspace).toMatch(/applyIfCurrent/);
+        expect(workspace).toMatch(/hasUserThreadSelectionRef/);
+    });
+
     it("activity_embed selected thread header shows topic, participants, channel, delivery", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
         expect(view).toMatch(/data-cc-thread-header-summary/);

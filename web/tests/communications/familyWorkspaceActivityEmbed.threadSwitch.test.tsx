@@ -27,6 +27,9 @@ import {
     seedDrawerFamilyWorkspaceCacheForTests,
 } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 
+const fetchMock = vi.fn();
+vi.stubGlobal("fetch", fetchMock);
+
 const threadA: ThreadVM = {
     id: "t-a",
     subject: "Enrollment Packet",
@@ -194,10 +197,40 @@ function seedCaches(): void {
     );
 }
 
+function installDelayedFetchMock(): void {
+    fetchMock.mockImplementation(async (url: string) => {
+        const u = new URL(String(url), "http://localhost");
+        if (!String(url).includes("/family-workspace")) {
+            return new Response("{}", { status: 404 });
+        }
+        const threadId = u.searchParams.get("thread_id");
+        if (threadId === "t-a") {
+            await new Promise((r) => setTimeout(r, 250));
+            return new Response(
+                JSON.stringify({
+                    workspace: buildVm([msg({ id: "m-a-late", threadId: "t-a", body: "Alpha thread message LATE", channel: "email" })]),
+                }),
+                { status: 200 },
+            );
+        }
+        if (threadId === "t-b") {
+            await new Promise((r) => setTimeout(r, 30));
+            return new Response(
+                JSON.stringify({
+                    workspace: buildVm([msg({ id: "m-b", threadId: "t-b", body: "Beta thread message", channel: "sms" })]),
+                }),
+                { status: 200 },
+            );
+        }
+        return new Response(JSON.stringify({ workspace: buildVm([]) }), { status: 200 });
+    });
+}
+
 describe("familyWorkspace activity_embed thread switching", () => {
     beforeEach(() => {
         resetDrawerFamilyWorkspacePrefetchCacheForTests();
         seedCaches();
+        fetchMock.mockReset();
     });
 
     afterEach(() => {
@@ -250,5 +283,40 @@ describe("familyWorkspace activity_embed thread switching", () => {
 
         expect(el.textContent).toContain("New Message");
         expect(el.querySelector('[data-cc-new-message]')?.getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("ignores stale thread A revalidation after topic B is selected", async () => {
+        installDelayedFetchMock();
+
+        const el = render(
+            <FamilyCommunicationWorkspace
+                entity={{ entityType: "opportunities", entityId: "opp-1" }}
+                surfaceVariant="activity_embed"
+            />,
+        );
+
+        await flush();
+        await flush();
+
+        expect(el.textContent).toContain("Alpha thread message");
+
+        const threadBButton = el.querySelector('[data-cc-thread-chip="t-b"]') as HTMLButtonElement;
+        await act(async () => {
+            threadBButton.click();
+            await Promise.resolve();
+        });
+        await flush();
+
+        expect(el.textContent).toContain("Beta thread message");
+
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 350));
+        });
+        await flush();
+
+        expect(el.textContent).toContain("Beta thread message");
+        expect(el.textContent).not.toContain("Alpha thread message LATE");
+        expect(el.querySelector('[data-cc-thread-header-summary]')).toBeTruthy();
+        expect(el.querySelector('[data-cc-new-message]')?.getAttribute("aria-pressed")).not.toBe("true");
     });
 });
