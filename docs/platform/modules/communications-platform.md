@@ -78,6 +78,43 @@ Shared client helper: `web/lib/communications/v2/communicationTemplateDraftSeed.
 
 ---
 
+## Focus Panel Activity embed (July 2026) — **frozen**
+
+**Surface:** `surfaceVariant="activity_embed"` on `FamilyCommunicationWorkspace` inside the Activity cockpit (`OpportunityFocusPanelEmbeddedWorkspace`).
+
+**Operator model:** Conversation **topics** — business context titles (Tour Scheduling, Enrollment Packet, General) — with SMS/Email icons indicating transport only. Transport threads remain per-recipient/channel under the hood (`THREAD_SEMANTICS.md`); the Activity UI presents a topic rail + read/compose pane.
+
+**Load path (canonical embedded workspace doctrine):**
+
+```
+Selected record (queue row)
+  → Preview VM on drawer/focus payload (first paint)
+  → Activity embed renders immediately (channels, recipients, recent threads, composer)
+  → Background prefetch → full FamilyCommunicationWorkspace VM
+  → Warm cache (`drawerFamilyWorkspacePrefetchCache`) on revisit
+```
+
+Full doctrine: [`../../sprints/2026-07/communications-preview-vm-doctrine.md`](../../sprints/2026-07/communications-preview-vm-doctrine.md).
+
+**Topic rail:** `threadsForActivityTopicRail` hides zero-message threads; titles from `deriveThreadTopicTitle` (email: thread subject → workflow → message subject → metadata → General; SMS: session continuity, no message-subject fallback).
+
+**Reply vs New Message:**
+
+| Mode | Selection | Composer | Recipients |
+|------|-----------|----------|------------|
+| **Thread selected** | `selectedThreadId` set | Collapsed Reply → expand; channel locked | Thread transport participants only |
+| **+ New** | `selectedThreadId` null | Expanded immediately | Household defaults |
+
+**Post-send lifecycle:** Confirm send keeps thread selected (or opens `createdThreadId` from new message); composer clears; reply bar collapses; timeline reloads.
+
+**Presentation helpers:** `threadTopicPresentation.ts`, `timelinePresentation.ts`.
+
+**Out of scope (next sprint):** attachments, rich editor, Settings/provider onboarding, compliance UX, inbound email, Test Email/SMS, Announcements/Templates expansion. Command Center modal layout and send runtime unchanged.
+
+Sprint closeout: [`../../sprints/2026-07/communications-activity-sprint-closeout.md`](../../sprints/2026-07/communications-activity-sprint-closeout.md).
+
+---
+
 ## Related
 
 - `../../product/communications.md` (transitional expanded reference)

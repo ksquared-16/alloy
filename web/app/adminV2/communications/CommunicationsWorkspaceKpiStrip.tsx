@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Communications KPI band — compact, glanceable status strip.
+ * Communications KPI band - compact, glanceable status strip.
  *
  * Refactored (Work/Studio parity) to render the SHARED `CompactKpiStrip` with platform
  * KPI color semantics, so Communications and Processing read as siblings. Data is
@@ -28,7 +28,16 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
     let items: CompactKpiItem[] = [];
     let loading = false;
 
-    if (activeTab === "inbox") {
+    if (activeTab === "overview") {
+        const m = inbox.metrics;
+        loading = inboxLoading;
+        items = [
+            { key: "needs_reply", label: "Needs reply", value: String(m?.requiresResponse ?? 0), state: "pending" },
+            { key: "unread", label: "Unread", value: String(m?.unread ?? 0), state: "attention" },
+            { key: "scheduled", label: "Scheduled", value: String(computeAnnouncementWorkspaceKpis(announcements.rows).scheduled), state: "pending" },
+            { key: "sent", label: "Sent (7d)", value: String(computeAnnouncementWorkspaceKpis(announcements.rows).sentRecently), state: "done" },
+        ];
+    } else if (activeTab === "inbox") {
         const m = inbox.metrics;
         loading = inboxLoading;
         items = [
@@ -54,6 +63,31 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
             { key: "scheduled", label: "Scheduled", value: String(k.scheduled), state: "pending" },
             { key: "active", label: "Active", value: String(k.active), state: "ready" },
             { key: "sent_recently", label: "Sent (7d)", value: String(k.sentRecently), state: "done" },
+        ];
+    } else if (activeTab === "scheduled") {
+        const k = computeAnnouncementWorkspaceKpis(announcements.rows);
+        loading = announcementsLoading;
+        items = [
+            { key: "scheduled", label: "Scheduled", value: String(k.scheduled), state: "pending" },
+            { key: "draft", label: "Draft", value: String(k.draft), state: "neutral" },
+            { key: "active", label: "Active", value: String(k.active), state: "ready" },
+            { key: "sent_recently", label: "Sent (7d)", value: String(k.sentRecently), state: "done" },
+        ];
+    } else if (activeTab === "channels") {
+        loading = false;
+        items = [
+            { key: "email", label: "Email", value: "-", state: "ready" },
+            { key: "sms", label: "SMS", value: "-", state: "ready" },
+            { key: "in_app", label: "In-app", value: "Active", state: "ready" },
+            { key: "push", label: "Push", value: "Soon", state: "neutral" },
+        ];
+    } else if (activeTab === "branding") {
+        loading = false;
+        items = [
+            { key: "identity", label: "Identity", value: "-", state: "neutral" },
+            { key: "reply_to", label: "Reply-to", value: "-", state: "neutral" },
+            { key: "signature", label: "Signature", value: "-", state: "neutral" },
+            { key: "colors", label: "Colors", value: "-", state: "neutral" },
         ];
     }
 

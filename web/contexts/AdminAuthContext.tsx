@@ -30,6 +30,11 @@ export function useAdminAuth() {
     return ctx;
 }
 
+/** Safe when rendered outside AdminAuthProvider (e.g. dev shells). */
+export function useAdminAuthOptional(): AdminAuthContextValue | null {
+    return useContext(AdminAuthContext);
+}
+
 export function AdminAuthProvider({
     userEmail,
     userId,

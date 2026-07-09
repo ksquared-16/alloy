@@ -23,7 +23,8 @@ import NestedSurfaceFieldLayoutSurface, {
     type LayoutSurfaceFieldMeta,
 } from "@/components/admin/focusPanel/drillIn/NestedSurfaceFieldLayoutSurface";
 import ChildProfileAvatarComposer from "@/components/admin/focusPanel/drillIn/ChildProfileAvatarComposer";
-import InlineRuntimeFieldList from "@/components/admin/focusPanel/drillIn/InlineRuntimeFieldList";
+import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
+import EvidenceSectionCard from "@/components/admin/focusPanel/drillIn/EvidenceSectionCard";
 import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
 import {
     buildChildrenCardEvidence,
@@ -50,6 +51,7 @@ import {
 import { chunkNestedSurfaceFieldsForHalfRowLayout } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import {
     CHILDREN_SURFACE_ID,
+    fieldPresentationLabel,
     fieldShowIconForNestedGroup,
     fieldShowLabelForNestedGroup,
     groupShowAvatarForNestedGroup,
@@ -190,6 +192,17 @@ export default function ChildrenCard({
         setFocusedId(previewChildId);
         setEditing(composerPreview.perspective === "child_edit");
     }, [composerPreview, evidence.children]);
+
+    useEffect(() => {
+        if (!composingChildrenSurface) return;
+        if (focusedId) return;
+        const first = evidence.children[0];
+        if (!first) return;
+        setFocusedId(first.id);
+        setRosterOpen(true);
+        composer?.setDrillDepth({ kind: "child-focus", childId: first.id });
+        composer?.select({ kind: "region", surfaceId: CHILDREN_SURFACE_ID, groupKey: "identity" });
+    }, [composingChildrenSurface, evidence.children, focusedId, composer]);
 
     const isEmpty = evidence.count === 0;
     const focused =
@@ -372,12 +385,7 @@ export default function ChildrenCard({
                     ))}
                 </div>
                 {composingChildrenSurface ? (
-                    <InlineRuntimeFieldList
-                        surfaceId={CHILDREN_SURFACE_ID}
-                        groupKey="roster"
-                        suppressPreview
-                        whenRegionSelectedOnly={false}
-                    />
+                    <NestedSurfaceAddField surfaceId={CHILDREN_SURFACE_ID} groupKey="roster" />
                 ) : null}
             </ComposableRegionShell>
         );
@@ -1023,29 +1031,29 @@ function FocusedChild({
                                 triggerLabel="+ Add evidence section"
                             />
                             {evidenceSections.map((section) => (
-                                <ComposableRegionShell
+                                <EvidenceSectionCard
                                     key={section.key}
                                     surfaceId={CHILDREN_SURFACE_ID}
                                     groupKey={section.key}
                                     label={section.label}
-                                    className="alloy-os-children__composer-region"
-                                    dataAttrs={{ "data-children-evidence-region": section.key }}
-                                >
-                                    <p className="alloy-os-child-egroup__title">{section.label}</p>
-                                    <NestedSurfaceFieldLayoutSurface
-                                        surfaceId={CHILDREN_SURFACE_ID}
-                                        groupKey={section.key}
-                                        fields={section.fieldKeys.map((fieldKey) => {
-                                            const meta = CHILDREN_FIELD_TRUTH_META[fieldKey];
-                                            return {
-                                                fieldKey,
-                                                label: fieldKey.replace(/^[a-z_]+\./, "").replace(/_/g, " "),
-                                                icon: meta?.icon,
-                                                value: meta?.get(child) ?? null,
-                                            };
-                                        })}
-                                    />
-                                </ComposableRegionShell>
+                                    fields={section.fieldKeys.map((fieldKey) => {
+                                        const meta = CHILDREN_FIELD_TRUTH_META[fieldKey];
+                                        const catalog = fieldKey.replace(/^[a-z_]+\./, "").replace(/_/g, " ");
+                                        return {
+                                            fieldKey,
+                                            label: childrenSurfaceConfig
+                                                ? fieldPresentationLabel(
+                                                      childrenSurfaceConfig,
+                                                      section.key,
+                                                      fieldKey,
+                                                      catalog,
+                                                  )
+                                                : catalog,
+                                            icon: meta?.icon,
+                                            value: meta?.get(child) ?? null,
+                                        };
+                                    })}
+                                />
                             ))}
                         </div>
                     ) : null}

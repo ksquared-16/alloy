@@ -22,6 +22,7 @@ import {
     CHILDREN_SURFACE_ID,
     FINANCIAL_CONFIG_SURFACE_ID,
     fieldPresentationLabel,
+    availableFieldsForNestedGroup,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
@@ -284,7 +285,7 @@ describe("Focus Panel in-canvas drill-in composer wiring", () => {
     });
 
     it("uses inline runtime field editing and metadata-only drill-in inspector", () => {
-        expect(householdCard).toContain("InlineRuntimeFieldList");
+        expect(householdCard).toContain("NestedSurfaceAddField");
         expect(householdCard).toContain("ComposableFieldShell");
         expect(drillInspector).toContain("metadataOnly");
         expect(drillInspector).not.toContain("data-inspector-field-list");
@@ -303,7 +304,8 @@ describe("Focus Panel in-canvas drill-in composer wiring", () => {
 
     it("household card wraps runtime regions with composable shells", () => {
         expect(householdCard).toContain("ComposableRegionShell");
-        expect(householdCard).toContain("RegionEditLayer");
+        expect(householdCard).toContain("NestedSurfaceAddField");
+        expect(householdCard).not.toContain("function RegionEditLayer");
         expect(householdCard).not.toContain("RegionInlineCompose");
         expect(householdCard).not.toContain("Edit fields below");
     });
@@ -398,11 +400,12 @@ describe("Final Surface Composer doctrine — runtime sacred, composer overlay",
         expect(householdCard).not.toContain("data-household-compose-preview");
     });
 
-    it("scopes edit-layer field controls to selected regions (overlay, not replacement)", () => {
-        expect(inlineFieldList).toContain("whenRegionSelectedOnly");
-        expect(inlineFieldList).toContain("suppressPreview");
-        expect(householdCard).toContain("suppressPreview");
-        expect(householdCard).toContain("whenRegionSelectedOnly");
+    it("scopes add-field controls to selected regions (one per region)", () => {
+        const addField = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceAddField.tsx");
+        expect(addField).toContain("regionSelected");
+        expect(addField).toContain("data-canvas-add-field");
+        expect(householdCard).toContain("NestedSurfaceAddField");
+        expect(householdCard).not.toContain("InlineRuntimeFieldList");
     });
 
     it("restores child runtime layout — no duplicate compose preview rows", () => {
@@ -449,6 +452,7 @@ describe("Final Focus Panel ship blockers — empty emergency / child edit / dat
 
 describe("Final Focus Panel Composer ship fixes", () => {
     const householdSpec = readSrc("lib/platform/surfaceComposition/definitions/recursiveSurfaceProofs.ts");
+    const householdCard = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
     const childrenCard = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
     const layoutSurface = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceFieldLayoutSurface.tsx");
     const avatarComposer = readSrc("components/admin/focusPanel/drillIn/ChildProfileAvatarComposer.tsx");
@@ -552,8 +556,89 @@ describe("Final Focus Panel Composer ship fixes", () => {
 
     it("exposes child profile avatar composer on identity header", () => {
         expect(childrenCard).toContain("ChildProfileAvatarComposer");
-        expect(avatarComposer).toContain("Set image");
+        expect(avatarComposer).toContain("setChildAvatarPreviewUrl");
+        expect(avatarComposer).toContain("Remove");
         expect(avatarComposer).toContain("groupShowAvatarForNestedGroup");
         expect(childrenCard).toContain("imageUrl={previewImageUrl}");
+    });
+
+    it("polish sprint — field instances own controls; evidence sections are cards", () => {
+        const addField = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceAddField.tsx");
+        const evidenceCard = readSrc("components/admin/focusPanel/drillIn/EvidenceSectionCard.tsx");
+        expect(layoutSurface).toContain("fp-field-instance__remove");
+        expect(layoutSurface).toContain("FieldInstance");
+        expect(layoutSurface).toContain("showAddField");
+        expect(addField).toContain("!regionSelected");
+        expect(childrenCard).toContain("EvidenceSectionCard");
+        expect(childrenCard).toContain("NestedSurfaceAddField");
+        expect(childrenCard).not.toContain("InlineRuntimeFieldList");
+        expect(evidenceCard).toContain("setNestedGroupEnabled");
+        expect(evidenceCard).toContain("showAddField={false}");
+        expect(runtimeCss).toContain(".fp-evidence-section");
+        expect(runtimeCss).toContain(".fp-field-instance__remove");
+    });
+
+    it("household summary supports secondary parent on collapsed card", () => {
+        expect(householdCard).toContain('groupKey="other_parent_guardian"');
+        expect(householdCard).toContain("data-household-secondary-parent");
+        expect(householdCard).toContain("secondaryParents");
+    });
+
+    it("composer leak fixes — clean evidence picker, floating add field, drag hints", () => {
+        const addSectionMenu = readSrc("components/admin/focusPanel/drillIn/AddSectionMenu.tsx");
+        const addField = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceAddField.tsx");
+        const floatingPopover = readSrc("components/admin/focusPanel/drillIn/ComposerFloatingPopover.tsx");
+        const sectionCatalog = readSrc("lib/adminV2/settings/surfaces/sectionCatalog.ts");
+        const fieldAdapter = readSrc("lib/adminV2/settings/surfaces/compositionFieldAdapter.ts");
+        expect(addSectionMenu).toContain("ComposerFloatingPopover");
+        expect(addSectionMenu).toContain("fp-add-section-menu__label");
+        expect(addSectionMenu).toContain("fp-add-section-menu__desc");
+        expect(addSectionMenu).toContain("CUSTOM_SECTION_OPTION.label");
+        expect(sectionCatalog).toContain('label: "Documents"');
+        expect(sectionCatalog).not.toContain("DocumentsUploaded");
+        expect(addField).toContain("ComposerFloatingPopover");
+        expect(floatingPopover).toContain("createPortal");
+        expect(layoutSurface).toContain("Place beside");
+        expect(layoutSurface).toContain("Place below");
+        expect(runtimeCss).toContain(".fp-add-section-menu__label");
+        expect(runtimeCss).toContain(".fp-layout-drop-hint");
+        expect(runtimeCss).toContain("overflow: visible");
+        expect(fieldAdapter).toContain("child.medical_summary");
+        expect(fieldAdapter).toContain("child.first_name");
+    });
+
+    it("evidence sections offer supporting child fields in add-field library", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setNestedGroupEnabled(config, "medical", true, { sectionSemantic: "medical" });
+        const available = availableFieldsForNestedGroup(CHILDREN_SURFACE_ID, "medical", config, []);
+        expect(available.some((f) => f.key === "child.nickname")).toBe(true);
+        expect(available.some((f) => f.key === "child.documents_summary")).toBe(true);
+        expect(available.some((f) => f.key === "inquiry_child.program")).toBe(true);
+    });
+
+    it("composer canvas resolves elevated cell keys like runtime work-unit", () => {
+        const canvas = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
+        expect(canvas).toContain("resolveElevatedCellKey");
+        expect(canvas).toContain("data-fp-composer-depth-active");
+        expect(canvas).not.toContain("const elevatedCellKey = activeDepth?.card ?? null");
+    });
+
+    it("field removal promotes orphan half rows and exposes reliable remove chrome", () => {
+        const layoutSurface = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceFieldLayoutSurface.tsx");
+        const runtimeCss = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(layoutSurface).toContain("onAfterRemove");
+        expect(layoutSurface).toContain("e.stopPropagation()");
+        expect(layoutSurface).toContain("fp-layout-surface--dragging");
+        expect(runtimeCss).toContain(".fp-layout-surface--dragging .fp-layout-drop-zone");
+        expect(runtimeCss).toContain("[data-fp-composer-depth-active=\"true\"]");
+    });
+
+    it("composer drill-in auto-opens household and child focus surfaces", () => {
+        const householdCard = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
+        const childrenCard = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
+        expect(householdCard).toContain("composingHouseholdSurface");
+        expect(householdCard).toContain("setExpanded(true)");
+        expect(childrenCard).toContain("composingChildrenSurface");
+        expect(childrenCard).toContain("setDrillDepth({ kind: \"child-focus\"");
     });
 });

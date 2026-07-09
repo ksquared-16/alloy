@@ -205,3 +205,14 @@ export function resetDrawerFamilyWorkspacePrefetchCacheForTests(): void {
     inflight.clear();
     listeners.clear();
 }
+
+/** Test-only warm seed (avoids fetch during Activity embed selection tests). */
+export function seedDrawerFamilyWorkspaceCacheForTests(
+    params: DrawerFamilyWorkspacePrefetchParams,
+    workspace: FamilyCommunicationWorkspaceVM,
+): void {
+    const key = drawerFamilyWorkspaceCacheKey(params);
+    if (!key) return;
+    cache.set(key, { workspace, fetchedAt: Date.now() });
+    notify();
+}

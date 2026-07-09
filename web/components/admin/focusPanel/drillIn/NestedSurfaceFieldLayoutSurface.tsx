@@ -2,12 +2,10 @@
 
 import { useCallback, useMemo, useState, type DragEvent } from "react";
 import clsx from "clsx";
-import { GripVertical, Plus, X, type LucideIcon } from "lucide-react";
+import { GripVertical, X, type LucideIcon } from "lucide-react";
 
 import {
-    addFieldToNestedGroup,
     applyNestedSurfaceFieldDrop,
-    availableFieldsForNestedGroup,
     fieldLayoutWidthForNestedGroup,
     fieldPresentationLabel,
     fieldShowIconForNestedGroup,
@@ -30,6 +28,7 @@ import {
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import { availableFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
 
 export type LayoutSurfaceFieldMeta = {
     fieldKey: string;
@@ -45,6 +44,8 @@ type Props = {
     groupKey: string;
     fields: LayoutSurfaceFieldMeta[];
     className?: string;
+    /** When false, parent region owns the single Add field affordance. */
+    showAddField?: boolean;
 };
 
 function catalogLabelFor(
@@ -60,18 +61,18 @@ function catalogLabelFor(
 }
 
 /**
- * Visual layout surface — fields render as runtime rows and ARE the composer.
- * Drag beside to pair; drag below to stack on a full row. No layout dropdowns.
+ * Visual layout surface — each field instance IS the editor.
+ * Drag beside to pair; drag below for a full row. Controls appear on hover/selection only.
  */
 export default function NestedSurfaceFieldLayoutSurface({
     surfaceId,
     groupKey,
     fields,
     className = "",
+    showAddField = true,
 }: Props) {
     const composer = useFocusPanelComposer();
     const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
-    const [addOpen, setAddOpen] = useState(false);
     const [editingLabelKey, setEditingLabelKey] = useState<string | null>(null);
     const [draggingKey, setDraggingKey] = useState<string | null>(null);
     const [dropHint, setDropHint] = useState<{ targetKey: string; zone: NestedSurfaceFieldDropZone } | null>(null);
@@ -97,14 +98,6 @@ export default function NestedSurfaceFieldLayoutSurface({
             fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey),
         );
     }, [config, groupKey, orderedKeys]);
-
-    const available = useMemo(
-        () =>
-            config && composing
-                ? availableFieldsForNestedGroup(surfaceId, groupKey, config, tenantFieldDefinitions)
-                : [],
-        [config, composing, surfaceId, groupKey, tenantFieldDefinitions],
-    );
 
     const mutate = useCallback(
         (next: NestedSurfaceConfig) => composer?.updateConfig(surfaceId, next),
@@ -133,7 +126,12 @@ export default function NestedSurfaceFieldLayoutSurface({
 
     return (
         <div
-            className={clsx("fp-layout-surface", composing && "fp-layout-surface--composing", className)}
+            className={clsx(
+                "fp-layout-surface",
+                composing && "fp-layout-surface--composing",
+                draggingKey && "fp-layout-surface--dragging",
+                className,
+            )}
             data-nested-layout-surface={groupKey}
             onClick={(e) => {
                 e.stopPropagation();
@@ -155,159 +153,103 @@ export default function NestedSurfaceFieldLayoutSurface({
 
                         if (meta.renderBlock) {
                             return (
-                                <div key={fieldKey} className="fp-layout-field fp-layout-field--block">
-                                    {composing ? (
-                                        <LayoutFieldChrome
-                                            surfaceId={surfaceId}
-                                            groupKey={groupKey}
-                                            fieldKey={fieldKey}
-                                            label={fieldPresentationLabel(
-                                                config!,
-                                                groupKey,
-                                                fieldKey,
-                                                catalogLabelFor(surfaceId, groupKey, fieldKey, tenantFieldDefinitions),
-                                            )}
-                                            config={config!}
-                                            composing={composing}
-                                            selected={
-                                                composer?.selection?.kind === "field" &&
-                                                composer.selection.surfaceId === surfaceId &&
-                                                composer.selection.groupKey === groupKey &&
-                                                composer.selection.fieldKey === fieldKey
-                                            }
-                                            editingLabelKey={editingLabelKey}
-                                            onSelect={() =>
-                                                composer?.select({ kind: "field", surfaceId, groupKey, fieldKey })
-                                            }
-                                            onMutate={mutate}
-                                            onEditLabel={setEditingLabelKey}
-                                            onDragStart={() => setDraggingKey(fieldKey)}
-                                            onDragEnd={() => {
-                                                setDraggingKey(null);
-                                                setDropHint(null);
-                                            }}
-                                            dropHint={dropHint?.targetKey === fieldKey ? dropHint.zone : null}
-                                            onDropZone={(zone) => handleDrop(fieldKey, zone)}
-                                            onDropHint={(zone) => setDropHint(zone ? { targetKey: fieldKey, zone } : null)}
-                                            canPairBeside={chunk.length < 2}
-                                        />
-                                    ) : null}
+                                <FieldInstance
+                                    key={fieldKey}
+                                    surfaceId={surfaceId}
+                                    groupKey={groupKey}
+                                    fieldKey={fieldKey}
+                                    label={fieldPresentationLabel(
+                                        config!,
+                                        groupKey,
+                                        fieldKey,
+                                        catalogLabelFor(surfaceId, groupKey, fieldKey, tenantFieldDefinitions),
+                                    )}
+                                    config={config!}
+                                    composing={composing}
+                                    selected={
+                                        composer?.selection?.kind === "field" &&
+                                        composer.selection.surfaceId === surfaceId &&
+                                        composer.selection.groupKey === groupKey &&
+                                        composer.selection.fieldKey === fieldKey
+                                    }
+                                    editingLabelKey={editingLabelKey}
+                                    draggingKey={draggingKey}
+                                    dropHint={dropHint?.targetKey === fieldKey ? dropHint.zone : null}
+                                    canPairBeside={chunk.length < 2}
+                                    onSelect={() =>
+                                        composer?.select({ kind: "field", surfaceId, groupKey, fieldKey })
+                                    }
+                                    onMutate={mutate}
+                                    onEditLabel={setEditingLabelKey}
+                                    onDragStart={setDraggingKey}
+                                    onDragEnd={() => {
+                                        setDraggingKey(null);
+                                        setDropHint(null);
+                                    }}
+                                    onDropZone={(zone) => handleDrop(fieldKey, zone)}
+                                    onDropHint={(zone) => setDropHint(zone ? { targetKey: fieldKey, zone } : null)}
+                                    onAfterRemove={() =>
+                                        composer?.select({ kind: "region", surfaceId, groupKey })
+                                    }
+                                    className="fp-layout-field--block"
+                                >
                                     {meta.renderBlock()}
-                                </div>
+                                </FieldInstance>
                             );
                         }
 
                         const showLabel = fieldShowLabelForNestedGroup(config!, groupKey, fieldKey);
                         const showIcon = fieldShowIconForNestedGroup(config!, groupKey, fieldKey);
-                        const label = fieldPresentationLabel(
-                            config!,
-                            groupKey,
-                            fieldKey,
-                            meta.label,
-                        );
+                        const label = fieldPresentationLabel(config!, groupKey, fieldKey, meta.label);
 
                         return (
-                            <div
+                            <FieldInstance
                                 key={fieldKey}
-                                className={clsx(
-                                    "fp-layout-field",
-                                    draggingKey === fieldKey && "is-dragging",
+                                surfaceId={surfaceId}
+                                groupKey={groupKey}
+                                fieldKey={fieldKey}
+                                label={label}
+                                config={config!}
+                                composing={composing}
+                                selected={
                                     composer?.selection?.kind === "field" &&
-                                        composer.selection.fieldKey === fieldKey &&
-                                        "is-selected",
-                                )}
-                                data-canvas-field={fieldKey}
-                                draggable={composing}
-                                onDragStart={(e) => {
-                                    if (!composing) return;
-                                    e.dataTransfer.setData("text/plain", fieldKey);
-                                    e.dataTransfer.effectAllowed = "move";
-                                    setDraggingKey(fieldKey);
-                                }}
+                                    composer.selection.surfaceId === surfaceId &&
+                                    composer.selection.groupKey === groupKey &&
+                                    composer.selection.fieldKey === fieldKey
+                                }
+                                editingLabelKey={editingLabelKey}
+                                draggingKey={draggingKey}
+                                dropHint={dropHint?.targetKey === fieldKey ? dropHint.zone : null}
+                                canPairBeside={chunk.length < 2}
+                                onSelect={() =>
+                                    composer?.select({ kind: "field", surfaceId, groupKey, fieldKey })
+                                }
+                                onMutate={mutate}
+                                onEditLabel={setEditingLabelKey}
+                                onDragStart={setDraggingKey}
                                 onDragEnd={() => {
                                     setDraggingKey(null);
                                     setDropHint(null);
                                 }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    composer?.select({ kind: "field", surfaceId, groupKey, fieldKey });
-                                }}
+                                onDropZone={(zone) => handleDrop(fieldKey, zone)}
+                                onDropHint={(zone) => setDropHint(zone ? { targetKey: fieldKey, zone } : null)}
+                                onAfterRemove={() =>
+                                    composer?.select({ kind: "region", surfaceId, groupKey })
+                                }
                             >
-                                {composing ? (
-                                    <LayoutFieldChrome
-                                        surfaceId={surfaceId}
-                                        groupKey={groupKey}
-                                        fieldKey={fieldKey}
-                                        label={label}
-                                        config={config!}
-                                        composing={composing}
-                                        selected={
-                                            composer?.selection?.kind === "field" &&
-                                            composer.selection.surfaceId === surfaceId &&
-                                            composer.selection.groupKey === groupKey &&
-                                            composer.selection.fieldKey === fieldKey
-                                        }
-                                        editingLabelKey={editingLabelKey}
-                                        onSelect={() =>
-                                            composer?.select({ kind: "field", surfaceId, groupKey, fieldKey })
-                                        }
-                                        onMutate={mutate}
-                                        onEditLabel={setEditingLabelKey}
-                                        onDragStart={() => setDraggingKey(fieldKey)}
-                                        onDragEnd={() => {
-                                            setDraggingKey(null);
-                                            setDropHint(null);
-                                        }}
-                                        dropHint={dropHint?.targetKey === fieldKey ? dropHint.zone : null}
-                                        onDropZone={(zone) => handleDrop(fieldKey, zone)}
-                                        onDropHint={(zone) => setDropHint(zone ? { targetKey: fieldKey, zone } : null)}
-                                        canPairBeside={chunk.length < 2}
-                                    />
-                                ) : null}
                                 <RuntimeFieldRow
                                     field={{ ...meta, label }}
                                     showLabel={showLabel}
                                     showIcon={showIcon}
                                 />
-                            </div>
+                            </FieldInstance>
                         );
                     })}
                 </div>
             ))}
 
-            {composing ? (
-                <div className="fp-layout-surface__add-wrap">
-                    <button
-                        type="button"
-                        className="fp-inline-field-list__add"
-                        data-canvas-add-field={groupKey}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setAddOpen((v) => !v);
-                        }}
-                    >
-                        <Plus className="h-3.5 w-3.5" aria-hidden />
-                        Add field
-                    </button>
-                    {addOpen && available.length > 0 ? (
-                        <div className="fp-inline-field-library" data-drill-in-field-library={groupKey}>
-                            {available.map((f) => (
-                                <button
-                                    key={f.key}
-                                    type="button"
-                                    className="fp-inline-field-library__item"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        mutate(addFieldToNestedGroup(config!, groupKey, f.key));
-                                        setAddOpen(false);
-                                    }}
-                                >
-                                    {f.label}
-                                </button>
-                            ))}
-                        </div>
-                    ) : null}
-                </div>
+            {composing && showAddField ? (
+                <NestedSurfaceAddField surfaceId={surfaceId} groupKey={groupKey} />
             ) : null}
         </div>
     );
@@ -340,7 +282,7 @@ function RuntimeFieldRow({
     );
 }
 
-function LayoutFieldChrome({
+function FieldInstance({
     surfaceId,
     groupKey,
     fieldKey,
@@ -349,15 +291,19 @@ function LayoutFieldChrome({
     composing,
     selected,
     editingLabelKey,
+    draggingKey,
+    dropHint,
+    canPairBeside,
     onSelect,
     onMutate,
     onEditLabel,
     onDragStart,
     onDragEnd,
-    dropHint,
     onDropZone,
     onDropHint,
-    canPairBeside,
+    onAfterRemove,
+    className = "",
+    children,
 }: {
     surfaceId: string;
     groupKey: string;
@@ -367,15 +313,19 @@ function LayoutFieldChrome({
     composing: boolean;
     selected: boolean;
     editingLabelKey: string | null;
+    draggingKey: string | null;
+    dropHint: NestedSurfaceFieldDropZone | null;
+    canPairBeside: boolean;
     onSelect: () => void;
     onMutate: (next: NestedSurfaceConfig) => void;
     onEditLabel: (key: string | null) => void;
-    onDragStart: () => void;
+    onDragStart: (key: string) => void;
     onDragEnd: () => void;
-    dropHint: NestedSurfaceFieldDropZone | null;
     onDropZone: (zone: NestedSurfaceFieldDropZone) => void;
     onDropHint: (zone: NestedSurfaceFieldDropZone | null) => void;
-    canPairBeside: boolean;
+    onAfterRemove: () => void;
+    className?: string;
+    children: React.ReactNode;
 }) {
     const visibility = fieldVisibilityForNestedGroup(config, groupKey, fieldKey);
     const showLabel = fieldShowLabelForNestedGroup(config, groupKey, fieldKey);
@@ -397,116 +347,157 @@ function LayoutFieldChrome({
     };
 
     return (
-        <div className={clsx("fp-layout-field__chrome", selected && "is-selected")} onClick={onSelect}>
-            <button
-                type="button"
-                className="fp-layout-field__grip"
-                aria-label={`Drag ${label}`}
-                onMouseDown={onDragStart}
-                onMouseUp={onDragEnd}
-            >
-                <GripVertical className="h-3 w-3" aria-hidden />
-            </button>
-
-            {canPairBeside ? (
-                <div
-                    className={clsx("fp-layout-drop-zone fp-layout-drop-zone--beside", dropHint === "beside" && "is-active")}
-                    data-drop-zone="beside"
-                    onDragOver={(e) => onDragOver(e, "beside")}
-                    onDragLeave={() => onDropHint(null)}
-                    onDrop={(e) => onDrop(e, "beside")}
-                />
-            ) : null}
-            <div
-                className={clsx("fp-layout-drop-zone fp-layout-drop-zone--below", dropHint === "below" && "is-active")}
-                data-drop-zone="below"
-                onDragOver={(e) => onDragOver(e, "below")}
-                onDragLeave={() => onDropHint(null)}
-                onDrop={(e) => onDrop(e, "below")}
-            />
-
-            <div className="fp-layout-field__controls" onClick={(e) => e.stopPropagation()}>
-                {editingLabel ? (
-                    <input
-                        className="fp-inline-field-row__label-input"
-                        autoFocus
-                        defaultValue={label}
-                        onBlur={(e) => {
-                            onMutate(setFieldPresentationLabel(config, groupKey, fieldKey, e.target.value));
-                            onEditLabel(null);
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                            if (e.key === "Escape") onEditLabel(null);
-                        }}
-                    />
-                ) : (
-                    <button
-                        type="button"
-                        className="fp-layout-field__control"
-                        onClick={() => onEditLabel(fieldKey)}
+        <div
+            className={clsx(
+                "fp-layout-field",
+                className,
+                composing && "fp-layout-field--composing",
+                draggingKey === fieldKey && "is-dragging",
+                selected && "is-selected",
+            )}
+            data-canvas-field={fieldKey}
+            draggable={composing}
+            onDragStart={(e) => {
+                if (!composing) return;
+                e.dataTransfer.setData("text/plain", fieldKey);
+                e.dataTransfer.effectAllowed = "move";
+                onDragStart(fieldKey);
+            }}
+            onDragEnd={onDragEnd}
+            onClick={(e) => {
+                e.stopPropagation();
+                onSelect();
+            }}
+        >
+            {children}
+            {composing ? (
+                <>
+                    {canPairBeside ? (
+                        <div
+                            className={clsx(
+                                "fp-layout-drop-zone fp-layout-drop-zone--beside",
+                                dropHint === "beside" && "is-active",
+                            )}
+                            data-drop-zone="beside"
+                            onDragOver={(e) => onDragOver(e, "beside")}
+                            onDragLeave={() => onDropHint(null)}
+                            onDrop={(e) => onDrop(e, "beside")}
+                        >
+                            <span className="fp-layout-drop-hint">Place beside</span>
+                        </div>
+                    ) : null}
+                    <div
+                        className={clsx(
+                            "fp-layout-drop-zone fp-layout-drop-zone--below",
+                            dropHint === "below" && "is-active",
+                        )}
+                        data-drop-zone="below"
+                        onDragOver={(e) => onDragOver(e, "below")}
+                        onDragLeave={() => onDropHint(null)}
+                        onDrop={(e) => onDrop(e, "below")}
                     >
-                        Relabel
-                    </button>
-                )}
-                <select
-                    className="fp-inline-field-row__behavior"
-                    value={visibility}
-                    aria-label={`Behavior for ${label}`}
-                    onChange={(e) =>
-                        onMutate(
-                            setFieldVisibilityInNestedGroup(
-                                config,
-                                groupKey,
-                                fieldKey,
-                                e.target.value as SurfaceFieldVisibility,
-                            ),
-                        )
-                    }
-                >
-                    {(Object.keys(SURFACE_FIELD_VISIBILITY_LABELS) as SurfaceFieldVisibility[]).map((mode) => (
-                        <option key={mode} value={mode}>
-                            {SURFACE_FIELD_VISIBILITY_LABELS[mode]}
-                        </option>
-                    ))}
-                </select>
-                <button
-                    type="button"
-                    className={clsx("fp-layout-field__toggle", showLabel && "is-on")}
-                    aria-pressed={showLabel}
-                    onClick={() =>
-                        onMutate(
-                            setFieldPresentationModeInNestedGroup(config, groupKey, fieldKey, {
-                                showLabel: !showLabel,
-                            }),
-                        )
-                    }
-                >
-                    Label
-                </button>
-                <button
-                    type="button"
-                    className={clsx("fp-layout-field__toggle", showIcon && "is-on")}
-                    aria-pressed={showIcon}
-                    onClick={() =>
-                        onMutate(
-                            setFieldPresentationModeInNestedGroup(config, groupKey, fieldKey, {
-                                showIcon: !showIcon,
-                            }),
-                        )
-                    }
-                >
-                    Icon
-                </button>
-                <button
-                    type="button"
-                    className="fp-layout-field__remove"
-                    aria-label={`Remove ${label}`}
-                    onClick={() => onMutate(removeFieldFromNestedGroup(config, groupKey, fieldKey))}
-                >
-                    <X className="h-3 w-3" />
-                </button>
-            </div>
+                        <span className="fp-layout-drop-hint">Place below</span>
+                    </div>
+                    <div className="fp-field-instance__chrome" onClick={(e) => e.stopPropagation()}>
+                        <div className="fp-field-instance__toolbar">
+                        <button
+                            type="button"
+                            className="fp-layout-field__grip"
+                            aria-label={`Drag ${label}`}
+                            tabIndex={-1}
+                        >
+                            <GripVertical className="h-3 w-3" aria-hidden />
+                        </button>
+                        <div className="fp-field-instance__controls">
+                            {editingLabel ? (
+                                <input
+                                    className="fp-inline-field-row__label-input"
+                                    autoFocus
+                                    defaultValue={label}
+                                    onBlur={(e) => {
+                                        onMutate(setFieldPresentationLabel(config, groupKey, fieldKey, e.target.value));
+                                        onEditLabel(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                        if (e.key === "Escape") onEditLabel(null);
+                                    }}
+                                />
+                            ) : (
+                                <button
+                                    type="button"
+                                    className="fp-layout-field__control"
+                                    onClick={() => onEditLabel(fieldKey)}
+                                >
+                                    Rename
+                                </button>
+                            )}
+                            <select
+                                className="fp-inline-field-row__behavior"
+                                value={visibility}
+                                aria-label={`Display policy for ${label}`}
+                                onChange={(e) =>
+                                    onMutate(
+                                        setFieldVisibilityInNestedGroup(
+                                            config,
+                                            groupKey,
+                                            fieldKey,
+                                            e.target.value as SurfaceFieldVisibility,
+                                        ),
+                                    )
+                                }
+                            >
+                                {(Object.keys(SURFACE_FIELD_VISIBILITY_LABELS) as SurfaceFieldVisibility[]).map((mode) => (
+                                    <option key={mode} value={mode}>
+                                        {SURFACE_FIELD_VISIBILITY_LABELS[mode]}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                className={clsx("fp-layout-field__toggle", showLabel && "is-on")}
+                                aria-pressed={showLabel}
+                                onClick={() =>
+                                    onMutate(
+                                        setFieldPresentationModeInNestedGroup(config, groupKey, fieldKey, {
+                                            showLabel: !showLabel,
+                                        }),
+                                    )
+                                }
+                            >
+                                Label
+                            </button>
+                            <button
+                                type="button"
+                                className={clsx("fp-layout-field__toggle", showIcon && "is-on")}
+                                aria-pressed={showIcon}
+                                onClick={() =>
+                                    onMutate(
+                                        setFieldPresentationModeInNestedGroup(config, groupKey, fieldKey, {
+                                            showIcon: !showIcon,
+                                        }),
+                                    )
+                                }
+                            >
+                                Icon
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            className="fp-field-instance__remove"
+                            aria-label={`Remove ${label}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onMutate(removeFieldFromNestedGroup(config, groupKey, fieldKey));
+                                onAfterRemove();
+                            }}
+                        >
+                            <X className="h-3.5 w-3.5" />
+                        </button>
+                    </div>
+                </div>
+                </>
+            ) : null}
         </div>
     );
 }

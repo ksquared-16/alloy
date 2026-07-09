@@ -23,14 +23,16 @@ export type InboxModalProps = {
 
 export default function InboxModal({ open, onClose }: InboxModalProps) {
     const [composeOpen, setComposeOpen] = useState(false);
-    const [tab, setTab] = useState<CommunicationsModalTab>("inbox");
+    const [tab, setTab] = useState<CommunicationsModalTab>("overview");
     const commandCenterEnabled = isCommsV2FlagEnabled("comms_v2_command_center");
 
     useEffect(() => {
-        if (!open) {
+        if (open) return;
+        const resetId = window.setTimeout(() => {
             setComposeOpen(false);
-            setTab("inbox");
-        }
+            setTab("overview");
+        }, 0);
+        return () => window.clearTimeout(resetId);
     }, [open]);
 
     useEffect(() => {
@@ -38,7 +40,7 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
         void warmCommunicationsWorkspaceModal();
     }, [open, commandCenterEnabled]);
 
-    const showComposeNew = commandCenterEnabled ? tab === "inbox" : !commandCenterEnabled;
+    const showComposeNew = commandCenterEnabled ? tab === "inbox" || tab === "overview" : !commandCenterEnabled;
 
     return (
         <AdminV2WorkspaceBosModalShell
@@ -60,7 +62,11 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                         onComposeNew={() => setComposeOpen(true)}
                         showComposeNew={showComposeNew}
                     >
-                        <CommunicationsModalTabPanel tab={tab} />
+                        <CommunicationsModalTabPanel
+                            tab={tab}
+                            onNavigateTab={setTab}
+                            onComposeNew={() => setComposeOpen(true)}
+                        />
                     </CommunicationsWorkspaceShell>
                 </CommunicationsWorkspaceKpiProvider>
             :   <div

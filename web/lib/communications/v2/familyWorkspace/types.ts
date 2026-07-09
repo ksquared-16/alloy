@@ -100,6 +100,11 @@ export type TimelineEventVM = {
     repliedAt: string | null;
     sentAt: string | null;
     status: string | null; // derived: received | failed | replied | opened | delivered | sent | queued | null
+    /** Outbound target person when present in message metadata. */
+    recipientPersonId?: string | null;
+    /** Operator auth user id when present in message metadata. */
+    senderUserId?: string | null;
+    senderDisplayName?: string | null;
 };
 
 export type HealthSummary = {

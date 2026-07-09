@@ -71,6 +71,18 @@ export const COMMS_OUTBOUND_BUBBLE_CLASS = "rounded-tr-sm bg-alloy-juniper/10 te
 export const COMMS_OUTLINE_ACCENT_SOFT_BTN_CLASS =
     "inline-flex shrink-0 items-center gap-1 rounded-lg border border-alloy-juniper/40 bg-alloy-juniper/10 px-2.5 py-2 text-sm font-semibold text-alloy-juniper shadow-sm hover:bg-alloy-juniper/15";
 
+/** Activity embed — unified operator action buttons (Send, Later, BOS). */
+export const COMMS_ACTIVITY_BTN_BASE =
+    "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 text-xs disabled:opacity-40";
+export const COMMS_ACTIVITY_PRIMARY_BTN_CLASS =
+    `${COMMS_ACTIVITY_BTN_BASE} bg-alloy-juniper font-semibold text-white shadow-sm hover:bg-alloy-juniper/90`;
+export const COMMS_ACTIVITY_SECONDARY_BTN_CLASS =
+    `${COMMS_ACTIVITY_BTN_BASE} border border-alloy-stone/25 bg-white font-medium text-alloy-midnight/75 shadow-sm hover:bg-alloy-stone/8`;
+
+/** Matches Focus Panel header BOS control (outline Bend Pine, compact height). */
+export const COMMS_BOS_HEADER_BTN_CLASS =
+    `${COMMS_ACTIVITY_SECONDARY_BTN_CLASS} min-w-[4.5rem]`;
+
 const COMMS_LIST_RESERVE_ROW_COUNT = 5;
 
 /** Quiet reserve for library list columns while warm data is unresolved. */

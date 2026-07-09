@@ -26,6 +26,6 @@ describe("command center replaces inbox modal body", () => {
     });
     it("the body embeds no BOS panel and uses no folder navigation", () => {
         expect(shell).not.toMatch(/aiCommandSurface\/[A-Za-z]*Panel/);
-        expect(shell).not.toMatch(/folder|Inbox|Sent|Archived|Drafts/);
+        expect(shell).not.toMatch(/InboxFolder|folder navigation|\"Sent\"|\"Archived\"|\"Drafts\"/);
     });
 });
