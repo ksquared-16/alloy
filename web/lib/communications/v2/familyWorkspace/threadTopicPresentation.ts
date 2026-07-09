@@ -1,4 +1,5 @@
 import type { RecipientVM, ThreadVM } from "./types";
+import { messageDeliveryDisplay, threadReadAvailabilityHint } from "./timelinePresentation";
 
 export type ThreadTopicTitleInput = {
     thread: Pick<ThreadVM, "subject" | "channel" | "attentionState" | "slaState">;
@@ -6,9 +7,25 @@ export type ThreadTopicTitleInput = {
     messageSubject?: string | null;
     /** Workflow/action label when surfaced on the thread context. */
     workflowLabel?: string | null;
+    /** Additional conversation metadata (thread row metadata, action labels). */
+    conversationMetadata?: {
+        topic?: string | null;
+        actionLabel?: string | null;
+        familyLabel?: string | null;
+    } | null;
 };
 
-const GENERIC_CHANNEL_TITLES = new Set(["sms", "email", "in_app", "in-app", "sms conversation", "email conversation", "general questions", "general"]);
+const GENERIC_CHANNEL_TITLES = new Set([
+    "sms",
+    "email",
+    "in_app",
+    "in-app",
+    "sms conversation",
+    "email conversation",
+    "general questions",
+    "general",
+    "conversation",
+]);
 
 const PERSON_ENTITY_TYPES = new Set(["person", "persons", "child"]);
 
@@ -20,21 +37,48 @@ export function isPersonPrimaryEntity(type: string | null | undefined): boolean 
     return PERSON_ENTITY_TYPES.has((type ?? "").trim().toLowerCase());
 }
 
-/** Meaningful conversation topic title for Activity embed thread rows. */
+function deriveConversationMetadataTopic(
+    thread: Pick<ThreadVM, "attentionState" | "slaState">,
+    metadata?: ThreadTopicTitleInput["conversationMetadata"],
+): string | null {
+    const action = metadata?.actionLabel?.trim();
+    if (action && !isGenericChannelTitle(action)) return action;
+
+    const topic = metadata?.topic?.trim();
+    if (topic && !isGenericChannelTitle(topic)) return topic;
+
+    const family = metadata?.familyLabel?.trim();
+    if (family && !isGenericChannelTitle(family)) return family;
+
+    if (thread.attentionState?.trim()) {
+        const attention = thread.attentionState.trim();
+        if (!isGenericChannelTitle(attention)) return attention;
+    }
+
+    if (thread.slaState?.trim()) {
+        const sla = thread.slaState.trim();
+        if (!isGenericChannelTitle(sla)) return sla;
+    }
+
+    return null;
+}
+
+/**
+ * Conversation topic title for Activity embed — business context first, channel icon carries transport.
+ * Priority: explicit thread title → workflow/action → message subject → metadata → General.
+ */
 export function deriveThreadTopicTitle(input: ThreadTopicTitleInput): string {
     const fromThread = input.thread.subject?.trim();
     if (fromThread && !isGenericChannelTitle(fromThread)) return fromThread;
 
+    const workflow = input.workflowLabel?.trim();
+    if (workflow && !isGenericChannelTitle(workflow)) return workflow;
+
     const fromMessage = input.messageSubject?.trim();
     if (fromMessage && !isGenericChannelTitle(fromMessage)) return fromMessage;
 
-    const workflow = input.workflowLabel?.trim();
-    if (workflow) return workflow;
-
-    if (input.thread.attentionState?.trim()) {
-        const attention = input.thread.attentionState.trim();
-        if (!isGenericChannelTitle(attention)) return attention;
-    }
+    const fromMetadata = deriveConversationMetadataTopic(input.thread, input.conversationMetadata);
+    if (fromMetadata) return fromMetadata;
 
     return deriveThreadTopicFallback();
 }
@@ -184,4 +228,47 @@ export function deriveThreadReplyRecipientIds(
     messages: ReadonlyArray<ThreadPreviewMessage>,
 ): string[] {
     return deriveThreadParticipantPersonIds(thread, messages);
+}
+
+export type ThreadHeaderMessage = {
+    thread_id?: string | null;
+    direction?: string | null;
+    status?: string | null;
+    channel?: string | null;
+    opened_at?: string | null;
+    delivered_at?: string | null;
+    created_at?: string | null;
+};
+
+/** Rich thread header: latest delivery/read + activity timestamp for selected conversation. */
+export function deriveThreadHeaderSummary(
+    thread: ThreadVM,
+    messages: ReadonlyArray<ThreadHeaderMessage>,
+): {
+    deliveryLabel: string | null;
+    deliveryCls: string | null;
+    activityAt: string | null;
+    readHint: string | null;
+} {
+    const threadMessages = messages.filter((m) => !m.thread_id || m.thread_id === thread.id);
+    const byTime = [...threadMessages].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+    const latest = byTime[0] ?? null;
+    const latestOutbound = byTime.find((m) => m.direction === "outbound") ?? null;
+    const statusSource = latestOutbound ?? latest;
+    const delivery =
+        statusSource?.direction === "outbound"
+            ? messageDeliveryDisplay(statusSource.status, thread.channel, {
+                  openedAt: statusSource.opened_at,
+                  deliveredAt: statusSource.delivered_at,
+              })
+            : statusSource?.direction === "inbound"
+              ? messageDeliveryDisplay("received", thread.channel)
+              : null;
+
+    return {
+        deliveryLabel: delivery?.label ?? null,
+        deliveryCls: delivery?.cls ?? null,
+        activityAt: thread.lastActivityAt ?? latest?.created_at ?? null,
+        readHint: threadReadAvailabilityHint(thread.channel),
+    };
 }

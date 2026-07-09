@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     deriveMessageSenderLabel,
+    deriveThreadHeaderSummary,
     deriveThreadChannelLabel,
     deriveThreadLastPreview,
     deriveThreadMessageSubject,
@@ -76,13 +77,38 @@ describe("threadTopicPresentation", () => {
         ).toBe("Enrollment paperwork");
     });
 
-    it("uses workflow label before General fallback", () => {
+    it("uses workflow label before message subject", () => {
         expect(
             deriveThreadTopicTitle({
                 thread: baseThread({ subject: null, channel: "sms" }),
-                workflowLabel: "Waitlist follow-up",
+                workflowLabel: "Tour Scheduling",
+                messageSubject: "Enrollment Packet",
             }),
-        ).toBe("Waitlist follow-up");
+        ).toBe("Tour Scheduling");
+    });
+
+    it("uses explicit thread title for business topics like Tour Scheduling", () => {
+        expect(
+            deriveThreadTopicTitle({
+                thread: baseThread({ subject: "Tour Scheduling" }),
+            }),
+        ).toBe("Tour Scheduling");
+    });
+
+    it("deriveThreadHeaderSummary surfaces delivery and activity for selected thread", () => {
+        const thread = baseThread({ id: "t-del", channel: "sms", lastActivityAt: "2026-07-08T14:00:00Z" });
+        const summary = deriveThreadHeaderSummary(thread, [
+            {
+                thread_id: "t-del",
+                direction: "outbound",
+                status: "delivered",
+                created_at: "2026-07-08T14:00:00Z",
+                delivered_at: "2026-07-08T14:00:00Z",
+            },
+        ]);
+        expect(summary.deliveryLabel).toBe("Delivered");
+        expect(summary.activityAt).toBe("2026-07-08T14:00:00Z");
+        expect(summary.readHint).toBe("Read unavailable for SMS");
     });
 
     it("filters zero-message threads from activity rail", () => {

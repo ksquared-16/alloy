@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, Underline, List, Link2, Smile, Paperclip, FileText, Send, Clock, Check, UserPlus, ChevronDown, Plus } from "lucide-react";
-import { relTime, messageDeliveryDisplay, threadReadAvailabilityHint } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
+import { relTime, messageDeliveryDisplay } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import CommunicationPreferencesEditor from "@/components/admin/communications/CommunicationPreferencesEditor";
 import type { PersonPreferenceProfile, RecipientVM, ThreadVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
@@ -16,6 +16,7 @@ import type { CommandCenterRecordLink } from "@/lib/communications/v2/commandCen
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
 import {
     deriveThreadChannelLabel,
+    deriveThreadHeaderSummary,
     deriveThreadLastPreview,
     deriveThreadMessageSubject,
     deriveThreadTopicTitle,
@@ -858,7 +859,6 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         const activeThread = selectedThread ?? activityThreadList.find((t) => t.id === selectedThreadId) ?? null;
         const activeParticipants = activeThread ? resolveThreadRecipients(activeThread, timelineMessages, allLiveRecipients) : [];
         const activeParticipantSummary = formatThreadParticipantNames(activeParticipants);
-        const activeReadHint = activeThread ? threadReadAvailabilityHint(activeThread.channel) : null;
         return (
             <div data-cc-surface-variant={surfaceVariant} className="flex h-full min-h-0 flex-1 overflow-hidden">
                 {/* TOPIC RAIL — compact conversation browser (~190–220px) */}
@@ -936,23 +936,36 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         {isNewMessageMode ? (
                             <div className="text-[12px] font-semibold text-alloy-juniper">New Message</div>
                         ) : activeThread ? (
-                            <>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-alloy-midnight">
-                                        <span className="inline-flex items-center justify-center rounded-md border border-alloy-stone/15 bg-alloy-stone/[0.04] p-0.5 text-alloy-juniper" aria-label={deriveThreadChannelLabel(activeThread.channel)}>
-                                            <ThreadChannelIcon channel={activeThread.channel} />
-                                        </span>
-                                        {threadDisplayTitle(activeThread, timelineMessages)}
-                                    </span>
-                                    {activeThread.unread > 0 ? (
-                                        <span className="rounded-full bg-alloy-juniper/15 px-2 py-0.5 text-[10px] font-medium text-alloy-juniper">{activeThread.unread} unread</span>
-                                    ) : null}
-                                </div>
-                                <p className="mt-0.5 text-[10px] text-alloy-midnight/50">
-                                    {activeParticipantSummary} · {activeThread.messageCount} messages · {relTime(activeThread.lastActivityAt)}
-                                    {activeReadHint ? ` · ${activeReadHint}` : ""}
-                                </p>
-                            </>
+                            (() => {
+                                const headerTitle = threadDisplayTitle(activeThread, timelineMessages);
+                                const headerSummary = deriveThreadHeaderSummary(activeThread, timelineMessages);
+                                return (
+                                    <div className="space-y-1" data-cc-thread-header-summary>
+                                        <div className="flex flex-wrap items-start gap-2">
+                                            <h3 className="text-[14px] font-semibold leading-tight text-alloy-midnight">{headerTitle}</h3>
+                                            {activeThread.unread > 0 ? (
+                                                <span className="rounded-full bg-alloy-juniper/15 px-2 py-0.5 text-[10px] font-medium text-alloy-juniper">{activeThread.unread} unread</span>
+                                            ) : null}
+                                        </div>
+                                        <p className="text-[11px] font-medium text-alloy-midnight/65">{activeParticipantSummary}</p>
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-alloy-midnight/50">
+                                            <span className="inline-flex items-center gap-1 font-medium text-alloy-midnight/60">
+                                                <ThreadChannelIcon channel={activeThread.channel} className="h-3 w-3" />
+                                                {deriveThreadChannelLabel(activeThread.channel)}
+                                            </span>
+                                            {headerSummary.deliveryLabel ? (
+                                                <span className={headerSummary.deliveryCls ?? "text-alloy-midnight/50"}>{headerSummary.deliveryLabel}</span>
+                                            ) : null}
+                                            {headerSummary.activityAt ? (
+                                                <span className="text-alloy-midnight/45">{relTime(headerSummary.activityAt)}</span>
+                                            ) : null}
+                                        </div>
+                                        {headerSummary.readHint && activeThread.channel === "sms" && headerSummary.deliveryLabel !== "Opened" ? (
+                                            <p className="text-[9px] text-alloy-midnight/40">{headerSummary.readHint}</p>
+                                        ) : null}
+                                    </div>
+                                );
+                            })()
                         ) : (
                             <p className="text-[11px] text-alloy-midnight/55">Select a topic on the left to read messages.</p>
                         )}

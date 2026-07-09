@@ -118,6 +118,12 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(view).toMatch(/\{composerColumn\}/);
     });
 
+    it("activity_embed selected thread header shows topic, participants, channel, delivery", () => {
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        expect(view).toMatch(/data-cc-thread-header-summary/);
+        expect(view).toMatch(/deriveThreadHeaderSummary/);
+    });
+
     it("activity_embed composer uses header-matched BOS control and formatting toolbar", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
         const ui = read("app/adminV2/communications/commsWorkspaceUi.tsx");
