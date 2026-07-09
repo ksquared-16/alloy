@@ -78,6 +78,39 @@ Shared client helper: `web/lib/communications/v2/communicationTemplateDraftSeed.
 
 ---
 
+## Focus Panel Activity embed (July 2026)
+
+**Surface:** `surfaceVariant="activity_embed"` on `FamilyCommunicationWorkspace` inside the Activity cockpit (`OpportunityFocusPanelEmbeddedWorkspace`).
+
+**Operator model:** Conversation **topics** — business context titles (Tour Scheduling, Enrollment Packet, General) — with SMS/Email icons indicating transport only. Transport threads remain per-recipient/channel under the hood (`THREAD_SEMANTICS.md`); the Activity UI merges them into a topic rail + read/compose pane.
+
+**Load path (canonical embedded workspace doctrine):**
+
+```
+Selected record (queue row)
+  → Preview VM on drawer/focus payload (first paint)
+  → Activity embed renders immediately (channels, recipients, recent threads, composer)
+  → Background prefetch → full FamilyCommunicationWorkspace VM
+  → Warm cache (`drawerFamilyWorkspacePrefetchCache`) on revisit
+```
+
+**Topic rail:** `threadsForActivityTopicRail` hides zero-message threads; titles from `deriveThreadTopicTitle` (thread subject → workflow → message subject → metadata → General).
+
+**Reply vs New Message:**
+
+| Mode | Selection | Composer channel | Recipients |
+|------|-----------|------------------|------------|
+| **Thread selected** | `selectedThreadId` set | Defaults to thread channel | Thread transport participants only |
+| **+ New** | `selectedThreadId` null | Operator choice | Household defaults |
+
+**Presentation helpers:** `web/lib/communications/v2/familyWorkspace/threadTopicPresentation.ts`, `timelinePresentation.ts`.
+
+**Out of scope for Activity embed:** provider onboarding, compliance enforcement UI, inbound email setup, Settings bindings, Command Center modal layout, send runtime changes.
+
+Sprint closeout: `docs/sprints/2026-07/communications-activity-sprint-closeout.md`.
+
+---
+
 ## Related
 
 - `../../product/communications.md` (transitional expanded reference)

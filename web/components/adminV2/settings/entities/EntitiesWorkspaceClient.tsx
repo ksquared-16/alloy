@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ConfigLockBanner from "@/components/admin/ConfigLockBanner";
 import {
     CONFIG_WORKSPACE_GHOST_ACTION_CLASS,
-    CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS,
     CONFIG_WORKSPACE_ROW_CLASS,
     CONFIG_WORKSPACE_ROW_EXPANDED_CLASS,
     CONFIG_WORKSPACE_ROW_INNER_CLASS,
@@ -317,36 +316,41 @@ export default function EntitiesWorkspaceClient() {
     }
 
     const industryOptions = industries.filter((i) => i.key !== "generic").sort((a, b) => a.label.localeCompare(b.label));
+    const showIndustrySelector = industryOptions.length > 1;
 
     return (
         <div className="min-w-0 space-y-3" data-testid="entities-workspace">
             {configLocked ? <ConfigLockBanner /> : null}
 
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-alloy-forge/12 bg-alloy-stone/[0.2] px-3 py-2.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Industry</label>
-                <select
-                    value={data.org_industry_id ?? GENERIC_VALUE}
-                    onChange={(e) => void handleIndustryChange(e.target.value)}
-                    disabled={!canMutate || industrySaving || configLocked}
-                    className="rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm disabled:opacity-60"
-                    data-testid="entities-industry-select"
-                >
-                    <option value={GENERIC_VALUE}>Generic</option>
-                    {industryOptions.map((i) => (
-                        <option key={i.id} value={i.id}>
-                            {i.label}
-                        </option>
-                    ))}
-                </select>
-                {industrySaving ? <span className="text-[11px] text-alloy-midnight/45">Saving…</span> : null}
-            </div>
+            {showIndustrySelector ? (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-alloy-forge/12 bg-alloy-stone/[0.2] px-3 py-2.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                        Industry
+                    </label>
+                    <select
+                        value={data.org_industry_id ?? GENERIC_VALUE}
+                        onChange={(e) => void handleIndustryChange(e.target.value)}
+                        disabled={!canMutate || industrySaving || configLocked}
+                        className="rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1.5 text-sm disabled:opacity-60"
+                        data-testid="entities-industry-select"
+                    >
+                        <option value={GENERIC_VALUE}>Generic</option>
+                        {industryOptions.map((i) => (
+                            <option key={i.id} value={i.id}>
+                                {i.label}
+                            </option>
+                        ))}
+                    </select>
+                    {industrySaving ? <span className="text-[11px] text-alloy-midnight/45">Saving…</span> : null}
+                </div>
+            ) : null}
 
             <p className="text-[12px] text-alloy-midnight/55">
                 Name the record types your team sees across queues, drawers, and workflows. These names match the Data
                 Model entity rail.
             </p>
 
-            <div className={CONFIG_WORKSPACE_INLINE_EDITOR_SHELL_CLASS}>
+            <div className="min-w-0 w-full">
                 <div className="overflow-hidden rounded-lg border border-alloy-forge/12 bg-white">
                     {hubEntities.map((entity) => {
                         const defaults = defaultsByType.get(entity.labelsKey);

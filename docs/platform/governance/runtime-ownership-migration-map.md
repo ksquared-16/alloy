@@ -51,6 +51,20 @@ These modules **remain authoritative**; only surrounding owners changed:
 
 ---
 
+## Focus Panel Activity communications (July 2026)
+
+| Concern | Owner | Notes |
+| ------- | ----- | ----- |
+| Activity cockpit layout / flex height chain | `InlineOpportunityFocusPanel.tsx`, `OpportunityFocusPanelEmbeddedWorkspace.tsx`, `alloyOsRuntime.css` | Protected flex chain — see `adminv2-runtime-performance-doctrine.md` |
+| Communications **presentation** in Activity | `FamilyCommunicationWorkspaceView.tsx` (`activity_embed` branch only) | Topic rail + read/compose; Command Center modal path unchanged |
+| Communications **data + send** | `FamilyCommunicationWorkspace.tsx`, `resolveFamilyCommunicationWorkspace`, `family-send` API | Preview VM → warm cache → full VM; no parallel send runtime |
+| Topic title / participant derivation | `threadTopicPresentation.ts` | Pure helpers; transport thread → business topic |
+| Preview VM first paint | `resolveFamilyCommunicationWorkspacePreview.ts`, drawer VM compose | Path C — selected record carries `communicationsPreviewVm` |
+
+Do **not** move send eligibility, provider bindings, or compliance into Activity embed UI-only work.
+
+---
+
 ## Protected doctrine test suite
 
 When updating tests after an ownership migration:

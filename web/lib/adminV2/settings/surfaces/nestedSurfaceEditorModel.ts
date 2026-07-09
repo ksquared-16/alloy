@@ -244,9 +244,11 @@ export function availableFieldsForNestedGroup(
     const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
     if (!def) return [];
     const selected = new Set(selectedFieldKeys(config, groupKey));
-    return availableFieldsForNamespaces(def.acceptedNamespaces, tenantFieldDefinitions).filter(
-        (f) => !selected.has(f.key),
-    );
+    const namespaces =
+        surfaceId === CHILDREN_SURFACE_ID && isEvidenceSection(surfaceId, groupKey)
+            ? (["child", "inquiry_child"] as const)
+            : def.acceptedNamespaces;
+    return availableFieldsForNamespaces(namespaces, tenantFieldDefinitions).filter((f) => !selected.has(f.key));
 }
 
 function patchGroup(

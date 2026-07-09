@@ -19,16 +19,14 @@ import {
     computeTemplateWorkspaceKpis,
 } from "@/lib/communications/v2/communicationsWorkspaceKpiModel";
 import type { KpiState } from "@/components/workspace/kpiSemantics";
-import type { ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
+import type { ProcessCardAccent, ProcessCardIcon } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 
-function accentForState(state?: KpiState): ProcessCardAccent {
+function accentForState(state: KpiState): ProcessCardAccent {
     switch (state) {
         case "ready":
             return "pine";
         case "attention":
             return "gold";
-        case "critical":
-            return "ember";
         case "done":
             return "midnight";
         default:
@@ -36,18 +34,43 @@ function accentForState(state?: KpiState): ProcessCardAccent {
     }
 }
 
-function statusForState(state?: KpiState): WorkspaceMetricStatus {
+function statusForState(state: KpiState): WorkspaceMetricStatus {
     switch (state) {
         case "ready":
             return "healthy";
         case "attention":
             return "warning";
-        case "critical":
-            return "critical";
         default:
             return "unknown";
     }
 }
+
+function metric(
+    key: string,
+    label: string,
+    value: string,
+    state: KpiState,
+    icon: ProcessCardIcon
+): WorkspaceMetricTileItem {
+    return {
+        key,
+        label,
+        value,
+        icon,
+        accent: accentForState(state),
+        status: statusForState(state),
+    };
+}
+
+const TAB_EYEBROW: Partial<Record<CommunicationsModalTab, string>> = {
+    overview: "Overview",
+    inbox: "Inbox",
+    templates: "Templates",
+    announcements: "Announcements",
+    scheduled: "Scheduled",
+    channels: "Channels",
+    branding: "Branding",
+};
 
 export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeTab: CommunicationsModalTab }) {
     const { inbox, templates, announcements } = useCommunicationsWorkspaceKpi();
@@ -58,37 +81,66 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
 
     let items: WorkspaceMetricTileItem[] = [];
     let loading = false;
-    let eyebrow = "Status";
 
-    if (activeTab === "inbox") {
+    if (activeTab === "overview") {
+        const m = inbox.metrics;
+        const announcementKpis = computeAnnouncementWorkspaceKpis(announcements.rows);
+        loading = inboxLoading || announcementsLoading;
+        items = [
+            metric("needs_reply", "Needs reply", String(m?.requiresResponse ?? 0), "pending", "message"),
+            metric("unread", "Unread", String(m?.unread ?? 0), "attention", "book"),
+            metric("scheduled", "Scheduled", String(announcementKpis.scheduled), "pending", "calendar"),
+            metric("sent", "Sent (7d)", String(announcementKpis.sentRecently), "done", "book"),
+        ];
+    } else if (activeTab === "inbox") {
         const m = inbox.metrics;
         loading = inboxLoading;
-        eyebrow = "Inbox";
         items = [
-            { key: "needs_reply", label: "Needs reply", value: String(m?.requiresResponse ?? 0), icon: "message", accent: accentForState("pending"), status: statusForState("pending") },
-            { key: "overdue", label: "Overdue", value: String(m?.slaAtRisk ?? 0), icon: "shield", accent: accentForState("attention"), status: statusForState("attention") },
-            { key: "unread", label: "Unread", value: String(m?.unread ?? 0), icon: "book", accent: accentForState("attention"), status: statusForState("attention") },
-            { key: "needs_review", label: NEEDS_REVIEW_STATUS_LABEL, value: String(m?.unclassified ?? 0), icon: "clipboard", accent: accentForState("pending"), status: statusForState("pending") },
+            metric("needs_reply", "Needs reply", String(m?.requiresResponse ?? 0), "pending", "message"),
+            metric("overdue", "Overdue", String(m?.slaAtRisk ?? 0), "attention", "shield"),
+            metric("unread", "Unread", String(m?.unread ?? 0), "attention", "book"),
+            metric("needs_review", NEEDS_REVIEW_STATUS_LABEL, String(m?.unclassified ?? 0), "pending", "clipboard"),
         ];
     } else if (activeTab === "templates") {
         const k = computeTemplateWorkspaceKpis(templates.rows);
         loading = templatesLoading;
-        eyebrow = "Templates";
         items = [
-            { key: "active", label: "Active", value: String(k.active), icon: "spark", accent: accentForState("ready"), status: statusForState("ready") },
-            { key: "draft", label: "Draft", value: String(k.draft), icon: "layers", accent: accentForState("pending"), status: statusForState("pending") },
-            { key: "categories", label: "Categories", value: String(k.categories), icon: "grid", accent: accentForState("neutral"), status: statusForState("neutral") },
-            { key: "last_updated", label: "Last updated", value: k.lastUpdatedLabel, icon: "calendar", accent: accentForState("done"), status: statusForState("done") },
+            metric("active", "Active", String(k.active), "ready", "spark"),
+            metric("draft", "Draft", String(k.draft), "pending", "layers"),
+            metric("categories", "Categories", String(k.categories), "neutral", "grid"),
+            metric("last_updated", "Last updated", k.lastUpdatedLabel, "done", "calendar"),
         ];
     } else if (activeTab === "announcements") {
         const k = computeAnnouncementWorkspaceKpis(announcements.rows);
         loading = announcementsLoading;
-        eyebrow = "Announcements";
         items = [
-            { key: "draft", label: "Draft", value: String(k.draft), icon: "layers", accent: accentForState("pending"), status: statusForState("pending") },
-            { key: "scheduled", label: "Scheduled", value: String(k.scheduled), icon: "calendar", accent: accentForState("pending"), status: statusForState("pending") },
-            { key: "active", label: "Active", value: String(k.active), icon: "spark", accent: accentForState("ready"), status: statusForState("ready") },
-            { key: "sent_recently", label: "Sent (7d)", value: String(k.sentRecently), icon: "book", accent: accentForState("done"), status: statusForState("done") },
+            metric("draft", "Draft", String(k.draft), "pending", "layers"),
+            metric("scheduled", "Scheduled", String(k.scheduled), "pending", "calendar"),
+            metric("active", "Active", String(k.active), "ready", "spark"),
+            metric("sent_recently", "Sent (7d)", String(k.sentRecently), "done", "book"),
+        ];
+    } else if (activeTab === "scheduled") {
+        const k = computeAnnouncementWorkspaceKpis(announcements.rows);
+        loading = announcementsLoading;
+        items = [
+            metric("scheduled", "Scheduled", String(k.scheduled), "pending", "calendar"),
+            metric("draft", "Draft", String(k.draft), "neutral", "layers"),
+            metric("active", "Active", String(k.active), "ready", "spark"),
+            metric("sent_recently", "Sent (7d)", String(k.sentRecently), "done", "book"),
+        ];
+    } else if (activeTab === "channels") {
+        items = [
+            metric("email", "Email", "-", "ready", "message"),
+            metric("sms", "SMS", "-", "ready", "message"),
+            metric("in_app", "In-app", "Active", "ready", "spark"),
+            metric("push", "Push", "Soon", "neutral", "bolt"),
+        ];
+    } else if (activeTab === "branding") {
+        items = [
+            metric("identity", "Identity", "-", "neutral", "grid"),
+            metric("reply_to", "Reply-to", "-", "neutral", "message"),
+            metric("signature", "Signature", "-", "neutral", "book"),
+            metric("colors", "Colors", "-", "neutral", "layers"),
         ];
     }
 
@@ -98,7 +150,7 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
         <div className="flex w-full min-w-0 items-center gap-3" data-comms-workspace-kpi-band="true" data-testid="comms-workspace-kpi-band">
             <p className={WS_METRIC_EYEBROW_INLINE}>
                 <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-alloy-midnight/45" aria-hidden />
-                {eyebrow}
+                {TAB_EYEBROW[activeTab] ?? "Status"}
             </p>
             <WorkspaceMetricTiles items={items} size="md" align="start" loading={loading} ariaLabel="Communications status" className="min-w-0 flex-1" />
         </div>
