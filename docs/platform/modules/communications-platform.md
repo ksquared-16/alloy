@@ -78,11 +78,11 @@ Shared client helper: `web/lib/communications/v2/communicationTemplateDraftSeed.
 
 ---
 
-## Focus Panel Activity embed (July 2026)
+## Focus Panel Activity embed (July 2026) — **frozen**
 
 **Surface:** `surfaceVariant="activity_embed"` on `FamilyCommunicationWorkspace` inside the Activity cockpit (`OpportunityFocusPanelEmbeddedWorkspace`).
 
-**Operator model:** Conversation **topics** — business context titles (Tour Scheduling, Enrollment Packet, General) — with SMS/Email icons indicating transport only. Transport threads remain per-recipient/channel under the hood (`THREAD_SEMANTICS.md`); the Activity UI merges them into a topic rail + read/compose pane.
+**Operator model:** Conversation **topics** — business context titles (Tour Scheduling, Enrollment Packet, General) — with SMS/Email icons indicating transport only. Transport threads remain per-recipient/channel under the hood (`THREAD_SEMANTICS.md`); the Activity UI presents a topic rail + read/compose pane.
 
 **Load path (canonical embedded workspace doctrine):**
 
@@ -94,20 +94,24 @@ Selected record (queue row)
   → Warm cache (`drawerFamilyWorkspacePrefetchCache`) on revisit
 ```
 
-**Topic rail:** `threadsForActivityTopicRail` hides zero-message threads; titles from `deriveThreadTopicTitle` (thread subject → workflow → message subject → metadata → General).
+Full doctrine: [`../../sprints/2026-07/communications-preview-vm-doctrine.md`](../../sprints/2026-07/communications-preview-vm-doctrine.md).
+
+**Topic rail:** `threadsForActivityTopicRail` hides zero-message threads; titles from `deriveThreadTopicTitle` (email: thread subject → workflow → message subject → metadata → General; SMS: session continuity, no message-subject fallback).
 
 **Reply vs New Message:**
 
-| Mode | Selection | Composer channel | Recipients |
-|------|-----------|------------------|------------|
-| **Thread selected** | `selectedThreadId` set | Defaults to thread channel | Thread transport participants only |
-| **+ New** | `selectedThreadId` null | Operator choice | Household defaults |
+| Mode | Selection | Composer | Recipients |
+|------|-----------|----------|------------|
+| **Thread selected** | `selectedThreadId` set | Collapsed Reply → expand; channel locked | Thread transport participants only |
+| **+ New** | `selectedThreadId` null | Expanded immediately | Household defaults |
 
-**Presentation helpers:** `web/lib/communications/v2/familyWorkspace/threadTopicPresentation.ts`, `timelinePresentation.ts`.
+**Post-send lifecycle:** Confirm send keeps thread selected (or opens `createdThreadId` from new message); composer clears; reply bar collapses; timeline reloads.
 
-**Out of scope for Activity embed:** provider onboarding, compliance enforcement UI, inbound email setup, Settings bindings, Command Center modal layout, send runtime changes.
+**Presentation helpers:** `threadTopicPresentation.ts`, `timelinePresentation.ts`.
 
-Sprint closeout: `docs/sprints/2026-07/communications-activity-sprint-closeout.md`.
+**Out of scope (next sprint):** attachments, rich editor, Settings/provider onboarding, compliance UX, inbound email, Test Email/SMS, Announcements/Templates expansion. Command Center modal layout and send runtime unchanged.
+
+Sprint closeout: [`../../sprints/2026-07/communications-activity-sprint-closeout.md`](../../sprints/2026-07/communications-activity-sprint-closeout.md).
 
 ---
 
