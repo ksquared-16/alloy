@@ -10,6 +10,7 @@
 import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
 import type { WorkspaceHeaderKpiVm } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import type { ProcessCardAccent, ProcessCardIcon } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
+import { WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
 
 export type WorkspaceMetricStatus = "healthy" | "warning" | "critical" | "unknown";
 
@@ -25,13 +26,24 @@ export interface WorkspaceMetricTileItem {
 export type WorkspaceMetricTilesSize = "sm" | "md";
 export type WorkspaceMetricTilesAlign = "start" | "end";
 
+/** Accent ring on icon wells — visual anchor without module themes. */
+const ACCENT_ICON_RING: Partial<Record<ProcessCardAccent, string>> = {
+    pine: "[&_[data-work-unit-header-kpi-icon-well]]:ring-1 [&_[data-work-unit-header-kpi-icon-well]]:ring-alloy-bend-pine/28",
+    blue: "[&_[data-work-unit-header-kpi-icon-well]]:ring-1 [&_[data-work-unit-header-kpi-icon-well]]:ring-alloy-blue/25",
+    ember: "[&_[data-work-unit-header-kpi-icon-well]]:ring-1 [&_[data-work-unit-header-kpi-icon-well]]:ring-alloy-ember/28",
+    midnight:
+        "[&_[data-work-unit-header-kpi-icon-well]]:ring-1 [&_[data-work-unit-header-kpi-icon-well]]:ring-alloy-midnight-forge/22",
+    stone: "[&_[data-work-unit-header-kpi-icon-well]]:ring-1 [&_[data-work-unit-header-kpi-icon-well]]:ring-alloy-stone/50",
+    gold: "[&_[data-work-unit-header-kpi-icon-well]]:ring-1 [&_[data-work-unit-header-kpi-icon-well]]:ring-alloy-gold-dark/30",
+};
+
 /**
- * Polished metric tile overrides — spacing unchanged; reduced value weight; clearer labels/icons.
- * `md` used in Processing nav band; `sm` for compact full-width strips (Communications).
+ * Canonical metric tile overrides — accent icon wells from processCardAccentStyles;
+ * numbers intentionally quieter than action cards; labels use secondary hierarchy.
  */
 const SIZE_OVERRIDES: Record<WorkspaceMetricTilesSize, string> = {
-    sm: "[&_[data-work-unit-header-kpi]]:min-w-0 [&_[data-work-unit-header-kpi-value]]:text-[17px] [&_[data-work-unit-header-kpi-value]]:font-semibold [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:text-alloy-midnight/60 [&_[data-work-unit-header-kpi-icon-well]]:bg-alloy-midnight-forge/[0.08] [&_[data-work-unit-header-kpi-icon]]:opacity-100",
-    md: "[&_[data-work-unit-header-kpi]]:min-w-[8.05rem] [&_[data-work-unit-header-kpi]]:gap-2.5 [&_[data-work-unit-header-kpi]]:px-3 [&_[data-work-unit-header-kpi]]:py-2.5 [&_[data-work-unit-header-kpi-icon-well]]:h-[41px] [&_[data-work-unit-header-kpi-icon-well]]:w-[41px] [&_[data-work-unit-header-kpi-icon-well]]:bg-alloy-midnight-forge/[0.08] [&_[data-work-unit-header-kpi-icon]]:opacity-100 [&_[data-work-unit-header-kpi-value]]:text-[19px] [&_[data-work-unit-header-kpi-value]]:font-semibold [&_[data-work-unit-header-kpi-value]]:text-alloy-midnight [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:text-[11px] [&_[data-work-unit-header-kpi-label]]:text-alloy-midnight/60",
+    sm: `[&_[data-work-unit-header-kpi]]:min-w-0 [&_[data-work-unit-header-kpi-value]]:!font-medium [&_[data-work-unit-header-kpi-value]]:text-[16px] [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:${WS_TEXT_SECONDARY} [&_[data-work-unit-header-kpi-icon]]:!opacity-100`,
+    md: `[&_[data-work-unit-header-kpi]]:min-w-[8.05rem] [&_[data-work-unit-header-kpi]]:gap-2.5 [&_[data-work-unit-header-kpi]]:px-3 [&_[data-work-unit-header-kpi]]:py-2.5 [&_[data-work-unit-header-kpi-icon-well]]:h-[41px] [&_[data-work-unit-header-kpi-icon-well]]:w-[41px] [&_[data-work-unit-header-kpi-icon]]:!opacity-100 [&_[data-work-unit-header-kpi-value]]:!font-medium [&_[data-work-unit-header-kpi-value]]:text-[18px] [&_[data-work-unit-header-kpi-value]]:text-alloy-midnight [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:text-[11px] [&_[data-work-unit-header-kpi-label]]:${WS_TEXT_SECONDARY}`,
 };
 
 function toKpiVm(item: WorkspaceMetricTileItem, index: number, loading: boolean): WorkspaceHeaderKpiVm {
@@ -72,7 +84,11 @@ export default function WorkspaceMetricTiles({
             aria-busy={loading}
         >
             {items.map((item, index) => (
-                <div key={item.key} role="listitem" className="min-w-0">
+                <div
+                    key={item.key}
+                    role="listitem"
+                    className={`min-w-0 ${item.accent ? (ACCENT_ICON_RING[item.accent] ?? "") : ""}`.trim()}
+                >
                     <SurfaceHeaderKpiCard
                         kpi={toKpiVm(item, index, loading)}
                         interactive={false}

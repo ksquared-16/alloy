@@ -9,7 +9,7 @@ import { useCallback, useRef, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceDivider from "@/components/workspace/WorkspaceDivider";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
-import { WS_CANVAS, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
+import { WS_ACTION_SECONDARY, WS_CANVAS, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
 import ProcessingQueueList from "@/app/adminV2/processing/ProcessingQueueList";
 import ProcessingImportAction from "./ProcessingImportAction";
 import { usePosCase } from "./usePosCase";
@@ -120,7 +120,7 @@ export default function PosProcessingWorkspace({
                                     <button
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/70 hover:border-alloy-bend-pine/30"
+                                        className={WS_ACTION_SECONDARY}
                                     >
                                         Import form
                                     </button>

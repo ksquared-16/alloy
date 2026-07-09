@@ -17,7 +17,7 @@ import { WS_FIELD_CANVAS, WS_SHELL_INSET } from "@/components/workspace/workspac
  *
  * ## Layer model (Operational Workspace Doctrine V2)
  * 1. White modal shell — header + nav
- * 2. Inset stone workspace field (~16px gutter, ~4% stone canvas)
+ * 2. Inset stone workspace field (~16px gutter, ~7% stone canvas)
  * 3. White contained surfaces (cards, zones, queues) — module children
  * 4. Interactive objects — buttons, rows, selections
  *

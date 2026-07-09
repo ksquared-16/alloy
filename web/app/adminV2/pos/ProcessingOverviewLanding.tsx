@@ -162,7 +162,7 @@ export default function ProcessingOverviewLanding({
                 </section>
                 {importErr ? <p className={`text-[11px] ${WS_TEXT_SECONDARY}`}>{importErr}</p> : null}
 
-                <div className="grid gap-5 lg:grid-cols-3">
+                <div className="grid gap-6 lg:grid-cols-3">
                     <ContinuePanel title="Recent work" action="View all" onAction={onOpenWork}>
                         {recentRows.length === 0 ? (
                             <EmptyHint>No active imports yet — import a form to begin.</EmptyHint>
@@ -217,17 +217,17 @@ export default function ProcessingOverviewLanding({
                         )}
                     </ContinuePanel>
 
-                    <section>
-                        <header className="mb-3 flex items-center justify-between gap-2">
+                    <WorkspaceCard flat padded className="px-4 py-3">
+                        <header className="mb-2 flex items-center justify-between gap-2">
                             <h2 className={`text-[13px] font-semibold ${WS_TEXT_PRIMARY}`}>Folders</h2>
                         </header>
-                        <ul className="divide-y divide-alloy-stone/12 overflow-hidden rounded-xl bg-white shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
+                        <ul className="divide-y divide-alloy-stone/12">
                             {navFolders.map((folder) => (
                                 <li key={folder.id}>
                                     <button
                                         type="button"
                                         onClick={onOpenWork}
-                                        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-alloy-stone/[0.03]"
+                                        className="flex w-full items-center justify-between px-1 py-2.5 text-left transition-colors hover:bg-alloy-stone/[0.04]"
                                     >
                                         <span className="flex min-w-0 items-center gap-2">
                                             <ProcessingFolderIcon folderId={folder.id} className={`h-3.5 w-3.5 shrink-0 ${WS_ICON_STRUCTURAL}`} />
@@ -241,7 +241,7 @@ export default function ProcessingOverviewLanding({
                                 </li>
                             ))}
                         </ul>
-                    </section>
+                    </WorkspaceCard>
                 </div>
             </div>
         </WorkspaceSurface>
@@ -260,9 +260,9 @@ function ContinuePanel({
     children: ReactNode;
 }) {
     return (
-        <WorkspaceCard flat padded className="px-4 py-3">
-            <header className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-[13px] font-semibold text-alloy-midnight">{title}</h2>
+        <WorkspaceCard flat padded className="px-4 py-3.5">
+            <header className="mb-2.5 flex items-center justify-between gap-2">
+                <h2 className={`text-[13px] font-semibold ${WS_TEXT_PRIMARY}`}>{title}</h2>
                 <button type="button" onClick={onAction} className="text-[11px] font-semibold text-alloy-bend-pine hover:underline">
                     {action} →
                 </button>

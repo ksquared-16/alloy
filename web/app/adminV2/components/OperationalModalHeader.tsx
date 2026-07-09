@@ -1,28 +1,24 @@
 "use client";
 
 /**
- * Operational Workspace Shell — canonical modal header.
+ * Operational Workspace Shell — canonical compact modal header band.
  *
  * One header rhythm for every operational module surface (Communications, Processing,
- * Work Items, Operational Intelligence, and future operational modules). It borrows the
- * Focus Panel header language — a Bend Pine left accent + top wash, a bare module glyph
- * (no tile background), and a strong title — adapted for module-level workspaces
- * (no record chrome, no decorative hero, no explanatory subtitle).
+ * Work Items, and future operational modules). Compact top band: icon + title + optional
+ * subtitle on the left, actions + Close on the right. Mode nav (Work | Studio) stacks
+ * directly beneath — no tall standalone hero header.
  *
- *   ┃ icon  Title ……………………………… [secondary] [primary] [Close]
- *   ^ Bend Pine accent
- *
- * Below this header, surfaces stack (in order): KPI/status strip → Work/Studio mode
- * switch → child-section nav → queue/workspace body. Modules pass icon, title, and
- * optional actions; this component owns structure, spacing, identity treatment, accent,
- * and the Close affordance so siblings stay visually identical. Identity is carried by
- * icon + title + accent + actions — never prose.
+ *   ┃ icon  Title                    [secondary] [primary] [Close]
+ *         subtitle (muted)
+ *   ^ Bend Pine left accent
  */
 
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 
-/** Primary action (Bend Pine / juniper). Matches comms Compose New + OIP primary. */
+import { WS_TEXT_MUTED, WS_TEXT_PRIMARY, WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
+
+/** Primary action (Bend Pine). Matches comms Compose New + Work Items New task. */
 export const OPERATIONAL_PRIMARY_ACTION_CLASS =
     "inline-flex items-center gap-1.5 rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-alloy-bend-pine/90 disabled:opacity-50";
 /** Secondary action (calm outline). */
@@ -53,23 +49,24 @@ export default function OperationalModalHeader({
 }) {
     return (
         <header
-            className="flex w-full shrink-0 items-center justify-between gap-4 border-b border-alloy-stone/15 border-l-[3px] border-l-alloy-bend-pine bg-gradient-to-b from-alloy-bend-pine/[0.06] to-white px-4 py-2.5"
+            className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-alloy-stone/18 border-l-2 border-l-alloy-bend-pine bg-white px-4 py-1.5"
             data-operational-modal-header="true"
+            data-workspace-header-compact="true"
         >
-            <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex min-w-0 items-center gap-2">
                 <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center text-alloy-midnight"
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center ${WS_TEXT_PRIMARY}`}
                     data-operational-modal-header-icon="true"
                     aria-hidden
                 >
                     {icon}
                 </span>
-                <div className="min-w-0">
-                    <h2 id={titleId} className="truncate text-[15px] font-bold leading-tight text-alloy-midnight">
+                <div className="min-w-0 leading-tight">
+                    <h2 id={titleId} className={`truncate text-[14px] font-semibold ${WS_TEXT_PRIMARY}`}>
                         {title}
                     </h2>
                     {subtitle ? (
-                        <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/50">{subtitle}</p>
+                        <p className={`truncate text-[11px] ${WS_TEXT_SECONDARY}`}>{subtitle}</p>
                     ) : null}
                 </div>
             </div>
@@ -79,7 +76,7 @@ export default function OperationalModalHeader({
                 <button
                     type="button"
                     onClick={onClose}
-                    className="inline-flex items-center gap-1 rounded-lg border border-alloy-stone/20 px-2 py-1 text-[11px] font-semibold text-alloy-forge hover:bg-alloy-stone/[0.06]"
+                    className={`inline-flex items-center gap-1 rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px] font-semibold ${WS_TEXT_MUTED} hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight`}
                     aria-label={closeLabel}
                 >
                     <X className="h-3.5 w-3.5" aria-hidden strokeWidth={2} />

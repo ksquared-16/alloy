@@ -28,6 +28,12 @@ export const PROCESSING_BODY = `text-[11px] leading-snug ${WS_TEXT_SECONDARY}`;
 /** Metadata lines — secondary hierarchy. */
 export const PROCESSING_METADATA = `text-[10px] leading-snug ${WS_TEXT_SECONDARY}`;
 
+/** Queue row title — compact scan density for operational queue rails. */
+export const PROCESSING_QUEUE_ROW_TITLE = `text-[11px] font-medium leading-snug ${WS_TEXT_PRIMARY}`;
+
+/** Queue row metadata — supporting lines beneath title. */
+export const PROCESSING_QUEUE_METADATA = `text-[9px] leading-snug ${WS_TEXT_SECONDARY}`;
+
 /** Field labels in forms — secondary hierarchy (uppercase band). */
 export const PROCESSING_FIELD_LABEL =
     `text-[10px] font-semibold uppercase tracking-[0.08em] ${WS_TEXT_SECONDARY}`;

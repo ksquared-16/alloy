@@ -15,9 +15,7 @@ import {
 import {
     PROCESSING_BODY,
     PROCESSING_DISABLED,
-    PROCESSING_FIELD_LABEL,
     PROCESSING_METADATA,
-    PROCESSING_PANEL_EYEBROW,
     PROCESSING_ROW_TITLE,
 } from "@/lib/pos/processingPresentationTokens";
 
@@ -97,15 +95,17 @@ export function ProcessingQuestionReviewList({
 
     return (
         <>
-            <p className={`mb-3 ${PROCESSING_METADATA}`}>
+            <p className={`mb-2 ${PROCESSING_METADATA}`}>
                 {activeCount} active question{activeCount === 1 ? "" : "s"}
                 {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
             </p>
-            <div className="space-y-2">
+            <div className="space-y-1">
                 {sections.map((section) => (
-                    <section key={section.title} className="py-4 first:pt-0 last:pb-0">
-                        <h3 className={`mb-3 ${PROCESSING_PANEL_EYEBROW}`}>{section.title}</h3>
-                        <ol className="space-y-2">
+                    <section key={section.title} className="py-2 first:pt-0 last:pb-0">
+                        <h3 className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.06em] ${PROCESSING_METADATA}`}>
+                            {section.title}
+                        </h3>
+                        <ol className="space-y-1.5">
                             {section.questions.map((q) => {
                                 const sel = selectedId === q.id;
                                 const isEditing = editingId === q.id;
@@ -122,7 +122,7 @@ export function ProcessingQuestionReviewList({
                                         key={q.id}
                                         data-testid={`review-question-${q.id}`}
                                         data-question-ignored={q.ignored ? "true" : undefined}
-                                        className={`rounded-lg px-2.5 py-2.5 transition-colors ${sel ? "bg-alloy-bend-pine/[0.04]" : "hover:bg-alloy-stone/[0.03]"} ${q.ignored ? "opacity-55" : ""}`}
+                                        className={`rounded-lg px-2 py-2 transition-colors ${sel ? "bg-alloy-bend-pine/[0.05]" : "hover:bg-alloy-stone/[0.03]"} ${q.ignored ? "opacity-55" : ""}`}
                                     >
                                         <div className="flex items-start gap-2.5">
                                             <button
@@ -133,7 +133,7 @@ export function ProcessingQuestionReviewList({
                                                 <span className={PROCESSING_METADATA}>
                                                     {q.evidenceLabel || "Untitled source field"}
                                                 </span>
-                                                <span className={`${PROCESSING_ROW_TITLE} leading-snug`}>
+                                                <span className={`${PROCESSING_ROW_TITLE} text-[12px] leading-snug`}>
                                                     {q.displayLabel || (
                                                         <span className={`font-normal ${PROCESSING_DISABLED}`}>Untitled question</span>
                                                     )}
@@ -201,9 +201,9 @@ export function ProcessingQuestionReviewList({
                                         </div>
 
                                         {!q.ignored && sel ? (
-                                            <div className="mt-4 space-y-3">
+                                            <div className="mt-3 space-y-2.5">
                                                 <div>
-                                                    <label className={`mb-1 block ${PROCESSING_FIELD_LABEL}`}>
+                                                    <label className={`mb-1 block ${PROCESSING_METADATA}`}>
                                                         Destination
                                                     </label>
                                                     <select
@@ -226,7 +226,7 @@ export function ProcessingQuestionReviewList({
                                                 </div>
                                                 {showNameRep ? (
                                                     <div>
-                                                        <label className={`mb-1 block ${PROCESSING_FIELD_LABEL}`}>
+                                                        <label className={`mb-1 block ${PROCESSING_METADATA}`}>
                                                             Name format
                                                         </label>
                                                         <div className="flex flex-wrap gap-1">
@@ -264,7 +264,7 @@ export function ProcessingQuestionReviewList({
                                         ) : null}
 
                                         {isEditing && !q.ignored ? (
-                                            <div className="mt-4 space-y-2">
+                                            <div className="mt-3 space-y-2">
                                                 <input
                                                     value={q.displayLabel}
                                                     onChange={(e) => onUpdate(q.id, { displayLabel: e.target.value })}

@@ -15,6 +15,7 @@
 
 import { useRef, useState } from "react";
 import type { PageMap } from "@/lib/pos/processingCase/structure/pdfFieldMap";
+import { WS_TEXT_MUTED, WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
 
 const PINE = "#00A283";
 
@@ -40,7 +41,7 @@ export default function PosPdfFieldMap({
 }) {
     if (pages.length === 0) return null;
     return (
-        <div className="space-y-2.5">
+        <div className="space-y-3" data-workspace-artifact-pages="true">
             {pages.map((pg) => (
                 <PageSvg key={pg.page} pg={pg} selectedId={selectedId} onSelect={onSelect} mapping={mapping} onDrawRect={onDrawRect} />
             ))}
@@ -96,18 +97,18 @@ function PageSvg({
     };
 
     return (
-        <div>
-            <div className="mb-1 flex items-center justify-between text-[10px] text-stone-400">
-                <span className="font-medium uppercase tracking-wide">
+        <article className="rounded-lg border border-alloy-stone/18 bg-white p-2 shadow-[0_1px_4px_rgba(24,39,58,0.05)]">
+            <div className={`mb-1.5 flex items-center justify-between text-[10px] ${WS_TEXT_SECONDARY}`}>
+                <span className="font-semibold uppercase tracking-[0.06em]">
                     Page {pg.page} · {pg.rects.length} field{pg.rects.length === 1 ? "" : "s"}
                 </span>
-                {!pg.hasPageDims ? <span className="italic">Context unavailable — relative layout only</span> : null}
-                {mapping ? <span className="font-medium text-alloy-bend-pine">Drag to map the field</span> : null}
+                {!pg.hasPageDims ? <span className={`italic ${WS_TEXT_MUTED}`}>Relative layout only</span> : null}
+                {mapping ? <span className="font-semibold text-alloy-bend-pine">Drag to map</span> : null}
             </div>
             <svg
                 ref={svgRef}
                 viewBox={`0 0 ${pg.width} ${pg.height}`}
-                className="w-full rounded-md border border-stone-200"
+                className="w-full rounded-md border border-alloy-stone/15"
                 style={{ aspectRatio: `${pg.width} / ${pg.height}`, background: "#fff", cursor: mapping ? "crosshair" : "default" }}
                 role="img"
                 aria-label={`Field map for page ${pg.page}`}
@@ -147,6 +148,6 @@ function PageSvg({
                     <rect x={drag.x} y={drag.y} width={drag.w} height={drag.h} rx={1.5} fill={PINE} fillOpacity={0.2} stroke={PINE} strokeWidth={2} strokeDasharray="4 2" />
                 ) : null}
             </svg>
-        </div>
+        </article>
     );
 }

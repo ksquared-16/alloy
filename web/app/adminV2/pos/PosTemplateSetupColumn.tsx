@@ -27,7 +27,7 @@ import PosPdfFieldMap from "./PosPdfFieldMap";
 import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
 import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
-import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
+import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY, WS_ARTIFACT_VIEWPORT, WS_ARTIFACT_VIEWPORT_SCROLL } from "@/components/workspace/workspaceTokens";
 import {
     seedReviewQuestionFromDraftField,
     expandQuestionsForDraftSave,
@@ -458,7 +458,7 @@ export default function PosTemplateSetupColumn({
                 </div>
             ) : (
             <>
-            <div className="flex min-h-0 flex-1 gap-3 overflow-hidden p-1.5 pt-0">
+            <div className="flex min-h-0 flex-1 gap-4 overflow-hidden p-2 pt-0">
                 <WorkspaceZonePanel
                     title="Source document"
                     className="min-w-0 flex-[55]"
@@ -487,41 +487,50 @@ export default function PosTemplateSetupColumn({
                     }
                 >
                     <div
-                        className={`min-h-0 flex-1 bg-alloy-stone/[0.02] p-0.5 ${
-                            leftView === "pdf" && pdfUrl ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-y-contain"
-                        }`}
+                        className={
+                            leftView === "pdf" && pdfUrl
+                                ? `${WS_ARTIFACT_VIEWPORT} p-1`
+                                : WS_ARTIFACT_VIEWPORT
+                        }
                     >
                         {leftView === "highlights" ? (
                             hasRegions ? (
                                 <>
                                     {mappingQuestionId ? (
-                                        <div className="mb-1 flex items-center justify-between rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] px-2 py-0.5 text-[10px] text-alloy-bend-pine">
+                                        <div className="mx-2 mt-1.5 flex shrink-0 items-center justify-between rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] px-2 py-0.5 text-[10px] text-alloy-bend-pine">
                                             <span>Drag a rectangle on the page to map this question.</span>
                                             <button type="button" onClick={() => setMappingQuestionId(null)} className="font-medium text-alloy-midnight/45 hover:underline">
                                                 Cancel
                                             </button>
                                         </div>
                                     ) : null}
-                                    <PosPdfFieldMap
-                                        pages={pageMaps}
-                                        selectedId={selectedQuestionId}
-                                        onSelect={setSelectedQuestionId}
-                                        mapping={!!mappingQuestionId}
-                                        onDrawRect={handleDrawRect}
-                                    />
-                                    <div className="mt-1 flex items-center gap-3 text-[9px] text-alloy-midnight/40">
-                                        <span className="flex items-center gap-1">
-                                            <span className="inline-block h-2 w-2.5 rounded-sm border border-alloy-bend-pine/40 bg-alloy-bend-pine/15" /> Question
-                                        </span>
-                                        <span className="flex items-center gap-1">
-                                            <span className="inline-block h-2 w-2.5 rounded-sm border-2 border-alloy-bend-pine bg-alloy-bend-pine/30" /> Selected
-                                        </span>
+                                    <div
+                                        className={WS_ARTIFACT_VIEWPORT_SCROLL}
+                                        data-workspace-artifact-viewport="true"
+                                    >
+                                        <PosPdfFieldMap
+                                            pages={pageMaps}
+                                            selectedId={selectedQuestionId}
+                                            onSelect={setSelectedQuestionId}
+                                            mapping={!!mappingQuestionId}
+                                            onDrawRect={handleDrawRect}
+                                        />
+                                        <div className="mt-2 flex items-center gap-3 pb-1 text-[9px] text-alloy-midnight/40">
+                                            <span className="flex items-center gap-1">
+                                                <span className="inline-block h-2 w-2.5 rounded-sm border border-alloy-bend-pine/40 bg-alloy-bend-pine/15" /> Question
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <span className="inline-block h-2 w-2.5 rounded-sm border-2 border-alloy-bend-pine bg-alloy-bend-pine/30" /> Selected
+                                            </span>
+                                        </div>
                                     </div>
                                 </>
                             ) : (
-                                <div className="rounded border border-dashed border-alloy-stone/25 bg-white p-3 text-center text-[11px] text-alloy-midnight/40">
-                                    No recognized question regions — this draft came from text. Switch to Original PDF to view the
-                                    document, and add questions on the right.
+                                <div className={`${WS_ARTIFACT_VIEWPORT_SCROLL} flex items-center justify-center`}>
+                                    <div className="rounded border border-dashed border-alloy-stone/25 bg-white p-3 text-center text-[11px] text-alloy-midnight/40">
+                                        No recognized question regions — this draft came from text. Switch to Original PDF to view the
+                                        document, and add questions on the right.
+                                    </div>
                                 </div>
                             )
                         ) : pdfUrl ? (
@@ -531,16 +540,18 @@ export default function PosTemplateSetupColumn({
                                 className="min-h-0 flex-1 w-full rounded border border-alloy-stone/15 bg-white"
                             />
                         ) : pdfErr ? (
-                            <div className="text-[11px] text-alloy-midnight/40">{pdfErr}</div>
+                            <div className={`${WS_ARTIFACT_VIEWPORT_SCROLL} text-[11px] text-alloy-midnight/40`}>{pdfErr}</div>
                         ) : (
-                            <div className="h-64 w-full animate-pulse rounded bg-alloy-stone/10" />
+                            <div className={`${WS_ARTIFACT_VIEWPORT_SCROLL} flex items-center`}>
+                                <div className="h-64 w-full animate-pulse rounded bg-alloy-stone/10" />
+                            </div>
                         )}
                     </div>
                 </WorkspaceZonePanel>
 
                 <WorkspaceZonePanel
                     title="Review questions"
-                    className="min-w-0 flex-[23] bg-alloy-stone/[0.02]"
+                    className="min-w-0 flex-[23]"
                     headerAction={
                         <div className="flex gap-2">
                             {(["questions", "text"] as const).map((t) => (
@@ -558,7 +569,7 @@ export default function PosTemplateSetupColumn({
                         </div>
                     }
                 >
-                    <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
+                    <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
                         {tab === "questions" ? (
                             <>
                                 <ProcessingQuestionReviewList

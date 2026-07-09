@@ -4,8 +4,8 @@
  * @module WorkspaceSurface
  *
  * ## Purpose
- * Scrollable workspace body beneath the shell nav. Establishes the stone workspace field
- * (~4%) that white cards sit on.
+ * Scrollable workspace body beneath the shell nav. Inherits the stone workspace field
+ * from `WorkspaceShell` so white cards visibly float above it.
  *
  * ## When to use
  * As the direct child content region inside `WorkspaceShell` for Overview landings,
@@ -22,6 +22,7 @@
  */
 
 import type { HTMLAttributes, ReactNode } from "react";
+import { WS_SURFACE_CONTENT_PAD } from "@/components/workspace/workspaceTokens";
 
 /**
  * Stone tone inherits the inset field from WorkspaceShell (Layer 2).
@@ -49,7 +50,7 @@ export default function WorkspaceSurface({
     return (
         <div
             data-workspace-surface={tone}
-            className={`flex min-h-0 flex-1 flex-col ${scroll ? "overflow-y-auto" : "overflow-hidden"} ${TONE_CLASS[tone]} ${padded ? "p-4 lg:p-5" : ""} ${className}`.trim()}
+            className={`flex min-h-0 flex-1 flex-col ${scroll ? "overflow-y-auto" : "overflow-hidden"} ${TONE_CLASS[tone]} ${padded ? WS_SURFACE_CONTENT_PAD : ""} ${className}`.trim()}
             {...rest}
         >
             {children}

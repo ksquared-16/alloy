@@ -19,7 +19,8 @@ import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
-import { PROCESSING_METADATA, PROCESSING_ROW_TITLE } from "@/lib/pos/processingPresentationTokens";
+import { PROCESSING_EMPTY, PROCESSING_QUEUE_METADATA, PROCESSING_QUEUE_ROW_TITLE } from "@/lib/pos/processingPresentationTokens";
+import { WS_TEXT_MUTED } from "@/components/workspace/workspaceTokens";
 
 /**
  * Display order: operator-actionable lanes first; completed/archived are secondary.
@@ -87,7 +88,7 @@ const LANE_TONE: Record<string, string> = {
 };
 
 const QUEUE_ROW_CLASS =
-    "flex w-full items-center gap-1.5 border-b border-alloy-stone/10 px-2 py-2 text-left transition-colors hover:bg-alloy-stone/[0.04]";
+    "flex w-full items-center gap-1.5 border-b border-alloy-stone/10 px-2 py-1.5 text-left transition-colors hover:bg-alloy-stone/[0.04]";
 const QUEUE_ROW_SELECTED_CLASS =
     "border-l-2 border-l-alloy-bend-pine bg-alloy-bend-pine/[0.06] hover:bg-alloy-bend-pine/[0.08]";
 
@@ -201,8 +202,8 @@ export default function ProcessingQueueList({
     if (total === 0) {
         return (
             <div className="m-2 border border-dashed border-alloy-stone/20 bg-alloy-stone/[0.02] p-4 text-center">
-                <div className="text-[12px] font-medium text-alloy-midnight/70">Empty queue</div>
-                <p className="mx-auto mt-1 max-w-[16rem] text-[10px] leading-relaxed text-alloy-midnight/40">
+                <div className={`font-medium ${PROCESSING_EMPTY}`}>Empty queue</div>
+                <p className={`mx-auto mt-1 max-w-[16rem] text-[10px] leading-relaxed ${WS_TEXT_MUTED}`}>
                     Import a form to begin review.
                 </p>
                 {onGoToSources ? (
@@ -214,7 +215,7 @@ export default function ProcessingQueueList({
                         Go to Documents
                     </button>
                 ) : (
-                    <p className="mt-2 text-[10px] text-alloy-midnight/40">Import a PDF using the toolbar above.</p>
+                    <p className={`mt-2 text-[10px] ${WS_TEXT_MUTED}`}>Import a PDF using the toolbar above.</p>
                 )}
             </div>
         );
@@ -230,7 +231,7 @@ export default function ProcessingQueueList({
         const count = laneRows.length;
         return (
             <div key={lane.key}>
-                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                <div className={`px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${WS_TEXT_MUTED}`}>
                     {lane.label} · {count}
                 </div>
                 <ul>{laneRows.map((row) => renderRow(row))}</ul>
@@ -271,10 +272,10 @@ export default function ProcessingQueueList({
                 >
                     <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
-                            <span className={`min-w-0 flex-1 truncate ${PROCESSING_ROW_TITLE}`}>{title}</span>
-                            <span className={`shrink-0 tabular-nums ${PROCESSING_METADATA}`}>{formatAge(row.sourceDisplay?.receivedAt ?? row.createdAt)}</span>
+                            <span className={`min-w-0 flex-1 truncate ${PROCESSING_QUEUE_ROW_TITLE}`}>{title}</span>
+                            <span className={`shrink-0 tabular-nums ${PROCESSING_QUEUE_METADATA}`}>{formatAge(row.sourceDisplay?.receivedAt ?? row.createdAt)}</span>
                         </span>
-                        <span className={`mt-0.5 flex items-center gap-1 truncate ${PROCESSING_METADATA} ${laneTone}`}>
+                        <span className={`mt-0.5 flex items-center gap-1 truncate ${PROCESSING_QUEUE_METADATA} ${laneTone}`}>
                             <span>{laneLabel}</span>
                             {rec ? (
                                 <>

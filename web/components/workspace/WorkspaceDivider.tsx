@@ -15,6 +15,8 @@
  * - Decorative rules with strong contrast.
  */
 
+import { WS_DIVIDER_FILL } from "@/components/workspace/workspaceTokens";
+
 export default function WorkspaceDivider({
     orientation = "horizontal",
     className = "",
@@ -26,8 +28,8 @@ export default function WorkspaceDivider({
 }) {
     const base =
         orientation === "vertical"
-            ? "w-px self-stretch bg-alloy-stone/15"
-            : "h-px w-full bg-alloy-stone/15";
+            ? `w-px self-stretch ${WS_DIVIDER_FILL}`
+            : `h-px w-full ${WS_DIVIDER_FILL}`;
     return (
         <span
             aria-hidden

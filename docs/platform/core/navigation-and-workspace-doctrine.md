@@ -138,6 +138,26 @@ This is the **canonical operational workspace visual system** for every AdminV2 
 
 **Supersedes:** Alloy Workspace Doctrine V1 (same hierarchy; V2 adds inset stone field ownership in `WorkspaceShell`, mandatory `WorkspaceMetricTiles`, and certified Communications + Work Items migrations).
 
+### Structural rules (frozen July 2026)
+
+| Rule | Implementation |
+|------|----------------|
+| **Compact header band** | `WorkspaceHeader` / `OperationalModalHeader` — single compact row: icon + title (Midnight Forge) + muted subtitle + actions + Close; no tall standalone hero |
+| **Nav → content divider** | `WS_NAV_CONTENT_DIVIDER` on `WorkspaceModeNav` — visible stone hairline under secondary tabs before workspace body |
+| **Queue → detail divider** | `WorkspaceDivider` vertical + `WS_QUEUE_RAIL` border — visible separation between queue rail and working canvas |
+| **Artifact viewport** | `WS_ARTIFACT_VIEWPORT` + `WS_ARTIFACT_VIEWPORT_SCROLL` — PDF/region stacks scroll inside the document zone with page labels and bottom padding (no clipped edge) |
+| **Queue typography** | `PROCESSING_QUEUE_ROW_TITLE` / `PROCESSING_QUEUE_METADATA` — compact row density; status + time preserved |
+| **Inspector simplification** | Spacing + hierarchy over heavy borders; Bend Pine only for active/success/action states |
+
+### Visual polish (July 2026 — presentation only)
+
+| Area | Change |
+|------|--------|
+| **Stone field** | `WS_FIELD` at ~7% (`bg-alloy-stone/[0.07]`) + subtle `ring-alloy-stone/25` on canvas — white cards visibly float |
+| **KPI tiles** | `WorkspaceMetricTiles` uses accent icon wells + accent rings; value weight reduced (`font-medium`); labels use `WS_TEXT_SECONDARY` |
+| **Typography** | Three levels frozen: Primary (`text-alloy-midnight`), Secondary (`text-alloy-slate`), Muted (`text-alloy-midnight/40`) |
+| **Containment** | Stronger card elevation (`WS_PROCESS_TILE_CHROME`, `WS_PANEL_SURFACE_FLAT`); spacing via `WS_SURFACE_CONTENT_PAD` |
+
 ### Purpose
 
 One operating system for operational module UIs. The hierarchy and visual language are fixed; **only the content changes**. No module may invent parallel shell chrome, KPI styles, or accent themes.
@@ -147,7 +167,7 @@ One operating system for operational module UIs. The hierarchy and visual langua
 | Layer | Treatment | Token / component |
 |-------|-----------|-------------------|
 | **1 — White modal shell** | Header, mode nav, metrics band | `WorkspaceShell` outer chrome |
-| **2 — Inset stone workspace field** | ~16px white gutter; ~4% stone operational canvas | `WS_SHELL_INSET` + `WS_FIELD_CANVAS` (owned by `WorkspaceShell`) |
+| **2 — Inset stone workspace field** | ~16px white gutter; ~7% stone operational canvas | `WS_SHELL_INSET` + `WS_FIELD_CANVAS` (owned by `WorkspaceShell`) |
 | **3 — White operational surfaces** | Cards, queues, review panels, studio libraries | `WorkspaceCard`, `WorkspaceZonePanel`, module white frames |
 | **4 — Interactive objects** | Buttons, rows, selections, badges, hover states | Bend Pine selection; Midnight Forge structure |
 
@@ -173,7 +193,7 @@ WS_SHELL_INSET               White gutter (~16px)
 | **Bend Pine** | Selections, progress, current step, primary CTA, success, generation, completion |
 | **Alloy Gold** | Publish, attention, certification |
 | **White** | Modal shell + contained surfaces (Layer 1 + 3) |
-| **River Stone ~4%** | Inset workspace field (Layer 2) |
+| **River Stone ~7%** | Inset workspace field (Layer 2) |
 
 **Never** use module-specific color themes. Processing, Communications, Work Items, Scheduling, Attendance, and Commercial share one visual language.
 
@@ -182,8 +202,8 @@ WS_SHELL_INSET               White gutter (~16px)
 | Level | Token | Use |
 |-------|-------|-----|
 | Primary | `WS_TEXT_PRIMARY` | Titles, section headers, selected tabs |
-| Secondary | `WS_TEXT_SECONDARY` | Descriptions, metadata, timestamps |
-| Disabled | `WS_TEXT_DISABLED` | Inactive states only |
+| Secondary | `WS_TEXT_SECONDARY` (`text-alloy-slate`) | Descriptions, metadata, timestamps |
+| Muted | `WS_TEXT_MUTED` | Disabled / de-emphasized states only |
 
 ### Icon hierarchy
 
@@ -201,8 +221,9 @@ WS_SHELL_INSET               White gutter (~16px)
 ### Containment doctrine
 
 - **Spacing over boxes** — major regions separated by rhythm, not extra borders.
-- **Stone hairlines only** — never black or heavy dividers.
+- **Visible stone hairlines** — `WS_NAV_CONTENT_DIVIDER`, `WS_DIVIDER_FILL`, `WS_QUEUE_RAIL` must read in browser; never black or heavy dividers.
 - **Soft elevation** on white surfaces (`WorkspaceCard`, zone panels).
+- **No double stone tint** — `WorkspaceShell` owns Layer 2; module bodies use white surfaces on the field (`WorkspaceSurface` tone `stone` inherits shell; queue views use `canvas` when zone panels carry chrome).
 
 ### When to use which primitive
 
