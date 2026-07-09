@@ -10,6 +10,7 @@ import MyTasksCreateTaskCard, {
     type MyTasksCreateLinkedRecord,
 } from "@/app/adminV2/components/MyTasksCreateTaskCard";
 import MyTasksTaskCard from "@/app/adminV2/components/MyTasksTaskCard";
+import ProcessingParentPanel from "@/app/adminV2/pos/ProcessingParentPanel";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { useEntityLabelsOptional } from "@/contexts/EntityLabelsContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
@@ -130,9 +131,20 @@ export type MyTasksPanelProps = {
     onFilterCountChange?: (count: number) => void;
     /** Bump to open the create form from an external trigger (modal header "New task"). */
     requestCreateNonce?: number;
+    /** Overview landing → queue navigation filter. */
+    navFilter?: OperationalTaskWorkspaceFilter;
+    /** Overview landing → queue navigation with task pre-selected. */
+    navSelectedTaskId?: string | null;
 };
 
-export default function MyTasksPanel({ compact = false, onClose, onFilterCountChange, requestCreateNonce = 0 }: MyTasksPanelProps) {
+export default function MyTasksPanel({
+    compact = false,
+    onClose,
+    onFilterCountChange,
+    requestCreateNonce = 0,
+    navFilter,
+    navSelectedTaskId,
+}: MyTasksPanelProps) {
     const workEnabled = isOperationalWorkV1Enabled();
     const { userId } = useAdminAuth();
     const { labels: entityLabels } = useEntityLabelsOptional();
@@ -153,10 +165,10 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
         };
     }, [linkedOpportunityId, linkedRecordLabel]);
 
-    const [filter, setFilter] = useState<OperationalTaskWorkspaceFilter>("open");
+    const [filter, setFilter] = useState<OperationalTaskWorkspaceFilter>(navFilter ?? "open");
     const [searchQuery, setSearchQuery] = useState("");
     // Two-pane (modal) workspace: which queue row is open in the right detail pane.
-    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(navSelectedTaskId ?? null);
     // Business Process → Stage doctrine: selected process / stage rail key (modal only).
     const [processGroup, setProcessGroup] = useState<WorkItemsProcessGroupKey>(WORK_ITEMS_ALL_GROUP_KEY);
     const [tasks, setTasks] = useState<MyTasksTaskRow[]>(
@@ -204,6 +216,14 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
     useEffect(() => {
         if (requestCreateNonce > 0) openCreateFormRef.current();
     }, [requestCreateNonce]);
+
+    useEffect(() => {
+        if (navFilter) setFilter(navFilter);
+    }, [navFilter]);
+
+    useEffect(() => {
+        if (navSelectedTaskId) setSelectedTaskId(navSelectedTaskId);
+    }, [navSelectedTaskId]);
 
     const load = useCallback(async () => {
         if (!workEnabled) return;
@@ -693,162 +713,166 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
         );
     }
 
-    // Modal (compact): Process rail → Queue → Workspace, the Business Process → Stage →
-    // Item → Focus Panel/record doctrine. Process/Stage groups partition work; the legacy
-    // filters (Open/Mine/Overdue…) live inside the selected process, not as the primary axis.
+    // Modal (compact): Process rail → Queue → Task detail — Digital Mailroom Work layout.
     return (
-        <div className="flex min-h-0 flex-1 gap-3" data-adminv2-tasks-panel="true" data-adminv2-tasks-workspace="true">
-            {/* Process rail — primary organization (Process → Work View). */}
-            <aside className="flex w-[11.5rem] shrink-0 flex-col gap-1.5" data-adminv2-tasks-process-rail="true">
-                <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
-                    Process
-                </p>
-                <nav className="space-y-0.5" role="tablist" aria-label="Work by process">
-                    {processGroups.map((g) => {
-                        const stageActive = g.stages.some((s) => s.key === activeProcessGroup);
-                        const on = g.key === activeProcessGroup || stageActive;
-                        return (
-                            <div key={g.key}>
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={g.key === activeProcessGroup}
-                                    data-adminv2-process-group={g.key}
-                                    onClick={() => {
-                                        setProcessGroup(g.key);
-                                        setSelectedTaskId(null);
-                                        clearForms();
-                                    }}
-                                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] font-semibold transition-colors ${
-                                        on ?
-                                            "bg-alloy-juniper/[0.08] text-alloy-juniper ring-1 ring-alloy-juniper/20"
-                                        :   "text-alloy-midnight/65 hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight/85"
-                                    }`}
-                                >
-                                    <span className="truncate">{g.label}</span>
-                                    <span className={`shrink-0 tabular-nums text-[10px] ${on ? "text-alloy-juniper/80" : "text-alloy-midnight/40"}`}>
-                                        {g.count}
-                                    </span>
-                                </button>
-                                {on && g.stages.length > 0 ? (
-                                    <div
-                                        className="mt-0.5 space-y-0.5 border-l border-alloy-stone/15 pl-2"
-                                        role="group"
-                                        aria-label={`${g.label} stages`}
+        <div className="flex min-h-0 flex-1 overflow-hidden bg-white" data-adminv2-tasks-panel="true" data-adminv2-tasks-workspace="true">
+            <ProcessingParentPanel
+                title="Process"
+                className="w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 self-stretch border-0 border-r border-stone-200"
+                data-testid="work-items-process-rail"
+            >
+                <div className="min-h-0 flex-1 overflow-y-auto p-2" data-adminv2-tasks-process-rail="true">
+                    <nav className="space-y-0.5" role="tablist" aria-label="Work by process">
+                        {processGroups.map((g) => {
+                            const stageActive = g.stages.some((s) => s.key === activeProcessGroup);
+                            const on = g.key === activeProcessGroup || stageActive;
+                            return (
+                                <div key={g.key}>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={g.key === activeProcessGroup}
+                                        data-adminv2-process-group={g.key}
+                                        onClick={() => {
+                                            setProcessGroup(g.key);
+                                            setSelectedTaskId(null);
+                                            clearForms();
+                                        }}
+                                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] font-semibold transition-colors ${
+                                            on ?
+                                                "bg-alloy-juniper/[0.08] text-alloy-juniper ring-1 ring-alloy-juniper/20"
+                                            :   "text-alloy-midnight/65 hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight/85"
+                                        }`}
                                     >
-                                        {g.stages.map((s) => {
-                                            const stageOn = s.key === activeProcessGroup;
-                                            return (
+                                        <span className="truncate">{g.label}</span>
+                                        <span className={`shrink-0 tabular-nums text-[10px] ${on ? "text-alloy-juniper/80" : "text-alloy-midnight/40"}`}>
+                                            {g.count}
+                                        </span>
+                                    </button>
+                                    {on && g.stages.length > 0 ? (
+                                        <div
+                                            className="mt-0.5 space-y-0.5 border-l border-alloy-stone/15 pl-2"
+                                            role="group"
+                                            aria-label={`${g.label} stages`}
+                                        >
+                                            {g.stages.map((s) => {
+                                                const stageOn = s.key === activeProcessGroup;
+                                                return (
+                                                    <button
+                                                        key={s.key}
+                                                        type="button"
+                                                        role="tab"
+                                                        aria-selected={stageOn}
+                                                        data-adminv2-process-stage={s.key}
+                                                        onClick={() => {
+                                                            setProcessGroup(s.key);
+                                                            setSelectedTaskId(null);
+                                                            clearForms();
+                                                        }}
+                                                        className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] font-medium transition-colors ${
+                                                            stageOn ?
+                                                                "bg-alloy-juniper/[0.06] text-alloy-juniper"
+                                                            :   "text-alloy-midnight/55 hover:bg-alloy-stone/[0.05] hover:text-alloy-midnight/80"
+                                                        }`}
+                                                    >
+                                                        <span className="truncate">{s.label}</span>
+                                                        <span className="shrink-0 tabular-nums text-[10px] text-alloy-midnight/40">
+                                                            {s.count}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : null}
+                                </div>
+                            );
+                        })}
+                    </nav>
+                    <div className="mt-2 rounded-lg border border-dashed border-alloy-stone/20 px-2 py-1.5" data-adminv2-tasks-work-views="true">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Work views</p>
+                        <p className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/40">
+                            Appear here once a process publishes work views.
+                        </p>
+                    </div>
+                </div>
+            </ProcessingParentPanel>
+
+            <ProcessingParentPanel
+                title="Queue"
+                className="w-[28%] min-w-[14rem] max-w-[18rem] shrink-0 self-stretch border-0 border-r border-stone-200"
+                data-testid="work-items-queue"
+            >
+                <div className="flex min-h-0 flex-1 flex-col gap-2 p-2" data-adminv2-tasks-queue="true">
+                    {searchInput}
+                    {filterRail}
+                    {errorBanner}
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                        {loading && visibleTasks.length === 0 && tasks.length === 0 ? <MyTasksLoadingState /> : null}
+                        {!loading && processTasks.length === 0 ? emptyState : null}
+                        {processTasks.length > 0 ? (
+                            <>
+                                <div
+                                    className="flex items-baseline justify-between px-0.5 pb-1.5"
+                                    data-adminv2-tasks-queue-header="true"
+                                >
+                                    <h3 className="text-[13px] font-semibold text-alloy-midnight">{activeProcessLabel}</h3>
+                                    <span className="text-[11px] tabular-nums text-alloy-midnight/45">
+                                        {activeFilterLabel} · {processTasks.length}
+                                    </span>
+                                </div>
+                                <ul className="space-y-1.5">
+                                    {processTasks.map((t) => {
+                                        const badge = operationalTaskUrgencyBadge(t);
+                                        const isSelected = t.id === selectedTaskId;
+                                        return (
+                                            <li key={t.id}>
                                                 <button
-                                                    key={s.key}
                                                     type="button"
-                                                    role="tab"
-                                                    aria-selected={stageOn}
-                                                    data-adminv2-process-stage={s.key}
+                                                    data-adminv2-task-queue-row={t.id}
+                                                    aria-pressed={isSelected}
                                                     onClick={() => {
-                                                        setProcessGroup(s.key);
-                                                        setSelectedTaskId(null);
                                                         clearForms();
+                                                        setSelectedTaskId(t.id);
+                                                        if (createOpen) setCreateOpen(false);
                                                     }}
-                                                    className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] font-medium transition-colors ${
-                                                        stageOn ?
-                                                            "bg-alloy-juniper/[0.06] text-alloy-juniper"
-                                                        :   "text-alloy-midnight/55 hover:bg-alloy-stone/[0.05] hover:text-alloy-midnight/80"
+                                                    className={`w-full rounded-lg border px-2.5 py-2 text-left shadow-sm transition-colors ${
+                                                        isSelected ?
+                                                            "border-alloy-juniper/45 border-l-2 border-l-alloy-juniper bg-alloy-juniper/[0.06] ring-1 ring-alloy-juniper/15"
+                                                        : badge.urgency === "overdue" ?
+                                                            "border-alloy-stone/18 border-l-2 border-l-red-400/80 bg-white hover:bg-alloy-stone/[0.04]"
+                                                        :   "border-alloy-stone/18 bg-white hover:bg-alloy-stone/[0.04]"
                                                     }`}
                                                 >
-                                                    <span className="truncate">{s.label}</span>
-                                                    <span className="shrink-0 tabular-nums text-[10px] text-alloy-midnight/40">
-                                                        {s.count}
-                                                    </span>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="truncate text-[12.5px] font-semibold text-alloy-midnight/90">
+                                                            {normalizeOperationalTaskTitleDisplay(t.title)}
+                                                        </span>
+                                                        <span
+                                                            className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${badge.className}`}
+                                                        >
+                                                            {badge.label}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/55">
+                                                        Due {formatOperationalTaskDueDisplay(t.due_at)}
+                                                    </p>
                                                 </button>
-                                            );
-                                        })}
-                                    </div>
-                                ) : null}
-                            </div>
-                        );
-                    })}
-                </nav>
-                {/* Work views appear here once processes expose them (see data gap). */}
-                <div className="mt-1 rounded-lg border border-dashed border-alloy-stone/20 px-2 py-1.5" data-adminv2-tasks-work-views="true">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Work views</p>
-                    <p className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/40">
-                        Appear here once a process publishes work views.
-                    </p>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </>
+                        ) : null}
+                    </div>
                 </div>
-            </aside>
+            </ProcessingParentPanel>
 
-            {/* Queue — work items for the selected process, with filters as a secondary axis. */}
-            <div className="flex min-h-0 w-[18.5rem] shrink-0 flex-col gap-2" data-adminv2-tasks-queue="true">
-                {searchInput}
-                {filterRail}
-                {errorBanner}
-                <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
-                    {loading && visibleTasks.length === 0 && tasks.length === 0 ? <MyTasksLoadingState /> : null}
-                    {!loading && processTasks.length === 0 ? emptyState : null}
-                    {processTasks.length > 0 ? (
-                        <>
-                            <div
-                                className="flex items-baseline justify-between px-0.5 pb-1.5"
-                                data-adminv2-tasks-queue-header="true"
-                            >
-                                <h3 className="text-[13px] font-semibold text-alloy-midnight">{activeProcessLabel}</h3>
-                                <span className="text-[11px] tabular-nums text-alloy-midnight/45">
-                                    {activeFilterLabel} · {processTasks.length}
-                                </span>
-                            </div>
-                            <ul className="space-y-1.5">
-                                {processTasks.map((t) => {
-                                    const badge = operationalTaskUrgencyBadge(t);
-                                    const isSelected = t.id === selectedTaskId;
-                                    return (
-                                        <li key={t.id}>
-                                            <button
-                                                type="button"
-                                                data-adminv2-task-queue-row={t.id}
-                                                aria-pressed={isSelected}
-                                                onClick={() => {
-                                                    clearForms();
-                                                    setSelectedTaskId(t.id);
-                                                    if (createOpen) setCreateOpen(false);
-                                                }}
-                                                className={`w-full rounded-lg border px-2.5 py-2 text-left shadow-sm transition-colors ${
-                                                    isSelected ?
-                                                        "border-alloy-juniper/45 border-l-2 border-l-alloy-juniper bg-alloy-juniper/[0.06] ring-1 ring-alloy-juniper/15"
-                                                    : badge.urgency === "overdue" ?
-                                                        "border-alloy-stone/18 border-l-2 border-l-red-400/80 bg-white hover:bg-alloy-stone/[0.04]"
-                                                    :   "border-alloy-stone/18 bg-white hover:bg-alloy-stone/[0.04]"
-                                                }`}
-                                            >
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="truncate text-[12.5px] font-semibold text-alloy-midnight/90">
-                                                        {normalizeOperationalTaskTitleDisplay(t.title)}
-                                                    </span>
-                                                    <span
-                                                        className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${badge.className}`}
-                                                    >
-                                                        {badge.label}
-                                                    </span>
-                                                </div>
-                                                <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/55">
-                                                    Due {formatOperationalTaskDueDisplay(t.due_at)}
-                                                </p>
-                                            </button>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        </>
-                    ) : null}
-                </div>
-            </div>
-
-            {/* Workspace — selected work item detail, create form, or calm empty state. */}
-            <div
-                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.02]"
-                data-adminv2-tasks-detail="true"
+            <ProcessingParentPanel
+                title="Task detail"
+                className="min-w-[20rem] flex-1 self-stretch border-0"
+                data-testid="work-items-task-detail"
             >
-                <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                <div className="min-h-0 flex-1 overflow-y-auto p-3" data-adminv2-tasks-detail="true">
                     {createOpen ? (
                         createCard
                     ) : selectedTask ? (
@@ -865,9 +889,9 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
                                 start a new one.
                             </p>
                         </div>
-                        )}
-                    </div>
+                    )}
                 </div>
-            </div>
+            </ProcessingParentPanel>
+        </div>
     );
 }
