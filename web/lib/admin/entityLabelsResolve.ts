@@ -102,6 +102,7 @@ export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId:
     const overrideByType: Record<string, EntityLabelRow> = {};
     for (const o of overrides) overrideByType[o.entity_type] = o;
 
+    const defaultTypes = new Set(defaults.map((d) => d.entity_type));
     const effective: EntityLabelRow[] = defaults.map((d) => {
         const ov = overrideByType[d.entity_type];
         return {
@@ -110,6 +111,16 @@ export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId:
             plural: ov?.plural ?? d.plural,
         };
     });
+    for (const o of overrides) {
+        if (!defaultTypes.has(o.entity_type)) {
+            effective.push({
+                entity_type: o.entity_type,
+                singular: o.singular,
+                plural: o.plural,
+            });
+        }
+    }
+    effective.sort((a, b) => a.entity_type.localeCompare(b.entity_type));
 
     mark("merge_effective_ms");
     const totalMs = Date.now() - t0;
