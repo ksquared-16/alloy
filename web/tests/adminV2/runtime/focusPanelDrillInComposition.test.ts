@@ -22,6 +22,7 @@ import {
     CHILDREN_SURFACE_ID,
     FINANCIAL_CONFIG_SURFACE_ID,
     fieldPresentationLabel,
+    availableFieldsForNestedGroup,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
@@ -581,5 +582,37 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(householdCard).toContain('groupKey="other_parent_guardian"');
         expect(householdCard).toContain("data-household-secondary-parent");
         expect(householdCard).toContain("secondaryParents");
+    });
+
+    it("composer leak fixes — clean evidence picker, floating add field, drag hints", () => {
+        const addSectionMenu = readSrc("components/admin/focusPanel/drillIn/AddSectionMenu.tsx");
+        const addField = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceAddField.tsx");
+        const floatingPopover = readSrc("components/admin/focusPanel/drillIn/ComposerFloatingPopover.tsx");
+        const sectionCatalog = readSrc("lib/adminV2/settings/surfaces/sectionCatalog.ts");
+        const fieldAdapter = readSrc("lib/adminV2/settings/surfaces/compositionFieldAdapter.ts");
+        expect(addSectionMenu).toContain("ComposerFloatingPopover");
+        expect(addSectionMenu).toContain("fp-add-section-menu__label");
+        expect(addSectionMenu).toContain("fp-add-section-menu__desc");
+        expect(addSectionMenu).toContain("CUSTOM_SECTION_OPTION.label");
+        expect(sectionCatalog).toContain('label: "Documents"');
+        expect(sectionCatalog).not.toContain("DocumentsUploaded");
+        expect(addField).toContain("ComposerFloatingPopover");
+        expect(floatingPopover).toContain("createPortal");
+        expect(layoutSurface).toContain("Place beside");
+        expect(layoutSurface).toContain("Place below");
+        expect(runtimeCss).toContain(".fp-add-section-menu__label");
+        expect(runtimeCss).toContain(".fp-layout-drop-hint");
+        expect(runtimeCss).toContain("overflow: visible");
+        expect(fieldAdapter).toContain("child.medical_summary");
+        expect(fieldAdapter).toContain("child.first_name");
+    });
+
+    it("evidence sections offer supporting child fields in add-field library", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setNestedGroupEnabled(config, "medical", true, { sectionSemantic: "medical" });
+        const available = availableFieldsForNestedGroup(CHILDREN_SURFACE_ID, "medical", config, []);
+        expect(available.some((f) => f.key === "child.nickname")).toBe(true);
+        expect(available.some((f) => f.key === "child.documents_summary")).toBe(true);
+        expect(available.some((f) => f.key === "inquiry_child.program")).toBe(true);
     });
 });
