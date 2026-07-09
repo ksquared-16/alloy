@@ -132,9 +132,12 @@ function buildVm(messages: TimelineEventVM[]): FamilyCommunicationWorkspaceVM {
             displayFlags: { email: true, sms: true, marketing: true },
         },
         composerDraft: {
+            channel: "email",
+            recipientContactIds: ["person-kelly"],
+            subject: null,
+            body: "",
             availableChannels: { email: true, sms: true, note: false, reasons: {} },
-            defaultChannel: "email",
-            defaultRecipients: ["person-kelly"],
+            consentBlockers: [],
         },
         scope: {
             level: "family",
