@@ -284,7 +284,7 @@ describe("Focus Panel in-canvas drill-in composer wiring", () => {
     });
 
     it("uses inline runtime field editing and metadata-only drill-in inspector", () => {
-        expect(householdCard).toContain("InlineRuntimeFieldList");
+        expect(householdCard).toContain("NestedSurfaceAddField");
         expect(householdCard).toContain("ComposableFieldShell");
         expect(drillInspector).toContain("metadataOnly");
         expect(drillInspector).not.toContain("data-inspector-field-list");
@@ -303,7 +303,8 @@ describe("Focus Panel in-canvas drill-in composer wiring", () => {
 
     it("household card wraps runtime regions with composable shells", () => {
         expect(householdCard).toContain("ComposableRegionShell");
-        expect(householdCard).toContain("RegionEditLayer");
+        expect(householdCard).toContain("NestedSurfaceAddField");
+        expect(householdCard).not.toContain("function RegionEditLayer");
         expect(householdCard).not.toContain("RegionInlineCompose");
         expect(householdCard).not.toContain("Edit fields below");
     });
@@ -398,11 +399,12 @@ describe("Final Surface Composer doctrine — runtime sacred, composer overlay",
         expect(householdCard).not.toContain("data-household-compose-preview");
     });
 
-    it("scopes edit-layer field controls to selected regions (overlay, not replacement)", () => {
-        expect(inlineFieldList).toContain("whenRegionSelectedOnly");
-        expect(inlineFieldList).toContain("suppressPreview");
-        expect(householdCard).toContain("suppressPreview");
-        expect(householdCard).toContain("whenRegionSelectedOnly");
+    it("scopes add-field controls to selected regions (one per region)", () => {
+        const addField = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceAddField.tsx");
+        expect(addField).toContain("regionSelected");
+        expect(addField).toContain("data-canvas-add-field");
+        expect(householdCard).toContain("NestedSurfaceAddField");
+        expect(householdCard).not.toContain("InlineRuntimeFieldList");
     });
 
     it("restores child runtime layout — no duplicate compose preview rows", () => {
@@ -449,6 +451,7 @@ describe("Final Focus Panel ship blockers — empty emergency / child edit / dat
 
 describe("Final Focus Panel Composer ship fixes", () => {
     const householdSpec = readSrc("lib/platform/surfaceComposition/definitions/recursiveSurfaceProofs.ts");
+    const householdCard = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
     const childrenCard = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
     const layoutSurface = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceFieldLayoutSurface.tsx");
     const avatarComposer = readSrc("components/admin/focusPanel/drillIn/ChildProfileAvatarComposer.tsx");
@@ -552,8 +555,31 @@ describe("Final Focus Panel Composer ship fixes", () => {
 
     it("exposes child profile avatar composer on identity header", () => {
         expect(childrenCard).toContain("ChildProfileAvatarComposer");
-        expect(avatarComposer).toContain("Set image");
+        expect(avatarComposer).toContain("setChildAvatarPreviewUrl");
+        expect(avatarComposer).toContain("Remove");
         expect(avatarComposer).toContain("groupShowAvatarForNestedGroup");
         expect(childrenCard).toContain("imageUrl={previewImageUrl}");
+    });
+
+    it("polish sprint — field instances own controls; evidence sections are cards", () => {
+        const addField = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceAddField.tsx");
+        const evidenceCard = readSrc("components/admin/focusPanel/drillIn/EvidenceSectionCard.tsx");
+        expect(layoutSurface).toContain("fp-field-instance__remove");
+        expect(layoutSurface).toContain("FieldInstance");
+        expect(layoutSurface).toContain("showAddField");
+        expect(addField).toContain("!regionSelected");
+        expect(childrenCard).toContain("EvidenceSectionCard");
+        expect(childrenCard).toContain("NestedSurfaceAddField");
+        expect(childrenCard).not.toContain("InlineRuntimeFieldList");
+        expect(evidenceCard).toContain("setNestedGroupEnabled");
+        expect(evidenceCard).toContain("showAddField={false}");
+        expect(runtimeCss).toContain(".fp-evidence-section");
+        expect(runtimeCss).toContain(".fp-field-instance__remove");
+    });
+
+    it("household summary supports secondary parent on collapsed card", () => {
+        expect(householdCard).toContain('groupKey="other_parent_guardian"');
+        expect(householdCard).toContain("data-household-secondary-parent");
+        expect(householdCard).toContain("secondaryParents");
     });
 });

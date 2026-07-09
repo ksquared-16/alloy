@@ -24,7 +24,7 @@ import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurf
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
 import ComposableFieldShell from "@/components/admin/focusPanel/drillIn/ComposableFieldShell";
-import InlineRuntimeFieldList from "@/components/admin/focusPanel/drillIn/InlineRuntimeFieldList";
+import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
 import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
 import InlineSectionControls from "@/components/admin/focusPanel/drillIn/InlineSectionControls";
 import {
@@ -295,6 +295,7 @@ export default function HouseholdCard({
             <CollapsedBody
                 evidence={evidence}
                 masked={maskedChannels}
+                composing={composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false}
                 onPreviewGroup={(key) => {
                     setExpanded(true);
                     setFocusedGroup(key);
@@ -362,11 +363,13 @@ function householdHeadline(evidence: ReturnType<typeof buildHouseholdCardEvidenc
 function CollapsedBody({
     evidence,
     masked,
+    composing = false,
     onPreviewGroup,
     onAddEmergencyContact,
 }: {
     evidence: ReturnType<typeof buildHouseholdCardEvidence>;
     masked: boolean;
+    composing?: boolean;
     onPreviewGroup: (key: HouseholdEvidenceGroupKey) => void;
     onAddEmergencyContact?: () => void;
 }) {
@@ -407,32 +410,88 @@ function CollapsedBody({
             ? "emergency_contacts"
             : "primary_contact";
 
+    const secondaryParents =
+        evidence.groups.find((g) => g.key === "other_parent_guardian")?.contacts ?? [];
+
     return (
         <div className="alloy-os-household__summary">
-            {evidence.primaryContact ? (
-                <div className="alloy-os-household__primary-row" data-household-primary-row="true">
-                    <CardAvatar name={evidence.primaryContact.name} imageUrl={evidence.primaryContact.imageUrl} size={30} />
-                    <div className="alloy-os-household__row-main min-w-0">
-                        <span className="alloy-os-household__row-name">
-                            {evidence.primaryContact.name}
-                            <span className="alloy-os-card-pill alloy-os-card-pill--positive alloy-os-household__primary-badge">Primary</span>
-                        </span>
-                        <span
-                            className={clsx(
-                                "alloy-os-household__row-detail",
-                                !channel && "alloy-os-household__channel--missing",
-                            )}
-                            data-household-channel="true"
-                        >
-                            {channel ?? "No contact channel on file"}
-                        </span>
+            <ComposableRegionShell
+                surfaceId={HOUSEHOLD_SURFACE_ID}
+                groupKey="primary_contact"
+                className="alloy-os-household__summary-region"
+                dataAttrs={{ "data-household-summary-region": "primary_contact" }}
+            >
+                {evidence.primaryContact ? (
+                    <div className="alloy-os-household__primary-row" data-household-primary-row="true">
+                        <CardAvatar name={evidence.primaryContact.name} imageUrl={evidence.primaryContact.imageUrl} size={30} />
+                        <div className="alloy-os-household__row-main min-w-0">
+                            <span className="alloy-os-household__row-name">
+                                {evidence.primaryContact.name}
+                                <span className="alloy-os-card-pill alloy-os-card-pill--positive alloy-os-household__primary-badge">Primary</span>
+                            </span>
+                            <span
+                                className={clsx(
+                                    "alloy-os-household__row-detail",
+                                    !channel && "alloy-os-household__channel--missing",
+                                )}
+                                data-household-channel="true"
+                            >
+                                {channel ?? "No contact channel on file"}
+                            </span>
+                        </div>
                     </div>
-                </div>
-            ) : (
-                <p className="alloy-os-household__missing" data-household-missing="primary">
-                    Primary contact needed
-                </p>
-            )}
+                ) : (
+                    <p className="alloy-os-household__missing" data-household-missing="primary">
+                        Primary contact needed
+                    </p>
+                )}
+                {composing ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="primary_contact" /> : null}
+            </ComposableRegionShell>
+
+            {secondaryParents.length > 0 ? (
+                <ComposableRegionShell
+                    surfaceId={HOUSEHOLD_SURFACE_ID}
+                    groupKey="other_parent_guardian"
+                    className="alloy-os-household__summary-region"
+                    dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
+                >
+                    {secondaryParents.map((contact) => (
+                        <div
+                            key={contact.personId}
+                            className="alloy-os-household__primary-row"
+                            data-household-secondary-parent={contact.personId}
+                        >
+                            <CardAvatar name={contact.name} imageUrl={contact.imageUrl ?? null} size={30} />
+                            <div className="alloy-os-household__row-main min-w-0">
+                                <span className="alloy-os-household__row-name">
+                                    {contact.name}
+                                    {contact.roleLabel ? (
+                                        <span className="alloy-os-card-pill alloy-os-card-pill--neutral alloy-os-household__primary-badge">
+                                            {contact.roleLabel}
+                                        </span>
+                                    ) : null}
+                                </span>
+                                <span className="alloy-os-household__row-detail" data-household-channel="true">
+                                    {[contact.phone, contact.email].filter(Boolean).join(" · ") || "No contact channel on file"}
+                                </span>
+                            </div>
+                        </div>
+                    ))}
+                    {composing ? (
+                        <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="other_parent_guardian" />
+                    ) : null}
+                </ComposableRegionShell>
+            ) : composing ? (
+                <ComposableRegionShell
+                    surfaceId={HOUSEHOLD_SURFACE_ID}
+                    groupKey="other_parent_guardian"
+                    className="alloy-os-household__summary-region"
+                    dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
+                >
+                    <p className="alloy-os-household__row-detail">Add secondary parent fields when contacts exist</p>
+                    <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="other_parent_guardian" />
+                </ComposableRegionShell>
+            ) : null}
 
             {evidence.address ? <AddressLine address={evidence.address} /> : null}
 
@@ -552,13 +611,7 @@ function ExpandedBody({
                         nestedConfig={nestedConfig}
                         composing={composing}
                     />
-                    {composing ? (
-                        <RegionEditLayer
-                            surfaceId={HOUSEHOLD_SURFACE_ID}
-                            groupKey={group.key}
-                            composing={composing}
-                        />
-                    ) : null}
+                    {composing ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey={group.key} /> : null}
                 </ComposableRegionShell>
             ))}
             {composing ? <AddSectionMenu surfaceId={HOUSEHOLD_SURFACE_ID} /> : null}
@@ -608,37 +661,12 @@ function FocusedGroupBody({
                 nestedConfig={nestedConfig}
                 composing={composing}
             />
-            {composing ? (
-                <RegionEditLayer
-                    surfaceId={HOUSEHOLD_SURFACE_ID}
-                    groupKey={group.key}
-                    composing={composing}
-                />
-            ) : null}
+            {composing ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey={group.key} /> : null}
         </ComposableRegionShell>
     );
 }
 
-/** Edit-layer field controls — runtime rows stay visible above (Final Surface Composer doctrine). */
-function RegionEditLayer({
-    surfaceId,
-    groupKey,
-    composing,
-}: {
-    surfaceId: string;
-    groupKey: string;
-    composing: boolean;
-}) {
-    if (!composing) return null;
-    return (
-        <InlineRuntimeFieldList
-            surfaceId={surfaceId}
-            groupKey={groupKey}
-            suppressPreview
-            whenRegionSelectedOnly
-        />
-    );
-}
+/** Household groups render runtime rows; Add field is one per selected region. */
 
 function EmergencyEmptyState({
     onAdd,
