@@ -1,83 +1,126 @@
 "use client";
 
+import type { ReactNode } from "react";
+
+import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
+import WorkspaceModeNav from "@/components/workspace/WorkspaceModeNav";
+import type { WorkspaceMode } from "@/components/workspace/WorkspaceModeTabs";
+import { WS_FIELD } from "@/components/workspace/workspaceTokens";
+
 /**
- * Canonical workspace chrome: Left navigation → Work area.
+ * @module WorkspaceShell
  *
- * The shared shell for every operational workspace (POS, Forms, Layout Builder,
- * Processing, future Packet Builder). White sidebar with Bend Pine active state,
- * white canvas — NO navy slab, NO beige. The BOS rail lives OUTSIDE this (owned by
- * the modal shell); this component never renders or touches it.
+ * ## Purpose
+ * The invariant chrome for every operational module modal (Processing, Communications,
+ * Work Items, Scheduling, Attendance, Billing, Reporting). Owns the fixed hierarchy so
+ * modules only supply content.
+ *
+ * ## When to use
+ * Any AdminV2 modal workspace that follows Work | Studio + module sub-tabs. Processing
+ * (Digital Mailroom) is the reference implementation.
+ *
+ * ## Do NOT use for
+ * - `/workspace` org landing (Presentation Runtime `WorkspaceRootShell`).
+ * - Entity drawers / Focus Panel record surfaces.
+ * - Settings or configuration pages outside the operational modal pattern.
+ *
+ * ## Required structure (never deviate)
+ * ```
+ * WorkspaceHeader     — module title + tagline + actions + close
+ * [optional kpiBand]  — full-width status strip (Communications)
+ * WorkspaceModeNav    — Work | Studio + module tabs [+ optional metricsColumn]
+ * Workspace body      — stone field; children use WorkspaceSurface / WorkspaceCard
+ * ```
  */
 
-import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
-import { WS_CANVAS, WS_NAV_GROUP_LABEL, WS_NAV_ITEM_ACTIVE, WS_NAV_ITEM_IDLE } from "./workspaceTokens";
+export type WorkspaceShellHeader = {
+    icon: ReactNode;
+    title: string;
+    titleId: string;
+    subtitle?: string;
+    actions?: ReactNode;
+    secondaryActions?: ReactNode;
+    onClose: () => void;
+    closeLabel?: string;
+};
 
-export interface WorkspaceNavItem<K extends string = string> {
-    key: K;
-    label: string;
-    icon: LucideIcon;
-    group: string;
-}
-
-export default function WorkspaceShell<K extends string>({
-    items,
-    active,
-    onNavigate,
-    groupLabels = {},
-    width = "8.5rem",
-    navHeader,
+export default function WorkspaceShell<M extends string, S extends string>({
+    header,
+    modes,
+    activeMode,
+    onModeChange,
+    modeAriaLabel,
+    sectionTabs,
+    activeSection,
+    onSectionChange,
+    sectionAriaLabel,
+    kpiBand,
+    metricsColumn,
+    sectionTrailing,
+    navDataAttr,
+    sectionsDataAttr,
+    bodyClassName,
+    dataTestId,
     children,
 }: {
-    items: ReadonlyArray<WorkspaceNavItem<K>>;
-    active: K;
-    onNavigate: (key: K) => void;
-    groupLabels?: Record<string, string>;
-    width?: string;
-    /** Optional element rendered at the top of the nav column (e.g. a mode switcher). */
-    navHeader?: ReactNode;
+    header: WorkspaceShellHeader;
+    modes: ReadonlyArray<WorkspaceMode<M>>;
+    activeMode: M;
+    onModeChange: (mode: M) => void;
+    modeAriaLabel: string;
+    sectionTabs: { key: S; label: string }[];
+    activeSection: S;
+    onSectionChange: (key: S) => void;
+    sectionAriaLabel: string;
+    kpiBand?: ReactNode;
+    metricsColumn?: ReactNode;
+    sectionTrailing?: ReactNode;
+    navDataAttr?: string;
+    sectionsDataAttr?: string;
+    bodyClassName?: string;
+    dataTestId?: string;
     children: ReactNode;
 }) {
-    let lastGroup: string | null = null;
     return (
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-            <nav
-                aria-label="Workspace sections"
-                className="flex shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-alloy-stone/12 bg-white px-2 py-2.5"
-                style={{ width }}
+        <div
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
+            data-workspace-shell="true"
+            data-testid={dataTestId}
+        >
+            <WorkspaceHeader
+                icon={header.icon}
+                title={header.title}
+                subtitle={header.subtitle}
+                titleId={header.titleId}
+                actions={header.actions}
+                secondaryActions={header.secondaryActions}
+                onClose={header.onClose}
+                closeLabel={header.closeLabel}
+            />
+
+            {kpiBand}
+
+            <WorkspaceModeNav
+                modes={modes}
+                activeMode={activeMode}
+                onModeChange={onModeChange}
+                modeAriaLabel={modeAriaLabel}
+                sectionTabs={sectionTabs}
+                activeSection={activeSection}
+                onSectionChange={onSectionChange}
+                sectionAriaLabel={sectionAriaLabel}
+                metricsColumn={metricsColumn}
+                sectionTrailing={sectionTrailing}
+                navDataAttr={navDataAttr}
+                sectionsDataAttr={sectionsDataAttr}
+            />
+
+            <div
+                className={bodyClassName ?? `flex min-h-0 flex-1 flex-col overflow-hidden ${WS_FIELD}`}
+                data-workspace-shell-body="true"
             >
-                {navHeader ? <div className="mb-1">{navHeader}</div> : null}
-                {items.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = active === item.key;
-                    const showGroup = item.group !== lastGroup;
-                    lastGroup = item.group;
-                    return (
-                        <div key={item.key}>
-                            {showGroup && groupLabels[item.group] ? (
-                                <div className={`px-2 pb-1 pt-2 ${WS_NAV_GROUP_LABEL}`}>{groupLabels[item.group]}</div>
-                            ) : null}
-                            <button
-                                type="button"
-                                onClick={() => onNavigate(item.key)}
-                                aria-current={isActive ? "page" : undefined}
-                                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors ${
-                                    isActive ? WS_NAV_ITEM_ACTIVE : WS_NAV_ITEM_IDLE
-                                }`}
-                            >
-                                <Icon
-                                    size={15}
-                                    strokeWidth={1.9}
-                                    className={isActive ? "text-alloy-juniper" : "text-alloy-midnight/45"}
-                                    aria-hidden
-                                />
-                                <span className="truncate">{item.label}</span>
-                            </button>
-                        </div>
-                    );
-                })}
-            </nav>
-            <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${WS_CANVAS}`}>{children}</div>
+                {children}
+            </div>
         </div>
     );
 }

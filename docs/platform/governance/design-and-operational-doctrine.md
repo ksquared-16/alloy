@@ -42,6 +42,7 @@ AdminV2 reveal gates, queue empty semantics, composed payload readiness — **pr
 - Typography: `../../system/typography-and-presentation-doctrine.md`
 - BOS identity: `../../system/bos-identity-doctrine.md`
 - Queue record rows: `../../system/queue-record-doctrine.md`
+- **Alloy Workspace Doctrine V1** (operational module modals): `../core/navigation-and-workspace-doctrine.md` — Alloy Workspace Doctrine V1 section; components: `web/components/workspace/doctrine.ts`
 
 ---
 

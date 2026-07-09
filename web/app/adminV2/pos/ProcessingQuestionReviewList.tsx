@@ -12,6 +12,13 @@ import {
     supportsNameRepresentation,
     type ReviewQuestionInput,
 } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
+import {
+    PROCESSING_BODY,
+    PROCESSING_FIELD_LABEL,
+    PROCESSING_METADATA,
+    PROCESSING_PANEL_EYEBROW,
+    PROCESSING_ROW_TITLE,
+} from "@/lib/pos/processingPresentationTokens";
 
 function resolvedStorageSummary(question: ReviewQuestionInput): string {
     if (question.ignored || question.questionSubject === "processing_only") {
@@ -89,22 +96,20 @@ export function ProcessingQuestionReviewList({
 
     return (
         <>
-            <p className="mb-1.5 text-[9px] font-medium text-alloy-midnight/40">
+            <p className={`mb-2 ${PROCESSING_METADATA}`}>
                 {activeCount} active question{activeCount === 1 ? "" : "s"}
                 {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
             </p>
-            <div className="divide-y divide-alloy-stone/10">
+            <div className="space-y-1">
                 {sections.map((section) => (
-                    <section key={section.title} className="py-2 first:pt-0 last:pb-0">
-                        <div className="mb-1 flex items-baseline justify-between gap-2">
-                            <h3 className="text-[9px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/35">
-                                {section.title}
-                            </h3>
-                            <span className="text-[9px] tabular-nums text-alloy-midnight/30">
+                    <section key={section.title} className="py-3 first:pt-0 last:pb-0">
+                        <div className="mb-2 flex items-baseline justify-between gap-2">
+                            <h3 className={PROCESSING_PANEL_EYEBROW}>{section.title}</h3>
+                            <span className={`tabular-nums ${PROCESSING_METADATA}`}>
                                 {section.questions.filter((q) => !q.ignored).length}
                             </span>
                         </div>
-                        <ol className="divide-y divide-alloy-stone/[0.08]">
+                        <ol className="space-y-1">
                             {section.questions.map((q) => {
                                 const sel = selectedId === q.id;
                                 const isEditing = editingId === q.id;
@@ -121,30 +126,34 @@ export function ProcessingQuestionReviewList({
                                         key={q.id}
                                         data-testid={`review-question-${q.id}`}
                                         data-question-ignored={q.ignored ? "true" : undefined}
-                                        className={`py-1.5 transition-colors ${sel ? "bg-alloy-stone/[0.03]" : ""} ${q.ignored ? "opacity-55" : ""}`}
+                                        className={`rounded-lg px-2 py-2 transition-colors ${sel ? "bg-alloy-bend-pine/[0.04]" : "hover:bg-alloy-stone/[0.03]"} ${q.ignored ? "opacity-55" : ""}`}
                                     >
-                                        <div className="flex items-start gap-1">
+                                        <div className="flex items-start gap-2">
                                             <button
                                                 type="button"
                                                 onClick={() => onSelect(sel ? null : q.id)}
-                                                className="flex min-w-0 flex-1 flex-col gap-px text-left"
+                                                className="flex min-w-0 flex-1 flex-col gap-1 text-left"
                                             >
-                                                <span className="text-[9px] text-alloy-midnight/40">
+                                                <span className={PROCESSING_METADATA}>
                                                     {q.evidenceLabel || "Untitled source field"}
                                                 </span>
-                                                <span className="text-[11px] font-semibold leading-snug text-alloy-midnight">
+                                                <span className={`${PROCESSING_ROW_TITLE} leading-snug`}>
                                                     {q.displayLabel || (
-                                                        <span className="font-normal text-alloy-midnight/35">Untitled question</span>
+                                                        <span className="font-normal text-alloy-midnight/40">Untitled question</span>
                                                     )}
                                                 </span>
-                                                <span className="text-[9px] text-alloy-midnight/45">
-                                                    {TYPE_LABEL[q.type] ?? q.type}
-                                                    {mapped ? " · mapped" : " · not mapped"}
-                                                    {highConfidence ? (
-                                                        <span className="font-semibold text-alloy-bend-pine"> · High confidence</span>
-                                                    ) : (
-                                                        <span> · {STATUS_LABEL[status] ?? status}</span>
-                                                    )}
+                                                <span className={`flex flex-wrap items-center gap-1.5 ${PROCESSING_BODY}`}>
+                                                    <span>{TYPE_LABEL[q.type] ?? q.type}</span>
+                                                    <span className="text-alloy-midnight/25" aria-hidden>
+                                                        ·
+                                                    </span>
+                                                    <span>{mapped ? "Mapped" : "Not mapped"}</span>
+                                                    <span className="text-alloy-midnight/25" aria-hidden>
+                                                        ·
+                                                    </span>
+                                                    <span className={highConfidence ? "text-alloy-bend-pine" : "text-alloy-midnight/45"}>
+                                                        {STATUS_LABEL[status] ?? status}
+                                                    </span>
                                                 </span>
                                             </button>
                                             <div className="flex shrink-0 items-center gap-0.5">
@@ -200,9 +209,9 @@ export function ProcessingQuestionReviewList({
                                         </div>
 
                                         {!q.ignored && sel ? (
-                                            <div className="mt-1.5 space-y-1.5 border-t border-alloy-stone/[0.08] pt-1.5">
+                                            <div className="mt-3 space-y-2 border-t border-alloy-stone/10 pt-3">
                                                 <div>
-                                                    <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                                    <label className={`mb-1 block ${PROCESSING_FIELD_LABEL}`}>
                                                         Destination
                                                     </label>
                                                     <select
@@ -225,7 +234,7 @@ export function ProcessingQuestionReviewList({
                                                 </div>
                                                 {showNameRep ? (
                                                     <div>
-                                                        <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                                        <label className={`mb-1 block ${PROCESSING_FIELD_LABEL}`}>
                                                             Name format
                                                         </label>
                                                         <div className="flex flex-wrap gap-1">
@@ -255,7 +264,7 @@ export function ProcessingQuestionReviewList({
                                                         </div>
                                                     </div>
                                                 ) : null}
-                                                <div className="flex items-center gap-1 text-[9px] font-medium text-alloy-bend-pine">
+                                                <div className={`flex items-center gap-1 ${PROCESSING_METADATA} text-alloy-bend-pine`}>
                                                     <Check className="h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
                                                     <span>{resolvedStorageSummary(q)}</span>
                                                 </div>
@@ -263,7 +272,7 @@ export function ProcessingQuestionReviewList({
                                         ) : null}
 
                                         {isEditing && !q.ignored ? (
-                                            <div className="mt-1.5 space-y-1 border-t border-alloy-stone/[0.08] pt-1.5">
+                                            <div className="mt-3 space-y-2 border-t border-alloy-stone/10 pt-3">
                                                 <input
                                                     value={q.displayLabel}
                                                     onChange={(e) => onUpdate(q.id, { displayLabel: e.target.value })}

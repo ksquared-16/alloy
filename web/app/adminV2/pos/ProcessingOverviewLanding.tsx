@@ -3,14 +3,14 @@
 import { ArrowRight, Briefcase, FileUp, Layers } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
-import type { WorkspaceHeaderKpiVm } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import ProcessingLandingActionCard from "./ProcessingLandingActionCard";
+import WorkspaceCard from "@/components/workspace/WorkspaceCard";
+import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 import { useProcessingFormApi } from "./useProcessingFormApi";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
-import { caseMatchesCategoryFolder, formOrigin } from "@/lib/pos/processingFolderConfig";
+import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 
 function formatAge(iso: string | null): string {
@@ -37,18 +37,6 @@ function statusTone(label: string): string {
     return "text-alloy-midnight/55";
 }
 
-const OVERVIEW_KPIS = (args: {
-    active: number;
-    ready: number;
-    forms: number;
-    published: number;
-}): WorkspaceHeaderKpiVm[] => [
-    { slot: 1, label: "Active work", icon: "clipboard", accent: "midnight", formattedValue: String(args.active), status: "unknown", sourceKey: null, drillHref: null },
-    { slot: 2, label: "Ready", icon: "spark", accent: "pine", formattedValue: String(args.ready), status: "healthy", sourceKey: null, drillHref: null },
-    { slot: 3, label: "Forms", icon: "layers", accent: "stone", formattedValue: String(args.forms), status: "unknown", sourceKey: null, drillHref: null },
-    { slot: 4, label: "Published", icon: "book", accent: "stone", formattedValue: String(args.published), status: "unknown", sourceKey: null, drillHref: null },
-];
-
 export default function ProcessingOverviewLanding({
     onOpenWork,
     onOpenStudio,
@@ -72,7 +60,6 @@ export default function ProcessingOverviewLanding({
 
     const rows = queue.data?.rows ?? [];
     const active = rows.filter((r) => r.status !== "completed" && r.status !== "archived");
-    const ready = rows.filter((r) => r.status === "ready" || r.formDraftSummary?.generatedFormId);
     const recentRows = active.slice(0, 3);
     const recentForms = forms.slice(0, 3);
 
@@ -112,7 +99,7 @@ export default function ProcessingOverviewLanding({
     }
 
     return (
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white p-4 lg:p-5" data-testid="processing-overview-landing">
+        <WorkspaceSurface scroll data-testid="processing-overview-landing">
             <input
                 ref={fileInputRef}
                 type="file"
@@ -168,22 +155,6 @@ export default function ProcessingOverviewLanding({
                     />
                 </section>
                 {importErr ? <p className="text-[11px] text-alloy-midnight/60">{importErr}</p> : null}
-
-                <section>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/35">
-                        Today&apos;s activity
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                        {OVERVIEW_KPIS({
-                            active: active.length,
-                            ready: ready.length,
-                            forms: forms.length,
-                            published: forms.filter((f) => f.has_published_version).length,
-                        }).map((kpi) => (
-                            <SurfaceHeaderKpiCard key={kpi.slot} kpi={kpi} interactive={false} variant="work-unit" density="compact" />
-                        ))}
-                    </div>
-                </section>
 
                 <div className="grid gap-4 lg:grid-cols-3">
                     <ContinuePanel title="Recent work" action="View all" onAction={onOpenWork}>
@@ -267,7 +238,7 @@ export default function ProcessingOverviewLanding({
                     </section>
                 </div>
             </div>
-        </div>
+        </WorkspaceSurface>
     );
 }
 
@@ -283,7 +254,7 @@ function ContinuePanel({
     children: ReactNode;
 }) {
     return (
-        <section className="rounded-xl border border-alloy-stone/15 bg-white px-4 py-3">
+        <WorkspaceCard flat padded className="px-4 py-3">
             <header className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="text-[13px] font-semibold text-alloy-midnight">{title}</h2>
                 <button type="button" onClick={onAction} className="text-[11px] font-semibold text-alloy-bend-pine hover:underline">
@@ -291,7 +262,7 @@ function ContinuePanel({
                 </button>
             </header>
             {children}
-        </section>
+        </WorkspaceCard>
     );
 }
 

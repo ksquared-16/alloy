@@ -130,6 +130,87 @@ Full drawer rules: `../operator/drawer-system.md`.
 
 ---
 
+## Alloy Workspace Doctrine V1 (operational module modals)
+
+**Status:** Frozen (July 2026). **Reference implementation:** Processing (Digital Mailroom).
+
+This section defines the **shared modal workspace** every operational module consumes — Communications, Work Items, Scheduling, Attendance, Billing, Reporting, and future modules. It is distinct from the org-level `/workspace` landing (four-zone command center above).
+
+### Purpose
+
+One operating system for operational module UIs. The hierarchy and visual language are fixed; **only the content changes**. Processing validated the pattern; no module may invent parallel shell chrome.
+
+### Required hierarchy (never deviate)
+
+```
+Module title + tagline     WorkspaceHeader
+Work | Studio              WorkspaceModeTabs
+Module section tabs        WorkspaceSubTabs   [optional WorkspaceMetricTiles in nav band]
+────────────────────────── WorkspaceDivider (stone hairline)
+Workspace body             WorkspaceSurface (stone field)
+  └ white surfaces         WorkspaceCard / WorkspaceZonePanel
+```
+
+### Visual hierarchy
+
+| Layer | Treatment |
+|-------|-----------|
+| Shell header | White, Bend Pine left accent, Midnight Forge title |
+| Mode + section nav | White band, Bend Pine active selection |
+| Metric tiles | White KPI cards on nav band (Work mode) |
+| Workspace field | River Stone ~4% (`WS_FIELD`) |
+| Cards / zones | White surfaces, thin stone border, soft elevation |
+| Separators | Stone hairlines only — never black, never heavy |
+
+### Color hierarchy (frozen)
+
+| Token | Role |
+|-------|------|
+| **Midnight Forge** | Structure, navigation, typography, icons, secondary actions |
+| **Bend Pine** | Primary action, active selection, progress, success, publish/generate/compose |
+| **Alloy Gold** | Attention, published state |
+| **White** | Surfaces and cards |
+| **River Stone** | Workspace field background |
+
+No other accent colors in operational module workspaces. Bend Pine is never used as decoration.
+
+### Containment model
+
+- **Stone field** replaces flat white modal backgrounds globally.
+- **White cards** carry contained content (Overview action cards, summary panels).
+- **Zone panels** split multi-column workspaces (queue rail, source document, inspector).
+- **Dividers** separate regions horizontally (below nav) and vertically (queue ↔ canvas).
+
+### Component library
+
+Import from `@/components/workspace/doctrine`:
+
+| Component | Responsibility |
+|-----------|----------------|
+| `WorkspaceShell` | Invariant modal chrome (header + nav + body) |
+| `WorkspaceHeader` | Module title, tagline, actions, Close |
+| `WorkspaceModeTabs` | Work \| Studio |
+| `WorkspaceSubTabs` | Module section tabs |
+| `WorkspaceModeNav` | Composed two-level nav (+ optional metrics column) |
+| `WorkspaceMetricTiles` | Canonical metric tiles (shared KPI card) |
+| `WorkspaceSurface` | Scrollable stone-field body |
+| `WorkspaceCard` | White contained surface |
+| `WorkspaceZonePanel` | Multi-column zone (queue, source, review) |
+| `WorkspaceDivider` | Subtle stone separator |
+| `WorkspaceSection` | Eyebrow + content group |
+
+Code: `web/components/workspace/doctrine.ts`, tokens: `web/components/workspace/workspaceTokens.ts`.
+
+### Rules for future modules
+
+1. Compose `WorkspaceShell` + workspace primitives — no custom hierarchy.
+2. Module-specific code supplies **data and content only** (e.g. `ProcessingKpiStrip` derives metrics, renders `WorkspaceMetricTiles`).
+3. Do not duplicate shell layout in module folders.
+4. Do not introduce module-specific themes or accent colors.
+5. Migrate legacy modules (Communications, Work Items) to the doctrine barrel incrementally.
+
+---
+
 ## Related
 
 - `business-process-system.md`

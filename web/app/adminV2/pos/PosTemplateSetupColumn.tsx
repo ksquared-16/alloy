@@ -26,7 +26,8 @@ import { computePageMaps, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/p
 import PosPdfFieldMap from "./PosPdfFieldMap";
 import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
 import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
-import ProcessingParentPanel from "./ProcessingParentPanel";
+import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
+import { WS_FIELD } from "@/components/workspace/workspaceTokens";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 import {
     seedReviewQuestionFromDraftField,
@@ -458,8 +459,8 @@ export default function PosTemplateSetupColumn({
                 </div>
             ) : (
             <>
-            <div className="flex min-h-0 flex-1 gap-2 overflow-hidden p-0">
-                <ProcessingParentPanel
+            <div className={`flex min-h-0 flex-1 gap-3 overflow-hidden ${WS_FIELD} p-2 pt-1`}>
+                <WorkspaceZonePanel
                     title="Source document"
                     className="min-w-0 flex-[55]"
                     headerAction={
@@ -487,7 +488,7 @@ export default function PosTemplateSetupColumn({
                     }
                 >
                     <div
-                        className={`min-h-0 flex-1 bg-alloy-stone/[0.02] p-2 ${
+                        className={`min-h-0 flex-1 bg-alloy-stone/[0.02] p-1.5 ${
                             leftView === "pdf" && pdfUrl ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-y-contain"
                         }`}
                     >
@@ -536,11 +537,11 @@ export default function PosTemplateSetupColumn({
                             <div className="h-64 w-full animate-pulse rounded bg-alloy-stone/10" />
                         )}
                     </div>
-                </ProcessingParentPanel>
+                </WorkspaceZonePanel>
 
-                <ProcessingParentPanel
+                <WorkspaceZonePanel
                     title="Review questions"
-                    className="min-w-0 flex-[23]"
+                    className="min-w-0 flex-[23] bg-alloy-stone/[0.02]"
                     headerAction={
                         <div className="flex gap-2">
                             {(["questions", "text"] as const).map((t) => (
@@ -609,7 +610,7 @@ export default function PosTemplateSetupColumn({
                             </div>
                         )}
                     </div>
-                </ProcessingParentPanel>
+                </WorkspaceZonePanel>
             </div>
             </>
             )}

@@ -19,6 +19,7 @@ import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
+import { PROCESSING_METADATA, PROCESSING_ROW_TITLE } from "@/lib/pos/processingPresentationTokens";
 
 /**
  * Display order: operator-actionable lanes first; completed/archived are secondary.
@@ -86,7 +87,7 @@ const LANE_TONE: Record<string, string> = {
 };
 
 const QUEUE_ROW_CLASS =
-    "flex w-full items-center gap-1 border-b border-alloy-stone/10 px-1.5 py-px text-left transition-colors hover:bg-alloy-stone/[0.04]";
+    "flex w-full items-center gap-1.5 border-b border-alloy-stone/10 px-2 py-2 text-left transition-colors hover:bg-alloy-stone/[0.04]";
 const QUEUE_ROW_SELECTED_CLASS =
     "border-l-2 border-l-alloy-bend-pine bg-alloy-bend-pine/[0.06] hover:bg-alloy-bend-pine/[0.08]";
 
@@ -269,11 +270,11 @@ export default function ProcessingQueueList({
                     className={`${QUEUE_ROW_CLASS} ${selected ? QUEUE_ROW_SELECTED_CLASS : ""}`}
                 >
                     <span className="min-w-0 flex-1">
-                        <span className="flex items-baseline justify-between gap-1.5">
-                            <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-alloy-midnight">{title}</span>
-                            <span className="shrink-0 text-[7px] tabular-nums text-alloy-midnight/30">{formatAge(row.sourceDisplay?.receivedAt ?? row.createdAt)}</span>
+                        <span className="flex items-baseline justify-between gap-2">
+                            <span className={`min-w-0 flex-1 truncate ${PROCESSING_ROW_TITLE}`}>{title}</span>
+                            <span className={`shrink-0 tabular-nums ${PROCESSING_METADATA}`}>{formatAge(row.sourceDisplay?.receivedAt ?? row.createdAt)}</span>
                         </span>
-                        <span className={`flex items-center gap-1 truncate text-[7px] font-medium leading-tight ${laneTone}`}>
+                        <span className={`mt-0.5 flex items-center gap-1 truncate ${PROCESSING_METADATA} ${laneTone}`}>
                             <span>{laneLabel}</span>
                             {rec ? (
                                 <>

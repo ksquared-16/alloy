@@ -22,8 +22,6 @@ import { PRESENTATION_SECTION_EYEBROW, PRESENTATION_SECTION_HEADER } from "@/lib
 export const BEND_PINE = "#00A283";
 export const BEND_PINE_HOVER = "#009276";
 
-/** Canvas: white platform surface (no beige). */
-export const WS_CANVAS = "bg-white";
 /** Optional faint page field behind floating panels — cool neutral, never beige. */
 export const WS_PAGE_FIELD = "bg-neutral-50";
 /** Column / region separators. */
@@ -96,3 +94,31 @@ export const WS_ACTION_PRIMARY =
     "rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-[#009276] disabled:opacity-50";
 export const WS_ACTION_SECONDARY =
     "rounded-md border border-alloy-stone/20 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-alloy-midnight/75 hover:border-alloy-stone/35 disabled:opacity-50";
+
+/* ── Alloy Workspace Doctrine V1 — frozen palette & surfaces ───────────────────
+   Midnight Forge (#273F52 / alloy-midnight-forge) — structure, navigation, typography, icons
+   Bend Pine (#00A283) — primary action, selection, progress, success (never decoration)
+   Alloy Gold — attention, published
+   White — surfaces and cards
+   River Stone (#F4F6F9) — workspace field (~4% wash)
+   No other accent colors in operational module workspaces. */
+
+/** Stone workspace field behind white surfaces (~4%). Replaces flat white modal backgrounds. */
+export const WS_FIELD = "bg-alloy-stone/[0.04]";
+
+/** Module shell nav band padding (header → mode tabs → section tabs). */
+export const WS_SHELL_NAV_CLASS = "shrink-0 bg-white px-4 py-2.5";
+
+/** Queue / list rail — recessed column with vertical stone separator. */
+export const WS_QUEUE_RAIL =
+    "border-r border-alloy-stone/15 bg-alloy-stone/[0.03] shadow-[inset_-1px_0_0_rgba(24,39,58,0.04)]";
+
+/** Primary working canvas inside a module workspace. */
+export const WS_CANVAS = "bg-white shadow-[0_1px_6px_rgba(24,39,58,0.06)]";
+
+/** Secondary inspector column beside the canvas. */
+export const WS_INSPECTOR = "bg-alloy-stone/[0.02] border-l border-alloy-stone/12";
+
+/** Inline metric-band eyebrow (Today's activity) beside WorkspaceMetricTiles. */
+export const WS_METRIC_EYEBROW_INLINE =
+    "flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/55";
