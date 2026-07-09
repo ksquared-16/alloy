@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 
+import ComposerFloatingPopover from "@/components/admin/focusPanel/drillIn/ComposerFloatingPopover";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import {
     isNestedGroupEnabled,
@@ -31,6 +32,7 @@ export default function AddSectionMenu({
 }: Props) {
     const composer = useFocusPanelComposer();
     const [open, setOpen] = useState(false);
+    const triggerRef = useRef<HTMLButtonElement>(null);
 
     const config = composer?.configFor(surfaceId) ?? null;
     const options = useMemo(
@@ -62,15 +64,22 @@ export default function AddSectionMenu({
     return (
         <div className="fp-add-section-wrap" data-add-section-menu={surfaceId} data-add-section-variant={variant}>
             <button
+                ref={triggerRef}
                 type="button"
                 className="fp-inline-add-section"
                 data-add-section-trigger="true"
+                aria-expanded={open}
                 onClick={() => setOpen((v) => !v)}
             >
                 <Plus className="inline h-3.5 w-3.5 align-text-bottom" aria-hidden /> {triggerLabel}
             </button>
-            {open ? (
-                <div className="fp-add-section-menu" role="menu">
+            <ComposerFloatingPopover
+                open={open}
+                anchorRef={triggerRef}
+                onClose={() => setOpen(false)}
+                className="fp-add-section-menu"
+            >
+                <div role="menu">
                     {available.map((option) => (
                         <button
                             key={option.groupKey}
@@ -82,28 +91,28 @@ export default function AddSectionMenu({
                             onClick={() => addSection(option.groupKey, option.semantic)}
                         >
                             <span className="fp-add-section-menu__label">{option.label}</span>
-                            <span className="fp-add-section-menu__desc">{option.description}</span>
+                            {option.description ? (
+                                <span className="fp-add-section-menu__desc">{option.description}</span>
+                            ) : null}
                         </button>
                     ))}
-                    {variant === "operational" ? (
-                        <button
-                            type="button"
-                            role="menuitem"
-                            className="fp-add-section-menu__item fp-add-section-menu__item--custom"
-                            data-add-section-custom="true"
-                            onClick={() => {
-                                const label = window.prompt("Name this section");
-                                const trimmed = label?.trim();
-                                if (!trimmed) return;
-                                addSection(CUSTOM_SECTION_OPTION.groupKey, CUSTOM_SECTION_OPTION.semantic, trimmed);
-                            }}
-                        >
-                            <span className="fp-add-section-menu__label">{CUSTOM_SECTION_OPTION.label}</span>
-                            <span className="fp-add-section-menu__desc">{CUSTOM_SECTION_OPTION.description}</span>
-                        </button>
-                    ) : null}
+                    <button
+                        type="button"
+                        role="menuitem"
+                        className="fp-add-section-menu__item fp-add-section-menu__item--custom"
+                        data-add-section-custom="true"
+                        onClick={() => {
+                            const label = window.prompt("Name this section");
+                            const trimmed = label?.trim();
+                            if (!trimmed) return;
+                            addSection(CUSTOM_SECTION_OPTION.groupKey, CUSTOM_SECTION_OPTION.semantic, trimmed);
+                        }}
+                    >
+                        <span className="fp-add-section-menu__label">{CUSTOM_SECTION_OPTION.label}</span>
+                        <span className="fp-add-section-menu__desc">{CUSTOM_SECTION_OPTION.description}</span>
+                    </button>
                 </div>
-            ) : null}
+            </ComposerFloatingPopover>
         </div>
     );
 }

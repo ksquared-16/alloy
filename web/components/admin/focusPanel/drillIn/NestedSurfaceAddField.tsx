@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 
+import ComposerFloatingPopover from "@/components/admin/focusPanel/drillIn/ComposerFloatingPopover";
 import {
     addFieldToNestedGroup,
     availableFieldsForNestedGroup,
@@ -22,6 +23,7 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, className =
     const composer = useFocusPanelComposer();
     const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
     const [addOpen, setAddOpen] = useState(false);
+    const triggerRef = useRef<HTMLButtonElement>(null);
 
     const composing = composer?.isComposingSurface(surfaceId) ?? false;
     const config = composer?.configFor(surfaceId);
@@ -49,9 +51,11 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, className =
     return (
         <div className={["fp-region-add-field", className].filter(Boolean).join(" ")} data-region-add-field={groupKey}>
             <button
+                ref={triggerRef}
                 type="button"
                 className="fp-inline-field-list__add"
                 data-canvas-add-field={groupKey}
+                aria-expanded={addOpen}
                 onClick={(e) => {
                     e.stopPropagation();
                     setAddOpen((v) => !v);
@@ -60,8 +64,13 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, className =
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 Add field
             </button>
-            {addOpen ? (
-                <div className="fp-inline-field-library" data-drill-in-field-library={groupKey}>
+            <ComposerFloatingPopover
+                open={addOpen}
+                anchorRef={triggerRef}
+                onClose={() => setAddOpen(false)}
+                className="fp-inline-field-library"
+            >
+                <div data-drill-in-field-library={groupKey}>
                     {available.map((f) => (
                         <button
                             key={f.key}
@@ -73,11 +82,14 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, className =
                                 setAddOpen(false);
                             }}
                         >
-                            {f.label}
+                            <span className="fp-inline-field-library__label">{f.label}</span>
+                            {!f.isSystemField ? (
+                                <span className="fp-inline-field-library__meta">Custom field</span>
+                            ) : null}
                         </button>
                     ))}
                 </div>
-            ) : null}
+            </ComposerFloatingPopover>
         </div>
     );
 }
