@@ -1,8 +1,42 @@
 # Current Work + Action System Hardening — Sprint Closeout
 
 **Sprint:** July 2026  
-**Branch:** `cursor/dea30cea` (worktree)  
-**Baseline:** Current Work V1 merged to staging (PR #95)
+**Status:** **Ready for Product QA**  
+**Merged:** PR [#111](https://github.com/ksquared-16/alloy/pull/111) → `staging`  
+**Merge commit:** `da8a82c30d3d6162c684e50dfe455f783be82e84`  
+**Staging HEAD:** `da8a82c30d3d6162c684e50dfe455f783be82e84`
+
+---
+
+## Ready for staging QA
+
+PR #111 is merged. Staging is the QA target for the Current Work hardening stream (published operating-plan wiring, checklist truth resolution, supporting action slide-in panel with Schedule Tour proof).
+
+### CI status (pre-merge, PR #111)
+
+| Check | Result |
+|-------|--------|
+| Web typecheck | pass |
+| Vercel – workwithalloy | pass |
+| Vercel – firefly-early-learning | pass |
+| Vercel Preview Comments | pass |
+
+### Post-merge validation (staging @ `da8a82c30`)
+
+```bash
+cd web && NODE_OPTIONS="--max-old-space-size=8192" npx tsc --noEmit   # exit 0
+cd web && npm run test -- \
+  tests/adminV2/runtime/resolveCurrentWorkActionSurface.test.ts \
+  tests/adminV2/runtime/currentWorkCard.test.tsx \
+  tests/adminV2/runtime/currentWorkOperationalSurface.test.ts \
+  tests/adminV2/runtime/currentWorkActionSurfacePolicy.test.ts \
+  tests/adminV2/runtime/projectCurrentWork.test.ts \
+  tests/adminV2/runtime/currentWorkCardEvidence.test.ts \
+  tests/adminV2/runtime/currentWorkPolish.test.tsx \
+  tests/adminV2/runtime/filterRightRailActionsForCurrentWork.test.ts \
+  tests/adminV2/runtime/deriveCurrentWorkSupportingActions.test.ts
+# 59/59 passed
+```
 
 ---
 
@@ -10,127 +44,79 @@
 
 | # | Goal | Status |
 |---|------|--------|
-| 1 | Harden Current Work (Summary, Focus, completion, handoffs, queue, empty states) | **In progress** — awaiting QA screenshots / product feedback |
-| 2 | Audit Action System entry points | **Complete** — see [action-system.md](../../platform/operator/action-system.md) |
-| 3 | Action Registry alignment | **Partial** — category-backed CW policy; full resolver unification deferred |
-| 4 | Cross-domain readiness | **Partial** — policy generalized; domain action seeds pending |
-| 5 | Documentation | **Complete** — canonical action-system doc + alignment docs updated |
-| 6 | Refactoring | **Partial** — centralized CW action policy module |
+| 1 | Harden Current Work (Summary, Focus, completion, handoffs, queue, empty states) | **Ready for Product QA** |
+| 2 | Audit Action System entry points | **Complete** — see [action-system.md](../../../platform/operator/action-system.md) |
+| 3 | Action Registry alignment | **Partial** — category-backed CW policy; inline panel resolver started |
+| 4 | Cross-domain readiness | **Partial** — published-plan + checklist truth; billing fixture covered in tests |
+| 5 | Documentation | **Complete** — canonical action-system doc + current-work-surface updates |
+| 6 | Refactoring | **Partial** — centralized CW action policy + surface VM layer |
 
 ---
 
-## What changed (this session)
+## What shipped in PR #111
 
-### Code
+### Phase 1 — Published operating plan + checklist truth
 
-| File | Change |
-|------|--------|
-| `web/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActionSurfacePolicy.ts` | **New** — cross-domain action competition policy using canonical categories |
-| `web/lib/adminV2/runtime/focusPanel/currentWork/deriveCurrentWorkSupportingActions.ts` | Refactored to use shared policy (replaces inline enrollment key sets) |
-| `web/lib/adminV2/runtime/focusPanel/currentWork/filterRightRailActionsForCurrentWork.ts` | Refactored to use shared policy |
-| `web/tests/adminV2/runtime/currentWorkActionSurfacePolicy.test.ts` | **New** — policy unit tests |
+- `resolvePublishedStageInputsForCurrentWork` — reads lifecycle builder metadata
+- `resolveCurrentWorkTemplateFromPublishedPlan` — adapts to Current Work overlay
+- `resolveCurrentWorkChecklistTruthFromPublishedRules` — field-rule completion from record/readiness truth
+- `buildCurrentWorkSurfaceVM` — config-first VM with stage-runtime fallback
+- Enrollment + billing fixtures and operational surface tests (18 tests)
 
-### Documentation
+### Phase 2 — Supporting action slide-in panel
 
-| File | Change |
-|------|--------|
-| `docs/platform/operator/action-system.md` | **New** — canonical Action System inventory and doctrine |
-| `docs/sprints/07_2026/current-work-action-hardening/00-sprint-closeout.md` | This closeout |
+- `resolveCurrentWorkActionSurface` — `inline_form` | `communications_composer` | `header_delegate` | `unsupported`
+- `CurrentWorkActionPanel` — focused-view shell inside Current Work
+- Schedule Tour proof — embedded `OpportunityTourScheduleActionModal` (`variant="embedded"`)
+- Post-success: panel close + `adminv2:opportunity-updated` refresh path
+- `FocusPanelCardRenderer` passes `mutation` to `CurrentWorkCard`
 
----
+### Policy + docs
 
-## What was simplified
-
-1. **Single policy module** for Current Work action competition — was duplicated inline key sets in two files  
-2. **Category-backed demotion** — `status_lifecycle` and `communication` categories replace per-key enrollment lists for rail/supporting filters (cross-domain)  
-3. **Documentation consolidation** — one canonical operator doc for action inventory; prior sprint audits referenced as historical  
+- `currentWorkActionSurfacePolicy.ts` — cross-domain action competition
+- `docs/platform/operator/action-system.md` — canonical Action System inventory
 
 ---
 
-## Architecture audit summary
+## Known follow-up (post-QA — do not start until feedback)
 
-### Ownership model (confirmed)
+- Email inline action panel
+- SMS inline action panel
+- Send Packet inline action panel
+- BOS recommendation widget
+- Action icons polish
+
+Additional engineering backlog (unchanged):
+
+- Queue row registry actions on Presentation V2 condensed rows
+- Single unified action resolver for work-unit rail + drawer VM
+- Operating-plan publish reconciliation job
+- Remove legacy manage-key compat when overflow placement is universal
+
+---
+
+## Architecture audit summary (confirmed)
 
 ```
-Current Work  →  operational progression (stage-work runtime)
-Actions       →  execution layer (registry + placements)
+Current Work  →  operational progression (stage-work runtime + published plan overlay)
+Actions       →  execution layer (registry + placements + inline panel resolver)
 Manage        →  administrative catalog slice (overflow slot)
 Right rail    →  assistive inventory (demoted when CW owns completion)
 BOS           →  assist only (no outcome bypass)
 ```
 
-### Duplication identified (not yet removed)
+---
 
-| Issue | Location | Phase 2 action |
-|-------|----------|----------------|
-| Dual drawer stacks | VM path + `AdminEntityDrawerLegacy` | Converge on VM path per drawer sunset roadmap |
-| `record_header` triple consume | Manage, supporting, handoff | Single resolver with surface projections |
-| Queue actions on V2 rows | `CondensedQueueRow` has no rail | Wire registry `queue_row` placements |
-| Legacy manage stubs | `buildRecordManageMenuForEntity` | Registry-backed for person/child drawers |
-| Three execute paths | execute, enrollment-status, relationship | Consolidate through `runRegisteredAction` |
+## Suggested QA entry points
 
-### Config vs runtime (confirmed aligned)
-
-- Current Work title/checklist/outcomes: **stage operating plan** — not hardcoded  
-- Supporting actions: **DB `record_header`** + policy filter  
-- Manage: **same resolve**, overflow slot for admin  
-- Completion: **stage-work runtime** — intentionally outside action registry  
+1. Open an enrollment opportunity on a stage with published operating plan (e.g. Lead / Tour stage).
+2. Focus Panel → Work mode → Current Work card.
+3. Summary: verify progress, checklist, helpful actions.
+4. Details → Focus: verify primary action, helpful actions grid, other paths, outcome picker.
+5. Schedule Tour helpful action → inline panel → save → verify refresh without page reload.
 
 ---
 
-## What remains (needs QA input)
+## Sprint completion
 
-Awaiting source-of-truth from product:
-
-- [ ] Summary polish issues (spacing, copy, empty states)  
-- [ ] Focus completion flow edge cases  
-- [ ] Communications handoff verification per outcome type  
-- [ ] Queue projection empty/hold states  
-- [ ] Browser QA pass on staging with real org data  
-
-### Known code gaps (no QA required)
-
-- Presentation V2 `CondensedQueueRow` — queue registry actions not wired  
-- Operating-plan publish reconciliation — dev script only  
-- BOS Focus contextual chips — P2  
-- Legacy enrollment manage keys in policy module — remove when overflow placement is universal  
-
----
-
-## Phase 2 recommendations
-
-1. **Operating-plan publish reconciliation** — run `reconcileOrphanedStageWorkForOpportunity` on plan publish  
-2. **Queue row actions on Presentation V2** — hydrate `queue_row` placements on condensed rows  
-3. **Single action resolver module** — unify work-unit rail + drawer VM resolve  
-4. **Expand registered handlers** — migrate high-traffic actions (`schedule_tour`, comms) to `actionRegistry.ts`  
-5. **BOS Focus integration** — contextual chips tied to open work template  
-6. **Operational Action Rule Sets** — invariant/repair pipeline per operational-action-doctrine  
-7. **Remove legacy manage key compat** — once all admin actions use overflow slot in config  
-
----
-
-## Validation
-
-```bash
-cd web && npm run test -- \
-  tests/adminV2/runtime/currentWorkActionSurfacePolicy.test.ts \
-  tests/adminV2/runtime/currentWorkPolish.test.tsx \
-  tests/adminV2/runtime/filterRightRailActionsForCurrentWork.test.ts \
-  tests/adminV2/runtime/deriveCurrentWorkSupportingActions.test.ts \
-  tests/adminV2/runtime/projectCurrentWork.test.ts
-
-cd web && npx tsc --noEmit
-```
-
-**Not committed** per sprint instruction — review before commit.
-
----
-
-## Suggested commit message (when ready)
-
-```
-Harden Current Work action policy with cross-domain category classification.
-
-Centralize supporting/rail demotion in currentWorkActionSurfacePolicy and add
-canonical Action System documentation for the post-V1 alignment sprint.
-```
+**Not complete.** Marked **Ready for Product QA** pending manual staging verification and product feedback.
