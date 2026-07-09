@@ -9,7 +9,6 @@
 import { useEffect, useState } from "react";
 
 import WorkspaceMetricTiles, { type WorkspaceMetricTileItem } from "@/components/workspace/WorkspaceMetricTiles";
-import { WS_METRIC_EYEBROW_INLINE } from "@/components/workspace/workspaceTokens";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import {
     fetchOperationalTasksSummary,
@@ -110,12 +109,15 @@ export default function WorkItemsKpiStrip() {
     );
 
     return (
-        <div className="flex w-full min-w-0 items-center gap-3" data-testid="work-items-kpi-band">
-            <p className={WS_METRIC_EYEBROW_INLINE}>
-                <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-alloy-midnight/45" aria-hidden />
-                Today&apos;s activity
-            </p>
-            <WorkspaceMetricTiles items={items} size="md" align="start" loading={loading} ariaLabel="Work Items metrics" className="min-w-0 flex-1" />
-        </div>
+        <WorkspaceMetricTiles
+            eyebrow="Today's activity"
+            items={items}
+            size="md"
+            align="start"
+            loading={loading}
+            ariaLabel="Work Items metrics"
+            className="w-full"
+            data-testid="work-items-kpi-band"
+        />
     );
 }

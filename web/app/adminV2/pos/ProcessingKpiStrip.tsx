@@ -9,7 +9,6 @@
 
 import { useEffect } from "react";
 import WorkspaceMetricTiles, { type WorkspaceMetricTileItem } from "@/components/workspace/WorkspaceMetricTiles";
-import { WS_METRIC_EYEBROW_INLINE } from "@/components/workspace/workspaceTokens";
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 import { useProcessingFormApi } from "./useProcessingFormApi";
 
@@ -41,12 +40,15 @@ export default function ProcessingKpiStrip() {
     ];
 
     return (
-        <div className="flex w-full items-center gap-3" data-testid="processing-work-mode-kpi-band">
-            <p className={WS_METRIC_EYEBROW_INLINE}>
-                <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-alloy-midnight/45" aria-hidden />
-                Today&apos;s activity
-            </p>
-            <WorkspaceMetricTiles items={items} size="md" align="start" loading={loading} ariaLabel="Today's activity" className="min-w-0 flex-1" />
-        </div>
+        <WorkspaceMetricTiles
+            eyebrow="Today's activity"
+            items={items}
+            size="md"
+            align="start"
+            loading={loading}
+            ariaLabel="Today's activity"
+            className="w-full"
+            data-testid="processing-work-mode-kpi-band"
+        />
     );
 }

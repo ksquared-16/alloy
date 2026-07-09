@@ -130,9 +130,12 @@ export const WS_CANVAS = "bg-white shadow-[0_1px_6px_rgba(24,39,58,0.06)]";
 /** Secondary inspector column beside the canvas. */
 export const WS_INSPECTOR = "bg-alloy-stone/[0.02] border-l border-alloy-stone/12";
 
-/** Inline metric-band eyebrow (Today's activity) beside WorkspaceMetricTiles. */
-export const WS_METRIC_EYEBROW_INLINE =
-    "flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-slate";
+/** Metric-band eyebrow — stacked above WorkspaceMetricTiles (canonical nav metrics layout). */
+export const WS_METRIC_EYEBROW =
+    "flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-slate";
+
+/** @deprecated use stacked `WS_METRIC_EYEBROW` via `WorkspaceMetricTiles` `eyebrow` prop */
+export const WS_METRIC_EYEBROW_INLINE = WS_METRIC_EYEBROW;
 
 /** Shared execution body beneath module nav — stone field. */
 export const WS_EXECUTION_BODY =
@@ -142,10 +145,17 @@ export const WS_EXECUTION_BODY =
 export const WS_SURFACE_CONTENT_PAD = "p-4 lg:p-6";
 
 /**
- * Artifact viewport — intentional scroll container for PDF/region stacks in operational modules.
+ * Artifact canvas — white document surface with stone border and soft depth.
+ * Wraps scroll/viewport content inside artifact-heavy module zones (Processing source document).
+ */
+export const WS_ARTIFACT_CANVAS =
+    "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-[0_2px_8px_rgba(24,39,58,0.06)] ring-1 ring-alloy-stone/[0.06]";
+
+/**
+ * Artifact viewport — flex column inside WS_ARTIFACT_CANVAS.
  * Parent must be `flex min-h-0 flex-col`; scroll stays inside the document zone.
  */
-export const WS_ARTIFACT_VIEWPORT = "flex min-h-0 flex-1 flex-col overflow-hidden bg-white";
+export const WS_ARTIFACT_VIEWPORT = "flex min-h-0 flex-1 flex-col overflow-hidden";
 
 /** Internal scroll region for stacked artifact pages (bottom padding avoids clipped edge). */
 export const WS_ARTIFACT_VIEWPORT_SCROLL =

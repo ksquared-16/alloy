@@ -10,7 +10,7 @@
 import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
 import type { WorkspaceHeaderKpiVm } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import type { ProcessCardAccent, ProcessCardIcon } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
-import { WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
+import { WS_METRIC_EYEBROW, WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
 
 export type WorkspaceMetricStatus = "healthy" | "warning" | "critical" | "unknown";
 
@@ -61,24 +61,31 @@ function toKpiVm(item: WorkspaceMetricTileItem, index: number, loading: boolean)
 
 export default function WorkspaceMetricTiles({
     items,
+    eyebrow,
     size = "sm",
     align = "start",
     loading = false,
     ariaLabel = "Workspace metrics",
     className = "",
+    "data-testid": testId,
 }: {
     items: WorkspaceMetricTileItem[];
+    /** Optional band label stacked above tiles (e.g. Today's activity). */
+    eyebrow?: string;
     size?: WorkspaceMetricTilesSize;
     align?: WorkspaceMetricTilesAlign;
     loading?: boolean;
     ariaLabel?: string;
     className?: string;
+    "data-testid"?: string;
 }) {
     if (items.length === 0) return null;
-    return (
+
+    const tiles = (
         <div
-            className={`flex flex-wrap items-stretch gap-2.5 ${align === "end" ? "justify-end" : "justify-start"} ${SIZE_OVERRIDES[size]} ${className}`.trim()}
+            className={`flex flex-wrap items-stretch gap-2.5 ${align === "end" ? "justify-end" : "justify-start"} ${SIZE_OVERRIDES[size]} ${eyebrow ? "w-full" : className}`.trim()}
             data-workspace-metric-tiles="true"
+            data-testid={eyebrow ? undefined : testId}
             role="list"
             aria-label={ariaLabel}
             aria-busy={loading}
@@ -97,6 +104,22 @@ export default function WorkspaceMetricTiles({
                     />
                 </div>
             ))}
+        </div>
+    );
+
+    if (!eyebrow) return tiles;
+
+    return (
+        <div
+            className={`flex w-full min-w-0 flex-col gap-1.5 ${className}`.trim()}
+            data-workspace-metric-band="true"
+            data-testid={testId}
+        >
+            <p className={WS_METRIC_EYEBROW}>
+                <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-alloy-midnight/45" aria-hidden />
+                {eyebrow}
+            </p>
+            {tiles}
         </div>
     );
 }

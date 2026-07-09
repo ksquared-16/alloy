@@ -10,7 +10,6 @@ import WorkspaceMetricTiles, {
     type WorkspaceMetricStatus,
     type WorkspaceMetricTileItem,
 } from "@/components/workspace/WorkspaceMetricTiles";
-import { WS_METRIC_EYEBROW_INLINE } from "@/components/workspace/workspaceTokens";
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 import { useCommunicationsWorkspaceKpi } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import { NEEDS_REVIEW_STATUS_LABEL } from "@/lib/communications/v2/commandCenterViewModel";
@@ -146,13 +145,20 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
 
     if (items.length === 0) return null;
 
+    const eyebrowLabel = TAB_EYEBROW[activeTab] ?? "Status";
+
     return (
-        <div className="flex w-full min-w-0 items-center gap-3" data-comms-workspace-kpi-band="true" data-testid="comms-workspace-kpi-band">
-            <p className={WS_METRIC_EYEBROW_INLINE}>
-                <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-alloy-midnight/45" aria-hidden />
-                {TAB_EYEBROW[activeTab] ?? "Status"}
-            </p>
-            <WorkspaceMetricTiles items={items} size="md" align="start" loading={loading} ariaLabel="Communications status" className="min-w-0 flex-1" />
+        <div data-comms-workspace-kpi-band="true" className="w-full min-w-0">
+            <WorkspaceMetricTiles
+                eyebrow={eyebrowLabel}
+                items={items}
+                size="md"
+                align="start"
+                loading={loading}
+                ariaLabel="Communications status"
+                className="w-full"
+                data-testid="comms-workspace-kpi-band"
+            />
         </div>
     );
 }

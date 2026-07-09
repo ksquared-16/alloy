@@ -90,9 +90,27 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(divider).toContain("WS_DIVIDER_FILL");
     });
 
+    it("WorkspaceMetricTiles supports stacked metric band eyebrow", () => {
+        const tiles = read("components/workspace/WorkspaceMetricTiles.tsx");
+        expect(tiles).toContain("eyebrow?: string");
+        expect(tiles).toContain("data-workspace-metric-band");
+        expect(tiles).toContain("WS_METRIC_EYEBROW");
+        const processing = read("app/adminV2/pos/ProcessingKpiStrip.tsx");
+        expect(processing).toContain('eyebrow="Today\'s activity"');
+        expect(processing).not.toContain("WS_METRIC_EYEBROW_INLINE");
+    });
+
+    it("Processing uses artifact canvas containment for source document", () => {
+        const setup = read("app/adminV2/pos/PosTemplateSetupColumn.tsx");
+        expect(setup).toContain("WS_ARTIFACT_CANVAS");
+        expect(setup).toContain('data-workspace-artifact-canvas="true"');
+        const tokens = read("components/workspace/workspaceTokens.ts");
+        expect(tokens).toContain("export const WS_ARTIFACT_CANVAS");
+    });
+
     it("Processing uses artifact viewport and queue doctrine primitives", () => {
         const setup = read("app/adminV2/pos/PosTemplateSetupColumn.tsx");
-        expect(setup).toContain("WS_ARTIFACT_VIEWPORT");
+        expect(setup).toContain("WS_ARTIFACT_CANVAS");
         expect(setup).toContain('data-workspace-artifact-viewport="true"');
         const workspace = read("app/adminV2/pos/PosProcessingWorkspace.tsx");
         expect(workspace).toContain("WorkspaceDivider");

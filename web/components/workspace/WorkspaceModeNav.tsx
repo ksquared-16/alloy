@@ -91,7 +91,7 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
                         />
                     </div>
                     <div
-                        className="flex min-w-0 items-center justify-start border-t border-alloy-stone/15 py-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:border-t-0 lg:pl-4 lg:py-0"
+                        className="flex min-w-0 flex-col items-stretch justify-center border-t border-alloy-stone/15 py-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:border-t-0 lg:pl-4 lg:py-1"
                         data-workspace-mode-metrics="true"
                     >
                         {metricsColumn}
