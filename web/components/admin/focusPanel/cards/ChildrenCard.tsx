@@ -193,6 +193,17 @@ export default function ChildrenCard({
         setEditing(composerPreview.perspective === "child_edit");
     }, [composerPreview, evidence.children]);
 
+    useEffect(() => {
+        if (!composingChildrenSurface) return;
+        if (focusedId) return;
+        const first = evidence.children[0];
+        if (!first) return;
+        setFocusedId(first.id);
+        setRosterOpen(true);
+        composer?.setDrillDepth({ kind: "child-focus", childId: first.id });
+        composer?.select({ kind: "region", surfaceId: CHILDREN_SURFACE_ID, groupKey: "identity" });
+    }, [composingChildrenSurface, evidence.children, focusedId, composer]);
+
     const isEmpty = evidence.count === 0;
     const focused =
         !isEmpty && focusedId ? evidence.children.find((c) => c.id === focusedId) ?? null : null;
