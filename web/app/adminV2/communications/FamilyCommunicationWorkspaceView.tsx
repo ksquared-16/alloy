@@ -14,6 +14,15 @@ import type { ConsentState, RecipientGroup, ComposerChannel } from "@/lib/commun
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import type { CommandCenterRecordLink } from "@/lib/communications/v2/commandCenterRecordLinks";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import {
+    deriveThreadChannelLabel,
+    deriveThreadLastPreview,
+    deriveThreadMessageSubject,
+    deriveThreadTopicTitle,
+    formatThreadParticipantNames,
+    threadParticipantsForTopicRow,
+    threadsForActivityTopicRail,
+} from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import {
@@ -59,35 +68,15 @@ export type WorkspaceDetail = {
 };
 export type WorkspaceSelected = { id: string; family_label?: string | null; sla_state?: string | null; assignment_state?: string | null; attention_state?: string | null };
 
-function threadChipLabel(thread: ThreadVM): string {
-    const subject = thread.subject?.trim();
-    if (subject) return subject;
-    if (thread.channel === "sms") return "SMS";
-    return "Email";
-}
-
-function sortThreadsForStrip(threads: ThreadVM[]): ThreadVM[] {
-    return [...threads].sort((a, b) => {
-        const ta = Date.parse(String(a.lastActivityAt ?? 0));
-        const tb = Date.parse(String(b.lastActivityAt ?? 0));
-        return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+function threadDisplayTitle(thread: ThreadVM, previewMessages: WorkspaceTimelineMessage[] = []): string {
+    return deriveThreadTopicTitle({
+        thread,
+        messageSubject: deriveThreadMessageSubject(thread.id, previewMessages),
     });
 }
 
-/** Activity embed thread list — hide orphaned zero-message threads (not real conversations). */
-function threadsForActivityEmbed(threads: ThreadVM[]): ThreadVM[] {
-    return sortThreadsForStrip(threads).filter((thread) => thread.messageCount > 0);
-}
-
-function threadParticipantsForAvatars(thread: ThreadVM, recipients: RecipientVM[]): RecipientVM[] {
-    const primary = recipients.filter((r) => r.tier === "primary");
-    const pool = primary.length > 0 ? primary : recipients;
-    if (pool.length <= 2) return pool;
-    return pool.slice(0, 2);
-}
-
 function ThreadParticipantAvatars({ thread, recipients }: { thread: ThreadVM; recipients: RecipientVM[] }) {
-    const participants = threadParticipantsForAvatars(thread, recipients);
+    const participants = threadParticipantsForTopicRow(thread, recipients);
     if (participants.length === 0) {
         const ChannelIcon = thread.channel === "sms" ? MessageSquare : Mail;
         return (
@@ -164,6 +153,8 @@ export type FamilyCommunicationWorkspaceViewProps = {
     selectedThreadId: string | null;
     selectedThread?: ThreadVM | null;
     messages: WorkspaceTimelineMessage[];
+    /** Full-family timeline for Activity topic previews (activity_embed only). */
+    timelineMessages?: WorkspaceTimelineMessage[];
     liveRecipientGroups: RecipientGroup[] | null;
     selectedRecipientIds: string[];
     liveChannel: ComposerChannel;
@@ -193,7 +184,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         noteDraft = "", onNoteDraftChange, onAddNote, noteSaving = false, noteError,
         taskTitleDraft = "", taskDueDraft = "", onTaskTitleChange, onTaskDueChange, onCreateTask, onCompleteTask, taskSaving = false, taskError,
         surfaceVariant = "default", threads = [], onNewMessage,
-        LIVE_WORKSPACE, selectedThreadId, selectedThread = null, messages,
+        LIVE_WORKSPACE, selectedThreadId, selectedThread = null, messages, timelineMessages = [],
         liveRecipientGroups, selectedRecipientIds, liveChannel, subjectDraft, bodyDraft, sendResult, sendError, sending, assignBusy,
         onClaim, onAllMessages, onOpenThread, onToggleRecipient, onSubjectChange, onBodyChange, onSendNow, onConfirmSend, onDismissSend,
     } = props;
@@ -487,7 +478,13 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         <div
             data-cc-ws-column="composer"
             data-cc-ws-section="composer"
-            className={`flex min-h-0 flex-col bg-white ${isActivityEmbed ? "shrink-0 border-t-2 border-alloy-stone/20 px-3 py-2.5" : "px-4 py-3"}`}
+            className={`flex min-h-0 flex-col bg-white ${
+                isActivityEmbed
+                    ? isNewMessageMode
+                        ? "min-h-0 flex-1 overflow-hidden border-t-2 border-alloy-stone/20 px-3 py-2.5"
+                        : "shrink-0 border-t-2 border-alloy-stone/20 px-3 py-2.5"
+                    : "px-4 py-3"
+            }`}
         >
                 <div data-cc-composer-channels className="inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
                     {renderModeTab("email", "Email")}
@@ -727,7 +724,15 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     className={`mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35 ${workspaceMode === "sms" ? "hidden" : ""}`}
                 />
 
-                <div className={`mt-2 flex min-h-0 flex-col overflow-hidden rounded-lg border bg-white shadow-sm ${isActivityEmbed ? "min-h-[148px] flex-none border-alloy-stone/30 ring-1 ring-alloy-stone/10" : "min-h-[240px] flex-1 border-alloy-stone/20"}`}>
+                <div
+                    className={`mt-2 flex min-h-0 flex-col overflow-hidden rounded-lg border bg-white shadow-sm ${
+                        isActivityEmbed
+                            ? isNewMessageMode
+                                ? "min-h-[12rem] flex-1 border-alloy-stone/30 ring-1 ring-alloy-stone/10"
+                                : "min-h-[9.5rem] flex-none border-alloy-stone/30 ring-1 ring-alloy-stone/10"
+                            : "min-h-[240px] flex-1 border-alloy-stone/20"
+                    }`}
+                >
                     <div className={`flex items-center gap-0.5 border-b border-alloy-stone/20 ${COMMS_SURFACE_MUTED_CLASS} px-1.5 py-1`}>
                         <button type="button" aria-label="Bold" className={toolbarBtn} onClick={() => applyBodyFormat("bold")}><Bold className="h-3.5 w-3.5" /></button>
                         <button type="button" aria-label="Italic" className={toolbarBtn} onClick={() => applyBodyFormat("italic")}><Italic className="h-3.5 w-3.5" /></button>
@@ -747,11 +752,17 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         placeholder={
                             isNewMessageMode
                                 ? `Write a new message to ${detail ? detail.contactName : (selected.family_label ?? "the family")}…`
-                                : `Reply in ${selectedThread ? threadChipLabel(selectedThread) : "this thread"}…`
+                                : `Reply in ${selectedThread ? threadDisplayTitle(selectedThread, timelineMessages) : "this thread"}…`
                         }
                         value={bodyDraft}
                         onChange={(e) => onBodyChange(e.target.value)}
-                        className={`w-full resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none ${isActivityEmbed ? "min-h-[108px]" : "min-h-0 flex-1"}`}
+                        className={`w-full resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none ${
+                            isActivityEmbed
+                                ? isNewMessageMode
+                                    ? "min-h-[9.5rem] flex-1"
+                                    : "min-h-[5.5rem]"
+                                : "min-h-0 flex-1"
+                        }`}
                     />
                 </div>
 
@@ -802,18 +813,23 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     );
 
     if (isActivityEmbed) {
-        const activityThreadList = threadsForActivityEmbed(threads);
+        const activityThreadList = threadsForActivityTopicRail(threads);
         const activeThread = selectedThread ?? activityThreadList.find((t) => t.id === selectedThreadId) ?? null;
+        const activeParticipants = activeThread ? threadParticipantsForTopicRow(activeThread, allLiveRecipients) : [];
+        const activeParticipantSummary = formatThreadParticipantNames(
+            activeParticipants.length > 0 ? activeParticipants : allLiveRecipients.slice(0, 2),
+        );
         return (
             <div data-cc-surface-variant={surfaceVariant} className="flex h-full min-h-0 flex-1 overflow-hidden">
-                {/* THREAD LIST — conversation browser */}
+                {/* TOPIC RAIL — compact conversation browser (~190–220px) */}
                 <div
                     data-cc-ws-column="threadlist"
                     data-cc-thread-strip
-                    className="flex min-h-0 w-[40%] min-w-[8.5rem] max-w-[13.5rem] shrink-0 flex-col border-r-2 border-alloy-stone/20 bg-alloy-stone/[0.015]"
+                    data-cc-topic-rail
+                    className="flex min-h-0 w-[12.5rem] min-w-[11.875rem] max-w-[13.75rem] shrink-0 flex-col border-r-2 border-alloy-stone/25 bg-alloy-stone/[0.02]"
                 >
                     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/20 bg-white px-2.5 py-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Conversations</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Topics</span>
                         <button
                             type="button"
                             data-cc-new-message
@@ -830,25 +846,42 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         ) : (
                             activityThreadList.map((thread) => {
                                 const active = selectedThreadId === thread.id;
+                                const participants = threadParticipantsForTopicRow(thread, allLiveRecipients);
+                                const participantNames = formatThreadParticipantNames(
+                                    participants.length > 0 ? participants : allLiveRecipients.slice(0, 2),
+                                );
+                                const topicTitle = threadDisplayTitle(thread, timelineMessages);
+                                const preview = deriveThreadLastPreview(thread.id, timelineMessages);
+                                const channelLabel = deriveThreadChannelLabel(thread.channel);
                                 return (
                                     <button
                                         key={thread.id}
                                         type="button"
                                         data-cc-thread-chip={thread.id}
+                                        data-cc-thread-topic={topicTitle}
                                         aria-pressed={active}
                                         onClick={() => onOpenThread(thread.id)}
-                                        className={`mb-1 flex w-full items-start gap-2 rounded-lg border px-2 py-1.5 text-left transition ${active ? "border-alloy-juniper/45 bg-alloy-juniper/10 ring-1 ring-alloy-juniper/20" : "border-alloy-stone/20 bg-white hover:border-alloy-juniper/40"}`}
+                                        className={`mb-1.5 flex w-full flex-col gap-1 rounded-lg border px-2 py-1.5 text-left transition ${active ? "border-alloy-juniper/45 bg-alloy-juniper/10 ring-1 ring-alloy-juniper/20" : "border-alloy-stone/20 bg-white hover:border-alloy-juniper/35"}`}
                                     >
-                                        <ThreadParticipantAvatars thread={thread} recipients={allLiveRecipients} />
-                                        <span className="min-w-0 flex-1">
-                                            <span className="flex items-center gap-1.5">
-                                                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-alloy-midnight">{threadChipLabel(thread)}</span>
-                                                {thread.unread > 0 ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-juniper" aria-label="Unread" /> : null}
+                                        <span className="flex items-start gap-2">
+                                            <ThreadParticipantAvatars thread={thread} recipients={allLiveRecipients} />
+                                            <span className="min-w-0 flex-1">
+                                                <span className="flex items-start gap-1">
+                                                    <span className="min-w-0 flex-1 truncate text-[11px] font-semibold leading-tight text-alloy-midnight">{topicTitle}</span>
+                                                    {thread.unread > 0 ? <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-juniper" aria-label="Unread" /> : null}
+                                                </span>
+                                                <span className="mt-0.5 block truncate text-[9.5px] text-alloy-midnight/50">{participantNames}</span>
                                             </span>
-                                            <span className="mt-0.5 flex items-center justify-between gap-1 text-[9.5px] text-alloy-midnight/45">
-                                                <span className="truncate">{thread.channel === "sms" ? "SMS" : "Email"} · {thread.messageCount} msg</span>
-                                                <span className="shrink-0">{relTime(thread.lastActivityAt)}</span>
+                                        </span>
+                                        {preview ? (
+                                            <span className="line-clamp-2 text-[9.5px] leading-snug text-alloy-midnight/45">{preview}</span>
+                                        ) : null}
+                                        <span className="flex items-center justify-between gap-1 text-[9px] text-alloy-midnight/40">
+                                            <span className="flex min-w-0 items-center gap-1">
+                                                <span className="rounded-full border border-alloy-stone/20 bg-alloy-stone/[0.04] px-1.5 py-px font-medium text-alloy-midnight/55">{channelLabel}</span>
+                                                {thread.messageCount > 0 ? <span>{thread.messageCount} msg</span> : null}
                                             </span>
+                                            <span className="shrink-0">{relTime(thread.lastActivityAt)}</span>
                                         </span>
                                     </button>
                                 );
@@ -857,45 +890,48 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     </div>
                 </div>
 
-                {/* CONVERSATION + COMPOSER — selected thread detail, composer pinned below */}
+                {/* READ / COMPOSE PANE */}
                 <div data-cc-ws-column="conversation" className="flex min-h-0 flex-1 flex-col bg-white">
-                    <div
-                        data-cc-thread-header
-                        className="shrink-0 border-b border-alloy-stone/20 bg-white px-3 py-2"
-                    >
+                    <div data-cc-thread-header className="shrink-0 border-b border-alloy-stone/20 bg-white px-3 py-2">
                         {isNewMessageMode ? (
-                            <>
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-alloy-juniper">New message</div>
-                                <p className="mt-0.5 text-[11px] text-alloy-midnight/55">Compose a new conversation — separate from thread replies.</p>
-                            </>
+                            <div className="text-[12px] font-semibold text-alloy-juniper">New Message</div>
                         ) : activeThread ? (
                             <>
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-[13px] font-semibold text-alloy-midnight">{threadChipLabel(activeThread)}</span>
+                                    <span className="text-[13px] font-semibold text-alloy-midnight">{threadDisplayTitle(activeThread, timelineMessages)}</span>
                                     <span className="rounded-full border border-alloy-stone/20 bg-alloy-stone/[0.04] px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60">
-                                        {activeThread.channel === "sms" ? "SMS" : "Email"}
+                                        {deriveThreadChannelLabel(activeThread.channel)}
                                     </span>
-                                    <span className="text-[10px] text-alloy-midnight/45">{activeThread.messageCount} messages · {relTime(activeThread.lastActivityAt)}</span>
+                                    {activeThread.unread > 0 ? (
+                                        <span className="rounded-full bg-alloy-juniper/15 px-2 py-0.5 text-[10px] font-medium text-alloy-juniper">{activeThread.unread} unread</span>
+                                    ) : null}
                                 </div>
-                                <p className="mt-0.5 text-[10px] text-alloy-midnight/45">Reading selected thread — replies stay in this conversation.</p>
+                                <p className="mt-0.5 text-[10px] text-alloy-midnight/50">
+                                    {activeParticipantSummary} · {activeThread.messageCount} messages · {relTime(activeThread.lastActivityAt)}
+                                </p>
                             </>
                         ) : (
-                            <p className="text-[11px] text-alloy-midnight/55">Select a conversation on the left to read messages.</p>
+                            <p className="text-[11px] text-alloy-midnight/55">Select a topic on the left to read messages.</p>
                         )}
                     </div>
-                    <div data-cc-ws-section="timeline" className={`min-h-0 flex-1 overflow-auto border-b border-alloy-stone/15 ${COMMS_SURFACE_MUTED_CLASS} px-3 py-2.5`}>
-                        {isNewMessageMode ? (
-                            <div className="flex h-full min-h-[6rem] flex-col items-center justify-center rounded-lg border border-dashed border-alloy-stone/25 bg-white/70 px-4 py-6 text-center">
-                                <p className="text-[12px] font-medium text-alloy-midnight/70">Start a new message</p>
-                                <p className="mt-1 max-w-[16rem] text-[10px] leading-snug text-alloy-midnight/45">Choose recipients and write below. Select a conversation on the left to read an existing thread.</p>
+
+                    {isNewMessageMode ? (
+                        composerColumn
+                    ) : (
+                        <>
+                            <div
+                                data-cc-ws-section="timeline"
+                                className={`min-h-0 flex-1 overflow-auto border-b border-alloy-stone/15 ${COMMS_SURFACE_MUTED_CLASS} px-3 py-2.5`}
+                            >
+                                {messages.length === 0 ? (
+                                    <div className="text-[11px] text-alloy-midnight/45">No messages in this conversation yet.</div>
+                                ) : (
+                                    messageListBody
+                                )}
                             </div>
-                        ) : messages.length === 0 ? (
-                            <div className="text-[11px] text-alloy-midnight/45">No messages in this thread yet.</div>
-                        ) : (
-                            messageListBody
-                        )}
-                    </div>
-                    {composerColumn}
+                            {composerColumn}
+                        </>
+                    )}
                 </div>
             </div>
         );

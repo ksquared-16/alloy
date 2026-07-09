@@ -347,6 +347,7 @@ export default function FamilyCommunicationWorkspace(props: {
         consent: vm.consentSummary.household,
     };
     const selected = { id: vm.scope.customerId, family_label: vm.family.label, sla_state: null, assignment_state: "unassigned" };
+    const timelineMessages = vm.timelineEvents.map(toWorkspaceMessage);
 
     return (
         <section
@@ -377,6 +378,7 @@ export default function FamilyCommunicationWorkspace(props: {
                 selectedThreadId={selectedThreadId}
                 selectedThread={vm.threads.find((t) => t.id === selectedThreadId) ?? null}
                 messages={messages}
+                timelineMessages={isActivityEmbed ? timelineMessages : undefined}
                 liveRecipientGroups={vm.recipientGroups}
                 selectedRecipientIds={selectedRecipientIds}
                 liveChannel={liveChannel}

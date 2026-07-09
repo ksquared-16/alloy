@@ -2113,14 +2113,19 @@ html[data-alloy-os-runtime="on"]
   height: 100%;
   overflow: hidden;
 }
-.alloy-os-activity-cockpit__comms [data-cc-ws-column="threadlist"] {
-  flex: 0 0 auto;
+.alloy-os-activity-cockpit__comms [data-cc-ws-column="threadlist"],
+.alloy-os-activity-cockpit__comms [data-cc-topic-rail] {
+  flex: 0 0 12.5rem;
+  width: 12.5rem;
+  min-width: 11.875rem;
+  max-width: 13.75rem;
   min-height: 0;
 }
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="conversation"] {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  border-left: 0;
 }
 .alloy-os-activity-cockpit__comms [data-cc-ws-column="conversation"] > [data-cc-ws-section="timeline"] {
   flex: 1 1 auto;
@@ -2132,7 +2137,10 @@ html[data-alloy-os-runtime="on"]
   overflow: visible;
 }
 .alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] textarea[aria-label="Message body"] {
-  min-height: 72px;
+  min-height: 88px;
+}
+.alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] [data-cc-ws-column="composer"].flex-1 textarea[aria-label="Message body"] {
+  min-height: 152px;
 }
 .alloy-os-activity-cockpit__comms [data-cc-surface-variant="activity_embed"] [data-cc-composer-channels] {
   font-size: 10px;

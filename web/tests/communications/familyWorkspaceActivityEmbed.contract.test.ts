@@ -21,18 +21,23 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(tab).toMatch(/surfaceVariant=\{props\.surfaceVariant\}/);
         expect(workspace).toMatch(/onNewMessage=\{startNewMessage\}/);
         expect(workspace).toMatch(/threads=\{vm\.threads\}/);
+        expect(workspace).toMatch(/timelineMessages=\{isActivityEmbed \? timelineMessages : undefined\}/);
     });
 
-    it("activity_embed view renders a two-pane conversation workspace (thread list | conversation)", () => {
+    it("activity_embed view renders topic rail + read/compose pane", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
-        // Thread rollup list (repurposed data-cc-thread-strip) with per-thread chips.
+        expect(view).toMatch(/data-cc-topic-rail/);
         expect(view).toMatch(/data-cc-thread-strip/);
         expect(view).toMatch(/data-cc-ws-column="threadlist"/);
         expect(view).toMatch(/data-cc-thread-chip/);
+        expect(view).toMatch(/data-cc-thread-topic/);
         expect(view).toMatch(/data-cc-thread-header/);
         expect(view).toMatch(/data-cc-thread-avatars/);
+        expect(view).toMatch(/threadsForActivityTopicRail\(threads\)/);
+        expect(view).toMatch(/deriveThreadLastPreview/);
+        expect(view).toMatch(/formatThreadParticipantNames/);
+        expect(view).toMatch(/deriveThreadChannelLabel/);
         expect(view).toMatch(/onOpenThread\(thread\.id\)/);
-        // Selected conversation + pinned composer on the right pane.
         expect(view).toMatch(/data-cc-ws-column="conversation"/);
         expect(view).toMatch(/data-cc-new-message/);
         expect(view).toMatch(/data-cc-recipient-compact/);
@@ -49,20 +54,46 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(css).toMatch(/\.alloy-os-activity-cockpit__stack[\s\S]*height: 100%/);
         expect(css).toMatch(/\.alloy-os-activity-cockpit__work[\s\S]*flex: 1\.6 1 0/);
         expect(css).toMatch(/\.alloy-os-activity-cockpit__docs[\s\S]*flex: 1\.2 1 0/);
-        // Split-mode cockpit fill uses flex (not height:100% — parent flex used size may be indefinite).
         expect(css).toMatch(
             /html\[data-alloy-os-runtime-split="true"\][\s\S]*\.alloy-os-activity-cockpit[\s\S]*flex: 1 1 0%/
         );
         expect(css).toMatch(
             /html\[data-alloy-os-runtime-split="true"\][\s\S]*\.alloy-os-activity-cockpit__body[\s\S]*flex: 1 1 0%/
         );
+        expect(css).toMatch(/\[data-cc-topic-rail\]/);
     });
 
-    it("activity_embed hides zero-message threads from the conversation list", () => {
+    it("activity_embed hides zero-message threads via topic rail helper", () => {
+        const helper = read("lib/communications/v2/familyWorkspace/threadTopicPresentation.ts");
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
-        expect(view).toMatch(/function threadsForActivityEmbed/);
-        expect(view).toMatch(/thread\.messageCount > 0/);
-        expect(view).toMatch(/threadsForActivityEmbed\(threads\)/);
+        expect(helper).toMatch(/threadsForActivityTopicRail/);
+        expect(helper).toMatch(/thread\.messageCount > 0/);
+        expect(view).toMatch(/threadsForActivityTopicRail\(threads\)/);
+    });
+
+    it("activity_embed thread title uses meaningful fallback helper", () => {
+        const helper = read("lib/communications/v2/familyWorkspace/threadTopicPresentation.ts");
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        expect(helper).toMatch(/deriveThreadTopicTitle/);
+        expect(helper).toMatch(/SMS Conversation/);
+        expect(view).toMatch(/threadDisplayTitle/);
+        expect(view).toMatch(/deriveThreadMessageSubject/);
+    });
+
+    it("activity_embed new-message mode shows compact compose pane without dashed empty panel", () => {
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        expect(view).toMatch(/isNewMessageMode \? \(\n\s*composerColumn/);
+        expect(view).not.toMatch(/Start a new message/);
+        expect(view).not.toMatch(/border-dashed border-alloy-stone\/25 bg-white\/70/);
+        expect(view).toMatch(/New Message/);
+        expect(view).toMatch(/Send now/);
+    });
+
+    it("activity_embed selected thread shows history + reply composer", () => {
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        expect(view).toMatch(/data-cc-ws-section="timeline"/);
+        expect(view).toMatch(/Send reply/);
+        expect(view).toMatch(/\{composerColumn\}/);
     });
 
     it("activity_embed composer uses header-matched BOS control and formatting toolbar", () => {
@@ -92,6 +123,13 @@ describe("familyWorkspace activity_embed contract", () => {
         const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
         expect(tab).toMatch(/activity_embed[\s\S]*flex-1/);
         expect(workspace).toMatch(/isActivityEmbed[\s\S]*flex-1/);
+    });
+
+    it("Command Center default modal layout remains unchanged", () => {
+        const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
+        expect(view).toMatch(/grid-cols-\[minmax\(0,1fr\)_minmax\(380px,1\.35fr\)\]/);
+        expect(view).toMatch(/data-cc-ws-column="timeline"/);
+        expect(view).toMatch(/snapshotBand/);
     });
 });
 
