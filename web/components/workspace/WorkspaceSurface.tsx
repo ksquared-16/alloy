@@ -22,10 +22,13 @@
  */
 
 import type { HTMLAttributes, ReactNode } from "react";
-import { WS_FIELD } from "@/components/workspace/workspaceTokens";
 
+/**
+ * Stone tone inherits the inset field from WorkspaceShell (Layer 2).
+ * Canvas tone is a full white execution surface when zone panels carry containment.
+ */
 const TONE_CLASS = {
-    stone: WS_FIELD,
+    stone: "",
     canvas: "bg-white",
 } as const;
 

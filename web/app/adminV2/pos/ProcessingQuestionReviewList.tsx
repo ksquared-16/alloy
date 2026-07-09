@@ -14,6 +14,7 @@ import {
 } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import {
     PROCESSING_BODY,
+    PROCESSING_DISABLED,
     PROCESSING_FIELD_LABEL,
     PROCESSING_METADATA,
     PROCESSING_PANEL_EYEBROW,
@@ -96,20 +97,15 @@ export function ProcessingQuestionReviewList({
 
     return (
         <>
-            <p className={`mb-2 ${PROCESSING_METADATA}`}>
+            <p className={`mb-3 ${PROCESSING_METADATA}`}>
                 {activeCount} active question{activeCount === 1 ? "" : "s"}
                 {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
             </p>
-            <div className="space-y-1">
+            <div className="space-y-2">
                 {sections.map((section) => (
-                    <section key={section.title} className="py-3 first:pt-0 last:pb-0">
-                        <div className="mb-2 flex items-baseline justify-between gap-2">
-                            <h3 className={PROCESSING_PANEL_EYEBROW}>{section.title}</h3>
-                            <span className={`tabular-nums ${PROCESSING_METADATA}`}>
-                                {section.questions.filter((q) => !q.ignored).length}
-                            </span>
-                        </div>
-                        <ol className="space-y-1">
+                    <section key={section.title} className="py-4 first:pt-0 last:pb-0">
+                        <h3 className={`mb-3 ${PROCESSING_PANEL_EYEBROW}`}>{section.title}</h3>
+                        <ol className="space-y-2">
                             {section.questions.map((q) => {
                                 const sel = selectedId === q.id;
                                 const isEditing = editingId === q.id;
@@ -126,32 +122,28 @@ export function ProcessingQuestionReviewList({
                                         key={q.id}
                                         data-testid={`review-question-${q.id}`}
                                         data-question-ignored={q.ignored ? "true" : undefined}
-                                        className={`rounded-lg px-2 py-2 transition-colors ${sel ? "bg-alloy-bend-pine/[0.04]" : "hover:bg-alloy-stone/[0.03]"} ${q.ignored ? "opacity-55" : ""}`}
+                                        className={`rounded-lg px-2.5 py-2.5 transition-colors ${sel ? "bg-alloy-bend-pine/[0.04]" : "hover:bg-alloy-stone/[0.03]"} ${q.ignored ? "opacity-55" : ""}`}
                                     >
-                                        <div className="flex items-start gap-2">
+                                        <div className="flex items-start gap-2.5">
                                             <button
                                                 type="button"
                                                 onClick={() => onSelect(sel ? null : q.id)}
-                                                className="flex min-w-0 flex-1 flex-col gap-1 text-left"
+                                                className="flex min-w-0 flex-1 flex-col gap-1.5 text-left"
                                             >
                                                 <span className={PROCESSING_METADATA}>
                                                     {q.evidenceLabel || "Untitled source field"}
                                                 </span>
                                                 <span className={`${PROCESSING_ROW_TITLE} leading-snug`}>
                                                     {q.displayLabel || (
-                                                        <span className="font-normal text-alloy-midnight/40">Untitled question</span>
+                                                        <span className={`font-normal ${PROCESSING_DISABLED}`}>Untitled question</span>
                                                     )}
                                                 </span>
-                                                <span className={`flex flex-wrap items-center gap-1.5 ${PROCESSING_BODY}`}>
+                                                <span className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 ${PROCESSING_BODY}`}>
                                                     <span>{TYPE_LABEL[q.type] ?? q.type}</span>
-                                                    <span className="text-alloy-midnight/25" aria-hidden>
-                                                        ·
-                                                    </span>
+                                                    <span aria-hidden>·</span>
                                                     <span>{mapped ? "Mapped" : "Not mapped"}</span>
-                                                    <span className="text-alloy-midnight/25" aria-hidden>
-                                                        ·
-                                                    </span>
-                                                    <span className={highConfidence ? "text-alloy-bend-pine" : "text-alloy-midnight/45"}>
+                                                    <span aria-hidden>·</span>
+                                                    <span className={highConfidence ? "text-alloy-bend-pine" : undefined}>
                                                         {STATUS_LABEL[status] ?? status}
                                                     </span>
                                                 </span>
@@ -164,7 +156,7 @@ export function ProcessingQuestionReviewList({
                                                         className={`rounded px-1 py-0.5 text-[8px] font-semibold ${
                                                             mappingFieldId === q.id
                                                                 ? "text-alloy-bend-pine"
-                                                                : "text-alloy-midnight/40 hover:text-alloy-bend-pine"
+                                                                : "text-alloy-midnight-forge opacity-70 hover:text-alloy-bend-pine"
                                                         }`}
                                                     >
                                                         {mappingFieldId === q.id ? "Mapping…" : "Map"}
@@ -175,7 +167,7 @@ export function ProcessingQuestionReviewList({
                                                         type="button"
                                                         aria-label="Restore question"
                                                         onClick={() => onIgnore(q.id)}
-                                                        className="p-0.5 text-alloy-midnight/30 hover:text-alloy-bend-pine"
+                                                        className="p-0.5 text-alloy-midnight-forge opacity-70 hover:text-alloy-bend-pine"
                                                     >
                                                         <RotateCcw className="h-3 w-3" />
                                                     </button>
@@ -184,7 +176,7 @@ export function ProcessingQuestionReviewList({
                                                         type="button"
                                                         aria-label="Ignore question"
                                                         onClick={() => onIgnore(q.id)}
-                                                        className="p-0.5 text-alloy-midnight/30 hover:text-alloy-midnight/60"
+                                                        className="p-0.5 text-alloy-midnight-forge opacity-70 hover:text-alloy-midnight-forge"
                                                     >
                                                         <EyeOff className="h-3 w-3" />
                                                     </button>
@@ -193,7 +185,7 @@ export function ProcessingQuestionReviewList({
                                                     type="button"
                                                     aria-label="Edit question"
                                                     onClick={() => onEdit(isEditing ? null : q.id)}
-                                                    className="p-0.5 text-alloy-midnight/30 hover:text-alloy-midnight/60"
+                                                    className="p-0.5 text-alloy-midnight-forge opacity-70 hover:text-alloy-bend-pine"
                                                 >
                                                     <Pencil className="h-3 w-3" />
                                                 </button>
@@ -201,7 +193,7 @@ export function ProcessingQuestionReviewList({
                                                     type="button"
                                                     aria-label="Delete question"
                                                     onClick={() => onRemove(q.id)}
-                                                    className="p-0.5 text-alloy-midnight/30 hover:text-alloy-midnight/60"
+                                                    className="p-0.5 text-alloy-midnight-forge opacity-70 hover:text-alloy-bend-pine"
                                                 >
                                                     <Trash2 className="h-3 w-3" />
                                                 </button>
@@ -209,7 +201,7 @@ export function ProcessingQuestionReviewList({
                                         </div>
 
                                         {!q.ignored && sel ? (
-                                            <div className="mt-3 space-y-2 border-t border-alloy-stone/10 pt-3">
+                                            <div className="mt-4 space-y-3">
                                                 <div>
                                                     <label className={`mb-1 block ${PROCESSING_FIELD_LABEL}`}>
                                                         Destination
@@ -254,7 +246,7 @@ export function ProcessingQuestionReviewList({
                                                                         className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
                                                                             active
                                                                                 ? "text-alloy-bend-pine underline decoration-alloy-bend-pine/40 underline-offset-2"
-                                                                                : "text-alloy-midnight/50 hover:text-alloy-midnight/70"
+                                                                                : "text-alloy-midnight/55 hover:text-alloy-bend-pine"
                                                                         }`}
                                                                     >
                                                                         {o.label}
@@ -272,7 +264,7 @@ export function ProcessingQuestionReviewList({
                                         ) : null}
 
                                         {isEditing && !q.ignored ? (
-                                            <div className="mt-3 space-y-2 border-t border-alloy-stone/10 pt-3">
+                                            <div className="mt-4 space-y-2">
                                                 <input
                                                     value={q.displayLabel}
                                                     onChange={(e) => onUpdate(q.id, { displayLabel: e.target.value })}

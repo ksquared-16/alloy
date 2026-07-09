@@ -23,7 +23,7 @@ describe("command center live wiring", () => {
     });
     it("renders metrics, filters, queues, and a timeline", () => {
         expect(kpiStripSrc).toMatch(/data-comms-workspace-kpi-band/);
-        expect(kpiStripSrc).toMatch(/CompactKpiStrip/);
+        expect(kpiStripSrc).toMatch(/WorkspaceMetricTiles/);
         expect(shellSrc).toMatch(/setInboxKpis/);
         expect(src).toMatch(/data-cc-filters/);
         expect(src).toMatch(/visibleCommandCenterQueues/);
@@ -86,10 +86,10 @@ describe("command center live wiring", () => {
         expect(batch).toMatch(/resolveOpportunityStatusDisplay/);
     });
     it("prefetches conversations from shell mount and inbox open", () => {
-        const shell = readFileSync(join(process.cwd(), "app", "adminV2", "components", "AdminV2Shell.tsx"), "utf8");
+        const preload = readFileSync(join(process.cwd(), "lib", "adminV2", "coreSurfacePreloadRegistry.ts"), "utf8");
         const nav = readFileSync(join(process.cwd(), "app", "adminV2", "components", "TopNavBar.tsx"), "utf8");
         const cache = readFileSync(join(process.cwd(), "lib", "communications", "v2", "commandCenterPrefetchCache.ts"), "utf8");
-        expect(shell).toMatch(/scheduleCommunicationsWorkspaceWarm/);
+        expect(preload).toMatch(/scheduleCommunicationsWorkspaceWarm/);
         expect(nav).toMatch(/warmCommunicationsWorkspaceModal/);
         expect(shellSrc).toMatch(/commandCenterPrefetchCache/);
         expect(cache).toMatch(/warmFirstConversationWorkspace/);

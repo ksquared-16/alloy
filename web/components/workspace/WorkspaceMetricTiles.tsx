@@ -3,24 +3,8 @@
 /**
  * @module WorkspaceMetricTiles
  *
- * ## Purpose
- * The canonical metric tile row for operational module workspaces. Wraps the shipped
- * workspace / work-unit KPI card (`SurfaceHeaderKpiCard`) so every module's metrics
- * read identically. Only the metrics change — never the tile chrome.
- *
- * ## When to use
- * - In `WorkspaceShell.metricsColumn` (Processing Today's activity band).
- * - In `WorkspaceShell.kpiBand` full-width strips (Communications — migrate from CompactKpiStrip).
- * - Any module status summary beside or below the mode nav.
- *
- * ## Do NOT use for
- * - Org-level `/workspace` landing KPIs (Presentation Runtime header model).
- * - Decorative stats without real/derived data.
- * - Module-specific card layouts — pass data via `WorkspaceMetricTileItem[]` only.
- *
- * ## Color (frozen)
- * Midnight Forge = structure; Bend Pine = success/progress; Gold = publish/attention.
- * Callers pass semantic `accent`; this component never invents decoration.
+ * Canonical metric tile row — polished for supporting (not dominating) the workspace.
+ * Values are intentionally quieter than action cards; labels and icons read clearly.
  */
 
 import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
@@ -41,9 +25,13 @@ export interface WorkspaceMetricTileItem {
 export type WorkspaceMetricTilesSize = "sm" | "md";
 export type WorkspaceMetricTilesAlign = "start" | "end";
 
+/**
+ * Polished metric tile overrides — spacing unchanged; reduced value weight; clearer labels/icons.
+ * `md` used in Processing nav band; `sm` for compact full-width strips (Communications).
+ */
 const SIZE_OVERRIDES: Record<WorkspaceMetricTilesSize, string> = {
-    sm: "[&_[data-work-unit-header-kpi]]:min-w-0 [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal",
-    md: "[&_[data-work-unit-header-kpi]]:min-w-[8.05rem] [&_[data-work-unit-header-kpi]]:gap-2.5 [&_[data-work-unit-header-kpi]]:px-3 [&_[data-work-unit-header-kpi]]:py-2.5 [&_[data-work-unit-header-kpi-icon-well]]:h-[41px] [&_[data-work-unit-header-kpi-icon-well]]:w-[41px] [&_[data-work-unit-header-kpi-value]]:text-[21px] [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:text-[11px]",
+    sm: "[&_[data-work-unit-header-kpi]]:min-w-0 [&_[data-work-unit-header-kpi-value]]:text-[17px] [&_[data-work-unit-header-kpi-value]]:font-semibold [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:text-alloy-midnight/60 [&_[data-work-unit-header-kpi-icon-well]]:bg-alloy-midnight-forge/[0.08] [&_[data-work-unit-header-kpi-icon]]:opacity-100",
+    md: "[&_[data-work-unit-header-kpi]]:min-w-[8.05rem] [&_[data-work-unit-header-kpi]]:gap-2.5 [&_[data-work-unit-header-kpi]]:px-3 [&_[data-work-unit-header-kpi]]:py-2.5 [&_[data-work-unit-header-kpi-icon-well]]:h-[41px] [&_[data-work-unit-header-kpi-icon-well]]:w-[41px] [&_[data-work-unit-header-kpi-icon-well]]:bg-alloy-midnight-forge/[0.08] [&_[data-work-unit-header-kpi-icon]]:opacity-100 [&_[data-work-unit-header-kpi-value]]:text-[19px] [&_[data-work-unit-header-kpi-value]]:font-semibold [&_[data-work-unit-header-kpi-value]]:text-alloy-midnight [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:text-[11px] [&_[data-work-unit-header-kpi-label]]:text-alloy-midnight/60",
 };
 
 function toKpiVm(item: WorkspaceMetricTileItem, index: number, loading: boolean): WorkspaceHeaderKpiVm {

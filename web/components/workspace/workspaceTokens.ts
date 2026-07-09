@@ -106,6 +106,12 @@ export const WS_ACTION_SECONDARY =
 /** Stone workspace field behind white surfaces (~4%). Replaces flat white modal backgrounds. */
 export const WS_FIELD = "bg-alloy-stone/[0.04]";
 
+/** White gutter inset between modal shell chrome and the stone workspace field (~16px). */
+export const WS_SHELL_INSET = "flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 pb-4 pt-3";
+
+/** Rounded stone operational canvas inside the shell inset (Layer 2). */
+export const WS_FIELD_CANVAS = `flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ${WS_FIELD}`;
+
 /** Module shell nav band padding (header → mode tabs → section tabs). */
 export const WS_SHELL_NAV_CLASS = "shrink-0 bg-white px-4 py-2.5";
 
@@ -122,3 +128,32 @@ export const WS_INSPECTOR = "bg-alloy-stone/[0.02] border-l border-alloy-stone/1
 /** Inline metric-band eyebrow (Today's activity) beside WorkspaceMetricTiles. */
 export const WS_METRIC_EYEBROW_INLINE =
     "flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/55";
+
+/** Shared execution body beneath module nav — stone field, no top border clash. */
+export const WS_EXECUTION_BODY =
+    "flex min-h-0 flex-1 flex-col overflow-hidden bg-alloy-stone/[0.04]";
+
+/* ── Typography hierarchy (three levels only — Workspace Doctrine V1 freeze) ─── */
+
+/** Primary — titles, section headers, selected tabs, primary information. */
+export const WS_TEXT_PRIMARY = "text-alloy-midnight";
+
+/** Secondary — descriptions, metadata, timestamps, supporting copy. */
+export const WS_TEXT_SECONDARY = "text-alloy-midnight/55";
+
+/** Disabled — inactive or de-emphasized states only. */
+export const WS_TEXT_DISABLED = "text-alloy-midnight/35";
+
+/* ── Icon hierarchy (Workspace Doctrine V1 freeze) ─────────────────────────── */
+
+/** Structural icons — navigation chrome, folder/list affordances. */
+export const WS_ICON_STRUCTURAL = "text-alloy-midnight-forge";
+
+/** Interactive icons — actions, links, map/edit controls on hover path. */
+export const WS_ICON_INTERACTIVE = "text-alloy-bend-pine";
+
+/** Attention / publish — warnings and published-state marks. */
+export const WS_ICON_ATTENTION = "text-alloy-gold-dark";
+
+/** Disabled icon treatment. */
+export const WS_ICON_DISABLED = "text-alloy-midnight/35";

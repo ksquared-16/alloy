@@ -130,84 +130,116 @@ Full drawer rules: `../operator/drawer-system.md`.
 
 ---
 
-## Alloy Workspace Doctrine V1 (operational module modals)
+## Alloy Operational Workspace Doctrine V2 (frozen)
 
-**Status:** Frozen (July 2026). **Reference implementation:** Processing (Digital Mailroom).
+**Status:** **Frozen** (July 2026). **Certified implementations:** Processing (Digital Mailroom), Communications, Work Items.
 
-This section defines the **shared modal workspace** every operational module consumes — Communications, Work Items, Scheduling, Attendance, Billing, Reporting, and future modules. It is distinct from the org-level `/workspace` landing (four-zone command center above).
+This is the **canonical operational workspace visual system** for every AdminV2 module modal — Scheduling, Attendance, Billing, Commercial, and future modules inherit it unchanged. Distinct from the org-level `/workspace` landing (Presentation Runtime four-zone command center).
+
+**Supersedes:** Alloy Workspace Doctrine V1 (same hierarchy; V2 adds inset stone field ownership in `WorkspaceShell`, mandatory `WorkspaceMetricTiles`, and certified Communications + Work Items migrations).
 
 ### Purpose
 
-One operating system for operational module UIs. The hierarchy and visual language are fixed; **only the content changes**. Processing validated the pattern; no module may invent parallel shell chrome.
+One operating system for operational module UIs. The hierarchy and visual language are fixed; **only the content changes**. No module may invent parallel shell chrome, KPI styles, or accent themes.
+
+### Layer model (frozen)
+
+| Layer | Treatment | Token / component |
+|-------|-----------|-------------------|
+| **1 — White modal shell** | Header, mode nav, metrics band | `WorkspaceShell` outer chrome |
+| **2 — Inset stone workspace field** | ~16px white gutter; ~4% stone operational canvas | `WS_SHELL_INSET` + `WS_FIELD_CANVAS` (owned by `WorkspaceShell`) |
+| **3 — White operational surfaces** | Cards, queues, review panels, studio libraries | `WorkspaceCard`, `WorkspaceZonePanel`, module white frames |
+| **4 — Interactive objects** | Buttons, rows, selections, badges, hover states | Bend Pine selection; Midnight Forge structure |
+
+The modal shell is **never** fully stone-tinted. The stone field is **inset** inside the white shell.
 
 ### Required hierarchy (never deviate)
 
 ```
-Module title + tagline     WorkspaceHeader
-Work | Studio              WorkspaceModeTabs
-Module section tabs        WorkspaceSubTabs   [optional WorkspaceMetricTiles in nav band]
-────────────────────────── WorkspaceDivider (stone hairline)
-Workspace body             WorkspaceSurface (stone field)
-  └ white surfaces         WorkspaceCard / WorkspaceZonePanel
+WorkspaceHeader              Module title + tagline + actions + close
+WorkspaceModeNav             Work | Studio + section tabs [+ WorkspaceMetricTiles]
+WS_SHELL_INSET               White gutter (~16px)
+  WS_FIELD_CANVAS            Stone operational canvas (Layer 2)
+    WorkspaceSurface         Scroll region (inherits field — no duplicate tint)
+      WorkspaceCard          Overview panels, summary groups
+      WorkspaceZonePanel     Queue / source / inspector columns
 ```
 
-### Visual hierarchy
-
-| Layer | Treatment |
-|-------|-----------|
-| Shell header | White, Bend Pine left accent, Midnight Forge title |
-| Mode + section nav | White band, Bend Pine active selection |
-| Metric tiles | White KPI cards on nav band (Work mode) |
-| Workspace field | River Stone ~4% (`WS_FIELD`) |
-| Cards / zones | White surfaces, thin stone border, soft elevation |
-| Separators | Stone hairlines only — never black, never heavy |
-
-### Color hierarchy (frozen)
+### Color doctrine (frozen)
 
 | Token | Role |
 |-------|------|
-| **Midnight Forge** | Structure, navigation, typography, icons, secondary actions |
-| **Bend Pine** | Primary action, active selection, progress, success, publish/generate/compose |
-| **Alloy Gold** | Attention, published state |
-| **White** | Surfaces and cards |
-| **River Stone** | Workspace field background |
+| **Midnight Forge** | Structure, typography, icons, navigation, labels, hairlines |
+| **Bend Pine** | Selections, progress, current step, primary CTA, success, generation, completion |
+| **Alloy Gold** | Publish, attention, certification |
+| **White** | Modal shell + contained surfaces (Layer 1 + 3) |
+| **River Stone ~4%** | Inset workspace field (Layer 2) |
 
-No other accent colors in operational module workspaces. Bend Pine is never used as decoration.
+**Never** use module-specific color themes. Processing, Communications, Work Items, Scheduling, Attendance, and Commercial share one visual language.
 
-### Containment model
+### Typography hierarchy (three levels)
 
-- **Stone field** replaces flat white modal backgrounds globally.
-- **White cards** carry contained content (Overview action cards, summary panels).
-- **Zone panels** split multi-column workspaces (queue rail, source document, inspector).
-- **Dividers** separate regions horizontally (below nav) and vertically (queue ↔ canvas).
+| Level | Token | Use |
+|-------|-------|-----|
+| Primary | `WS_TEXT_PRIMARY` | Titles, section headers, selected tabs |
+| Secondary | `WS_TEXT_SECONDARY` | Descriptions, metadata, timestamps |
+| Disabled | `WS_TEXT_DISABLED` | Inactive states only |
+
+### Icon hierarchy
+
+| Role | Token |
+|------|-------|
+| Structural | `WS_ICON_STRUCTURAL` |
+| Interactive | `WS_ICON_INTERACTIVE` |
+| Attention / publish | `WS_ICON_ATTENTION` |
+| Disabled | `WS_ICON_DISABLED` |
+
+### Metric doctrine
+
+`WorkspaceMetricTiles` is the **only** KPI primitive — Workspace, Work Unit headers, Processing, Communications, Work Items, and future modules. No `CompactKpiStrip`, no custom variants, no alternate KPI styles. Module adapters (e.g. `ProcessingKpiStrip`) supply **data only**.
+
+### Containment doctrine
+
+- **Spacing over boxes** — major regions separated by rhythm, not extra borders.
+- **Stone hairlines only** — never black or heavy dividers.
+- **Soft elevation** on white surfaces (`WorkspaceCard`, zone panels).
+
+### When to use which primitive
+
+| Primitive | Use when |
+|-----------|----------|
+| `WorkspaceShell` | Every operational module modal (always) |
+| `WorkspaceSurface` | Scrollable overview/studio body inside the stone canvas |
+| `WorkspaceCard` | Single contained white panel (overview sections, summary groups) |
+| `WorkspaceZonePanel` | Multi-column operational layout (queue, source document, inspector) |
+| `WorkspaceMetricTiles` | Any KPI / status strip in nav band |
+| `WorkspaceDivider` | Vertical/horizontal separation between zones |
 
 ### Component library
 
-Import from `@/components/workspace/doctrine`:
+Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/doctrine.ts`, tokens: `web/components/workspace/workspaceTokens.ts`.
 
-| Component | Responsibility |
-|-----------|----------------|
-| `WorkspaceShell` | Invariant modal chrome (header + nav + body) |
-| `WorkspaceHeader` | Module title, tagline, actions, Close |
-| `WorkspaceModeTabs` | Work \| Studio |
-| `WorkspaceSubTabs` | Module section tabs |
-| `WorkspaceModeNav` | Composed two-level nav (+ optional metrics column) |
-| `WorkspaceMetricTiles` | Canonical metric tiles (shared KPI card) |
-| `WorkspaceSurface` | Scrollable stone-field body |
-| `WorkspaceCard` | White contained surface |
-| `WorkspaceZonePanel` | Multi-column zone (queue, source, review) |
-| `WorkspaceDivider` | Subtle stone separator |
-| `WorkspaceSection` | Eyebrow + content group |
+### Certified implementations
 
-Code: `web/components/workspace/doctrine.ts`, tokens: `web/components/workspace/workspaceTokens.ts`.
+| Module | Shell | Metrics | Surface |
+|--------|-------|---------|---------|
+| **Processing** | `DigitalMailroomShell` → `WorkspaceShell` | `ProcessingKpiStrip` → `WorkspaceMetricTiles` | Overview / Queue / Studio unchanged |
+| **Communications** | `CommunicationsWorkspaceShell` → `WorkspaceShell` | `CommunicationsWorkspaceKpiStrip` → `WorkspaceMetricTiles` | Inbox / Templates / Announcements unchanged |
+| **Work Items** | `WorkItemsShell` → `WorkspaceShell` | `WorkItemsKpiStrip` → `WorkspaceMetricTiles` | Overview + Queue via `WorkspaceSurface` |
 
 ### Rules for future modules
 
 1. Compose `WorkspaceShell` + workspace primitives — no custom hierarchy.
-2. Module-specific code supplies **data and content only** (e.g. `ProcessingKpiStrip` derives metrics, renders `WorkspaceMetricTiles`).
+2. Module code supplies **data and content only**.
 3. Do not duplicate shell layout in module folders.
 4. Do not introduce module-specific themes or accent colors.
-5. Migrate legacy modules (Communications, Work Items) to the doctrine barrel incrementally.
+5. Do not create competing KPI or surface components.
+
+---
+
+## Alloy Workspace Doctrine V1 (superseded)
+
+V1 established the component barrel and Processing reference (July 2026). **V2 above is authoritative** — inset field in shell, universal metric tiles, Communications + Work Items certification.
 
 ---
 

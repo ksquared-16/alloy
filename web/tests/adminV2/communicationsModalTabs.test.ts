@@ -24,8 +24,8 @@ describe("Communications modal tabs", () => {
         const shell = read(SHELL);
         const panel = read(PANEL);
         expect(src).toContain("CommunicationsWorkspaceShell");
-        expect(shell).toContain('data-comms-workspace-shell="true"');
-        expect(shell).toContain("CommsModalTabBar");
+        expect(shell).toContain("data-comms-workspace-shell");
+        expect(shell).toContain("WorkspaceShell");
         expect(src).toContain("COMMUNICATIONS_MODAL_TABS");
         expect(src).not.toContain("SettingsEntityTabBar");
         expect(src).toContain("CommunicationsModalTabPanel");
@@ -34,13 +34,10 @@ describe("Communications modal tabs", () => {
         }
         expect(shell).toContain('data-inbox-compose-new="true"');
         expect(src).toContain("QuickMessageModal");
-        expect(shell).toContain('data-comms-workspace-shell="true"');
-        expect(shell).toContain('data-comms-modal-version="workspace-inc2c"');
+        expect(shell).toContain("workspace-v2");
         expect(shell).not.toContain('data-comms-workspace-context="true"');
-        // Shared Operational Workspace Shell header (icon + title + actions + Close).
-        expect(shell).toContain("OperationalModalHeader");
-        expect(shell).toContain("COMMS_WORKSPACE_EXECUTION_CLASS");
         expect(shell).toContain("CommunicationsWorkspaceKpiStrip");
+        expect(shell).not.toContain("OperationalModalHeader");
     });
 
     it("CommsModalTabBar renders subordinate underline tabs with a Bend Pine active state (not floating pills)", () => {

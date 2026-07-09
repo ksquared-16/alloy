@@ -9,7 +9,7 @@ import { useCallback, useRef, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceDivider from "@/components/workspace/WorkspaceDivider";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
-import { WS_CANVAS, WS_FIELD, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
+import { WS_CANVAS, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
 import ProcessingQueueList from "@/app/adminV2/processing/ProcessingQueueList";
 import ProcessingImportAction from "./ProcessingImportAction";
 import { usePosCase } from "./usePosCase";
@@ -87,7 +87,7 @@ export default function PosProcessingWorkspace({
                     e.target.value = "";
                 }}
             />
-            <div className={`flex min-h-0 flex-1 overflow-hidden ${WS_FIELD}`}>
+            <div className="flex min-h-0 flex-1 overflow-hidden">
                 <WorkspaceZonePanel
                     title="Queue"
                     className={`w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}

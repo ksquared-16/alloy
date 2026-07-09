@@ -41,7 +41,7 @@ export default function WorkspaceZonePanel({
             data-workspace-zone-panel={zoneKey}
             data-testid={testId}
         >
-            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/12 bg-white/80 px-3 py-1.5">
+            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/12 bg-white/80 px-3 py-1">
                 <h2 className={WS_EYEBROW}>{title}</h2>
                 {headerAction}
             </header>

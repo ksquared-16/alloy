@@ -10,7 +10,7 @@ function read(rel: string): string {
     return readFileSync(join(ROOT, rel), "utf8");
 }
 
-describe("Alloy Workspace Doctrine V1", () => {
+describe("Alloy Operational Workspace Doctrine V2", () => {
     it("exports the frozen component barrel", () => {
         const barrel = read("components/workspace/doctrine.ts");
         for (const name of [
@@ -30,18 +30,39 @@ describe("Alloy Workspace Doctrine V1", () => {
         }
     });
 
-    it("Processing shell composes WorkspaceShell only (no duplicate layout chrome)", () => {
+    it("WorkspaceShell owns inset stone field canvas (Layer 2)", () => {
+        const shell = read("components/workspace/WorkspaceShell.tsx");
+        expect(shell).toContain("WS_SHELL_INSET");
+        expect(shell).toContain("WS_FIELD_CANVAS");
+        expect(shell).toContain('data-workspace-shell-inset="true"');
+    });
+
+    it("Processing composes WorkspaceShell + WorkspaceMetricTiles", () => {
         const shell = read("app/adminV2/pos/DigitalMailroomShell.tsx");
         expect(shell).toContain("WorkspaceShell");
         expect(shell).not.toContain("OperationalModalHeader");
-        expect(shell).not.toContain("OperationalWorkspaceModeNav");
-        expect(shell).not.toContain("ProcessingParentPanel");
-    });
-
-    it("Processing metrics use WorkspaceMetricTiles via data adapter", () => {
         const strip = read("app/adminV2/pos/ProcessingKpiStrip.tsx");
         expect(strip).toContain("WorkspaceMetricTiles");
-        expect(strip).not.toContain("SurfaceHeaderKpiCard");
+    });
+
+    it("Communications composes WorkspaceShell + WorkspaceMetricTiles", () => {
+        const shell = read("app/adminV2/communications/CommunicationsWorkspaceShell.tsx");
+        expect(shell).toContain("WorkspaceShell");
+        expect(shell).not.toContain("OperationalModalHeader");
+        expect(shell).not.toContain("CompactKpiStrip");
+        const strip = read("app/adminV2/communications/CommunicationsWorkspaceKpiStrip.tsx");
+        expect(strip).toContain("WorkspaceMetricTiles");
+        expect(strip).not.toContain("CompactKpiStrip");
+    });
+
+    it("Work Items composes WorkspaceShell + WorkspaceMetricTiles + WorkspaceSurface", () => {
+        const shell = read("app/adminV2/tasks/WorkItemsShell.tsx");
+        expect(shell).toContain("WorkspaceShell");
+        expect(shell).toContain("WorkspaceSurface");
+        expect(shell).toContain("WorkItemsKpiStrip");
+        expect(shell).not.toContain("OperationalModalHeader");
+        const strip = read("app/adminV2/tasks/WorkItemsKpiStrip.tsx");
+        expect(strip).toContain("WorkspaceMetricTiles");
     });
 
     it("Processing queue workspace uses shared zone panel and tokens", () => {

@@ -34,7 +34,7 @@
  *
  * No other accent colors in operational module workspaces.
  *
- * @see docs/platform/core/navigation-and-workspace-doctrine.md — Alloy Workspace Doctrine V1
+ * @see docs/platform/core/navigation-and-workspace-doctrine.md — Alloy Operational Workspace Doctrine V2
  */
 
 export { default as WorkspaceShell } from "@/components/workspace/WorkspaceShell";
@@ -59,6 +59,8 @@ export { default as WorkspaceSurface } from "@/components/workspace/WorkspaceSur
 /** Design tokens — import when composing custom layout inside doctrine surfaces. */
 export {
     WS_FIELD,
+    WS_SHELL_INSET,
+    WS_FIELD_CANVAS,
     WS_SHELL_NAV_CLASS,
     WS_QUEUE_RAIL,
     WS_CANVAS,

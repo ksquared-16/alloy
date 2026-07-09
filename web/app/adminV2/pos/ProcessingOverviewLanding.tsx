@@ -6,6 +6,12 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import ProcessingLandingActionCard from "./ProcessingLandingActionCard";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
+import {
+    WS_ICON_STRUCTURAL,
+    WS_TEXT_DISABLED,
+    WS_TEXT_PRIMARY,
+    WS_TEXT_SECONDARY,
+} from "@/components/workspace/workspaceTokens";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 import { useProcessingFormApi } from "./useProcessingFormApi";
@@ -33,8 +39,8 @@ function workStatusLabel(row: { status: string; formDraftSummary?: { generatedFo
 
 function statusTone(label: string): string {
     if (label.includes("Ready")) return "text-alloy-bend-pine";
-    if (label === "Completed") return "text-alloy-midnight/40";
-    return "text-alloy-midnight/55";
+    if (label === "Completed") return WS_TEXT_DISABLED;
+    return WS_TEXT_SECONDARY;
 }
 
 export default function ProcessingOverviewLanding({
@@ -112,7 +118,7 @@ export default function ProcessingOverviewLanding({
                 }}
             />
 
-            <div className="mx-auto max-w-6xl space-y-5">
+            <div className="mx-auto max-w-6xl space-y-7">
                 <section className="grid gap-3 md:grid-cols-3">
                             <ProcessingLandingActionCard
                                 tier="primary"
@@ -154,9 +160,9 @@ export default function ProcessingOverviewLanding({
                         testId="processing-studio-card"
                     />
                 </section>
-                {importErr ? <p className="text-[11px] text-alloy-midnight/60">{importErr}</p> : null}
+                {importErr ? <p className={`text-[11px] ${WS_TEXT_SECONDARY}`}>{importErr}</p> : null}
 
-                <div className="grid gap-4 lg:grid-cols-3">
+                <div className="grid gap-5 lg:grid-cols-3">
                     <ContinuePanel title="Recent work" action="View all" onAction={onOpenWork}>
                         {recentRows.length === 0 ? (
                             <EmptyHint>No active imports yet — import a form to begin.</EmptyHint>
@@ -173,7 +179,7 @@ export default function ProcessingOverviewLanding({
                                             >
                                                 <span className="mt-1 h-8 w-0.5 shrink-0 rounded-full bg-alloy-bend-pine" aria-hidden />
                                                 <span className="min-w-0 flex-1">
-                                                    <span className="block truncate text-[13px] font-semibold text-alloy-midnight group-hover:text-alloy-midnight">
+                                                    <span className={`block truncate text-[13px] font-semibold ${WS_TEXT_PRIMARY} group-hover:text-alloy-midnight`}>
                                                         {row.sourceDisplay?.label ?? "Untitled source"}
                                                     </span>
                                                     <span className={`mt-0.5 block text-[11px] font-medium ${statusTone(status)}`}>
@@ -201,7 +207,7 @@ export default function ProcessingOverviewLanding({
                                         <span className="mt-1 h-8 w-0.5 shrink-0 rounded-full bg-alloy-midnight/25" aria-hidden />
                                         <span className="min-w-0 flex-1">
                                             <div className="truncate text-[13px] font-semibold text-alloy-midnight">{form.name ?? form.key}</div>
-                                            <div className="mt-0.5 text-[11px] text-alloy-midnight/45">
+                                            <div className={`mt-0.5 text-[11px] ${WS_TEXT_SECONDARY}`}>
                                                 Updated {formatAge(form.updated_at ?? form.created_at ?? null)}
                                             </div>
                                         </span>
@@ -213,7 +219,7 @@ export default function ProcessingOverviewLanding({
 
                     <section>
                         <header className="mb-3 flex items-center justify-between gap-2">
-                            <h2 className="text-[13px] font-semibold text-alloy-midnight/70">Folders</h2>
+                            <h2 className={`text-[13px] font-semibold ${WS_TEXT_PRIMARY}`}>Folders</h2>
                         </header>
                         <ul className="divide-y divide-alloy-stone/12 overflow-hidden rounded-xl bg-white shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
                             {navFolders.map((folder) => (
@@ -224,12 +230,12 @@ export default function ProcessingOverviewLanding({
                                         className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-alloy-stone/[0.03]"
                                     >
                                         <span className="flex min-w-0 items-center gap-2">
-                                            <ProcessingFolderIcon folderId={folder.id} className="h-3.5 w-3.5 shrink-0 text-alloy-midnight/40" />
-                                            <span className="text-[12px] font-medium text-alloy-midnight/70">{folder.label}</span>
+                                            <ProcessingFolderIcon folderId={folder.id} className={`h-3.5 w-3.5 shrink-0 ${WS_ICON_STRUCTURAL}`} />
+                                            <span className={`text-[12px] font-medium ${WS_TEXT_PRIMARY}`}>{folder.label}</span>
                                         </span>
                                         <span className="flex items-center gap-2">
-                                            <span className="text-[11px] tabular-nums text-alloy-midnight/35">({folder.count})</span>
-                                            <ArrowRight className="h-3.5 w-3.5 text-alloy-midnight/25" aria-hidden />
+                                            <span className={`text-[11px] tabular-nums ${WS_TEXT_DISABLED}`}>({folder.count})</span>
+                                            <ArrowRight className={`h-3.5 w-3.5 ${WS_ICON_STRUCTURAL} opacity-60`} aria-hidden />
                                         </span>
                                     </button>
                                 </li>
@@ -268,7 +274,7 @@ function ContinuePanel({
 
 function EmptyHint({ children }: { children: ReactNode }) {
     return (
-        <div className="rounded-lg border border-dashed border-alloy-stone/20 px-3 py-8 text-center text-[12px] text-alloy-midnight/45">
+        <div className={`rounded-lg border border-dashed border-alloy-stone/20 px-3 py-8 text-center text-[12px] ${WS_TEXT_SECONDARY}`}>
             {children}
         </div>
     );

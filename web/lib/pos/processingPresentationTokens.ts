@@ -3,15 +3,37 @@
  *
  * Layout, chrome, and zone surfaces use the Alloy Workspace doctrine
  * (`@/components/workspace/workspaceTokens` and `@/components/workspace/doctrine`).
- * This file retains presentation typography aliases for Processing content bodies.
+ * Typography follows the three-level Workspace Doctrine V1 hierarchy.
  */
 
-export {
-    PRESENTATION_SECTION_EYEBROW as PROCESSING_PANEL_EYEBROW,
-    PRESENTATION_SECTION_HEADER as PROCESSING_PANEL_TITLE,
-    PRESENTATION_DATA_VALUE_COMPACT as PROCESSING_ROW_TITLE,
-    PRESENTATION_SUPPORTING as PROCESSING_BODY,
-    PRESENTATION_SUPPORTING_COMPACT as PROCESSING_METADATA,
-    PRESENTATION_LABEL as PROCESSING_FIELD_LABEL,
-    PRESENTATION_EMPTY_STATE as PROCESSING_EMPTY,
-} from "@/lib/presentation/presentationTypography";
+import {
+    WS_TEXT_DISABLED,
+    WS_TEXT_PRIMARY,
+    WS_TEXT_SECONDARY,
+} from "@/components/workspace/workspaceTokens";
+
+/** Section band eyebrow — secondary hierarchy. */
+export const PROCESSING_PANEL_EYEBROW =
+    `text-[11px] font-semibold uppercase tracking-[0.07em] ${WS_TEXT_SECONDARY}`;
+
+/** Panel section title — primary hierarchy. */
+export const PROCESSING_PANEL_TITLE = `text-[13px] font-semibold tracking-tight ${WS_TEXT_PRIMARY}`;
+
+/** Question / row primary label — primary hierarchy. */
+export const PROCESSING_ROW_TITLE = `text-[13px] font-semibold leading-snug ${WS_TEXT_PRIMARY}`;
+
+/** Supporting body copy — secondary hierarchy. */
+export const PROCESSING_BODY = `text-[11px] leading-snug ${WS_TEXT_SECONDARY}`;
+
+/** Metadata lines — secondary hierarchy. */
+export const PROCESSING_METADATA = `text-[10px] leading-snug ${WS_TEXT_SECONDARY}`;
+
+/** Field labels in forms — secondary hierarchy (uppercase band). */
+export const PROCESSING_FIELD_LABEL =
+    `text-[10px] font-semibold uppercase tracking-[0.08em] ${WS_TEXT_SECONDARY}`;
+
+/** Empty states — secondary hierarchy. */
+export const PROCESSING_EMPTY = `text-[12px] leading-snug ${WS_TEXT_SECONDARY}`;
+
+/** Disabled / placeholder copy only. */
+export const PROCESSING_DISABLED = WS_TEXT_DISABLED;

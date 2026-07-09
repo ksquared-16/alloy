@@ -27,7 +27,6 @@ import PosPdfFieldMap from "./PosPdfFieldMap";
 import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
 import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
-import { WS_FIELD } from "@/components/workspace/workspaceTokens";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 import {
     seedReviewQuestionFromDraftField,
@@ -400,7 +399,7 @@ export default function PosTemplateSetupColumn({
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-white">
-            <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-2 py-1">
+            <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-1.5 py-0.5">
                 <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                     <ProcessingWorkflowStepper
                         compact
@@ -459,7 +458,7 @@ export default function PosTemplateSetupColumn({
                 </div>
             ) : (
             <>
-            <div className={`flex min-h-0 flex-1 gap-3 overflow-hidden ${WS_FIELD} p-2 pt-1`}>
+            <div className="flex min-h-0 flex-1 gap-3 overflow-hidden p-1.5 pt-0">
                 <WorkspaceZonePanel
                     title="Source document"
                     className="min-w-0 flex-[55]"
@@ -480,7 +479,7 @@ export default function PosTemplateSetupColumn({
                                 ))}
                             </div>
                             {pdfUrl ? (
-                                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" title="Open the PDF" className="text-alloy-midnight/35 hover:text-alloy-bend-pine">
+                                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" title="Open the PDF" className="text-alloy-midnight-forge hover:text-alloy-bend-pine">
                                     <Download className="h-3.5 w-3.5" aria-hidden />
                                 </a>
                             ) : null}
@@ -488,7 +487,7 @@ export default function PosTemplateSetupColumn({
                     }
                 >
                     <div
-                        className={`min-h-0 flex-1 bg-alloy-stone/[0.02] p-1.5 ${
+                        className={`min-h-0 flex-1 bg-alloy-stone/[0.02] p-0.5 ${
                             leftView === "pdf" && pdfUrl ? "flex flex-col overflow-hidden" : "overflow-y-auto overscroll-y-contain"
                         }`}
                     >
