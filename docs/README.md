@@ -52,7 +52,7 @@ Start here: **`platform/foundation/system-overview.md`**
 6. `platform/core/business-process-system.md` — **operator model: Business Process → Stage → Record**
 7. `platform/core/entity-model.md`
 8. `platform/core/placement-system.md` — **School → Program → Room; lead vs child authority**
-9. `platform/core/navigation-and-workspace-doctrine.md`
+9. `platform/core/navigation-and-workspace-doctrine.md` — **Alloy Operational Workspace Doctrine V2** (frozen July 2026; reference: Processing; certified: Communications, Work Items; barrel: `web/components/workspace/doctrine.ts`)
 10. `platform/core/record-system.md`
 11. `platform/core/status-and-state-system.md`
 
