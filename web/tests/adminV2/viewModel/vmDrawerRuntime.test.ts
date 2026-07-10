@@ -250,7 +250,7 @@ describe("VM drawer runtime wiring", () => {
         ).toBe(false);
     });
 
-    it("logs drawer_vm_runtime client events", async () => {
+    it("drawer VM runtime log and router enforce canonical cutover without legacy fallback", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
@@ -259,11 +259,41 @@ describe("VM drawer runtime wiring", () => {
             join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog.ts"),
             "utf8"
         );
-        expect(log).toContain("drawer_vm_runtime:${event}");
+        const router = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
+        const oppGate = readFileSync(
+            join(
+                webRoot,
+                "lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate.ts",
+            ),
+            "utf8",
+        );
+
+        expect(log).toContain("perfDrawer");
         expect(log).toContain('"mounted"');
         expect(log).toContain("swap_committed");
         expect(log).toContain("swap_hold_current");
         expect(log).toContain("related_prefetch_start");
+        expect(log).toContain("logDrawerVmRuntimeServer");
         expect(log).toContain("compose_ok");
+
+        expect(router).not.toContain("AdminEntityDrawerLegacy");
+        expect(router).not.toContain("dynamic(");
+        expect(router).toMatch(/return null;/);
+
+        expect(oppGate).not.toContain("NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH");
+        expect(oppGate).toContain("return true");
+
+        const adminV2Wu =
+            "/adminV2/workspace/dept/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit/a428520f-b6a1-4913-8209-2d45a9affcd9";
+        expect(
+            resolveVmDrawerRuntimeRoute({ type: "opportunities", id: "opp-1" }, adminV2Wu),
+        ).toBe("opportunity");
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
+        expect(
+            resolveVmDrawerRuntimeRoute({ type: "opportunities", id: "opp-1" }, adminV2Wu),
+        ).toBe("opportunity");
+        expect(resolveVmDrawerRuntimeRoute({ type: "jobs", id: "job-1" }, adminV2Wu)).toBe(
+            "legacy",
+        );
     });
 });
