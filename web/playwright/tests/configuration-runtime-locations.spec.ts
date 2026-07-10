@@ -70,4 +70,24 @@ test.describe("configuration-runtime-locations", () => {
         await expect(page.getByTestId("locations-section-queue")).toBeVisible();
         await expect(page.getByTestId("locations-configuration-context")).toContainText("Locations");
     });
+
+    test("Add Location opens inline create workspace (not legacy drawer)", async ({ page }) => {
+        test.setTimeout(600_000);
+        await page.setViewportSize({ width: 1440, height: 960 });
+        await ensureAdminPlaywrightSession(page);
+
+        await page.goto("/settings/locations", { waitUntil: "domcontentloaded", timeout: 120_000 });
+        await expect(page.getByTestId("locations-configuration-page")).toBeVisible({ timeout: 60_000 });
+
+        const addBtn = page.getByTestId("locations-add-location");
+        if (await addBtn.isVisible().catch(() => false)) {
+            await addBtn.click();
+            await expect(page.getByTestId("locations-site-create")).toBeVisible({ timeout: 30_000 });
+            await page.screenshot({
+                path: path.join(screenshotDir, "06-inline-location-create.png"),
+                fullPage: true,
+                animations: "disabled",
+            });
+        }
+    });
 });

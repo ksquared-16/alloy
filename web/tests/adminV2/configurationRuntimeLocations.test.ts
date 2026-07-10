@@ -27,6 +27,9 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("locations-item-queue");
         expect(page).not.toContain("SettingsPageHeader");
         expect(page).not.toContain("data-locations-editor-table");
+        expect(page).not.toContain("openDrawer");
+        expect(page).not.toContain("useAdminDrawer");
+        expect(page).toContain("LocationSiteCreatePanel");
     });
 
     it("section queue includes Locations, Programs, Rooms, and Schedule Templates", () => {
