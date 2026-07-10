@@ -4825,10 +4825,10 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-fp-composer-cell__drag-bar {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  left: 34px;
+  right: 104px;
   height: 28px;
-  z-index: 7;
+  z-index: 6;
   cursor: grab;
   touch-action: none;
   pointer-events: auto;
@@ -4849,7 +4849,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   );
 }
 .alloy-os-fp-composer-cell__chrome {
-  position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  position: absolute; inset: 0; z-index: 8; pointer-events: none;
   border-radius: inherit; transition: box-shadow 120ms, outline 120ms;
 }
 .alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__chrome,
@@ -4865,6 +4865,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   height: 22px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e7eb) 80%, transparent);
   background: color-mix(in srgb, #fff 92%, transparent); color: var(--alloy-os-text-tertiary, #9ca3af);
   pointer-events: auto; opacity: 0; transition: opacity 100ms;
+  z-index: 1;
 }
 .alloy-os-fp-composer-cell__configure {
   right: 34px; padding: 0 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.02em;

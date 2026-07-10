@@ -211,6 +211,18 @@ describe("Enrollment Freeze — depth + overlay polish", () => {
     });
 });
 
+describe("Surface Builder composer chrome", () => {
+    it("keeps remove/configure controls above the drag bar hit target", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toMatch(/\.alloy-os-fp-composer-cell__chrome\s*\{[^}]*z-index:\s*8/);
+        expect(css).toMatch(/\.alloy-os-fp-composer-cell__drag-bar\s*\{[^}]*z-index:\s*6/);
+        expect(css).toMatch(/\.alloy-os-fp-composer-cell__drag-bar\s*\{[^}]*right:\s*104px/);
+        const composer = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
+        expect(composer).toContain("onRemove");
+        expect(composer).toContain("removeArea");
+    });
+});
+
 describe("Targeted contact editing + depth history (QA)", () => {
     it("Household has per-row edit affordances, not a global Edit contact link", () => {
         const card = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
