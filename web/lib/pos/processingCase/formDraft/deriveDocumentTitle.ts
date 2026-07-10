@@ -7,12 +7,15 @@
  */
 
 const CLASSIFICATION_LABELS: Record<string, string> = {
-    subsidy_contract: "Subsidy Contract",
+    subsidy_contract: "Subsidy Authorization",
+    subsidy_authorization: "Subsidy Authorization",
     remittance: "Remittance",
-    immunization_record: "Immunization Record",
-    enrollment_document: "Enrollment Document",
+    immunization_record: "Child Medical Examination Report",
+    enrollment_document: "Enrollment Packet",
+    enrollment_packet: "Enrollment Packet",
+    employment_application: "Employment Application",
     form_like_document: "Form",
-    unknown: "Untitled form",
+    unknown: "Untitled document",
 };
 
 function titleCase(s: string): string {
@@ -56,6 +59,9 @@ export interface DeriveTitleInput {
     extractedText?: string | null;
     fileName?: string | null;
     classificationKey?: string | null;
+    subjectLabel?: string | null;
+    periodLabel?: string | null;
+    receivedAt?: string | null;
 }
 
 export interface DerivedTitle {
@@ -63,17 +69,63 @@ export interface DerivedTitle {
     fromText: boolean;
 }
 
+function formatReceivedDate(iso: string | null | undefined): string | null {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+function formatPeriodLabel(raw: string | null | undefined): string | null {
+    const text = (raw ?? "").trim();
+    return text || null;
+}
+
+/** Build operator-facing display name from document context. */
+export function buildDocumentDisplayName(input: {
+    documentTypeLabel: string;
+    subjectLabel?: string | null;
+    periodLabel?: string | null;
+    receivedAt?: string | null;
+}): string {
+    const typeLabel = input.documentTypeLabel.trim() || "Untitled document";
+    const subject = (input.subjectLabel ?? "").trim();
+    const period = formatPeriodLabel(input.periodLabel) ?? formatReceivedDate(input.receivedAt);
+    if (subject && period) return `${typeLabel} — ${subject} — ${period}`;
+    if (subject) return `${typeLabel} — ${subject}`;
+    if (period) return `${typeLabel} — ${period}`;
+    return typeLabel;
+}
+
 export function deriveDocumentTitle(input: DeriveTitleInput): DerivedTitle {
     const fromText = titleFromText(input.extractedText);
+    const key = input.classificationKey ?? "";
+    const classificationLabel = key && CLASSIFICATION_LABELS[key] ? CLASSIFICATION_LABELS[key] : null;
+
+    if (classificationLabel || input.subjectLabel || input.periodLabel || input.receivedAt) {
+        const baseType = fromText ?? classificationLabel ?? cleanFilenameToTitle(input.fileName) ?? "Untitled document";
+        return {
+            title: buildDocumentDisplayName({
+                documentTypeLabel: classificationLabel ?? baseType,
+                subjectLabel: input.subjectLabel,
+                periodLabel: input.periodLabel,
+                receivedAt: input.receivedAt,
+            }),
+            fromText: Boolean(fromText),
+        };
+    }
+
     if (fromText) return { title: fromText, fromText: true };
 
     const fromFile = cleanFilenameToTitle(input.fileName);
     if (fromFile) return { title: fromFile, fromText: false };
 
-    const key = input.classificationKey ?? "";
-    if (key && CLASSIFICATION_LABELS[key]) return { title: CLASSIFICATION_LABELS[key], fromText: false };
+    if (classificationLabel) return { title: classificationLabel, fromText: false };
 
-    return { title: "Untitled form", fromText: false };
+    const received = formatReceivedDate(input.receivedAt);
+    if (received) return { title: `Untitled document — ${received}`, fromText: false };
+
+    return { title: "Untitled document", fromText: false };
 }
 
 /**

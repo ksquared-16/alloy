@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Check, EyeOff, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import {
     NAME_REPRESENTATION_OPTIONS,
@@ -13,20 +14,19 @@ import {
     type ReviewQuestionInput,
 } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import {
-    PROCESSING_BODY,
-    PROCESSING_DISABLED,
-    PROCESSING_METADATA,
-    PROCESSING_ROW_TITLE,
-} from "@/lib/pos/processingPresentationTokens";
-import { WS_ICON_STRUCTURAL, WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
+    eligibleCanonicalFieldsForSubject,
+    reviewFieldOptionById,
+    suggestReviewDestinationField,
+} from "@/lib/pos/processingCase/formDraft/processingReviewFieldCatalog";
+import {
+    detectedInputFormatLabel,
+    normalizeFieldValue,
+} from "@/lib/pos/processingCase/formDraft/fieldNormalization";
 
-function resolvedStorageSummary(question: ReviewQuestionInput): string {
-    if (question.ignored || question.questionSubject === "processing_only") {
-        return storageSummaryLabel(null);
-    }
+function resolvedFieldSource(question: ReviewQuestionInput) {
     const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
-    const fieldSource =
+    return (
         question.field_source ??
         deriveFieldSources({
             subject,
@@ -34,8 +34,27 @@ function resolvedStorageSummary(question: ReviewQuestionInput): string {
             intent,
             displayLabel: question.displayLabel,
             type: question.type,
-        });
-    return storageSummaryLabel(fieldSource);
+            destinationFieldId: question.destinationFieldId,
+        })
+    );
+}
+
+function fieldMatchConfidence(question: ReviewQuestionInput): { label: string; percent: number | null } {
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
+    const suggestion = suggestReviewDestinationField({
+        evidenceLabel: question.evidenceLabel,
+        displayLabel: question.displayLabel,
+        type: question.type,
+        subject,
+    });
+    const selectedId = question.destinationFieldId ?? suggestion?.fieldId ?? null;
+    if (!selectedId) return { label: "No match", percent: null };
+    if (question.destinationFieldId && question.destinationFieldId !== suggestion?.fieldId) {
+        return { label: "Operator selected", percent: null };
+    }
+    if (suggestion) return { label: "Field match", percent: suggestion.confidencePercent };
+    return { label: "Field match", percent: 65 };
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -96,17 +115,22 @@ export function ProcessingQuestionReviewList({
 
     return (
         <>
-            <p className={`mb-2 ${PROCESSING_METADATA}`}>
+            <p className="mb-1.5 text-[9px] font-medium text-alloy-midnight/40">
                 {activeCount} active question{activeCount === 1 ? "" : "s"}
                 {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
             </p>
-            <div className="space-y-1">
+            <div className="divide-y divide-alloy-stone/10">
                 {sections.map((section) => (
                     <section key={section.title} className="py-2 first:pt-0 last:pb-0">
-                        <h3 className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.06em] ${PROCESSING_METADATA}`}>
-                            {section.title}
-                        </h3>
-                        <ol className="space-y-1.5">
+                        <div className="mb-1 flex items-baseline justify-between gap-2">
+                            <h3 className="text-[9px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/35">
+                                {section.title}
+                            </h3>
+                            <span className="text-[9px] tabular-nums text-alloy-midnight/30">
+                                {section.questions.filter((q) => !q.ignored).length}
+                            </span>
+                        </div>
+                        <ol className="divide-y divide-alloy-stone/[0.08]">
                             {section.questions.map((q) => {
                                 const sel = selectedId === q.id;
                                 const isEditing = editingId === q.id;
@@ -115,38 +139,35 @@ export function ProcessingQuestionReviewList({
                                 const resolvedSubject = q.questionSubject ?? defaultSubjectForIntent(intent);
                                 const status = deriveResolutionStatus(q);
                                 const showNameRep =
-                                    supportsNameRepresentation(intent) && resolvedSubject !== "processing_only";
-                                const highConfidence = status === "high";
+                                    supportsNameRepresentation(intent, q.type) && resolvedSubject !== "processing_only";
+                                const matchConfidence = fieldMatchConfidence(q);
+                                const detectionLabel = STATUS_LABEL[status] ?? status;
 
                                 return (
                                     <li
                                         key={q.id}
                                         data-testid={`review-question-${q.id}`}
                                         data-question-ignored={q.ignored ? "true" : undefined}
-                                        className={`rounded-lg px-2 py-2 transition-colors ${sel ? "bg-alloy-bend-pine/[0.05]" : "hover:bg-alloy-stone/[0.03]"} ${q.ignored ? "opacity-55" : ""}`}
+                                        className={`py-1.5 transition-colors ${sel ? "bg-alloy-stone/[0.03]" : ""} ${q.ignored ? "opacity-55" : ""}`}
                                     >
-                                        <div className="flex items-start gap-2.5">
+                                        <div className="flex items-start gap-1">
                                             <button
                                                 type="button"
                                                 onClick={() => onSelect(sel ? null : q.id)}
-                                                className="flex min-w-0 flex-1 flex-col gap-1.5 text-left"
+                                                className="flex min-w-0 flex-1 flex-col gap-px text-left"
                                             >
-                                                <span className={PROCESSING_METADATA}>
+                                                <span className="text-[9px] text-alloy-midnight/40">
                                                     {q.evidenceLabel || "Untitled source field"}
                                                 </span>
-                                                <span className={`${PROCESSING_ROW_TITLE} text-[12px] leading-snug`}>
+                                                <span className="text-[11px] font-semibold leading-snug text-alloy-midnight">
                                                     {q.displayLabel || (
-                                                        <span className={`font-normal ${PROCESSING_DISABLED}`}>Untitled question</span>
+                                                        <span className="font-normal text-alloy-midnight/35">Untitled question</span>
                                                     )}
                                                 </span>
-                                                <span className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 ${PROCESSING_BODY}`}>
-                                                    <span>{TYPE_LABEL[q.type] ?? q.type}</span>
-                                                    <span aria-hidden>·</span>
-                                                    <span>{mapped ? "Mapped" : "Not mapped"}</span>
-                                                    <span aria-hidden>·</span>
-                                                    <span className={highConfidence ? "text-alloy-bend-pine" : undefined}>
-                                                        {STATUS_LABEL[status] ?? status}
-                                                    </span>
+                                                <span className="text-[9px] text-alloy-midnight/45">
+                                                    {TYPE_LABEL[q.type] ?? q.type}
+                                                    {mapped ? " · mapped" : " · not mapped"}
+                                                    <span> · {detectionLabel}</span>
                                                 </span>
                                             </button>
                                             <div className="flex shrink-0 items-center gap-0.5">
@@ -157,7 +178,7 @@ export function ProcessingQuestionReviewList({
                                                         className={`rounded px-1 py-0.5 text-[8px] font-semibold ${
                                                             mappingFieldId === q.id
                                                                 ? "text-alloy-bend-pine"
-                                                                : `${WS_ICON_STRUCTURAL} hover:text-alloy-bend-pine`
+                                                                : "text-alloy-midnight/40 hover:text-alloy-bend-pine"
                                                         }`}
                                                     >
                                                         {mappingFieldId === q.id ? "Mapping…" : "Map"}
@@ -168,7 +189,7 @@ export function ProcessingQuestionReviewList({
                                                         type="button"
                                                         aria-label="Restore question"
                                                         onClick={() => onIgnore(q.id)}
-                                                        className={`p-0.5 ${WS_ICON_STRUCTURAL} hover:text-alloy-bend-pine`}
+                                                        className="p-0.5 text-alloy-midnight/30 hover:text-alloy-bend-pine"
                                                     >
                                                         <RotateCcw className="h-3 w-3" />
                                                     </button>
@@ -177,7 +198,7 @@ export function ProcessingQuestionReviewList({
                                                         type="button"
                                                         aria-label="Ignore question"
                                                         onClick={() => onIgnore(q.id)}
-                                                        className={`p-0.5 ${WS_ICON_STRUCTURAL} hover:text-alloy-midnight-forge`}
+                                                        className="p-0.5 text-alloy-midnight/30 hover:text-alloy-midnight/60"
                                                     >
                                                         <EyeOff className="h-3 w-3" />
                                                     </button>
@@ -186,7 +207,7 @@ export function ProcessingQuestionReviewList({
                                                     type="button"
                                                     aria-label="Edit question"
                                                     onClick={() => onEdit(isEditing ? null : q.id)}
-                                                    className={`p-0.5 ${WS_ICON_STRUCTURAL} hover:text-alloy-bend-pine`}
+                                                    className="p-0.5 text-alloy-midnight/30 hover:text-alloy-midnight/60"
                                                 >
                                                     <Pencil className="h-3 w-3" />
                                                 </button>
@@ -194,7 +215,7 @@ export function ProcessingQuestionReviewList({
                                                     type="button"
                                                     aria-label="Delete question"
                                                     onClick={() => onRemove(q.id)}
-                                                    className={`p-0.5 ${WS_ICON_STRUCTURAL} hover:text-alloy-bend-pine`}
+                                                    className="p-0.5 text-alloy-midnight/30 hover:text-alloy-midnight/60"
                                                 >
                                                     <Trash2 className="h-3 w-3" />
                                                 </button>
@@ -202,70 +223,11 @@ export function ProcessingQuestionReviewList({
                                         </div>
 
                                         {!q.ignored && sel ? (
-                                            <div className="mt-3 space-y-2.5">
-                                                <div>
-                                                    <label className={`mb-1 block ${PROCESSING_METADATA}`}>
-                                                        Destination
-                                                    </label>
-                                                    <select
-                                                        value={q.questionSubject ?? "processing_only"}
-                                                        data-testid={`review-subject-${q.id}`}
-                                                        onChange={(e) =>
-                                                            onUpdate(q.id, {
-                                                                questionSubject: e.target.value as ReviewQuestionInput["questionSubject"],
-                                                                field_source: undefined,
-                                                            })
-                                                        }
-                                                        className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] text-alloy-midnight focus:border-alloy-bend-pine/40 focus:outline-none"
-                                                    >
-                                                        {QUESTION_SUBJECT_OPTIONS.map((o) => (
-                                                            <option key={o.value} value={o.value}>
-                                                                {o.label}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                {showNameRep ? (
-                                                    <div>
-                                                        <label className={`mb-1 block ${PROCESSING_METADATA}`}>
-                                                            Name format
-                                                        </label>
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {NAME_REPRESENTATION_OPTIONS.map((o) => {
-                                                                const active = (q.nameRepresentation ?? "full_name") === o.value;
-                                                                return (
-                                                                    <button
-                                                                        key={o.value}
-                                                                        type="button"
-                                                                        data-testid={`review-name-rep-${q.id}-${o.value}`}
-                                                                        onClick={() =>
-                                                                            onUpdate(q.id, {
-                                                                                nameRepresentation: o.value,
-                                                                                field_source: undefined,
-                                                                            })
-                                                                        }
-                                                                        className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
-                                                                            active
-                                                                                ? "text-alloy-bend-pine underline decoration-alloy-bend-pine/40 underline-offset-2"
-                                                                                : `${WS_TEXT_SECONDARY} hover:text-alloy-bend-pine`
-                                                                        }`}
-                                                                    >
-                                                                        {o.label}
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                ) : null}
-                                                <div className={`flex items-center gap-1 ${PROCESSING_METADATA} text-alloy-bend-pine`}>
-                                                    <Check className="h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
-                                                    <span>{resolvedStorageSummary(q)}</span>
-                                                </div>
-                                            </div>
+                                            <ReviewQuestionInspector question={q} showNameRep={showNameRep} onUpdate={onUpdate} />
                                         ) : null}
 
                                         {isEditing && !q.ignored ? (
-                                            <div className="mt-3 space-y-2">
+                                            <div className="mt-1.5 space-y-1 border-t border-alloy-stone/[0.08] pt-1.5">
                                                 <input
                                                     value={q.displayLabel}
                                                     onChange={(e) => onUpdate(q.id, { displayLabel: e.target.value })}
@@ -288,5 +250,168 @@ export function ProcessingQuestionReviewList({
                 ))}
             </div>
         </>
+    );
+}
+
+function ReviewQuestionInspector({
+    question,
+    showNameRep,
+    onUpdate,
+}: {
+    question: ReviewQuestionInput;
+    showNameRep: boolean;
+    onUpdate: (id: string, patch: Partial<ReviewQuestionInput>) => void;
+}) {
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
+    const eligibleFields = eligibleCanonicalFieldsForSubject(subject);
+    const suggestion = suggestReviewDestinationField({
+        evidenceLabel: question.evidenceLabel,
+        displayLabel: question.displayLabel,
+        type: question.type,
+        subject,
+    });
+    const selectedFieldId = question.destinationFieldId ?? suggestion?.fieldId ?? "";
+    const selectedField = selectedFieldId ? reviewFieldOptionById(selectedFieldId) : null;
+    const fieldSource = resolvedFieldSource(question);
+    const matchConfidence = fieldMatchConfidence(question);
+    const sampleValue = question.sampleValue ?? question.evidence ?? "";
+    const normalization = selectedField
+        ? normalizeFieldValue(sampleValue, selectedField.valueKind)
+        : null;
+
+    return (
+        <div className="mt-1.5 space-y-2 border-t border-alloy-stone/[0.08] pt-1.5" data-testid={`review-inspector-${question.id}`}>
+            <InspectorRow label="Detected type">
+                <span className="text-[10px] text-alloy-midnight/70">{TYPE_LABEL[question.type] ?? question.type}</span>
+            </InspectorRow>
+
+            <InspectorRow label="Destination">
+                <select
+                    value={question.questionSubject ?? "processing_only"}
+                    data-testid={`review-subject-${question.id}`}
+                    onChange={(e) =>
+                        onUpdate(question.id, {
+                            questionSubject: e.target.value as ReviewQuestionInput["questionSubject"],
+                            destinationFieldId: undefined,
+                            field_source: undefined,
+                        })
+                    }
+                    className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] text-alloy-midnight focus:border-alloy-bend-pine/40 focus:outline-none"
+                >
+                    {QUESTION_SUBJECT_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                            {o.label}
+                        </option>
+                    ))}
+                </select>
+            </InspectorRow>
+
+            {subject !== "processing_only" ? (
+                <InspectorRow label="Destination field">
+                    <select
+                        value={selectedFieldId}
+                        data-testid={`review-destination-field-${question.id}`}
+                        onChange={(e) =>
+                            onUpdate(question.id, {
+                                destinationFieldId: e.target.value || undefined,
+                                field_source: undefined,
+                            })
+                        }
+                        className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] text-alloy-midnight focus:border-alloy-bend-pine/40 focus:outline-none"
+                    >
+                        <option value="">Choose a field…</option>
+                        {eligibleFields.map((field) => (
+                            <option key={field.id} value={field.id}>
+                                {field.label}
+                            </option>
+                        ))}
+                    </select>
+                </InspectorRow>
+            ) : null}
+
+            {subject !== "processing_only" && suggestion && !question.destinationFieldId ? (
+                <p className="text-[9px] text-alloy-midnight/45">
+                    Suggested: <span className="font-medium text-alloy-midnight/65">{suggestion.label}</span>
+                    {" · "}
+                    {suggestion.confidencePercent}% confidence
+                </p>
+            ) : null}
+
+            {subject !== "processing_only" && matchConfidence.percent != null ? (
+                <InspectorRow label="Match confidence">
+                    <span className="text-[10px] font-medium text-alloy-bend-pine">{matchConfidence.percent}%</span>
+                </InspectorRow>
+            ) : null}
+
+            {showNameRep ? (
+                <InspectorRow label="Name format">
+                    <div className="flex flex-wrap gap-1">
+                        {NAME_REPRESENTATION_OPTIONS.map((o) => {
+                            const active = (question.nameRepresentation ?? "full_name") === o.value;
+                            return (
+                                <button
+                                    key={o.value}
+                                    type="button"
+                                    data-testid={`review-name-rep-${question.id}-${o.value}`}
+                                    onClick={() =>
+                                        onUpdate(question.id, {
+                                            nameRepresentation: o.value,
+                                            field_source: undefined,
+                                        })
+                                    }
+                                    className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                                        active
+                                            ? "text-alloy-bend-pine underline decoration-alloy-bend-pine/40 underline-offset-2"
+                                            : "text-alloy-midnight/50 hover:text-alloy-midnight/70"
+                                    }`}
+                                >
+                                    {o.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </InspectorRow>
+            ) : null}
+
+            {selectedField && question.type === "date" ? (
+                <>
+                    <InspectorRow label="Input format detected">
+                        <span className="text-[10px] text-alloy-midnight/65">
+                            {detectedInputFormatLabel(sampleValue, selectedField.valueKind)}
+                        </span>
+                    </InspectorRow>
+                    <InspectorRow label="Normalize">
+                        {normalization?.status === "valid" ? (
+                            <span className="text-[10px] text-alloy-bend-pine">
+                                Parse and normalize date → {String(normalization.canonicalValue)}
+                            </span>
+                        ) : normalization?.status === "ambiguous" ? (
+                            <span className="text-[10px] text-amber-700">{normalization.reason}</span>
+                        ) : normalization?.status === "invalid" && sampleValue ? (
+                            <span className="text-[10px] text-red-700">{normalization.reason}</span>
+                        ) : (
+                            <span className="text-[10px] text-alloy-midnight/45">Awaiting extracted value</span>
+                        )}
+                    </InspectorRow>
+                </>
+            ) : null}
+
+            <div className="flex items-center gap-1 text-[9px] font-medium text-alloy-bend-pine">
+                <Check className="h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
+                <span>{storageSummaryLabel(fieldSource, selectedFieldId || null)}</span>
+            </div>
+        </div>
+    );
+}
+
+function InspectorRow({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <div>
+            <label className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                {label}
+            </label>
+            {children}
+        </div>
     );
 }

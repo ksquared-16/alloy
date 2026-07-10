@@ -7,6 +7,10 @@
 
 import type { FormFieldSource } from "@/lib/forms/schema";
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
+import {
+    reviewFieldOptionById,
+    suggestReviewDestinationField,
+} from "./processingReviewFieldCatalog";
 import type { ManualFieldInput as DraftFieldInput } from "./buildManualFormDraft";
 
 export type QuestionSubject =
@@ -30,6 +34,7 @@ export type QuestionResolutionStatus =
 
 export type QuestionIntent =
     | "child_identity"
+    | "date_of_birth"
     | "guardian_identity"
     | "emergency_contact"
     | "contact_info"
@@ -54,6 +59,10 @@ export type ReviewQuestionInput = {
     bbox?: [number, number, number, number];
     questionSubject?: QuestionSubject;
     nameRepresentation?: NameRepresentation;
+    /** Selected canonical destination field (registry id). */
+    destinationFieldId?: string;
+    /** Optional extracted/sample value for normalization preview. */
+    sampleValue?: string;
     resolutionStatus?: QuestionResolutionStatus;
     ignored?: boolean;
     /** Advanced override — when set, skips derived storage. */
@@ -84,7 +93,7 @@ export function inferQuestionIntent(label: string): QuestionIntent {
     if (/\b(parent|guardian|mother|father|caregiver)('?s)?\s*name\b/i.test(text)) return "guardian_identity";
     if (/\bemergency\s*contact\b/i.test(text)) return "emergency_contact";
     if (/\ballerg|medical|immuniz|physician|health\b/i.test(text)) return "health";
-    if (/\b(date\s*of\s*birth|birth\s*date|birthdate|d\.?o\.?b\.?)\b/i.test(text)) return "child_identity";
+    if (/\b(date\s*of\s*birth|birth\s*date|birthdate|d\.?o\.?b\.?)\b/i.test(text)) return "date_of_birth";
     if (/\bemail\b/i.test(text)) return "contact_info";
     if (/\b(phone|telephone|mobile|cell)\b/i.test(text)) return "contact_info";
     if (/\bdate\b/i.test(text)) return "date";
@@ -94,6 +103,7 @@ export function inferQuestionIntent(label: string): QuestionIntent {
 export function defaultSubjectForIntent(intent: QuestionIntent): QuestionSubject {
     switch (intent) {
         case "child_identity":
+        case "date_of_birth":
         case "health":
             return "child";
         case "guardian_identity":
@@ -108,7 +118,8 @@ export function defaultSubjectForIntent(intent: QuestionIntent): QuestionSubject
     }
 }
 
-export function supportsNameRepresentation(intent: QuestionIntent): boolean {
+export function supportsNameRepresentation(intent: QuestionIntent, type?: string): boolean {
+    if (type === "date" || intent === "date_of_birth") return false;
     return intent === "child_identity" || intent === "guardian_identity" || intent === "emergency_contact";
 }
 
@@ -144,10 +155,29 @@ export function deriveFieldSources(input: {
     intent: QuestionIntent;
     displayLabel: string;
     type: string;
+    destinationFieldId?: string;
 }): FormFieldSource | undefined {
     if (input.subject === "processing_only") return undefined;
 
-    if (input.intent === "child_identity" || (input.subject === "child" && supportsNameRepresentation(input.intent))) {
+    if (input.destinationFieldId) {
+        const selected = reviewFieldOptionById(input.destinationFieldId);
+        if (selected) return selected.fieldSource;
+    }
+
+    const suggestion = suggestReviewDestinationField({
+        evidenceLabel: input.displayLabel,
+        displayLabel: input.displayLabel,
+        type: input.type,
+        subject: input.subject,
+    });
+    if (suggestion) return suggestion.fieldSource;
+
+    if (input.intent === "date_of_birth" || (input.type === "date" && input.subject === "child")) {
+        const dob = reviewFieldOptionById("child_date_of_birth");
+        if (dob) return dob.fieldSource;
+    }
+
+    if (input.intent === "child_identity" || (input.subject === "child" && supportsNameRepresentation(input.intent, input.type))) {
         if (input.nameRepresentation === "first_last") {
             return registrySource("child", "child_first_name", "child_first_name");
         }
@@ -174,13 +204,37 @@ export function deriveFieldSources(input: {
         }
     }
 
-    const suggestion = suggestFieldBinding(input.displayLabel, input.type);
-    return suggestion?.field_source;
+    const bindingSuggestion = suggestFieldBinding(input.displayLabel, input.type);
+    return bindingSuggestion?.field_source;
 }
 
-/** Human label for where data is stored — never exposes raw keys in primary UI. */
-export function storageSummaryLabel(fieldSource?: FormFieldSource | null): string {
+const PROCESSING_FIELD_LABEL_BY_KEY = new Map<string, string>(
+    [
+        ["child:child_date_of_birth", "Date of birth"],
+        ["child:child_first_name", "Child first name"],
+        ["child:child_last_name", "Child last name"],
+        ["guardian:guardian_first_name", "Parent / guardian first name"],
+        ["guardian:guardian_last_name", "Parent / guardian last name"],
+        ["guardian:guardian_email", "Parent email"],
+        ["guardian:guardian_phone", "Parent phone"],
+        ["enrollment:start_date", "Desired start date"],
+        ["enrollment:child_site", "Preferred school / site"],
+        ["enrollment:allergy_notes", "Allergies"],
+    ] as const
+);
+
+/** Human label for where data is stored — shows canonical field when known. */
+export function storageSummaryLabel(
+    fieldSource?: FormFieldSource | null,
+    destinationFieldId?: string | null
+): string {
+    if (destinationFieldId) {
+        const option = reviewFieldOptionById(destinationFieldId);
+        if (option) return option.label;
+    }
     if (!fieldSource) return "Processing only — not synced to records";
+    const selected = PROCESSING_FIELD_LABEL_BY_KEY.get(`${fieldSource.entity_type}:${fieldSource.field_key}`);
+    if (selected) return selected;
     const subject =
         fieldSource.entity_type === "child" || fieldSource.entity_type === "customer_member"
             ? "Child"
@@ -220,6 +274,7 @@ export function expandQuestionsForDraftSave(questions: readonly ReviewQuestionIn
             intent,
             displayLabel: label,
             type: question.type,
+            destinationFieldId: question.destinationFieldId,
         });
 
         const pdfProvenance = {
@@ -232,7 +287,7 @@ export function expandQuestionsForDraftSave(questions: readonly ReviewQuestionIn
         const splitName =
             subject !== "processing_only" &&
             (nameRep === "first_last" || nameRep === "first_middle_last") &&
-            (supportsNameRepresentation(intent) ||
+            (supportsNameRepresentation(intent, question.type) ||
                 subject === "child" ||
                 subject === "parent" ||
                 subject === "guardian" ||
@@ -318,7 +373,7 @@ export function seedReviewQuestionFromDraftField(field: {
     const evidenceLabel = field.label;
     const intent = inferQuestionIntent(evidenceLabel);
     const questionSubject = field.field_source
-        ? field.field_source.entity_type === "child"
+        ? field.field_source.entity_type === "child" || field.field_source.entity_type === "customer_member"
             ? "child"
             : field.field_source.entity_type === "guardian" || field.field_source.entity_type === "person"
               ? "guardian"
@@ -328,6 +383,13 @@ export function seedReviewQuestionFromDraftField(field: {
                   ? "household"
                   : "processing_only"
         : defaultSubjectForIntent(intent);
+
+    const suggestion = suggestReviewDestinationField({
+        evidenceLabel,
+        displayLabel: field.label,
+        type: field.type,
+        subject: questionSubject,
+    });
 
     return {
         id: field.id,
@@ -342,7 +404,10 @@ export function seedReviewQuestionFromDraftField(field: {
         page: field.page,
         bbox: field.bbox,
         questionSubject,
-        nameRepresentation: supportsNameRepresentation(intent) ? defaultNameRepresentation(intent, evidenceLabel) : undefined,
-        field_source: field.field_source ?? suggestFieldBinding(field.label, field.type)?.field_source,
+        nameRepresentation: supportsNameRepresentation(intent, field.type)
+            ? defaultNameRepresentation(intent, evidenceLabel)
+            : undefined,
+        destinationFieldId: suggestion?.fieldId,
+        field_source: field.field_source ?? suggestion?.fieldSource ?? suggestFieldBinding(field.label, field.type)?.field_source,
     };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { LayoutGrid, List, MoreHorizontal, Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ProcessingFormRow } from "./useProcessingFormApi";
 import ProcessingConfirmDialog from "./ProcessingConfirmDialog";
 import ProcessingFolderDetailPanel from "./ProcessingFolderDetailPanel";
@@ -73,6 +73,7 @@ export default function ProcessingFormsAssetLibrary({
     listLoaded,
     listErr,
     onRetry,
+    focusFolderId,
 }: {
     forms: ProcessingFormRow[];
     search: string;
@@ -86,9 +87,14 @@ export default function ProcessingFormsAssetLibrary({
     listLoaded?: boolean;
     listErr?: string | null;
     onRetry?: () => void;
+    focusFolderId?: string | null;
 }) {
     const { formFolders } = useProcessingFolders();
     const [activeFolder, setActiveFolder] = useState("generated");
+
+    useEffect(() => {
+        if (focusFolderId) setActiveFolder(focusFolderId);
+    }, [focusFolderId]);
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [manageOpen, setManageOpen] = useState(false);
     const [menuFormId, setMenuFormId] = useState<string | null>(null);

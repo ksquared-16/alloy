@@ -6,6 +6,36 @@ import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdmi
 export const dynamic = "force-dynamic";
 
 /**
+ * PATCH /api/admin/pos/documents/[id] — update operator display name (title only).
+ * Original filename remains unchanged for audit.
+ */
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const ctx = await getAdminContextCached();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    if (ctx.role !== "admin") return jsonError("Forbidden", 403);
+
+    const { id: rawId } = await params;
+    const documentId = parseUuidParam(rawId, "id");
+    if (documentId instanceof NextResponse) return documentId;
+
+    const body = (await request.json().catch(() => ({}))) as { display_name?: string };
+    const displayName = (body.display_name ?? "").trim();
+    if (!displayName) return jsonError("Display name cannot be empty.", 400);
+
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+        .from("documents")
+        .update({ title: displayName, updated_at: new Date().toISOString() })
+        .eq("org_id", ctx.orgId)
+        .eq("id", documentId)
+        .select("id, title, original_filename")
+        .maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return jsonError("Not found", 404);
+    return jsonData({ id: data.id, display_name: data.title, original_filename: data.original_filename });
+}
+
+/**
  * DELETE /api/admin/pos/documents/[id] — POS-FP15.
  *
  * SAFE delete of an unprocessed / unused source document (e.g. a test upload). Admin-only,

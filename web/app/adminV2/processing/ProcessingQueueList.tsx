@@ -15,6 +15,7 @@ import { MoreHorizontal } from "lucide-react";
 import type { ProcessingCaseQueueRow, ProcessingCaseStatus } from "@/lib/pos/processingCase/readModel/types";
 import RecommendationBadge from "@/app/adminV2/pos/RecommendationBadge";
 import ProcessingConfirmDialog from "@/app/adminV2/pos/ProcessingConfirmDialog";
+import ProcessingRenameDocumentDialog from "@/app/adminV2/pos/ProcessingRenameDocumentDialog";
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
@@ -167,6 +168,7 @@ export default function ProcessingQueueList({
     const [menuRowId, setMenuRowId] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<QueueDisplayRow | null>(null);
     const [confirmArchive, setConfirmArchive] = useState<QueueDisplayRow | null>(null);
+    const [renameTarget, setRenameTarget] = useState<QueueDisplayRow | null>(null);
     const [deleting, setDeleting] = useState(false);
     const [deleteErr, setDeleteErr] = useState<string | null>(null);
     const load = refresh;
@@ -260,6 +262,7 @@ export default function ProcessingQueueList({
                   : "text-alloy-midnight/35";
         const canDelete = canDeleteTestUpload(row);
         const canArchive = canArchiveImport(row);
+        const canRename = row.primarySource?.kind === "document";
         const menuOpen = menuRowId === row.id;
         return (
             <li key={row.id} className="group relative">
@@ -286,7 +289,7 @@ export default function ProcessingQueueList({
                         </span>
                     </span>
                 </button>
-                {canDelete || canArchive ? (
+                {canDelete || canArchive || canRename ? (
                     <div className="absolute right-1 top-1">
                         <button
                             type="button"
@@ -302,6 +305,20 @@ export default function ProcessingQueueList({
                         </button>
                         {menuOpen ? (
                             <div className="absolute right-0 z-10 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-alloy-stone/15 bg-white py-1 shadow-lg">
+                                {canRename ? (
+                                    <button
+                                        type="button"
+                                        className="block w-full px-3 py-1.5 text-left text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/[0.06]"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setMenuRowId(null);
+                                            setRenameTarget(row);
+                                            setDeleteErr(null);
+                                        }}
+                                    >
+                                        Rename
+                                    </button>
+                                ) : null}
                                 {canArchive ? (
                                     <button
                                         type="button"
@@ -531,6 +548,13 @@ export default function ProcessingQueueList({
                     {deleteErr}
                 </p>
             ) : null}
+            <ProcessingRenameDocumentDialog
+                open={!!renameTarget}
+                documentId={renameTarget?.primarySource?.kind === "document" ? renameTarget.primarySource.id : null}
+                initialName={renameTarget?.sourceDisplay?.label ?? ""}
+                onClose={() => setRenameTarget(null)}
+                onRenamed={() => refresh()}
+            />
         </div>
     );
 }
