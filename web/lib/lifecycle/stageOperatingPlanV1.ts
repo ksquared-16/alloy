@@ -26,6 +26,30 @@ export type StageWorkCompletionPolicyV1 = {
     repeat_due_days?: number;
 };
 
+export type StageWorkTemplateActionRefV1 = {
+    action_ref: string;
+    override_label?: string;
+};
+
+export type StageWorkTemplateTransitionRefV1 = {
+    transition_ref: string;
+    override_label?: string;
+};
+
+export type StageWorkTemplateOutcomeRefV1 = {
+    outcome_ref: string;
+};
+
+export type StageWorkTemplateAlternatePathRefV1 =
+    | StageWorkTemplateTransitionRefV1
+    | StageWorkTemplateActionRefV1;
+
+export function isWorkTemplateTransitionRef(
+    ref: StageWorkTemplateAlternatePathRefV1,
+): ref is StageWorkTemplateTransitionRefV1 {
+    return typeof (ref as StageWorkTemplateTransitionRefV1).transition_ref === "string";
+}
+
 export type StageWorkTemplateV1 = {
     template_key: string;
     label: string;
@@ -38,6 +62,14 @@ export type StageWorkTemplateV1 = {
     /** Optional link to platform work definition catalog key. */
     work_definition_key?: string | null;
     completion_policy?: StageWorkCompletionPolicyV1;
+    /** Operator primary execution affordance for this work template. */
+    primary_action?: StageWorkTemplateActionRefV1;
+    /** Ordered helpful actions shown on Current Work summary. Empty array = explicitly none. */
+    helpful_actions?: StageWorkTemplateActionRefV1[];
+    /** Ordered alternate progression paths (transitions or actions). Empty array = explicitly none. */
+    alternate_paths?: StageWorkTemplateAlternatePathRefV1[];
+    /** Ordered outcome refs — filters canonical stage outcomes for this template. Empty = explicitly none. */
+    outcome_refs?: StageWorkTemplateOutcomeRefV1[];
 };
 
 export type StageCompletionOutcomeV1 = {
@@ -168,6 +200,40 @@ function trimNonEmpty(value: unknown): string | null {
     return t.length > 0 ? t : null;
 }
 
+function parseActionRef(raw: unknown): StageWorkTemplateActionRefV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const action_ref = trimNonEmpty(o.action_ref);
+    if (!action_ref) return null;
+    const override_label = trimNonEmpty(o.override_label);
+    return override_label ? { action_ref, override_label } : { action_ref };
+}
+
+function parseTransitionRef(raw: unknown): StageWorkTemplateTransitionRefV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const transition_ref = trimNonEmpty(o.transition_ref);
+    if (!transition_ref) return null;
+    const override_label = trimNonEmpty(o.override_label);
+    return override_label ? { transition_ref, override_label } : { transition_ref };
+}
+
+function parseAlternatePathRef(raw: unknown): StageWorkTemplateAlternatePathRefV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    if (trimNonEmpty(o.transition_ref)) return parseTransitionRef(raw);
+    if (trimNonEmpty(o.action_ref)) return parseActionRef(raw);
+    return null;
+}
+
+function parseOutcomeRef(raw: unknown): StageWorkTemplateOutcomeRefV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const outcome_ref = trimNonEmpty(o.outcome_ref);
+    if (!outcome_ref) return null;
+    return { outcome_ref };
+}
+
 function parseDuePolicy(raw: unknown): StageWorkDuePolicy | null {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
     const o = raw as Record<string, unknown>;
@@ -207,6 +273,37 @@ function parseWorkTemplate(raw: unknown): StageWorkTemplateV1 | null {
         o.completion_policy as StageWorkCompletionPolicyV1 | undefined,
     );
     if (completion_policy) tpl.completion_policy = completion_policy;
+
+    const primary_action = parseActionRef(o.primary_action);
+    if (primary_action) tpl.primary_action = primary_action;
+
+    if (Array.isArray(o.helpful_actions)) {
+        const helpful_actions: StageWorkTemplateActionRefV1[] = [];
+        for (const item of o.helpful_actions) {
+            const parsed = parseActionRef(item);
+            if (parsed) helpful_actions.push(parsed);
+        }
+        tpl.helpful_actions = helpful_actions;
+    }
+
+    if (Array.isArray(o.alternate_paths)) {
+        const alternate_paths: StageWorkTemplateAlternatePathRefV1[] = [];
+        for (const item of o.alternate_paths) {
+            const parsed = parseAlternatePathRef(item);
+            if (parsed) alternate_paths.push(parsed);
+        }
+        tpl.alternate_paths = alternate_paths;
+    }
+
+    if (Array.isArray(o.outcome_refs)) {
+        const outcome_refs: StageWorkTemplateOutcomeRefV1[] = [];
+        for (const item of o.outcome_refs) {
+            const parsed = parseOutcomeRef(item);
+            if (parsed) outcome_refs.push(parsed);
+        }
+        tpl.outcome_refs = outcome_refs;
+    }
+
     return tpl;
 }
 

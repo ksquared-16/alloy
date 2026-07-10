@@ -333,6 +333,13 @@ export default function LifecycleStageWorkspace({
                             stageLabel={stageLabel}
                             savedPlan={bootstrap?.stage_operating_plan ?? null}
                             onDirtyChange={setOperatingPlanDirty}
+                            configuredActions={bootstrap?.actions ?? []}
+                            processStages={
+                                bootstrap?.pipeline?.queues?.map((lane) => ({
+                                    key: lane.key,
+                                    label: lane.label,
+                                })) ?? []
+                            }
                         />
                     :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
                 </ConfigurationRuntimeUniversalCard>
