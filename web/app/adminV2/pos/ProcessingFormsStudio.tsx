@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ProcessingCreateFormDialog from "./ProcessingCreateFormDialog";
 import ProcessingFormsAssetLibrary, { type FormAssetFilter } from "./ProcessingFormsAssetLibrary";
 import ProcessingFormBuilder from "./ProcessingFormBuilder";
@@ -8,40 +8,34 @@ import ProcessingStudioShell, { ProcessingStudioPlaceholder, type ProcessingStud
 import { useProcessingFormApi } from "./useProcessingFormApi";
 
 export default function ProcessingFormsStudio({
-    initialFormId,
+    selectedFormId,
+    onSelectedFormIdChange,
     initialTab = "forms",
     onTabChange,
-    onBuilderOpenChange,
 }: {
-    initialFormId?: string | null;
+    selectedFormId: string | null;
+    onSelectedFormIdChange: (formId: string | null) => void;
     initialTab?: ProcessingStudioTab;
     onTabChange?: (tab: ProcessingStudioTab) => void;
-    onBuilderOpenChange?: (open: boolean) => void;
 }) {
     const { forms, listErr, listLoaded, loadForms, createBlankForm, archiveForm, deleteForm } = useProcessingFormApi();
-    const [selectedFormId, setSelectedFormId] = useState<string | null>(initialFormId ?? null);
     const studioTab = initialTab;
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState<FormAssetFilter>("all");
     const [createOpen, setCreateOpen] = useState(false);
     const [creating, setCreating] = useState(false);
     const [focusFolderId, setFocusFolderId] = useState<string | null>(null);
-    const initialFormApplied = useRef(false);
 
     useEffect(() => {
         if (!listLoaded) void loadForms();
     }, [listLoaded, loadForms]);
 
-    useEffect(() => {
-        if (initialFormId && !initialFormApplied.current) {
-            initialFormApplied.current = true;
-            setSelectedFormId(initialFormId);
-        }
-    }, [initialFormId]);
-
-    useEffect(() => {
-        onBuilderOpenChange?.(!!selectedFormId);
-    }, [selectedFormId, onBuilderOpenChange]);
+    const openForm = useCallback(
+        (formId: string) => {
+            onSelectedFormIdChange(formId);
+        },
+        [onSelectedFormIdChange]
+    );
 
     const handleCreateContinue = useCallback(
         async (payload: {
@@ -59,19 +53,19 @@ export default function ProcessingFormsStudio({
                     setCreateOpen(false);
                     setFilter("all");
                     setFocusFolderId("manual");
-                    setSelectedFormId(formId);
+                    openForm(formId);
                 }
             } finally {
                 setCreating(false);
             }
         },
-        [createBlankForm, creating]
+        [createBlankForm, creating, openForm]
     );
 
     const handleBackFromBuilder = useCallback(() => {
-        setSelectedFormId(null);
+        onSelectedFormIdChange(null);
         void loadForms();
-    }, [loadForms]);
+    }, [loadForms, onSelectedFormIdChange]);
 
     if (selectedFormId) {
         const formMeta = forms.find((f) => f.id === selectedFormId) ?? null;
@@ -94,7 +88,7 @@ export default function ProcessingFormsStudio({
                         filter={filter}
                         onSearchChange={setSearch}
                         onFilterChange={setFilter}
-                        onSelectForm={setSelectedFormId}
+                        onSelectForm={openForm}
                         onCreateBlank={() => setCreateOpen(true)}
                         onArchiveForm={archiveForm}
                         onDeleteForm={deleteForm}

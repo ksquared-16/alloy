@@ -22,7 +22,6 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
     const [workView, setWorkView] = useState<DigitalMailroomWorkView>("overview");
     const [studioTab, setStudioTab] = useState<ProcessingStudioTab>("forms");
     const [studioFormId, setStudioFormId] = useState<string | null>(null);
-    const [builderOpen, setBuilderOpen] = useState(false);
 
     useEffect(() => {
         if (open) void warmProcessingQueueCache();
@@ -34,7 +33,6 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
         setWorkView("overview");
         setStudioTab("forms");
         setStudioFormId(null);
-        setBuilderOpen(false);
         onClose();
     }, [onClose]);
 
@@ -70,7 +68,7 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                     onWorkViewChange={setWorkView}
                     onStudioTabChange={setStudioTab}
                     onClose={handleClose}
-                    hideChrome={builderOpen}
+                    hideChrome={!!studioFormId}
                 >
                     {mode === "work" ? (
                         workView === "overview" ? (
@@ -88,10 +86,10 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                         )
                     ) : (
                         <ProcessingFormsStudio
-                            initialFormId={studioFormId}
+                            selectedFormId={studioFormId}
+                            onSelectedFormIdChange={setStudioFormId}
                             initialTab={studioTab}
                             onTabChange={setStudioTab}
-                            onBuilderOpenChange={setBuilderOpen}
                         />
                     )}
                 </DigitalMailroomShell>
