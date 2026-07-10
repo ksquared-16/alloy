@@ -1,4 +1,5 @@
 import type { GlobalSearchAdminV2DrawerEntityType } from "@/lib/admin/globalSearch/globalRecordSearchDrawerTarget";
+import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
 import type { GlobalRecordSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
 import type { GlobalRecordSearchCluster } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
 import type { PersonDrawerOpenSeed } from "@/lib/admin/drawer/personDrawerOpenSeed";
@@ -101,6 +102,10 @@ export function launchGlobalRecordSearchOpen(detail: GlobalRecordSearchOpenDetai
     const entity_id = detail.open_entity_id.trim();
     const entity_type = detail.open_entity_type;
     if (!entity_id || typeof window === "undefined") return null;
+
+    if (entity_type === "locations") {
+        return canonicalLocationSettingsHref(entity_id);
+    }
 
     if (adminV2PathHasDrawerHost(window.location.pathname)) {
         dispatchGlobalRecordSearchOpen(detail);

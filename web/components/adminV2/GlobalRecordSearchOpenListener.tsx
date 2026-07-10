@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAdminDrawer, type OpenDrawerParams } from "@/contexts/AdminDrawerContext";
 import {
     ADMINV2_GLOBAL_SEARCH_OPEN_RECORD_EVENT,
@@ -9,6 +10,7 @@ import {
     readGlobalRecordSearchOpenIntent,
     type GlobalRecordSearchOpenDetail,
 } from "@/lib/adminV2/globalRecordSearchOpen";
+import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
 import { isGlobalSearchLegacyDrawerEntityType } from "@/lib/admin/globalSearch/globalRecordSearchDrawerTarget";
 import {
     cachePersonDrawerChildOpenSeed,
@@ -37,11 +39,16 @@ function warmPersonDrawerFromGlobalSearch(detail: GlobalRecordSearchOpenDetail):
 
 function openFromGlobalSearchDetail(
     openDrawer: (params: OpenDrawerParams) => void,
+    navigate: (href: string) => void,
     detail: GlobalRecordSearchOpenDetail
 ): void {
     const id = detail.open_entity_id.trim();
     const type = detail.open_entity_type;
     if (!id || isGlobalSearchLegacyDrawerEntityType(type)) return;
+    if (type === "locations") {
+        navigate(canonicalLocationSettingsHref(id));
+        return;
+    }
     warmPersonDrawerFromGlobalSearch(detail);
     openDrawer({
         type,
@@ -53,27 +60,29 @@ function openFromGlobalSearchDetail(
 
 /** Opens AdminV2 entity drawer from global search — blocks legacy member/contact drawers. */
 export default function GlobalRecordSearchOpenListener() {
+    const router = useRouter();
     const { openDrawer } = useAdminDrawer();
+    const navigate = (href: string) => router.push(href);
 
     useEffect(() => {
         const pending = readGlobalRecordSearchOpenIntent();
         if (pending) {
             clearGlobalRecordSearchOpenIntent();
             if (!isGlobalSearchLegacyDrawerEntityType(pending.open_entity_type)) {
-                openFromGlobalSearchDetail(openDrawer, pending);
+                openFromGlobalSearchDetail(openDrawer, navigate, pending);
             }
         }
-    }, [openDrawer]);
+    }, [openDrawer, navigate]);
 
     useEffect(() => {
         const onOpen = (ev: Event) => {
             const detail = (ev as CustomEvent<GlobalRecordSearchOpenDetail>).detail;
             if (!detail?.open_entity_id || !detail?.open_entity_type) return;
-            openFromGlobalSearchDetail(openDrawer, detail);
+            openFromGlobalSearchDetail(openDrawer, navigate, detail);
         };
         window.addEventListener(ADMINV2_GLOBAL_SEARCH_OPEN_RECORD_EVENT, onOpen);
         return () => window.removeEventListener(ADMINV2_GLOBAL_SEARCH_OPEN_RECORD_EVENT, onOpen);
-    }, [openDrawer]);
+    }, [openDrawer, navigate]);
 
     return null;
 }

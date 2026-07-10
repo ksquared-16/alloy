@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import {
+    canonicalLocationSettingsHref,
+    LOCATION_SETTINGS_PATH,
+} from "@/lib/admin/canonicalLocationSettingsRoutes";
 import {
     ConfigurationContext,
     ConfigurationEmptyState,
@@ -39,7 +44,12 @@ function sectionEmptyListCopy(section: (typeof LOCATION_CONFIG_SECTIONS)[number]
     return "No schedule templates yet.";
 }
 
-export default function LocationsConfigurationPage() {
+export default function LocationsConfigurationPage({
+    initialLocationId = null,
+}: {
+    initialLocationId?: string | null;
+}) {
+    const router = useRouter();
     const { canMutate } = useAdminAuth();
     const [creatingSite, setCreatingSite] = useState(false);
     const {
@@ -63,7 +73,7 @@ export default function LocationsConfigurationPage() {
         programOptionsForSite,
         ageUnitSelectOptions,
         setSchedulePatterns,
-    } = useLocationsConfigurationSettings();
+    } = useLocationsConfigurationSettings({ initialLocationId });
 
     const contextActions =
         canMutate && section === "locations" && !creatingSite ?
@@ -90,6 +100,9 @@ export default function LocationsConfigurationPage() {
                         setSection(s.key);
                         setSelectedId(null);
                         setCreatingSite(false);
+                        if (s.key !== "locations") {
+                            router.replace(LOCATION_SETTINGS_PATH);
+                        }
                     }}
                     testId={`locations-section-${s.key}`}
                 />
@@ -110,6 +123,9 @@ export default function LocationsConfigurationPage() {
                         onClick={() => {
                             setCreatingSite(false);
                             setSelectedId(item.id);
+                            if (section === "locations") {
+                                router.replace(canonicalLocationSettingsHref(item.id));
+                            }
                         }}
                         testId={`locations-item-${item.id}`}
                     />
@@ -137,6 +153,7 @@ export default function LocationsConfigurationPage() {
                         const newId = await createSiteLocation(input);
                         setCreatingSite(false);
                         setSelectedId(newId);
+                        router.replace(canonicalLocationSettingsHref(newId));
                         return newId;
                     }}
                 />

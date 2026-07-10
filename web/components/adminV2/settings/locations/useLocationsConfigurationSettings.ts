@@ -42,7 +42,8 @@ function isRoom(row: LocationHierarchyRow): boolean {
     return String(row.location_type ?? "").trim() === "unit";
 }
 
-export function useLocationsConfigurationSettings() {
+export function useLocationsConfigurationSettings(options?: { initialLocationId?: string | null }) {
+    const initialLocationId = String(options?.initialLocationId ?? "").trim() || null;
     const [section, setSection] = useState<LocationConfigSection>("locations");
     const [rows, setRows] = useState<LocationHierarchyRow[]>([]);
     const [programCategories, setProgramCategories] = useState<LocationProgramCategoryRow[]>([]);
@@ -183,14 +184,33 @@ export function useLocationsConfigurationSettings() {
     }, [section, siteRows, programCategories, roomRows, schedulePatterns, siteLabelById]);
 
     useEffect(() => {
-        if (!listItems.length) {
-            setSelectedId(null);
+        if (loading || !initialLocationId) return;
+        if (section !== "locations") {
+            setSection("locations");
             return;
         }
+        const siteMatch = siteRows.some((site) => site.id === initialLocationId);
+        if (siteMatch) {
+            setSelectedId(initialLocationId);
+            setError(null);
+            return;
+        }
+        if (!loading) {
+            setError("Location not found or unavailable.");
+            setSelectedId(null);
+        }
+    }, [initialLocationId, loading, siteRows, section]);
+
+    useEffect(() => {
+        if (!listItems.length) {
+            if (!initialLocationId) setSelectedId(null);
+            return;
+        }
+        if (initialLocationId && section === "locations") return;
         if (!selectedId || !listItems.some((item) => item.id === selectedId)) {
             setSelectedId(listItems[0]!.id);
         }
-    }, [listItems, selectedId]);
+    }, [listItems, selectedId, initialLocationId, section]);
 
     const selectedSite = useMemo(
         () => (section === "locations" ? siteRows.find((s) => s.id === selectedId) ?? null : null),
