@@ -44,7 +44,7 @@ export default function ProcessingLandingActionCard({
                     isPrimary
                         ? "bg-alloy-bend-pine/[0.1] text-alloy-bend-pine ring-alloy-bend-pine/25"
                         : isTertiary
-                          ? "bg-alloy-stone/45 text-alloy-midnight/45 ring-alloy-stone/35"
+                          ? "bg-alloy-midnight/[0.05] text-alloy-midnight-forge ring-alloy-midnight-forge/18"
                           : "bg-alloy-bend-pine/[0.08] text-alloy-bend-pine ring-alloy-bend-pine/20"
                 )}
             >
@@ -58,8 +58,8 @@ export default function ProcessingLandingActionCard({
                     isPrimary
                         ? "text-alloy-bend-pine"
                         : isTertiary
-                          ? "text-alloy-midnight/45 group-hover:text-alloy-midnight/65"
-                          : "text-alloy-midnight/55 group-hover:text-alloy-midnight"
+                          ? "text-alloy-midnight-forge group-hover:text-alloy-midnight"
+                          : "text-alloy-bend-pine"
                 )}
             >
                 {cta}
@@ -79,8 +79,8 @@ export default function ProcessingLandingActionCard({
                 isPrimary
                     ? `shadow-[0_4px_24px_rgba(24,39,58,0.09)] ring-1 ring-alloy-bend-pine/18 hover:shadow-[0_10px_36px_rgba(0,162,131,0.14)] hover:ring-alloy-bend-pine/28 ${WS_PROCESS_TILE_CHROME_HOVER}`
                     : isTertiary
-                      ? `shadow-[0_2px_8px_rgba(24,39,58,0.05)] ring-1 ring-alloy-stone/15 hover:shadow-[0_4px_18px_rgba(24,39,58,0.08)] hover:ring-alloy-stone/25 ${WS_PROCESS_TILE_CHROME_HOVER}`
-                      : `shadow-[0_3px_14px_rgba(24,39,58,0.08)] ring-1 ring-alloy-stone/12 hover:shadow-[0_6px_24px_rgba(24,39,58,0.11)] hover:ring-alloy-bend-pine/15 ${WS_PROCESS_TILE_CHROME_HOVER}`,
+                      ? `shadow-[0_2px_8px_rgba(24,39,58,0.05)] ring-1 ring-alloy-midnight-forge/12 hover:shadow-[0_4px_18px_rgba(24,39,58,0.08)] hover:ring-alloy-midnight-forge/20 ${WS_PROCESS_TILE_CHROME_HOVER}`
+                      : `shadow-[0_3px_14px_rgba(24,39,58,0.08)] ring-1 ring-alloy-bend-pine/14 hover:shadow-[0_6px_24px_rgba(0,162,131,0.1)] hover:ring-alloy-bend-pine/22 ${WS_PROCESS_TILE_CHROME_HOVER}`,
                 dragHandlers?.dragActive && "ring-2 ring-alloy-bend-pine/35",
                 disabled && "pointer-events-none opacity-60"
             )}

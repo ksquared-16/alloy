@@ -511,7 +511,9 @@ export default function PosTemplateSetupColumn({
                     }
                 >
                     <ProcessingSourceDocumentViewport
+                        key={`${detail.id}-${leftView}`}
                         pdfMode={leftView === "pdf" && !!pdfUrl}
+                        pageLayouts={pageMaps.map((p) => ({ width: p.width, height: p.height }))}
                         mappingBanner={
                             leftView === "highlights" && mappingQuestionId ? (
                                 <div className="mx-1.5 mt-1.5 flex shrink-0 items-center justify-between rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] px-2 py-0.5 text-[10px] text-alloy-bend-pine">
@@ -554,7 +556,8 @@ export default function PosTemplateSetupColumn({
                             <iframe
                                 src={pdfUrl}
                                 title="Source PDF"
-                                className="min-h-[48rem] w-full flex-1 rounded border border-alloy-stone/15 bg-white"
+                                className="w-full rounded border border-alloy-stone/15 bg-white"
+                                style={{ height: "72rem" }}
                             />
                         ) : pdfErr ? (
                             <div className="p-2 text-[11px] text-alloy-midnight/40">{pdfErr}</div>

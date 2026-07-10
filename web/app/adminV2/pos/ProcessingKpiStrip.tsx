@@ -26,16 +26,16 @@ export default function ProcessingKpiStrip() {
     const loading = queueLoading || !listLoaded;
 
     const items: WorkspaceMetricTileItem[] = [
-        { key: "active", label: "Active work", value: String(active.length), icon: "clipboard", accent: "midnight", status: "unknown" },
+        { key: "active", label: "Active work", value: String(active.length), icon: "clipboard", accent: "pine", status: "healthy" },
         { key: "ready", label: "Ready", value: String(ready.length), icon: "spark", accent: "pine", status: "healthy" },
-        { key: "forms", label: "Forms", value: String(forms.length), icon: "layers", accent: "stone", status: "unknown" },
+        { key: "forms", label: "Forms", value: String(forms.length), icon: "layers", accent: "midnight", status: "unknown" },
         {
             key: "published",
             label: "Published",
             value: String(forms.filter((f) => f.has_published_version).length),
             icon: "book",
             accent: "gold",
-            status: "warning",
+            status: "unknown",
         },
     ];
 

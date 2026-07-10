@@ -116,7 +116,7 @@ export default function WorkspaceMetricTiles({
             data-testid={testId}
         >
             <p className={WS_METRIC_EYEBROW}>
-                <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-alloy-midnight/45" aria-hidden />
+                <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-alloy-slate/50" aria-hidden />
                 {eyebrow}
             </p>
             {tiles}

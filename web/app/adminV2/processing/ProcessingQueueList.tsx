@@ -20,7 +20,7 @@ import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
 import { PROCESSING_EMPTY, PROCESSING_QUEUE_METADATA, PROCESSING_QUEUE_ROW_TITLE } from "@/lib/pos/processingPresentationTokens";
-import { WS_TEXT_MUTED } from "@/components/workspace/workspaceTokens";
+import { WS_ICON_ATTENTION, WS_ICON_INTERACTIVE, WS_ICON_STRUCTURAL, WS_TEXT_MUTED, WS_TEXT_PRIMARY, WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
 
 /**
  * Display order: operator-actionable lanes first; completed/archived are secondary.
@@ -357,6 +357,12 @@ export default function ProcessingQueueList({
 
     const renderFolderHeader = (key: ProcessingFolderKey, label: string, count: number, accent?: "pine" | "midnight" | "stone") => {
         const expanded = openFolders[key];
+        const iconClass =
+            key === "completed"
+                ? WS_ICON_ATTENTION
+                : key === "incoming" || accent === "pine"
+                  ? WS_ICON_INTERACTIVE
+                  : WS_ICON_STRUCTURAL;
         return (
         <button
             type="button"
@@ -367,10 +373,10 @@ export default function ProcessingQueueList({
             data-processing-folder={key}
         >
             <span className="flex min-w-0 items-center gap-2">
-                <ProcessingFolderIcon folderId={key} className="h-3 w-3 shrink-0 text-alloy-midnight/35" />
-                <span className="truncate text-[11px] font-semibold text-alloy-midnight/70">{label}</span>
+                <ProcessingFolderIcon folderId={key} className={`h-3 w-3 shrink-0 ${iconClass}`} />
+                <span className={`truncate text-[11px] font-semibold ${WS_TEXT_PRIMARY}`}>{label}</span>
             </span>
-            <span className="ml-2 shrink-0 px-1.5 text-[9px] font-semibold tabular-nums text-alloy-midnight/35">
+            <span className={`ml-2 shrink-0 px-1.5 text-[9px] font-semibold tabular-nums ${WS_TEXT_SECONDARY}`}>
                 {count}
             </span>
         </button>

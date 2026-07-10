@@ -18,6 +18,7 @@ import {
     PROCESSING_METADATA,
     PROCESSING_ROW_TITLE,
 } from "@/lib/pos/processingPresentationTokens";
+import { WS_ICON_STRUCTURAL, WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
 
 function resolvedStorageSummary(question: ReviewQuestionInput): string {
     if (question.ignored || question.questionSubject === "processing_only") {
@@ -156,7 +157,7 @@ export function ProcessingQuestionReviewList({
                                                         className={`rounded px-1 py-0.5 text-[8px] font-semibold ${
                                                             mappingFieldId === q.id
                                                                 ? "text-alloy-bend-pine"
-                                                                : "text-alloy-midnight-forge opacity-70 hover:text-alloy-bend-pine"
+                                                                : `${WS_ICON_STRUCTURAL} hover:text-alloy-bend-pine`
                                                         }`}
                                                     >
                                                         {mappingFieldId === q.id ? "Mapping…" : "Map"}
@@ -167,7 +168,7 @@ export function ProcessingQuestionReviewList({
                                                         type="button"
                                                         aria-label="Restore question"
                                                         onClick={() => onIgnore(q.id)}
-                                                        className="p-0.5 text-alloy-midnight-forge opacity-70 hover:text-alloy-bend-pine"
+                                                        className={`p-0.5 ${WS_ICON_STRUCTURAL} hover:text-alloy-bend-pine`}
                                                     >
                                                         <RotateCcw className="h-3 w-3" />
                                                     </button>
@@ -176,7 +177,7 @@ export function ProcessingQuestionReviewList({
                                                         type="button"
                                                         aria-label="Ignore question"
                                                         onClick={() => onIgnore(q.id)}
-                                                        className="p-0.5 text-alloy-midnight-forge opacity-70 hover:text-alloy-midnight-forge"
+                                                        className={`p-0.5 ${WS_ICON_STRUCTURAL} hover:text-alloy-midnight-forge`}
                                                     >
                                                         <EyeOff className="h-3 w-3" />
                                                     </button>
@@ -185,7 +186,7 @@ export function ProcessingQuestionReviewList({
                                                     type="button"
                                                     aria-label="Edit question"
                                                     onClick={() => onEdit(isEditing ? null : q.id)}
-                                                    className="p-0.5 text-alloy-midnight-forge opacity-70 hover:text-alloy-bend-pine"
+                                                    className={`p-0.5 ${WS_ICON_STRUCTURAL} hover:text-alloy-bend-pine`}
                                                 >
                                                     <Pencil className="h-3 w-3" />
                                                 </button>
@@ -193,7 +194,7 @@ export function ProcessingQuestionReviewList({
                                                     type="button"
                                                     aria-label="Delete question"
                                                     onClick={() => onRemove(q.id)}
-                                                    className="p-0.5 text-alloy-midnight-forge opacity-70 hover:text-alloy-bend-pine"
+                                                    className={`p-0.5 ${WS_ICON_STRUCTURAL} hover:text-alloy-bend-pine`}
                                                 >
                                                     <Trash2 className="h-3 w-3" />
                                                 </button>
@@ -246,7 +247,7 @@ export function ProcessingQuestionReviewList({
                                                                         className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
                                                                             active
                                                                                 ? "text-alloy-bend-pine underline decoration-alloy-bend-pine/40 underline-offset-2"
-                                                                                : "text-alloy-midnight/55 hover:text-alloy-bend-pine"
+                                                                                : `${WS_TEXT_SECONDARY} hover:text-alloy-bend-pine`
                                                                         }`}
                                                                     >
                                                                         {o.label}

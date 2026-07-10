@@ -189,11 +189,47 @@ WS_SHELL_INSET               White gutter (~16px)
 
 | Token | Role |
 |-------|------|
-| **Midnight Forge** | Structure, typography, icons, navigation, labels, hairlines |
-| **Bend Pine** | Selections, progress, current step, primary CTA, success, generation, completion |
-| **Alloy Gold** | Publish, attention, certification |
+| **Midnight Forge** | Structure, titles, default icons, inventory (forms library, category folders) |
+| **Alloy Slate** | Secondary copy, metadata, counts, dates |
+| **Bend Pine** | Actionable, active, selected, ready, progress, primary CTA |
+| **Alloy Gold** | Published, finalized, completed, attention where appropriate |
 | **White** | Modal shell + contained surfaces (Layer 1 + 3) |
 | **River Stone ~7%** | Inset workspace field (Layer 2) |
+
+Green (Bend Pine) indicates **action or active operational state** — not decorative fill. Do not make every icon green.
+
+### Artifact document viewport (frozen)
+
+Source-document zones (Processing and future artifact-heavy modules) use `ProcessingSourceDocumentViewport` + `WorkspaceArtifactZoomControls`:
+
+| Mode | Behavior |
+|------|----------|
+| **Fit page** (default) | `scale = min(availW/contentW, availH/firstPageH, 1)` — entire first page visible; preserves aspect ratio |
+| **Fit width** | Width fits viewport; vertical scroll through full document |
+| **Manual zoom** | Predictable +/- steps; scroll when content exceeds viewport |
+
+Requirements:
+
+- Bounded flex child (`min-h-0 flex-1`); scroll element owns `overflow-auto`
+- `ResizeObserver` + post-layout measurement (not a single early `scrollHeight` read)
+- Multi-page stacks scroll inside the source-document panel; footer CTA stays fixed outside scroll
+- Regions and PDF modes share fit/zoom semantics
+- Manual zoom must never clip content inside an inaccessible wrapper
+
+Scale helpers: `web/lib/workspace/artifactViewportScale.ts`
+
+### Metric KPI semantic accents (frozen)
+
+`WorkspaceMetricTiles` accent + status must agree:
+
+| Metric | Accent | Meaning |
+|--------|--------|---------|
+| Active work | Bend Pine | Actionable queue |
+| Ready | Bend Pine | Actionable / healthy |
+| Forms | Midnight Forge | Inventory |
+| Published | Alloy Gold | Finalized |
+
+Eyebrow labels (e.g. "Today's activity") stack **above** the tile row via `WorkspaceMetricTiles` `eyebrow` prop — never beside tiles in a horizontal band.
 
 **Never** use module-specific color themes. Processing, Communications, Work Items, Scheduling, Attendance, and Commercial share one visual language.
 

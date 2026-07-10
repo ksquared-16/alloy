@@ -97,7 +97,10 @@ function PageSvg({
     };
 
     return (
-        <article className="rounded-lg border border-alloy-stone/18 bg-white p-2 shadow-[0_1px_4px_rgba(24,39,58,0.05)]">
+        <article
+            className="rounded-lg border border-alloy-stone/18 bg-white p-2 shadow-[0_1px_4px_rgba(24,39,58,0.05)]"
+            data-workspace-artifact-page="true"
+        >
             <div className={`mb-1.5 flex items-center justify-between text-[10px] ${WS_TEXT_SECONDARY}`}>
                 <span className="font-semibold uppercase tracking-[0.06em]">
                     Page {pg.page} · {pg.rects.length} field{pg.rects.length === 1 ? "" : "s"}

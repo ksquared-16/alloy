@@ -143,4 +143,33 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(nav).toContain("WorkspaceModeTabs");
         expect(nav).toContain("WorkspaceSubTabs");
     });
+
+    it("Processing KPI accents follow semantic color doctrine", () => {
+        const strip = read("app/adminV2/pos/ProcessingKpiStrip.tsx");
+        expect(strip).toContain('accent: "pine"');
+        expect(strip).toContain('label: "Active work"');
+        expect(strip).toContain('label: "Ready"');
+        expect(strip).toContain('accent: "midnight"');
+        expect(strip).toContain('label: "Forms"');
+        expect(strip).toContain('accent: "gold"');
+        expect(strip).toContain('label: "Published"');
+    });
+
+    it("metric eyebrow stacks above tile row", () => {
+        const tiles = read("components/workspace/WorkspaceMetricTiles.tsx");
+        expect(tiles).toContain("flex-col gap-1.5");
+        expect(tiles).toContain("data-workspace-metric-band");
+        expect(tiles).not.toMatch(/eyebrow[\s\S]*flex-row[\s\S]*data-workspace-metric-tiles/);
+    });
+
+    it("artifact viewport uses bounded scroll and dual-axis fit-page scale", () => {
+        const viewport = read("app/adminV2/pos/ProcessingSourceDocumentViewport.tsx");
+        expect(viewport).toContain("resolveArtifactScale");
+        expect(viewport).toContain("ResizeObserver");
+        expect(viewport).toContain("basis-0");
+        expect(viewport).toContain("data-workspace-artifact-scale-mode");
+        const scale = read("lib/workspace/artifactViewportScale.ts");
+        expect(scale).toContain("computeFitPageScale");
+        expect(scale).toContain("Math.min(scaleW, scaleH, 1)");
+    });
 });
