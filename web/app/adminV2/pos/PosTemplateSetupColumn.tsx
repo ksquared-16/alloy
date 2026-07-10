@@ -47,9 +47,15 @@ import {
     deriveFieldSources,
     type ReviewQuestionInput,
 } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
+import {
+    countReviewMappingDispositions,
+    summarizeGenerateIncludedFields,
+} from "@/lib/pos/processingCase/formDraft/generateStepPresentation";
 import { detectionModeLabel } from "@/lib/pos/processingCase/formDraft/detectionModeLabel";
 import { proposeGeneratedFormName } from "@/lib/pos/documentInstanceNaming";
 import ProcessingNativeFormCreatingState from "./ProcessingNativeFormCreatingState";
+import ProcessingConfirmDialog from "./ProcessingConfirmDialog";
+import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
 
 function formatWhen(iso: string | null | undefined): string {
     if (!iso) return "—";
@@ -91,7 +97,7 @@ export default function PosTemplateSetupColumn({
     onOpenForm,
 }: {
     state: PosCaseState;
-    onOpenForm?: (formId: string) => void;
+    onOpenForm?: (formId: string, formName?: string) => void;
 }) {
     const { detail, reload } = state;
     const caseId = detail?.id ?? null;
@@ -123,6 +129,8 @@ export default function PosTemplateSetupColumn({
     const [phase, setPhase] = useState<"review" | "generate">("review");
     const [formName, setFormName] = useState("");
     const [creatingPhase, setCreatingPhase] = useState(0);
+    const [generateAnywayOpen, setGenerateAnywayOpen] = useState(false);
+    const autoDetectAttemptedRef = useRef<string | null>(null);
 
     const clearSelection = () => {
         setSelectedQuestionId(null);
@@ -152,6 +160,11 @@ export default function PosTemplateSetupColumn({
 
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const docId = draft?.source_document_id ?? (primary?.kind === "document" ? (primary?.id ?? null) : null);
+    const processingIntent = detail?.processingIntent ?? null;
+    const sourceFilenameEarly = primary?.display.label ?? draft?.title ?? "Untitled document";
+    const sourceFormat = detectProcessingSourceFormat(sourceFilenameEarly, "");
+    const sourceCapabilities = capabilitiesForFormat(sourceFormat);
+    const shouldAutoDetect = processingIntent === "generate_form" && sourceCapabilities.questionDetection;
 
     // Re-seed the reviewed list when the stored draft changes (detect / save / case switch).
     useEffect(() => {
@@ -237,39 +250,52 @@ export default function PosTemplateSetupColumn({
         return { page: pendingManualRegion.page, ...rect };
     }, [pendingManualRegion, pageMaps]);
 
-    const summaryCounts = useMemo(() => {
-        let resolved = 0;
-        let processingOnly = 0;
-        let ignored = 0;
-        let unresolved = 0;
-        for (const q of reviewQuestions) {
-            if (q.ignored) {
-                ignored += 1;
-                continue;
-            }
-            const fieldKey = q.field_source?.field_key;
-            const hasBinding = Boolean(fieldKey && fieldKey !== "unmapped" && fieldKey !== "custom");
-            if (q.questionSubject === "processing_only") {
-                processingOnly += 1;
-            } else if (!hasBinding) {
-                unresolved += 1;
-            } else {
-                resolved += 1;
-            }
-        }
-        return { resolved, processingOnly, ignored, unresolved };
-    }, [reviewQuestions]);
+    const summaryCounts = useMemo(() => countReviewMappingDispositions(reviewQuestions), [reviewQuestions]);
 
-    const includedQuestions = useMemo(() => {
-        return expandQuestionsForDraftSave(reviewQuestions).map((f) => ({
-            label: f.label,
-            section: f.section,
-            destination:
-                f.field_source?.field_key && f.field_source.field_key !== "custom" && f.field_source.field_key !== "unmapped"
-                    ? f.field_source.field_key
-                    : "Form field only",
-        }));
-    }, [reviewQuestions]);
+    const includedSections = useMemo(
+        () => summarizeGenerateIncludedFields(reviewQuestions),
+        [reviewQuestions]
+    );
+
+    useEffect(() => {
+        if (!caseId || draft || busy || creating || !shouldAutoDetect) return;
+        if (autoDetectAttemptedRef.current === caseId) return;
+        autoDetectAttemptedRef.current = caseId;
+        let cancelled = false;
+        (async () => {
+            setBusy(true);
+            setErr(null);
+            try {
+                const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, {
+                    method: "POST",
+                    credentials: "same-origin",
+                });
+                const body = (await res.json().catch(() => ({}))) as {
+                    data?: { form_draft_preview?: StoredFormDraftPreview };
+                    error?: string;
+                };
+                if (cancelled) return;
+                if (!res.ok) throw new Error(body.error || `Couldn't read this document (${res.status})`);
+                const next = body.data?.form_draft_preview ?? null;
+                setDraft(next);
+                const seeded = seedReviewQuestions(next);
+                setReviewQuestions(seeded);
+                reviewQuestionsRef.current = seeded;
+                await reload();
+            } catch (e) {
+                if (!cancelled) setErr(e instanceof Error ? e.message : "Couldn't read this document");
+            } finally {
+                if (!cancelled) setBusy(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [caseId, draft, busy, creating, shouldAutoDetect, reload]);
+
+    useEffect(() => {
+        autoDetectAttemptedRef.current = null;
+    }, [caseId]);
 
     if (!detail) return null;
 
@@ -478,13 +504,13 @@ export default function PosTemplateSetupColumn({
         }
     };
 
-    const handleCreate = async () => {
+    const handleCreate = async (generateAnyway = false) => {
         const trimmedFormName = formName.trim();
         if (!trimmedFormName) {
             setErr("Enter a form name before generating.");
             return;
         }
-        const expanded = expandQuestionsForDraftSave(reviewQuestionsRef.current);
+        const expanded = expandQuestionsForDraftSave(reviewQuestionsRef.current, { generateAnyway });
         if (expanded.length === 0) {
             setErr("Add at least one active question before generating the form.");
             return;
@@ -492,6 +518,7 @@ export default function PosTemplateSetupColumn({
         setCreating(true);
         setCreatingPhase(0);
         setErr(null);
+        setGenerateAnywayOpen(false);
         try {
             setCreatingPhase(1);
             const saveRes = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
@@ -510,6 +537,7 @@ export default function PosTemplateSetupColumn({
                         page: f.page,
                         bbox: f.bbox,
                         evidence: f.evidence,
+                        ...(f.description ? { description: f.description } : {}),
                         ...(f.field_source ? { field_source: f.field_source } : {}),
                     })),
                 }),
@@ -524,12 +552,16 @@ export default function PosTemplateSetupColumn({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ form_name: trimmedFormName }),
             });
-            const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string }; error?: string };
+            const body = (await res.json().catch(() => ({}))) as {
+                data?: { form_id?: string; form_name?: string };
+                error?: string;
+            };
             if (!res.ok) throw new Error(body.error || `Couldn't create the form (${res.status})`);
             setCreatingPhase(3);
             await reload();
             const formId = body.data?.form_id ?? null;
-            if (formId && onOpenForm) onOpenForm(formId);
+            const persistedName = body.data?.form_name?.trim() || trimmedFormName;
+            if (formId && onOpenForm) onOpenForm(formId, persistedName);
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Couldn't create the form");
         } finally {
@@ -537,8 +569,38 @@ export default function PosTemplateSetupColumn({
         }
     };
 
-    // ---- no draft yet: question-first detect prompt ----
+    // ---- no draft yet: auto-detect for generate_form, manual gate otherwise ----
     if (!draft) {
+        if (shouldAutoDetect && busy) {
+            return (
+                <ProcessingNativeFormCreatingState
+                    phaseIndex={0}
+                    error={err}
+                    onRetry={err ? () => void handleDetect() : undefined}
+                />
+            );
+        }
+
+        if (processingIntent === "generate_form" && !sourceCapabilities.questionDetection) {
+            return (
+                <div className="flex h-full min-h-0 flex-col items-center justify-center bg-white p-6 text-center">
+                    <div className="max-w-sm">
+                        <div className="text-[14px] font-semibold text-alloy-midnight">{docTitle}</div>
+                        <p className="mt-1 text-[12px] text-alloy-midnight/50">
+                            Automatic question detection is not available for {sourceCapabilities.label} files. You can
+                            still store and preview the document, but native form generation requires a supported format
+                            (PDF, DOCX, or plain text).
+                        </p>
+                        {detail.documentFormPreview ? (
+                            <p className="mt-2 text-[11px] text-alloy-midnight/45">
+                                Document preview is available — switch to another supported source to generate a form.
+                            </p>
+                        ) : null}
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="flex h-full min-h-0 flex-col items-center justify-center bg-white p-6 text-center">
                 <div className="max-w-sm">
@@ -620,36 +682,47 @@ export default function PosTemplateSetupColumn({
 
                     <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.03] p-3">
                         <div className="flex flex-wrap gap-3">
-                            <SummaryRow label="Mapped" value={summaryCounts.resolved} tone="pine" />
-                            <SummaryRow label="Processing only" value={summaryCounts.processingOnly} tone="midnight" />
+                            <SummaryRow label="Mapped" value={summaryCounts.mapped} tone="pine" />
+                            <SummaryRow label="Form field only" value={summaryCounts.formFieldOnly} tone="midnight" />
                             <SummaryRow label="Unresolved" value={summaryCounts.unresolved} tone="muted" />
                             <SummaryRow label="Ignored" value={summaryCounts.ignored} tone="muted" />
                         </div>
                         {summaryCounts.unresolved > 0 ? (
-                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2">
+                            <div className="mt-3 rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2">
                                 <p className="text-[11px] text-amber-900">
-                                    {summaryCounts.unresolved} question{summaryCounts.unresolved === 1 ? "" : "s"} still need mapping
+                                    {summaryCounts.unresolved} question{summaryCounts.unresolved === 1 ? "" : "s"} still
+                                    need a destination before answers can write to business records.
                                 </p>
-                                <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
-                                    Back to review
-                                </button>
                             </div>
                         ) : null}
                     </section>
 
                     <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-white p-4">
                         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Included fields</h3>
-                        {includedQuestions.length === 0 ? (
+                        {includedSections.every((s) => s.fields.length === 0) ? (
                             <p className="mt-2 text-[11px] text-alloy-midnight/40">No active questions to include.</p>
                         ) : (
-                            <ul className="mt-2 space-y-1.5">
-                                {includedQuestions.map((q) => (
-                                    <li key={`${q.section}-${q.label}`} className="flex items-start justify-between gap-3 text-[11px]" data-testid={`generate-included-${q.label.replace(/\s+/g, "-").toLowerCase()}`}>
-                                        <span className="font-medium text-alloy-midnight">{q.label}</span>
-                                        <span className="shrink-0 text-alloy-midnight/45">{q.destination}</span>
-                                    </li>
+                            <div className="mt-2 space-y-3">
+                                {includedSections.map((section) => (
+                                    <div key={section.title}>
+                                        <h4 className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                                            {section.title}
+                                        </h4>
+                                        <ul className="mt-1 space-y-1">
+                                            {section.fields.map((q) => (
+                                                <li
+                                                    key={`${section.title}-${q.label}`}
+                                                    className="flex items-start justify-between gap-3 text-[11px]"
+                                                    data-testid={`generate-included-${q.label.replace(/\s+/g, "-").toLowerCase()}`}
+                                                >
+                                                    <span className="font-medium text-alloy-midnight">{q.label}</span>
+                                                    <span className="shrink-0 text-alloy-midnight/45">{q.destination}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
                                 ))}
-                            </ul>
+                            </div>
                         )}
                     </section>
 
@@ -670,17 +743,50 @@ export default function PosTemplateSetupColumn({
                         <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
                             Back to review
                         </button>
-                        <button
-                            type="button"
-                            disabled={creating || busy || activeFieldCount === 0 || !formName.trim()}
-                            onClick={() => void handleCreate()}
-                            className={WS_ACTION_PRIMARY}
-                            data-testid="processing-generate-native-form"
-                        >
-                            Generate native form
-                        </button>
+                        {summaryCounts.unresolved > 0 ? (
+                            <>
+                                <button
+                                    type="button"
+                                    disabled={creating || busy}
+                                    onClick={() => setGenerateAnywayOpen(true)}
+                                    className={`${WS_ACTION_SECONDARY} text-alloy-midnight/55`}
+                                    data-testid="processing-generate-anyway"
+                                >
+                                    Generate anyway
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={creating || busy || activeFieldCount === 0}
+                                    onClick={() => setPhase("review")}
+                                    className={WS_ACTION_PRIMARY}
+                                    data-testid="processing-review-unresolved"
+                                >
+                                    Review unresolved
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled={creating || busy || activeFieldCount === 0 || !formName.trim()}
+                                onClick={() => void handleCreate()}
+                                className={WS_ACTION_PRIMARY}
+                                data-testid="processing-generate-native-form"
+                            >
+                                Generate native form
+                            </button>
+                        )}
                     </div>
                 </div>
+                <ProcessingConfirmDialog
+                    open={generateAnywayOpen}
+                    onClose={() => setGenerateAnywayOpen(false)}
+                    onConfirm={() => void handleCreate(true)}
+                    title="Generate with unresolved questions?"
+                    body={`${summaryCounts.unresolved} unresolved question${summaryCounts.unresolved === 1 ? "" : "s"} will be generated as form-only fields. They will not write to business records until you configure a destination in the form builder.`}
+                    confirmLabel="Generate anyway"
+                    confirming={creating}
+                    testId="processing-generate-anyway-confirm"
+                />
                 </>
             ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -905,7 +1011,11 @@ export default function PosTemplateSetupColumn({
                             </button>
                         ) : null}
                         {created ? (
-                            <button type="button" onClick={() => created.form_id && onOpenForm?.(created.form_id)} className={WS_ACTION_PRIMARY}>
+                            <button
+                                type="button"
+                                onClick={() => created.form_id && onOpenForm?.(created.form_id, formName.trim() || undefined)}
+                                className={WS_ACTION_PRIMARY}
+                            >
                                 Edit form in Studio
                             </button>
                         ) : (

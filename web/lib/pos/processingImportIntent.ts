@@ -56,3 +56,10 @@ export function processingIntentMetadata(intent: ProcessingImportIntent): Record
         import_purpose: intent,
     };
 }
+
+/** Read persisted import intent from case/document metadata — never infer from UI state. */
+export function parseProcessingIntentFromMetadata(metadata: unknown): ProcessingImportIntent | null {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    const raw = (metadata as Record<string, unknown>).processing_intent ?? (metadata as Record<string, unknown>).import_purpose;
+    return isProcessingImportIntent(raw) ? raw : null;
+}

@@ -12,7 +12,19 @@ import {
     resolveProcessingPublicSlug,
 } from "@/lib/pos/processingPublicRuntime";
 import { readLinkEmbedUrl, writeLinkEmbedUrl } from "@/lib/forms/intakeRuntimeOrchestrationStorage";
+import { resolveLinkLocationLabel } from "@/lib/forms/locationSpecificPublicLinkMetadata";
 import type { ProcessingFormPublicLinkRow, ProcessingMintedPublicLink } from "./useProcessingFormApi";
+
+type SiteOption = { id: string; label: string };
+
+type MintArgs = {
+    formName: string;
+    formKey: string;
+    existingMeta?: Record<string, unknown>;
+    publishedVersionId?: string | null;
+    locationId?: string;
+    locationName?: string;
+};
 
 type Props = {
     formId: string;
@@ -24,19 +36,15 @@ type Props = {
     canMutate?: boolean;
     listPublicLinks: (formId: string) => Promise<ProcessingFormPublicLinkRow[]>;
     loadPublishedVersionId: (formId: string) => Promise<string | null>;
-    mintProcessingPublicLink: (
-        formId: string,
-        args: {
-            formName: string;
-            formKey: string;
-            existingMeta?: Record<string, unknown>;
-            publishedVersionId?: string | null;
-        }
-    ) => Promise<ProcessingMintedPublicLink>;
+    mintProcessingPublicLink: (formId: string, args: MintArgs) => Promise<ProcessingMintedPublicLink>;
     unpublishProcessingPublicLinks: (formId: string, links: ProcessingFormPublicLinkRow[]) => Promise<void>;
     onPublishRepublish?: () => Promise<void>;
+    onBackToForms?: () => void;
     publishBusy?: boolean;
     publishJustSucceeded?: boolean;
+    defaultOpen?: boolean;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 };
 
 const STATUS_LABELS = {
@@ -44,6 +52,12 @@ const STATUS_LABELS = {
     published: "Published",
     archived: "Archived",
 } as const;
+
+function resolveLinkShareUrl(link: ProcessingFormPublicLinkRow, origin: string | null): string | null {
+    const stored = readLinkEmbedUrl(link.id);
+    if (stored) return stored;
+    return null;
+}
 
 export default function ProcessingFormDistributionPanel({
     formId,
@@ -58,8 +72,12 @@ export default function ProcessingFormDistributionPanel({
     mintProcessingPublicLink,
     unpublishProcessingPublicLinks,
     onPublishRepublish,
+    onBackToForms,
     publishBusy = false,
     publishJustSucceeded = false,
+    defaultOpen = false,
+    open,
+    onOpenChange,
 }: Props) {
     const [links, setLinks] = useState<ProcessingFormPublicLinkRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -68,30 +86,36 @@ export default function ProcessingFormDistributionPanel({
     const [minted, setMinted] = useState<ProcessingMintedPublicLink | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
     const [copyWarn, setCopyWarn] = useState<string | null>(null);
+    const [sites, setSites] = useState<SiteOption[]>([]);
+    const [sitesLoading, setSitesLoading] = useState(false);
+    const [distributionScope, setDistributionScope] = useState<"all_sites" | "selected_sites">("all_sites");
+    const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
+
+    const origin = typeof window !== "undefined" ? window.location.origin : null;
 
     const processingLinks = useMemo(() => links.filter((l) => isProcessingIntakeLink(l.metadata)), [links]);
     const activeProcessingLinks = useMemo(() => processingLinks.filter((l) => l.is_active), [processingLinks]);
-    const storedShareUrl = useMemo(() => {
-        for (const link of activeProcessingLinks) {
-            const url = readLinkEmbedUrl(link.id);
-            if (url) return url;
-        }
-        return null;
-    }, [activeProcessingLinks]);
+
+    const siteCatalog = useMemo(() => {
+        const map: Record<string, string> = {};
+        for (const s of sites) map[s.id] = s.label;
+        return map;
+    }, [sites]);
+
     const publishStatus = deriveProcessingFormPublishStatus({
         formActive,
         hasPublishedVersion,
         hasActiveProcessingLink: activeProcessingLinks.length > 0,
     });
     const publicSlug = resolveProcessingPublicSlug(formKey, formName, existingMeta);
-    const shareUrl = minted
+
+    const mintedShareUrl = minted
         ? resolveProcessingPublicShareUrl({
               embedUrl: minted.embed_url,
               embedPath: minted.embed_path,
-              origin: typeof window !== "undefined" ? window.location.origin : null,
+              origin,
           })
-        : storedShareUrl;
-    const iframeHtml = shareUrl ? buildProcessingPublicFormIframeHtml({ embedUrl: shareUrl, formTitle: formName }) : null;
+        : null;
 
     const reload = useCallback(async () => {
         setLoading(true);
@@ -111,6 +135,27 @@ export default function ProcessingFormDistributionPanel({
         void reload();
     }, [reload, hasPublishedVersion]);
 
+    useEffect(() => {
+        if (!hasPublishedVersion) return;
+        let cancelled = false;
+        setSitesLoading(true);
+        (async () => {
+            try {
+                const res = await fetch("/api/admin/workspace/site-filter", { credentials: "same-origin" });
+                const body = (await res.json()) as { sites?: Array<{ id: string; label: string }> };
+                if (cancelled) return;
+                setSites((body.sites ?? []).map((s) => ({ id: s.id, label: s.label })));
+            } catch {
+                if (!cancelled) setSites([]);
+            } finally {
+                if (!cancelled) setSitesLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [hasPublishedVersion]);
+
     const copyText = async (key: string, text: string) => {
         setCopyWarn(null);
         try {
@@ -123,28 +168,49 @@ export default function ProcessingFormDistributionPanel({
         }
     };
 
-    const handlePublishPublic = async () => {
-        if (!canMutate || !hasPublishedVersion) return;
-        setBusy(true);
-        setErr(null);
-        try {
-            const publishedVersionId = await loadPublishedVersionId(formId);
-            const created = await mintProcessingPublicLink(formId, {
+    const mintLinks = async (targets: Array<{ locationId?: string; locationName?: string }>) => {
+        const publishedVersionId = await loadPublishedVersionId(formId);
+        const created: ProcessingMintedPublicLink[] = [];
+        for (const target of targets) {
+            const link = await mintProcessingPublicLink(formId, {
                 formName,
                 formKey,
                 existingMeta,
                 publishedVersionId,
+                ...(target.locationId ? { locationId: target.locationId, locationName: target.locationName } : {}),
             });
             const embedUrl = resolveProcessingPublicShareUrl({
-                embedUrl: created.embed_url,
-                embedPath: created.embed_path,
-                origin: typeof window !== "undefined" ? window.location.origin : null,
+                embedUrl: link.embed_url,
+                embedPath: link.embed_path,
+                origin,
             });
-            writeLinkEmbedUrl(created.id, embedUrl);
-            setMinted(created);
-            await reload();
+            if (embedUrl) writeLinkEmbedUrl(link.id, embedUrl);
+            created.push(link);
+        }
+        if (created.length === 1) setMinted(created[0]!);
+        await reload();
+    };
+
+    const handleCreateDistributionLinks = async () => {
+        if (!canMutate || !hasPublishedVersion) return;
+        setBusy(true);
+        setErr(null);
+        try {
+            if (distributionScope === "all_sites") {
+                await mintLinks([{}]);
+            } else {
+                if (selectedSiteIds.length === 0) {
+                    setErr("Select at least one site.");
+                    return;
+                }
+                const targets = selectedSiteIds.map((id) => {
+                    const site = sites.find((s) => s.id === id);
+                    return { locationId: id, locationName: site?.label ?? "Location" };
+                });
+                await mintLinks(targets);
+            }
         } catch (e) {
-            setErr(e instanceof Error ? e.message : "Could not publish public link");
+            setErr(e instanceof Error ? e.message : "Could not create distribution links");
         } finally {
             setBusy(false);
         }
@@ -165,12 +231,18 @@ export default function ProcessingFormDistributionPanel({
         }
     };
 
+    const toggleSite = (siteId: string) => {
+        setSelectedSiteIds((prev) => (prev.includes(siteId) ? prev.filter((id) => id !== siteId) : [...prev, siteId]));
+    };
+
     return (
         <ProcessingCollapsibleInspectorSection
-            title="Publish"
-            subtitle="Public URL, embed, and intake status"
+            title="Distribution"
+            subtitle="Share links after publish — separate from publishing the form"
             accent
-            defaultOpen={publishStatus === "published"}
+            defaultOpen={defaultOpen || publishStatus === "published" || publishJustSucceeded}
+            open={open}
+            onOpenChange={onOpenChange}
             testId="processing-form-distribution-panel"
         >
             <div className="space-y-3">
@@ -179,46 +251,167 @@ export default function ProcessingFormDistributionPanel({
                         className="rounded-full bg-alloy-stone/[0.12] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/60"
                         data-testid="processing-form-publish-status"
                     >
-                        {STATUS_LABELS[publishStatus]}
+                        {hasPublishedVersion ? STATUS_LABELS.published : STATUS_LABELS.draft}
                     </span>
+                    {activeProcessingLinks.length > 0 ? (
+                        <span className="text-[10px] text-alloy-bend-pine">
+                            {activeProcessingLinks.length} active link{activeProcessingLinks.length === 1 ? "" : "s"}
+                        </span>
+                    ) : null}
                     <span className="text-[11px] text-alloy-midnight/45">Slug: {publicSlug}</span>
                 </div>
 
-                <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
-                    Publish the form, then share a public link or iframe embed. Submissions enter Processing for review — no
-                    records are created automatically.
-                </p>
-
                 {publishJustSucceeded ? (
-                    <div className="rounded-lg border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.06] px-3 py-2" data-testid="processing-form-publish-success">
+                    <div
+                        className="rounded-lg border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.06] px-3 py-2"
+                        data-testid="processing-form-publish-success"
+                    >
                         <p className="text-[11px] font-semibold text-alloy-bend-pine">Published successfully</p>
-                        <p className="text-[11px] text-alloy-midnight/55">Your public form is live.</p>
+                        <p className="text-[11px] text-alloy-midnight/55">
+                            Your form version is live. Create distribution links below to share it publicly.
+                        </p>
                     </div>
                 ) : null}
 
-                {loading ? <p className="text-[11px] text-alloy-midnight/45">Loading share links…</p> : null}
+                {loading ? <p className="text-[11px] text-alloy-midnight/45">Loading links…</p> : null}
                 {err ? <p className="text-[11px] text-rose-700">{err}</p> : null}
                 {copyWarn ? <p className="text-[11px] text-amber-800">{copyWarn}</p> : null}
 
+                {!hasPublishedVersion ? (
+                    <p className="text-[11px] text-alloy-midnight/45">
+                        Publish the form from the toolbar first. Distribution links can be created after publish.
+                    </p>
+                ) : (
+                    <>
+                        <fieldset className="space-y-2">
+                            <legend className="text-[11px] font-semibold text-alloy-midnight">Distribution scope</legend>
+                            <label className="flex items-center gap-2 text-[11px]">
+                                <input
+                                    type="radio"
+                                    name={`distribution-scope-${formId}`}
+                                    checked={distributionScope === "all_sites"}
+                                    onChange={() => setDistributionScope("all_sites")}
+                                    data-testid="processing-distribution-all-sites"
+                                />
+                                All sites (org-wide link)
+                            </label>
+                            <label className="flex items-center gap-2 text-[11px]">
+                                <input
+                                    type="radio"
+                                    name={`distribution-scope-${formId}`}
+                                    checked={distributionScope === "selected_sites"}
+                                    onChange={() => setDistributionScope("selected_sites")}
+                                    data-testid="processing-distribution-selected-sites"
+                                />
+                                Selected sites (one link per site)
+                            </label>
+                        </fieldset>
+
+                        {distributionScope === "selected_sites" ? (
+                            <div className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] px-3 py-2">
+                                {sitesLoading ? (
+                                    <p className="text-[11px] text-alloy-midnight/45">Loading sites…</p>
+                                ) : sites.length === 0 ? (
+                                    <p className="text-[11px] text-alloy-midnight/45">No sites available for this organization.</p>
+                                ) : (
+                                    <ul className="max-h-32 space-y-1 overflow-y-auto">
+                                        {sites.map((site) => (
+                                            <li key={site.id}>
+                                                <label className="flex items-center gap-2 text-[11px]">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedSiteIds.includes(site.id)}
+                                                        onChange={() => toggleSite(site.id)}
+                                                        data-testid={`processing-distribution-site-${site.id}`}
+                                                    />
+                                                    {site.label}
+                                                </label>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        ) : null}
+
+                        <button
+                            type="button"
+                            disabled={!canMutate || busy}
+                            onClick={() => void handleCreateDistributionLinks()}
+                            className="rounded-md bg-alloy-bend-pine px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+                            data-testid="processing-form-create-distribution-links"
+                        >
+                            {busy ? "Creating…" : "Create distribution link(s)"}
+                        </button>
+                    </>
+                )}
+
                 {activeProcessingLinks.length > 0 ? (
-                    <div className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.04] px-3 py-2">
-                        <p className="text-[11px] font-semibold text-alloy-midnight">Active public links</p>
-                        <ul className="mt-2 space-y-1.5">
-                            {activeProcessingLinks.map((link) => (
-                                <li key={link.id} className="text-[11px] text-alloy-midnight/60">
-                                    <span className="font-mono">{link.token_prefix ?? link.id.slice(0, 8)}</span>
-                                    {link.pinned_form_definition_version_id ? (
-                                        <span className="ml-2 text-alloy-midnight/40">pinned version</span>
+                    <ul className="space-y-2" data-testid="processing-form-active-links">
+                        {activeProcessingLinks.map((link) => {
+                            const locationLabel = resolveLinkLocationLabel(
+                                link.metadata as Record<string, unknown>,
+                                siteCatalog
+                            );
+                            const shareUrl =
+                                link.id === minted?.id && mintedShareUrl
+                                    ? mintedShareUrl
+                                    : resolveLinkShareUrl(link, origin);
+                            const iframeHtml = shareUrl
+                                ? buildProcessingPublicFormIframeHtml({ embedUrl: shareUrl, formTitle: formName })
+                                : null;
+                            return (
+                                <li
+                                    key={link.id}
+                                    className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.04] px-3 py-2"
+                                >
+                                    <p className="text-[11px] font-semibold text-alloy-midnight">
+                                        {locationLabel ?? "Org-wide"}
+                                    </p>
+                                    <p className="text-[10px] text-alloy-midnight/40">
+                                        {link.token_prefix ?? link.id.slice(0, 8)}
+                                        {link.pinned_form_definition_version_id ? " · pinned version" : " · latest published"}
+                                    </p>
+                                    {shareUrl ? (
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                className="config-secondary-btn text-[10px]"
+                                                onClick={() => void copyText(`url-${link.id}`, shareUrl)}
+                                                data-testid={`processing-form-copy-link-${link.id}`}
+                                            >
+                                                {copied === `url-${link.id}` ? "Copied" : "Copy link"}
+                                            </button>
+                                            {iframeHtml ? (
+                                                <button
+                                                    type="button"
+                                                    className="config-secondary-btn text-[10px]"
+                                                    onClick={() => void copyText(`iframe-${link.id}`, iframeHtml)}
+                                                >
+                                                    {copied === `iframe-${link.id}` ? "Copied" : "Copy iframe"}
+                                                </button>
+                                            ) : null}
+                                            <a
+                                                href={shareUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="config-secondary-btn text-[10px]"
+                                                data-testid={`processing-form-open-link-${link.id}`}
+                                            >
+                                                Open
+                                            </a>
+                                        </div>
                                     ) : (
-                                        <span className="ml-2 text-alloy-midnight/40">latest published</span>
+                                        <p className="mt-1 text-[10px] text-alloy-midnight/40">
+                                            Link active — copy URL from the one-time reveal after minting.
+                                        </p>
                                     )}
                                 </li>
-                            ))}
-                        </ul>
-                    </div>
+                            );
+                        })}
+                    </ul>
                 ) : null}
 
-                {minted && shareUrl ? (
+                {minted && mintedShareUrl ? (
                     <div
                         className="rounded-lg bg-amber-50/80 px-3 py-2 ring-1 ring-amber-200/60"
                         data-testid="processing-form-one-time-link"
@@ -228,68 +421,30 @@ export default function ProcessingFormDistributionPanel({
                             For security, the full URL is shown once after minting.
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <code className="break-all rounded bg-white px-2 py-1 font-mono text-[10px]">{shareUrl}</code>
+                            <code className="break-all rounded bg-white px-2 py-1 font-mono text-[10px]">{mintedShareUrl}</code>
                             <button
                                 type="button"
                                 className="text-[10px] font-semibold text-alloy-blue hover:underline"
-                                onClick={() => void copyText("url", shareUrl)}
+                                onClick={() => void copyText("url", mintedShareUrl)}
                                 data-testid="processing-form-copy-url"
                             >
                                 {copied === "url" ? "Copied" : "Copy link"}
                             </button>
+                            <a
+                                href={mintedShareUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] font-semibold text-alloy-blue hover:underline"
+                                data-testid="processing-form-open-minted"
+                            >
+                                Open
+                            </a>
                         </div>
-                        {iframeHtml ? (
-                            <div className="mt-3">
-                                <button
-                                    type="button"
-                                    className="text-[10px] font-semibold text-alloy-blue hover:underline"
-                                    onClick={() => void copyText("iframe", iframeHtml)}
-                                    data-testid="processing-form-copy-iframe"
-                                >
-                                    {copied === "iframe" ? "Copied" : "Copy iframe"}
-                                </button>
-                            </div>
-                        ) : null}
                     </div>
                 ) : null}
 
-                <div className="flex flex-wrap gap-2">
-                    {hasPublishedVersion && publishStatus !== "published" ? (
-                        <button
-                            type="button"
-                            disabled={!canMutate || busy}
-                            onClick={() => void handlePublishPublic()}
-                            className="rounded-md bg-alloy-bend-pine px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
-                            data-testid="processing-form-publish-public"
-                        >
-                            {busy ? "Publishing…" : "Publish public link"}
-                        </button>
-                    ) : null}
-                    {publishStatus === "published" && shareUrl ? (
-                        <>
-                            <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() => void copyText("url", shareUrl)}
-                                className="config-secondary-btn text-[11px]"
-                                data-testid="processing-form-copy-link"
-                            >
-                                {copied === "url" ? "Copied" : "Copy link"}
-                            </button>
-                            {iframeHtml ? (
-                                <button
-                                    type="button"
-                                    disabled={busy}
-                                    onClick={() => void copyText("iframe", iframeHtml)}
-                                    className="config-secondary-btn text-[11px]"
-                                    data-testid="processing-form-copy-iframe-btn"
-                                >
-                                    {copied === "iframe" ? "Copied" : "Copy iframe"}
-                                </button>
-                            ) : null}
-                        </>
-                    ) : null}
-                    {onPublishRepublish ? (
+                <div className="flex flex-wrap gap-2 border-t border-alloy-stone/10 pt-3">
+                    {onPublishRepublish && hasPublishedVersion ? (
                         <button
                             type="button"
                             disabled={!canMutate || publishBusy}
@@ -297,7 +452,7 @@ export default function ProcessingFormDistributionPanel({
                             className="config-secondary-btn text-[11px] disabled:opacity-50"
                             data-testid="processing-form-republish"
                         >
-                            {publishBusy ? "Republishing…" : "Republish"}
+                            {publishBusy ? "Republishing…" : "Republish version"}
                         </button>
                     ) : null}
                     {activeProcessingLinks.length > 0 ? (
@@ -308,14 +463,20 @@ export default function ProcessingFormDistributionPanel({
                             className="config-secondary-btn text-[11px] disabled:opacity-50"
                             data-testid="processing-form-unpublish"
                         >
-                            {busy ? "Unpublishing…" : "Unpublish"}
+                            {busy ? "Deactivating…" : "Deactivate links"}
+                        </button>
+                    ) : null}
+                    {onBackToForms ? (
+                        <button
+                            type="button"
+                            onClick={onBackToForms}
+                            className="config-secondary-btn text-[11px]"
+                            data-testid="processing-form-return-to-forms"
+                        >
+                            Return to Forms
                         </button>
                     ) : null}
                 </div>
-
-                {!hasPublishedVersion ? (
-                    <p className="text-[10px] text-alloy-midnight/45">Publish the form from the toolbar before sharing publicly.</p>
-                ) : null}
             </div>
         </ProcessingCollapsibleInspectorSection>
     );

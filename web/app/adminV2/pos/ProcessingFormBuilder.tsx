@@ -32,6 +32,7 @@ import {
     resolveProcessingBuilderRegistryEntry,
 } from "@/lib/forms/processingFormBuilderLibrary";
 import type { FormField, FormFieldSource, FormSchemaV1 } from "@/lib/forms/schema";
+import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import ProcessingFormBuilderLibraryPanel from "./ProcessingFormBuilderLibraryPanel";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
 import ProcessingFormCanvas, { type CanvasDropTarget } from "./ProcessingFormCanvas";
@@ -66,7 +67,10 @@ type BuilderMode = "edit" | "preview" | "runtime";
 
 function destinationLabel(field: FormField): string {
     const source = field.field_source;
-    if (!source) return "Processing only";
+    if (!source) {
+        if (field.description === PROCESSING_NEEDS_DESTINATION_DESCRIPTION) return "Needs destination";
+        return "Form field only";
+    }
     if (source.entity_type === "child" || source.entity_type === "customer_member") return "Child";
     if (source.entity_type === "guardian" || source.entity_type === "person") return "Parent / Guardian";
     if (source.entity_type === "enrollment") return "Enrollment";
@@ -75,7 +79,7 @@ function destinationLabel(field: FormField): string {
 }
 
 const STORE_OPTIONS = [
-    { value: "processing_only", label: "Processing only" },
+    { value: "processing_only", label: "Form field only" },
     { value: "child", label: "Child" },
     { value: "parent", label: "Parent / Guardian" },
     { value: "enrollment", label: "Enrollment" },
@@ -117,10 +121,12 @@ function typeLabel(field: FormField): string {
 export default function ProcessingFormBuilder({
     formId,
     formMeta,
+    initialFormName = null,
     onBack,
 }: {
     formId: string;
     formMeta: ProcessingFormRow | null;
+    initialFormName?: string | null;
     onBack: () => void;
 }) {
     const {
@@ -157,11 +163,17 @@ export default function ProcessingFormBuilder({
     const [hasPublishedVersion, setHasPublishedVersion] = useState(Boolean(formMeta?.has_published_version));
     const [publishJustSucceeded, setPublishJustSucceeded] = useState(false);
 
-    const [inspectorSection, setInspectorSection] = useState<string>("branding");
+    const [inspectorSection, setInspectorSection] = useState<string>(hasPublishedVersion ? "distribution" : "branding");
+
+    const displayFormName = formMeta?.name?.trim() || initialFormName?.trim() || schema?.title || "Untitled form";
 
     useEffect(() => {
         setHasPublishedVersion(Boolean(formMeta?.has_published_version));
     }, [formMeta?.has_published_version]);
+
+    useEffect(() => {
+        if (publishJustSucceeded) setInspectorSection("distribution");
+    }, [publishJustSucceeded]);
 
     useEffect(() => {
         if (selectedFieldId) setInspectorSection("question");
@@ -321,9 +333,15 @@ export default function ProcessingFormBuilder({
                 <button type="button" onClick={onBack} className="text-[12px] text-alloy-midnight/50 hover:text-alloy-midnight">
                     ← Forms
                 </button>
-                <span className="text-[14px] font-semibold text-alloy-midnight">{formMeta?.name || schema.title}</span>
+                <span className="text-[14px] font-semibold text-alloy-midnight">{displayFormName}</span>
                 <span className="text-[10px] font-semibold text-alloy-midnight/55" data-surface-dirty={dirty ? "true" : "false"}>
-                    {editVersionId ? (dirty ? "Draft · unsaved" : "Draft saved") : "Published (read-only)"}
+                    {hasPublishedVersion ? (
+                        <span className="text-alloy-bend-pine" data-testid="form-builder-published-badge">Published</span>
+                    ) : editVersionId ? (
+                        dirty ? "Draft · unsaved" : "Draft saved"
+                    ) : (
+                        "Published (read-only)"
+                    )}
                 </span>
                 <span className="flex-1" />
                 <div className="flex rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.08] p-0.5">
@@ -352,15 +370,27 @@ export default function ProcessingFormBuilder({
                         >
                             {saving ? "Saving…" : "Save draft"}
                         </button>
-                        <button
-                            type="button"
-                            disabled={publishing}
-                            onClick={() => void publish()}
-                            className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-                            data-testid="form-builder-publish"
-                        >
-                            {publishing ? "Publishing…" : "Publish"}
-                        </button>
+                        {hasPublishedVersion ? (
+                            <button
+                                type="button"
+                                disabled={publishing}
+                                onClick={() => void publish()}
+                                className="config-secondary-btn text-[11px] disabled:opacity-50"
+                                data-testid="form-builder-republish"
+                            >
+                                {publishing ? "Republishing…" : "Republish"}
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled={publishing}
+                                onClick={() => void publish()}
+                                className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                                data-testid="form-builder-publish"
+                            >
+                                {publishing ? "Publishing…" : "Publish"}
+                            </button>
+                        )}
                     </>
                 ) : null}
             </div>
@@ -428,6 +458,12 @@ export default function ProcessingFormBuilder({
                         data-surface-inspector="true"
                     >
                         <div>
+                        <p
+                            className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40"
+                            data-testid="processing-builder-inspector-header"
+                        >
+                            {selectedField ? "Question" : selectedSection ? "Section" : "Form settings"}
+                        </p>
                         <BrandingInspectorCard
                             schemaTitle={schema.title}
                             branding={branding}
@@ -446,10 +482,11 @@ export default function ProcessingFormBuilder({
                         <ProcessingFormDistributionPanel
                             formId={formId}
                             formKey={formMeta?.key ?? formId}
-                            formName={formMeta?.name || schema.title}
+                            formName={displayFormName}
                             hasPublishedVersion={hasPublishedVersion}
                             existingMeta={formMetaSnapshot}
                             canMutate={editable || hasPublishedVersion}
+                            onBackToForms={onBack}
                             listPublicLinks={listPublicLinks}
                             loadPublishedVersionId={loadPublishedVersionId}
                             mintProcessingPublicLink={mintProcessingPublicLink}
@@ -457,12 +494,15 @@ export default function ProcessingFormBuilder({
                             onPublishRepublish={editable ? () => publish() : undefined}
                             publishBusy={publishing}
                             publishJustSucceeded={publishJustSucceeded}
+                            defaultOpen={hasPublishedVersion || publishJustSucceeded}
+                            open={inspectorSection === "distribution"}
+                            onOpenChange={(open) => open && setInspectorSection("distribution")}
                         />
                         {selectedField ? (
                             <div data-surface-composer-inspector="field">
                                 <ProcessingCollapsibleInspectorSection
-                                    title="Question"
-                                    subtitle="Label, type, and help text"
+                                    title="Content"
+                                    subtitle="Label and help text"
                                     open={inspectorSection === "question"}
                                     onOpenChange={(open) => open && setInspectorSection("question")}
                                     accent
@@ -487,6 +527,11 @@ export default function ProcessingFormBuilder({
                                     <p className="config-typo-sublabel mb-1">Question type</p>
                                     <p className="text-[12px] text-alloy-midnight/70">{typeLabel(selectedField)}</p>
                                 </div>
+                                {selectedField.description === PROCESSING_NEEDS_DESTINATION_DESCRIPTION ? (
+                                    <p className="rounded-md border border-amber-200/70 bg-amber-50/80 px-2 py-1.5 text-[11px] text-amber-900" data-testid="form-builder-needs-destination">
+                                        Needs destination configuration — answers will not write to business records until you set a destination below.
+                                    </p>
+                                ) : null}
                                 {editable && selectedField.type !== "text_block" ? (
                                     <label className="flex items-center gap-2 text-[12px]">
                                         <input

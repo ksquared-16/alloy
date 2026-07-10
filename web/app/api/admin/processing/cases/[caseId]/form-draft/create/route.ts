@@ -85,6 +85,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             {
                 caseId,
                 form_id: result.formId,
+                form_name: result.formName,
                 form_version_id: result.formVersionId,
                 created_at: result.createdAt,
                 already_created: result.alreadyCreated,

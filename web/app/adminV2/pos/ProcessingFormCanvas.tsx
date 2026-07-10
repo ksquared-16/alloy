@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useMemo } from "react";
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { groupFieldsIntoRows } from "@/lib/forms/formRowComposition";
+import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 
 export type CanvasDropTarget = {
     sectionId: string;
@@ -168,6 +169,14 @@ function QuestionBlock({
             <p className="text-[11px] font-semibold text-alloy-midnight">
                 {field.label}
                 {field.required ? <span className="text-amber-600"> *</span> : null}
+                {field.description === PROCESSING_NEEDS_DESTINATION_DESCRIPTION ? (
+                    <span
+                        className="ml-1.5 rounded-full border border-amber-300/70 bg-amber-50 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-800"
+                        data-testid={`form-canvas-needs-destination-${field.id}`}
+                    >
+                        Needs destination
+                    </span>
+                ) : null}
             </p>
             {isTextBlock ? (
                 <div className="mt-2 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.08] px-3 py-2 text-[11px] leading-relaxed text-alloy-midnight/65">

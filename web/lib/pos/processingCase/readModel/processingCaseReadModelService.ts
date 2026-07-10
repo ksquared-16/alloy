@@ -29,6 +29,7 @@ import { parseStoredDocumentFormPreview } from "../structure/documentFormPreview
 import { parseStoredFormDraftPreview } from "../formDraft/formDraftPreviewDb";
 import { parseFormDraftCreated } from "../formDraft/createFormFromCaseDraft";
 import { resolveDetectionMode } from "../formDraft/detectionModeLabel";
+import { parseProcessingIntentFromMetadata } from "@/lib/pos/processingImportIntent";
 
 function toRef(row: ReadModelSourceRow): SourceRef {
     return { kind: row.source_kind, id: row.source_id, role: row.role, linkedAt: row.linked_at };
@@ -142,5 +143,6 @@ export async function getProcessingCaseDetail(
         documentFormPreview: parseStoredDocumentFormPreview(c.metadata),
         formDraftPreview: parseStoredFormDraftPreview(c.metadata),
         formDraftCreated: parseFormDraftCreated(c.metadata),
+        processingIntent: parseProcessingIntentFromMetadata(c.metadata),
     };
 }
