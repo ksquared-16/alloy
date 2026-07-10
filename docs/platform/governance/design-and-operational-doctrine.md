@@ -42,6 +42,7 @@ AdminV2 reveal gates, queue empty semantics, composed payload readiness — **pr
 - Typography: `../../system/typography-and-presentation-doctrine.md`
 - BOS identity: `../../system/bos-identity-doctrine.md`
 - Queue record rows: `../../system/queue-record-doctrine.md`
+- **Alloy Operational Workspace Doctrine V2** (operational module modals): `../core/navigation-and-workspace-doctrine.md` — **frozen** (July 2026); inset stone field, universal `WorkspaceMetricTiles`, certified Processing / Communications / Work Items; components: `web/components/workspace/doctrine.ts`
 
 ---
 
@@ -78,5 +79,6 @@ Document **decisions**, not debates. Frozen areas:
 - Queue preview boundary
 - BOS human-in-the-loop
 - AdminV2 reveal gates
+- **Alloy Operational Workspace Doctrine V2** (operational module modal presentation — frozen July 2026)
 
 Open areas stay in roadmap until frozen — then merge into platform docs.

@@ -10,7 +10,7 @@ import MyTasksCreateTaskCard, {
     type MyTasksCreateLinkedRecord,
 } from "@/app/adminV2/components/MyTasksCreateTaskCard";
 import MyTasksTaskCard from "@/app/adminV2/components/MyTasksTaskCard";
-import ProcessingParentPanel from "@/app/adminV2/pos/ProcessingParentPanel";
+import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { useEntityLabelsOptional } from "@/contexts/EntityLabelsContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
@@ -716,7 +716,7 @@ export default function MyTasksPanel({
     // Modal (compact): Process rail → Queue → Task detail — Digital Mailroom Work layout.
     return (
         <div className="flex min-h-0 flex-1 overflow-hidden bg-white" data-adminv2-tasks-panel="true" data-adminv2-tasks-workspace="true">
-            <ProcessingParentPanel
+            <WorkspaceZonePanel
                 title="Process"
                 className="w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 self-stretch border-0 border-r border-stone-200"
                 data-testid="work-items-process-rail"
@@ -795,9 +795,9 @@ export default function MyTasksPanel({
                         </p>
                     </div>
                 </div>
-            </ProcessingParentPanel>
+            </WorkspaceZonePanel>
 
-            <ProcessingParentPanel
+            <WorkspaceZonePanel
                 title="Queue"
                 className="w-[28%] min-w-[14rem] max-w-[18rem] shrink-0 self-stretch border-0 border-r border-stone-200"
                 data-testid="work-items-queue"
@@ -865,9 +865,9 @@ export default function MyTasksPanel({
                         ) : null}
                     </div>
                 </div>
-            </ProcessingParentPanel>
+            </WorkspaceZonePanel>
 
-            <ProcessingParentPanel
+            <WorkspaceZonePanel
                 title="Task detail"
                 className="min-w-[20rem] flex-1 self-stretch border-0"
                 data-testid="work-items-task-detail"
@@ -891,7 +891,7 @@ export default function MyTasksPanel({
                         </div>
                     )}
                 </div>
-            </ProcessingParentPanel>
+            </WorkspaceZonePanel>
         </div>
     );
 }

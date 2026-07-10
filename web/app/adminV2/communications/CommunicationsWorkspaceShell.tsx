@@ -4,12 +4,8 @@ import type { ReactNode } from "react";
 import { MessageSquare } from "lucide-react";
 
 import CommunicationsWorkspaceKpiStrip from "@/app/adminV2/communications/CommunicationsWorkspaceKpiStrip";
-import OperationalWorkspaceModeNav from "@/app/adminV2/components/OperationalWorkspaceModeNav";
-import OperationalModalHeader from "@/app/adminV2/components/OperationalModalHeader";
-import {
-    COMMS_PRIMARY_BTN_CLASS,
-    COMMS_WORKSPACE_EXECUTION_CLASS,
-} from "@/app/adminV2/communications/commsWorkspaceUi";
+import WorkspaceShell from "@/components/workspace/WorkspaceShell";
+import { COMMS_PRIMARY_BTN_CLASS, COMMS_WORKSPACE_EXECUTION_CLASS } from "@/app/adminV2/communications/commsWorkspaceUi";
 import {
     COMMUNICATIONS_MODES,
     COMMUNICATIONS_TAB_MODE,
@@ -32,8 +28,7 @@ export type CommunicationsWorkspaceShellProps = {
 };
 
 /**
- * Stable Communications workspace chrome - header, KPI reserve, navigation, execution surface.
- * Tab execution bodies mount inside the execution region only.
+ * Communications operational workspace — composes canonical WorkspaceShell + WorkspaceMetricTiles.
  */
 export default function CommunicationsWorkspaceShell({
     tabs,
@@ -47,20 +42,22 @@ export default function CommunicationsWorkspaceShell({
     children,
 }: CommunicationsWorkspaceShellProps) {
     const modeTabs = tabs.filter((t) => COMMUNICATIONS_TAB_MODE[t.key] === mode);
+
     return (
-        <div
-            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
-            data-comms-workspace-shell="true"
-            data-comms-modal-version="workspace-inc2c"
-        >
-            <OperationalModalHeader
-                icon={<MessageSquare className="h-4 w-4" aria-hidden strokeWidth={2} />}
-                title="Communications"
-                subtitle="Where conversations happen."
-                titleId="adminv2-inbox-modal-title"
-                onClose={onClose}
-                closeLabel="Close communications"
-                actions={
+        <WorkspaceShell
+            dataTestId="communications-workspace-shell"
+            shellDataAttrs={{
+                "data-comms-workspace-shell": true,
+                "data-comms-modal-version": "workspace-v2",
+            }}
+            header={{
+                icon: <MessageSquare className="h-4 w-4" aria-hidden strokeWidth={2} />,
+                title: "Communications",
+                subtitle: "Where conversations happen.",
+                titleId: "adminv2-inbox-modal-title",
+                onClose,
+                closeLabel: "Close communications",
+                actions:
                     showComposeNew && onComposeNew ? (
                         <button
                             type="button"
@@ -70,31 +67,23 @@ export default function CommunicationsWorkspaceShell({
                         >
                             Compose New
                         </button>
-                    ) : null
-                }
-            />
-
-            {activeTab !== "overview" ? <CommunicationsWorkspaceKpiStrip activeTab={activeTab} /> : null}
-
-            <OperationalWorkspaceModeNav
-                modes={COMMUNICATIONS_MODES}
-                activeMode={mode}
-                onModeChange={onModeChange}
-                modeAriaLabel="Communications mode"
-                sectionTabs={modeTabs}
-                activeSection={activeTab}
-                onSectionChange={onTabChange}
-                sectionAriaLabel={mode === "studio" ? "Studio sections" : "Work sections"}
-                navDataAttr="comms"
-                sectionsDataAttr="comms"
-            />
-
-            <div
-                className={`${COMMS_WORKSPACE_EXECUTION_CLASS} !min-h-0 !border-t-0 !bg-white !p-0`}
-                data-comms-workspace-execution="true"
-            >
+                    ) : null,
+            }}
+            modes={COMMUNICATIONS_MODES}
+            activeMode={mode}
+            onModeChange={onModeChange}
+            modeAriaLabel="Communications mode"
+            sectionTabs={modeTabs}
+            activeSection={activeTab}
+            onSectionChange={onTabChange}
+            sectionAriaLabel={mode === "studio" ? "Studio sections" : "Work sections"}
+            metricsColumn={activeTab !== "overview" ? <CommunicationsWorkspaceKpiStrip activeTab={activeTab} /> : undefined}
+            navDataAttr="comms"
+            sectionsDataAttr="comms"
+        >
+            <div className={`${COMMS_WORKSPACE_EXECUTION_CLASS} !min-h-0 !p-0`} data-comms-workspace-execution="true">
                 {children}
             </div>
-        </div>
+        </WorkspaceShell>
     );
 }

@@ -18,7 +18,7 @@ export const COMMS_KPI_STRIP_SURFACE_CLASS =
     "shrink-0 w-full border-b border-alloy-stone/12 bg-gradient-to-b from-alloy-stone/[0.05] to-white px-4 py-2";
 export const COMMS_WORKSPACE_NAV_CLASS = "shrink-0 bg-white px-4 py-2.5";
 export const COMMS_WORKSPACE_EXECUTION_CLASS =
-    "flex min-h-[min(22rem,65vh)] flex-1 flex-col overflow-hidden border-t border-alloy-stone/12 bg-alloy-stone/[0.02] p-3";
+    "flex min-h-0 flex-1 flex-col overflow-hidden p-3";
 export const COMMS_EXECUTION_FRAME_CLASS =
     "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-[0_1px_4px_rgba(15,23,42,0.07)]";
 export const COMMS_LIBRARY_RAIL_HEADER_CLASS = "border-b border-alloy-stone/15 bg-alloy-stone/[0.04] p-3";
