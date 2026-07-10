@@ -18,9 +18,10 @@ import {
     type TenantFieldDefinitionRow,
 } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import {
-    isValidatorAllowedQueueRecordFieldRefKey,
-    validatorAllowedQueueRecordFieldRefKeys,
-} from "@/lib/layout/queueRecordValidatorAllowList";
+    isQueueRowRuntimeResolvableEitherLayout,
+    isQueueRowRuntimeResolvableRefKey,
+} from "@/lib/fields/queueRowRuntimeResolution";
+import { publishableQueueRowRefKeys } from "@/lib/fields/canonicalDataProviderRegistry";
 import {
     isBlockedLayoutPickerRefKey,
     manifestEntryForRefKey,
@@ -134,10 +135,7 @@ function resolverAliasesForRefKey(refKey: string, input: FieldResolverInput): re
 }
 
 function aliasOnQueueValidator(refKey: string): boolean {
-    return (
-        isValidatorAllowedQueueRecordFieldRefKey(refKey, false) ||
-        isValidatorAllowedQueueRecordFieldRefKey(refKey, true)
-    );
+    return isQueueRowRuntimeResolvableEitherLayout(refKey);
 }
 
 function aliasOnDrawerManifest(refKey: string): boolean {
@@ -319,16 +317,21 @@ function resolveQueueRow(input: FieldResolverInput, refKey: string): SurfaceReso
         return resolveComputedProjection("queue_row", input, refKey);
     }
     const module: FieldResolverModule = "queue_record_scoped";
-    const pipeline = isValidatorAllowedQueueRecordFieldRefKey(refKey, false);
-    const waitlist = isValidatorAllowedQueueRecordFieldRefKey(refKey, true);
+    const pipeline = isQueueRowRuntimeResolvableRefKey(refKey, false);
+    const waitlist = isQueueRowRuntimeResolvableRefKey(refKey, true);
     if (pipeline || waitlist) {
         return {
             supported: true,
             module,
-            reason: pipeline && waitlist ? "Queue validator allow-list" : pipeline ? "Pipeline queue only" : "Waitlist queue only",
+            reason:
+                pipeline && waitlist
+                    ? "Canonical queue row provider"
+                    : pipeline
+                      ? "Pipeline queue provider"
+                      : "Waitlist queue provider",
         };
     }
-    return { supported: false, module, reason: "Not on queue row validator allow-list" };
+    return { supported: false, module, reason: "Not a supported queue row data provider" };
 }
 
 function entityReachableInContext(input: FieldResolverInput, context: FieldAvailabilityContext | undefined): boolean {
@@ -473,7 +476,7 @@ export function supportedSurfacesForField(input: FieldResolverInput): FieldConsu
 
 /** RefKeys the queue_row resolver module can resolve. */
 export function queueResolverBackedRefKeys(isWaitlist = false): readonly string[] {
-    return validatorAllowedQueueRecordFieldRefKeys(isWaitlist);
+    return publishableQueueRowRefKeys(isWaitlist);
 }
 
 export function resolverInputFromComputedField(row: ComputedFieldDefinition): FieldResolverInput {
@@ -504,7 +507,7 @@ export function builderFieldEntryForRefKey(
         const namespace = dot >= 0 ? trimmed.slice(0, dot) : computed.entity_type;
         return { key: trimmed, label: computed.label, namespace, isSystemField: true };
     }
-    if (!isValidatorAllowedQueueRecordFieldRefKey(trimmed, false) && !isValidatorAllowedQueueRecordFieldRefKey(trimmed, true)) {
+    if (!isQueueRowRuntimeResolvableEitherLayout(trimmed)) {
         return null;
     }
     const manifest = manifestEntryForRefKey(trimmed);

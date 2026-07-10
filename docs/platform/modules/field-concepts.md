@@ -104,4 +104,23 @@ Consumers should read business fields and choice options from:
 | **Configuration Workspace Doctrine** | **REFERENCE IMPLEMENTATION** |
 | **Field Platform** | **ACTIVE** |
 
-Next phase: **Field Platform Consumer Audit**. Data Model is frozen while Field Platform continues evolving through consumer adoption.
+Next phase: **Field Platform Consumer Convergence** (Queue Rows reference adoption complete — see `docs/sprints/08_2026/field-platform-consumer-convergence.md`).
+
+---
+
+## Canonical data providers (July 2026)
+
+The Field Platform distinguishes **provider kinds**:
+
+| Kind | Examples |
+| --- | --- |
+| **Business field** | First Name, Tour Date, Program |
+| **Platform field** | Created At, Record Owner |
+| **Calculated field** | Age (planned), Target start date (planned) |
+| **Runtime signal** | Current Work, Days in Stage, Missing Required Info |
+| **Relationship** | Primary Contact → Email (leaf projection) |
+| **Collection** | Children → count (projection) |
+
+Relationships and collections are **not** scalar fields. Consumers declare supported capabilities via `consumerProviderCapabilities.ts`.
+
+Implementation: `web/lib/fields/canonicalDataProviderModel.ts`, `canonicalDataProviderRegistry.ts`, **`canonicalQueueRowProviderDerivation.ts`** (adapter from canonical sources — not a replacement catalog).
