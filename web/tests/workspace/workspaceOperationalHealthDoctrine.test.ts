@@ -30,13 +30,15 @@ describe("Alloy Operational Health Doctrine V3 — Work Items", () => {
         expect(health).toContain("item.trend");
     });
 
-    it("Work Items overview metrics: Open, Due Today, Overdue, Completed Today", () => {
-        const adapter = read("app/adminV2/tasks/WorkItemsKpiStrip.tsx");
-        expect(adapter).toContain('label: "Open"');
-        expect(adapter).toContain('label: "Due Today"');
-        expect(adapter).toContain('label: "Overdue"');
-        expect(adapter).toContain('label: "Completed Today"');
-        expect(adapter).toContain("overviewItems");
+    it("Work Items overview has no nav-band or in-content metric tiles", () => {
+        const shell = read("app/adminV2/tasks/WorkItemsShell.tsx");
+        expect(shell).toContain("hideHeaderMetrics");
+        expect(shell).toContain('workView === "overview"');
+        expect(shell).toContain("hideHeaderMetrics ? undefined");
+        const overview = read("app/adminV2/tasks/WorkItemsOverviewLanding.tsx");
+        expect(overview).not.toContain("WorkspaceOperationalHealth");
+        expect(overview).not.toContain("WorkspaceMetricTiles");
+        expect(overview).not.toContain("SurfaceHeaderKpiCard");
     });
 
     it("Work Items queue metrics: Assigned, Waiting, Due Soon, Overdue", () => {
@@ -44,18 +46,19 @@ describe("Alloy Operational Health Doctrine V3 — Work Items", () => {
         expect(adapter).toContain('label: "Assigned"');
         expect(adapter).toContain('label: "Waiting"');
         expect(adapter).toContain('label: "Due Soon"');
-        expect(adapter).toContain("queueItems");
-        expect(adapter).toContain("workView");
+        expect(adapter).toContain('label: "Overdue"');
+        expect(adapter).not.toContain("overviewItems");
     });
 
-    it("WorkItemsShell passes workView into the health strip", () => {
-        const shell = read("app/adminV2/tasks/WorkItemsShell.tsx");
-        expect(shell).toContain("<WorkItemsKpiStrip workView={workView} />");
-    });
-
-    it("Work Items composes WorkspaceOperationalHealth", () => {
+    it("Work Items composes WorkspaceOperationalHealth on Queue only", () => {
         const adapter = read("app/adminV2/tasks/WorkItemsKpiStrip.tsx");
         expect(adapter).toContain("WorkspaceOperationalHealth");
         expect(adapter).not.toContain("WorkspaceMetricTiles");
+    });
+
+    it("Processing hides nav-band metrics on Work → Overview (reference)", () => {
+        const shell = read("app/adminV2/pos/DigitalMailroomShell.tsx");
+        expect(shell).toContain("hideHeaderMetrics");
+        expect(shell).toContain('workView === "overview"');
     });
 });

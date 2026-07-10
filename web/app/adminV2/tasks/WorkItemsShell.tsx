@@ -28,6 +28,8 @@ export default function WorkItemsShell({
     onNewTask: () => void;
     children: ReactNode;
 }) {
+    const hideHeaderMetrics = workView === "overview";
+
     return (
         <WorkspaceShell
             dataTestId="work-items-shell"
@@ -59,7 +61,7 @@ export default function WorkItemsShell({
             activeSection={workView}
             onSectionChange={onWorkViewChange}
             sectionAriaLabel="Work sections"
-            metricsColumn={<WorkItemsKpiStrip workView={workView} />}
+            metricsColumn={hideHeaderMetrics ? undefined : <WorkItemsKpiStrip />}
             navDataAttr="work-items"
             sectionsDataAttr="work-items"
         >

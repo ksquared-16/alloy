@@ -173,7 +173,7 @@ Overview sections **omit** the header metrics column. Operational sections **inc
 | **Processing → Queue** | Active Work · Needs Review · Ready · Published (header health band) |
 | **Communications → Overview** | Reply · Unread · Scheduled · Sent (body tiles) |
 | **Communications → Inbox** | Needs Reply · Unread · Scheduled · Needs Review (header health band) |
-| **Work Items → Overview** | Open · Due Today · Overdue · Completed Today (body tiles) |
+| **Work Items → Overview** | None — action cards + continue/recent panels only (no metric tiles) |
 | **Work Items → Queue** | Assigned · Waiting · Due Soon · Overdue (header health band) |
 
 Each metric reserves space for **trend intelligence** (see below): e.g. `↑ 12 today`, `↓ 18% week over week`, `↑ 4 since yesterday`.
@@ -348,7 +348,7 @@ Metrics **belong to the active section**, not the mode or the workspace. When th
 | **Processing** | Studio | Forms · Published · Draft · Generated |
 | **Communications** | Overview | Reply · Unread · Scheduled · Sent (`SurfaceHeaderKpiCard` in body) |
 | **Communications** | Inbox | Needs Reply · Unread · Scheduled · Needs Review |
-| **Work Items** | Overview | Open · Due Today · Overdue · Completed Today (`SurfaceHeaderKpiCard` in body) |
+| **Work Items** | Overview | None — launch action cards + continue/recent panels (no metric tiles) |
 | **Work Items** | Queue | Assigned · Waiting · Due Soon · Overdue (`WorkspaceOperationalHealth` in nav band) |
 
 Rules:
@@ -462,7 +462,7 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 |--------|--------|-------|---------|-------|
 | **Processing (Digital Mailroom)** | **Reference implementation** | `DigitalMailroomShell` → `WorkspaceShell` | Overview: `useProcessingOverviewKpis` → `SurfaceHeaderKpiCard`. Queue/Studio: `ProcessingKpiStrip` → `WorkspaceOperationalHealth` | Overview activity tiles below action cards; queue rail, artifact viewport |
 | **Communications** | Certified | `CommunicationsWorkspaceShell` → `WorkspaceShell` | Overview: `SurfaceHeaderKpiCard`. Inbox/Studio: `CommunicationsWorkspaceKpiStrip` | Same overview vs operational metric split as Processing |
-| **Work Items** | Certified | `WorkItemsShell` → `WorkspaceShell` | Overview: `SurfaceHeaderKpiCard`. Queue: `WorkItemsKpiStrip` → `WorkspaceOperationalHealth` | Overview + Queue section-scoped metrics |
+| **Work Items** | Certified | `WorkItemsShell` → `WorkspaceShell` | Queue: `WorkItemsKpiStrip` → `WorkspaceOperationalHealth` | Overview omits metrics; Queue section-scoped health band |
 
 ### Processing certification checklist (reference — all satisfied)
 
