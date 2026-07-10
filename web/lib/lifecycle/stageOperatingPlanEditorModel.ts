@@ -3,6 +3,11 @@
  */
 
 import { MANUAL_AD_HOC_WORK_DEFINITION_KEY } from "@/lib/admin/operationalWork/operationalWorkDedupe";
+import type {
+    StageCompletionOutcomeV1,
+    StageOperatingPlanV1,
+    StageWorkTemplateV1,
+} from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { normalizeOperatingPlanDraftForPersist } from "@/lib/lifecycle/stageOperatingPlanConvergence";
 import { normalizeOutcomeRulesOnPersist } from "@/lib/lifecycle/stageOutcomeAutomation";
