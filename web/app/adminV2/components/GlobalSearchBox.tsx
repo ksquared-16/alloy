@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { neutral, derived } from "@/styles/tokens/colors";
 import { resolveGlobalSearchOpenFromHit } from "@/lib/admin/globalSearch/globalRecordSearchOpenResolution";
+import { resolveGlobalSearchLocationSettingsHref } from "@/lib/admin/globalSearch/globalRecordSearchLocationNavigation";
 import {
     buildGlobalSearchStatusPill,
     formatGlobalSearchClusterContextLine,
@@ -188,6 +189,16 @@ export default function GlobalSearchBox() {
 
     const selectHit = useCallback(
         (hit: GlobalRecordSearchHit) => {
+            const locationHref = resolveGlobalSearchLocationSettingsHref(hit);
+            if (locationHref) {
+                setOpen(false);
+                setQ("");
+                setGroups([]);
+                setClusters([]);
+                setUnsupportedMsg(null);
+                router.push(locationHref);
+                return;
+            }
             const resolution = resolveGlobalSearchOpenFromHit(hit);
             if (!resolution.supported || !resolution.detail) {
                 setUnsupportedMsg("This record type is not yet supported in global search.");
