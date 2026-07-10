@@ -4719,13 +4719,33 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 [data-fp-composer-depth-active="true"] .alloy-os-fp-composer__panel {
   position: relative;
 }
+/* Anchor the elevated drill-in (and its scrim) to the VISIBLE composer canvas — the
+ * scrollable body — not the tall base grid. The base grid becomes `position: relative`
+ * on depth (runtime centering), but in the composer that grid can be far taller than
+ * the viewport and sit behind a frozen scroll offset, dropping the drill-in below the
+ * fold. Neutralizing the grid + wrapper positioning re-parents the absolutely-centered
+ * card to the body so it centers in view with no top/bottom cutoff. */
+[data-fp-composer-depth-active="true"] .alloy-os-fp-composer__body > .relative,
+[data-fp-composer-depth-active="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"] {
+  position: static;
+}
+[data-fp-composer-depth-active="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-fp-depth-scrim {
+  position: absolute;
+  inset: 0;
+}
 [data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard {
   width: min(560px, calc(100% - 32px));
   max-width: 560px;
-  max-height: min(75vh, calc(100dvh - 120px));
+  top: 22px;
+  /* Bound to the visible canvas height first, then the viewport — never overflow the
+   * body (short panel) or the screen (tall panel). Internal card body still scrolls. */
+  max-height: min(calc(100% - 44px), calc(100dvh - 120px));
 }
 .alloy-os-fp-composer__ghost {
   position: absolute; z-index: 20; pointer-events: none; border-radius: 12px;

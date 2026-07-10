@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type Props = {
@@ -20,6 +20,7 @@ export default function ComposerFloatingPopover({
     children,
 }: Props) {
     const [pos, setPos] = useState<{ top: number; left: number; minWidth: number } | null>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
 
     const updatePosition = () => {
         if (!open || !anchorRef.current) {
@@ -50,6 +51,10 @@ export default function ComposerFloatingPopover({
         const onDoc = (e: MouseEvent) => {
             const target = e.target as Node;
             if (anchorRef.current?.contains(target)) return;
+            // The popover content is portaled to <body>, so it is NOT inside the anchor.
+            // Without this guard, a mousedown on a popover item closes + unmounts the
+            // portal before its click fires — the selection never commits.
+            if (contentRef.current?.contains(target)) return;
             onClose();
         };
         document.addEventListener("mousedown", onDoc);
@@ -60,6 +65,7 @@ export default function ComposerFloatingPopover({
 
     return createPortal(
         <div
+            ref={contentRef}
             className={className}
             style={{
                 position: "fixed",
