@@ -130,7 +130,7 @@ Full drawer rules: `../operator/drawer-system.md`.
 
 ---
 
-## Alloy Operational Workspace Doctrine V2 (frozen)
+## Alloy Operational Workspace Doctrine V3 (frozen)
 
 **Status:** **Frozen and certified** (July 2026).
 
@@ -140,7 +140,31 @@ Full drawer rules: `../operator/drawer-system.md`.
 
 This is the **canonical operational workspace visual system** for every AdminV2 module modal — Scheduling, Attendance, Billing, Commercial, and future modules inherit it unchanged. Distinct from the org-level `/workspace` landing (Presentation Runtime four-zone command center).
 
-**Supersedes:** Alloy Workspace Doctrine V1 (same hierarchy; V2 adds inset stone field ownership in `WorkspaceShell`, mandatory `WorkspaceMetricTiles`, and certified module migrations).
+**Supersedes:**
+
+- **V1** — established the component barrel and Processing reference.
+- **V2** — added inset stone field ownership in `WorkspaceShell` and certified module migrations.
+- **V3 (this revision)** — reframes the **KPI philosophy**: metrics are **contextual, operational, and section-scoped**. Boxed interactive KPI cards are retired in favor of a flat **Operational Health strip** with reserved trend intelligence.
+
+### KPI philosophy (V3 — the metric contract)
+
+Metrics are:
+
+- **Contextual** — they belong to the **active section**, not the workspace as a whole.
+- **Operational** — they answer "what needs attention right now," not "how much exists."
+- **Not inventory** — never total-count catalogs (no "Forms: 214"); operational states only.
+- **Not workspace-wide** — the same band changes as the operator changes sections.
+- **Not interactive cards** — rendered as a flat **Operational Health strip**, not clickable tiles or pills.
+
+**Metrics belong to the active section.** When the section changes, the metric set changes. One shell, many contextual health bands.
+
+| Section | Operational metrics |
+|---------|---------------------|
+| **Processing → Queue** | Active Work · Needs Review · Ready · Published |
+| **Communications → Inbox** | Needs Reply · Unread · Scheduled · Needs Review |
+| **Work Items → Queue** | Open · Due Today · Overdue · Completed |
+
+Each metric reserves space for **trend intelligence** (see below): e.g. `↑ 12 today`, `↓ 18% week over week`, `↑ 4 since yesterday`.
 
 ### Visual hierarchy (five layers — frozen)
 
@@ -165,7 +189,8 @@ Import from `@/components/workspace/doctrine`. Tokens: `web/components/workspace
 | **`WorkspaceModeNav`** | Composes mode + section tabs; optional metrics column | Work \| Studio + Overview \| Queue + KPI band |
 | **`WorkspaceModeTabs`** | Primary mode rail (Work \| Studio) | Work mode default |
 | **`WorkspaceSubTabs`** | Secondary section navigation | Overview \| Queue |
-| **`WorkspaceMetricTiles`** | Canonical KPI tiles — **data-only adapters** supply counts | `ProcessingKpiStrip` → Today's activity band |
+| **`WorkspaceOperationalHealth`** | Flat operational health band — not cards, not pills, not interactive | `ProcessingKpiStrip` → Work + Studio contextual metrics |
+| **`WorkspaceMetricTiles`** | Legacy boxed KPI tiles — **deprecated for operational health**; Communications / Work Items pending migration | — |
 | **`WorkspaceSurface`** | Scrollable stone-field body for overview/studio | `ProcessingOverviewLanding` |
 | **`WorkspaceCard`** | White contained panel on stone field | Overview lower zones, summary groups |
 | **`WorkspaceZonePanel`** | Multi-column zone with header + body (queue, source, inspector) | Queue / Source document / Review questions |
@@ -175,7 +200,7 @@ Processing-specific presentation adapters (not duplicated by future modules):
 
 | Adapter | Purpose |
 |---------|---------|
-| `ProcessingKpiStrip` | Queue-derived operational metrics only |
+| **`ProcessingKpiStrip`** | Work vs Studio operational health adapter (data + trend placeholders only) |
 | `ProcessingLandingActionCard` | Overview action-card hierarchy |
 | `ProcessingSourceDocumentViewport` | Artifact fit-page / fit-width / manual zoom |
 | `ProcessingQueueList` | Folder rail + work lanes + row density |
@@ -185,7 +210,7 @@ Processing-specific presentation adapters (not duplicated by future modules):
 | Rule | Implementation |
 |------|----------------|
 | **Compact header band** | `WorkspaceHeader` — single compact row: icon + title (Midnight Forge) + Slate subtitle + actions + Close |
-| **Control band** | Header + `WorkspaceModeNav` + optional `WorkspaceMetricTiles` wrapped in `WS_CONTROL_BAND_DIVIDER` (`border-b border-alloy-stone/30`) — full inner width |
+| **Control band** | Header + `WorkspaceModeNav` + optional `WorkspaceOperationalHealth` wrapped in `WS_CONTROL_BAND_DIVIDER` (`border-b border-alloy-stone/30`) — full inner width |
 | **Metric band attachment** | Eyebrow stacked **above** tiles; metrics vertically aligned with Work navigation stack — not a floating card row |
 | **Queue → detail divider** | `WS_QUEUE_RAIL` (`border-r border-alloy-stone/30`, white background) — full height below control band |
 | **Artifact viewport** | `ProcessingSourceDocumentViewport` + `WorkspaceArtifactZoomControls` — bounded scroll, dual-axis fit-page, manual zoom on content wrapper |
@@ -197,7 +222,7 @@ Processing-specific presentation adapters (not duplicated by future modules):
 | Area | Rule |
 |------|------|
 | **Stone field** | `WS_FIELD` at ~7%; white cards visibly float with `WS_PROCESS_TILE_CHROME` / `WS_PANEL_SURFACE_FLAT` |
-| **KPI tiles** | 21px semibold values; 11px Slate labels; semantic accent icon wells; eyebrow above tile row |
+| **KPI / health band** | Flat operational health; eyebrow above metric row; reserved trend line per metric | `WorkspaceOperationalHealth` + `ProcessingKpiStrip` |
 | **Typography** | Three levels: Primary (`WS_TEXT_PRIMARY`), Secondary (`WS_TEXT_SECONDARY`), Muted (`WS_TEXT_MUTED`) |
 | **Action cards** | Import (strongest Pine) → Active work (Pine CTA) → Form library (Midnight inventory) — all Open CTAs interactive |
 | **Queue rows** | ~8–10% tighter vertical padding; selection Pine rail preserved |
@@ -224,7 +249,7 @@ The modal shell is **never** fully stone-tinted. The stone field is **inset** in
 WorkspaceShell
   WorkspaceHeader              Module title + tagline + actions + close
   [control band divider]
-  WorkspaceModeNav             Work | Studio + section tabs [+ WorkspaceMetricTiles]
+  WorkspaceModeNav             Work | Studio + section tabs [+ WorkspaceOperationalHealth]
   WS_SHELL_INSET               White gutter (~16px)
     WS_FIELD_CANVAS            Stone operational canvas (Layer 2)
       WorkspaceSurface         Scroll region (overview / studio)
@@ -268,20 +293,97 @@ Requirements:
 
 Scale helpers: `web/lib/workspace/artifactViewportScale.ts`
 
-### Metric KPI semantic accents (frozen)
+### Operational health doctrine (V3 — replaces boxed KPI cards)
 
-`WorkspaceMetricTiles` accent + status must agree:
+`WorkspaceOperationalHealth` is the **canonical operational health primitive** for module nav bands. Processing is the reference implementation.
+
+**Not cards. Not pills. Not interactive.** Operational health only — lighter and less dominant than boxed KPI tiles.
+
+Each metric column:
+
+```
+{value} {label}
+{trend line — reserved even when placeholder}
+```
+
+Example (Processing Queue section):
+
+```
+TODAY'S ACTIVITY
+
+25 Active Work          1 Needs Review
+↑ 4 today               ↓ 42%
+
+24 Ready                13 Published
+↑ 6 today               ↑ 2 since yesterday
+```
+
+#### Metrics are section-scoped (required)
+
+Metrics **belong to the active section**, not the mode or the workspace. When the operator switches sections, the metric set changes with it. Module adapters supply counts + trends per section; `WorkspaceOperationalHealth` owns layout and typography.
+
+| Module | Section | Operational metrics |
+|--------|---------|---------------------|
+| **Processing** | Queue | Active Work · Needs Review · Ready · Published |
+| **Processing** | Studio | Forms · Published · Draft · Generated |
+| **Communications** | Inbox | Needs Reply · Unread · Scheduled · Needs Review |
+| **Work Items** | Queue | Open · Due Today · Overdue · Completed |
+
+Rules:
+
+- **Do not** reuse one metric set across sections.
+- **Do not** show inventory totals ("how many exist") — show operational states ("what needs attention").
+- **Do not** show workspace-wide rollups in a section band — those belong to the org-level `/workspace` command center.
+
+#### Trend intelligence (reserved per metric)
+
+Every metric reserves a second-line trend slot. Static placeholders are acceptable until historical comparison APIs exist. Supported comparison windows:
+
+| Window | Example |
+|--------|---------|
+| Since yesterday | `↑ 4 since yesterday` |
+| Today | `↑ 12 today` |
+| Week over week | `↓ 18% week over week` |
+| Last 7 days | `↓ 12% vs last 7 days` |
+| Last 30 days | `↑ 5 this month` |
+
+Trend direction uses semantic color:
+
+| Signal | Color |
+|--------|-------|
+| Increase / healthy | Bend Pine |
+| Published / completed | Alloy Gold |
+| Review / attention metric | Alloy Ember |
+| Inventory / neutral / decrease | Midnight Forge or Slate |
+
+#### Color doctrine (operational health)
+
+| Token | Use |
+|-------|-----|
+| **Bend Pine** | Increases, healthy states, active operational counts |
+| **Alloy Gold** | Published, completed |
+| **Alloy Ember** | Needs review, attention |
+| **Midnight Forge** | Inventory, neutral counts |
+| **Alloy Slate** | Labels, metadata, de-emphasized trends |
+
+**No additional accent colors.** Preserve nav-band spacing — reduce visual weight only; do not change layout grid.
+
+### Legacy metric KPI tiles (superseded for operational health)
+
+`WorkspaceMetricTiles` remains for Communications and Work Items until migrated. **Do not use for new operational health bands.**
+
+Previous boxed tile accents (for migration reference):
 
 | Metric | Accent | Meaning |
 |--------|--------|---------|
 | Active work | Bend Pine | Actionable queue |
-| Needs review | Alloy Ember / warning | Operator review required |
+| Needs review | Alloy Ember | Operator review required |
 | Ready to publish | Bend Pine | Generated form awaiting publish |
-| Published | Alloy Gold | Finalized forms (from form library API) |
+| Published | Alloy Gold | Finalized forms |
 
-Eyebrow labels (e.g. "Today's activity") stack **above** the tile row via `WorkspaceMetricTiles` `eyebrow` prop — never beside tiles in a horizontal band.
+Eyebrow labels stack **above** the metric row — never beside metrics in a horizontal band.
 
-**Never** use module-specific color themes. Processing, Communications, Work Items, Scheduling, Attendance, and Commercial share one visual language.
+**Never** use module-specific color themes.
 
 ### Typography hierarchy (three levels)
 
@@ -302,7 +404,9 @@ Eyebrow labels (e.g. "Today's activity") stack **above** the tile row via `Works
 
 ### Metric doctrine
 
-`WorkspaceMetricTiles` is the **only** KPI primitive — Workspace, Work Unit headers, Processing, Communications, Work Items, and future modules. No `CompactKpiStrip`, no custom variants, no alternate KPI styles. Module adapters (e.g. `ProcessingKpiStrip`) supply **data only**.
+`WorkspaceOperationalHealth` is the **operational health primitive** for module nav bands (Processing reference). Module adapters (e.g. `ProcessingKpiStrip`) supply **data and trend placeholders only**.
+
+`WorkspaceMetricTiles` is **legacy** — Communications and Work Items only until migrated. No `CompactKpiStrip`, no custom card variants, no alternate KPI styles for new work.
 
 ### Containment doctrine
 
@@ -319,7 +423,8 @@ Eyebrow labels (e.g. "Today's activity") stack **above** the tile row via `Works
 | `WorkspaceSurface` | Scrollable overview/studio body inside the stone canvas |
 | `WorkspaceCard` | Single contained white panel (overview sections, summary groups) |
 | `WorkspaceZonePanel` | Multi-column operational layout (queue, source document, inspector) |
-| `WorkspaceMetricTiles` | Any KPI / status strip in nav band |
+| `WorkspaceOperationalHealth` | Operational health strip in nav band (flat, non-interactive) |
+| `WorkspaceMetricTiles` | Legacy boxed KPI tiles (pending migration) |
 | `WorkspaceDivider` | Vertical/horizontal separation between zones |
 
 ### Component library
@@ -330,9 +435,9 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 
 | Module | Status | Shell | Metrics | Notes |
 |--------|--------|-------|---------|-------|
-| **Processing (Digital Mailroom)** | **Reference implementation** | `DigitalMailroomShell` → `WorkspaceShell` | `ProcessingKpiStrip` → `WorkspaceMetricTiles` | Overview action cards, queue rail, artifact viewport, review inspector — canonical |
-| **Communications** | Certified | `CommunicationsWorkspaceShell` → `WorkspaceShell` | `CommunicationsWorkspaceKpiStrip` → `WorkspaceMetricTiles` | Inherits Processing shell patterns |
-| **Work Items** | Certified | `WorkItemsShell` → `WorkspaceShell` | `WorkItemsKpiStrip` → `WorkspaceMetricTiles` | Overview + Queue via `WorkspaceSurface` |
+| **Processing (Digital Mailroom)** | **Reference implementation** | `DigitalMailroomShell` → `WorkspaceShell` | `ProcessingKpiStrip` → `WorkspaceOperationalHealth` | Work + Studio contextual health; overview action cards, queue rail, artifact viewport |
+| **Communications** | Certified (health-band migration pending) | `CommunicationsWorkspaceShell` → `WorkspaceShell` | `CommunicationsWorkspaceKpiStrip` → `WorkspaceMetricTiles` | Inbox target metrics: Needs Reply · Unread · Scheduled · Needs Review |
+| **Work Items** | Certified (health-band migration pending) | `WorkItemsShell` → `WorkspaceShell` | `WorkItemsKpiStrip` → `WorkspaceMetricTiles` | Queue target metrics: Open · Due Today · Overdue · Completed |
 
 ### Processing certification checklist (reference — all satisfied)
 
@@ -341,7 +446,7 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 | Header | Compact identity band, no hero | `WorkspaceHeader` via `DigitalMailroomShell` |
 | Modes | Work \| Studio primary tabs | `WorkspaceModeTabs` |
 | Subnavigation | Overview \| Queue under Work | `WorkspaceSubTabs` |
-| Metric band | Today's activity above tiles; operational counts only | `ProcessingKpiStrip` → Active work, Needs review, Ready to publish, Published |
+| Metric band | Flat operational health; Work vs Studio metrics; trend line reserved | `ProcessingKpiStrip` → `WorkspaceOperationalHealth` |
 | Action cards | Three-tier semantic hierarchy | `ProcessingLandingActionCard` on overview |
 | Containment | Stone field + white surfaces | `WorkspaceShell` inset + `WorkspaceSurface` / `WorkspaceCard` |
 | Queue | Folder rail, compact rows, Pine selection | `ProcessingQueueList` + `WS_QUEUE_RAIL` |
@@ -357,12 +462,16 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 3. Do not duplicate shell layout in module folders.
 4. Do not introduce module-specific themes or accent colors.
 5. Do not create competing KPI or surface components.
+6. Metrics are **section-scoped and operational** — never inventory totals, never workspace-wide rollups, never interactive cards. Use `WorkspaceOperationalHealth` with a per-section metric set and reserved trend line.
 
 ---
 
-## Alloy Workspace Doctrine V1 (superseded)
+## Alloy Workspace Doctrine V1 / V2 (superseded)
 
-V1 established the component barrel and Processing reference (July 2026). **V2 above is authoritative** — inset field in shell, universal metric tiles, Communications + Work Items certification.
+- **V1** established the component barrel and Processing reference (July 2026).
+- **V2** added inset stone field ownership in `WorkspaceShell` and certified Communications + Work Items.
+
+**V3 above is authoritative** — contextual, operational, section-scoped metrics rendered as a flat Operational Health strip with reserved trend intelligence. Boxed interactive KPI cards are retired.
 
 ---
 
