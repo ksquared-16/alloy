@@ -30,6 +30,27 @@ describe("buildFocusPanelSummaryDefaultDoc", () => {
             expect(readFocusPanelCardSectionMeta(section)).not.toBeNull();
         }
     });
+
+    it("seeds a half-width Current Work grid with stacked Household + Children on the right", async () => {
+        const { readFocusPanelPublishedLayout } = await import(
+            "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout"
+        );
+        const { focusPanelSummaryDefaultGridLayout } = await import(
+            "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc"
+        );
+        const doc = buildFocusPanelSummaryDefaultDoc();
+        const layout = readFocusPanelPublishedLayout(doc);
+        expect(layout?.grid).toBeDefined();
+        const grid = focusPanelSummaryDefaultGridLayout();
+        const currentWork = grid.areas.find((a) => a.card === "current_work")!;
+        const household = grid.areas.find((a) => a.card === "household")!;
+        const children = grid.areas.find((a) => a.card === "children")!;
+        expect(currentWork.colSpan).toBe(6);
+        expect(household).toMatchObject({ colStart: 7, colSpan: 6, rowStart: 1 });
+        expect(children.colStart).toBe(7);
+        expect(children.rowStart).toBeGreaterThan(household.rowStart);
+        expect(layout!.grid!.areas).toEqual(grid.areas);
+    });
 });
 
 describe("deriveFocusPanelGridFromLayoutDoc", () => {

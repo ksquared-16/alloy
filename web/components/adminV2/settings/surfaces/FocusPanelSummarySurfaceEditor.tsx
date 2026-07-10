@@ -210,15 +210,16 @@ export default function FocusPanelSummarySurfaceEditor({ onBack, onOpenNestedSur
             .then((state) => {
                 if (!active) return;
                 setLayoutState(state);
-                const seedDoc = state.draft?.doc ?? state.published?.doc ?? null;
-                if (seedDoc) {
-                    const seeded = readSummaryCardOrder(seedDoc);
-                    if (seeded.length > 0) setOrder(seeded);
-                    setRowLayout(readFocusPanelPublishedLayout(seedDoc));
-                    const nested = readNestedSurfacesFromDoc(seedDoc);
-                    setNestedConfigs(nested);
-                    setNestedConfigsSeed(nested);
-                }
+                const seedDoc = state.draft?.doc ?? state.published?.doc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC;
+                const seeded = readSummaryCardOrder(seedDoc);
+                if (seeded.length > 0) setOrder(seeded);
+                setRowLayout(
+                    readFocusPanelPublishedLayout(seedDoc)
+                        ?? readFocusPanelPublishedLayout(FOCUS_PANEL_SUMMARY_DEFAULT_DOC),
+                );
+                const nested = readNestedSurfacesFromDoc(seedDoc);
+                setNestedConfigs(nested);
+                setNestedConfigsSeed(nested);
                 setLoaded(true);
             })
             .catch((e: unknown) => {

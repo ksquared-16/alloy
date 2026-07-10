@@ -33,7 +33,7 @@ export const DEFAULT_CARD_ROW_SPAN: Partial<Record<FocusPanelCardKey, number>> =
     household: 3,
     children: 4,
     readiness_kpi: 3,
-    current_work: 2,
+    current_work: 4,
 };
 export function defaultRowSpanForCard(card: FocusPanelCardKey): number {
     return DEFAULT_CARD_ROW_SPAN[card] ?? 2;

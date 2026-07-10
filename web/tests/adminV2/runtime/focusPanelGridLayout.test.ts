@@ -191,10 +191,10 @@ describe("focusPanelGridLayoutOps", () => {
     });
 
     it("opens new/seeded cards at their NATURAL summary height — not a min row", () => {
-        // Per-card defaults: Household/Children tallest, Current Work shortest, > 1 row each.
+        // Per-card defaults: Household/Children/Current Work open tall enough for full summary cards.
         expect(defaultRowSpanForCard("household")).toBeGreaterThanOrEqual(3);
-        expect(defaultRowSpanForCard("children")).toBeGreaterThan(defaultRowSpanForCard("current_work"));
-        expect(defaultRowSpanForCard("current_work")).toBeGreaterThan(1);
+        expect(defaultRowSpanForCard("children")).toBeGreaterThanOrEqual(3);
+        expect(defaultRowSpanForCard("current_work")).toBeGreaterThanOrEqual(3);
 
         // addCardToGrid uses the natural default (not rowSpan 1).
         const g = addCardToGrid(emptyGridLayout(12), "household");
