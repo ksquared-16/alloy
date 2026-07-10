@@ -211,30 +211,16 @@ Operational work must always expose a path back to the operating context. Wherev
 
 | Concern | Doctrine primitive | Location |
 |---------|-------------------|----------|
-| Modal outer chrome | `WorkspaceShell` | `web/components/workspace/operational/` |
-| Header (icon + title + actions + Close) | `WorkspaceHeader` | `web/components/workspace/operational/` |
-| Work / Studio mode rail | `WorkspaceModeTabs` | `web/components/workspace/operational/` |
-| Child-section underline tabs | `WorkspaceSubTabs` | `web/components/workspace/operational/` |
-| KPI / status strip | `WorkspaceMetricTiles` | `web/components/workspace/operational/` |
-| Execution / landing body | `WorkspaceSurface` | `web/components/workspace/operational/` |
-| Overview action tiles | `WorkspaceCard` | `web/components/workspace/operational/` |
-| Continue / recent zone panels | `WorkspaceZonePanel` | `web/components/workspace/operational/` |
-| Hairline region separators | `WorkspaceDivider` | `web/components/workspace/operational/` |
+| Modal outer chrome + nav composition | `WorkspaceShell` | `web/components/workspace/WorkspaceShell.tsx` |
+| Header (icon + title + actions + Close) | `WorkspaceHeader` | `web/components/workspace/WorkspaceHeader.tsx` |
+| Work / Studio mode + section tabs | `WorkspaceModeNav` → `WorkspaceModeTabs` + `WorkspaceSubTabs` | `web/components/workspace/` |
+| KPI / status strip | `WorkspaceMetricTiles` | `web/components/workspace/WorkspaceMetricTiles.tsx` |
+| Execution / landing body | `WorkspaceSurface` | `web/components/workspace/WorkspaceSurface.tsx` |
+| Overview action tiles / contained panels | `WorkspaceCard` | `web/components/workspace/WorkspaceCard.tsx` |
+| Multi-column zone panels | `WorkspaceZonePanel` | `web/components/workspace/WorkspaceZonePanel.tsx` |
+| Hairline region separators | `WorkspaceDivider` | `web/components/workspace/WorkspaceDivider.tsx` |
 
-**Legacy / outer shell (unchanged):**
-
-| Concern | Primitive | Location |
-|---------|-----------|----------|
-| Modal shell / geometry / width | `AdminV2WorkspaceBosModalShell` | `web/app/adminV2/components/` |
-| Header implementation (wrapped by `WorkspaceHeader`) | `OperationalModalHeader` | `web/app/adminV2/components/` |
-| Primary / secondary action classes | `OPERATIONAL_PRIMARY_ACTION_CLASS` / `OPERATIONAL_SECONDARY_ACTION_CLASS` | via `WorkspaceHeader` export |
-| Active-modal anchor (left nav) | `useActiveAdminV2WorkspaceModal` | `web/lib/adminV2/` |
-| Mode switch implementation (wrapped by `WorkspaceModeTabs`) | `AlloyModeSwitch` | `web/components/workspace/` |
-| KPI strip implementation (wrapped by `WorkspaceMetricTiles`) | `CompactKpiStrip` | `web/components/workspace/` |
-| KPI/status color semantics | `kpiSemantics` | `web/components/workspace/` |
-| Two-level nav composer | `OperationalWorkspaceModeNav` | `web/app/adminV2/components/` — composes `WorkspaceModeTabs` + `WorkspaceSubTabs` + `WorkspaceDivider` |
-
-Barrel export: `@/components/workspace/operational`.
+Barrel export: `@/components/workspace/doctrine`.
 
 **Color semantics** (`kpiSemantics.ts`) are platform-wide. States map to one meaning and one token; modules never invent decorative colors:
 

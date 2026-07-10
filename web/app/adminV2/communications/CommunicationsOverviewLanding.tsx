@@ -1,17 +1,14 @@
 "use client";
 
 import { ArrowRight, Mail, Megaphone, MessageSquare } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
+import ProcessingLandingActionCard from "@/app/adminV2/pos/ProcessingLandingActionCard";
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
+import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
-import {
-    WorkspaceCard,
-    WorkspaceSurface,
-    WorkspaceZoneEmptyHint,
-    WorkspaceZonePanel,
-} from "@/components/workspace/operational";
 import type { WorkspaceHeaderKpiVm } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import {
     computeAnnouncementWorkspaceKpis,
@@ -120,10 +117,10 @@ export default function CommunicationsOverviewLanding({
     });
 
     return (
-        <WorkspaceSurface variant="landing" data-comms-overview-landing="true">
+        <WorkspaceSurface data-comms-overview-landing="true">
             <div className="mx-auto max-w-6xl space-y-5">
                 <section className="grid gap-3 md:grid-cols-3">
-                    <WorkspaceCard
+                    <ProcessingLandingActionCard
                         tier="primary"
                         icon={<MessageSquare className="h-5 w-5" aria-hidden />}
                         title="Reply to Families"
@@ -132,7 +129,7 @@ export default function CommunicationsOverviewLanding({
                         onClick={() => onNavigateTab("inbox")}
                         testId="comms-reply-families-card"
                     />
-                    <WorkspaceCard
+                    <ProcessingLandingActionCard
                         tier="secondary"
                         icon={<Megaphone className="h-5 w-5" aria-hidden />}
                         title="Send Announcement"
@@ -141,7 +138,7 @@ export default function CommunicationsOverviewLanding({
                         onClick={() => onNavigateTab("announcements")}
                         testId="comms-announcement-card"
                     />
-                    <WorkspaceCard
+                    <ProcessingLandingActionCard
                         tier="tertiary"
                         icon={<Mail className="h-5 w-5" aria-hidden />}
                         title="Compose Message"
@@ -164,9 +161,9 @@ export default function CommunicationsOverviewLanding({
                 </section>
 
                 <div className="grid gap-4 lg:grid-cols-3">
-                    <WorkspaceZonePanel title="Continue conversations" action="View all" onAction={() => onNavigateTab("inbox")}>
+                    <ContinuePanel title="Continue conversations" action="View all" onAction={() => onNavigateTab("inbox")}>
                         {needsReplyConversations.length === 0 ? (
-                            <WorkspaceZoneEmptyHint>No conversations need a reply right now.</WorkspaceZoneEmptyHint>
+                            <EmptyHint>No conversations need a reply right now.</EmptyHint>
                         ) : (
                             <ul className="space-y-1.5">
                                 {needsReplyConversations.map((row) => {
@@ -200,11 +197,11 @@ export default function CommunicationsOverviewLanding({
                                 })}
                             </ul>
                         )}
-                    </WorkspaceZonePanel>
+                    </ContinuePanel>
 
-                    <WorkspaceZonePanel title="Recent announcements" action="View all" onAction={() => onNavigateTab("announcements")}>
+                    <ContinuePanel title="Recent announcements" action="View all" onAction={() => onNavigateTab("announcements")}>
                         {recentAnnouncements.length === 0 ? (
-                            <WorkspaceZoneEmptyHint>Drafts and sent announcements appear here.</WorkspaceZoneEmptyHint>
+                            <EmptyHint>Drafts and sent announcements appear here.</EmptyHint>
                         ) : (
                             <ul className="space-y-1.5">
                                 {recentAnnouncements.map((row) => (
@@ -224,7 +221,7 @@ export default function CommunicationsOverviewLanding({
                                 ))}
                             </ul>
                         )}
-                    </WorkspaceZonePanel>
+                    </ContinuePanel>
 
                     <section>
                         <header className="mb-3 flex items-center justify-between gap-2">
@@ -256,5 +253,37 @@ export default function CommunicationsOverviewLanding({
                 </div>
             </div>
         </WorkspaceSurface>
+    );
+}
+
+function ContinuePanel({
+    title,
+    action,
+    onAction,
+    children,
+}: {
+    title: string;
+    action: string;
+    onAction: () => void;
+    children: ReactNode;
+}) {
+    return (
+        <section className="rounded-xl border border-alloy-stone/15 bg-white px-4 py-3">
+            <header className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="text-[13px] font-semibold text-alloy-midnight">{title}</h2>
+                <button type="button" onClick={onAction} className="text-[11px] font-semibold text-alloy-bend-pine hover:underline">
+                    {action} -&gt;
+                </button>
+            </header>
+            {children}
+        </section>
+    );
+}
+
+function EmptyHint({ children }: { children: ReactNode }) {
+    return (
+        <div className="rounded-lg border border-dashed border-alloy-stone/20 px-3 py-8 text-center text-[12px] text-alloy-midnight/45">
+            {children}
+        </div>
     );
 }

@@ -201,6 +201,7 @@ None of these requires a new navigation spine, a new "record module," or a new d
 | Experience Builder / record layouts / drawer composition | `./operator/experience-builder-doctrine.md` |
 | Business processes, stages, work units | `./core/business-process-system.md` |
 | Navigation & workspace spine | `./core/navigation-and-workspace-doctrine.md` |
+| **Alloy Operational Workspace Doctrine V2** (module modal shell) | `./core/navigation-and-workspace-doctrine.md` — **frozen** (July 2026); certified: Processing, Communications, Work Items; barrel: `web/components/workspace/doctrine.ts` |
 | Drawer architecture & VM ownership | `./operator/drawer-system.md` |
 | Queue preview boundary | `./operator/queue-system.md` |
 | Record authority & resolution | `./core/record-system.md` |

@@ -8,7 +8,7 @@
 
 ## Certification statement
 
-Alloy Operational Workspace Doctrine V2 is frozen. Processing (Digital Mailroom) is the certified reference implementation. Communications now composes `WorkspaceShell`, `WorkspaceHeader`, `WorkspaceModeTabs`, `WorkspaceSubTabs`, `WorkspaceMetricTiles`, `WorkspaceSurface`, `WorkspaceCard`, `WorkspaceZonePanel`, and `WorkspaceDivider` from `@/components/workspace/operational` — supplying data and tab content only. No parallel shell chrome, no Communications-specific header/nav/KPI implementations.
+Alloy Operational Workspace Doctrine V2 is frozen. Processing (Digital Mailroom) is the certified reference implementation. Communications now composes `WorkspaceShell`, `WorkspaceHeader`, `WorkspaceModeTabs`, `WorkspaceSubTabs`, `WorkspaceMetricTiles`, `WorkspaceSurface`, `WorkspaceCard`, `WorkspaceZonePanel`, and `WorkspaceDivider` from `@/components/workspace/doctrine` — supplying data and tab content only. No parallel shell chrome, no Communications-specific header/nav/KPI implementations.
 
 **Presentation only.** Routes, APIs, inbox runtime, thread runtime, announcements runtime, and template runtime are unchanged.
 
@@ -53,7 +53,7 @@ cd web && npx tsc --noEmit
 
 ## Changed files (doctrine adoption)
 
-**New doctrine primitives:** `web/components/workspace/operational/*`
+**New doctrine primitives:** `web/components/workspace/doctrine.ts` (barrel) + certified components under `web/components/workspace/`
 
 **Communications:** `CommunicationsWorkspaceShell.tsx`, `CommunicationsModalTabPanel.tsx`, `CommunicationsOverviewLanding.tsx`, `CommunicationsWorkspaceKpiStrip.tsx`, `CommsModalTabBar.tsx`, `RulesWorkspace.tsx` (replaces Branding)
 

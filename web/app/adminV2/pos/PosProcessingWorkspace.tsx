@@ -7,6 +7,8 @@
 
 import { useCallback, useRef, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
+import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
+import { WS_ACTION_SECONDARY, WS_CANVAS, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
 import ProcessingQueueList from "@/app/adminV2/processing/ProcessingQueueList";
 import ProcessingImportAction from "./ProcessingImportAction";
 import { usePosCase } from "./usePosCase";
@@ -14,7 +16,6 @@ import PosCaseWorkColumn from "./PosCaseWorkColumn";
 import PosCaseDecisionColumn from "./PosCaseDecisionColumn";
 import PosTemplateSetupColumn from "./PosTemplateSetupColumn";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
-import ProcessingParentPanel from "./ProcessingParentPanel";
 
 export default function PosProcessingWorkspace({
     selectedCaseId,
@@ -85,10 +86,10 @@ export default function PosProcessingWorkspace({
                     e.target.value = "";
                 }}
             />
-            <div className="flex min-h-0 flex-1 overflow-hidden bg-white">
-                <ProcessingParentPanel
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+                <WorkspaceZonePanel
                     title="Queue"
-                    className="w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 self-stretch border-0 border-r border-stone-200"
+                    className={`w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
                 >
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         <ProcessingQueueList
@@ -102,10 +103,10 @@ export default function PosProcessingWorkspace({
                             }}
                         />
                     </div>
-                </ProcessingParentPanel>
+                </WorkspaceZonePanel>
 
                 {!selectedCaseId ? (
-                    <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden bg-white p-6">
+                    <div className={`flex min-w-[20rem] flex-1 flex-col overflow-hidden p-5 ${WS_CANVAS}`}>
                         <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center">
                             <div className="text-center">
                                 <WorkspaceEmptyState
@@ -116,7 +117,7 @@ export default function PosProcessingWorkspace({
                                     <button
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/70 hover:border-alloy-bend-pine/30"
+                                        className={WS_ACTION_SECONDARY}
                                     >
                                         Import form
                                     </button>
@@ -130,7 +131,7 @@ export default function PosProcessingWorkspace({
                         </div>
                     </div>
                 ) : detailLoading ? (
-                    <div className="flex min-w-[28rem] flex-1 flex-col overflow-hidden bg-white" aria-busy="true">
+                    <div className={`flex min-w-[28rem] flex-1 flex-col overflow-hidden ${WS_CANVAS}`} aria-busy="true">
                         <div className="shrink-0 border-b border-alloy-stone/12 px-4 py-3">
                             <div className="h-5 w-48 animate-pulse rounded bg-alloy-stone/10" />
                             <div className="mt-2 h-3 w-72 animate-pulse rounded bg-alloy-stone/10" />
@@ -151,15 +152,15 @@ export default function PosProcessingWorkspace({
                         </div>
                     </div>
                 ) : isDocumentCase ? (
-                    <div className="flex min-w-[28rem] flex-1 flex-col overflow-hidden">
+                    <div className={`flex min-w-[28rem] flex-1 flex-col overflow-hidden ${WS_CANVAS}`}>
                         <PosTemplateSetupColumn state={state} onOpenForm={onOpenForm} />
                     </div>
                 ) : (
                     <>
-                        <div className="flex min-w-[20rem] flex-1 flex-col overflow-hidden border-r border-alloy-stone/12 bg-white">
+                        <div className={`flex min-w-[20rem] flex-1 flex-col overflow-hidden ${WS_CANVAS}`}>
                             <PosCaseWorkColumn state={state} />
                         </div>
-                        <div className="flex w-[19rem] shrink-0 flex-col overflow-hidden bg-white">
+                        <div className={`flex w-[19rem] shrink-0 flex-col overflow-hidden ${WS_INSPECTOR}`}>
                             <PosCaseDecisionColumn state={state} />
                         </div>
                     </>

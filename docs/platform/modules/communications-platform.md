@@ -48,7 +48,7 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 
 ### Modal navigation (Operational Workspace Doctrine V2)
 
-Communications composes `@/components/workspace/operational` — same primitive stack as Processing (Digital Mailroom). Presentation only; send/thread/announcement/template runtimes unchanged.
+Communications composes `@/components/workspace/doctrine` — same primitive stack as Processing (Digital Mailroom). Presentation only; send/thread/announcement/template runtimes unchanged.
 
 | Mode | Sections |
 |------|----------|

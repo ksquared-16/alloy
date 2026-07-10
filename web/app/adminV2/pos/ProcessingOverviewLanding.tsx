@@ -3,14 +3,20 @@
 import { ArrowRight, Briefcase, FileUp, Layers } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
-import type { WorkspaceHeaderKpiVm } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import ProcessingLandingActionCard from "./ProcessingLandingActionCard";
+import WorkspaceCard from "@/components/workspace/WorkspaceCard";
+import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
+import {
+    WS_ICON_STRUCTURAL,
+    WS_TEXT_DISABLED,
+    WS_TEXT_PRIMARY,
+    WS_TEXT_SECONDARY,
+} from "@/components/workspace/workspaceTokens";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 import { useProcessingFormApi } from "./useProcessingFormApi";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
-import { caseMatchesCategoryFolder, formOrigin } from "@/lib/pos/processingFolderConfig";
+import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 
 function formatAge(iso: string | null): string {
@@ -33,21 +39,9 @@ function workStatusLabel(row: { status: string; formDraftSummary?: { generatedFo
 
 function statusTone(label: string): string {
     if (label.includes("Ready")) return "text-alloy-bend-pine";
-    if (label === "Completed") return "text-alloy-midnight/40";
-    return "text-alloy-midnight/55";
+    if (label === "Completed") return WS_TEXT_DISABLED;
+    return WS_TEXT_SECONDARY;
 }
-
-const OVERVIEW_KPIS = (args: {
-    active: number;
-    ready: number;
-    forms: number;
-    published: number;
-}): WorkspaceHeaderKpiVm[] => [
-    { slot: 1, label: "Active work", icon: "clipboard", accent: "midnight", formattedValue: String(args.active), status: "unknown", sourceKey: null, drillHref: null },
-    { slot: 2, label: "Ready", icon: "spark", accent: "pine", formattedValue: String(args.ready), status: "healthy", sourceKey: null, drillHref: null },
-    { slot: 3, label: "Forms", icon: "layers", accent: "stone", formattedValue: String(args.forms), status: "unknown", sourceKey: null, drillHref: null },
-    { slot: 4, label: "Published", icon: "book", accent: "stone", formattedValue: String(args.published), status: "unknown", sourceKey: null, drillHref: null },
-];
 
 export default function ProcessingOverviewLanding({
     onOpenWork,
@@ -72,7 +66,6 @@ export default function ProcessingOverviewLanding({
 
     const rows = queue.data?.rows ?? [];
     const active = rows.filter((r) => r.status !== "completed" && r.status !== "archived");
-    const ready = rows.filter((r) => r.status === "ready" || r.formDraftSummary?.generatedFormId);
     const recentRows = active.slice(0, 3);
     const recentForms = forms.slice(0, 3);
 
@@ -112,7 +105,7 @@ export default function ProcessingOverviewLanding({
     }
 
     return (
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white p-4 lg:p-5" data-testid="processing-overview-landing">
+        <WorkspaceSurface scroll data-testid="processing-overview-landing">
             <input
                 ref={fileInputRef}
                 type="file"
@@ -125,13 +118,13 @@ export default function ProcessingOverviewLanding({
                 }}
             />
 
-            <div className="mx-auto max-w-6xl space-y-5">
+            <div className="mx-auto max-w-6xl space-y-7">
                 <section className="grid gap-3 md:grid-cols-3">
                             <ProcessingLandingActionCard
                                 tier="primary"
                                 disabled={uploading}
                         testId="processing-import-action-card"
-                        icon={<FileUp className="h-5 w-5" aria-hidden />}
+                        icon={<FileUp className="h-5 w-5" aria-hidden strokeWidth={2} />}
                         title={uploading ? "Importing…" : "Import form"}
                         description="Drop a PDF to start review."
                         cta="Open"
@@ -150,7 +143,7 @@ export default function ProcessingOverviewLanding({
                     />
                             <ProcessingLandingActionCard
                                 tier="secondary"
-                                icon={<Briefcase className="h-5 w-5" aria-hidden />}
+                                icon={<Briefcase className="h-5 w-5" aria-hidden strokeWidth={2} />}
                         title="Active work"
                         description="Resume imports and question review."
                         cta="Open"
@@ -159,7 +152,7 @@ export default function ProcessingOverviewLanding({
                     />
                             <ProcessingLandingActionCard
                                 tier="tertiary"
-                                icon={<Layers className="h-5 w-5" aria-hidden />}
+                                icon={<Layers className="h-5 w-5" aria-hidden strokeWidth={2} />}
                         title="Form library"
                         description="Forms and assets in Studio."
                         cta="Open"
@@ -167,25 +160,9 @@ export default function ProcessingOverviewLanding({
                         testId="processing-studio-card"
                     />
                 </section>
-                {importErr ? <p className="text-[11px] text-alloy-midnight/60">{importErr}</p> : null}
+                {importErr ? <p className={`text-[11px] ${WS_TEXT_SECONDARY}`}>{importErr}</p> : null}
 
-                <section>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/35">
-                        Today&apos;s activity
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                        {OVERVIEW_KPIS({
-                            active: active.length,
-                            ready: ready.length,
-                            forms: forms.length,
-                            published: forms.filter((f) => f.has_published_version).length,
-                        }).map((kpi) => (
-                            <SurfaceHeaderKpiCard key={kpi.slot} kpi={kpi} interactive={false} variant="work-unit" density="compact" />
-                        ))}
-                    </div>
-                </section>
-
-                <div className="grid gap-4 lg:grid-cols-3">
+                <div className="grid gap-6 lg:grid-cols-3">
                     <ContinuePanel title="Recent work" action="View all" onAction={onOpenWork}>
                         {recentRows.length === 0 ? (
                             <EmptyHint>No active imports yet — import a form to begin.</EmptyHint>
@@ -202,7 +179,7 @@ export default function ProcessingOverviewLanding({
                                             >
                                                 <span className="mt-1 h-8 w-0.5 shrink-0 rounded-full bg-alloy-bend-pine" aria-hidden />
                                                 <span className="min-w-0 flex-1">
-                                                    <span className="block truncate text-[13px] font-semibold text-alloy-midnight group-hover:text-alloy-midnight">
+                                                    <span className={`block truncate text-[13px] font-semibold ${WS_TEXT_PRIMARY} group-hover:text-alloy-midnight`}>
                                                         {row.sourceDisplay?.label ?? "Untitled source"}
                                                     </span>
                                                     <span className={`mt-0.5 block text-[11px] font-medium ${statusTone(status)}`}>
@@ -230,7 +207,7 @@ export default function ProcessingOverviewLanding({
                                         <span className="mt-1 h-8 w-0.5 shrink-0 rounded-full bg-alloy-midnight/25" aria-hidden />
                                         <span className="min-w-0 flex-1">
                                             <div className="truncate text-[13px] font-semibold text-alloy-midnight">{form.name ?? form.key}</div>
-                                            <div className="mt-0.5 text-[11px] text-alloy-midnight/45">
+                                            <div className={`mt-0.5 text-[11px] ${WS_TEXT_SECONDARY}`}>
                                                 Updated {formatAge(form.updated_at ?? form.created_at ?? null)}
                                             </div>
                                         </span>
@@ -240,34 +217,34 @@ export default function ProcessingOverviewLanding({
                         )}
                     </ContinuePanel>
 
-                    <section>
-                        <header className="mb-3 flex items-center justify-between gap-2">
-                            <h2 className="text-[13px] font-semibold text-alloy-midnight/70">Folders</h2>
+                    <WorkspaceCard flat padded className="px-4 py-3">
+                        <header className="mb-2 flex items-center justify-between gap-2">
+                            <h2 className={`text-[13px] font-semibold ${WS_TEXT_PRIMARY}`}>Folders</h2>
                         </header>
-                        <ul className="divide-y divide-alloy-stone/12 overflow-hidden rounded-xl bg-white shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
+                        <ul className="divide-y divide-alloy-stone/12">
                             {navFolders.map((folder) => (
                                 <li key={folder.id}>
                                     <button
                                         type="button"
                                         onClick={onOpenWork}
-                                        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-alloy-stone/[0.03]"
+                                        className="flex w-full items-center justify-between px-1 py-2.5 text-left transition-colors hover:bg-alloy-stone/[0.04]"
                                     >
                                         <span className="flex min-w-0 items-center gap-2">
-                                            <ProcessingFolderIcon folderId={folder.id} className="h-3.5 w-3.5 shrink-0 text-alloy-midnight/40" />
-                                            <span className="text-[12px] font-medium text-alloy-midnight/70">{folder.label}</span>
+                                            <ProcessingFolderIcon folderId={folder.id} className={`h-3.5 w-3.5 shrink-0 ${WS_ICON_STRUCTURAL}`} />
+                                            <span className={`text-[12px] font-medium ${WS_TEXT_PRIMARY}`}>{folder.label}</span>
                                         </span>
                                         <span className="flex items-center gap-2">
-                                            <span className="text-[11px] tabular-nums text-alloy-midnight/35">({folder.count})</span>
-                                            <ArrowRight className="h-3.5 w-3.5 text-alloy-midnight/25" aria-hidden />
+                                            <span className={`text-[11px] tabular-nums ${WS_TEXT_DISABLED}`}>({folder.count})</span>
+                                            <ArrowRight className={`h-3.5 w-3.5 ${WS_ICON_STRUCTURAL} opacity-60`} aria-hidden />
                                         </span>
                                     </button>
                                 </li>
                             ))}
                         </ul>
-                    </section>
+                    </WorkspaceCard>
                 </div>
             </div>
-        </div>
+        </WorkspaceSurface>
     );
 }
 
@@ -283,21 +260,21 @@ function ContinuePanel({
     children: ReactNode;
 }) {
     return (
-        <section className="rounded-xl border border-alloy-stone/15 bg-white px-4 py-3">
-            <header className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-[13px] font-semibold text-alloy-midnight">{title}</h2>
+        <WorkspaceCard flat padded className="px-4 py-3.5">
+            <header className="mb-2.5 flex items-center justify-between gap-2">
+                <h2 className={`text-[13px] font-semibold ${WS_TEXT_PRIMARY}`}>{title}</h2>
                 <button type="button" onClick={onAction} className="text-[11px] font-semibold text-alloy-bend-pine hover:underline">
                     {action} →
                 </button>
             </header>
             {children}
-        </section>
+        </WorkspaceCard>
     );
 }
 
 function EmptyHint({ children }: { children: ReactNode }) {
     return (
-        <div className="rounded-lg border border-dashed border-alloy-stone/20 px-3 py-8 text-center text-[12px] text-alloy-midnight/45">
+        <div className={`rounded-lg border border-dashed border-alloy-stone/20 px-3 py-8 text-center text-[12px] ${WS_TEXT_SECONDARY}`}>
             {children}
         </div>
     );

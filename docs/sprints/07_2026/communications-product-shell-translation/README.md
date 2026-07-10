@@ -3,7 +3,7 @@
 **Date:** 2026-07-10  
 **Status:** Doctrine V2 certified adopter (presentation only)
 
-Presentation-only sprint. Communications consumes `@/components/workspace/operational` — the same primitive stack as Processing (Digital Mailroom). No routes, APIs, workflows, or communication engine behavior changed.
+Presentation-only sprint. Communications consumes `@/components/workspace/doctrine` — the same primitive stack as Processing (Digital Mailroom). No routes, APIs, workflows, or communication engine behavior changed.
 
 ---
 
@@ -19,8 +19,8 @@ See [HANDOFF.md](./HANDOFF.md) for the full certification statement.
 
 | Slice | Outcome |
 | --- | --- |
-| **Doctrine primitives** | `web/components/workspace/operational/*` — certified stack extracted from Processing grammar |
-| **Product shell** | `CommunicationsWorkspaceShell` composes doctrine components only (`doctrine-v2`) |
+| **Doctrine primitives** | `@/components/workspace/doctrine` — certified stack (Processing reference) |
+| **Product shell** | `CommunicationsWorkspaceShell` composes `WorkspaceShell` + `WorkspaceMetricTiles` (`workspace-v2`) |
 | **Work -> Overview** | `WorkspaceCard` action tiles, `WorkspaceZonePanel` continue/recent lists |
 | **Work -> Inbox** | Existing `CommandCenterShell` unchanged |
 | **Work -> Announcements** | Existing `AnnouncementsWorkspace` unchanged |
@@ -45,13 +45,7 @@ Default Work tab on open: **Overview** (parity with Digital Mailroom).
 ## Files changed
 
 ### New
-- `web/components/workspace/operational/*` (doctrine primitives)
-- `web/app/adminV2/communications/CommunicationsOverviewLanding.tsx`
-- `web/app/adminV2/communications/ScheduledWorkspace.tsx`
-- `web/app/adminV2/communications/ChannelsWorkspace.tsx`
-- `web/app/adminV2/communications/RulesWorkspace.tsx`
-- `web/app/adminV2/communications/CommunicationsStudioListRow.tsx`
-- `web/tests/adminV2/communicationsWorkspaceDoctrine.test.ts`
+- `web/app/adminV2/communications/RulesWorkspace.tsx` (Studio Rules; replaces Branding)
 
 ### Updated
 - `web/app/adminV2/communications/CommunicationsWorkspaceShell.tsx`

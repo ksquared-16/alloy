@@ -1,63 +1,63 @@
 "use client";
 
 /**
- * Processing → Work → Incoming KPI strip.
+ * Processing → Work mode metrics band.
  *
- * Compact operational pulse, visually identical to the Communications KPI band (both
- * render the shared `CompactKpiStrip` with platform KPI color semantics). Counts come
- * from the EXISTING processing queue endpoint (`GET /api/admin/processing/queue`) —
- * no new API, no schema, no fabricated metrics.
- *
- * Data source:
- *   • Needs review / Ready to approve / Needs a decision — real status counts the API
- *     returns in `data.counts`.
- *   • Saved today — derived safely from loaded rows (completed cases whose status
- *     changed today). Reflects loaded cases only; never invents a value.
+ * Data-only adapter: derives counts from already-loaded queue + form APIs and renders
+ * the canonical `WorkspaceMetricTiles`. No layout or tile styling lives here.
  */
 
-import CompactKpiStrip, { type CompactKpiItem } from "@/components/workspace/CompactKpiStrip";
+import { useEffect } from "react";
+import WorkspaceMetricTiles, { type WorkspaceMetricTileItem } from "@/components/workspace/WorkspaceMetricTiles";
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
+import { useProcessingFormApi } from "./useProcessingFormApi";
 
-function isToday(iso: string | null | undefined): boolean {
-    if (!iso) return false;
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return false;
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+/** Matches ProcessingQueueList `deriveWorkLane` → needs_review. */
+function isNeedsReviewRow(row: { status: string; formDraftSummary?: { generatedFormId: string | null } | null }): boolean {
+    if (row.status === "completed" || row.status === "archived") return false;
+    if (row.formDraftSummary?.generatedFormId) return false;
+    if (row.status === "ready") return false;
+    return true;
+}
+
+/** Matches ProcessingQueueList `deriveWorkLane` → ready_publish. */
+function isReadyToPublishRow(row: { status: string; formDraftSummary?: { generatedFormId: string | null } | null }): boolean {
+    if (row.status === "completed" || row.status === "archived") return false;
+    return !!row.formDraftSummary?.generatedFormId;
 }
 
 export default function ProcessingKpiStrip() {
-    const { data, loading } = useProcessingQueueWarm();
-    const counts = data?.counts ?? {};
+    const { data, loading: queueLoading } = useProcessingQueueWarm();
+    const { forms, listLoaded, loadForms } = useProcessingFormApi();
+
+    useEffect(() => {
+        if (!listLoaded) void loadForms();
+    }, [listLoaded, loadForms]);
+
     const rows = data?.rows ?? [];
+    const active = rows.filter((r) => r.status !== "completed" && r.status !== "archived");
+    const needsReview = rows.filter(isNeedsReviewRow);
+    const readyToPublish = rows.filter(isReadyToPublishRow);
+    const publishedCount = forms.filter((f) => f.has_published_version).length;
+    const loading = queueLoading || !listLoaded;
 
-    const savedToday = rows.filter((r) => r.status === "completed" && isToday(r.statusChangedAt)).length;
-
-    const items: CompactKpiItem[] = [
-        { key: "needs_review", label: "Needs review", value: String(counts.needs_review ?? 0), state: "attention" },
-        {
-            key: "ready_generate",
-            label: "Ready to generate",
-            value: String(
-                rows.filter(
-                    (r) =>
-                        (r.primarySource?.kind === "document" ||
-                            r.primarySource?.kind === "upload" ||
-                            r.primarySource?.kind === "recreated_document") &&
-                        r.formDraftSummary &&
-                        !r.formDraftSummary.generatedFormId
-                ).length
-            ),
-            state: "ready",
-        },
-        {
-            key: "ready_publish",
-            label: "Ready to publish",
-            value: String(rows.filter((r) => r.formDraftSummary?.generatedFormId).length),
-            state: "pending",
-        },
-        { key: "completed_today", label: "Completed today", value: String(savedToday), state: "done" },
+    const items: WorkspaceMetricTileItem[] = [
+        { key: "active", label: "Active work", value: String(active.length), icon: "clipboard", accent: "pine", status: "healthy" },
+        { key: "needs_review", label: "Needs review", value: String(needsReview.length), icon: "shield", accent: "ember", status: "warning" },
+        { key: "ready_publish", label: "Ready to publish", value: String(readyToPublish.length), icon: "spark", accent: "pine", status: "healthy" },
+        { key: "published", label: "Published", value: String(publishedCount), icon: "book", accent: "gold", status: "unknown" },
     ];
 
-    return <CompactKpiStrip items={items} loading={loading} ariaLabel="Processing status" />;
+    return (
+        <WorkspaceMetricTiles
+            eyebrow="Today's activity"
+            items={items}
+            size="md"
+            align="start"
+            loading={loading}
+            ariaLabel="Today's activity"
+            className="w-full"
+            data-testid="processing-work-mode-kpi-band"
+        />
+    );
 }

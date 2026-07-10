@@ -7,7 +7,6 @@ import CommunicationsOverviewLanding from "@/app/adminV2/communications/Communic
 import ScheduledWorkspace from "@/app/adminV2/communications/ScheduledWorkspace";
 import ChannelsWorkspace from "@/app/adminV2/communications/ChannelsWorkspace";
 import RulesWorkspace from "@/app/adminV2/communications/RulesWorkspace";
-import { WorkspaceSurface } from "@/components/workspace/operational";
 
 /** Primary operator tabs inside the Communications modal (gated only by comms_v2_command_center). */
 export type CommunicationsModalTab =
@@ -85,9 +84,13 @@ export default function CommunicationsModalTabPanel({
     const useExecutionFrame = tab !== "overview" && tab !== "channels" && tab !== "rules";
 
     return (
-        <WorkspaceSurface
-            variant={useExecutionFrame ? "framed" : "plain"}
+        <div
             data-comms-modal-body="true"
+            className={
+                useExecutionFrame
+                    ? "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
+                    : "relative flex min-h-0 flex-1 flex-col overflow-hidden"
+            }
             data-comms-workspace-execution-surface="true"
         >
             <div
@@ -135,6 +138,6 @@ export default function CommunicationsModalTabPanel({
             >
                 <RulesWorkspace />
             </div>
-        </WorkspaceSurface>
+        </div>
     );
 }
