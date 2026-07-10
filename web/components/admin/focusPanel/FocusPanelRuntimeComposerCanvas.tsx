@@ -3,6 +3,7 @@
 import {
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -223,6 +224,17 @@ export default function FocusPanelRuntimeComposerCanvas({
         () => resolveElevatedCellKey(activeDepth?.card ?? null, summaryInputs.cellResolution),
         [activeDepth?.card, summaryInputs.cellResolution],
     );
+
+    // Centered drill-in: when a card elevates, the composer body freezes to
+    // `overflow: hidden` (page must not scroll). Reset its scroll to the top FIRST so
+    // the elevated card — anchored near the top of the visible canvas — is fully in
+    // view (no top/bottom cutoff), matching the runtime centered-focus behavior. The
+    // grid's own scroll-to-top pass can't target this body once it is overflow:hidden.
+    useLayoutEffect(() => {
+        if (!activeDepth) return;
+        const body = surfaceRef.current;
+        if (body) body.scrollTop = 0;
+    }, [activeDepth]);
 
     useEffect(() => {
         if (!activeDepth) return;

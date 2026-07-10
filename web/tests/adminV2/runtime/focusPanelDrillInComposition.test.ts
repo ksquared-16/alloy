@@ -9,6 +9,7 @@ import {
     HOUSEHOLD_SURFACE_ID,
     moveFieldInNestedGroup,
     removeFieldFromNestedGroup,
+    reconcileNestedSurfaceConfig,
     setFieldVisibilityInNestedGroup,
     setFieldPresentationLabel,
     setNestedGroupEnabled,
@@ -23,6 +24,7 @@ import {
     FINANCIAL_CONFIG_SURFACE_ID,
     fieldPresentationLabel,
     availableFieldsForNestedGroup,
+    type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
@@ -157,6 +159,96 @@ describe("Focus Panel drill-in composition model", () => {
         const after = config.groups.map((g) => g.key);
         expect(after.indexOf("children")).toBeLessThan(after.indexOf("emergency_contacts"));
         expect(after[0]).toBe("primary_contact");
+    });
+});
+
+describe("Add Field commits to the working composer config (state-update bug)", () => {
+    // The composer reads config via `configFor` (= reconcile(stored)) and writes via
+    // `updateConfig` (= store reconcile(next)). This simulates the full add → persist →
+    // reopen loop so a reconcile that silently wipes newly added fields would fail here.
+    const configFor = (surfaceId: string, stored: NestedSurfaceConfig | null) =>
+        reconcileNestedSurfaceConfig(surfaceId, stored);
+    const addFieldThroughComposer = (
+        surfaceId: string,
+        groupKey: string,
+        fieldKey: string,
+        stored: NestedSurfaceConfig | null,
+    ): NestedSurfaceConfig => {
+        const working = configFor(surfaceId, stored);
+        // updateConfig(surfaceId, addFieldToNestedGroup(working, ...)) stores a reconcile.
+        return reconcileNestedSurfaceConfig(surfaceId, addFieldToNestedGroup(working, groupKey, fieldKey));
+    };
+
+    it("adds a field to a Household group and it survives reopen (reconcile)", () => {
+        const initial = configFor(HOUSEHOLD_SURFACE_ID, null);
+        const available = availableFieldsForNestedGroup(HOUSEHOLD_SURFACE_ID, "primary_contact", initial, []);
+        expect(available.length).toBeGreaterThan(0);
+        const fieldKey = available[0]!.key;
+
+        const stored = addFieldThroughComposer(HOUSEHOLD_SURFACE_ID, "primary_contact", fieldKey, null);
+        expect(selectedFieldKeys(stored, "primary_contact")).toContain(fieldKey);
+
+        // Reopening the composer re-reads through configFor — the field must persist.
+        const reopened = configFor(HOUSEHOLD_SURFACE_ID, stored);
+        expect(selectedFieldKeys(reopened, "primary_contact")).toContain(fieldKey);
+    });
+
+    it("adds a field to a Children focus group and it appears in focus rows", () => {
+        const initial = configFor(CHILDREN_SURFACE_ID, null);
+        const available = availableFieldsForNestedGroup(CHILDREN_SURFACE_ID, "identity", initial, []);
+        expect(available.length).toBeGreaterThan(0);
+        const fieldKey = available[0]!.key;
+
+        const stored = addFieldThroughComposer(CHILDREN_SURFACE_ID, "identity", fieldKey, null);
+        const reopened = configFor(CHILDREN_SURFACE_ID, stored);
+        expect(selectedFieldKeys(reopened, "identity")).toContain(fieldKey);
+
+        const focusRows = childrenFocusRowsFromNestedConfig(reopened);
+        expect(focusRows.some((row) => row.groupKey === "identity" && row.fieldKey === fieldKey)).toBe(true);
+    });
+
+    it("adds a field to a Children evidence section and it appears in that section", () => {
+        let stored = configFor(CHILDREN_SURFACE_ID, null);
+        stored = reconcileNestedSurfaceConfig(
+            CHILDREN_SURFACE_ID,
+            setNestedGroupEnabled(stored, "medical", true, { sectionSemantic: "medical" }),
+        );
+        const available = availableFieldsForNestedGroup(CHILDREN_SURFACE_ID, "medical", stored, []);
+        expect(available.length).toBeGreaterThan(0);
+        const fieldKey = available[0]!.key;
+
+        stored = addFieldThroughComposer(CHILDREN_SURFACE_ID, "medical", fieldKey, stored);
+        const reopened = configFor(CHILDREN_SURFACE_ID, stored);
+
+        const sections = childrenEvidenceSectionsFromNestedConfig(reopened);
+        const medical = sections.find((section) => section.key === "medical");
+        expect(medical?.fieldKeys).toContain(fieldKey);
+    });
+});
+
+describe("Add Field / centered drill-in composer wiring", () => {
+    const popover = readSrc("components/admin/focusPanel/drillIn/ComposerFloatingPopover.tsx");
+    const canvas = readSrc("components/admin/focusPanel/FocusPanelRuntimeComposerCanvas.tsx");
+    const runtimeCss = readSrc("app/adminV2/components/alloyOsRuntime.css");
+
+    it("keeps the Add Field popover open when clicking its own (portaled) items", () => {
+        // The portaled popover content is not inside the anchor — the outside-click guard
+        // must also skip clicks inside the content, or the selection never commits.
+        expect(popover).toContain("contentRef");
+        expect(popover).toContain("contentRef.current?.contains(target)");
+        expect(popover).toContain("ref={contentRef}");
+    });
+
+    it("centers the drill-in by resetting composer canvas scroll on elevation", () => {
+        expect(canvas).toContain("useLayoutEffect");
+        expect(canvas).toContain("body.scrollTop = 0");
+        expect(canvas).toContain("resolveElevatedCellKey");
+        expect(canvas).toContain("data-fp-composer-depth-active");
+    });
+
+    it("anchors the elevated drill-in card to the visible composer canvas (no cutoff)", () => {
+        expect(runtimeCss).toContain('[data-fp-composer-depth-active="true"]');
+        expect(runtimeCss).toContain("max-height: min(calc(100% - 44px), calc(100dvh - 120px))");
     });
 });
 
