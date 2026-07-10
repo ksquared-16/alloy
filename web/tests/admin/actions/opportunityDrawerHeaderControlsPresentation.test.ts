@@ -72,13 +72,15 @@ describe("opportunity drawer header controls presentation", () => {
         expect(controls).not.toContain("OpportunityDrawerHeaderActionsPanel");
     });
 
-    it("registry Manage actions stay in Focus Panel header, not workspace command rail", () => {
+    it("registry Manage actions stay in Focus Panel header via VM header menu builder", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        const legacy = read("components/admin/AdminEntityDrawerLegacy.tsx");
+        const menuBuilder = read(
+            "lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions.ts"
+        );
         expect(runtime).toContain("displayVm.actions.header_menu");
         expect(runtime).not.toContain("DrawerCommandRailActionsRegistrar");
-        expect(legacy).toContain("handleResolvedOpportunityHeaderAction");
-        expect(legacy).toContain("flattenOpportunityRecordHeaderActionsForMenu");
+        expect(menuBuilder).toContain("flattenOpportunityRecordHeaderActionsForMenu");
+        expect(menuBuilder).toContain("buildOpportunityDrawerHeaderMenuActions");
     });
 
     it("BOS label remains Work with BOS", () => {

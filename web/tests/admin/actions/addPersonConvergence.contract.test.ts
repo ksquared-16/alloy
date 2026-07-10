@@ -10,16 +10,14 @@ function read(rel: string): string {
 }
 
 describe("add person convergence contracts", () => {
-    it("opportunity VM runtime and legacy drawer use canonical AddPersonModal", () => {
+    it("opportunity VM runtime uses canonical AddPersonModal (legacy drawer removed)", () => {
         const vmModals = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals.tsx");
-        const legacyDrawer = read("components/admin/AdminEntityDrawerLegacy.tsx");
+        const router = read("components/admin/AdminEntityDrawer.tsx");
         expect(vmModals).toContain("AddPersonModal");
         expect(vmModals).toContain("submitAddPersonFromDrawer");
         expect(vmModals).toContain("openAddPerson");
-        expect(legacyDrawer).toContain("AddPersonModal");
-        expect(legacyDrawer).toContain("openAddPersonModal");
-        expect(legacyDrawer).toContain("ADMINV2_OPEN_ADD_PERSON_MODAL");
-        expect(legacyDrawer).not.toContain("AddFamilyMemberModal");
+        expect(router).not.toContain("AdminEntityDrawerLegacy");
+        expect(vmModals).not.toContain("AddFamilyMemberModal");
     });
 
     it("registry client routes person actions to openAddPerson", () => {

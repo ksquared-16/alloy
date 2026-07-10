@@ -60,11 +60,12 @@ describe("loadOpportunityDrawerViaViewModel", () => {
         clearOpportunityDrawerVmLoadInFlightForTests();
     });
 
-    it("returns cutover_disabled when kill switch is active", async () => {
+    it("loads VM even when kill switch env is set (permanent cutover)", async () => {
         process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
+        const vm = settledVm();
+        vi.mocked(fetchOpportunityDrawerViewModelClient).mockResolvedValue({ ok: true, viewModel: vm });
         const result = await loadOpportunityDrawerViaViewModel("opp-1", null);
-        expect(result).toEqual({ ok: false, reason: "cutover_disabled" });
-        expect(fetchOpportunityDrawerViewModelClient).not.toHaveBeenCalled();
+        expect(result.ok).toBe(true);
     });
 
     it("loads VM without NEXT_PUBLIC_ADMINV2_DRAWER_VM", async () => {

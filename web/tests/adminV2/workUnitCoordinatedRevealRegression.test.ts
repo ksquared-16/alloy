@@ -31,19 +31,23 @@ describe("workUnitCoordinatedRevealRegression", () => {
 });
 
 describe("drawerCoordinatedRevealRegression (source)", () => {
-    it("opportunity releases below-fold lock on primary coordinated reveal", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain(
-            "opportunityDrawerOverviewRevealReady && opportunityDrawerPrimaryContractSatisfied"
-        );
-        expect(drawer).toContain("setOpportunityDrawerBelowFoldRevealed(true)");
+    it("opportunity VM runtime prefetches linked persons after committed visible record", () => {
+        const vm = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(vm).toContain("prefetchLinkedPersonsFromOpportunityRecord");
+        expect(vm).toContain("committedVisible");
+        expect(vm).not.toContain("AdminEntityDrawerLegacy");
+        expect(vm).not.toContain("setOpportunityDrawerBelowFoldRevealed");
     });
 
-    it("child→opportunity restore reveals below-fold for header actions", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain('prev.type === "persons"');
-        expect(drawer).toContain("restoreCanRenderFrame");
-        expect(drawer).toContain("setOpportunityDrawerBelowFoldRevealed(true)");
+    it("child→opportunity restore re-warms graph via VM restore session", () => {
+        const restore = readSrc(
+            "lib/adminV2/viewModel/drawer/vmRuntime/restoreOpportunityDrawerSession.ts"
+        );
+        const ctx = readSrc("contexts/AdminDrawerContext.tsx");
+        expect(restore).toContain("scheduleOpportunityDrawerGraphRewarmAfterRestore");
+        expect(restore).toContain("scheduleWarmRelatedDrawerTargetsAfterVmApply");
+        expect(ctx).toContain("goBackToLead");
+        expect(ctx).toContain("buildRestoredOpportunityDrawerState");
     });
 
     it("person section reserves use final-size variants", () => {

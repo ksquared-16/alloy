@@ -21,9 +21,9 @@ describe("canonicalAdminRoutes", () => {
         );
     });
 
-    it("redirects legacy admin financials to legacy-admin", () => {
-        expect(legacyAdminRedirectTarget("/admin/financials")).toBe("/legacy-admin/financials");
-        expect(legacyAdminRedirectTarget("/admin/opportunities")).toBe("/legacy-admin/opportunities");
+    it("redirects non-canonical /admin bookmarks to operator workspace", () => {
+        expect(legacyAdminRedirectTarget("/admin/financials")).toBe("/workspace");
+        expect(legacyAdminRedirectTarget("/admin/opportunities")).toBe("/workspace");
     });
 
     it("does not redirect canonical admin workspace or settings", () => {

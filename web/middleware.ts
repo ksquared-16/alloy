@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    /** Phase H1: legacy `/admin/*` bookmarks → `/legacy-admin/*` before canonical rewrites. */
+    /** Phase H1: legacy `/admin/*` bookmarks → canonical settings/workspace (legacy drawer retired). */
     const legacyTarget = legacyAdminRedirectTarget(pathname);
     if (legacyTarget) {
         const url = request.nextUrl.clone();

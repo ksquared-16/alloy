@@ -42,12 +42,12 @@ describe("vmDrawerRuntimeRoute", () => {
         ).toBe("opportunity");
     });
 
-    it("routes opportunity to legacy when kill switch is active", () => {
+    it("keeps VM route when kill switch env is set (permanent cutover)", () => {
         delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
         process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
         expect(
             resolveVmDrawerRuntimeRoute({ type: "opportunities", id: "opp-1" }, adminV2Wu)
-        ).toBe("legacy");
+        ).toBe("opportunity");
     });
 
     it("keeps legacy for non-adminV2 surfaces", () => {
@@ -73,14 +73,14 @@ describe("vmDrawerRuntimeRoute", () => {
         ).toBe("person");
     });
 
-    it("keeps persons on legacy when person VM kill switch is active", () => {
+    it("keeps persons on VM when person kill switch env is set (permanent cutover)", () => {
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH", "1");
         expect(
             resolveVmDrawerRuntimeRoute(
                 { type: "persons", id: "person-1", openSource: "opportunity_primary_contact" },
                 adminV2Wu
             )
-        ).toBe("legacy");
+        ).toBe("person");
     });
 
     it("routes adminV2 child inquiry to child runtime by default", () => {
@@ -108,7 +108,7 @@ describe("vmDrawerRuntimeRoute", () => {
         ).toBe("opportunity");
     });
 
-    it("coerceAdminV2VmDrawerRoute respects kill switch", () => {
+    it("coerceAdminV2VmDrawerRoute keeps VM route when kill switch env is set", () => {
         process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
         expect(
             coerceAdminV2VmDrawerRoute(
@@ -116,7 +116,7 @@ describe("vmDrawerRuntimeRoute", () => {
                 { type: "opportunities", id: "opp-1" },
                 adminV2Wu
             )
-        ).toBe("legacy");
+        ).toBe("opportunity");
     });
 });
 
@@ -132,7 +132,8 @@ describe("VM drawer runtime wiring", () => {
         expect(router).toContain("PersonSubjectSurfaceRuntime");
         expect(router).not.toContain("PersonDrawerVmRuntime");
         expect(router).not.toContain("ChildDrawerVmRuntime");
-        expect(router).toContain("AdminEntityDrawerLegacy");
+        expect(router).not.toContain("AdminEntityDrawerLegacy");
+        expect(router).not.toContain("dynamic(");
         expect(router).not.toContain("opportunityInquiryWorkflowHeaderStatus");
     });
 

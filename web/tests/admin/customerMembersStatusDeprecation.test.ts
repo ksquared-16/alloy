@@ -29,14 +29,13 @@ describe("customer_members status deprecation — Phase 2", () => {
         expect(src).not.toContain("status_key");
     });
 
-    it("legacy drawer no longer renders customer_members status control", () => {
-        const src = read("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(src).not.toMatch(
+    it("legacy drawer monolith is deleted — no customer_members status control in router", () => {
+        const router = read("components/admin/AdminEntityDrawer.tsx");
+        expect(router).not.toContain("AdminEntityDrawerLegacy");
+        expect(router).not.toMatch(
             /drawer\.type === "customer_members"[\s\S]{0,2000}formData\.status_key/
         );
-        const statusEntityMatch = src.match(/const STATUS_ENTITY_TYPES = \[([\s\S]*?)\];/);
-        expect(statusEntityMatch).not.toBeNull();
-        expect(statusEntityMatch![1]).not.toContain("customer_members");
+        expect(router).not.toContain("STATUS_ENTITY_TYPES");
     });
 
     it("unified drawer status excludes customer_members", () => {

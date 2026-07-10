@@ -72,15 +72,14 @@ export function isCanonicalAdminPath(pathname: string): boolean {
     );
 }
 
-/** Map old `/admin/...` bookmark to `/legacy-admin/...` when not canonical. */
+/** Map old `/admin/...` bookmark to operator workspace when not canonical. */
 export function legacyAdminRedirectTarget(pathname: string): string | null {
     const p = pathname.trim();
     if (!p.startsWith(`${CANONICAL_ADMIN_BASE}/`) && p !== CANONICAL_ADMIN_BASE) {
         return null;
     }
     if (isCanonicalAdminPath(p)) return null;
-    const suffix = p === CANONICAL_ADMIN_BASE ? "" : p.slice(CANONICAL_ADMIN_BASE.length);
-    return `${LEGACY_ADMIN_BASE}${suffix}`;
+    return CANONICAL_OPERATOR_BASE;
 }
 
 /** Normalize transitional `/adminV2` or `/admin/v2` paths to canonical settings landing. */

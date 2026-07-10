@@ -58,15 +58,14 @@ describe("Operator Work Unit — legacy quarantine guards", () => {
         }
     });
 
-    it("the legacy drawer is suppressed on operator Work Unit surfaces (cannot mount there)", () => {
+    it("the legacy drawer runtime is deleted and suppressed on operator Work Unit surfaces", () => {
         const src = read("components/admin/AdminEntityDrawer.tsx");
         expect(src).toContain("isWorkUnitQueueSurfacePath");
-        // The WU guard must return BEFORE the legacy fallback render, so the legacy drawer can
-        // never mount on an operator work-unit surface.
+        expect(src).not.toContain("AdminEntityDrawerLegacy");
         const guardIdx = src.indexOf("isWorkUnitQueueSurfacePath(pathname)");
-        const legacyIdx = src.indexOf("<AdminEntityDrawerLegacy");
+        const returnNullIdx = src.indexOf("return null;");
         expect(guardIdx).toBeGreaterThan(-1);
-        expect(legacyIdx).toBeGreaterThan(guardIdx);
+        expect(returnNullIdx).toBeGreaterThan(guardIdx);
     });
 
     it("ProcessSummaryCard uses the model's canonical href, never a hand-built legacy/admin path", () => {
