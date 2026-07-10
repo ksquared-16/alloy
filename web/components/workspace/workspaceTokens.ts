@@ -135,7 +135,7 @@ export const WS_CANVAS = "bg-white shadow-[0_1px_6px_rgba(24,39,58,0.06)]";
 /** Secondary inspector column beside the canvas. */
 export const WS_INSPECTOR = "bg-alloy-stone/[0.02] border-l border-alloy-stone/12";
 
-/** Metric-band eyebrow — stacked above WorkspaceMetricTiles (canonical nav metrics layout). */
+/** Metric-band eyebrow — stacked above operational health or legacy metric tiles. */
 export const WS_METRIC_EYEBROW =
     "flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-slate";
 
