@@ -4756,13 +4756,34 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   .alloy-os-focus-panel-grid[data-fp-depth="active"] {
   position: static;
 }
-[data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+/* Shell must not trap abspos — anchor the elevated card to the composer viewport. */
+[data-fp-composer-depth-active="true"]
+  .alloy-os-fp-composer__body
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  > .alloy-os-fp-composer-cell {
+  position: static;
+}
+[data-fp-composer-depth-active="true"]
+  .alloy-os-fp-composer__body
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-fp-composer-cell__chrome,
+[data-fp-composer-depth-active="true"]
+  .alloy-os-fp-composer__body
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-fp-composer-cell__drag-bar,
+[data-fp-composer-depth-active="true"]
+  .alloy-os-fp-composer__body
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-fp-composer-cell__expansion {
+  display: none;
+}
+[data-fp-composer-depth-active="true"]
   .alloy-os-fp-composer__body
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"] {
   min-height: 0 !important;
 }
-[data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+[data-fp-composer-depth-active="true"]
   .alloy-os-fp-composer__body
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -4779,13 +4800,13 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   max-height: min(75vh, calc(100% - 32px), calc(100dvh - 120px));
   animation: none;
 }
-[data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+[data-fp-composer-depth-active="true"]
   .alloy-os-focus-panel-grid[data-fp-closing="true"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard {
   animation: none;
 }
-[data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+[data-fp-composer-depth-active="true"]
   .alloy-os-fp-composer__body
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
