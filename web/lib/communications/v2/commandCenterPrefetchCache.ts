@@ -45,6 +45,7 @@ export type CommandCenterFirstConversationWarm = {
 
 let cache: CommandCenterCacheSnapshot | null = null;
 let firstConversationWarm: CommandCenterFirstConversationWarm | null = null;
+let pendingSelectionId: string | null = null;
 let inflight: Promise<CommandCenterCacheSnapshot> | null = null;
 let warmScheduled = false;
 const listeners = new Set<() => void>();
@@ -66,7 +67,17 @@ export function getCommandCenterFirstConversationWarm(): CommandCenterFirstConve
 }
 
 export function getCommandCenterWarmSelectedConversationId(): string | null {
-    return getCommandCenterFirstConversationWarm()?.conversationId ?? null;
+    return pendingSelectionId ?? getCommandCenterFirstConversationWarm()?.conversationId ?? null;
+}
+
+export function getCommandCenterPendingSelection(): string | null {
+    return pendingSelectionId;
+}
+
+/** After Compose New send, focus the new thread in the workspace inbox. */
+export function setCommandCenterPendingSelection(conversationId: string | null): void {
+    pendingSelectionId = conversationId?.trim() || null;
+    notify();
 }
 
 export function subscribeCommandCenterCache(listener: () => void): () => void {
@@ -106,13 +117,15 @@ async function warmFirstConversationWorkspace(
 
     const conv = conversations.find((c) => c.id === firstId);
     const customerId = conv?.customer_id?.trim() ?? null;
+    const entityType = conv?.primary_entity_type?.trim() ?? null;
+    const entityId = conv?.primary_entity_id?.trim() ?? null;
     const liveWorkspace = isCommsV2FlagEnabled("comms_v2_live_workspace");
 
     try {
-        if (liveWorkspace && customerId) {
+        if (liveWorkspace && (customerId || (entityType && entityId))) {
             const composerChannel: ComposerChannel = conv?.channel === "sms" ? "sms" : "email";
             const workspace = await prefetchDrawerFamilyWorkspace({
-                customerId,
+                ...(customerId ? { customerId } : { entityType: entityType!, entityId: entityId! }),
                 threadId: firstId,
                 composerChannel,
             });
@@ -221,6 +234,7 @@ export function scheduleCommandCenterPrefetch(): void {
 export function resetCommandCenterPrefetchCacheForTests(): void {
     cache = null;
     firstConversationWarm = null;
+    pendingSelectionId = null;
     inflight = null;
     warmScheduled = false;
     listeners.clear();

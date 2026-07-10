@@ -10,6 +10,7 @@ import {
     isNeedsReviewConversation,
     isResolvedConversation,
 } from "@/lib/communications/v2/conversationTriage";
+import { formatQueueRowPhoneDisplay } from "@/lib/presentation/runtime/formatQueueRowContactDisplay";
 
 export const OPERATIONAL_QUEUES = [
     { key: "awaiting_parent_reply", label: "Awaiting Parent Reply" },
@@ -48,6 +49,8 @@ export type ConversationSummary = {
     primary_contact_person_id?: string | null;
     /** Resolved household id for live Family Communication Workspace (when thread anchors a family). */
     customer_id?: string | null;
+    /** Conversation topic label (business context), distinct from family name. */
+    topic_label?: string | null;
 };
 
 export const OTHER_QUEUE_KEY = "other" as const;
@@ -120,17 +123,57 @@ export function resolveCommandCenterSelection(
 
 export function conversationDisplayTitle(c: ConversationSummary): string {
     const label = (c.family_label ?? "").trim();
-    if (label && !label.includes("@")) return label;
+    if (label && !label.includes("@") && label.toLowerCase() !== "family") return label;
     const contact = (c.primary_contact_name ?? "").trim();
     if (contact) return contact;
     return "Family";
 }
 
-export function conversationDisplayRecipient(c: ConversationSummary): string | null {
-    const recipient = (c.recipient_key ?? "").trim();
-    const title = conversationDisplayTitle(c);
-    if (!recipient || recipient.toLowerCase() === title.toLowerCase()) return null;
+/** Business topic for queue rows — never duplicates the family name. */
+export function conversationDisplayTopic(c: ConversationSummary): string {
+    const topic = (c.topic_label ?? "").trim();
+    if (topic) return topic;
+    return "General";
+}
+
+export function conversationDisplayChildren(c: ConversationSummary): string | null {
+    if (!c.child_names?.length) return null;
+    return c.child_names.join(", ");
+}
+
+export function formatConversationContactDisplay(recipientKey: string | null | undefined): string | null {
+    const recipient = (recipientKey ?? "").trim();
+    if (!recipient) return null;
+    const phone = formatQueueRowPhoneDisplay(recipient);
+    if (phone) {
+        const digits = recipient.replace(/\D/g, "");
+        if (digits.length === 11 && digits.startsWith("1")) return `+1 ${phone}`;
+        return phone;
+    }
     return recipient;
+}
+
+export function conversationDisplayRecipient(c: ConversationSummary): string | null {
+    const formatted = formatConversationContactDisplay(c.recipient_key);
+    if (!formatted) return null;
+    const title = conversationDisplayTitle(c);
+    if (formatted.toLowerCase() === title.toLowerCase()) return null;
+    return formatted;
+}
+
+/** Distinct household count for queue headers (one family may have multiple topic rows). */
+export function countDistinctQueueFamilies(conversations: ConversationSummary[]): number {
+    const keys = new Set<string>();
+    for (const c of conversations) {
+        const customerId = (c.customer_id ?? "").trim();
+        if (customerId) {
+            keys.add(`customer:${customerId}`);
+            continue;
+        }
+        const family = conversationDisplayTitle(c).toLowerCase();
+        keys.add(`label:${family}`);
+    }
+    return keys.size;
 }
 
 export function conversationChannelLabel(channel: string | null | undefined): string {
@@ -265,6 +308,7 @@ export function applyQueueFilters(
         if (search) {
             const haystack = [
                 c.family_label,
+                c.topic_label,
                 c.recipient_key,
                 c.primary_contact_name,
                 c.last_message_preview,

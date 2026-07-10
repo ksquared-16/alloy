@@ -126,4 +126,25 @@ describe("command center live wiring", () => {
         expect(shellSrc).not.toMatch(/useState[^;]*bodyDraft/);
         expect(shellSrc).not.toMatch(/useState[^;]*selectedThreadId/);
     });
+    it("resolves workspace from customer_id or primary entity and never renders a blank selected state", () => {
+        expect(shellSrc).toMatch(/selectedEntity/);
+        expect(shellSrc).toMatch(/entity:\s*LIVE_WORKSPACE \? selectedEntity/);
+        expect(shellSrc).toMatch(/conversationDisplayTopic/);
+        expect(shellSrc).toMatch(/workspaceLoading/);
+        expect(shellSrc).toMatch(/runtime\.error/);
+        expect(shellSrc).not.toMatch(/\)\s*:\s*null\}\s*<\/section>/);
+    });
+    it("compose new uses canonical runtime composer instead of legacy quick message modal", () => {
+        const inbox = readFileSync(join(process.cwd(), "app", "adminV2", "components", "InboxModal.tsx"), "utf8");
+        const compose = readFileSync(
+            join(process.cwd(), "app", "adminV2", "communications", "ComposeNewCommunicationModal.tsx"),
+            "utf8"
+        );
+        expect(inbox).toContain("ComposeNewCommunicationModal");
+        expect(inbox).not.toContain("QuickMessageModal");
+        expect(compose).toContain("useFamilyCommunicationRuntime");
+        expect(compose).toContain("FamilyCommunicationWorkspaceView");
+        expect(compose).toContain("startNewMessage");
+        expect(compose).not.toContain("/api/admin/communications/send");
+    });
 });

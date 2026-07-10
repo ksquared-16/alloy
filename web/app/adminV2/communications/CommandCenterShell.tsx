@@ -10,11 +10,14 @@ import {
     flattenVisibleConversationIds,
     resolveCommandCenterSelection,
     conversationDisplayTitle,
+    conversationDisplayTopic,
+    conversationDisplayChildren,
     conversationDisplayRecipient,
-    conversationDisplaySubtitle,
+    conversationChannelLabel,
     conversationUnreadCount,
     conversationQueueStatusPill,
     queueStatusPillClass,
+    countDistinctQueueFamilies,
     resolveCommandCenterHealthDisplay,
     type ConversationSummary,
     type CommandCenterFilters,
@@ -22,6 +25,7 @@ import {
 import {
     getCommandCenterCacheSnapshot,
     getCommandCenterWarmSelectedConversationId,
+    getCommandCenterPendingSelection,
     prefetchCommandCenterConversations,
     subscribeCommandCenterCache,
 } from "@/lib/communications/v2/commandCenterPrefetchCache";
@@ -121,8 +125,16 @@ export default function CommandCenterShell() {
         if (COMMS_FIXTURES_ENABLED && selectedId) return FIXTURE_FAMILY_DETAILS[selectedId]?.customerId ?? null;
         return selected?.customer_id ?? null;
     }, [selected, selectedId]);
+    const selectedEntity = useMemo(() => {
+        if (selectedCustomerId) return undefined;
+        const entityType = selected?.primary_entity_type?.trim();
+        const entityId = selected?.primary_entity_id?.trim();
+        if (!entityType || !entityId) return undefined;
+        return { entityType, entityId };
+    }, [selectedCustomerId, selected?.primary_entity_type, selected?.primary_entity_id]);
     const runtime = useFamilyCommunicationRuntime({
         customerId: LIVE_WORKSPACE ? selectedCustomerId ?? undefined : undefined,
+        entity: LIVE_WORKSPACE ? selectedEntity : undefined,
         initialThreadId: selectedId,
         surfaceVariant: "workspace_inbox",
     });
@@ -152,6 +164,11 @@ export default function CommandCenterShell() {
         return subscribeCommandCenterCache(() => {
             const snap = getCommandCenterCacheSnapshot();
             if (snap) setConversations(snap.conversations);
+            const pending = getCommandCenterPendingSelection();
+            if (pending) {
+                setSelectedId(pending);
+                return;
+            }
             setSelectedId((prev) => prev ?? getCommandCenterWarmSelectedConversationId());
         });
     }, []);
@@ -390,8 +407,10 @@ export default function CommandCenterShell() {
     const workspaceHydrating =
         !COMMS_FIXTURES_ENABLED &&
         filtered.length > 0 &&
-        (loading || runtime.loading || !selectedId) &&
+        (loading || !selectedId) &&
         !selected;
+    const workspaceLoading = Boolean(selected && (runtime.loading || (!runtime.vm && !runtime.error)));
+    const distinctFamilyCount = useMemo(() => countDistinctQueueFamilies(filtered), [filtered]);
 
     return (
         <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-2.5 bg-white p-2.5">
@@ -404,7 +423,7 @@ export default function CommandCenterShell() {
                     <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2.5">
                         <div className="flex items-center justify-between">
                             <span className="text-sm font-semibold text-alloy-midnight">Communication queue</span>
-                            <span className="text-[11px] tabular-nums text-alloy-midnight/45">{filtered.length} families</span>
+                            <span className="text-[11px] tabular-nums text-alloy-midnight/45">{distinctFamilyCount} families</span>
                         </div>
                         <div data-cc-filters className="mt-2 flex items-center gap-1.5">
                             <div className="relative shrink-0">
@@ -448,14 +467,16 @@ export default function CommandCenterShell() {
                                             const d = FIXTURE_FAMILY_DETAILS[c.id];
                                             const isSel = selectedId === c.id;
                                             const a = attnAccent(c.attention_state);
-                                            const title = d ? (c.family_label ?? "Family") : conversationDisplayTitle(c);
-                                            const subtitle = d ? `${d.children} · ${d.program}` : conversationDisplaySubtitle(c);
-                                            const recipient = d ? null : conversationDisplayRecipient(c);
+                                            const familyName = d ? (c.family_label ?? "Family") : conversationDisplayTitle(c);
+                                            const topicLabel = d ? (c.topic_label ?? d.program) : conversationDisplayTopic(c);
+                                            const childrenLabel = d ? d.children : conversationDisplayChildren(c);
+                                            const contactLabel = d ? null : conversationDisplayRecipient(c);
                                             const preview = d ? null : (c.last_message_preview ?? null);
                                             const unread = conversationUnreadCount(c);
                                             const statusPill = conversationQueueStatusPill(c);
                                             const activityAt = c.last_activity_at ?? c.last_message_at;
-                                            const channelLabel = (c.channel ?? "").toLowerCase() === "sms" ? "SMS" : (c.channel ?? "").toLowerCase() === "email" ? "Email" : (c.channel ?? "");
+                                            const channelLabel = conversationChannelLabel(c.channel);
+                                            const attentionLabel = conversationAttentionLabel(c.attention_state);
                                             return (
                                                 <li key={c.id}>
                                                     <button
@@ -469,20 +490,22 @@ export default function CommandCenterShell() {
                                                         }`}
                                                     >
                                                         <div className="flex items-start justify-between gap-2">
-                                                            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight text-alloy-midnight">{title}</span>
+                                                            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight text-alloy-midnight">{familyName}</span>
                                                             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${queueStatusPillClass(statusPill.tone)}`}>{statusPill.label}</span>
                                                         </div>
-                                                        {recipient ? (
-                                                            <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">{recipient}</div>
+                                                        <div className="mt-0.5 truncate text-[11px] font-medium text-alloy-midnight/70">{topicLabel}</div>
+                                                        {childrenLabel ? (
+                                                            <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">{childrenLabel}</div>
+                                                        ) : contactLabel ? (
+                                                            <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">{contactLabel}</div>
                                                         ) : null}
-                                                        <div className="mt-1 truncate text-[11px] text-alloy-midnight/55">{subtitle}</div>
                                                         {preview ? (
                                                             <div className="mt-1 line-clamp-2 text-[10px] leading-snug text-alloy-midnight/50">{preview}</div>
                                                         ) : null}
                                                         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-alloy-midnight/45">
                                                             <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${a.dot}`} />
                                                             <span className="truncate">
-                                                                {[channelLabel, activityAt ? relTime(activityAt) : null].filter(Boolean).join(" · ")}
+                                                                {[channelLabel, activityAt ? relTime(activityAt) : null, attentionLabel].filter(Boolean).join(" · ")}
                                                             </span>
                                                             <span className="ml-auto flex shrink-0 items-center gap-1.5">
                                                                 {unread ? (
@@ -569,10 +592,19 @@ export default function CommandCenterShell() {
                             viewerUserId={adminAuth?.userId ?? null}
                             sendCompleteToken={runtime.sendCompleteToken}
                         />
-                    ) : selected && runtime.loading ? (
+                    ) : workspaceLoading ? (
                         <CommsWorkspacePanelReserve label="Loading conversation" />
+                    ) : selected && runtime.error ? (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+                            <p className="text-sm font-medium text-alloy-ember">{runtime.error}</p>
+                            <p className="max-w-sm text-xs leading-relaxed text-alloy-midnight/45">
+                                This conversation could not be loaded. Try selecting another family or refresh the queue.
+                            </p>
+                        </div>
                     ) : workspaceHydrating ? (
                         <CommsWorkspacePanelReserve label="Loading first conversation" />
+                    ) : selected ? (
+                        <CommsWorkspacePanelReserve label="Loading conversation" />
                     ) : !loading && filtered.length === 0 ? (
                         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
                             <p className="text-sm font-medium text-alloy-midnight/60">No conversations yet</p>
@@ -580,7 +612,9 @@ export default function CommandCenterShell() {
                                 Conversations appear here when messages are sent or received.
                             </p>
                         </div>
-                    ) : null}
+                    ) : (
+                        <CommsWorkspacePanelReserve label="Loading conversation" />
+                    )}
                 </section>
             </div>
         </div>
