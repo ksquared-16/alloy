@@ -52,6 +52,9 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
     const fields = d.fields as StoredFormDraftPreview["fields"];
     const sections = d.sections as StoredFormDraftPreview["sections"];
     return {
+        ...(typeof d.generated_form_name === "string" && d.generated_form_name.trim()
+            ? { generated_form_name: d.generated_form_name.trim() }
+            : {}),
         source_document_id: typeof d.source_document_id === "string" ? d.source_document_id : null,
         title: d.title,
         title_from_text: d.title_from_text === true,

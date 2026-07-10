@@ -22,6 +22,7 @@ export type ProcessingDevCleanupCounts = {
 export type ProcessingDevCleanupPlan = {
     orgId: string;
     dryRun: boolean;
+    clearAllForms: boolean;
     counts: ProcessingDevCleanupCounts;
     documentIds: string[];
     processingCaseIds: string[];
@@ -29,6 +30,8 @@ export type ProcessingDevCleanupPlan = {
     formSubmissionIds: string[];
     publicLinkIds: string[];
 };
+
+export type ProcessingDevCleanupRemaining = ProcessingDevCleanupCounts;
 
 function isProductionLike(): boolean {
     return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
@@ -60,8 +63,10 @@ type FormRow = { id: string; metadata: Record<string, unknown> | null };
 /** Build a dependency-safe cleanup plan for one org. */
 export async function planProcessingDevCleanup(
     supabase: SupabaseClient,
-    orgId: string
+    orgId: string,
+    options?: { clearAllForms?: boolean }
 ): Promise<ProcessingDevCleanupPlan> {
+    const clearAllForms = options?.clearAllForms === true;
     if (isProductionLike()) throw new Error("Refusing Processing dev cleanup in production.");
 
     const { data: caseRows, error: caseErr } = await supabase
@@ -111,13 +116,15 @@ export async function planProcessingDevCleanup(
         }
     }
 
-    const formIds = [
-        ...new Set(
-            ((formRows ?? []) as FormRow[])
-                .filter((form) => isProcessingOwnedForm(form.metadata) || formIdsFromCases.has(form.id))
-                .map((form) => form.id)
-        ),
-    ];
+    const formIds = clearAllForms
+        ? [...new Set(((formRows ?? []) as FormRow[]).map((form) => form.id))]
+        : [
+              ...new Set(
+                  ((formRows ?? []) as FormRow[])
+                      .filter((form) => isProcessingOwnedForm(form.metadata) || formIdsFromCases.has(form.id))
+                      .map((form) => form.id)
+              ),
+          ];
 
     const { data: versionRows, error: versionErr } = formIds.length
         ? await supabase
@@ -143,6 +150,7 @@ export async function planProcessingDevCleanup(
     return {
         orgId,
         dryRun: true,
+        clearAllForms,
         counts: {
             documents: documentIds.length,
             processingCases: processingCaseIds.length,
@@ -164,11 +172,12 @@ export async function planProcessingDevCleanup(
 /** Apply the cleanup plan — deletes eligible Processing test artifacts only. */
 export async function applyProcessingDevCleanup(
     supabase: SupabaseClient,
-    orgId: string
-): Promise<ProcessingDevCleanupPlan> {
+    orgId: string,
+    options?: { clearAllForms?: boolean }
+): Promise<ProcessingDevCleanupPlan & { remaining: ProcessingDevCleanupRemaining }> {
     if (isProductionLike()) throw new Error("Refusing Processing dev cleanup in production.");
 
-    const plan = await planProcessingDevCleanup(supabase, orgId);
+    const plan = await planProcessingDevCleanup(supabase, orgId, options);
 
     if (plan.formSubmissionIds.length > 0) {
         await supabase.from("form_packet_session_items").delete().eq("org_id", orgId).in("form_submission_id", plan.formSubmissionIds);
@@ -203,7 +212,44 @@ export async function applyProcessingDevCleanup(
         await supabase.from("documents").delete().eq("org_id", orgId).in("id", plan.documentIds);
     }
 
-    return { ...plan, dryRun: false };
+    const remaining = await countRemainingProcessingArtifacts(supabase, orgId);
+    return { ...plan, dryRun: false, remaining };
+}
+
+/** Post-apply verification — actual row counts by artifact type. */
+export async function countRemainingProcessingArtifacts(
+    supabase: SupabaseClient,
+    orgId: string
+): Promise<ProcessingDevCleanupRemaining> {
+    const [{ count: documents }, { count: processingCases }, { count: forms }, { count: formSubmissions }, { count: formPublicLinks }] =
+        await Promise.all([
+            supabase.from("documents").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+            supabase.from("processing_cases").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+            supabase.from("form_definitions").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+            supabase.from("form_submissions").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+            supabase.from("form_public_links").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+        ]);
+
+    const { count: processingCaseSources } = await supabase
+        .from("processing_case_sources")
+        .select("processing_case_id", { count: "exact", head: true })
+        .eq("org_id", orgId);
+
+    const { count: formVersions } = await supabase
+        .from("form_definition_versions")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId);
+
+    return {
+        documents: documents ?? 0,
+        processingCases: processingCases ?? 0,
+        processingCaseSources: processingCaseSources ?? 0,
+        forms: forms ?? 0,
+        formVersions: formVersions ?? 0,
+        formPublicLinks: formPublicLinks ?? 0,
+        formSubmissions: formSubmissions ?? 0,
+        publicLinks: formPublicLinks ?? 0,
+    };
 }
 
 export function assertProcessingDevCleanupAllowed(): void {

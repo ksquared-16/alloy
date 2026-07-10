@@ -155,6 +155,7 @@ export default function ProcessingFormBuilder({
     );
     const [formMetaSnapshot, setFormMetaSnapshot] = useState<Record<string, unknown>>(formMeta?.metadata ?? {});
     const [hasPublishedVersion, setHasPublishedVersion] = useState(Boolean(formMeta?.has_published_version));
+    const [publishJustSucceeded, setPublishJustSucceeded] = useState(false);
 
     const [inspectorSection, setInspectorSection] = useState<string>("branding");
 
@@ -277,6 +278,7 @@ export default function ProcessingFormBuilder({
         if (!editVersionId || !schema) return;
         setPublishing(true);
         setBuilderErr(null);
+        setPublishJustSucceeded(false);
         try {
             const patchedMeta = await publishForm(formId, editVersionId, schema, {
                 branding,
@@ -287,7 +289,15 @@ export default function ProcessingFormBuilder({
             setFormMetaSnapshot(patchedMeta);
             setDirty(false);
             setHasPublishedVersion(true);
-            await load();
+            setPublishJustSucceeded(true);
+            const result = await loadFormSchema(formId);
+            if (result.schema) {
+                setSchema(result.schema);
+                setEditVersionId(result.editVersionId);
+                setBranding(parseFormBranding(result.formRow ?? formMeta));
+                setFormMetaSnapshot(result.formRow?.metadata ?? patchedMeta);
+            }
+            setHasPublishedVersion(true);
             await loadForms();
         } catch (e) {
             setBuilderErr(e instanceof Error ? e.message : "Publish failed");
@@ -446,6 +456,7 @@ export default function ProcessingFormBuilder({
                             unpublishProcessingPublicLinks={unpublishProcessingPublicLinks}
                             onPublishRepublish={editable ? () => publish() : undefined}
                             publishBusy={publishing}
+                            publishJustSucceeded={publishJustSucceeded}
                         />
                         {selectedField ? (
                             <div data-surface-composer-inspector="field">

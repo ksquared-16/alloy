@@ -93,7 +93,7 @@ export default function ProcessingCreateFormDialog({
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder="Enrollment packet"
+                        placeholder="Lead inquiry form"
                         autoFocus
                         className="w-full rounded-[10px] border border-alloy-stone/20 px-3 py-2.5 text-[13px] shadow-sm outline-none focus:border-alloy-bend-pine/40 focus:ring-2 focus:ring-alloy-bend-pine/15"
                         data-testid="create-form-name"

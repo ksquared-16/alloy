@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const caseId = parseUuidParam(rawCaseId, "caseId");
     if (caseId instanceof NextResponse) return caseId;
 
-    let body: { title?: unknown; fields?: unknown };
+    let body: { title?: unknown; form_name?: unknown; fields?: unknown };
     try {
         body = (await request.json()) as typeof body;
     } catch {
@@ -102,10 +102,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         const title = (typeof body.title === "string" && body.title.trim()) || docTitle || "Untitled form";
+        const generatedFormName =
+            typeof body.form_name === "string" && body.form_name.trim() ? body.form_name.trim() : null;
 
-        const draft = stampFormDraftPreview(
-            buildManualFormDraft({ title, sourceDocumentId, fields })
-        );
+        const draft = stampFormDraftPreview({
+            ...buildManualFormDraft({ title, sourceDocumentId, fields }),
+            ...(generatedFormName ? { generated_form_name: generatedFormName } : {}),
+        });
         const stored = await dbStoreFormDraftPreview(supabase, { orgId: ctx.orgId, caseId, draft });
         return jsonData({ caseId, form_draft_preview: stored });
     } catch (e) {

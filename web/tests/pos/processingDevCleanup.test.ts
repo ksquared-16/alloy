@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
     PROCESSING_DEV_CLEANUP_CONFIRM_TOKEN,
     applyProcessingDevCleanup,
+    assertProcessingDevCleanupAllowed,
     planProcessingDevCleanup,
 } from "@/lib/pos/processingDevCleanup";
 
@@ -54,5 +55,59 @@ describe("processingDevCleanup", () => {
         expect(plan.counts.documents).toBe(1);
         expect(plan.counts.forms).toBe(1);
         expect(plan.dryRun).toBe(true);
+    });
+
+    it("clear_all includes non-processing-heuristic forms", async () => {
+        const supabase = makeSupabaseMock({
+            processing_cases: [],
+            processing_case_sources: [],
+            documents: [],
+            form_definitions: [
+                { id: "form-1", metadata: { source: "processing", origin: "blank" } },
+                { id: "form-legacy", metadata: {} },
+            ],
+            form_definition_versions: [],
+            form_public_links: [],
+            form_submissions: [],
+        });
+
+        const heuristic = await planProcessingDevCleanup(supabase as never, "org-1");
+        expect(heuristic.counts.forms).toBe(1);
+
+        const clearAll = await planProcessingDevCleanup(supabase as never, "org-1", { clearAllForms: true });
+        expect(clearAll.clearAllForms).toBe(true);
+        expect(clearAll.counts.forms).toBe(2);
+    });
+
+    it("blocks cleanup in production-like environments", () => {
+        vi.stubEnv("NODE_ENV", "production");
+        vi.stubEnv("VERCEL_ENV", "production");
+        expect(() => assertProcessingDevCleanupAllowed()).toThrow(/production/i);
+    });
+
+    it("apply returns remaining counts after deletion plan", async () => {
+        const supabase = makeSupabaseMock({
+            processing_cases: [],
+            processing_case_sources: [],
+            documents: [],
+            form_definitions: [],
+            form_definition_versions: [],
+            form_public_links: [],
+            form_submissions: [],
+        });
+        // countRemaining uses head count queries — mock empty via from().select().eq()
+        const countChain = {
+            select: vi.fn(() => countChain),
+            eq: vi.fn(() => countChain),
+            then(onFulfilled: (value: unknown) => unknown) {
+                return Promise.resolve(onFulfilled({ count: 0, error: null }));
+            },
+        };
+        supabase.from = vi.fn(() => countChain as never);
+
+        const result = await applyProcessingDevCleanup(supabase as never, "org-1", { clearAllForms: true });
+        expect(result.dryRun).toBe(false);
+        expect(result.remaining).toBeDefined();
+        expect(result.remaining?.forms).toBe(0);
     });
 });

@@ -55,6 +55,8 @@ export interface FormDraftDiagnostics {
 
 /** What lands in `processing_cases.metadata.form_draft_preview`. Preview only — no form created. */
 export interface StoredFormDraftPreview {
+    /** Operator-confirmed native form name — separate from source document display title. */
+    generated_form_name?: string | null;
     source_document_id: string | null;
     title: string;
     /** True when the title was derived from real document text (vs filename/classification fallback). */

@@ -22,6 +22,16 @@ import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processin
 import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
 import { maybeBuildDocumentFormPreviewSafe } from "@/lib/pos/processingCase/structure/maybeBuildDocumentFormPreviewSafe";
 import { buildDocumentTextUpdate, extractPdfText, looksLikePdf } from "@/lib/pos/processingCase/structure/pdfTextExtract";
+import {
+    capabilitiesForFormat,
+    detectProcessingSourceFormat,
+} from "@/lib/pos/processingSourceCapabilities";
+import {
+    isProcessingImportIntent,
+    processingIntentMetadata,
+    type ProcessingImportIntent,
+} from "@/lib/pos/processingImportIntent";
+import { proposeImportDisplayName, resolveDisplayNameWithCollision } from "@/lib/pos/documentInstanceNaming";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
@@ -77,6 +87,10 @@ export async function POST(request: NextRequest) {
     const entityId = typeof formData.get("entity_id") === "string" ? (formData.get("entity_id") as string).trim() : "";
     const docType = typeof formData.get("doc_type") === "string" ? (formData.get("doc_type") as string).trim() || null : null;
     const titleRaw = typeof formData.get("title") === "string" ? (formData.get("title") as string).trim() || null : null;
+    const intentRaw = formData.get("processing_intent");
+    const processingIntent: ProcessingImportIntent = isProcessingImportIntent(intentRaw)
+        ? intentRaw
+        : "generate_form";
     // POS-FP1c opt-in: when explicitly requested, route the uploaded document into the
     // existing Processing Case spine (non-form on-ramp). Default OFF — existing callers
     // that don't send this flag are completely unaffected.
@@ -90,6 +104,21 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const origName = file instanceof File && file.name ? file.name : "upload";
+    const mimeType = file.type || "";
+    const sourceFormat = detectProcessingSourceFormat(origName, mimeType);
+    const formatCaps = capabilitiesForFormat(sourceFormat);
+    if (!formatCaps.store) {
+        return NextResponse.json(
+            {
+                error: `${formatCaps.label} is not supported for Processing intake.`,
+                code: "UNSUPPORTED_FORMAT",
+                format: sourceFormat,
+            },
+            { status: 415 }
+        );
+    }
+
     const canonicalType: string | null = target.mode === "entity" ? target.canonicalType : null;
     const rowEntityId: string | null = target.mode === "entity" ? target.entityId : null;
     if (target.mode === "entity") {
@@ -102,7 +131,6 @@ export async function POST(request: NextRequest) {
     const bucket = process.env.ADMIN_DOCUMENTS_BUCKET?.trim() || DEFAULT_ORG_DOCUMENTS_BUCKET;
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const origName = file instanceof File && file.name ? file.name : "upload";
     const safeName = sanitizeFilename(origName);
     const objectId = randomUUID();
     const pathSegment = canonicalType ? `${canonicalType}/${rowEntityId}` : "pos_intake";
@@ -122,7 +150,19 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    const title = titleRaw ?? (origName !== "upload" ? origName : null);
+    const { data: existingTitles } = await supabase.from("documents").select("title").eq("org_id", ctx.orgId);
+    const existingDisplayNames = ((existingTitles ?? []) as Array<{ title?: string | null }>)
+        .map((row) => (row.title ?? "").trim())
+        .filter(Boolean);
+
+    const proposedTitle =
+        titleRaw ??
+        proposeImportDisplayName({
+            fileName: origName,
+            receivedAt: new Date().toISOString(),
+            existingDisplayNames,
+        });
+    const title = resolveDisplayNameWithCollision(proposedTitle, existingDisplayNames);
 
     const { data: row, error: insErr } = await supabase
         .from("documents")
@@ -133,11 +173,16 @@ export async function POST(request: NextRequest) {
             doc_type: docType,
             title,
             original_filename: origName !== "upload" ? origName : null,
-            mime_type: file.type || null,
+            mime_type: mimeType || null,
             byte_size: buffer.length,
             bucket,
             storage_path: storagePath,
             status: "uploaded",
+            metadata: {
+                processing_intent: processingIntent,
+                ...processingIntentMetadata(processingIntent),
+                source_format: sourceFormat,
+            },
         })
         .select("*")
         .single();
@@ -162,13 +207,27 @@ export async function POST(request: NextRequest) {
     // memory. On success the text lands on `documents.extracted_text` so the structure
     // preview (below) can use it. NEVER blocks the upload — any failure is swallowed and
     // recorded as an extraction status. No OCR; scanned PDFs simply yield no text.
-    if (looksLikePdf(file.type, origName)) {
+    if (looksLikePdf(mimeType, origName)) {
         try {
             const pdfResult = await extractPdfText(new Uint8Array(buffer));
             const textUpdate = buildDocumentTextUpdate(pdfResult);
             await supabase.from("documents").update(textUpdate).eq("org_id", ctx.orgId).eq("id", docId);
         } catch (e) {
             console.warn("[documents/upload] pdf text extraction", e instanceof Error ? e.message : e);
+        }
+    } else if (sourceFormat === "txt" || sourceFormat === "csv") {
+        try {
+            const text = buffer.toString("utf8");
+            await supabase
+                .from("documents")
+                .update({
+                    extracted_text: text,
+                    extraction_status: text.trim() ? "complete" : "empty",
+                })
+                .eq("org_id", ctx.orgId)
+                .eq("id", docId);
+        } catch (e) {
+            console.warn("[documents/upload] text file extraction", e instanceof Error ? e.message : e);
         }
     }
 
@@ -208,6 +267,31 @@ export async function POST(request: NextRequest) {
             sourceId: docId,
         });
         processingCaseId = opened?.processingCaseId ?? null;
+
+        if (processingCaseId) {
+            const { data: caseRow } = await supabase
+                .from("processing_cases")
+                .select("metadata")
+                .eq("org_id", ctx.orgId)
+                .eq("id", processingCaseId)
+                .maybeSingle();
+            const existingMeta =
+                caseRow?.metadata && typeof caseRow.metadata === "object" && !Array.isArray(caseRow.metadata)
+                    ? (caseRow.metadata as Record<string, unknown>)
+                    : {};
+            await supabase
+                .from("processing_cases")
+                .update({
+                    metadata: {
+                        ...existingMeta,
+                        ...processingIntentMetadata(processingIntent),
+                        source_document_display_name: title,
+                        source_document_filename: origName,
+                    },
+                })
+                .eq("org_id", ctx.orgId)
+                .eq("id", processingCaseId);
+        }
 
         // POS-FP9: classify the opened case from cheap document signals (filename /
         // mime / doc_type / metadata). Classification ONLY — no extraction, no record

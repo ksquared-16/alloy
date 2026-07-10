@@ -36,6 +36,7 @@ type Props = {
     unpublishProcessingPublicLinks: (formId: string, links: ProcessingFormPublicLinkRow[]) => Promise<void>;
     onPublishRepublish?: () => Promise<void>;
     publishBusy?: boolean;
+    publishJustSucceeded?: boolean;
 };
 
 const STATUS_LABELS = {
@@ -58,6 +59,7 @@ export default function ProcessingFormDistributionPanel({
     unpublishProcessingPublicLinks,
     onPublishRepublish,
     publishBusy = false,
+    publishJustSucceeded = false,
 }: Props) {
     const [links, setLinks] = useState<ProcessingFormPublicLinkRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -186,6 +188,13 @@ export default function ProcessingFormDistributionPanel({
                     Publish the form, then share a public link or iframe embed. Submissions enter Processing for review — no
                     records are created automatically.
                 </p>
+
+                {publishJustSucceeded ? (
+                    <div className="rounded-lg border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.06] px-3 py-2" data-testid="processing-form-publish-success">
+                        <p className="text-[11px] font-semibold text-alloy-bend-pine">Published successfully</p>
+                        <p className="text-[11px] text-alloy-midnight/55">Your public form is live.</p>
+                    </div>
+                ) : null}
 
                 {loading ? <p className="text-[11px] text-alloy-midnight/45">Loading share links…</p> : null}
                 {err ? <p className="text-[11px] text-rose-700">{err}</p> : null}

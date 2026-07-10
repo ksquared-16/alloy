@@ -19,6 +19,9 @@ import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import ProcessingDevCleanupDialog from "./ProcessingDevCleanupDialog";
+import ProcessingImportIntentModal from "./ProcessingImportIntentModal";
+import { processingImportAcceptList } from "@/lib/pos/processingSourceCapabilities";
+import { uploadProcessingDocument } from "@/lib/pos/processingDocumentUpload";
 import { useProcessingOverviewKpis } from "@/lib/pos/processingOverviewKpis";
 import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
 
@@ -58,6 +61,8 @@ export default function ProcessingOverviewLanding({
     const queue = useProcessingQueueWarm();
     const { forms, listLoaded, loadForms } = useProcessingFormApi();
     const { workFolders } = useProcessingFolders();
+    const [importOpen, setImportOpen] = useState(false);
+    const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [uploading, setUploading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
@@ -84,18 +89,36 @@ export default function ProcessingOverviewLanding({
         });
     }, [workFolders, rows, active.length]);
 
-    async function handleImport(file: File) {
+    const existingDisplayNames = useMemo(() => {
+        const fromRows = rows.map((row) => row.sourceDisplay?.label).filter((name): name is string => Boolean(name?.trim()));
+        const fromForms = forms.map((f) => f.name).filter((name): name is string => Boolean(name?.trim()));
+        return [...fromRows, ...fromForms];
+    }, [rows, forms]);
+
+    function openImportModal(file: File | null = null) {
+        setPendingImportFile(file);
+        setImportOpen(true);
+        setImportErr(null);
+    }
+
+    async function submitImport(payload: {
+        file: File;
+        intent: import("@/lib/pos/processingImportIntent").ProcessingImportIntent;
+        displayName: string;
+    }) {
         setUploading(true);
         setImportErr(null);
         try {
-            const form = new FormData();
-            form.append("file", file);
-            form.append("open_processing_case", "true");
-            const res = await fetch("/api/admin/documents/upload", { method: "POST", credentials: "same-origin", body: form });
-            const body = (await res.json().catch(() => ({}))) as { processing_case_id?: string | null; error?: string };
-            if (!res.ok) throw new Error(body.error || "Upload failed");
+            const body = await uploadProcessingDocument({
+                file: payload.file,
+                intent: payload.intent,
+                displayName: payload.displayName,
+            });
             void warmProcessingQueueCache({ force: true });
+            setImportOpen(false);
+            setPendingImportFile(null);
             if (body.processing_case_id) onOpenCase(body.processing_case_id);
+            else throw new Error("Import succeeded but no review case was created.");
         } catch (e) {
             setImportErr(e instanceof Error ? e.message : "Upload failed");
         } finally {
@@ -114,11 +137,11 @@ export default function ProcessingOverviewLanding({
             <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,application/pdf"
+                accept={processingImportAcceptList()}
                 className="hidden"
                 onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) void handleImport(f);
+                    if (f) openImportModal(f);
                     e.target.value = "";
                 }}
             />
@@ -130,17 +153,17 @@ export default function ProcessingOverviewLanding({
                                 disabled={uploading}
                         testId="processing-import-action-card"
                         icon={<FileUp className="h-5 w-5" aria-hidden strokeWidth={2} />}
-                        title={uploading ? "Importing…" : "Import form"}
-                        description="Drop a PDF to start review."
+                        title={uploading ? "Importing…" : "Import document"}
+                        description="Upload a document and choose what Alloy should do with it."
                         cta="Open"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => openImportModal()}
                         dragHandlers={{
                             onDragOver,
                             onDragLeave: () => setDragActive(false),
                             onDrop: (e) => {
                                 e.preventDefault();
                                 const file = e.dataTransfer.files?.[0];
-                                if (file) void handleImport(file);
+                                if (file) openImportModal(file);
                                 else setDragActive(false);
                             },
                             dragActive,
@@ -290,6 +313,20 @@ export default function ProcessingOverviewLanding({
                     void warmProcessingQueueCache({ force: true });
                     void loadForms();
                 }}
+            />
+            <ProcessingImportIntentModal
+                open={importOpen}
+                onClose={() => {
+                    if (!uploading) {
+                        setImportOpen(false);
+                        setPendingImportFile(null);
+                    }
+                }}
+                onSubmit={submitImport}
+                submitting={uploading}
+                error={importErr}
+                existingDisplayNames={existingDisplayNames}
+                initialFile={pendingImportFile}
             />
         </WorkspaceSurface>
     );
