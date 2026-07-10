@@ -100,6 +100,7 @@ Start here: **`platform/foundation/system-overview.md`**
 |--------|-----|
 | Documents & forms | `platform/modules/documents-and-forms.md` |
 | Communications | `platform/modules/communications-platform.md` |
+| Communications Identity (foundational) | `platform/modules/communications-identity-platform.md` |
 | Actions & workflows | `platform/modules/actions-and-workflows.md` |
 | Configuration | `platform/modules/configuration-platform.md` |
 | Attendance (L4 facts — doctrine) | `platform/modules/attendance-system.md` |

@@ -16,6 +16,7 @@ from ..integrations.twilio_client import send_sms, send_sms_with_credentials
 from ..supabase_client import _get_base_url, _get_headers
 from .communication_workflow_events import emit_for_communication_message
 from .communications.binding_resolver import find_binding_by_id, resolve_outbound_binding
+from .communications.identity_resolver import resolve_persisted_outbound_identity
 from .communications.status_callback import build_sms_status_callback_url
 from ..settings import PUBLIC_TWILIO_STATUS_CALLBACK_BASE
 from .communications.secret_ref import (
@@ -189,21 +190,61 @@ def process_communication_messages(
             continue
 
         binding: Optional[Dict[str, Any]] = None
-        bound_on_row = row.get("communication_provider_binding_id")
-        if bound_on_row and channel in ("sms", "email"):
-            cand = find_binding_by_id(base_url, headers, str(bound_on_row))
-            if cand and str(cand.get("org_id") or "") == org_id and (
-                str(cand.get("channel") or "").strip().lower() == channel
-            ):
-                binding = cand
-        if binding is None:
-            binding = resolve_outbound_binding(
-                base_url,
-                headers,
-                org_id=org_id,
-                channel=channel if channel in ("sms", "email") else "sms",
-                location_id=location_id_str,
-            )
+        persisted_identity_id = row.get("communication_identity_id")
+        # Phase 2: prefer persisted canonical identity (TypeScript-resolved at enqueue).
+        if persisted_identity_id and channel in ("sms", "email"):
+            binding = resolve_persisted_outbound_identity(base_url, headers, row)
+            if binding is None:
+                err = "canonical communication identity invalid or unavailable at send time"
+                logger.warning(
+                    "COMM_MSG_CANONICAL_IDENTITY_INVALID id=%s identity_id=%s",
+                    msg_id,
+                    persisted_identity_id,
+                )
+                _patch_comm_message(
+                    base_url,
+                    headers,
+                    str(msg_id),
+                    {"status": "failed", "error": err[:ERROR_TRUNCATE]},
+                )
+                failed += 1
+                mids.append(str(msg_id))
+                errors.append(err)
+                emit_for_communication_message(
+                    org_id=org_id,
+                    entity_type=str(entity_type),
+                    entity_id=entity_id,
+                    event_type="message_failed",
+                    message_id=str(msg_id),
+                    thread_id=thread_id,
+                    channel=channel or "sms",
+                    direction="outbound",
+                    body_text=body,
+                    extra={"reason": err, "canonical_identity_invalid": True},
+                )
+                continue
+        elif not persisted_identity_id:
+            bound_on_row = row.get("communication_provider_binding_id")
+            if bound_on_row and channel in ("sms", "email"):
+                cand = find_binding_by_id(base_url, headers, str(bound_on_row))
+                if cand and str(cand.get("org_id") or "") == org_id and (
+                    str(cand.get("channel") or "").strip().lower() == channel
+                ):
+                    binding = cand
+            if binding is None:
+                binding = resolve_outbound_binding(
+                    base_url,
+                    headers,
+                    org_id=org_id,
+                    channel=channel if channel in ("sms", "email") else "sms",
+                    location_id=location_id_str,
+                )
+                if binding is not None:
+                    logger.info(
+                        "COMM_MSG_LEGACY_COMPAT_RESOLUTION id=%s channel=%s",
+                        msg_id,
+                        channel,
+                    )
 
         bound_id = str(binding.get("id")) if isinstance(binding, dict) and binding.get("id") else None
         cfg = binding.get("config") if isinstance(binding, dict) and isinstance(binding.get("config"), dict) else {}
@@ -249,6 +290,8 @@ def process_communication_messages(
                         "provider_message_id": sms_sid or None,
                         "error": None,
                         "communication_provider_binding_id": bound_id,
+                        "communication_identity_id": binding.get("communication_identity_id") if isinstance(binding, dict) else row.get("communication_identity_id"),
+                        "communication_provider_account_id": binding.get("communication_provider_account_id") if isinstance(binding, dict) else row.get("communication_provider_account_id"),
                     },
                 )
                 sent += 1

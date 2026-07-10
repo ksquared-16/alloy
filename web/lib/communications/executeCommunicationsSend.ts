@@ -6,11 +6,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
-    activeOutboundBindings,
     availableComposerChannels,
     type BindingSummary,
 } from "@/lib/communications/composerChannels";
 import { enqueueCanonicalOutboundMessage } from "@/lib/communications/canonicalOutboundEnqueue";
+import { resolveOutboundSender } from "@/lib/communications/identity/resolveOutboundSender";
+import { serializeSenderResolution } from "@/lib/communications/identity/resolveSenderIdentity";
+import { logCanonicalResolution, logResolutionFailure } from "@/lib/communications/identity/identityResolutionObservability";
+import { SENDER_FAILURE } from "@/lib/communications/identity/failureCodes";
 import {
     assertRecipientPersonEligibleForDrawerEmail,
     assertRecipientPersonEligibleForDrawerSms,
@@ -54,6 +57,8 @@ export type ExecuteCommunicationsSendParams = {
     textRaw: string;
     subjectRawEmail?: string | undefined;
     bindingIdOpt: string;
+    /** Optional canonical identity override (Phase 2 identity platform). */
+    identityIdOpt?: string;
     recipientPersonIdRaw: string;
     /** Initial `to` / `to_address` from request; may be replaced when resolving from `recipient_person_id`. */
     toRawInput: string;
@@ -98,6 +103,7 @@ export async function executeCommunicationsSend(
         textRaw,
         subjectRawEmail,
         bindingIdOpt,
+        identityIdOpt,
         recipientPersonIdRaw,
         toRawInput,
         sendMetadataAugment,
@@ -203,6 +209,10 @@ export async function executeCommunicationsSend(
     const locId = await resolveContextLocationId(supabase, orgId, primaryEntityType, primaryEntityId);
 
     let resolvedBindingId: string | null = null;
+    let resolvedIdentityId: string | null = null;
+    let resolvedAccountId: string | null = null;
+    let senderResolutionMeta: Record<string, unknown> | null = null;
+
     if (channel !== "in_app") {
         if (!toRaw) {
             return { ok: false, status: 400, error: "to address required for sms/email" };
@@ -215,23 +225,55 @@ export async function executeCommunicationsSend(
             return { ok: false, status: 400, error: "Invalid email destination" };
         }
 
-        const pool = activeOutboundBindings(bindList, channel);
-        let candidates = pool;
-        if (bindingIdOpt && UUID_RE.test(bindingIdOpt)) {
-            candidates = pool.filter((b) => b.id === bindingIdOpt);
-            if (!candidates.length) {
-                return { ok: false, status: 400, error: "binding_id not valid for channel/org" };
-            }
-        }
-        if (!candidates.length) {
+        const identityOverride = identityIdOpt?.trim() || "";
+        const resolution = await resolveOutboundSender({
+            supabase,
+            orgId,
+            channel,
+            operatorUserId: null,
+            locationId: locId,
+            primaryEntityType,
+            primaryEntityId,
+            requestedIdentityId: UUID_RE.test(identityOverride) ? identityOverride : null,
+            requestedLegacyBindingId: bindingIdOpt && UUID_RE.test(bindingIdOpt) ? bindingIdOpt : null,
+            operatorHasCommunicationsSend: true,
+        });
+
+        if (!resolution.ok) {
+            logResolutionFailure({
+                orgId,
+                channel,
+                failureCode: resolution.failureCode,
+                source: quickMessage ? "family_send" : "drawer_composer",
+            });
+            const code =
+                resolution.failureCode === SENDER_FAILURE.NO_ELIGIBLE_IDENTITY
+                    ? "binding_missing"
+                    : resolution.failureCode === SENDER_FAILURE.UNSUPPORTED_CHANNEL
+                      ? "channel_unavailable"
+                      : resolution.failureCode;
             return {
                 ok: false,
-                status: 422,
-                error: "No actionable binding rows for chosen channel",
-                code: "binding_missing",
+                status: resolution.failureCode === SENDER_FAILURE.OPERATOR_UNAUTHORIZED ? 403 : 422,
+                error: resolution.message,
+                code,
             };
         }
-        resolvedBindingId = bindingIdOpt && UUID_RE.test(bindingIdOpt) ? bindingIdOpt : (candidates[0]?.id ?? null);
+
+        resolvedIdentityId = resolution.communicationIdentity.id;
+        resolvedAccountId = resolution.providerAccount.id;
+        resolvedBindingId = resolution.legacyBindingId;
+        senderResolutionMeta = serializeSenderResolution(resolution);
+        logCanonicalResolution({
+            orgId,
+            channel,
+            selectionReason: resolution.selectionReason,
+            fallbackLevel: resolution.fallbackLevel,
+            identityId: resolution.communicationIdentity.id,
+            accountId: resolution.providerAccount.id,
+            source: quickMessage ? "family_send" : "drawer_composer",
+            warnings: resolution.warnings,
+        });
     } else if (bindingIdOpt) {
         return { ok: false, status: 400, error: "binding_id applies only to sms/email" };
     }
@@ -240,6 +282,8 @@ export async function executeCommunicationsSend(
         source: quickMessage ? "header_quick_message" : "drawer_composer",
         ...(quickMessage ? { quick_message: true } : {}),
         ...(bindingIdOpt && UUID_RE.test(bindingIdOpt) ? { requested_binding_id: bindingIdOpt } : {}),
+        ...(identityIdOpt && UUID_RE.test(identityIdOpt) ? { requested_identity_id: identityIdOpt } : {}),
+        ...(senderResolutionMeta ? { sender_resolution: senderResolutionMeta } : {}),
         ...(recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw) ? { recipient_person_id: recipientPersonIdRaw } : {}),
         ...(sendMetadataAugment && typeof sendMetadataAugment === "object" ? sendMetadataAugment : {}),
     };
@@ -257,6 +301,9 @@ export async function executeCommunicationsSend(
         metadata: meta,
         contextLocationId: locId,
         communicationProviderBindingId: resolvedBindingId,
+        communicationIdentityId: resolvedIdentityId,
+        communicationProviderAccountId: resolvedAccountId,
+        fromAddress: channel !== "in_app" && senderResolutionMeta?.ok ? (senderResolutionMeta.safe_sender_metadata as { fromAddress?: string })?.fromAddress ?? null : null,
     });
 
     if (res.skippedReason === "insert_failed" || !res.communicationMessageId) {

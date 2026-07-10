@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { assertCommunicationsSendAllowed } from "@/lib/communications/communicationPermissions";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
 import { enforceConsentForSend } from "@/lib/communications/v2/consentEnforcement";
@@ -23,6 +24,17 @@ export async function POST(req: Request) {
     }
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
+
+    const sendAuth = await assertCommunicationsSendAllowed({
+        orgId: ctx.orgId,
+        actor: ctx.userId ? { userId: ctx.userId } : null,
+    });
+    if (!sendAuth.ok) {
+        return NextResponse.json(
+            { error: sendAuth.message, code: "communications_send_forbidden" },
+            { status: 403 }
+        );
+    }
 
     let body: Record<string, unknown>;
     try {

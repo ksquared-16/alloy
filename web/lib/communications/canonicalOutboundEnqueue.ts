@@ -87,6 +87,9 @@ async function insertCommunicationMessageRow(params: {
     metadata: Record<string, unknown>;
     to_address: string | null;
     communication_provider_binding_id?: string | null;
+    communication_identity_id?: string | null;
+    communication_provider_account_id?: string | null;
+    from_address?: string | null;
 }): Promise<{ messageId?: string | null; error?: { message?: string; code?: string } }> {
     const insertPayload: Record<string, unknown> = {
         org_id: params.org_id,
@@ -104,6 +107,15 @@ async function insertCommunicationMessageRow(params: {
     }
     if (params.communication_provider_binding_id) {
         insertPayload.communication_provider_binding_id = params.communication_provider_binding_id;
+    }
+    if (params.communication_identity_id) {
+        insertPayload.communication_identity_id = params.communication_identity_id;
+    }
+    if (params.communication_provider_account_id) {
+        insertPayload.communication_provider_account_id = params.communication_provider_account_id;
+    }
+    if (params.from_address) {
+        insertPayload.from_address = params.from_address;
     }
     const { data, error } = await params.supabase.from("communication_messages").insert(insertPayload).select("id").maybeSingle();
     return {
@@ -136,6 +148,10 @@ export async function enqueueCanonicalOutboundMessage(params: {
     contextLocationId?: string | null;
     /** Composer / explicit binding routing for outbound dequeue (SMS/email). Must belong to org_id + channel. */
     communicationProviderBindingId?: string | null;
+    /** Canonical identity platform references (Phase 2). */
+    communicationIdentityId?: string | null;
+    communicationProviderAccountId?: string | null;
+    fromAddress?: string | null;
     /** When false, skips workflow_events emit (testing only — default true) */
     emitMessageQueued?: boolean;
 }): Promise<CanonicalEnqueueResult> {
@@ -171,6 +187,10 @@ export async function enqueueCanonicalOutboundMessage(params: {
 
     const bindRaw = params.communicationProviderBindingId != null ? String(params.communicationProviderBindingId).trim() : "";
     const bindingUuid = /^[0-9a-f-]{36}$/i.test(bindRaw) ? bindRaw : null;
+    const identRaw = params.communicationIdentityId != null ? String(params.communicationIdentityId).trim() : "";
+    const identityUuid = /^[0-9a-f-]{36}$/i.test(identRaw) ? identRaw : null;
+    const acctRaw = params.communicationProviderAccountId != null ? String(params.communicationProviderAccountId).trim() : "";
+    const accountUuid = /^[0-9a-f-]{36}$/i.test(acctRaw) ? acctRaw : null;
 
     const emailSubjectResolved =
         mc === "email" ? resolveOutboundEmailSubject(params.primaryEntityType, params.emailSubjectRaw ?? null) : null;
@@ -187,6 +207,9 @@ export async function enqueueCanonicalOutboundMessage(params: {
         metadata: meta,
         to_address: params.toRaw?.trim() || null,
         communication_provider_binding_id: bindingUuid,
+        communication_identity_id: identityUuid,
+        communication_provider_account_id: accountUuid,
+        from_address: params.fromAddress?.trim() || null,
     });
 
     if (error?.message) {
