@@ -59,6 +59,22 @@ Prefer focused checks first:
 
 Use full `cd web && npm run test` before larger merges when practical.
 
+### Workspace orchestration (concurrent agents)
+
+Before expensive validation on a shared machine:
+
+- `npm run workspace:doctor` (from repo root or `cd web && npm run workspace:doctor`)
+- `npm run workspace:processes -- --kind=tsc` — do not start typecheck if another `tsc` is running
+
+Rules:
+
+- **Serialize** `npm run typecheck` and `npm run typecheck:tests` machine-wide (one at a time).
+- Keep **≤5** Cursor windows open (**≤3** during typecheck-heavy work).
+- Run `worktree:list` to confirm the agent is editing the intended worktree path.
+- Do not run full-tree `rg`/`find` across `web/` — scope to the feature path.
+
+See `docs/governance/workspace-orchestration.md`.
+
 ### TypeScript: `import type` for props and interfaces
 
 When a symbol appears **only as a type** (component props, function parameters, return types), import it with **`import type`** from the defining module — do not rely on value imports from the same line unless the symbol is also used at runtime.

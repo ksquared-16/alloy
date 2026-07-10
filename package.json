@@ -2,7 +2,14 @@
   "scripts": {
     "smoke:field-registry-api": "npx tsx scripts/smoke/api_field_registry_smoke.ts",
     "export:supabase-schema": "node scripts/supabase/export_schema_reference.mjs",
-    "generate:schema-docs": "node scripts/generate-schema-docs.mjs"
+    "generate:schema-docs": "node scripts/generate-schema-docs.mjs",
+    "workspace:status": "node scripts/workspace/status.mjs",
+    "workspace:doctor": "node scripts/workspace/doctor.mjs",
+    "workspace:processes": "node scripts/workspace/processes.mjs",
+    "workspace:ports": "node scripts/workspace/ports.mjs",
+    "workspace:cleanup": "node scripts/workspace/cleanup.mjs",
+    "worktree:list": "node scripts/workspace/worktree-list.mjs",
+    "worktree:prune-safe": "node scripts/workspace/worktree-prune-safe.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
