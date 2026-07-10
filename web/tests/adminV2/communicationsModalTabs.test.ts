@@ -42,7 +42,7 @@ describe("Communications modal tabs", () => {
             expect(panel).toContain(label);
         }
         expect(shell).toContain('data-inbox-compose-new="true"');
-        expect(src).toContain("QuickMessageModal");
+        expect(src).toContain("ComposeNewCommunicationModal");
         expect(shell).toContain("workspace-v2");
         expect(shell).not.toContain('data-comms-workspace-context="true"');
         expect(shell).toContain("CommunicationsWorkspaceKpiStrip");

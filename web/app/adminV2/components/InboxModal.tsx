@@ -12,7 +12,7 @@ import CommunicationsModalTabPanel, {
 } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 import CommunicationsWorkspaceShell from "@/app/adminV2/communications/CommunicationsWorkspaceShell";
 import { CommunicationsWorkspaceKpiProvider } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
-import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
+import ComposeNewCommunicationModal from "@/app/adminV2/communications/ComposeNewCommunicationModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 
@@ -84,7 +84,11 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                 </div>
             }
             {commandCenterEnabled ?
-                <QuickMessageModal open={composeOpen} onClose={() => setComposeOpen(false)} />
+                <ComposeNewCommunicationModal
+                    open={composeOpen}
+                    onClose={() => setComposeOpen(false)}
+                    onConversationStarted={() => setTab("inbox")}
+                />
             :   null}
         </AdminV2WorkspaceBosModalShell>
     );

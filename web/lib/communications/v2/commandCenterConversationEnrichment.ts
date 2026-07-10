@@ -10,6 +10,7 @@ import {
     type OpportunityStatusSourceRow,
 } from "@/lib/admin/drawer/resolveOpportunityStatusLabelsBatch";
 import type { ConversationSummary } from "@/lib/communications/v2/commandCenterViewModel";
+import { deriveThreadTopicTitle } from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const PREVIEW_MAX = 96;
@@ -56,6 +57,34 @@ function truncatePreview(body: string | null | undefined): string | null {
     if (!text) return null;
     if (text.length <= PREVIEW_MAX) return text;
     return `${text.slice(0, PREVIEW_MAX - 1)}…`;
+}
+
+function deriveQueueTopicLabel(row: ThreadRow): string {
+    const meta = row.metadata ?? {};
+    const actionLabel = typeof meta.action_label === "string" ? meta.action_label : null;
+    const topic = typeof meta.topic === "string" ? meta.topic : null;
+    const familyLabel = typeof meta.family_label === "string" ? meta.family_label : null;
+    const subject =
+        typeof meta.subject === "string"
+            ? meta.subject
+            : typeof meta.thread_subject === "string"
+              ? meta.thread_subject
+              : null;
+
+    return deriveThreadTopicTitle({
+        thread: {
+            subject,
+            channel: row.channel,
+            attentionState: row.attention_state,
+            slaState: row.sla_state,
+        },
+        workflowLabel: actionLabel,
+        conversationMetadata: {
+            topic,
+            actionLabel,
+            familyLabel,
+        },
+    });
 }
 
 async function loadLastMessagePreviews(
@@ -376,6 +405,7 @@ export async function enrichCommandCenterConversations(
             primary_entity_type: r.primary_entity_type,
             primary_entity_id: r.primary_entity_id,
             customer_id: customerId,
+            topic_label: deriveQueueTopicLabel(r),
         };
     });
 }
