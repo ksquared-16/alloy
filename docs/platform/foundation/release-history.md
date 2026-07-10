@@ -10,6 +10,8 @@
 
 ### July 2026
 
+- **Platform Simplification — Legacy Drawer Elimination** — deleted `AdminEntityDrawerLegacy` (~19.7k lines); Settings inline location create; Global Search campus → `/settings/locations?locationId=`; permanent VM cutover (kill switches retired); `/legacy-admin` landing archived. Merges: `4c5821cce` (#144), `305e95c4b` (#145), `e94811914` (#148). Production `npm run typecheck` wall time ~696s → ~69s on certification host (machine-dependent).
+
 - **Current Work (Focus Panel)** — config-driven operational surface on the Focus Panel: Summary → Focus → outcome completion inside Focus; primary CTA **`Record what happened`**; checklist handoffs (Communications, Household, Children, Documents); queue row current-work hints; action-registry supporting actions; right-rail demotion when Current Work owns completion. Merged to staging via PR #95.
 
 ### June 2026

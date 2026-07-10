@@ -2,6 +2,9 @@
 
 **Status:** Canonical infrastructure doc (June 2026). **Product vocabulary:** operators work in the **Focus Panel** on an **operational subject** — see [`focus-panel-architecture-vocabulary.md`](./focus-panel-architecture-vocabulary.md). This file documents payload/VM infrastructure that still uses *drawer* in module names during migration.
 
+
+> **Platform Simplification (July 2026):** Alloy has **no supported legacy entity drawer runtime**. Canonical operator experiences use VM, Focus Panel, Settings, Processing, Communications, or explicit operating surfaces. Unsupported historical entities **fail closed** (`AdminEntityDrawer` returns `null`). Rollback is **deployment/Git-based**, not permanent dual-runtime code.
+
 > **Convergence position (locked):** The **Focus Panel is the canonical operator surface.** The drawer shell remains only as **reveal / open-state infrastructure**. Drawer/tab overview and LayoutDoc drawer authoring are **legacy/transitional** and must not receive new product investment. Universal Cards absorb drawer sections over time. See the **freeze rule** and **sunset status matrix** in [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
 
 Entity detail architecture, VM ownership, and navigation semantics.
@@ -23,10 +26,11 @@ Drawers are **operational workspaces** for record detail — opened from queue r
 | Entity | Runtime | Maturity | Focus Panel body |
 |--------|---------|----------|------------------|
 | Opportunity | `OpportunityDrawerVmRuntime` | **Canonical** | **Yes** (when split active) |
-| Person / Child | `PersonsDrawerVmRuntime` | **Transitional** (VM flag default OFF) | **No** — required before drawer UX retires |
-| Other (location, job, …) | `AdminEntityDrawerLegacy` | **Legacy** — shrinking | **No** — location operating surface unresolved |
+| Person / Child | `PersonsDrawerVmRuntime` | **Canonical** (permanent VM cutover) | **Yes** (modal path; inline on work-unit surfaces) |
+| Location | Settings Configuration Runtime (`/settings/locations`) | **Canonical** | **No** — inline create + deep-link selection |
+| Unsupported historical entities (job, vendor, …) | — | **Removed** | **No** — `AdminEntityDrawer` fails closed (`return null`) |
 
-Router shell: `AdminEntityDrawer.tsx` (dynamic import) → runtime owner `AdminEntityDrawerLegacy.tsx` for legacy entity paths. Ownership map: [`../governance/runtime-ownership-migration-map.md`](../governance/runtime-ownership-migration-map.md). Sunset status per area: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
+Router shell: `AdminEntityDrawer.tsx` → VM subject surface runtimes only. **`AdminEntityDrawerLegacy` deleted** (July 2026 Platform Simplification). Ownership map: [`../governance/runtime-ownership-migration-map.md`](../governance/runtime-ownership-migration-map.md). Sunset status per area: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
 
 ---
 

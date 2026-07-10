@@ -1,10 +1,13 @@
 # Drawer Sunset & Focus Panel Convergence Roadmap
 
-**Status:** Canonical doctrine (June 2026). Documentation-only lock — no runtime code changes.
+**Status:** Canonical doctrine (July 2026). Legacy entity drawer runtime **deleted**; VM + Settings surfaces are authoritative.
 **Source material:** Card System Discovery Audit + Drawer Sunset & Focus Panel Convergence Audit.
 **Companion code plan:** [`../../sprints/06_2026/platform_simplification_phase3_drawer_deletion_audit.md`](../../sprints/06_2026/platform_simplification_phase3_drawer_deletion_audit.md) (legacy monolith deletion — a **separate track** from card convergence).
 
 This doc locks the product position: **the Focus Panel is the operator surface; the drawer is reveal/open-state infrastructure.** It exists so future implementation does not keep investing in legacy drawer / tab / LayoutDoc-overview behavior.
+
+
+> **July 2026 closeout:** `AdminEntityDrawerLegacy` is **deleted**. Kill-switch rollback paths are **retired**. Location campuses use Settings (`/settings/locations`). Campus search deep-links via `locationId`.
 
 ---
 
@@ -38,8 +41,8 @@ These positions are consistent with [`focus-panel-architecture-vocabulary.md`](.
 | Lead summary blueprint | Duplicate top-of-record config | Archive after parity | **Legacy** |
 | Person drawer | Legacy UX | Replace with Person/Child Focus Panel | **Transitional** |
 | Child drawer | Legacy UX | Replace with Child-focused card state | **Transitional** |
-| Location drawer | Legacy only | Needs future operating surface | **Unresolved** |
-| AdminEntityDrawerLegacy | Legacy monolith | Delete after parity / coverage | **Legacy** |
+| Location operating surface | Settings `/settings/locations` | Canonical campus configuration | **Canonical** |
+| AdminEntityDrawerLegacy | — | **Deleted** July 2026 (`e94811914`) | **Removed** |
 | Focus Panel Universal Cards | Future card runtime | Invest | **Canonical** |
 
 ---

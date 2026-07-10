@@ -54,3 +54,11 @@ Playwright location/search specs authored; Chromium install blocked in CI agent 
 
 - Relocating `app/legacy-admin/**` client modules still imported by canonical settings (file-path debt only; routes archived).
 - Full deletion of `app/legacy-admin/` route files beyond landing redirect (requires migrating imported clients).
+
+## Closeout certification
+
+**Final staging SHA (minimum):** `e9481191442d96ca543f45f2aa4839827f79f875`
+
+> Alloy has no supported legacy entity drawer runtime. Canonical operator experiences use VM, Focus Panel, Settings, Processing, Communications, or explicit operating surfaces. Unsupported historical entities fail closed. Rollback is deployment/Git-based rather than permanent dual-runtime code.
+
+Authenticated browser QA checklist: `docs/sprints/07_2026/platform-simplification-staging-qa-checklist.md`
