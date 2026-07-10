@@ -5,7 +5,7 @@
  * Folder rail + queue lanes + source-document-first review.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import { WS_ACTION_SECONDARY, WS_CANVAS, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
@@ -15,6 +15,9 @@ import { usePosCase } from "./usePosCase";
 import PosCaseWorkColumn from "./PosCaseWorkColumn";
 import PosCaseDecisionColumn from "./PosCaseDecisionColumn";
 import PosTemplateSetupColumn from "./PosTemplateSetupColumn";
+import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
+import { uploadProcessingDocument } from "@/lib/pos/processingDocumentUpload";
+import ProcessingImportIntentModal from "./ProcessingImportIntentModal";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 
 export default function PosProcessingWorkspace({
@@ -27,31 +30,38 @@ export default function PosProcessingWorkspace({
     onOpenForm?: (formId: string) => void;
 }) {
     const state = usePosCase(selectedCaseId);
-    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [dropActive, setDropActive] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
+    const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
+    const [importErr, setImportErr] = useState<string | null>(null);
 
     const primary = state.detail?.sources.find((s) => s.role === "primary") ?? state.detail?.sources[0] ?? null;
     const isDocumentCase =
         primary?.kind === "document" || primary?.kind === "upload" || primary?.kind === "recreated_document";
     const detailLoading = !!selectedCaseId && state.loading && !state.detail;
 
-    const uploadPdf = useCallback(
-        async (file: File) => {
+    const uploadDocument = useCallback(
+        async (payload: {
+            file: File;
+            intent: import("@/lib/pos/processingImportIntent").ProcessingImportIntent;
+            displayName: string;
+        }) => {
             setUploading(true);
+            setImportErr(null);
             try {
-                const form = new FormData();
-                form.append("file", file);
-                form.append("open_processing_case", "true");
-                const res = await fetch("/api/admin/documents/upload", {
-                    method: "POST",
-                    credentials: "same-origin",
-                    body: form,
+                const body = await uploadProcessingDocument({
+                    file: payload.file,
+                    intent: payload.intent,
+                    displayName: payload.displayName,
                 });
-                const body = (await res.json().catch(() => ({}))) as { processing_case_id?: string | null; error?: string };
-                if (!res.ok) throw new Error(body.error || "Upload failed");
                 void warmProcessingQueueCache({ force: true });
+                setImportOpen(false);
+                setPendingImportFile(null);
                 if (body.processing_case_id) onSelectCase(body.processing_case_id);
+                else throw new Error("Import succeeded but no review case was created.");
+            } catch (e) {
+                setImportErr(e instanceof Error ? e.message : "Upload failed");
             } finally {
                 setUploading(false);
                 setDropActive(false);
@@ -71,21 +81,15 @@ export default function PosProcessingWorkspace({
             onDrop={(e) => {
                 e.preventDefault();
                 const file = e.dataTransfer.files?.[0];
-                if (file && file.type === "application/pdf") void uploadPdf(file);
-                else setDropActive(false);
+                if (file) {
+                    const format = detectProcessingSourceFormat(file.name, file.type || "");
+                    if (capabilitiesForFormat(format).store) {
+                        setPendingImportFile(file);
+                        setImportOpen(true);
+                    } else setDropActive(false);
+                } else setDropActive(false);
             }}
         >
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,application/pdf"
-                className="hidden"
-                onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void uploadPdf(f);
-                    e.target.value = "";
-                }}
-            />
             <div className="flex min-h-0 flex-1 overflow-hidden">
                 <WorkspaceZonePanel
                     title="Queue"
@@ -116,14 +120,17 @@ export default function PosProcessingWorkspace({
                                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => fileInputRef.current?.click()}
+                                        onClick={() => {
+                                            setPendingImportFile(null);
+                                            setImportOpen(true);
+                                        }}
                                         className={WS_ACTION_SECONDARY}
                                     >
-                                        Import form
+                                        Import document
                                     </button>
                                 </div>
                                 {dropActive ? (
-                                    <p className="mt-4 text-[12px] font-semibold text-alloy-bend-pine">Drop PDF to import</p>
+                                    <p className="mt-4 text-[12px] font-semibold text-alloy-bend-pine">Drop a document to import</p>
                                 ) : uploading ? (
                                     <p className="mt-4 text-[12px] text-alloy-midnight/50">Importing…</p>
                                 ) : null}
@@ -166,6 +173,19 @@ export default function PosProcessingWorkspace({
                     </>
                 )}
             </div>
+            <ProcessingImportIntentModal
+                open={importOpen}
+                onClose={() => {
+                    if (!uploading) {
+                        setImportOpen(false);
+                        setPendingImportFile(null);
+                    }
+                }}
+                onSubmit={uploadDocument}
+                submitting={uploading}
+                error={importErr}
+                initialFile={pendingImportFile}
+            />
         </div>
     );
 }

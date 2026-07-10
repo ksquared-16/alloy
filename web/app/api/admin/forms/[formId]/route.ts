@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { dbGetFormDefinition, dbListVersionsForForm, dbUpdateFormDefinition } from "@/lib/admin/forms/formsAdminDb";
+import {
+    dbGetFormDefinition,
+    dbListFormIdsWithPublishedVersion,
+    dbListVersionsForForm,
+    dbUpdateFormDefinition,
+} from "@/lib/admin/forms/formsAdminDb";
 import { deleteFormDefinitionForAdmin } from "@/lib/admin/forms/deleteFormDefinitionForAdmin";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 
@@ -22,7 +27,17 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data: versions, error: vErr } = await dbListVersionsForForm(supabase, ctx.orgId, formId);
     if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
 
-    return jsonData({ ...form, versions: versions ?? [] });
+    const { data: pubRows, error: pubErr } = await dbListFormIdsWithPublishedVersion(supabase, ctx.orgId);
+    if (pubErr) return NextResponse.json({ error: pubErr.message }, { status: 500 });
+    const publishedFormIds = new Set(
+        (pubRows ?? []).map((r) => (r as { form_definition_id: string }).form_definition_id).filter(Boolean)
+    );
+
+    return jsonData({
+        ...form,
+        versions: versions ?? [],
+        has_published_version: publishedFormIds.has(formId),
+    });
 }
 
 /** PATCH /api/admin/forms/[formId] — admin only; key is immutable. */
