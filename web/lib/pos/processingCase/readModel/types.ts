@@ -17,6 +17,7 @@ import type { StoredDocumentFormPreview } from "../structure/types";
 import type { StoredFormDraftPreview } from "../formDraft/types";
 import type { DetectionModeKind } from "../formDraft/detectionModeLabel";
 import type { FormDraftCreatedLink } from "../formDraft/createFormFromCaseDraft";
+import type { ProcessingImportIntent } from "@/lib/pos/processingImportIntent";
 
 export type { ProcessingCaseSourceKind, ProcessingCaseSourceRole, ProcessingCaseStatus };
 
@@ -76,6 +77,8 @@ export interface ProcessingCaseDetail {
     formDraftPreview: StoredFormDraftPreview | null;
     /** POS-FP13 link to the unpublished editable form created from the draft (from `metadata.form_draft_created`); null until created. */
     formDraftCreated: FormDraftCreatedLink | null;
+    /** Persisted import intent from case metadata (`processing_intent` / `import_purpose`). */
+    processingIntent: ProcessingImportIntent | null;
 }
 
 export type ProcessingCaseQueueSortKey = "created_at" | "status_changed_at";

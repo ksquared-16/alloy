@@ -65,7 +65,7 @@ const STATUS_LABEL: Record<string, string> = {
     medium: "Medium",
     low: "Low",
     needs_review: "Needs review",
-    processing_only: "Processing only",
+    processing_only: "Form field only",
     ignored: "Ignored",
 };
 
@@ -209,8 +209,17 @@ export function ProcessingQuestionReviewList({
                                                 )}
                                                 <button
                                                     type="button"
-                                                    aria-label="Edit question"
-                                                    onClick={() => onEdit(isEditing ? null : q.id)}
+                                                    aria-label="Edit question mapping"
+                                                    data-testid={`review-pencil-${q.id}`}
+                                                    onClick={() => {
+                                                        onSelect(q.id);
+                                                        onEdit(null);
+                                                        requestAnimationFrame(() => {
+                                                            document
+                                                                .querySelector(`[data-testid="review-inspector-${q.id}"]`)
+                                                                ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                                                        });
+                                                    }}
                                                     className="p-0.5 text-alloy-midnight/30 hover:text-alloy-midnight/60"
                                                 >
                                                     <Pencil className="h-3 w-3" />

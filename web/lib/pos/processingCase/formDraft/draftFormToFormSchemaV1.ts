@@ -11,17 +11,27 @@
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
 import type { StoredFormDraftPreview } from "./types";
+import {
+    PROCESSING_NEEDS_DESTINATION_DESCRIPTION,
+    UNRESOLVED_AT_GENERATE_EVIDENCE,
+} from "./questionResolutionModel";
 
 export function draftFormToFormSchemaV1(draft: StoredFormDraftPreview): FormSchemaV1 {
     const fields: FormField[] = draft.fields.map((f) => {
+        const unresolvedAtGenerate = f.evidence === UNRESOLVED_AT_GENERATE_EVIDENCE;
         // Persist canonical binding: operator-reviewed binding wins; otherwise auto-suggest
         // from the label/type so generated forms prefill + drive guided intake by default.
-        const field_source = f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source;
+        const field_source = unresolvedAtGenerate
+            ? undefined
+            : f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source;
+        const description =
+            f.description ??
+            (unresolvedAtGenerate ? PROCESSING_NEEDS_DESTINATION_DESCRIPTION : undefined);
         const base = {
             id: f.id,
             label: f.label,
             required: f.required,
-            ...(f.description ? { description: f.description } : {}),
+            ...(description ? { description } : {}),
             ...(f.layout_width ? { layout_width: f.layout_width } : {}),
             ...(field_source ? { field_source } : {}),
         };
@@ -50,7 +60,7 @@ export function draftFormToFormSchemaV1(draft: StoredFormDraftPreview): FormSche
 
     return {
         schema_version: 1,
-        title: draft.title || "Untitled form",
+        title: draft.generated_form_name?.trim() || draft.title || "Untitled form",
         sections,
         fields,
     };

@@ -71,6 +71,66 @@ export type ReviewQuestionInput = {
     field_source?: FormFieldSource;
 };
 
+export type ReviewQuestionMappingDisposition = "mapped" | "form_field_only" | "unresolved" | "ignored";
+
+export const PROCESSING_NEEDS_DESTINATION_DESCRIPTION = "Needs destination configuration";
+export const UNRESOLVED_AT_GENERATE_EVIDENCE = "unresolved_at_generate";
+
+function hasCanonicalBinding(fieldSource?: FormFieldSource | null): boolean {
+    if (!fieldSource?.field_key) return false;
+    const key = fieldSource.field_key;
+    return key !== "unmapped" && key !== "custom";
+}
+
+/** Operator-facing disposition for generate-step summaries and CTAs. */
+export function classifyReviewQuestionMapping(question: ReviewQuestionInput): ReviewQuestionMappingDisposition {
+    if (question.ignored) return "ignored";
+    if (question.questionSubject === "processing_only") return "form_field_only";
+
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
+    const fieldSource =
+        question.field_source ??
+        deriveFieldSources({
+            subject,
+            nameRepresentation: question.nameRepresentation,
+            intent,
+            displayLabel: question.displayLabel,
+            type: question.type,
+            destinationFieldId: question.destinationFieldId,
+        });
+
+    if (hasCanonicalBinding(fieldSource)) return "mapped";
+    return "unresolved";
+}
+
+/** Human label for where a question's answer will land in the generated form. */
+export function formatReviewDestinationDisplay(question: ReviewQuestionInput): string {
+    const disposition = classifyReviewQuestionMapping(question);
+    if (disposition === "ignored") return "Ignored";
+    if (disposition === "form_field_only") return "Form field only";
+    if (disposition === "unresolved") return "Unresolved";
+
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
+    const fieldSource =
+        question.field_source ??
+        deriveFieldSources({
+            subject,
+            nameRepresentation: question.nameRepresentation,
+            intent,
+            displayLabel: question.displayLabel,
+            type: question.type,
+            destinationFieldId: question.destinationFieldId,
+        });
+    return storageSummaryLabel(fieldSource, question.destinationFieldId);
+}
+
+export type ExpandQuestionsOptions = {
+    /** When true, unresolved questions become form-only fields with provenance — not silently mapped. */
+    generateAnyway?: boolean;
+};
+
 export const QUESTION_SUBJECT_OPTIONS: Array<{ value: QuestionSubject; label: string }> = [
     { value: "child", label: "Child" },
     { value: "parent", label: "Parent" },
@@ -78,7 +138,7 @@ export const QUESTION_SUBJECT_OPTIONS: Array<{ value: QuestionSubject; label: st
     { value: "other_adult", label: "Other adult" },
     { value: "household", label: "Household" },
     { value: "enrollment", label: "Enrollment" },
-    { value: "processing_only", label: "Processing only" },
+    { value: "processing_only", label: "Form field only" },
 ];
 
 export const NAME_REPRESENTATION_OPTIONS: Array<{ value: NameRepresentation; label: string }> = [
@@ -234,7 +294,7 @@ export function storageSummaryLabel(
         const option = reviewFieldOptionById(destinationFieldId);
         if (option) return option.label;
     }
-    if (!fieldSource) return "Processing only — not synced to records";
+    if (!fieldSource) return "Form field only — not synced to records";
     const selected = PROCESSING_FIELD_LABEL_BY_KEY.get(`${fieldSource.entity_type}:${fieldSource.field_key}`);
     if (selected) return selected;
     const subject =
@@ -251,13 +311,20 @@ export function storageSummaryLabel(
 }
 
 /** Expand resolved questions into draft field rows (splits name representations). */
-export function expandQuestionsForDraftSave(questions: readonly ReviewQuestionInput[]): DraftFieldInput[] {
+export function expandQuestionsForDraftSave(
+    questions: readonly ReviewQuestionInput[],
+    options?: ExpandQuestionsOptions
+): DraftFieldInput[] {
     const out: DraftFieldInput[] = [];
 
     for (const question of questions) {
         if (question.ignored) continue;
         const label = question.displayLabel.trim();
         if (!label) continue;
+
+        const disposition = classifyReviewQuestionMapping(question);
+        const forceFormOnly =
+            options?.generateAnyway && disposition === "unresolved";
 
         const intent = inferQuestionIntent(question.evidenceLabel || label);
         let subject = question.questionSubject ?? defaultSubjectForIntent(intent);
@@ -270,20 +337,24 @@ export function expandQuestionsForDraftSave(questions: readonly ReviewQuestionIn
             subject = defaultSubjectForIntent(intent);
         }
         const nameRep = question.nameRepresentation ?? defaultNameRepresentation(intent, question.evidenceLabel);
-        const fieldSource = question.field_source ?? deriveFieldSources({
-            subject,
-            nameRepresentation: question.nameRepresentation,
-            intent,
-            displayLabel: label,
-            type: question.type,
-            destinationFieldId: question.destinationFieldId,
-        });
+        const fieldSource = forceFormOnly
+            ? undefined
+            : question.field_source ??
+              deriveFieldSources({
+                  subject,
+                  nameRepresentation: question.nameRepresentation,
+                  intent,
+                  displayLabel: label,
+                  type: question.type,
+                  destinationFieldId: question.destinationFieldId,
+              });
 
         const pdfProvenance = {
             pdf_field_name: question.pdf_field_name,
             page: question.page,
             bbox: question.bbox,
-            evidence: question.evidence,
+            evidence: forceFormOnly ? UNRESOLVED_AT_GENERATE_EVIDENCE : question.evidence,
+            ...(forceFormOnly ? { description: PROCESSING_NEEDS_DESTINATION_DESCRIPTION } : {}),
         };
 
         const splitName =
@@ -349,10 +420,7 @@ export function expandQuestionsForDraftSave(questions: readonly ReviewQuestionIn
             section: question.section,
             required: question.required,
             ...(fieldSource ? { field_source: fieldSource } : {}),
-            pdf_field_name: question.pdf_field_name,
-            page: question.page,
-            bbox: question.bbox,
-            evidence: question.evidence,
+            ...pdfProvenance,
         });
     }
 

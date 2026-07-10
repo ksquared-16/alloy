@@ -23,6 +23,7 @@ function detailWith(sources: { kind: ProcessingCaseSourceKind; id: string; role:
         documentFormPreview: null,
         formDraftPreview: null,
         formDraftCreated: null,
+        processingIntent: null,
     };
 }
 

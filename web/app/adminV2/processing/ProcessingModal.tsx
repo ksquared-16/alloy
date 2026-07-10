@@ -22,6 +22,7 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
     const [workView, setWorkView] = useState<DigitalMailroomWorkView>("overview");
     const [studioTab, setStudioTab] = useState<ProcessingStudioTab>("forms");
     const [studioFormId, setStudioFormId] = useState<string | null>(null);
+    const [studioFormName, setStudioFormName] = useState<string | null>(null);
 
     useEffect(() => {
         if (open) void warmProcessingQueueCache();
@@ -33,6 +34,7 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
         setWorkView("overview");
         setStudioTab("forms");
         setStudioFormId(null);
+        setStudioFormName(null);
         onClose();
     }, [onClose]);
 
@@ -42,8 +44,9 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
         setWorkView("work");
     }, []);
 
-    const openFormInStudio = useCallback((formId: string) => {
+    const openFormInStudio = useCallback((formId: string, formName?: string) => {
         setStudioFormId(formId);
+        setStudioFormName(formName?.trim() || null);
         setMode("studio");
         setStudioTab("forms");
     }, []);
@@ -87,7 +90,11 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                     ) : (
                         <ProcessingFormsStudio
                             selectedFormId={studioFormId}
-                            onSelectedFormIdChange={setStudioFormId}
+                            initialFormName={studioFormName}
+                            onSelectedFormIdChange={(formId) => {
+                                setStudioFormId(formId);
+                                if (!formId) setStudioFormName(null);
+                            }}
                             initialTab={studioTab}
                             onTabChange={setStudioTab}
                         />

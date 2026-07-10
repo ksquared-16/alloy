@@ -27,7 +27,7 @@ export default function PosProcessingWorkspace({
 }: {
     selectedCaseId: string | null;
     onSelectCase: (caseId: string | null) => void;
-    onOpenForm?: (formId: string) => void;
+    onOpenForm?: (formId: string, formName?: string) => void;
 }) {
     const state = usePosCase(selectedCaseId);
     const [dropActive, setDropActive] = useState(false);

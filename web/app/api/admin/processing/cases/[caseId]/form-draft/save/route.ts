@@ -51,6 +51,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 type: typeof f.type === "string" ? f.type : undefined,
                 required: f.required === true,
                 section: typeof f.section === "string" ? f.section : undefined,
+                description: typeof f.description === "string" ? f.description : undefined,
                 // Preserve PDF provenance when the reviewed field came from AcroForm detection
                 // or manual mapping.
                 pdf_field_name: typeof f.pdf_field_name === "string" ? f.pdf_field_name : undefined,

@@ -29,6 +29,8 @@ export interface ManualFieldInput {
     evidence?: string;
     /** Operator-reviewed canonical binding — persisted through to the generated form. */
     field_source?: import("@/lib/forms/schema").FormFieldSource;
+    /** Operator-visible note — e.g. unresolved-at-generate destination flag. */
+    description?: string;
 }
 
 export interface BuildManualDraftInput {
@@ -74,6 +76,7 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
                 ? { bbox: [f.bbox[0], f.bbox[1], f.bbox[2], f.bbox[3]] as [number, number, number, number] }
                 : {}),
             ...(f.field_source ? { field_source: f.field_source } : {}),
+            ...(f.description ? { description: f.description } : {}),
         });
     }
 

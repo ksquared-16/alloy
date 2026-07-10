@@ -301,7 +301,14 @@ export function useProcessingFormApi() {
     const mintProcessingPublicLink = useCallback(
         async (
             formId: string,
-            args: { formName: string; formKey: string; existingMeta?: Record<string, unknown>; publishedVersionId?: string | null }
+            args: {
+                formName: string;
+                formKey: string;
+                existingMeta?: Record<string, unknown>;
+                publishedVersionId?: string | null;
+                locationId?: string;
+                locationName?: string;
+            }
         ): Promise<ProcessingMintedPublicLink> => {
             const publicSlug = resolveProcessingPublicSlug(args.formKey, args.formName, args.existingMeta);
             const metadata = buildProcessingPublicLinkMetadata({ formName: args.formName, publicSlug });
@@ -312,6 +319,13 @@ export function useProcessingFormApi() {
                 body: JSON.stringify({
                     metadata,
                     ...(args.publishedVersionId ? { pinned_form_definition_version_id: args.publishedVersionId } : {}),
+                    ...(args.locationId
+                        ? {
+                              default_location_id: args.locationId,
+                              location_id: args.locationId,
+                              location_name: args.locationName ?? "Location",
+                          }
+                        : {}),
                 }),
             });
             if (!res.ok) throw new Error(await readJsonError(res, "Failed to create public link"));

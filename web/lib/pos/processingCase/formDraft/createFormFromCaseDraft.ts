@@ -47,7 +47,7 @@ export interface CreateFormDeps {
 }
 
 export type CreateFormResult =
-    | { ok: true; formId: string; formVersionId: string; createdAt: string; alreadyCreated: boolean }
+    | { ok: true; formId: string; formVersionId: string; formName: string; createdAt: string; alreadyCreated: boolean }
     | { ok: false; code: "not_found" | "no_preview" | "invalid_schema"; message: string };
 
 /** Read an already-stored creation link from case metadata (idempotency + read model). */
@@ -74,7 +74,16 @@ export async function createFormFromCaseDraft(
     // Idempotent: already created → return the existing link, never make a duplicate.
     const existing = parseFormDraftCreated(metadata);
     if (existing) {
-        return { ok: true, formId: existing.form_id, formVersionId: existing.form_version_id, createdAt: existing.created_at, alreadyCreated: true };
+        const preview = parseStoredFormDraftPreview(metadata);
+        const formName = preview?.generated_form_name?.trim() || preview?.title?.trim() || "Untitled form";
+        return {
+            ok: true,
+            formId: existing.form_id,
+            formVersionId: existing.form_version_id,
+            formName,
+            createdAt: existing.created_at,
+            alreadyCreated: true,
+        };
     }
 
     const preview = parseStoredFormDraftPreview(metadata);
@@ -125,7 +134,7 @@ export async function createFormFromCaseDraft(
         metadata: { ...metadata, form_draft_created: { form_id: def.id, form_version_id: ver.id, created_at: createdAt } },
     });
 
-    return { ok: true, formId: def.id, formVersionId: ver.id, createdAt, alreadyCreated: false };
+    return { ok: true, formId: def.id, formVersionId: ver.id, formName: name, createdAt, alreadyCreated: false };
 }
 
 /** Production deps backed by Supabase + the existing Forms DB helpers. Versions are ALWAYS "draft". */

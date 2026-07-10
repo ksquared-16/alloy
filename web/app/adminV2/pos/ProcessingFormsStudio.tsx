@@ -9,11 +9,13 @@ import { useProcessingFormApi } from "./useProcessingFormApi";
 
 export default function ProcessingFormsStudio({
     selectedFormId,
+    initialFormName = null,
     onSelectedFormIdChange,
     initialTab = "forms",
     onTabChange,
 }: {
     selectedFormId: string | null;
+    initialFormName?: string | null;
     onSelectedFormIdChange: (formId: string | null) => void;
     initialTab?: ProcessingStudioTab;
     onTabChange?: (tab: ProcessingStudioTab) => void;
@@ -73,6 +75,7 @@ export default function ProcessingFormsStudio({
             <ProcessingFormBuilder
                 formId={selectedFormId}
                 formMeta={formMeta}
+                initialFormName={initialFormName}
                 onBack={handleBackFromBuilder}
             />
         );
