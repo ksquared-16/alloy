@@ -211,8 +211,9 @@ describe("drawerLinkedGraphNavigation", () => {
         const opp = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(opp).not.toContain("lifecycleRailDevDebug");
         expect(opp).not.toContain("runtimeDebug={");
-        const legacy = read("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(legacy).not.toContain("runtimeDebug={");
+        const router = read("components/admin/AdminEntityDrawer.tsx");
+        expect(router).not.toContain("AdminEntityDrawerLegacy");
+        expect(router).not.toContain("runtimeDebug={");
     });
 
     it("model swap clears pending unconditionally and re-applies when drawer is stale", () => {

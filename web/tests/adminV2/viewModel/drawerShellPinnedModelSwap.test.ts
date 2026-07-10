@@ -134,9 +134,16 @@ describe("AdminDrawerContext shell-pinned swap wiring", () => {
             expect(hook).toContain("shouldHoldPriorDrawerContent");
             expect(hook).toContain("swap_hold_current");
         }
-        const legacy = readFileSync(join(webRoot, "components/admin/AdminEntityDrawerLegacy.tsx"), "utf8");
-        expect(legacy).toContain("warmRelatedDrawerViewModels");
-        expect(legacy).toContain("applyPersonDrawerPreload");
-        expect(legacy).toContain("completeDrawerRuntimeTransition");
+        const warmGraph = readFileSync(
+            join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/warmRelatedDrawerGraph.ts"),
+            "utf8"
+        );
+        expect(warmGraph).toContain("warmRelatedDrawerViewModels");
+        expect(warmGraph).toContain("related_graph_warm_start");
+        const personHook = readFileSync(
+            join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/usePersonsDrawerVmPayload.ts"),
+            "utf8"
+        );
+        expect(personHook).toContain("completeDrawerRuntimeTransition");
     });
 });

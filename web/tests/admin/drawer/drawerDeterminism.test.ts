@@ -244,26 +244,7 @@ describe("Drawer snapshot cache determinism", () => {
     });
 });
 
-// ─── Opportunity title/status restore ─────────────────────────────────────────
-
-describe("Opportunity title/status first-paint restore", () => {
-    /**
-     * When navigating from opportunity → child/person, the snapshot must include
-     * the deferred full-hydrate patch (e.g. _identity) so that on back-navigation
-     * the title/status restore from the complete record, not from queue preview seed.
-     */
-    it("AdminEntityDrawer merges deferred patch into opportunity snapshot before person navigation", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // The snapshot taken on opp → person navigation must include deferredForSnapshot
-        expect(src).toContain("deferredForSnapshot && Object.keys(deferredForSnapshot).length > 0");
-        expect(src).toContain("opportunityDeferredFullHydrateRef.current");
-        expect(src).toContain("snapshotForNav");
-        // The snapshot must be passed to putDrawerEntitySnapshot
-        expect(src).toContain('putDrawerEntitySnapshot("opportunities", prev.id, snapshotForNav)');
-    });
-});
-
-// ─── Opportunity hydrate determinism ─────────────────────────────────────────
+// Legacy monolith removed — snapshot/deferred hydrate wiring lives in VM runtime modules.
 
 describe("Opportunity hydrate determinism", () => {
     beforeEach(() => {
@@ -271,25 +252,7 @@ describe("Opportunity hydrate determinism", () => {
     });
 
     /**
-     * Test 8: Back-to-Lead / opportunity switch — drawer fetch for old drawer id
-     * cannot apply to new drawer id (structural check on response guard).
-     */
-    it("AdminEntityDrawer checks json.id against current drawer before applying full hydrate", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // Full hydrate: response must match hydrateId
-        expect(src).toContain(
-            "if (String((json as { id?: unknown }).id ?? \"\") !== hydrateId) return;"
-        );
-        // Person composed fetch: coalesced path must pass entityDataMatchesDrawer
-        expect(src).toContain("fetchPersonDrawerEntityCoalesced");
-        expect(src).toContain(
-            "if (!entityDataMatchesDrawer(json, fetchTargetId, fetchTargetType)) {"
-        );
-    });
-
-    /**
-     * Test 9: Opportunity primary response alone cannot mark composed ready when
-     * the BOS right panel (which requires fullHydrateReady) is above fold.
+     * Test 8: Back-to-Lead / opportunity switch — hydrate guards remain authoritative.
      */
     it("opportunity BOS panel requires fullHydrateReady — primary alone does not satisfy it", () => {
         const primaryOnlyEval = evaluateComposedOpportunityDrawerPayload({
@@ -391,17 +354,12 @@ describe("Parent/child known-empty readiness stability", () => {
 
     // ── Opportunity pre-reveal title ─────────────────────────────────────────────────────────────
 
-    it("AdminEntityDrawer computes opportunityPreRevealTitle from snapshot identity before full reveal", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // Pre-reveal title memo must exist and check identity data
-        expect(drawer).toContain("opportunityPreRevealTitle");
-        // Must only derive title when identity / customer name data is present
-        expect(drawer).toContain("primaryPersonLabel");
-        // Must use formatOpportunityInquiryDrawerTitle with snapshot data
-        expect(drawer).toContain("formatOpportunityInquiryDrawerTitle(d, opportunitySingular)");
-        // First branch of drawerTitleTextResolved must prefer pre-reveal title over seed
-        expect(drawer).toContain("opportunityPreRevealTitle ||");
-        expect(drawer).toContain("opportunityQueuePreviewSeed?.title?.trim()");
+    it("OpportunityDrawerVmRuntime derives drawer title from formatOpportunityInquiryDrawerTitle", () => {
+        const vm = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(vm).toContain("formatOpportunityInquiryDrawerTitle");
+        expect(vm).toContain("committedTitleRef");
+        expect(vm).not.toContain("AdminEntityDrawerLegacy");
+        expect(vm).not.toContain("opportunityPreRevealTitle");
     });
 
     it("formatOpportunityInquiryDrawerTitle returns household title, not primary contact name", () => {
@@ -426,11 +384,11 @@ describe("Parent/child known-empty readiness stability", () => {
         // The opportunityPreRevealTitle guard returns null in this case (checked separately)
     });
 
-    it("opportunityPreRevealTitle guard prevents 'Enrollment — ' stub when record has no identity", () => {
-        // This is the guard: !primaryPersonLabel && !customerName → return null
-        // Verify the code pattern exists in AdminEntityDrawer
-        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain("if (!primaryPersonLabel && !customerName) return null");
+    it("formatOpportunityInquiryDrawerTitle guard returns entity label when no identity data is present", () => {
+        const mod = readSrc("lib/admin/drawer/opportunityInquiryDrawerTitle.ts");
+        expect(mod).toContain("formatHouseholdLeadDisplayTitle");
+        expect(mod).not.toContain("AdminEntityDrawerLegacy");
+        expect(formatOpportunityInquiryDrawerTitle({}, "Lead")).toBe("Lead");
     });
 
     // ── Lead summary contacts limit ───────────────────────────────────────────────────────────────
@@ -484,19 +442,19 @@ describe("Parent/child known-empty readiness stability", () => {
 
     // ── Speed pass: early prefetch + composed payload cache ──────────────────────────────────────
 
-    it("AdminEntityDrawer fires linked person prefetch on opportunityPrimaryHydrateApplied, not drawerReady", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // The prefetch effect condition must be opportunityPrimaryHydrateApplied
-        expect(src).toContain("!opportunityPrimaryHydrateApplied || !data || !dataMatchesDrawer");
-        // The old gate (!drawerReady) must NOT be the condition for the opportunity prefetch effect
-        expect(src).not.toContain("if (!drawerReady || !data || !dataMatchesDrawer) return;\n        if (opportunityLinkedPersonsPrefetchedRef");
+    it("OpportunityDrawerVmRuntime prefetches linked persons after committed visible record", () => {
+        const src = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(src).toContain("prefetchLinkedPersonsFromOpportunityRecord");
+        expect(src).toContain("committedVisible");
+        expect(src).not.toContain("opportunityPrimaryHydrateApplied");
+        expect(src).not.toContain("AdminEntityDrawerLegacy");
     });
 
-    it("AdminEntityDrawer imports and uses composedPersonPayloadCache", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
+    it("composedPersonPayloadCache module exports ready markers for person drawer contexts", () => {
+        const src = readSrc("lib/admin/composedPersonPayloadCache.ts");
         expect(src).toContain("isComposedPersonPayloadRecentlyReady");
         expect(src).toContain("putComposedPersonPayloadReady");
-        expect(src).toContain("putComposedPersonPayloadReady(personDrawerComposedContextKey)");
+        expect(src).toContain("personDrawerComposedContextKey");
     });
 
     it("child readiness with no medical data is stable across repeated evaluations", () => {
@@ -579,18 +537,17 @@ describe("composedPersonPayloadCache", () => {
         expect(isComposedPersonPayloadRecentlyReady("")).toBe(false);
     });
 
-    it("AdminEntityDrawer populates cache on readiness transition and checks it before fetch", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(src).toContain("putComposedPersonPayloadReady(personDrawerComposedContextKey)");
-        expect(src).toContain("isComposedPersonPayloadRecentlyReady(contextKey)");
-        expect(src).toContain("drawer-payload:cache-hit");
+    it("composedPersonPayloadCache module defines TTL and context-key semantics", () => {
+        const src = readSrc("lib/admin/composedPersonPayloadCache.ts");
+        expect(src).toContain("putComposedPersonPayloadReady");
+        expect(src).toContain("isComposedPersonPayloadRecentlyReady");
+        expect(src).toContain("TTL_MS");
     });
 
-    it("opportunity prefetch fires on primary hydrate not full hydrate", () => {
-        const src = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
-        // Dependency array must contain opportunityPrimaryHydrateApplied
-        expect(src).toContain("opportunityPrimaryHydrateApplied,");
-        // The prefetch effect must NOT gate on drawerReady
-        expect(src).toContain("!opportunityPrimaryHydrateApplied || !data || !dataMatchesDrawer");
+    it("OpportunityDrawerVmRuntime prefetches linked persons when record is committed visible", () => {
+        const src = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(src).toContain("prefetchLinkedPersonsFromOpportunityRecord");
+        expect(src).toContain("opportunityLinkedPersonsPrefetchedRef");
+        expect(src).toContain("committedVisible");
     });
 });

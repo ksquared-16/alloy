@@ -333,15 +333,15 @@ describe("Drawer single-reveal bootstrap body", () => {
         expect(src).not.toMatch(/opportunityDrawerTabsPending && isOpportunityRecordModalTarget/);
     });
 
-    it("uses center modal presentation for locations on Admin V2 workspace", () => {
-        const src = read("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(src).toContain("isLocationRecordModalTarget");
-        expect(src).toMatch(
-            /useAdminV2RecordModalPresentation[\s\S]*isLocationRecordModalTarget/,
-        );
-        expect(src).toContain(
-            'drawerShellVariant === "adminV2" && drawer.type === "locations" && !!drawer.id'
-        );
+    it("locations no longer open via legacy drawer — settings route is canonical", () => {
+        const router = read("components/admin/AdminEntityDrawer.tsx");
+        const routes = read("lib/admin/canonicalLocationSettingsRoutes.ts");
+        const settings = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        expect(router).not.toContain("AdminEntityDrawerLegacy");
+        expect(router).not.toContain('drawer.type === "locations"');
+        expect(routes).toContain("canonicalLocationSettingsHref");
+        expect(settings).toContain("canonicalLocationSettingsHref");
+        expect(settings).not.toContain("useAdminDrawer");
     });
 
     it("does not show loading copy for packet status probe", () => {

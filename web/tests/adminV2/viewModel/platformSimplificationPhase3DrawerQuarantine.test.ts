@@ -1,11 +1,9 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { resolveVmDrawerDisplayRoute } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
-import {
-    INITIAL_DRAWER_RUNTIME_PHASE_STATE,
-} from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
+import { INITIAL_DRAWER_RUNTIME_PHASE_STATE } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import {
     legacyDrawerMustNotRenderVmBackedEntity,
     resolveVmCutoverDrawerRoute,
@@ -22,26 +20,13 @@ const WORKSPACE_WU = "/workspace/work-unit/new-leads/opp-1";
 const WORKSPACE_ROOT = "/workspace";
 
 describe("platform simplification phase 3 — legacy drawer quarantine", () => {
-    const prevOppKill = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
-    const prevPersonKill = process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH;
-    const prevChildKill = process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM_KILL_SWITCH;
-
-    afterEach(() => {
-        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = prevOppKill;
-        process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH = prevPersonKill;
-        process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM_KILL_SWITCH = prevChildKill;
-        vi.unstubAllEnvs();
-    });
-
-    it("routes /workspace opportunity to VM only when cutover is on", () => {
-        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
+    it("routes /workspace opportunity to VM runtime", () => {
         const drawer = { type: "opportunities" as const, id: "opp-1" };
         expect(resolveVmCutoverDrawerRoute(drawer, WORKSPACE_WU)).toBe("opportunity");
         expect(legacyDrawerMustNotRenderVmBackedEntity(drawer, WORKSPACE_WU)).toBe(true);
     });
 
-    it("routes /workspace person to VM only when cutover is on", () => {
-        delete process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH;
+    it("routes /workspace person to VM runtime", () => {
         const drawer = {
             type: "persons" as const,
             id: "person-1",
@@ -51,8 +36,7 @@ describe("platform simplification phase 3 — legacy drawer quarantine", () => {
         expect(legacyDrawerMustNotRenderVmBackedEntity(drawer, WORKSPACE_WU)).toBe(true);
     });
 
-    it("routes /workspace child inquiry to VM only when cutover is on", () => {
-        delete process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM_KILL_SWITCH;
+    it("routes /workspace child inquiry to VM runtime", () => {
         const drawer = {
             type: "persons" as const,
             id: "child-1",
@@ -62,43 +46,22 @@ describe("platform simplification phase 3 — legacy drawer quarantine", () => {
         expect(legacyDrawerMustNotRenderVmBackedEntity(drawer, WORKSPACE_WU)).toBe(true);
     });
 
-    it("keeps legacy drawer for unmigrated entity types on /workspace", () => {
-        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
+    it("unsupported entity types no longer have a legacy drawer runtime", () => {
         const drawer = { type: "jobs" as const, id: "job-1" };
         expect(resolveVmDrawerRuntimeRoute(drawer, WORKSPACE_WU)).toBe("legacy");
-        expect(legacyDrawerMustNotRenderVmBackedEntity(drawer, WORKSPACE_WU)).toBe(false);
-    });
-
-    it("allows legacy opportunity drawer when kill switch is active (explicit rollback)", () => {
-        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
-        const drawer = { type: "opportunities" as const, id: "opp-1" };
-        expect(resolveVmCutoverDrawerRoute(drawer, WORKSPACE_WU)).toBe("legacy");
-        expect(legacyDrawerMustNotRenderVmBackedEntity(drawer, WORKSPACE_WU)).toBe(false);
-    });
-
-    it("AdminEntityDrawer router mounts VM runtimes and quarantines legacy for VM entities", () => {
         const router = read("components/admin/AdminEntityDrawer.tsx");
-        // Phase C: router mounts the subject surface runtimes via canonical shim names
-        // (these re-export the unchanged OpportunityDrawerVmRuntime / PersonsDrawerVmRuntime).
+        expect(router).not.toContain("AdminEntityDrawerLegacy");
+    });
+
+    it("AdminEntityDrawer router mounts VM runtimes only", () => {
+        const router = read("components/admin/AdminEntityDrawer.tsx");
         expect(router).toContain("EnrollmentSubjectSurfaceRuntime");
         expect(router).toContain("PersonSubjectSurfaceRuntime");
-        expect(router).toContain("subjectSurface/EnrollmentSubjectSurfaceRuntime");
-        expect(router).toContain("subjectSurface/PersonSubjectSurfaceRuntime");
-        expect(router).toContain("legacyDrawerMustNotRenderVmBackedEntity");
-        expect(router).toMatch(/if \(route === "opportunity"\)/);
-        expect(router).toMatch(/if \(route === "person" \|\| route === "child"\)/);
-        expect(router).toContain("dynamic(");
-        expect(router).toContain("AdminEntityDrawerLegacy");
-    });
-
-    it("AdminEntityDrawerLegacy quarantines VM-backed entities on canonical surfaces", () => {
-        const legacy = read("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(legacy).toContain("legacyDrawerMustNotRenderVmBackedEntity");
-        expect(legacy).toContain("isCanonicalDrawerHostPath");
+        expect(router).not.toContain("AdminEntityDrawerLegacy");
+        expect(router).not.toContain("dynamic(");
     });
 
     it("resolveVmDrawerDisplayRoute selects VM on /workspace landing", () => {
-        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
         const route = resolveVmDrawerDisplayRoute(
             { type: "opportunities", id: "opp-1" },
             WORKSPACE_ROOT,
