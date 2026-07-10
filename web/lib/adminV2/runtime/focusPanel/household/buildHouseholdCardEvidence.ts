@@ -19,8 +19,11 @@
 
 import {
     buildOpportunityFamilyContactRows,
-    resolveLeadSummaryPrimaryPersonId,
 } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
+import {
+    relationshipDataBagFromTruthRecord,
+    resolvePrimaryContactAuthority,
+} from "@/lib/fields/relationship/primaryContactAuthority";
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import {
     formatDrawerHouseholdContactRoleLabel,
@@ -270,7 +273,13 @@ export function buildHouseholdCardEvidence(
     const householdLabel =
         trimOrNull(header.householdLabel) ?? trimOrNull(context.subject.label) ?? "Household";
 
-    const primaryPersonId = resolveLeadSummaryPrimaryPersonId(record);
+    const customerId = trimOrNull(record.customer_id) ?? trimOrNull((record._household_context as { customer_id?: string }[] | undefined)?.[0]?.customer_id);
+    const primaryAuthority = resolvePrimaryContactAuthority({
+        data: relationshipDataBagFromTruthRecord(record, customerId),
+        customerId,
+        preferOpportunityPointer: true,
+    });
+    const primaryPersonId = primaryAuthority.target_person_id;
     const primaryContact = buildPrimaryContact(record, primaryPersonId);
 
     // Read ALL family rows — do NOT use resolveOpportunityDrawerHouseholdContacts

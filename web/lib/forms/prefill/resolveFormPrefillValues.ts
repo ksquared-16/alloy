@@ -11,6 +11,7 @@ import {
 } from "@/lib/forms/prefill/prefillFieldMap";
 import { buildCanonicalPrefillFieldMap } from "@/lib/forms/prefill/canonicalPrefillMap";
 import { buildRelationshipPrefillFieldMap } from "@/lib/forms/prefill/formsRelationshipPrefillMap";
+import { resolveFormsRelationshipPrefillValues } from "@/lib/forms/prefill/formsRelationshipPrefillResolver";
 import {
     CONTACT_COMPAT_SELECT,
     CUSTOMER_CANONICAL_ADMIN_SELECT,
@@ -223,6 +224,16 @@ export async function resolveFormPrefillValues(
         const s = typeof raw === "string" ? raw : String(raw);
         const t = s.trim();
         if (t.length > 0) values[fieldId] = t;
+    }
+
+    const canonicalRelationship = await resolveFormsRelationshipPrefillValues(
+        supabase,
+        orgId,
+        schema,
+        launchFks,
+    );
+    for (const [fieldId, value] of Object.entries(canonicalRelationship.values)) {
+        values[fieldId] = value;
     }
 
     return values;

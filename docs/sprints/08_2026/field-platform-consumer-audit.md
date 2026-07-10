@@ -17,7 +17,7 @@ The first convergence sprint implemented the **canonical data-provider model** a
 | --- | --- | --- |
 | **Queue Rows** | Partial — static catalog + manual validator | **Reference adoption complete** (provider library wired) |
 | **Surface Composer (queue zones)** | Low | **Partial** — `compositionFieldAdapter` now uses provider registry |
-| **Forms / Documents / Processing / BP / Communications / Focus Panel** | Unchanged | **Partial** — Forms P2 relationship leaves + collection foundation (July 2026) |
+| **Forms / Documents / Processing / BP / Communications / Focus Panel** | Unchanged | **Partial** — P2 relationship leaves; P3A canonical resolver (July 2026) |
 
 Audit conclusions about duplicate catalogs remain valid for non-migrated consumers. Queue Row-specific findings for static catalog and manual allow-list are **resolved**.
 
@@ -35,6 +35,21 @@ Forms / Documents now consumes **relationship leaf** and **collection binding** 
 | Collection-bound operator authoring / publish | **Deferred** |
 
 See [forms-documents-field-platform-adoption.md](./forms-documents-field-platform-adoption.md) §21 for binding identity (Strategy C) and validation contracts.
+
+### Forms / Documents P3A update (July 2026)
+
+P3A adds the **canonical relationship runtime resolver** with explicit Primary Contact authority policy. **Focus Panel** is the active operational consumer — legacy drawers remain compatibility-only.
+
+| Capability | Status |
+| --- | --- |
+| Canonical resolver (`primaryContactAuthority`, `canonicalRelationshipResolver`) | **Implemented** — not committed |
+| Primary Contact authority (household pointer wins; legacy FK reconciliation) | **Implemented** |
+| Focus Panel primary id via canonical resolver | **Partial adoption** — `buildHouseholdCardEvidence` |
+| Non-primary singular leaves | **Collection-classified** — picker deferred |
+| Relationship writes | **Deferred P3B** |
+| Legacy drawer first-match resolvers | **Retained** — documented for P3B convergence |
+
+See [forms-documents-relationship-runtime-resolution.md](./forms-documents-relationship-runtime-resolution.md).
 
 ---
 
