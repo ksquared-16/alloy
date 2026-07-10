@@ -12,6 +12,7 @@ import {
 } from "@/lib/pos/processingCase/formDraft/processingReviewFieldCatalog";
 import type { PendingManualRegion } from "@/lib/pos/processingCase/formDraft/processingCanvasInteraction";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
+import { AlloyFieldLabel, AlloySelect, AlloyTextInput } from "./ProcessingAlloyControls";
 
 export default function PendingManualFieldEditor({
     pending,
@@ -52,95 +53,71 @@ export default function PendingManualFieldEditor({
             </div>
 
             <div className="space-y-2">
-                <label className="block">
-                    <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                        Source label
-                    </span>
-                    <input
+                <div>
+                    <AlloyFieldLabel>Source label</AlloyFieldLabel>
+                    <AlloyTextInput
                         value={pending.evidenceLabel}
-                        onChange={(e) => onChange({ evidenceLabel: e.target.value })}
+                        onChange={(evidenceLabel) => onChange({ evidenceLabel })}
                         placeholder="e.g. Birthdate"
-                        className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] focus:border-alloy-bend-pine/40 focus:outline-none"
-                        data-testid="pending-source-label"
+                        testId="pending-source-label"
                     />
-                </label>
+                </div>
 
-                <label className="block">
-                    <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                        Question label
-                    </span>
-                    <input
+                <div>
+                    <AlloyFieldLabel>Question label</AlloyFieldLabel>
+                    <AlloyTextInput
                         value={pending.displayLabel}
-                        onChange={(e) => onChange({ displayLabel: e.target.value })}
-                        placeholder="Display label for generated form"
-                        className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] focus:border-alloy-bend-pine/40 focus:outline-none"
+                        onChange={(displayLabel) => onChange({ displayLabel })}
+                        placeholder="Label on the generated form"
                     />
-                </label>
+                </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                    <label className="block">
-                        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                            Destination entity
-                        </span>
-                        <select
+                    <div>
+                        <AlloyFieldLabel>Store answer in</AlloyFieldLabel>
+                        <AlloySelect
                             value={subject}
-                            onChange={(e) =>
+                            onChange={(value) =>
                                 onChange({
-                                    questionSubject: e.target.value as QuestionSubject,
+                                    questionSubject: value as QuestionSubject,
                                     destinationFieldId: undefined,
                                 })
                             }
-                            className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] focus:border-alloy-bend-pine/40 focus:outline-none"
-                            data-testid="pending-destination-entity"
-                        >
-                            {QUESTION_SUBJECT_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
+                            options={QUESTION_SUBJECT_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+                            testId="pending-destination-entity"
+                        />
+                    </div>
 
-                    <label className="block">
-                        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                            Field type
-                        </span>
-                        <select
+                    <div>
+                        <AlloyFieldLabel>Answer type</AlloyFieldLabel>
+                        <AlloySelect
                             value={pending.type}
-                            onChange={(e) => onChange({ type: e.target.value, destinationFieldId: undefined })}
-                            className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] focus:border-alloy-bend-pine/40 focus:outline-none"
-                        >
-                            <option value="text">Text</option>
-                            <option value="date">Date</option>
-                            <option value="number">Number</option>
-                            <option value="boolean">Checkbox</option>
-                        </select>
-                    </label>
+                            onChange={(type) => onChange({ type, destinationFieldId: undefined })}
+                            options={[
+                                { value: "text", label: "Short text" },
+                                { value: "date", label: "Date" },
+                                { value: "number", label: "Number" },
+                                { value: "boolean", label: "Yes / No" },
+                            ]}
+                        />
+                    </div>
                 </div>
 
-                <label className="block">
-                    <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                        Destination field
-                    </span>
-                    <select
+                <div>
+                    <AlloyFieldLabel>Field</AlloyFieldLabel>
+                    <AlloySelect
                         value={selectedFieldId}
-                        onChange={(e) => onChange({ destinationFieldId: e.target.value || undefined })}
-                        className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] focus:border-alloy-bend-pine/40 focus:outline-none"
-                        data-testid="pending-destination-field"
-                    >
-                        <option value="">Select canonical field…</option>
-                        {eligible.map((field) => (
-                            <option key={field.id} value={field.id}>
-                                {field.label}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={(destinationFieldId) => onChange({ destinationFieldId: destinationFieldId || undefined })}
+                        placeholder="Choose a field…"
+                        options={eligible.map((field) => ({ value: field.id, label: field.label }))}
+                        testId="pending-destination-field"
+                    />
                     {suggestion && !pending.destinationFieldId ? (
                         <p className="mt-0.5 text-[9px] text-alloy-midnight/40">
                             Suggested: {suggestion.label} ({suggestion.confidencePercent}% match)
                         </p>
                     ) : null}
-                </label>
+                </div>
             </div>
 
             <div className="mt-2.5 flex items-center justify-end gap-2">

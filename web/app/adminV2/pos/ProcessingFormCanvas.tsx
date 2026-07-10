@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { useMemo } from "react";
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
-import { groupFieldsIntoRows } from "@/lib/forms/formRowComposition";
+import { groupFieldsIntoRows, rowCapacityRemaining, fieldLayoutFlexClass, layoutWidthFromField } from "@/lib/forms/formRowComposition";
 import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 
 export type CanvasDropTarget = {
@@ -18,12 +18,13 @@ export type CanvasDropTarget = {
 function resolveRowDropTarget(
     e: React.DragEvent,
     sectionId: string,
-    row: string[]
+    row: string[],
+    fieldById: Map<string, FormField>
 ): CanvasDropTarget {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const relX = (e.clientX - rect.left) / rect.width;
 
-    if (row.length >= 3) {
+    if (rowCapacityRemaining(row, fieldById) === 0) {
         const last = row[row.length - 1] ?? null;
         return { sectionId, fieldId: last, position: "after", rowIntent: "new-line" };
     }
@@ -322,7 +323,7 @@ export default function ProcessingFormCanvas({
                                             dropTarget?.sectionId === section.id &&
                                             dropTarget.fieldId != null &&
                                             row.includes(dropTarget.fieldId);
-                                        const rowFull = row.length >= 3;
+                                        const rowFull = rowCapacityRemaining(row, fieldById) === 0;
                                         return (
                                         <div
                                             key={`${section.id}-row-${rowIdx}`}
@@ -341,7 +342,7 @@ export default function ProcessingFormCanvas({
                                                 if ((e.target as HTMLElement).closest("[data-canvas-field]")) return;
                                                 e.preventDefault();
                                                 e.stopPropagation();
-                                                onDragFieldOver?.(resolveRowDropTarget(e, section.id, row));
+                                                onDragFieldOver?.(resolveRowDropTarget(e, section.id, row, fieldById));
                                             }}
                                             onDrop={(e) => {
                                                 e.preventDefault();
@@ -387,20 +388,12 @@ export default function ProcessingFormCanvas({
                                             {row.map((fid) => {
                                                 const field = fieldById.get(fid);
                                                 if (!field) return null;
-                                                const half = field.layout_width === "half";
-                                                const third = half && row.length >= 3;
+                                                const width = layoutWidthFromField(field);
                                                 const isTarget = dropTarget?.sectionId === section.id && dropTarget.fieldId === fid;
                                                 return (
                                                     <div
                                                         key={fid}
-                                                        className={clsx(
-                                                            "relative transition-[flex-basis] duration-150",
-                                                            third
-                                                                ? "min-w-[calc(33.333%-0.4375rem)] flex-[1_1_calc(33.333%-0.4375rem)]"
-                                                                : half
-                                                                ? "min-w-[calc(50%-0.3125rem)] flex-[1_1_calc(50%-0.3125rem)]"
-                                                                : "w-full flex-[1_1_100%]"
-                                                        )}
+                                                        className={clsx("relative transition-[flex-basis] duration-150", fieldLayoutFlexClass(width))}
                                                     >
                                                         <QuestionBlock
                                                             field={field}

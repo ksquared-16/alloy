@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import type { FormField, FormFieldLayoutWidth, FormSchemaV1 } from "@/lib/forms/schema";
 import {
     isCustomUnmappedField,
     uiKindForField,
@@ -29,8 +29,14 @@ function isTypeLocked(entry: SystemFieldRegistryEntry | null, custom: boolean): 
     return k === "date" || k === "number" || k === "checkbox" || k === "signature" || k === "select";
 }
 
-function layoutPassThrough(field: FormField): { layout_width?: "full" | "half" } {
-    if ("layout_width" in field && (field.layout_width === "half" || field.layout_width === "full")) {
+function layoutPassThrough(field: FormField): { layout_width?: FormFieldLayoutWidth } {
+    if (
+        "layout_width" in field &&
+        (field.layout_width === "half" ||
+            field.layout_width === "third" ||
+            field.layout_width === "quarter" ||
+            field.layout_width === "full")
+    ) {
         return { layout_width: field.layout_width };
     }
     return {};

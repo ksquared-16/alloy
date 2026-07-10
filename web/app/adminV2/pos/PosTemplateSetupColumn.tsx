@@ -39,6 +39,7 @@ import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
+import { AlloyFieldLabel, AlloyTextInput } from "./ProcessingAlloyControls";
 import {
     seedReviewQuestionFromDraftField,
     expandQuestionsForDraftSave,
@@ -571,16 +572,6 @@ export default function PosTemplateSetupColumn({
 
     // ---- no draft yet: auto-detect for generate_form, manual gate otherwise ----
     if (!draft) {
-        if (shouldAutoDetect && busy) {
-            return (
-                <ProcessingNativeFormCreatingState
-                    phaseIndex={0}
-                    error={err}
-                    onRetry={err ? () => void handleDetect() : undefined}
-                />
-            );
-        }
-
         if (processingIntent === "generate_form" && !sourceCapabilities.questionDetection) {
             return (
                 <div className="flex h-full min-h-0 flex-col items-center justify-center bg-white p-6 text-center">
@@ -598,6 +589,16 @@ export default function PosTemplateSetupColumn({
                         ) : null}
                     </div>
                 </div>
+            );
+        }
+
+        if (shouldAutoDetect) {
+            return (
+                <ProcessingNativeFormCreatingState
+                    phaseIndex={0}
+                    error={err}
+                    onRetry={err ? () => void handleDetect() : undefined}
+                />
             );
         }
 
@@ -664,16 +665,14 @@ export default function PosTemplateSetupColumn({
                     <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-white p-4">
                         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Form setup</h3>
                         <div className="mt-3 space-y-3">
-                            <label className="block">
-                                <span className="mb-1 block text-[11px] font-semibold text-alloy-midnight">Form name</span>
-                                <input
-                                    type="text"
+                            <div>
+                                <AlloyFieldLabel>Form name</AlloyFieldLabel>
+                                <AlloyTextInput
                                     value={formName}
-                                    onChange={(e) => setFormName(e.target.value)}
-                                    className="w-full rounded-lg border border-alloy-stone/20 px-3 py-2 text-[12px] outline-none focus:border-alloy-bend-pine/40"
-                                    data-testid="processing-generate-form-name"
+                                    onChange={setFormName}
+                                    testId="processing-generate-form-name"
                                 />
-                            </label>
+                            </div>
                             <DetailRow label="Source document" value={sourceFilename} />
                             <DetailRow label="Document display name" value={docTitle} />
                             <DetailRow label="Detected document type" value={detectionModeLabel(draft)} />
@@ -691,7 +690,7 @@ export default function PosTemplateSetupColumn({
                             <div className="mt-3 rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2">
                                 <p className="text-[11px] text-amber-900">
                                     {summaryCounts.unresolved} question{summaryCounts.unresolved === 1 ? "" : "s"} still
-                                    need a destination before answers can write to business records.
+                                    need a store destination before answers can write to business records.
                                 </p>
                             </div>
                         ) : null}
