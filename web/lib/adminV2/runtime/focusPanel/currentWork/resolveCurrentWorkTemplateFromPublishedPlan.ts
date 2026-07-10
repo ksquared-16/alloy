@@ -15,6 +15,7 @@ import {
     lifecycleFieldRequirementById,
     type LifecycleStageFieldRules,
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import { resolveCurrentWorkFieldRuleDisplayLabel } from "./resolveCurrentWorkFieldRuleDisplayLabel";
 import { getPlatformAction } from "@/lib/platform/actions/platformActionCatalog";
 
 import { actionCompetesWithCurrentWorkCompletion } from "./currentWorkActionSurfacePolicy";
@@ -122,7 +123,7 @@ function checklistFromFieldRules(fieldRules: LifecycleStageFieldRules | null): C
         const catalog = lifecycleFieldRequirementById(ruleId);
         items.push({
             key: ruleId,
-            label: catalog?.field_label ?? ruleId,
+            label: resolveCurrentWorkFieldRuleDisplayLabel(ruleId),
             required: required.has(ruleId),
             scope: entityScope(binding?.entity ?? catalog?.entity),
         });

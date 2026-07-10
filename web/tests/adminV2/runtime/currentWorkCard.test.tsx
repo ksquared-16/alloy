@@ -144,7 +144,7 @@ describe("CurrentWorkCard", () => {
         );
         expect(html).toContain("Contact Family");
         expect(html).toContain("Make contact and record outcome");
-        expect(html).toContain("View all activity");
+        expect(html).toContain("View recent activity");
         expect(html).not.toContain("Review Lead");
         expect(html).toContain('data-current-work-surface="true"');
         expect(html).toContain('data-work-card-perspective="summary"');
@@ -159,7 +159,9 @@ describe("CurrentWorkCard", () => {
         );
         expect(src).toContain("resolveWorkItemHandoff");
         expect(src).not.toContain("Communications is not on this panel");
-        expect(src).toContain('openFocusPanelMode?.("activity")');
+        expect(src).toContain("CurrentWorkActivityPreview");
+        expect(src).toContain('data-work-action="preview-activity"');
+        expect(src).not.toContain('openFocusPanelMode?.("activity")');
         expect(src).toContain("invokeHeaderAction");
         expect(src).toContain("resolveCurrentWorkActionSurface");
         expect(src).toContain("CurrentWorkActionPanel");

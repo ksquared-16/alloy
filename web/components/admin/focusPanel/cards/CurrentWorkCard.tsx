@@ -7,7 +7,9 @@ import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
 import StageWorkOutcomeConfirm from "@/components/workIntent/StageWorkOutcomeConfirm";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
+import CurrentWorkActivityPreview from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 import { useWorkIntentOutcomeCompletion } from "@/components/workIntent/useWorkIntentOutcomeCompletion";
+import { buildCurrentWorkActivityPreviewItems } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
 import { buildCurrentWorkCardEvidence } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
 import { buildOutcomeCompletionSummary } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildOutcomeCompletionSummary";
 import type { CurrentWorkChecklistItem } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
@@ -56,6 +58,12 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     const [completionSummary, setCompletionSummary] = useState<CurrentWorkCompletionSummary | null>(null);
     const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
     const [activePanelAction, setActivePanelAction] = useState<CurrentWorkActionVM | null>(null);
+    const [activityPreviewOpen, setActivityPreviewOpen] = useState(false);
+
+    const activityPreviewItems = useMemo(
+        () => buildCurrentWorkActivityPreviewItems(context),
+        [context],
+    );
 
     const closeActionPanel = useCallback(() => {
         setActivePanelAction(null);
@@ -91,6 +99,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
         setFocused(false);
         resetCompletion();
         closeActionPanel();
+        setActivityPreviewOpen(false);
     });
 
     const openFocus = () => {
@@ -215,7 +224,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 return;
             case "activity":
                 setHandoffNotice(null);
-                coordination?.openFocusPanelMode?.("activity");
+                setActivityPreviewOpen(true);
                 return;
             case "header_action": {
                 const composerAction = coordination?.resolveCommunicationsComposerAction?.();
@@ -263,33 +272,42 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
         closeActionPanel();
     };
 
-    const statusChip = (
-        <span className="alloy-os-currentwork__header-meta">
-            <span
+    const statusChip =
+        surface.progress.total > 0 ?
+            <span className="alloy-os-currentwork__header-meta" data-work-status-pill={focused ? "focused" : "summary"}>
+                <span
+                    className={clsx(
+                        "alloy-os-card-pill alloy-os-card-pill--subtle alloy-os-currentwork__status-chip",
+                        surface.status === "completed" && "alloy-os-card-pill--complete",
+                    )}
+                >
+                    {surface.statusLabel}
+                </span>
+                <span className="alloy-os-currentwork__header-percent" aria-hidden>
+                    · {surface.progress.percent}%
+                </span>
+            </span>
+        :   <span
                 className={clsx(
-                    "alloy-os-card-pill alloy-os-card-pill--subtle",
+                    "alloy-os-card-pill alloy-os-card-pill--subtle alloy-os-currentwork__status-chip",
                     surface.status === "completed" && "alloy-os-card-pill--complete",
                 )}
                 data-work-status-pill={focused ? "focused" : "summary"}
             >
                 {surface.statusLabel}
-            </span>
-            {surface.progress.total > 0 ?
-                <span className="alloy-os-currentwork__header-percent">{surface.progress.percent}%</span>
-            :   null}
-        </span>
-    );
+            </span>;
 
-    const footerAction = evidence.isEmpty ? null : (
-        <button
-            type="button"
-            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-            onClick={focused ? closeFocus : openFocus}
-            data-work-action={focused ? "hide-details" : "details"}
-        >
-            {focused ? "Hide details" : "Details →"}
-        </button>
-    );
+    const footerAction =
+        evidence.isEmpty || focused ? null : (
+            <button
+                type="button"
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                onClick={openFocus}
+                data-work-action="details"
+            >
+                Details →
+            </button>
+        );
 
     const body =
         evidence.isEmpty ? (
@@ -300,7 +318,10 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
             <OutcomeCompleteBody
                 surface={surface}
                 summary={completionSummary}
-                onViewActivity={() => coordination?.openFocusPanelMode?.("activity")}
+                activityPreviewOpen={activityPreviewOpen}
+                onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
+                onCloseActivityPreview={() => setActivityPreviewOpen(false)}
+                activityPreviewItems={activityPreviewItems}
                 onContinue={() => {
                     resetCompletion();
                     setFocused(false);
@@ -348,7 +369,10 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 surface={surface}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
-                onViewActivity={() => coordination?.openFocusPanelMode?.("activity")}
+                activityPreviewOpen={activityPreviewOpen}
+                onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
+                onCloseActivityPreview={() => setActivityPreviewOpen(false)}
+                activityPreviewItems={activityPreviewItems}
             />;
 
     return (
@@ -508,10 +532,16 @@ function SupportingGrid({
 
 function ActivityFooter({
     surface,
-    onViewActivity,
+    activityPreviewOpen,
+    onToggleActivityPreview,
+    onCloseActivityPreview,
+    activityPreviewItems,
 }: {
     surface: CurrentWorkSurfaceVM;
-    onViewActivity?: () => void;
+    activityPreviewOpen: boolean;
+    onToggleActivityPreview: () => void;
+    onCloseActivityPreview: () => void;
+    activityPreviewItems: ReturnType<typeof buildCurrentWorkActivityPreviewItems>;
 }) {
     return (
         <div className="alloy-os-currentwork__activity-footer" data-work-activity-footer="true">
@@ -525,11 +555,22 @@ function ActivityFooter({
                     :   null}
                 </p>
             :   null}
-            {onViewActivity ?
-                <button type="button" className="alloy-os-currentwork__activity-link" onClick={onViewActivity}>
-                    View all activity →
+            <div className="alloy-os-currentwork__activity-link-wrap">
+                <button
+                    type="button"
+                    className="alloy-os-currentwork__activity-link"
+                    onClick={onToggleActivityPreview}
+                    aria-expanded={activityPreviewOpen}
+                    data-work-action="preview-activity"
+                >
+                    View recent activity →
                 </button>
-            :   null}
+                <CurrentWorkActivityPreview
+                    open={activityPreviewOpen}
+                    items={activityPreviewItems}
+                    onClose={onCloseActivityPreview}
+                />
+            </div>
         </div>
     );
 }
@@ -538,12 +579,18 @@ function SummaryBody({
     surface,
     onChecklistItem,
     onAction,
-    onViewActivity,
+    activityPreviewOpen,
+    onToggleActivityPreview,
+    onCloseActivityPreview,
+    activityPreviewItems,
 }: {
     surface: CurrentWorkSurfaceVM;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
-    onViewActivity?: () => void;
+    activityPreviewOpen: boolean;
+    onToggleActivityPreview: () => void;
+    onCloseActivityPreview: () => void;
+    activityPreviewItems: ReturnType<typeof buildCurrentWorkActivityPreviewItems>;
 }) {
     const helpfulActions = [...surface.supportingActions, ...surface.communicationActions];
     return (
@@ -554,7 +601,13 @@ function SummaryBody({
                 <WorkPrimaryCard action={surface.primaryAction} onAction={onAction} />
             :   null}
             <SupportingGrid actions={helpfulActions} onAction={onAction} />
-            <ActivityFooter surface={surface} onViewActivity={onViewActivity} />
+            <ActivityFooter
+                surface={surface}
+                activityPreviewOpen={activityPreviewOpen}
+                onToggleActivityPreview={onToggleActivityPreview}
+                onCloseActivityPreview={onCloseActivityPreview}
+                activityPreviewItems={activityPreviewItems}
+            />
         </div>
     );
 }
@@ -716,12 +769,18 @@ function FocusedBody({
 function OutcomeCompleteBody({
     surface,
     summary,
-    onViewActivity,
+    activityPreviewOpen,
+    onToggleActivityPreview,
+    onCloseActivityPreview,
+    activityPreviewItems,
     onContinue,
 }: {
     surface: CurrentWorkSurfaceVM;
     summary: CurrentWorkCompletionSummary;
-    onViewActivity?: () => void;
+    activityPreviewOpen: boolean;
+    onToggleActivityPreview: () => void;
+    onCloseActivityPreview: () => void;
+    activityPreviewItems: ReturnType<typeof buildCurrentWorkActivityPreviewItems>;
     onContinue: () => void;
 }) {
     return (
@@ -748,11 +807,22 @@ function OutcomeCompleteBody({
                 </div>
             :   null}
             <div className="alloy-os-card-nav" data-work-complete-actions="true">
-                {onViewActivity ?
-                    <button type="button" className="alloy-os-ucard__action alloy-os-ucard__action--system5" onClick={onViewActivity}>
-                        View Activity
+                <div className="alloy-os-currentwork__activity-link-wrap">
+                    <button
+                        type="button"
+                        className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                        onClick={onToggleActivityPreview}
+                        aria-expanded={activityPreviewOpen}
+                        data-work-action="preview-activity"
+                    >
+                        View recent activity
                     </button>
-                :   null}
+                    <CurrentWorkActivityPreview
+                        open={activityPreviewOpen}
+                        items={activityPreviewItems}
+                        onClose={onCloseActivityPreview}
+                    />
+                </div>
                 <button
                     type="button"
                     className="alloy-os-ucard__action alloy-os-ucard__action--system5 alloy-os-ucard__action--cta"
