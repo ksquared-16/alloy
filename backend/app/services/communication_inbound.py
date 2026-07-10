@@ -11,6 +11,7 @@ import requests
 
 from ..supabase_client import _get_base_url, _get_headers, normalize_phone
 from .communication_workflow_events import emit_for_communication_message
+from .communications.identity_resolver import find_identity_by_legacy_binding, find_inbound_identities_by_destination
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -364,6 +365,24 @@ def persist_inbound_communication_sms(
         return None
 
     bid = binding_id if binding_id and _UUID_RE.match(binding_id) else None
+    identity_id = None
+    account_id = None
+    if bid:
+        ident = find_identity_by_legacy_binding(base_url, headers, bid)
+        if ident:
+            identity_id = ident.get("id")
+            account_id = ident.get("provider_account_id")
+    elif to_num:
+        matches = find_inbound_identities_by_destination(
+            base_url, headers, channel="sms", destination=to_num, org_id=org_id
+        )
+        if len(matches) == 1:
+            identity_id = matches[0].get("id")
+            account_id = matches[0].get("provider_account_id")
+        elif len(matches) > 1:
+            msg_meta = dict(msg_meta)
+            msg_meta["inbound_location_ambiguous"] = True
+
     payload_msg = {
         "org_id": org_id,
         "thread_id": thread_id,
@@ -379,6 +398,10 @@ def persist_inbound_communication_sms(
     }
     if bid:
         payload_msg["communication_provider_binding_id"] = bid
+    if identity_id:
+        payload_msg["communication_identity_id"] = identity_id
+    if account_id:
+        payload_msg["communication_provider_account_id"] = account_id
 
     h = dict(headers)
     h.update(_JSON_HEADERS)
