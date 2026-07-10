@@ -48,6 +48,7 @@ describe("processingDevCleanup", () => {
             form_definition_versions: [{ id: "ver-1", form_definition_id: "form-1" }],
             form_public_links: [],
             form_submissions: [],
+            form_packet_items: [],
         });
 
         const plan = await planProcessingDevCleanup(supabase as never, "org-1");
@@ -69,6 +70,7 @@ describe("processingDevCleanup", () => {
             form_definition_versions: [],
             form_public_links: [],
             form_submissions: [],
+            form_packet_items: [],
         });
 
         const heuristic = await planProcessingDevCleanup(supabase as never, "org-1");
@@ -85,6 +87,23 @@ describe("processingDevCleanup", () => {
         expect(() => assertProcessingDevCleanupAllowed()).toThrow(/production/i);
     });
 
+    it("plans form_packet_items when forms are referenced in packets", async () => {
+        const supabase = makeSupabaseMock({
+            processing_cases: [],
+            processing_case_sources: [],
+            documents: [],
+            form_definitions: [{ id: "form-1", metadata: { source: "processing" } }],
+            form_definition_versions: [{ id: "ver-1", form_definition_id: "form-1" }],
+            form_public_links: [],
+            form_submissions: [],
+            form_packet_items: [{ id: "pkt-item-1", form_definition_id: "form-1" }],
+        });
+
+        const plan = await planProcessingDevCleanup(supabase as never, "org-1", { clearAllForms: true });
+        expect(plan.counts.formPacketItems).toBe(1);
+        expect(plan.formPacketItemIds).toEqual(["pkt-item-1"]);
+    });
+
     it("apply returns remaining counts after deletion plan", async () => {
         const supabase = makeSupabaseMock({
             processing_cases: [],
@@ -94,6 +113,7 @@ describe("processingDevCleanup", () => {
             form_definition_versions: [],
             form_public_links: [],
             form_submissions: [],
+            form_packet_items: [],
         });
         // countRemaining uses head count queries — mock empty via from().select().eq()
         const countChain = {
