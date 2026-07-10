@@ -16,6 +16,8 @@ import {
     fetchSchedulePatternsForSite,
     type SchedulePatternRow,
 } from "@/lib/childcareOperational/fetchOperationalEnrollment";
+import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import type { LocationSiteCreateInput } from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 
 export type LocationConfigSection =
     | "locations"
@@ -213,6 +215,38 @@ export function useLocationsConfigurationSettings() {
         [section, schedulePatterns, selectedId],
     );
 
+    const createSiteLocation = useCallback(
+        async (input: LocationSiteCreateInput): Promise<string> => {
+            let metadata = mergeLocationMetadataField(null, "site_phone", input.phone.trim() || null);
+            metadata = mergeLocationMetadataField(metadata, "timezone", input.timezone.trim() || null);
+            const res = await fetch("/api/admin/locations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    location_type: "site",
+                    label: input.label.trim() || null,
+                    address1: input.address1.trim() || null,
+                    city: input.city.trim() || null,
+                    state: input.state.trim() || null,
+                    postal_code: input.postal_code.trim() || null,
+                    is_active: input.is_active,
+                    metadata,
+                }),
+            });
+            const json = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+            if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+            const newId = String(json.id ?? "").trim();
+            if (!newId) throw new Error("Create failed: missing location id");
+            window.dispatchEvent(
+                new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
+            );
+            await refreshLocations();
+            return newId;
+        },
+        [refreshLocations],
+    );
+
     const patchLocation = useCallback(
         async (id: string, body: Record<string, unknown>) => {
             const res = await fetch(`/api/admin/locations/${encodeURIComponent(id)}`, {
@@ -292,6 +326,7 @@ export function useLocationsConfigurationSettings() {
         selectedProgram,
         selectedRoom,
         selectedSchedulePattern,
+        createSiteLocation,
         patchLocation,
         patchProgramCategory,
         refresh,

@@ -1,7 +1,7 @@
 "use client";
 
+import { useState } from "react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import {
     ConfigurationContext,
     ConfigurationEmptyState,
@@ -14,6 +14,7 @@ import LocationOperationalRulesPanel from "@/components/adminV2/settings/locatio
 import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
+import LocationSiteCreatePanel from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import LocationSiteDetailPanel from "@/components/adminV2/settings/locations/LocationSiteDetailPanel";
 import {
     LOCATION_CONFIG_SECTIONS,
@@ -40,7 +41,7 @@ function sectionEmptyListCopy(section: (typeof LOCATION_CONFIG_SECTIONS)[number]
 
 export default function LocationsConfigurationPage() {
     const { canMutate } = useAdminAuth();
-    const { openDrawer } = useAdminDrawer();
+    const [creatingSite, setCreatingSite] = useState(false);
     const {
         section,
         setSection,
@@ -55,6 +56,7 @@ export default function LocationsConfigurationPage() {
         selectedProgram,
         selectedRoom,
         selectedSchedulePattern,
+        createSiteLocation,
         patchLocation,
         patchProgramCategory,
         roomCapacitySummaryForSite,
@@ -63,14 +65,15 @@ export default function LocationsConfigurationPage() {
         setSchedulePatterns,
     } = useLocationsConfigurationSettings();
 
-    // Create drawer is quarantined to the Locations section only (create-only) and
-    // marked for removal once inline create lands (Operational Configuration V1).
     const contextActions =
-        canMutate && section === "locations" ?
+        canMutate && section === "locations" && !creatingSite ?
             <ConfigurationPrimaryButton
                 className="config-primary-btn--sm"
                 data-testid="locations-add-location"
-                onClick={() => openDrawer({ type: "locations", id: "new" })}
+                onClick={() => {
+                    setCreatingSite(true);
+                    setError(null);
+                }}
             >
                 Add Location
             </ConfigurationPrimaryButton>
@@ -86,6 +89,7 @@ export default function LocationsConfigurationPage() {
                     onClick={() => {
                         setSection(s.key);
                         setSelectedId(null);
+                        setCreatingSite(false);
                     }}
                     testId={`locations-section-${s.key}`}
                 />
@@ -100,10 +104,13 @@ export default function LocationsConfigurationPage() {
             :   listItems.map((item) => (
                     <ConfigurationQueueItem
                         key={item.id}
-                        active={item.id === selectedId}
+                        active={item.id === selectedId && !creatingSite}
                         title={item.title}
                         subtitle={item.subtitle}
-                        onClick={() => setSelectedId(item.id)}
+                        onClick={() => {
+                            setCreatingSite(false);
+                            setSelectedId(item.id);
+                        }}
                         testId={`locations-item-${item.id}`}
                     />
                 ))
@@ -118,6 +125,20 @@ export default function LocationsConfigurationPage() {
                     testId="locations-loading"
                     title="Loading locations"
                     description="Fetching campuses, programs, rooms, and schedule templates."
+                />
+            );
+        }
+        if (section === "locations" && creatingSite) {
+            return (
+                <LocationSiteCreatePanel
+                    canMutate={canMutate}
+                    onCancel={() => setCreatingSite(false)}
+                    onCreate={async (input) => {
+                        const newId = await createSiteLocation(input);
+                        setCreatingSite(false);
+                        setSelectedId(newId);
+                        return newId;
+                    }}
                 />
             );
         }
