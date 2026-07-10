@@ -132,6 +132,7 @@ function isSafeKey(key: string): boolean {
         key === "mode" ||
         key === "render_state" ||
         key === "warm_seam" ||
+        key === "warm_result" ||
         key === "same_host" ||
         key === "view_id" ||
         key === "since_intent_ms" ||
