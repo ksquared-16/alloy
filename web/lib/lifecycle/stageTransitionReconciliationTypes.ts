@@ -2,6 +2,8 @@
  * Stage-transition work reconciliation — types for preflight + apply.
  */
 
+import type { EffectiveRequirementMissing } from "@/lib/lifecycle/requirementTimingTypes";
+
 export const STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR = "STAGE_TRANSITION_RECONCILIATION_REQUIRED" as const;
 
 export type StageTransitionWorkResolution = "completed" | "skipped" | "carry_forward";
@@ -39,6 +41,14 @@ export type StageTransitionReconciliationPreflight = {
     has_attention: boolean;
     attention_reason: string | null;
     wait_bucket: string | null;
+    /** Missing configured requirements (informational + attention + blocking). */
+    missingRequirements: EffectiveRequirementMissing[];
+    /** Subset that blocks the transition. */
+    blockingRequirements: EffectiveRequirementMissing[];
+    /** Alias for open_work — prior-stage work requiring reconciliation. */
+    openWorkConflicts: PriorStageOpenWorkItem[];
+    /** False when blocking requirements exist or work/attention reconciliation is required. */
+    canProceed: boolean;
 };
 
 export type ApplyStageTransitionReconciliationResult = {

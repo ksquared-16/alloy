@@ -403,7 +403,11 @@ export function lifecyclePreflightStagesForAction(
             stages.add("waitlist");
             break;
         case "schedule_tour":
-            stages.add("qualification");
+            if (fromStatus) {
+                const fromStage = canonicalOperatorStageForStatusKey(fromStatus);
+                if (fromStage) stages.add(fromStage);
+            }
+            stages.add("tour");
             break;
         case "approve_enrollment":
             stages.add("enrollment");

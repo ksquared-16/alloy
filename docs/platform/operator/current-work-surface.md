@@ -38,6 +38,13 @@ Operators open a record to **complete work**. Current Work answers:
 | **Checklist completion** | Published field rules via `evaluateFieldRulesForStage` + readiness gaps; work templates via stage-work runtime | Stage-runtime template states when no published overlay |
 
 **Checklist truth:** `resolveCurrentWorkChecklistTruthFromPublishedRules` maps published field-rule keys to record/readiness evaluation. Labels and order remain config-owned; `complete | missing | blocked` status comes from truth (blocked only when readiness gap is blocking).
+
+Requirement timing affects checklist truth as follows:
+
+- Legacy rules without timing continue to appear as stage-progress readiness.
+- `stage_progress` rules appear while the record is being worked.
+- `stage_exit` rules may appear as progression gaps, with copy such as “Needed before the configured next step,” but they do not make the record invalid.
+- Transition blocking happens in the stage/status preflight path only when explicit `stage_exit` metadata applies to the selected transition.
 | **Checklist handoff** | `inferWorkItemOwner()` + scope from field-rule entity | blocked operator copy — never silent no-op |
 | **Primary CTA (Summary)** | Work-primary card (`expand_work`) from template title | `"No current work configured"` |
 | **Record outcome CTA** | `"Record outcome"` when `showOutcomeCompletion` | disabled + `outcomeCompletionBlockReason` |

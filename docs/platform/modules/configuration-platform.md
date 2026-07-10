@@ -45,6 +45,19 @@ Kill switch for Phase 4 visual config at runtime: `LAYOUT_RUNTIME_OPPORTUNITY_DR
 
 Part of configuration plane — `/settings/processes` (UI: Business Processes).
 
+### Requirement timing metadata
+
+Business Process requirement rows use the existing lifecycle field-rule metadata. Per-rule timing is stored as `rule_meta_v1` beside `rule_levels_v1`; no new table or parallel requirement engine is introduced.
+
+Configuration controls:
+
+- **Required when:** creating the record, during this stage, leaving this stage, completing the process
+- **Transition applicability:** stage-exit rules may include or exclude specific configured transition/status keys
+- **Enforcement:** informational, needs attention, blocking
+- **Scope:** record, primary contact, any child, each child, relationship
+
+Legacy rows without timing preserve prior behavior: they appear in stage progress/readiness, while transition blocking remains limited to the pre-existing completion/status guard behavior until explicit `stage_exit` metadata is configured.
+
 ---
 
 ---

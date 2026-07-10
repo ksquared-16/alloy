@@ -12,6 +12,7 @@ import { detectBuilderStageTransition } from "@/lib/lifecycle/detectBuilderStage
 import { isBusinessProcessStageWorkTaskRow } from "@/lib/lifecycle/isBusinessProcessStageWorkTaskRow";
 import { parseEnrollmentOperationalFromMetadata } from "@/lib/opportunities/enrollmentOperationalMetadata";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
+import { evaluateTransitionRequirementPreflight } from "@/lib/lifecycle/evaluateTransitionRequirementPreflight";
 import type { StageTransitionReconciliationPreflight } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
 
 function trimOrNull(v: unknown): string | null {
@@ -73,6 +74,10 @@ export async function preflightStageTransitionReconciliation(params: {
         has_attention: false,
         attention_reason: null,
         wait_bucket: null,
+        missingRequirements: [],
+        blockingRequirements: [],
+        openWorkConflicts: [],
+        canProceed: true,
     };
 
     if (!orgId || !opportunityId || !nextStatusKey) return empty;
@@ -107,6 +112,18 @@ export async function preflightStageTransitionReconciliation(params: {
 
     const nextStageLabel = stageLabelForKey(departmentMetadata, transition.nextBuilderStageKey);
 
+    const requirementPreflight = await evaluateTransitionRequirementPreflight({
+        supabase: params.supabase,
+        orgId,
+        opportunityId,
+        departmentMetadata,
+        fromBuilderStageKey: transition.previousBuilderStageKey,
+        toBuilderStageKey: transition.nextBuilderStageKey,
+        previousStatusKey,
+        nextStatusKey,
+        nextStageLabel,
+    });
+
     const oppMetadata =
         opp?.metadata != null && typeof opp.metadata === "object" && !Array.isArray(opp.metadata)
             ? (opp.metadata as Record<string, unknown>)
@@ -115,13 +132,18 @@ export async function preflightStageTransitionReconciliation(params: {
     const hasAttention = enrollmentOp.wait_bucket !== "none";
 
     if (!transition.stageChanged || !transition.nextBuilderStageKey) {
+        const workRequired = hasAttention;
         return {
             ...empty,
             next_stage_label: nextStageLabel,
             has_attention: hasAttention,
             attention_reason: enrollmentOp.wait_reason,
             wait_bucket: enrollmentOp.wait_bucket !== "none" ? enrollmentOp.wait_bucket : null,
-            required: hasAttention,
+            missingRequirements: requirementPreflight.missingRequirements,
+            blockingRequirements: requirementPreflight.blockingRequirements,
+            required: workRequired || requirementPreflight.blockingRequirements.length > 0,
+            canProceed:
+                requirementPreflight.blockingRequirements.length === 0 && !workRequired,
         };
     }
 
@@ -136,6 +158,7 @@ export async function preflightStageTransitionReconciliation(params: {
         .limit(48);
 
     if (error) {
+        const blocking = requirementPreflight.blockingRequirements;
         return {
             ...empty,
             previous_builder_stage_key: transition.previousBuilderStageKey,
@@ -144,6 +167,10 @@ export async function preflightStageTransitionReconciliation(params: {
             has_attention: hasAttention,
             attention_reason: enrollmentOp.wait_reason,
             wait_bucket: enrollmentOp.wait_bucket !== "none" ? enrollmentOp.wait_bucket : null,
+            missingRequirements: requirementPreflight.missingRequirements,
+            blockingRequirements: blocking,
+            required: blocking.length > 0 || hasAttention,
+            canProceed: blocking.length === 0 && !hasAttention,
         };
     }
 
@@ -166,18 +193,23 @@ export async function preflightStageTransitionReconciliation(params: {
             due_at: trimOrNull((row as { due_at?: string }).due_at),
         }));
 
-    const required = openWork.length > 0 || hasAttention;
+    const workRequired = openWork.length > 0 || hasAttention;
+    const blocking = requirementPreflight.blockingRequirements;
 
     return {
-        required,
+        required: workRequired || blocking.length > 0,
         previous_builder_stage_key: transition.previousBuilderStageKey,
         next_builder_stage_key: transition.nextBuilderStageKey,
         previous_status_key: previousStatusKey,
         next_status_key: nextStatusKey,
         next_stage_label: nextStageLabel,
         open_work: openWork,
+        openWorkConflicts: openWork,
         has_attention: hasAttention,
         attention_reason: enrollmentOp.wait_reason,
         wait_bucket: enrollmentOp.wait_bucket !== "none" ? enrollmentOp.wait_bucket : null,
+        missingRequirements: requirementPreflight.missingRequirements,
+        blockingRequirements: blocking,
+        canProceed: blocking.length === 0 && !workRequired,
     };
 }

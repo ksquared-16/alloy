@@ -8,6 +8,10 @@ import { lifecycleFieldRequirementById } from "@/lib/lifecycle/lifecycleFieldReq
 import type { LifecycleFieldPaletteEntry } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 import { lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
 import type { RequirementConfigLevel } from "@/lib/completion/readinessTypes";
+import { parseRuleMetaV1 } from "@/lib/lifecycle/requirementTimingMeta";
+import type { RuleMetaV1 } from "@/lib/lifecycle/requirementTimingTypes";
+export type { RuleMetaV1 } from "@/lib/lifecycle/requirementTimingTypes";
+export type { RequirementRuleMetaV1, RequirementTiming } from "@/lib/lifecycle/requirementTimingTypes";
 
 /** Levels persisted in metadata (Phase 1). */
 export type PersistedRequirementLevel = "recommended" | "required" | "enforced";
@@ -25,6 +29,7 @@ export type RuleLevelsV1 = {
 
 export type LifecycleStageFieldRulesStored = LifecycleStageFieldRules & {
     rule_levels_v1?: RuleLevelsV1 | null;
+    rule_meta_v1?: RuleMetaV1 | null;
 };
 
 export type RuleEnforceableLookup = (ruleId: string) => boolean;
@@ -95,11 +100,15 @@ export function parseStoredFieldRules(raw: unknown): LifecycleStageFieldRulesSto
         (raw as { recommended_rule_ids?: unknown }).recommended_rule_ids
     );
     const rule_levels_v1 = parseRuleLevelsV1((raw as { rule_levels_v1?: unknown }).rule_levels_v1);
-    if (!required_rule_ids.length && !recommended_rule_ids.length && !rule_levels_v1) return null;
+    const rule_meta_v1 = parseRuleMetaV1((raw as { rule_meta_v1?: unknown }).rule_meta_v1);
+    if (!required_rule_ids.length && !recommended_rule_ids.length && !rule_levels_v1 && !rule_meta_v1) {
+        return null;
+    }
     return {
         required_rule_ids,
         recommended_rule_ids,
         ...(rule_levels_v1 ? { rule_levels_v1 } : {}),
+        ...(rule_meta_v1 ? { rule_meta_v1 } : {}),
     };
 }
 
@@ -215,6 +224,7 @@ export function buildDualWriteStoredFieldRules(input: {
     required_rule_ids: string[];
     recommended_rule_ids: string[];
     explicit_rule_levels_v1?: RuleLevelsV1 | null;
+    explicit_rule_meta_v1?: RuleMetaV1 | null;
     isEnforceable: RuleEnforceableLookup;
 }): LifecycleStageFieldRulesStored {
     const requiredSet = new Set(input.required_rule_ids);
@@ -261,6 +271,7 @@ export function buildDualWriteStoredFieldRules(input: {
         required_rule_ids: rules.required_rule_ids,
         recommended_rule_ids: rules.recommended_rule_ids,
         ...(rule_levels_v1 ? { rule_levels_v1 } : {}),
+        ...(input.explicit_rule_meta_v1 ? { rule_meta_v1: input.explicit_rule_meta_v1 } : {}),
     };
 }
 
@@ -293,6 +304,9 @@ export function storedFieldRulesToMetadataFieldRules(
     };
     if (stored.rule_levels_v1) {
         payload.rule_levels_v1 = stored.rule_levels_v1;
+    }
+    if (stored.rule_meta_v1) {
+        payload.rule_meta_v1 = stored.rule_meta_v1;
     }
     return payload;
 }
