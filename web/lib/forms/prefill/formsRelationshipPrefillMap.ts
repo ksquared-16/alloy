@@ -1,6 +1,9 @@
 /**
  * Relationship leaf prefill path mapping for Forms runtime.
  *
+ * P3A compatibility shim — legacy contact.* map for backward compatibility.
+ *
+ * Canonical relationship semantics live in formsRelationshipPrefillResolver.
  * Maps persisted relationship lineage → legacy prefill roots the resolver already loads.
  * Does not silently pick among multiple relationship candidates — resolver must enforce cardinality.
  */

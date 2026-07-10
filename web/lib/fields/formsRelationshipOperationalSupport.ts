@@ -8,6 +8,7 @@
 import type { CanonicalDataProvider } from "@/lib/fields/canonicalDataProviderModel";
 import type { FormsRelationshipRoleKey } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 import { formsRelationshipRoleFromProvider } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
+import { RELATIONSHIP_ROLE_SEMANTICS } from "@/lib/fields/relationship/relationshipSemanticShape";
 
 export type FormsRelationshipOperationalClass =
     | "authorable_prefill_readonly"
@@ -15,7 +16,15 @@ export type FormsRelationshipOperationalClass =
     | "declared_unavailable"
     | "deferred";
 
-/** Roles with a verified prefill adapter in P2 (primary → customers.primary_contact_id). */
+/** Roles with canonical resolver registration (P3A read layer). */
+export const FORMS_P3A_RESOLVER_REGISTERED_ROLES = new Set<FormsRelationshipRoleKey>([
+    "primary",
+    "secondary",
+    "parents",
+    "billing",
+    "emergency",
+]);
+
 export const FORMS_P2_OPERATIONAL_RELATIONSHIP_ROLES = new Set<FormsRelationshipRoleKey>(["primary"]);
 
 const SUPPORTED_LEAVES = new Set(["name", "email", "phone"]);
@@ -26,12 +35,17 @@ export function formsRelationshipOperationalClass(
     if (provider.kind !== "relationship") return "declared_unavailable";
     const role = formsRelationshipRoleFromProvider(provider);
     if (!role || !SUPPORTED_LEAVES.has(provider.relationship?.leaf_key ?? "")) return "declared_unavailable";
-    if (FORMS_P2_OPERATIONAL_RELATIONSHIP_ROLES.has(role)) return "authorable_prefill_readonly";
+    if (RELATIONSHIP_ROLE_SEMANTICS[role]?.pickerEnabledInP3A) return "authorable_prefill_readonly";
     return "deferred";
 }
 
 export function isFormsRelationshipAuthorableInP2(provider: CanonicalDataProvider): boolean {
     return formsRelationshipOperationalClass(provider) === "authorable_prefill_readonly";
+}
+
+
+export function isFormsRelationshipResolverRegistered(role: FormsRelationshipRoleKey): boolean {
+    return FORMS_P3A_RESOLVER_REGISTERED_ROLES.has(role);
 }
 
 export function isFormsRelationshipPublishableInP2(provider: CanonicalDataProvider): boolean {

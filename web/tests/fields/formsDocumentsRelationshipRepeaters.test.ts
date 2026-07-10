@@ -209,7 +209,7 @@ describe("Forms P2 operational role scope", () => {
             ],
         });
         const violations = validateFormsDocumentsP2Bindings(schema);
-        expect(violations.some((v) => v.message.includes("not operational"))).toBe(true);
+        expect(violations.some((v) => v.message.includes("collection-shaped") || v.message.includes("not operational"))).toBe(true);
     });
 });
 
@@ -473,7 +473,7 @@ describe("Forms P2 publish validation and packets", () => {
             ],
         });
         const violations = validateFormsDocumentsP2Bindings(schema);
-        expect(violations.some((v) => v.message.includes("not operational"))).toBe(true);
+        expect(violations.some((v) => v.message.includes("collection-shaped") || v.message.includes("not operational"))).toBe(true);
     });
 
     it("primary relationship prefill maps to contact root only", () => {

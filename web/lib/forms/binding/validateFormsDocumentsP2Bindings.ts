@@ -24,6 +24,8 @@ import {
     relationshipBindingMustBeReadOnlyAtPublish,
 } from "@/lib/fields/formsRelationshipWriteSemantics";
 import { isFormsRelationshipPublishableInP2 } from "@/lib/fields/formsRelationshipOperationalSupport";
+import { roleSupportsSingularRelationshipLeaf } from "@/lib/fields/relationship/relationshipSemanticShape";
+import { formsRelationshipRoleFromProvider } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 import type { FieldBindingViolation } from "@/lib/forms/binding/validatePosConnectedFieldBinding";
 
 function pushViolation(
@@ -49,6 +51,18 @@ function validateRelationshipLeaf(field: FormField, violations: FieldBindingViol
             field.id,
             "unknown_binding",
             `Field "${field.id}" relationship binding references unknown provider "${providerRef}".`,
+        );
+        return;
+    }
+
+
+    const publishRole = formsRelationshipRoleFromProvider(provider);
+    if (publishRole && !roleSupportsSingularRelationshipLeaf(publishRole)) {
+        pushViolation(
+            violations,
+            field.id,
+            "unsupported_provider_kind",
+            `Field "${field.id}" uses role "${publishRole}" which is collection-shaped — singular relationship leaves cannot publish until collection authoring is available.`,
         );
         return;
     }
