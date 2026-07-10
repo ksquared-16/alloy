@@ -8,6 +8,8 @@ import {
     slugifyWorkViewId,
     workViewsV1Equal,
     WORK_VIEW_CATCH_ALL_SUMMARY,
+    normalizeCatchAllWorkViewCompatBinding,
+    repairWorkViewsCatchAllCompatBindings,
 } from "@/lib/lifecycle/workViewsConfigV1";
 import { resolveProcessWorkViews } from "@/lib/lifecycle/workViewsCompatibility";
 
@@ -133,4 +135,64 @@ describe("work_views_v1 metadata", () => {
         ).toBe(false);
         expect(WORK_VIEW_CATCH_ALL_SUMMARY).toBe("All work in this process");
     });
+    it("strips compat_queue_key from include-all (catch-all) views at parse time", () => {
+        const parsed = parseWorkViewsV1([
+            {
+                id: "new_work_view_6",
+                label: "All Leads",
+                filters_v1: [],
+                compat_queue_key: "waitlist",
+                display_order: 6,
+            },
+        ]);
+        expect(parsed?.[0]?.compat_queue_key).toBeUndefined();
+        expect(parsed?.[0]?.filters_v1 ?? []).toHaveLength(0);
+    });
+
+    it("preserves compat_queue_key on predicate-bound views", () => {
+        const parsed = parseWorkViewsV1([
+            {
+                id: "new_leads",
+                label: "New Leads",
+                filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "lead" }],
+                compat_queue_key: "lifecycle_lead",
+            },
+        ]);
+        expect(parsed?.[0]?.compat_queue_key).toBe("lifecycle_lead");
+    });
+
+    it("repairWorkViewsCatchAllCompatBindings repairs only catch-all rows", () => {
+        const rows = [
+            {
+                id: "new_work_view_4",
+                label: "Waitlist",
+                compat_queue_key: "waitlist",
+                filters_v1: [{ field_key: "opportunity_stage", operator: "equals" as const, value: "waitlist" }],
+            },
+            {
+                id: "new_work_view_6",
+                label: "All Leads",
+                compat_queue_key: "waitlist",
+                filters_v1: [],
+            },
+        ];
+        const { workViews, changed } = repairWorkViewsCatchAllCompatBindings(rows);
+        expect(changed).toBe(true);
+        expect(workViews.find((v) => v.id === "new_work_view_4")?.compat_queue_key).toBe("waitlist");
+        expect(workViews.find((v) => v.id === "new_work_view_6")?.compat_queue_key).toBeUndefined();
+    });
+
+    it("normalizeCatchAllWorkViewCompatBinding is idempotent", () => {
+        const once = normalizeCatchAllWorkViewCompatBinding({
+            id: "all_leads",
+            label: "All Leads",
+            compat_queue_key: "waitlist",
+            filters_v1: [],
+        });
+        const twice = normalizeCatchAllWorkViewCompatBinding(once);
+        expect(twice).toEqual(once);
+        expect(once.compat_queue_key).toBeUndefined();
+    });
+
 });
+

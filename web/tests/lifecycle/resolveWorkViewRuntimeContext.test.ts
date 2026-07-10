@@ -29,6 +29,7 @@ const VIEWS: WorkViewConfigV1Stored[] = [
         visible_in_runtime: true,
         queue_layout_id: "layout-queue-2",
         focus_panel_layout_id: "layout-focus-2",
+        filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "tour" }],
     },
 ];
 

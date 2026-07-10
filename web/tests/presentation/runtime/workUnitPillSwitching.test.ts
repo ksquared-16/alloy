@@ -29,6 +29,42 @@ describe("workUnitPillSwitching", () => {
         expect(isSameHostWorkView("v-leads", "wu-other", map)).toBe(false);
     });
 
+    it("cross-host All Leads navigates; same-host All Leads stays in-page (count + queue share canonical host)", () => {
+        const lifecycleViews = [
+            { id: "new_leads", label: "New Leads" },
+            { id: "new_work_view_6", label: "All Leads" },
+        ];
+        const sameHostMap = new Map<string, WorkViewCanonicalLocation>([
+            ["new_leads", { workUnitId: "wu-lead", baseQueueKey: "lifecycle_lead", routeKey: "new_leads" }],
+            ["new_work_view_6", { workUnitId: "wu-lead", baseQueueKey: "lifecycle_lead", routeKey: "all_leads" }],
+        ]);
+        const crossHostMap = new Map<string, WorkViewCanonicalLocation>([
+            ["new_leads", { workUnitId: "wu-lead", baseQueueKey: "lifecycle_lead", routeKey: "new_leads" }],
+            ["new_work_view_6", { workUnitId: "wu-waitlist", baseQueueKey: "lifecycle_waitlist", routeKey: "all_leads" }],
+        ]);
+
+        const sameHost = resolveSelectWorkViewAction({
+            workViewId: "new_work_view_6",
+            currentWorkViewId: "new_leads",
+            currentWorkUnitId: "wu-lead",
+            canonicalLocationByViewId: sameHostMap,
+            targetInputs: { views: lifecycleViews, canonicalLocationByViewId: sameHostMap, selectedSiteId: null },
+        });
+        expect(sameHost).toEqual({ kind: "in-page", workViewId: "new_work_view_6" });
+
+        const crossHost = resolveSelectWorkViewAction({
+            workViewId: "new_work_view_6",
+            currentWorkViewId: "new_leads",
+            currentWorkUnitId: "wu-lead",
+            canonicalLocationByViewId: crossHostMap,
+            targetInputs: { views: lifecycleViews, canonicalLocationByViewId: crossHostMap, selectedSiteId: null },
+        });
+        expect(crossHost.kind).toBe("navigate");
+        if (crossHost.kind === "navigate") {
+            expect(crossHost.href).toContain("all-leads");
+        }
+    });
+
     it("resolveSelectWorkViewAction returns in-page for same-host view (no router.push)", () => {
         const map = new Map<string, WorkViewCanonicalLocation>([
             ["v-active", location("wu-1", "active-pipeline")],
