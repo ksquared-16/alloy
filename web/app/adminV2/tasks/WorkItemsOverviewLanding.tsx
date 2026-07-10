@@ -50,10 +50,10 @@ function taskRecordLabel(task: MyTasksTaskRow): string {
 }
 
 const QUICK_NAV: { filter: OperationalTaskWorkspaceFilter; label: string; icon: ReactNode }[] = [
-    { filter: "open", label: "Open tasks", icon: <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> },
+    { filter: "open", label: "Open work items", icon: <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> },
     { filter: "due_today", label: "Due today", icon: <Calendar className="h-3.5 w-3.5" aria-hidden /> },
-    { filter: "overdue", label: "Overdue tasks", icon: <Bell className="h-3.5 w-3.5" aria-hidden /> },
-    { filter: "completed", label: "Completed tasks", icon: <CheckSquare className="h-3.5 w-3.5" aria-hidden /> },
+    { filter: "overdue", label: "Overdue work items", icon: <Bell className="h-3.5 w-3.5" aria-hidden /> },
+    { filter: "completed", label: "Completed work items", icon: <CheckSquare className="h-3.5 w-3.5" aria-hidden /> },
 ];
 
 export default function WorkItemsOverviewLanding({
@@ -111,9 +111,9 @@ export default function WorkItemsOverviewLanding({
                         tier="primary"
                         testId="work-items-create-action-card"
                         icon={<Plus className="h-5 w-5" aria-hidden strokeWidth={2.25} />}
-                        title="Create a new task"
+                        title="Create a new work item"
                         description="Add a follow-up or reminder for yourself or your team."
-                        cta="New task"
+                        cta="New work item"
                         onClick={onNewTask}
                     />
                     <ProcessingLandingActionCard
@@ -139,7 +139,7 @@ export default function WorkItemsOverviewLanding({
                 <div className="grid gap-5 lg:grid-cols-3">
                     <ContinuePanel title="Continue where you left off" action="View all" onAction={onOpenQueue}>
                         {recentOpen.length === 0 ? (
-                            <EmptyHint>No open tasks yet — create one to get started.</EmptyHint>
+                            <EmptyHint>No open work items yet — create one to get started.</EmptyHint>
                         ) : (
                             <ul className="space-y-1.5">
                                 {recentOpen.map((task) => {
@@ -184,7 +184,7 @@ export default function WorkItemsOverviewLanding({
 
                     <ContinuePanel title="Recently completed" action="View all" onAction={() => onNavigateFilter("completed")}>
                         {recentCompleted.length === 0 ? (
-                            <EmptyHint>Completed tasks appear here.</EmptyHint>
+                            <EmptyHint>Completed work items appear here.</EmptyHint>
                         ) : (
                             <ul className="space-y-1.5">
                                 {recentCompleted.map((task) => (

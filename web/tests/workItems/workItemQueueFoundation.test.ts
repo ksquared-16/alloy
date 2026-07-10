@@ -1,0 +1,69 @@
+import { describe, expect, it } from "vitest";
+
+import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
+import { buildMyTasksPresentationLabels } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
+import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
+import {
+    buildWorkItemBosSummary,
+    buildWorkItemBreadcrumb,
+    mapWorkItemQueueRow,
+} from "@/lib/workItems/mapWorkItemQueueRow";
+import { WORK_ITEM_FOLDER_DEFS, WORK_ITEM_VIEW_DEFS } from "@/lib/workItems/workItemQueueScope";
+
+function task(overrides: Partial<MyTasksTaskRow> = {}): MyTasksTaskRow {
+    return {
+        id: overrides.id ?? "task-1",
+        title: overrides.title ?? "Follow up with household",
+        description: overrides.description ?? "Confirm next steps",
+        due_at: overrides.due_at ?? "2026-07-20T16:00:00.000Z",
+        status: overrides.status ?? "open",
+        source: overrides.source ?? "task_assist",
+        entity_id: overrides.entity_id ?? "opp-1",
+        entity_type: overrides.entity_type ?? "opportunities",
+        assigned_to_user_id: overrides.assigned_to_user_id ?? "u1",
+        created_at: overrides.created_at ?? "2026-07-10T16:00:00.000Z",
+        entity_label: overrides.entity_label ?? "Jordan Family Lead",
+        household_label: overrides.household_label ?? "Jordan Household",
+        assignee_label: overrides.assignee_label ?? "Kelly Operator",
+        department_id: overrides.department_id,
+        lifecycle_stage_key: overrides.lifecycle_stage_key,
+    };
+}
+
+describe("work item queue foundations", () => {
+    const entityLabels: EntityLabelsMap = {
+        opportunities: { singular: "Lead", plural: "Leads" },
+    };
+    const presentation = buildMyTasksPresentationLabels(entityLabels);
+
+    it("keeps user-facing work item terminology labels", () => {
+        expect(WORK_ITEM_FOLDER_DEFS.find((d) => d.key === "all_work")?.label).toBe("All Work");
+        expect(WORK_ITEM_VIEW_DEFS.find((d) => d.key === "mine")?.label).toBe("Mine");
+    });
+
+    it("builds deterministic breadcrumb and BOS summary", () => {
+        const row = task({ department_id: "dept-1", lifecycle_stage_key: "tour_scheduled" });
+        const breadcrumb = buildWorkItemBreadcrumb(row, presentation, entityLabels);
+        const summary = buildWorkItemBosSummary(row);
+
+        expect(breadcrumb).toContain("Business process");
+        expect(breadcrumb).toContain("Tour Scheduled");
+        expect(breadcrumb).toContain("Jordan Family Lead");
+
+        expect(summary).toContain("Task Assist follow-up");
+        expect(summary).toContain("Follow up with household");
+        expect(summary).toContain("Due");
+    });
+
+    it("maps MyTasks row to workspace queue row model", () => {
+        const model = mapWorkItemQueueRow(task(), { presentation, entityLabels });
+
+        expect(model.id).toBe("task-1");
+        expect(model.badge).toBe("BOS");
+        expect(model.isWaiting).toBe(true);
+        expect(model.completed).toBe(false);
+        expect(model.breadcrumb.length).toBeGreaterThan(0);
+        expect(model.dueOrTime?.startsWith("Due ")).toBe(true);
+        expect(model.assigneeInitials).toBe("KO");
+    });
+});
