@@ -221,6 +221,16 @@ describe("Surface Builder composer chrome", () => {
         expect(composer).toContain("onRemove");
         expect(composer).toContain("removeArea");
     });
+
+    it("centers elevated cards for all composer depth states (not edit-mode only)", () => {
+        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
+        expect(css).toMatch(
+            /\[data-fp-composer-depth-active="true"\][\s\S]*\.alloy-os-ucard\s*\{[^}]*top:\s*50%/,
+        );
+        expect(css).not.toMatch(
+            /\[data-fp-composer-edit-mode="true"\]\[data-fp-composer-depth-active="true"\][\s\S]*top:\s*50%/,
+        );
+    });
 });
 
 describe("Targeted contact editing + depth history (QA)", () => {

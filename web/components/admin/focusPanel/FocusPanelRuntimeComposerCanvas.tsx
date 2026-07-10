@@ -621,6 +621,7 @@ function ComposerCellShell({
                     onClick={(e) => {
                         e.stopPropagation();
                         onSelect();
+                        onEnterDrillIn?.();
                     }}
                 >
                     Configure
