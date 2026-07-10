@@ -1,10 +1,17 @@
 # Communications Product Shell Translation - Sprint Closeout
 
-**Date:** 2026-07-08  
-**Branch:** `cursor/66605932`  
-**Status:** Ready for review (not committed)
+**Date:** 2026-07-10  
+**Status:** Doctrine V2 certified adopter (presentation only)
 
-Presentation-only sprint. Translates Communications into the canonical Processing / Digital Mailroom product shell without changing routes, APIs, workflows, or communication engine behavior.
+Presentation-only sprint. Communications consumes `@/components/workspace/operational` — the same primitive stack as Processing (Digital Mailroom). No routes, APIs, workflows, or communication engine behavior changed.
+
+---
+
+## Doctrine V2 certification
+
+Communications composes: `WorkspaceShell`, `WorkspaceHeader`, `WorkspaceModeTabs`, `WorkspaceSubTabs`, `WorkspaceMetricTiles`, `WorkspaceSurface`, `WorkspaceCard`, `WorkspaceZonePanel`, `WorkspaceDivider`.
+
+See [HANDOFF.md](./HANDOFF.md) for the full certification statement.
 
 ---
 
@@ -12,14 +19,15 @@ Presentation-only sprint. Translates Communications into the canonical Processin
 
 | Slice | Outcome |
 | --- | --- |
-| **Product shell** | Subtitle, Work \| Studio mode switch, secondary nav, white execution surface, `workspace-inc2c` version marker |
-| **Work -> Overview** | `CommunicationsOverviewLanding` - action cards, Today's activity KPIs, continue conversations, recent announcements, quick navigation |
-| **Work -> Inbox** | Existing `CommandCenterShell` unchanged (queue, timeline, composer, family context, current work) |
+| **Doctrine primitives** | `web/components/workspace/operational/*` — certified stack extracted from Processing grammar |
+| **Product shell** | `CommunicationsWorkspaceShell` composes doctrine components only (`doctrine-v2`) |
+| **Work -> Overview** | `WorkspaceCard` action tiles, `WorkspaceZonePanel` continue/recent lists |
+| **Work -> Inbox** | Existing `CommandCenterShell` unchanged |
 | **Work -> Announcements** | Existing `AnnouncementsWorkspace` unchanged |
-| **Work -> Scheduled** | `ScheduledWorkspace` - scheduled outbound sends + scheduled announcements via existing APIs |
+| **Work -> Scheduled** | `ScheduledWorkspace` unchanged |
 | **Studio -> Templates** | Existing `TemplatesWorkspace` unchanged |
-| **Studio -> Channels** | `ChannelsWorkspace` - mockup list + embedded `CommunicationsSetupClient` for Email/SMS |
-| **Studio -> Branding** | `BrandingWorkspace` - org communication branding list from existing binding hints |
+| **Studio -> Channels** | `ChannelsWorkspace` unchanged |
+| **Studio -> Rules** | `RulesWorkspace` (formerly Branding) — channels, signatures, rules |
 
 ---
 
@@ -28,7 +36,7 @@ Presentation-only sprint. Translates Communications into the canonical Processin
 | Mode | Tabs |
 | --- | --- |
 | **Work** | Overview, Inbox, Announcements, Scheduled |
-| **Studio** | Templates, Channels, Branding |
+| **Studio** | Templates, Channels, Rules |
 
 Default Work tab on open: **Overview** (parity with Digital Mailroom).
 
@@ -37,19 +45,23 @@ Default Work tab on open: **Overview** (parity with Digital Mailroom).
 ## Files changed
 
 ### New
+- `web/components/workspace/operational/*` (doctrine primitives)
 - `web/app/adminV2/communications/CommunicationsOverviewLanding.tsx`
 - `web/app/adminV2/communications/ScheduledWorkspace.tsx`
 - `web/app/adminV2/communications/ChannelsWorkspace.tsx`
-- `web/app/adminV2/communications/BrandingWorkspace.tsx`
+- `web/app/adminV2/communications/RulesWorkspace.tsx`
 - `web/app/adminV2/communications/CommunicationsStudioListRow.tsx`
+- `web/tests/adminV2/communicationsWorkspaceDoctrine.test.ts`
 
 ### Updated
 - `web/app/adminV2/communications/CommunicationsWorkspaceShell.tsx`
 - `web/app/adminV2/communications/CommunicationsModalTabPanel.tsx`
 - `web/app/adminV2/communications/CommunicationsWorkspaceKpiStrip.tsx`
+- `web/app/adminV2/communications/CommunicationsOverviewLanding.tsx`
+- `web/app/adminV2/communications/CommsModalTabBar.tsx`
+- `web/app/adminV2/components/OperationalWorkspaceModeNav.tsx`
 - `web/app/adminV2/components/InboxModal.tsx`
 - `web/tests/adminV2/communicationsModalTabs.test.ts`
-- `web/tests/adminV2/commsV2CommandCenterDark.contract.test.ts`
 
 ---
 
@@ -58,31 +70,17 @@ Default Work tab on open: **Overview** (parity with Digital Mailroom).
 ```bash
 cd web && npm run test -- \
   tests/adminV2/communicationsModalTabs.test.ts \
+  tests/adminV2/communicationsWorkspaceDoctrine.test.ts \
   tests/adminV2/commsV2CommandCenterDark.contract.test.ts
 
-cd web && npx eslint \
-  app/adminV2/communications/CommunicationsModalTabPanel.tsx \
-  app/adminV2/communications/CommunicationsWorkspaceKpiStrip.tsx \
-  app/adminV2/communications/CommunicationsWorkspaceShell.tsx \
-  app/adminV2/communications/CommunicationsOverviewLanding.tsx \
-  app/adminV2/communications/ScheduledWorkspace.tsx \
-  app/adminV2/communications/ChannelsWorkspace.tsx \
-  app/adminV2/communications/BrandingWorkspace.tsx \
-  app/adminV2/communications/CommunicationsStudioListRow.tsx \
-  app/adminV2/components/InboxModal.tsx \
-  tests/adminV2/communicationsModalTabs.test.ts \
-  tests/adminV2/commsV2CommandCenterDark.contract.test.ts
-
-cd web && NODE_OPTIONS="--max-old-space-size=8192" npm run typecheck:build
+cd web && NODE_OPTIONS="--max-old-space-size=8192" npx tsc --noEmit
 ```
 
 Results:
 
-- PASS: Communications modal contract tests (`14 passed`)
-- PASS: Focused ESLint on touched UI/test files
-- PASS: `typecheck:build`
-- BLOCKED: Full `npm run typecheck` hung without diagnostics after 10+ minutes in this local agent environment
-- BLOCKED: Browser screenshot pass. Dev server starts on `127.0.0.1:3002`, but `/workspace` redirects to `/login?error=config` because local auth/config is unavailable
+- PASS: 20 contract/doctrine tests
+- PASS: Full `tsc --noEmit` (8GB heap)
+- BLOCKED: Browser screenshots — local `/workspace` requires authenticated Supabase config
 
 Screenshots: `docs/sprints/07_2026/communications-product-shell-translation/screenshots/`
 
@@ -104,6 +102,6 @@ Screenshots: `docs/sprints/07_2026/communications-product-shell-translation/scre
 
 | Item | Notes |
 | --- | --- |
-| Branding self-service editing | Read-only in Studio today; full edit surface deferred |
+| Rules self-service editing | Read-only in Studio today; full edit surface deferred |
 | Channels KPI strip values | Placeholder dashes until binding summary helper exists |
 | Scheduled workspace actions | View-only; cancel/reschedule stays in existing composer/announcement flows |

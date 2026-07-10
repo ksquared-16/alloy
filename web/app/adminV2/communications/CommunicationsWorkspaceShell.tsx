@@ -5,17 +5,18 @@ import { MessageSquare } from "lucide-react";
 
 import CommunicationsWorkspaceKpiStrip from "@/app/adminV2/communications/CommunicationsWorkspaceKpiStrip";
 import OperationalWorkspaceModeNav from "@/app/adminV2/components/OperationalWorkspaceModeNav";
-import OperationalModalHeader from "@/app/adminV2/components/OperationalModalHeader";
-import {
-    COMMS_PRIMARY_BTN_CLASS,
-    COMMS_WORKSPACE_EXECUTION_CLASS,
-} from "@/app/adminV2/communications/commsWorkspaceUi";
+import { COMMS_PRIMARY_BTN_CLASS } from "@/app/adminV2/communications/commsWorkspaceUi";
 import {
     COMMUNICATIONS_MODES,
     COMMUNICATIONS_TAB_MODE,
     type CommunicationsMode,
     type CommunicationsModalTab,
 } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
+import {
+    WorkspaceHeader,
+    WorkspaceShell,
+    WorkspaceSurface,
+} from "@/components/workspace/operational";
 
 type TabDef = { key: CommunicationsModalTab; label: string };
 
@@ -32,8 +33,8 @@ export type CommunicationsWorkspaceShellProps = {
 };
 
 /**
- * Stable Communications workspace chrome - header, KPI reserve, navigation, execution surface.
- * Tab execution bodies mount inside the execution region only.
+ * Communications workspace — consumes Operational Workspace Doctrine V2 primitives only.
+ * Tab execution bodies mount inside WorkspaceSurface; no Communications-specific shell chrome.
  */
 export default function CommunicationsWorkspaceShell({
     tabs,
@@ -47,13 +48,10 @@ export default function CommunicationsWorkspaceShell({
     children,
 }: CommunicationsWorkspaceShellProps) {
     const modeTabs = tabs.filter((t) => COMMUNICATIONS_TAB_MODE[t.key] === mode);
+
     return (
-        <div
-            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
-            data-comms-workspace-shell="true"
-            data-comms-modal-version="workspace-inc2c"
-        >
-            <OperationalModalHeader
+        <WorkspaceShell dataModule="comms" version="doctrine-v2">
+            <WorkspaceHeader
                 icon={<MessageSquare className="h-4 w-4" aria-hidden strokeWidth={2} />}
                 title="Communications"
                 subtitle="Where conversations happen."
@@ -87,14 +85,12 @@ export default function CommunicationsWorkspaceShell({
                 sectionAriaLabel={mode === "studio" ? "Studio sections" : "Work sections"}
                 navDataAttr="comms"
                 sectionsDataAttr="comms"
+                subTabDataAttr="comms"
             />
 
-            <div
-                className={`${COMMS_WORKSPACE_EXECUTION_CLASS} !min-h-0 !border-t-0 !bg-white !p-0`}
-                data-comms-workspace-execution="true"
-            >
+            <WorkspaceSurface variant="execution" className="!min-h-0 !border-t-0 !bg-white !p-0" data-comms-workspace-execution="true">
                 {children}
-            </div>
-        </div>
+            </WorkspaceSurface>
+        </WorkspaceShell>
     );
 }

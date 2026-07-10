@@ -2,18 +2,17 @@
 
 import type { ReactNode } from "react";
 
-import CommsModalTabBar from "@/app/adminV2/communications/CommsModalTabBar";
 import { COMMS_WORKSPACE_NAV_CLASS } from "@/app/adminV2/communications/commsWorkspaceUi";
-import AlloyModeSwitch, { type AlloyModeOption } from "@/components/workspace/AlloyModeSwitch";
+import {
+    WorkspaceDivider,
+    WorkspaceModeTabs,
+    WorkspaceSubTabs,
+} from "@/components/workspace/operational";
+import type { AlloyModeOption } from "@/components/workspace/AlloyModeSwitch";
 
 /**
  * Two-level operational workspace navigation — shared by Communications and Digital Mailroom.
- *
- *   Work | Studio
- *   ─────────────────
- *   Overview | Queue
- *   ─────────────────
- *   Workspace
+ * Composes doctrine primitives: WorkspaceModeTabs + WorkspaceSubTabs.
  */
 export default function OperationalWorkspaceModeNav<M extends string, S extends string>({
     modes,
@@ -27,6 +26,7 @@ export default function OperationalWorkspaceModeNav<M extends string, S extends 
     sectionTrailing,
     navDataAttr,
     sectionsDataAttr,
+    subTabDataAttr,
 }: {
     modes: ReadonlyArray<AlloyModeOption<M>>;
     activeMode: M;
@@ -39,6 +39,8 @@ export default function OperationalWorkspaceModeNav<M extends string, S extends 
     sectionTrailing?: ReactNode;
     navDataAttr?: string;
     sectionsDataAttr?: string;
+    /** Passed to WorkspaceSubTabs for legacy data-* tab attributes (e.g. comms). */
+    subTabDataAttr?: string;
 }) {
     return (
         <nav
@@ -46,21 +48,26 @@ export default function OperationalWorkspaceModeNav<M extends string, S extends 
             data-operational-workspace-nav={navDataAttr ?? "true"}
             aria-label={modeAriaLabel}
         >
-            <div className="border-b border-alloy-stone/15 pb-2.5" data-workspace-mode-rail="true">
-                <AlloyModeSwitch modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
-            </div>
+            <WorkspaceModeTabs
+                modes={modes}
+                activeMode={activeMode}
+                onModeChange={onModeChange}
+                ariaLabel={modeAriaLabel}
+            />
             <div
-                className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b border-stone-200 pt-2 pb-0"
+                className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 pt-2 pb-0"
                 data-workspace-mode-sections={sectionsDataAttr ?? "true"}
             >
-                <CommsModalTabBar
+                <WorkspaceSubTabs
                     tabs={sectionTabs}
                     activeKey={activeSection}
                     onSelect={onSectionChange}
-                    aria-label={sectionAriaLabel}
+                    ariaLabel={sectionAriaLabel}
+                    dataAttr={subTabDataAttr}
                 />
                 {sectionTrailing}
             </div>
+            <WorkspaceDivider className="mt-0 border-stone-200" />
         </nav>
     );
 }

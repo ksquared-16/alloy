@@ -36,15 +36,28 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 
 ---
 
-## Operator surfaces (Communications V2, June 2026)
+## Operator surfaces (Communications V2, July 2026)
 
 | Surface | Entry | Purpose |
 |---------|-------|---------|
-| **Communications modal** | AdminV2 top nav **Inbox** | Primary: **Inbox**, **Templates**, **Announcements** tabs (`comms_v2_command_center`) |
+| **Communications modal** | `/workspace` → top nav **Inbox** | Primary operator hub when `comms_v2_command_center` is enabled |
 | **Drawer Communications** | Entity drawer tab | Record-specific conversations only |
-| **Settings → Communications** | `/adminV2/settings/communications` | Provider bindings / channel setup only |
+| **Settings → Communications** | `/settings/communications` | Provider bindings / channel setup (also embedded in modal Channels tab) |
 | **`/adminV2/communications`** | Direct URL | Deprecated notice — not in nav |
 | **`/admin/communications`** | Legacy path | Deprecated / non-primary |
+
+### Modal navigation (Operational Workspace Doctrine V2)
+
+Communications composes `@/components/workspace/operational` — same primitive stack as Processing (Digital Mailroom). Presentation only; send/thread/announcement/template runtimes unchanged.
+
+| Mode | Sections |
+|------|----------|
+| **Work** | Overview · Inbox · Announcements · Scheduled |
+| **Studio** | Templates · Channels · Rules |
+
+Default Work tab on open: **Overview**. Header action: **Compose New** (Overview + Inbox).
+
+Implementation: `CommunicationsWorkspaceShell`, `CommunicationsModalTabPanel`, `InboxModal`. Sprint closeout: [`../../sprints/07_2026/communications-product-shell-translation/README.md`](../../sprints/07_2026/communications-product-shell-translation/README.md).
 
 Templates and Announcements inside the modal do not require separate feature flags beyond command center. See `../../sprints/06_2026/communications-v2/operator-surface-consolidation.md`.
 
@@ -118,6 +131,8 @@ Sprint closeout: [`../../sprints/2026-07/communications-activity-sprint-closeout
 ## Related
 
 - `../../product/communications.md` (transitional expanded reference)
+- `../operator/operational-workspace-shell.md` — modal workspace shell + Doctrine V2 primitives
 - `../../sprints/06_2026/communications-v2/operator-surface-consolidation.md`
+- `../../sprints/07_2026/communications-product-shell-translation/README.md` — Communications Doctrine V2 adoption closeout
 - `docs/schema/schema-policies-and-security.md`
 - `docs/audits/supabase-schema-alignment-audit.md`

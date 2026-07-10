@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Communications modal — Processing shell translation (workspace-inc2c).
+ * Communications modal — Operational Workspace Doctrine V2 adoption.
  */
 
 function read(rel: string): string {
@@ -17,6 +17,7 @@ const SHELL = "app/adminV2/communications/CommunicationsWorkspaceShell.tsx";
 const PANEL = "app/adminV2/communications/CommunicationsModalTabPanel.tsx";
 const PAGE = "app/adminV2/communications/page.tsx";
 const WS = "app/adminV2/communications/TemplatesWorkspace.tsx";
+const DOCTRINE = "components/workspace/operational/index.ts";
 
 describe("Communications modal tabs", () => {
     it("InboxModal exposes Work and Studio sections when Command Center is enabled", () => {
@@ -24,8 +25,12 @@ describe("Communications modal tabs", () => {
         const shell = read(SHELL);
         const panel = read(PANEL);
         expect(src).toContain("CommunicationsWorkspaceShell");
-        expect(shell).toContain('data-comms-workspace-shell="true"');
+        expect(shell).toContain('dataModule="comms"');
+        expect(shell).toContain('version="doctrine-v2"');
         expect(shell).toContain("OperationalWorkspaceModeNav");
+        expect(shell).toContain("WorkspaceShell");
+        expect(shell).toContain("WorkspaceHeader");
+        expect(shell).toContain("WorkspaceSurface");
         expect(src).toContain("COMMUNICATIONS_MODAL_TABS");
         expect(src).not.toContain("SettingsEntityTabBar");
         expect(src).toContain("CommunicationsModalTabPanel");
@@ -36,33 +41,30 @@ describe("Communications modal tabs", () => {
             "Scheduled",
             "Templates",
             "Channels",
-            "Branding",
+            "Rules",
         ]) {
             expect(panel).toContain(label);
         }
         expect(shell).toContain('data-inbox-compose-new="true"');
         expect(src).toContain("QuickMessageModal");
-        expect(shell).toContain('data-comms-workspace-shell="true"');
-        expect(shell).toContain('data-comms-modal-version="workspace-inc2c"');
         expect(shell).not.toContain('data-comms-workspace-context="true"');
-        expect(shell).toContain("OperationalModalHeader");
         expect(shell).toContain("Where conversations happen.");
-        expect(shell).toContain("COMMS_WORKSPACE_EXECUTION_CLASS");
+        expect(shell).not.toContain("OperationalModalHeader");
         expect(shell).not.toContain("data-comms-studio-settings-link");
     });
 
-    it("CommsModalTabBar renders subordinate underline tabs with a Bend Pine active state (not floating pills)", () => {
+    it("CommsModalTabBar delegates to WorkspaceSubTabs with Bend Pine active state", () => {
         const tabBar = read("app/adminV2/communications/CommsModalTabBar.tsx");
+        const subTabs = read("components/workspace/operational/WorkspaceSubTabs.tsx");
         const ui = read("app/adminV2/communications/commsWorkspaceUi.tsx");
+        expect(tabBar).toContain("WorkspaceSubTabs");
         expect(tabBar).toContain('data-comms-modal-tabs="true"');
-        expect(tabBar).toContain("border-b-2");
-        expect(tabBar).toContain("border-alloy-juniper");
-        expect(tabBar).toContain("text-alloy-juniper");
-        expect(tabBar).not.toContain("COMMS_TAB_RAIL_CLASS");
+        expect(subTabs).toContain("border-b-2");
+        expect(subTabs).toContain("border-alloy-juniper");
+        expect(subTabs).toContain("text-alloy-juniper");
         expect(ui).toContain("alloy-juniper");
         expect(ui).not.toContain("alloy-blue");
         expect(ui).not.toMatch(/bg-alloy-pine\b/);
-        expect(tabBar).not.toContain("COMMS_SECONDARY_BTN_CLASS");
     });
 
     it("TemplateCategoryField uses dropdown default and explicit create mode", () => {
@@ -81,19 +83,36 @@ describe("Communications modal tabs", () => {
         expect(src).toContain("AnnouncementsWorkspace");
         expect(src).toContain("ScheduledWorkspace");
         expect(src).toContain("ChannelsWorkspace");
-        expect(src).toContain("BrandingWorkspace");
+        expect(src).toContain("RulesWorkspace");
+        expect(src).toContain("WorkspaceSurface");
         expect(src).toContain('data-comms-tab-panel="overview"');
         expect(src).toContain('data-comms-tab-panel="inbox"');
         expect(src).toContain('data-comms-tab-panel="templates"');
         expect(src).toContain('data-comms-tab-panel="announcements"');
         expect(src).toContain('data-comms-tab-panel="scheduled"');
         expect(src).toContain('data-comms-tab-panel="channels"');
-        expect(src).toContain('data-comms-tab-panel="branding"');
+        expect(src).toContain('data-comms-tab-panel="rules"');
         expect(src).not.toContain("comms_v2_templates");
         expect(src).not.toContain("comms_v2_announcements");
         expect(src).not.toContain("comms-modal-placeholder");
         expect(src).not.toContain("isCommsV2FlagEnabled");
         expect(src).toMatch(/data-comms-modal-body="true"/);
+    });
+
+    it("CommunicationsWorkspaceShell consumes doctrine primitives only", () => {
+        const shell = read(SHELL);
+        expect(shell).not.toContain("OperationalModalHeader");
+        expect(shell).toContain("@/components/workspace/operational");
+        expect(read(DOCTRINE)).toContain("WorkspaceShell");
+        expect(read(DOCTRINE)).toContain("WorkspaceMetricTiles");
+    });
+
+    it("Overview landing uses doctrine zone panels and cards", () => {
+        const landing = read("app/adminV2/communications/CommunicationsOverviewLanding.tsx");
+        expect(landing).toContain("WorkspaceCard");
+        expect(landing).toContain("WorkspaceZonePanel");
+        expect(landing).toContain("WorkspaceSurface");
+        expect(landing).not.toContain("ProcessingLandingActionCard");
     });
 
     it("InboxModal gates the consolidated surface only on comms_v2_command_center", () => {

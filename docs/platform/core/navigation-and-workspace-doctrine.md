@@ -133,6 +133,7 @@ Full drawer rules: `../operator/drawer-system.md`.
 ## Related
 
 - `business-process-system.md`
+- `../operator/operational-workspace-shell.md` — Operational Workspace Doctrine V2 (Processing reference; Communications adopter)
 - `../operator/canonical-interaction-model.md` — full interaction spine (Workspace → … → Field)
 - `../operator/interaction-grammar.md` — drawer preserves workspace/perspective/queue context
 - `../operator/queue-system.md`

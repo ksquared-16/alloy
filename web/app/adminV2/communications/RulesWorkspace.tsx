@@ -36,10 +36,10 @@ const BRANDING_ITEMS: {
 ];
 
 /**
- * Studio Branding - organization communication branding inside the Communications shell.
+ * Studio Rules - channels, signatures, and organization communication rules inside the Communications shell.
  * Surfaces existing binding hints and org defaults; no new APIs or mutation paths.
  */
-export default function BrandingWorkspace() {
+export default function RulesWorkspace() {
     const [bindings, setBindings] = useState<BindingRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<BrandingKey | null>(null);
@@ -80,14 +80,14 @@ export default function BrandingWorkspace() {
         const item = BRANDING_ITEMS.find((b) => b.key === selected);
         const value = values[selected];
         return (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white" data-branding-workspace="true">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white" data-rules-workspace="true">
                 <header className="shrink-0 border-b border-alloy-stone/12 px-4 py-2.5">
                     <button
                         type="button"
                         onClick={() => setSelected(null)}
                         className="text-[11px] font-semibold text-alloy-bend-pine hover:underline"
                     >
-                        &lt;- Branding
+                        &lt;- Rules
                     </button>
                     <h2 className="mt-1 text-[14px] font-semibold text-alloy-midnight">{item?.label}</h2>
                     <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{item?.subtitle}</p>
@@ -120,11 +120,11 @@ export default function BrandingWorkspace() {
     }
 
     return (
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white" data-branding-workspace="true">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white" data-rules-workspace="true">
             <div className={`${COMMS_PANEL_SHELL_CLASS} mx-auto my-4 max-w-2xl overflow-hidden`}>
                 <header className="border-b border-alloy-stone/12 px-4 py-3">
-                    <h2 className="text-[13px] font-semibold text-alloy-midnight">Branding</h2>
-                    <p className="mt-0.5 text-[11px] text-alloy-midnight/50">Organization communication identity</p>
+                    <h2 className="text-[13px] font-semibold text-alloy-midnight">Rules</h2>
+                    <p className="mt-0.5 text-[11px] text-alloy-midnight/50">Channels, signatures, and communication rules</p>
                 </header>
                 <ul className="divide-y divide-alloy-stone/12">
                     {BRANDING_ITEMS.map((item) => {

@@ -6,7 +6,8 @@ import AnnouncementsWorkspace from "@/app/adminV2/communications/AnnouncementsWo
 import CommunicationsOverviewLanding from "@/app/adminV2/communications/CommunicationsOverviewLanding";
 import ScheduledWorkspace from "@/app/adminV2/communications/ScheduledWorkspace";
 import ChannelsWorkspace from "@/app/adminV2/communications/ChannelsWorkspace";
-import BrandingWorkspace from "@/app/adminV2/communications/BrandingWorkspace";
+import RulesWorkspace from "@/app/adminV2/communications/RulesWorkspace";
+import { WorkspaceSurface } from "@/components/workspace/operational";
 
 /** Primary operator tabs inside the Communications modal (gated only by comms_v2_command_center). */
 export type CommunicationsModalTab =
@@ -16,7 +17,7 @@ export type CommunicationsModalTab =
     | "scheduled"
     | "templates"
     | "channels"
-    | "branding";
+    | "rules";
 
 export const COMMUNICATIONS_WORK_TABS: { key: CommunicationsModalTab; label: string }[] = [
     { key: "overview", label: "Overview" },
@@ -28,7 +29,7 @@ export const COMMUNICATIONS_WORK_TABS: { key: CommunicationsModalTab; label: str
 export const COMMUNICATIONS_STUDIO_TABS: { key: CommunicationsModalTab; label: string }[] = [
     { key: "templates", label: "Templates" },
     { key: "channels", label: "Channels" },
-    { key: "branding", label: "Branding" },
+    { key: "rules", label: "Rules" },
 ];
 
 /** Flat tab list for shell consumers that need every section label. */
@@ -41,7 +42,7 @@ export const COMMUNICATIONS_MODAL_TABS: { key: CommunicationsModalTab; label: st
  * Work / Studio mode layer (parity with Digital Mailroom). Mode organizes existing domain
  * concepts - it does not remove them:
  *   - Work   -> Overview, Inbox, Announcements, Scheduled
- *   - Studio -> Templates, Channels, Branding
+ *   - Studio -> Templates, Channels, Rules
  */
 export type CommunicationsMode = "work" | "studio";
 
@@ -57,7 +58,7 @@ export const COMMUNICATIONS_TAB_MODE: Record<CommunicationsModalTab, Communicati
     scheduled: "work",
     templates: "studio",
     channels: "studio",
-    branding: "studio",
+    rules: "studio",
 };
 
 /** First tab shown when entering a mode. */
@@ -81,16 +82,12 @@ export default function CommunicationsModalTabPanel({
     onNavigateTab: (tab: CommunicationsModalTab) => void;
     onComposeNew?: () => void;
 }) {
-    const useExecutionFrame = tab !== "overview" && tab !== "channels" && tab !== "branding";
+    const useExecutionFrame = tab !== "overview" && tab !== "channels" && tab !== "rules";
 
     return (
-        <div
+        <WorkspaceSurface
+            variant={useExecutionFrame ? "framed" : "plain"}
             data-comms-modal-body="true"
-            className={
-                useExecutionFrame
-                    ? "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
-                    : "relative flex min-h-0 flex-1 flex-col overflow-hidden"
-            }
             data-comms-workspace-execution-surface="true"
         >
             <div
@@ -132,12 +129,12 @@ export default function CommunicationsModalTabPanel({
                 <ChannelsWorkspace />
             </div>
             <div
-                className={tabPanelClass(tab === "branding")}
-                data-comms-tab-panel="branding"
-                aria-hidden={tab !== "branding"}
+                className={tabPanelClass(tab === "rules")}
+                data-comms-tab-panel="rules"
+                aria-hidden={tab !== "rules"}
             >
-                <BrandingWorkspace />
+                <RulesWorkspace />
             </div>
-        </div>
+        </WorkspaceSurface>
     );
 }

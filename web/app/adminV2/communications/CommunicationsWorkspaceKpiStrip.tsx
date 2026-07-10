@@ -3,13 +3,12 @@
 /**
  * Communications KPI band - compact, glanceable status strip.
  *
- * Refactored (Work/Studio parity) to render the SHARED `CompactKpiStrip` with platform
- * KPI color semantics, so Communications and Processing read as siblings. Data is
- * unchanged: real inbox metrics + derived template/announcement KPIs from already-loaded
- * workspace data. No new fetches, no fabricated counts.
+ * Refactored to render WorkspaceMetricTiles (doctrine primitive) with platform
+ * KPI color semantics. Data is unchanged: real inbox metrics + derived template/
+ * announcement KPIs from already-loaded workspace data.
  */
 
-import CompactKpiStrip, { type CompactKpiItem } from "@/components/workspace/CompactKpiStrip";
+import { WorkspaceMetricTiles, type WorkspaceMetricTileItem } from "@/components/workspace/operational";
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 import { useCommunicationsWorkspaceKpi } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import { NEEDS_REVIEW_STATUS_LABEL } from "@/lib/communications/v2/commandCenterViewModel";
@@ -25,7 +24,7 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
     const templatesLoading = !templates.listResolved;
     const announcementsLoading = !announcements.listResolved;
 
-    let items: CompactKpiItem[] = [];
+    let items: WorkspaceMetricTileItem[] = [];
     let loading = false;
 
     if (activeTab === "overview") {
@@ -81,7 +80,7 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
             { key: "in_app", label: "In-app", value: "Active", state: "ready" },
             { key: "push", label: "Push", value: "Soon", state: "neutral" },
         ];
-    } else if (activeTab === "branding") {
+    } else if (activeTab === "rules") {
         loading = false;
         items = [
             { key: "identity", label: "Identity", value: "-", state: "neutral" },
@@ -93,5 +92,5 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
 
     if (items.length === 0) return null;
 
-    return <CompactKpiStrip items={items} loading={loading} ariaLabel="Communications status" data-comms-workspace-kpi-band="true" />;
+    return <WorkspaceMetricTiles items={items} loading={loading} ariaLabel="Communications status" data-comms-workspace-kpi-band="true" />;
 }
