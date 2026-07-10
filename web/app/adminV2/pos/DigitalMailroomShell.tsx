@@ -90,7 +90,7 @@ export default function DigitalMailroomShell({
                 else onStudioTabChange(key as ProcessingStudioTab);
             }}
             sectionAriaLabel={isWork ? "Work sections" : "Studio sections"}
-            metricsColumn={isWork ? <ProcessingKpiStrip /> : undefined}
+            metricsColumn={<ProcessingKpiStrip mode={mode} />}
             navDataAttr="mailroom"
             sectionsDataAttr="mailroom"
         >

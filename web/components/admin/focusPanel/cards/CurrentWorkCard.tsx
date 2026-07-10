@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import clsx from "clsx";
 
 import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
@@ -274,17 +274,17 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
 
     const statusChip =
         surface.progress.total > 0 ?
-            <span className="alloy-os-currentwork__header-meta" data-work-status-pill={focused ? "focused" : "summary"}>
-                <span
-                    className={clsx(
-                        "alloy-os-card-pill alloy-os-card-pill--subtle alloy-os-currentwork__status-chip",
-                        surface.status === "completed" && "alloy-os-card-pill--complete",
-                    )}
-                >
-                    {surface.statusLabel}
-                </span>
-                <span className="alloy-os-currentwork__header-percent" aria-hidden>
-                    · {surface.progress.percent}%
+            <span
+                className={clsx(
+                    "alloy-os-currentwork__status-progress-pill",
+                    surface.status === "completed" && "alloy-os-currentwork__status-progress-pill--complete",
+                )}
+                data-work-status-pill={focused ? "focused" : "summary"}
+                style={{ "--work-progress-percent": `${surface.progress.percent}%` } as CSSProperties}
+            >
+                <span className="alloy-os-currentwork__status-progress-fill" aria-hidden />
+                <span className="alloy-os-currentwork__status-progress-label">
+                    {surface.statusLabel} · {surface.progress.percent}%
                 </span>
             </span>
         :   <span
@@ -390,7 +390,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 tier={model.tier}
                 archetype="status"
                 statusChip={statusChip}
-                statusTone={evidence.statusTone}
+                statusTone={surface.progress.total > 0 ? "neutral" : evidence.statusTone}
                 density={focused ? "expanded" : "compact"}
                 gridSpan={model.span}
                 data-universal-card-key={model.key}

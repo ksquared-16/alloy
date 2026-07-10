@@ -10,33 +10,24 @@ function read(rel: string): string {
     return readFileSync(join(ROOT, rel), "utf8");
 }
 
-describe("Alloy Operational Health Doctrine V3", () => {
-    it("exports WorkspaceOperationalHealthStrip from doctrine barrel", () => {
+describe("Alloy Operational Health Doctrine V3 — Work Items", () => {
+    it("exports WorkspaceOperationalHealth from doctrine barrel", () => {
         const barrel = read("components/workspace/doctrine.ts");
-        expect(barrel).toContain("WorkspaceOperationalHealthStrip");
+        expect(barrel).toContain("WorkspaceOperationalHealth");
         expect(barrel).toContain("WorkspaceOperationalHealthItem");
     });
 
-    it("flat strip uses hairline separators — not boxed KPI cards", () => {
-        const strip = read("components/workspace/WorkspaceOperationalHealthStrip.tsx");
-        expect(strip).toContain("divide-x");
-        expect(strip).toContain("WS_OPERATIONAL_HEALTH_STRIP");
-        expect(strip).not.toContain("SurfaceHeaderKpiCard");
-        expect(strip).not.toContain("WS_KPI_CARD_CHROME");
-        expect(strip).not.toContain("shadow");
+    it("flat health band is not boxed KPI cards", () => {
+        const health = read("components/workspace/WorkspaceOperationalHealth.tsx");
+        expect(health).toContain("data-workspace-operational-health");
+        expect(health).not.toContain("SurfaceHeaderKpiCard");
+        expect(health).not.toContain("WS_KPI_CARD_CHROME");
     });
 
-    it("includes trend placeholders on every signal", () => {
-        const strip = read("components/workspace/WorkspaceOperationalHealthStrip.tsx");
-        expect(strip).toContain("data-operational-health-trend");
-        expect(strip).toContain("data-operational-health-trend-placeholder");
-        expect(strip).toContain('trendPlaceholder = "—"');
-    });
-
-    it("Processing composes WorkspaceOperationalHealthStrip", () => {
-        const adapter = read("app/adminV2/pos/ProcessingKpiStrip.tsx");
-        expect(adapter).toContain("WorkspaceOperationalHealthStrip");
-        expect(adapter).not.toContain("WorkspaceMetricTiles");
+    it("includes trend placeholders on metrics", () => {
+        const health = read("components/workspace/WorkspaceOperationalHealth.tsx");
+        expect(health).toContain("data-workspace-operational-health-trend");
+        expect(health).toContain("item.trend");
     });
 
     it("Work Items overview metrics: Open, Due Today, Overdue, Completed Today", () => {
@@ -60,5 +51,11 @@ describe("Alloy Operational Health Doctrine V3", () => {
     it("WorkItemsShell passes workView into the health strip", () => {
         const shell = read("app/adminV2/tasks/WorkItemsShell.tsx");
         expect(shell).toContain("<WorkItemsKpiStrip workView={workView} />");
+    });
+
+    it("Work Items composes WorkspaceOperationalHealth", () => {
+        const adapter = read("app/adminV2/tasks/WorkItemsKpiStrip.tsx");
+        expect(adapter).toContain("WorkspaceOperationalHealth");
+        expect(adapter).not.toContain("WorkspaceMetricTiles");
     });
 });

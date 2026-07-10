@@ -4,14 +4,14 @@
  * Work Items → Work mode operational health band (Doctrine V3).
  *
  * Data-only adapter: overview and queue sections supply different metric sets;
- * renders `WorkspaceOperationalHealthStrip` (flat ribbon — no boxed KPI cards).
+ * renders canonical `WorkspaceOperationalHealth` (flat strip — no boxed KPI cards).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import WorkspaceOperationalHealthStrip, {
+import WorkspaceOperationalHealth, {
     type WorkspaceOperationalHealthItem,
-} from "@/components/workspace/WorkspaceOperationalHealthStrip";
+} from "@/components/workspace/WorkspaceOperationalHealth";
 import type { WorkItemsWorkView } from "@/app/adminV2/tasks/workItemsSections";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import {
@@ -32,6 +32,21 @@ type TaskCounts = {
     completed_today: number;
     assigned: number;
     waiting: number;
+};
+
+/** Static trend placeholders until historical comparison APIs exist. */
+const OVERVIEW_TRENDS = {
+    open: { direction: "none" as const, label: "—" },
+    due_today: { direction: "none" as const, label: "—" },
+    overdue: { direction: "none" as const, label: "—", tone: "ember" as const },
+    completed_today: { direction: "none" as const, label: "—", tone: "gold" as const },
+};
+
+const QUEUE_TRENDS = {
+    assigned: { direction: "none" as const, label: "—" },
+    waiting: { direction: "none" as const, label: "—" },
+    due_soon: { direction: "none" as const, label: "—" },
+    overdue: { direction: "none" as const, label: "—", tone: "ember" as const },
 };
 
 function isToday(iso: string): boolean {
@@ -58,24 +73,6 @@ function deriveQueueAssignmentCounts(tasks: MyTasksTaskRow[]): { assigned: numbe
         else waiting += 1;
     }
     return { assigned, waiting };
-}
-
-function overviewItems(counts: TaskCounts): WorkspaceOperationalHealthItem[] {
-    return [
-        { key: "open", label: "Open", value: String(counts.open), status: "healthy" },
-        { key: "due_today", label: "Due Today", value: String(counts.due_today), status: "warning" },
-        { key: "overdue", label: "Overdue", value: String(counts.overdue), status: "critical" },
-        { key: "completed_today", label: "Completed Today", value: String(counts.completed_today), status: "unknown" },
-    ];
-}
-
-function queueItems(counts: TaskCounts): WorkspaceOperationalHealthItem[] {
-    return [
-        { key: "assigned", label: "Assigned", value: String(counts.assigned), status: "healthy" },
-        { key: "waiting", label: "Waiting", value: String(counts.waiting), status: "warning" },
-        { key: "due_soon", label: "Due Soon", value: String(counts.due_soon), status: "warning" },
-        { key: "overdue", label: "Overdue", value: String(counts.overdue), status: "critical" },
-    ];
 }
 
 const SECTION_EYEBROW: Record<WorkItemsWorkView, string> = {
@@ -153,10 +150,38 @@ export default function WorkItemsKpiStrip({ workView }: { workView: WorkItemsWor
         assigned: 0,
         waiting: 0,
     };
-    const items = workView === "queue" ? queueItems(counts ?? empty) : overviewItems(counts ?? empty);
+    const c = counts ?? empty;
+
+    const overviewItems: WorkspaceOperationalHealthItem[] = useMemo(
+        () => [
+            { key: "open", label: "Open", value: String(c.open), tone: "pine", trend: OVERVIEW_TRENDS.open },
+            { key: "due_today", label: "Due Today", value: String(c.due_today), tone: "gold", trend: OVERVIEW_TRENDS.due_today },
+            { key: "overdue", label: "Overdue", value: String(c.overdue), tone: "ember", trend: OVERVIEW_TRENDS.overdue },
+            {
+                key: "completed_today",
+                label: "Completed Today",
+                value: String(c.completed_today),
+                tone: "gold",
+                trend: OVERVIEW_TRENDS.completed_today,
+            },
+        ],
+        [c.open, c.due_today, c.overdue, c.completed_today]
+    );
+
+    const queueItems: WorkspaceOperationalHealthItem[] = useMemo(
+        () => [
+            { key: "assigned", label: "Assigned", value: String(c.assigned), tone: "pine", trend: QUEUE_TRENDS.assigned },
+            { key: "waiting", label: "Waiting", value: String(c.waiting), tone: "gold", trend: QUEUE_TRENDS.waiting },
+            { key: "due_soon", label: "Due Soon", value: String(c.due_soon), tone: "gold", trend: QUEUE_TRENDS.due_soon },
+            { key: "overdue", label: "Overdue", value: String(c.overdue), tone: "ember", trend: QUEUE_TRENDS.overdue },
+        ],
+        [c.assigned, c.waiting, c.due_soon, c.overdue]
+    );
+
+    const items = workView === "queue" ? queueItems : overviewItems;
 
     return (
-        <WorkspaceOperationalHealthStrip
+        <WorkspaceOperationalHealth
             eyebrow={SECTION_EYEBROW[workView]}
             items={items}
             loading={loading}

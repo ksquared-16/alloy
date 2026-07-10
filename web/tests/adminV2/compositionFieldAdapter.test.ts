@@ -205,8 +205,11 @@ describe("V1 scope — static composition fields only, no custom fields", () => 
             const groups = namedEvidenceGroupsForZone(zone);
             for (const group of groups) {
                 for (const field of group.availableFields) {
-                    // System fields follow "namespace.fieldName" pattern (camelCase keys allowed)
-                    expect(field.key).toMatch(/^[a-z_]+\.[a-zA-Z_]+$/);
+                    // Scalar refKeys follow "namespace.fieldName"; collection providers may use canonical keys like "children".
+                    const isCollectionProviderKey = field.key === "children";
+                    if (!isCollectionProviderKey) {
+                        expect(field.key).toMatch(/^[a-z_]+\.[a-zA-Z_]+$/);
+                    }
                     expect(field.isSystemField).toBe(true);
                 }
             }

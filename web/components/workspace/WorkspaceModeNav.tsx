@@ -36,7 +36,7 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
     onSectionChange: (key: S) => void;
     sectionAriaLabel: string;
     sectionTrailing?: ReactNode;
-    /** Right column — KPI band aligned with Work navigation (Processing reference). */
+    /** Right column — operational health aligned with Work navigation (Processing reference). */
     metricsColumn?: ReactNode;
     navDataAttr?: string;
     sectionsDataAttr?: string;

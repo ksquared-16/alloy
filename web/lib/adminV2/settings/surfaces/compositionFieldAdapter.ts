@@ -33,6 +33,11 @@
 import type { CompositionEvidenceGroupDef } from "@/lib/adminV2/settings/surfaces/compositionEvidenceGroupRegistry";
 import { evidenceGroupsForZone } from "@/lib/adminV2/settings/surfaces/compositionEvidenceGroupRegistry";
 import {
+    filterCanonicalDataProviders,
+    findCanonicalDataProvider,
+} from "@/lib/fields/canonicalDataProviderRegistry";
+import type { CanonicalDataProvider } from "@/lib/fields/canonicalDataProviderModel";
+import {
     buildTenantLayoutCatalogFields,
     type TenantFieldDefinitionRow,
 } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
@@ -79,116 +84,49 @@ export type NamedEvidenceGroup = {
     availableFields: AvailableField[];
 };
 
-// ── Static composition field catalog (V1) ─────────────────────────────────────
+// ── Canonical provider adapter (replaces static QUEUE_FIELD_CATALOG) ───────────
+
+function providerToAvailableField(provider: CanonicalDataProvider): AvailableField {
+    return {
+        key: provider.refKey,
+        label: provider.label,
+        entityNamespace: provider.entityNamespace as AvailableFieldEntityNamespace,
+        displayHint: provider.displayHint,
+        isSystemField: provider.isSystem,
+    };
+}
 
 /**
- * Platform-defined composition fields for the queue row refKey namespace.
- * These are the fields that `OperationalQueueRecordRow` knows how to render
- * (backed by `QueueRecordScopedColumn` which iterates `config.columns[].blocks[].fields[]`).
+ * Resolve a queue field key to an `AvailableField` via the canonical provider catalog.
  *
- * This is NOT the full tenant field catalog. Operator-created custom fields
- * are NOT included here — see the V2 deferral note in the file header.
- *
- * `isSystemField: true` for all entries here — they are platform-defined.
+ * Known providers → fully resolved with label + hint from provider metadata.
+ * Unknown keys → synthesized label; `isSystemField: false` marks unrecognized refs
+ * (legacy configs may still resolve through compatibility layer at publish time).
  */
-const QUEUE_FIELD_CATALOG: Record<string, { label: string; namespace: AvailableFieldEntityNamespace; hint?: AvailableFieldDisplayHint }> = {
-    // customer
-    "customer.display_name": { label: "Household Name", namespace: "customer" },
-    // queue_row computed
-    "queue_row.subject_label": { label: "Subject Label", namespace: "queue_row" },
-    "queue_row.stage_label": { label: "Stage", namespace: "queue_row" },
-    "queue_row.group_count_label": { label: "Group Count", namespace: "queue_row" },
-    "queue_row.work_summary": { label: "Work Summary", namespace: "queue_row" },
-    "queue_row.next_best_action_label": { label: "Next Best Action", namespace: "queue_row" },
-    // person
-    "person.primary_contact_name": { label: "Primary Contact Name", namespace: "person" },
-    "person.phone": { label: "Phone", namespace: "person", hint: "link" },
-    "person.email": { label: "Email", namespace: "person", hint: "link" },
-    "person.date_of_birth": { label: "Date of Birth", namespace: "person", hint: "date" },
-    "person.role_label": { label: "Role", namespace: "person" },
-    "person.address_line": { label: "Address", namespace: "person" },
-    "contact.first_name": { label: "First name", namespace: "person" },
-    "contact.last_name": { label: "Last name", namespace: "person" },
-    "contact.email": { label: "Email", namespace: "person", hint: "link" },
-    "contact.phone": { label: "Phone", namespace: "person", hint: "link" },
-    // opportunity
-    "opportunity.status_label": { label: "Status", namespace: "opportunity", hint: "status_pill" },
-    "opportunity.location": { label: "Location", namespace: "opportunity" },
-    "opportunity.attention_reason": { label: "Attention Reason", namespace: "opportunity" },
-    "opportunity.next_step": { label: "Next Step", namespace: "opportunity" },
-    "opportunity.tour_date": { label: "Tour Date", namespace: "opportunity", hint: "date" },
-    // child
-    "child.name": { label: "Child Name", namespace: "child" },
-    "child.first_name": { label: "First Name", namespace: "child" },
-    "child.last_name": { label: "Last Name", namespace: "child" },
-    "child.preferred_name": { label: "Preferred Name", namespace: "child" },
-    "child.nickname": { label: "Nickname", namespace: "child" },
-    "child.display_name": { label: "Display Name", namespace: "child" },
-    "children.count": { label: "Children count", namespace: "child", hint: "compact_list" },
-    "children.names": { label: "Children names", namespace: "child", hint: "compact_list" },
-    "children.summary": { label: "Children summary", namespace: "child", hint: "compact_list" },
-    "child.date_of_birth": { label: "Date of Birth", namespace: "child", hint: "date" },
-    "child.dob_age": { label: "Age", namespace: "child" },
-    "child.age": { label: "Age", namespace: "child" },
-    "child.age_band": { label: "Age Band", namespace: "child" },
-    "child.status": { label: "Child Status", namespace: "child", hint: "status_pill" },
-    "child.room": { label: "Room", namespace: "child" },
-    "child.location": { label: "Campus / Location", namespace: "child" },
-    "child.start_date": { label: "Desired Start Date", namespace: "child", hint: "date" },
-    "child.desired_start_date": { label: "Desired Start", namespace: "child", hint: "date" },
-    "child.medical_summary": { label: "Medical", namespace: "child" },
-    "child.documents_summary": { label: "Documents", namespace: "child" },
-    "child.pickup_summary": { label: "Pickup", namespace: "child" },
-    "child.notes_summary": { label: "Notes", namespace: "child" },
-    "child.communications_summary": { label: "Communications", namespace: "child" },
-    "child.readiness_summary": { label: "Readiness", namespace: "child" },
-    // inquiry_child
-    "inquiry_child.program": { label: "Program", namespace: "inquiry_child" },
-    "inquiry_child.schedule_type": { label: "Schedule Type", namespace: "inquiry_child" },
-    "inquiry_child.desired_schedule_type": { label: "Desired Schedule", namespace: "inquiry_child" },
-    "inquiry_child.program_category": { label: "Program Category", namespace: "inquiry_child" },
-    // waitlist computed (available on waitlist queue rows)
-    "waitlist.positionLabel": { label: "Waitlist Position", namespace: "queue_row", hint: "status_pill" },
-    "waitlist.tierLabel": { label: "Priority Tier", namespace: "queue_row", hint: "status_pill" },
-    "waitlist.waitSince": { label: "Wait Since", namespace: "queue_row", hint: "date" },
-    "waitlist.siblingContext": { label: "Sibling Context", namespace: "queue_row" },
-    "sibling.names": { label: "Sibling Names", namespace: "queue_row" },
-    "sibling.count": { label: "Sibling Count", namespace: "queue_row" },
-    "sibling.enrolled": { label: "Sibling Enrolled", namespace: "queue_row" },
-    "sibling.waitlisted": { label: "Sibling Waitlisted", namespace: "queue_row" },
-    "sibling.location": { label: "Sibling Location", namespace: "queue_row" },
-    "sibling.program": { label: "Sibling Program", namespace: "queue_row" },
-    "household.otherChildren": { label: "Other Children", namespace: "queue_row" },
-    "overrides.flags": { label: "Override Flags", namespace: "queue_row", hint: "status_pill" },
-};
-
-/**
- * Resolve a queue field key to an `AvailableField`.
- *
- * Keys in `QUEUE_FIELD_CATALOG` → fully resolved with label + hint.
- * Unknown keys → synthesized label from the refKey shape; `isSystemField: false`
- * marks these as unrecognized (they should not appear in the V1 builder UI,
- * but the synthesizer prevents hard failures if stale config references an
- * old or renamed key).
- */
-function resolveQueueField(key: string): AvailableField {
-    const entry = QUEUE_FIELD_CATALOG[key];
-    if (entry) {
-        return {
-            key,
-            label: entry.label,
-            entityNamespace: entry.namespace,
-            displayHint: entry.hint,
-            isSystemField: true,
-        };
+function resolveQueueField(key: string, tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[]): AvailableField {
+    const provider = findCanonicalDataProvider(key, { tenantFieldDefinitions });
+    if (provider) {
+        return providerToAvailableField(provider);
     }
-    // Synthesize — label from refKey shape; isSystemField=false = not in catalog
     const dotIndex = key.indexOf(".");
     const rawLabel = dotIndex >= 0 ? key.slice(dotIndex + 1) : key;
     const label = rawLabel.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     const rawNs = dotIndex >= 0 ? key.slice(0, dotIndex) : "opportunity";
     const namespace = rawNs as AvailableFieldEntityNamespace;
     return { key, label, entityNamespace: namespace, isSystemField: false };
+}
+
+function pickerProvidersForNamespaces(
+    namespaces: readonly AvailableFieldEntityNamespace[],
+    isWaitlist: boolean,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): CanonicalDataProvider[] {
+    const acceptedSet = new Set(namespaces);
+    return filterCanonicalDataProviders({
+        consumer: "queue_row",
+        isWaitlist,
+        tenantFieldDefinitions,
+    }).filter((provider) => acceptedSet.has(provider.entityNamespace as AvailableFieldEntityNamespace));
 }
 
 // ── Custom-field availability by namespace (V3 doctrine §5) ─────────────────────
@@ -275,29 +213,15 @@ function tenantFieldsForGroup(
 export function availableFieldsForNamespaces(
     namespaces: readonly AvailableFieldEntityNamespace[],
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+    isWaitlist = false,
 ): AvailableField[] {
-    const acceptedSet = new Set(namespaces);
-    const out: AvailableField[] = [];
+    const providers = pickerProvidersForNamespaces(namespaces, isWaitlist, tenantFieldDefinitions);
     const seen = new Set<string>();
-    // Platform starter fields whose namespace is accepted.
-    for (const key of Object.keys(QUEUE_FIELD_CATALOG)) {
-        const field = resolveQueueField(key);
-        if (acceptedSet.has(field.entityNamespace) && !seen.has(field.key)) {
-            seen.add(field.key);
-            out.push(field);
-        }
-    }
-    // Tenant custom fields whose namespace is accepted.
-    if (tenantFieldDefinitions && tenantFieldDefinitions.length > 0) {
-        const catalogFields = buildTenantLayoutCatalogFields(tenantFieldDefinitions, "pipeline_queue_row");
-        for (const cf of catalogFields) {
-            const available = tenantCatalogFieldToAvailable(cf);
-            if (!available) continue;
-            if (acceptedSet.has(available.entityNamespace) && !seen.has(available.key)) {
-                seen.add(available.key);
-                out.push(available);
-            }
-        }
+    const out: AvailableField[] = [];
+    for (const provider of providers) {
+        if (seen.has(provider.refKey)) continue;
+        seen.add(provider.refKey);
+        out.push(providerToAvailableField(provider));
     }
     return out;
 }
@@ -319,7 +243,7 @@ export function availableFieldsForGroup(
     const group = groups.find((g) => g.key === groupKey);
     if (!group) return [];
     return [
-        ...group.defaultFieldKeys.map(resolveQueueField),
+        ...group.defaultFieldKeys.map((key) => resolveQueueField(key, tenantFieldDefinitions)),
         ...tenantFieldsForGroup(group, isWaitlist, tenantFieldDefinitions),
     ];
 }
@@ -340,7 +264,7 @@ export function availableFieldsForZone(
         for (const key of group.defaultFieldKeys) {
             if (!seen.has(key)) {
                 seen.add(key);
-                fields.push(resolveQueueField(key));
+                fields.push(resolveQueueField(key, tenantFieldDefinitions));
             }
         }
         for (const tenantField of tenantFieldsForGroup(group, isWaitlist, tenantFieldDefinitions)) {
@@ -373,7 +297,7 @@ export function namedEvidenceGroupsForZone(
             label: g.label,
             purpose: g.purpose,
             availableFields: [
-                ...g.defaultFieldKeys.map(resolveQueueField),
+                ...g.defaultFieldKeys.map((key) => resolveQueueField(key, tenantFieldDefinitions)),
                 ...tenantFieldsForGroup(g, isWaitlist, tenantFieldDefinitions),
             ],
         }),

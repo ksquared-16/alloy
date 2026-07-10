@@ -139,6 +139,8 @@ describe("settings editor persist/load round-trip (metadata + fallback)", () => 
         // Editor with rowLayout=null persists the plain doc (no layout metadata).
         const doc = buildSummaryDocFromOrder(order);
         expect(readFocusPanelPublishedLayout(doc)).toBeNull();
+        // System default doc carries the seeded grid for Surface Builder + runtime.
+        expect(readFocusPanelPublishedLayout(FOCUS_PANEL_SUMMARY_DEFAULT_DOC)?.grid).toBeDefined();
     });
 });
 

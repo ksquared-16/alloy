@@ -135,16 +135,9 @@ export const WS_CANVAS = "bg-white shadow-[0_1px_6px_rgba(24,39,58,0.06)]";
 /** Secondary inspector column beside the canvas. */
 export const WS_INSPECTOR = "bg-alloy-stone/[0.02] border-l border-alloy-stone/12";
 
-/** Metric-band eyebrow — stacked above nav metrics / operational health (canonical nav layout). */
+/** Metric-band eyebrow — stacked above operational health or legacy metric tiles. */
 export const WS_METRIC_EYEBROW =
     "flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-slate";
-
-/**
- * Operational Health Doctrine V3 — flat ribbon container (hairline-separated cells, no KPI card chrome).
- * Reference: Processing nav-band metrics; Work Items overview + queue bands.
- */
-export const WS_OPERATIONAL_HEALTH_STRIP =
-    "overflow-hidden rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.02]";
 
 /** @deprecated use stacked `WS_METRIC_EYEBROW` via `WorkspaceMetricTiles` `eyebrow` prop */
 export const WS_METRIC_EYEBROW_INLINE = WS_METRIC_EYEBROW;
