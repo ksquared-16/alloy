@@ -1,16 +1,19 @@
 /**
- * Child focus edit field policy — maps published `child_surface` config to runtime
+ * Child focus edit field policy — maps published `children_surface` config to runtime
  * edit rows (displayed / editable / saveable).
  */
 
-import type { NestedSurfaceFieldMode } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { fieldVisibilityForNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    fieldIsSaveable,
+    fieldShouldRender,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
     CHILD_FOCUS_FIELD_DEFS,
     CHILD_UNSUPPORTED_SAVE_FIELD_KEYS,
     type ChildFocusFieldKey,
     childFocusViewFromConfig,
-    defaultChildFieldModes,
     isChildFocusFieldSaveSupported,
     orderedChildEditFieldKeys,
     type ChildFocusView,
@@ -48,29 +51,28 @@ export type ChildFocusEditFieldRow = {
     unsupported?: boolean;
 };
 
-function fieldModesFromConfig(config: NestedSurfaceConfig | null): Record<string, NestedSurfaceFieldMode> {
-    const modes: Record<string, NestedSurfaceFieldMode> = { ...defaultChildFieldModes() };
-    for (const group of config?.groups ?? []) {
-        for (const key of group.selectedFieldKeys) {
-            const mode = group.fieldModes?.[key];
-            if (mode) {
-                modes[key] = { ...modes[key], ...mode };
-            }
-        }
+function groupKeyForField(config: NestedSurfaceConfig, fieldKey: ChildFocusFieldKey): string | null {
+    const childEdit = config.groups.find((g) => g.key === "child_edit");
+    if (childEdit?.selectedFieldKeys.includes(fieldKey)) return "child_edit";
+    for (const group of config.groups) {
+        if (group.key === "identity") continue;
+        if (group.selectedFieldKeys.includes(fieldKey)) return group.key;
     }
-    return modes;
+    return null;
 }
 
-/** Resolve child edit rows from published child_surface config. */
+/** Resolve child edit rows from published children_surface config (fieldPolicies parity). */
 export function resolveChildFocusEditPolicy(config: NestedSurfaceConfig | null): ChildFocusEditFieldRow[] {
-    const modes = fieldModesFromConfig(config);
+    if (!config) return [];
     return orderedChildEditFieldKeys(config).flatMap((fieldKey) => {
         const def = CHILD_FOCUS_FIELD_DEFS[fieldKey];
         const valueKey = SAVE_FIELD_MAP[fieldKey];
         const saveSupported = isChildFocusFieldSaveSupported(fieldKey);
-        const mode = modes[fieldKey] ?? defaultChildFieldModes()[fieldKey];
-        const displayed = mode?.displayed !== false;
-        const editable = displayed && saveSupported && mode?.editable === true;
+        const groupKey = groupKeyForField(config, fieldKey);
+        const visibility =
+            groupKey ? fieldVisibilityForNestedGroup(config, groupKey, fieldKey) : "read-only";
+        const displayed = fieldShouldRender(visibility);
+        const editable = displayed && saveSupported && fieldIsSaveable(visibility);
         const unsupported = displayed && !saveSupported;
         return [
             {

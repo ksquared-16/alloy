@@ -5471,16 +5471,16 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   align-items: flex-start;
   gap: 4px;
   width: 100%;
-  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 32%, transparent);
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
   border-radius: 10px;
   padding: 14px 16px;
-  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 6%, #fff);
+  background: #fff;
   cursor: pointer;
   text-align: left;
 }
 
 .alloy-os-currentwork__work-primary:hover {
-  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 9%, #fff);
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 35%, transparent);
 }
 
 .alloy-os-currentwork__work-primary-label {

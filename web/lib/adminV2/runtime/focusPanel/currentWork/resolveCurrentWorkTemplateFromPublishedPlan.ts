@@ -18,7 +18,7 @@ import {
 import { resolveCurrentWorkFieldRuleDisplayLabel } from "./resolveCurrentWorkFieldRuleDisplayLabel";
 import { getPlatformAction } from "@/lib/platform/actions/platformActionCatalog";
 
-import { actionCompetesWithCurrentWorkCompletion } from "./currentWorkActionSurfacePolicy";
+import { actionCompetesWithCurrentWorkCompletion, isGenericUmbrellaLifecycleAction } from "./currentWorkActionSurfacePolicy";
 import type {
     CurrentWorkActionRefLookup,
     CurrentWorkTemplateChecklistConfig,
@@ -67,6 +67,11 @@ function catalogActionBucket(
     const category = canonicalCategory ?? platformCategory;
 
     if (category === "communication") return "communication";
+    if (isGenericUmbrellaLifecycleAction(actionKey)) return "alternate_path";
+    if (category === "status_lifecycle") {
+        if (recommendation === "recommended" || recommendation === "ready") return "supporting";
+        return "alternate_path";
+    }
     if (actionCompetesWithCurrentWorkCompletion(actionKey)) return "alternate_path";
     if (recommendation === "context_dependent") return "alternate_path";
     if (recommendation === "recommended" || recommendation === "ready") return "supporting";

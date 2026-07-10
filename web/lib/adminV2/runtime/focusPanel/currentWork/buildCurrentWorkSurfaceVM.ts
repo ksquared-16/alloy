@@ -30,6 +30,7 @@ import type {
 import { resolveCurrentWorkChecklistTruthFromPublishedRules, type ChecklistTruthResult } from "./resolveCurrentWorkChecklistTruthFromPublishedRules";
 import { resolveCurrentWorkTemplateFromPublishedPlan } from "./resolveCurrentWorkTemplateFromPublishedPlan";
 import { resolveStageWorkOutcomeCompletionState } from "./resolveStageWorkOutcomeCompletionState";
+import { isGenericUmbrellaLifecycleAction } from "./currentWorkActionSurfacePolicy";
 
 export type BuildCurrentWorkSurfaceVMInput = {
     context: OperationalContext;
@@ -292,6 +293,16 @@ function mergeActionVms(
     return merged;
 }
 
+/** Config-owned helpful actions: catalog/template first, registry only when config is empty. */
+function resolveHelpfulActions(args: {
+    fromConfig: CurrentWorkActionVM[];
+    fromRegistry: CurrentWorkActionVM[];
+}): CurrentWorkActionVM[] {
+    const filteredConfig = args.fromConfig.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
+    if (filteredConfig.length > 0) return filteredConfig;
+    return args.fromRegistry.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
+}
+
 /**
  * Build the presentation-safe Current Work surface VM from runtime + config.
  * Deterministic; UI renders this only — no domain-specific branches in components.
@@ -435,7 +446,10 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   "current_work_supporting",
               )
             : [];
-    const supportingActions = mergeActionVms(supportingFromConfig, classified.supporting);
+    const supportingActions = resolveHelpfulActions({
+        fromConfig: supportingFromConfig,
+        fromRegistry: classified.supporting,
+    });
 
     const alternateFromConfig =
         templateConfig?.alternate_paths?.length

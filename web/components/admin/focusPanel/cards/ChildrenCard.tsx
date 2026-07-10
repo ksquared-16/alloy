@@ -31,9 +31,7 @@ import {
     type ChildrenEvidenceChild,
 } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import {
-    CHILD_SURFACE_ID,
     childFocusViewFromConfig,
-    readChildNestedConfigFromDoc,
     type ChildFocusView,
 } from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
 import { seedChildFocusEditValues } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
@@ -123,10 +121,6 @@ export default function ChildrenCard({
     const childrenSurfaceConfig = useMemo(
         () => (composingChildrenSurface ? composer?.configFor(CHILDREN_SURFACE_ID) ?? null : readChildrenNestedConfigFromDoc(publishedDoc)),
         [composer, composingChildrenSurface, publishedDoc],
-    );
-    const childSurfaceConfig = useMemo(
-        () => (composer?.isComposingSurface(CHILD_SURFACE_ID) ? composer.configFor(CHILD_SURFACE_ID) : readChildNestedConfigFromDoc(publishedDoc)),
-        [composer, publishedDoc],
     );
     // Focus read layout is authored on `children_surface` (same surface as composer drill-in).
     // `child_surface` remains the edit/save policy seam — untouched by this card boundary.
@@ -353,7 +347,6 @@ export default function ChildrenCard({
                 childFocusView={childFocusView}
                 focusRows={focusRows}
                 evidenceSections={evidenceSections}
-                childSurfaceConfig={childSurfaceConfig}
                 childrenSurfaceConfig={childrenSurfaceConfig}
                 opportunityStartDate={opportunityStartDate}
                 mutation={mutation}
@@ -870,7 +863,6 @@ function FocusedChild({
     childFocusView,
     focusRows,
     evidenceSections,
-    childSurfaceConfig,
     childrenSurfaceConfig,
     opportunityStartDate,
     mutation,
@@ -888,7 +880,6 @@ function FocusedChild({
     childFocusView: ChildFocusView;
     focusRows: ChildrenFocusFieldRow[];
     evidenceSections: ChildrenEvidenceSectionView[];
-    childSurfaceConfig: ReturnType<typeof readChildNestedConfigFromDoc>;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
     opportunityStartDate: string | null;
     mutation?: FocusPanelMutation;
@@ -946,7 +937,7 @@ function FocusedChild({
                 <ChildFocusEdit
                     seed={editSeed}
                     childName={child.name}
-                    childSurfaceConfig={childSurfaceConfig}
+                    childSurfaceConfig={childrenSurfaceConfig}
                     opportunityStartDate={opportunityStartDate}
                     previewOnly={Boolean(composerPreview)}
                     save={mutation!.saveInquiryChild}
@@ -995,7 +986,7 @@ function FocusedChild({
                         }
                     }
                     childName={child.name}
-                    childSurfaceConfig={childSurfaceConfig}
+                    childSurfaceConfig={childrenSurfaceConfig}
                     opportunityStartDate={opportunityStartDate}
                     previewOnly
                     save={async () => ({ ok: true })}

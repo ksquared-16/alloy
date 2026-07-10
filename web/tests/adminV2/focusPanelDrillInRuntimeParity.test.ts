@@ -24,7 +24,8 @@ import {
     childFocusViewFromConfig,
     readChildNestedConfigFromDoc,
 } from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
-import { defaultNestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { defaultNestedSurfaceConfig, CHILDREN_SURFACE_ID, setFieldVisibilityInNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { childrenFocusRowsFromNestedConfig } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 import { HOUSEHOLD_CONTACT_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 import { getSurface } from "@/lib/platform/surfaceComposition/surfaceRegistry";
@@ -258,28 +259,19 @@ describe("child focus edit field policy + save payload", () => {
         expect(readiness.editable).toBe(false);
     });
 
-    it("published child_surface config drives runtime edit behavior", () => {
-        const config = defaultNestedSurfaceConfig(CHILD_SURFACE_ID);
-        const patched = {
-            ...config,
-            groups: config.groups.map((g) =>
-                g.key === "placement"
-                    ? {
-                          ...g,
-                          fieldModes: {
-                              ...g.fieldModes,
-                              "inquiry_child.program": { displayed: true, editable: true },
-                              "child.start_date": { displayed: true, editable: false },
-                          },
-                      }
-                    : g,
-            ),
-        };
-        const policy = resolveChildFocusEditPolicy(patched);
+    it("published children_surface fieldPolicies drive runtime edit behavior", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setFieldVisibilityInNestedGroup(config, "placement", "inquiry_child.program", "editable");
+        config = setFieldVisibilityInNestedGroup(config, "child_edit", "child.start_date", "read-only");
+
+        const policy = resolveChildFocusEditPolicy(config);
         const program = policy.find((r) => r.configKey === "inquiry_child.program")!;
         const start = policy.find((r) => r.configKey === "child.start_date")!;
         expect(program.editable).toBe(true);
         expect(start.editable).toBe(false);
+
+        const focusRows = childrenFocusRowsFromNestedConfig(config);
+        expect(focusRows.find((r) => r.fieldKey === "inquiry_child.program")?.editable).toBe(true);
     });
 
     it("ChildrenCard wires child drill-in save (not preview-only)", () => {

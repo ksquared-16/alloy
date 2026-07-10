@@ -6,6 +6,8 @@ import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { ChildrenEvidenceChild } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type { NestedSurfaceFieldMode, NestedSurfaceGroupDisplayOptions } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { fieldVisibilityForNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { readNestedSurfaceConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader";
 import { CHILDREN_FOCUS_GROUP_KEYS } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 
@@ -131,17 +133,13 @@ function identityDisplayOptions(config: NestedSurfaceConfig | null): NestedSurfa
     return config?.groups.find((g) => g.key === "identity")?.displayOptions ?? {};
 }
 
-function fieldModesForConfig(config: NestedSurfaceConfig | null): Record<string, NestedSurfaceFieldMode> {
-    const modes: Record<string, NestedSurfaceFieldMode> = { ...defaultChildFieldModes() };
-    for (const group of config?.groups ?? []) {
-        for (const key of group.selectedFieldKeys) {
-            const mode = group.fieldModes?.[key];
-            if (mode) {
-                modes[key] = { ...modes[key], ...mode };
-            }
-        }
+function groupKeyForField(config: NestedSurfaceConfig, fieldKey: ChildFocusFieldKey): string | null {
+    const childEdit = config.groups.find((g) => g.key === "child_edit");
+    if (childEdit?.selectedFieldKeys.includes(fieldKey)) return "child_edit";
+    for (const group of config.groups) {
+        if (group.selectedFieldKeys.includes(fieldKey)) return group.key;
     }
-    return modes;
+    return null;
 }
 
 function orderedFieldKeys(config: NestedSurfaceConfig | null): ChildFocusFieldKey[] {
@@ -178,17 +176,20 @@ export function readChildNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfa
     return readNestedSurfaceConfigFromDoc(doc, CHILD_SURFACE_ID);
 }
 
-/** Map published child_surface config to runtime focus/edit field policy. */
+/** Map published children_surface config to runtime focus/edit field policy. */
 export function childFocusViewFromConfig(config: NestedSurfaceConfig | null): ChildFocusView {
     const identityOpts = identityDisplayOptions(config);
-    const modes = { ...defaultChildFieldModes(), ...fieldModesForConfig(config) };
     const focusFields = orderedFieldKeys(config)
         .map((fieldKey) => {
             const def = CHILD_FOCUS_FIELD_DEFS[fieldKey]!;
-            const mode = modes[fieldKey];
-            const displayed = mode?.displayed !== false;
+            const groupKey = config ? groupKeyForField(config, fieldKey) : null;
+            const visibility =
+                config && groupKey
+                    ? fieldVisibilityForNestedGroup(config, groupKey, fieldKey)
+                    : "read-only";
+            const displayed = fieldShouldRender(visibility);
             const editable =
-                displayed && isChildFocusFieldSaveSupported(fieldKey) && mode?.editable === true;
+                displayed && isChildFocusFieldSaveSupported(fieldKey) && fieldIsSaveable(visibility);
             return { fieldKey, label: def.label, displayed, editable };
         })
         .filter((row) => row.displayed);

@@ -5,6 +5,11 @@ export const PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES = new Set([
     "guardian",
     "secondary_guardian",
     "secondary",
+    "secondary_contact",
+    "co_parent",
+    "coparent",
+    "spouse",
+    "partner",
 ]);
 export const PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES = new Set(["emergency_contact", "emergency"]);
 export const PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES = new Set(["authorized_pickup", "pickup"]);

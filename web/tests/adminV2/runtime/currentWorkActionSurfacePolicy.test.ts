@@ -12,9 +12,10 @@ describe("currentWorkActionSurfacePolicy", () => {
         expect(isManageOnlyRecordHeaderAction("schedule_tour")).toBe(false);
     });
 
-    it("uses status_lifecycle category for completion competition (cross-domain)", () => {
-        expect(actionCompetesWithCurrentWorkCompletion("close_lead")).toBe(true);
+    it("uses status_lifecycle category for generic umbrella completion competition", () => {
+        expect(actionCompetesWithCurrentWorkCompletion("update_enrollment_status")).toBe(true);
         expect(actionCompetesWithCurrentWorkCompletion("update_lead_status")).toBe(true);
+        expect(actionCompetesWithCurrentWorkCompletion("close_lead")).toBe(false);
         expect(actionCompetesWithCurrentWorkCompletion("schedule_tour")).toBe(false);
     });
 

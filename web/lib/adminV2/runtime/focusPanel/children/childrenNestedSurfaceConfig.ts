@@ -17,7 +17,7 @@ import {
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
-import { fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import { fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
     CHILD_FOCUS_FIELD_DEFS,
     isChildFocusFieldSaveSupported,
@@ -78,12 +78,12 @@ export function childrenFocusRowsFromNestedConfig(config: NestedSurfaceConfig | 
             if (seen.has(fieldKey)) continue;
             if (!fieldShouldRender(fieldVisibilityForNestedGroup(config, groupKey, fieldKey))) continue;
             seen.add(fieldKey);
-            const mode = group?.fieldModes?.[fieldKey];
-            const displayed = mode?.displayed !== false;
+            const visibility = fieldVisibilityForNestedGroup(config, groupKey, fieldKey);
+            const displayed = fieldShouldRender(visibility);
             const editable =
                 displayed
                 && isChildFocusFieldSaveSupported(fieldKey as ChildFocusFieldKey)
-                && mode?.editable === true;
+                && fieldIsSaveable(visibility);
             rows.push({
                 fieldKey,
                 label: catalogLabelForGroupField(config, groupKey, fieldKey),

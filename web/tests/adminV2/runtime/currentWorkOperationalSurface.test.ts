@@ -525,7 +525,7 @@ describe("Current Work operational surface", () => {
         expect(classified.supporting).toEqual([]);
     });
 
-    it("merges catalog alternate paths with record-header alternate paths", () => {
+    it("merges catalog alternate paths while filtering generic umbrella lifecycle actions", () => {
         const runtime = enrollmentContactRuntime();
         const publishedStageInputs = enrollmentPublishedInputs();
         const vm = buildCurrentWorkSurfaceVM({
@@ -550,10 +550,8 @@ describe("Current Work operational surface", () => {
             }),
         });
 
-        expect(vm.alternatePaths.map((action) => action.key)).toEqual([
-            "close_lead",
-            "update_enrollment_status",
-        ]);
+        expect(vm.alternatePaths.map((action) => action.key)).toEqual(["close_lead"]);
+        expect(vm.supportingActions.map((a) => a.key)).not.toContain("update_enrollment_status");
     });
 
     it("uses operator-facing labels for published field-rule checklist items", () => {

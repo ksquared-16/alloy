@@ -3,6 +3,7 @@ import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRe
 
 import {
     actionCompetesWithCurrentWorkCompletion,
+    isGenericUmbrellaLifecycleAction,
     isManageOnlyRecordHeaderAction,
 } from "./currentWorkActionSurfacePolicy";
 import type {
@@ -37,6 +38,9 @@ function categoryForHeaderAction(
     const key = action.key.trim();
     if (slot === "overflow" || isManageOnlyRecordHeaderAction(key)) {
         return "administrative";
+    }
+    if (isGenericUmbrellaLifecycleAction(key)) {
+        return "alternate_path";
     }
 
     const canonicalCategory = canonicalActionDefinition(key)?.category;
@@ -107,6 +111,7 @@ export function classifyRecordHeaderActionsForCurrentWork(args: {
     for (const { slot, action } of entries) {
         const key = action.key.trim();
         if (!key || seen.has(key)) continue;
+        if (isGenericUmbrellaLifecycleAction(key)) continue;
 
         const labelNorm = action.label.trim().toLowerCase();
         if (primaryNorm && (labelNorm === primaryNorm || labelNorm === `${primaryNorm} →`)) continue;

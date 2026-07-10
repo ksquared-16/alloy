@@ -29,6 +29,20 @@ const LEGACY_COMPLETION_DUPLICATE_KEYS = new Set([
     "contact_attempted",
 ]);
 
+/** Generic umbrella lifecycle editors — never surface as Current Work helpful actions. */
+export const GENERIC_UMBRELLA_LIFECYCLE_ACTION_KEYS = new Set([
+    "update_enrollment_status",
+    "update_lead_status",
+    "update_child_enrollment_status",
+    "update_status_add_note",
+]);
+
+export function isGenericUmbrellaLifecycleAction(actionKey: string): boolean {
+    const key = actionKey.trim();
+    if (!key) return false;
+    return GENERIC_UMBRELLA_LIFECYCLE_ACTION_KEYS.has(key);
+}
+
 export function isManageOnlyRecordHeaderAction(actionKey: string): boolean {
     const key = actionKey.trim();
     if (!key) return false;
@@ -45,7 +59,8 @@ export function actionCompetesWithCurrentWorkCompletion(actionKey: string): bool
     const key = actionKey.trim();
     if (!key) return false;
     if (LEGACY_COMPLETION_DUPLICATE_KEYS.has(key)) return true;
-    return actionCategoryCompetesWithCurrentWorkCompletion(key);
+    if (isGenericUmbrellaLifecycleAction(key)) return true;
+    return false;
 }
 
 export function actionCompetesWithCurrentWorkOnRail(actionKey: string): boolean {
@@ -55,6 +70,7 @@ export function actionCompetesWithCurrentWorkOnRail(actionKey: string): boolean 
 
     const category = canonicalActionDefinition(key)?.category;
     if (category === "communication") return true;
+    if (category === "status_lifecycle") return true;
 
     // Legacy placeholders not in canonical catalog.
     if (key === "send_message_placeholder") return true;

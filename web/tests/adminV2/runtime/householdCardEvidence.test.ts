@@ -204,6 +204,22 @@ describe("buildHouseholdCardEvidence", () => {
         expect(keys.indexOf("other_parent_guardian")).toBeGreaterThan(keys.indexOf("primary_contact"));
     });
 
+    it("projects secondary parent from scalar contact fields when family rows omit them", () => {
+        const record = baseRecord();
+        record._opportunity_persons = [
+            { person_id: "p-sarah", role_type: "primary_contact", name: "Sarah Johnson", phone: "555-123-4567", email: "sarah@example.com" },
+        ];
+        record["person.secondary_contact_name"] = "Michael Johnson";
+        record["person.secondary_phone"] = "555-111-2222";
+        record["person.secondary_email"] = "mike@example.com";
+
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        const otherParent = ev.groups.find((g) => g.key === "other_parent_guardian");
+        expect(otherParent?.count).toBe(1);
+        expect(otherParent?.contacts[0]?.name).toBe("Michael Johnson");
+        expect(otherParent?.contacts[0]?.phone).toBe("(555) 111-2222");
+    });
+
     it("orders children before emergency when published config says so", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         config = setNestedGroupEnabled(config, "emergency_contacts", true);
