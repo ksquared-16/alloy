@@ -302,7 +302,30 @@ Eyebrow labels (e.g. "Today's activity") stack **above** the tile row via `Works
 
 ### Metric doctrine
 
-`WorkspaceMetricTiles` is the **only** KPI primitive — Workspace, Work Unit headers, Processing, Communications, Work Items, and future modules. No `CompactKpiStrip`, no custom variants, no alternate KPI styles. Module adapters (e.g. `ProcessingKpiStrip`) supply **data only**.
+**Operational Health Doctrine V3 (July 2026):** Module nav-band metrics use `WorkspaceOperationalHealthStrip` — a **flat** operational health ribbon (hairline-separated cells, state dot + value color, trend placeholder row). **No boxed KPI cards** in the nav band. Processing is the reference presentation; Work Items adopts it with section-specific metric sets.
+
+`WorkspaceMetricTiles` remains available for legacy/adopter modules (Communications) until migrated. No `CompactKpiStrip`, no custom variants. Module adapters (e.g. `ProcessingKpiStrip`, `WorkItemsKpiStrip`) supply **data only**.
+
+### Alloy Operational Health Doctrine V3 (frozen)
+
+**Status:** Frozen (July 2026). **Reference:** Processing (Digital Mailroom) nav-band metrics.
+
+| Rule | Implementation |
+|------|----------------|
+| **Flat ribbon** | `WorkspaceOperationalHealthStrip` — one row, `divide-x` hairlines, `WS_OPERATIONAL_HEALTH_STRIP` container |
+| **No boxed KPI cards** | No `SurfaceHeaderKpiCard`, no `WS_KPI_CARD_CHROME`, no card shadow in nav metrics |
+| **Signal read order** | Label → value → trend placeholder (`—` until trend data exists) |
+| **State encoding** | Small dot + value color only — no colored boxes or pills |
+| **Trend placeholders** | Every signal reserves a third row (`data-operational-health-trend`) |
+
+**Work Items metric sets (presentation only — same APIs):**
+
+| Section | Metrics |
+|---------|---------|
+| **Overview** | Open · Due Today · Overdue · Completed Today |
+| **Queue** | Assigned · Waiting · Due Soon · Overdue |
+
+Eyebrow stacks above the strip (`Overview` / `Queue` / `Today's activity`) via the `eyebrow` prop — same layout as V2 metric bands.
 
 ### Containment doctrine
 
@@ -319,7 +342,8 @@ Eyebrow labels (e.g. "Today's activity") stack **above** the tile row via `Works
 | `WorkspaceSurface` | Scrollable overview/studio body inside the stone canvas |
 | `WorkspaceCard` | Single contained white panel (overview sections, summary groups) |
 | `WorkspaceZonePanel` | Multi-column operational layout (queue, source document, inspector) |
-| `WorkspaceMetricTiles` | Any KPI / status strip in nav band |
+| `WorkspaceOperationalHealthStrip` | Nav-band operational health (V3 flat ribbon — Processing, Work Items) |
+| `WorkspaceMetricTiles` | Legacy boxed KPI tiles (Communications until migrated) |
 | `WorkspaceDivider` | Vertical/horizontal separation between zones |
 
 ### Component library
@@ -330,9 +354,9 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 
 | Module | Status | Shell | Metrics | Notes |
 |--------|--------|-------|---------|-------|
-| **Processing (Digital Mailroom)** | **Reference implementation** | `DigitalMailroomShell` → `WorkspaceShell` | `ProcessingKpiStrip` → `WorkspaceMetricTiles` | Overview action cards, queue rail, artifact viewport, review inspector — canonical |
+| **Processing (Digital Mailroom)** | **Reference implementation** | `DigitalMailroomShell` → `WorkspaceShell` | `ProcessingKpiStrip` → `WorkspaceOperationalHealthStrip` | Overview action cards, queue rail, artifact viewport, review inspector — canonical |
 | **Communications** | Certified | `CommunicationsWorkspaceShell` → `WorkspaceShell` | `CommunicationsWorkspaceKpiStrip` → `WorkspaceMetricTiles` | Inherits Processing shell patterns |
-| **Work Items** | Certified | `WorkItemsShell` → `WorkspaceShell` | `WorkItemsKpiStrip` → `WorkspaceMetricTiles` | Overview + Queue via `WorkspaceSurface` |
+| **Work Items** | Certified | `WorkItemsShell` → `WorkspaceShell` | `WorkItemsKpiStrip` → `WorkspaceOperationalHealthStrip` | Overview + Queue metric sets via `WorkspaceSurface` |
 
 ### Processing certification checklist (reference — all satisfied)
 
@@ -341,7 +365,7 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 | Header | Compact identity band, no hero | `WorkspaceHeader` via `DigitalMailroomShell` |
 | Modes | Work \| Studio primary tabs | `WorkspaceModeTabs` |
 | Subnavigation | Overview \| Queue under Work | `WorkspaceSubTabs` |
-| Metric band | Today's activity above tiles; operational counts only | `ProcessingKpiStrip` → Active work, Needs review, Ready to publish, Published |
+| Metric band | Today's activity above flat health strip; operational counts only | `ProcessingKpiStrip` → Active work, Needs review, Ready to publish, Published |
 | Action cards | Three-tier semantic hierarchy | `ProcessingLandingActionCard` on overview |
 | Containment | Stone field + white surfaces | `WorkspaceShell` inset + `WorkspaceSurface` / `WorkspaceCard` |
 | Queue | Folder rail, compact rows, Pine selection | `ProcessingQueueList` + `WS_QUEUE_RAIL` |

@@ -20,6 +20,7 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
             "WorkspaceModeTabs",
             "WorkspaceSubTabs",
             "WorkspaceMetricTiles",
+            "WorkspaceOperationalHealthStrip",
             "WorkspaceSurface",
             "WorkspaceCard",
             "WorkspaceZonePanel",
@@ -37,12 +38,12 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(shell).toContain('data-workspace-shell-inset="true"');
     });
 
-    it("Processing composes WorkspaceShell + WorkspaceMetricTiles", () => {
+    it("Processing composes WorkspaceShell + WorkspaceOperationalHealthStrip", () => {
         const shell = read("app/adminV2/pos/DigitalMailroomShell.tsx");
         expect(shell).toContain("WorkspaceShell");
         expect(shell).not.toContain("OperationalModalHeader");
         const strip = read("app/adminV2/pos/ProcessingKpiStrip.tsx");
-        expect(strip).toContain("WorkspaceMetricTiles");
+        expect(strip).toContain("WorkspaceOperationalHealthStrip");
     });
 
     it("Communications composes WorkspaceShell + WorkspaceMetricTiles", () => {
@@ -55,14 +56,14 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(strip).not.toContain("CompactKpiStrip");
     });
 
-    it("Work Items composes WorkspaceShell + WorkspaceMetricTiles + WorkspaceSurface", () => {
+    it("Work Items composes WorkspaceShell + WorkspaceOperationalHealthStrip + WorkspaceSurface", () => {
         const shell = read("app/adminV2/tasks/WorkItemsShell.tsx");
         expect(shell).toContain("WorkspaceShell");
         expect(shell).toContain("WorkspaceSurface");
         expect(shell).toContain("WorkItemsKpiStrip");
         expect(shell).not.toContain("OperationalModalHeader");
         const strip = read("app/adminV2/tasks/WorkItemsKpiStrip.tsx");
-        expect(strip).toContain("WorkspaceMetricTiles");
+        expect(strip).toContain("WorkspaceOperationalHealthStrip");
     });
 
     it("Processing queue workspace uses shared zone panel and tokens", () => {
@@ -97,7 +98,7 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(tiles).toContain("WS_METRIC_EYEBROW");
         const processing = read("app/adminV2/pos/ProcessingKpiStrip.tsx");
         expect(processing).toContain('eyebrow="Today\'s activity"');
-        expect(processing).not.toContain("WS_METRIC_EYEBROW_INLINE");
+        expect(processing).toContain("WorkspaceOperationalHealthStrip");
     });
 
     it("WorkspaceShell separates nav chrome from workspace body", () => {
@@ -143,15 +144,14 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(nav).toContain("WorkspaceSubTabs");
     });
 
-    it("Processing KPI accents follow semantic color doctrine", () => {
+    it("Processing operational health statuses follow semantic color doctrine", () => {
         const strip = read("app/adminV2/pos/ProcessingKpiStrip.tsx");
         expect(strip).toContain('label: "Active work"');
-        expect(strip).toContain('accent: "pine"');
+        expect(strip).toContain('status: "healthy"');
         expect(strip).toContain('label: "Needs review"');
-        expect(strip).toContain('accent: "ember"');
+        expect(strip).toContain('status: "warning"');
         expect(strip).toContain('label: "Ready to publish"');
         expect(strip).toContain('label: "Published"');
-        expect(strip).toContain('accent: "gold"');
         expect(strip).not.toContain('label: "Forms"');
         expect(strip).not.toContain('label: "Ready"');
     });

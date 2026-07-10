@@ -22,7 +22,7 @@
  * ```
  * WorkspaceShell
  *   WorkspaceHeader
- *   WorkspaceModeNav → WorkspaceModeTabs + WorkspaceSubTabs [+ WorkspaceMetricTiles]
+ *   WorkspaceModeNav → WorkspaceModeTabs + WorkspaceSubTabs [+ WorkspaceOperationalHealthStrip]
  *   WS_SHELL_INSET → WS_FIELD_CANVAS
  *     WorkspaceSurface / WorkspaceCard / WorkspaceZonePanel
  *     WorkspaceDivider (zone separation)
@@ -53,6 +53,11 @@ export type {
     WorkspaceMetricTilesSize,
     WorkspaceMetricTilesAlign,
 } from "@/components/workspace/WorkspaceMetricTiles";
+export { default as WorkspaceOperationalHealthStrip } from "@/components/workspace/WorkspaceOperationalHealthStrip";
+export type {
+    WorkspaceOperationalHealthItem,
+    OperationalHealthStatus,
+} from "@/components/workspace/WorkspaceOperationalHealthStrip";
 export { default as WorkspaceSection } from "@/components/workspace/WorkspaceSection";
 export { default as WorkspaceCard } from "@/components/workspace/WorkspaceCard";
 export { default as WorkspaceZonePanel } from "@/components/workspace/WorkspaceZonePanel";
@@ -71,6 +76,7 @@ export {
     WS_INSPECTOR,
     WS_METRIC_EYEBROW,
     WS_METRIC_EYEBROW_INLINE,
+    WS_OPERATIONAL_HEALTH_STRIP,
     WS_KPI_CARD_CHROME,
     WS_PANEL_SURFACE_FLAT,
     WS_PROCESS_TILE_CHROME,
