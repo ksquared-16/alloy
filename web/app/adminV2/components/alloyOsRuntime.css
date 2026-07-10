@@ -4743,18 +4743,44 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   position: absolute;
   inset: 0;
 }
+/* Re-parent elevated drill-ins to the visible composer body (not the tall grid) so
+ * vertical centering uses the builder viewport — same centered-focus read as runtime. */
+[data-fp-composer-depth-active="true"]
+  .alloy-os-fp-composer__body
+  .alloy-os-focus-panel-grid[data-fp-depth="active"] {
+  position: static;
+}
 [data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+  .alloy-os-fp-composer__body
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"] {
+  min-height: 0 !important;
+}
+[data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+  .alloy-os-fp-composer__body
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  margin-inline: 0;
+  transform: translate(-50%, -50%);
   width: min(560px, calc(100% - 32px));
   max-width: 560px;
-  top: 22px;
-  /* Viewport-bounded only — % of parent collapses to ~0 when the card is abspos. */
-  min-height: min(360px, calc(75vh - 48px));
-  max-height: min(75vh, calc(100dvh - 120px));
+  /* Body-anchored bounds — card stays fully inside the visible builder canvas. */
+  min-height: min(280px, calc(100% - 48px));
+  max-height: min(75vh, calc(100% - 32px), calc(100dvh - 120px));
+  animation: none;
 }
 [data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+  .alloy-os-focus-panel-grid[data-fp-closing="true"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard {
+  animation: none;
+}
+[data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+  .alloy-os-fp-composer__body
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard
