@@ -48,6 +48,10 @@ function mapIdentity(row: Record<string, unknown>): CommunicationIdentityRow {
         is_default_for_scope: Boolean(row.is_default_for_scope),
         legacy_binding_id: row.legacy_binding_id != null ? String(row.legacy_binding_id) : null,
         metadata: (row.metadata as Record<string, unknown>) ?? {},
+        default_access_mode:
+            row.default_access_mode === "explicit_grants_required"
+                ? "explicit_grants_required"
+                : "open_until_restricted",
     };
 }
 

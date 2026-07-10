@@ -43,3 +43,6 @@ LEFT JOIN public.communication_provider_accounts pa ON pa.legacy_binding_id = b.
 WHERE pa.id IS NULL;
 
 \echo '=== Idempotency check: re-run backfill block manually; counts above should be unchanged ==='
+
+\echo ''
+\echo '=== Phase 3 certification (run communications_identity_phase3_certification.sql after Phase 3 migration) ==='

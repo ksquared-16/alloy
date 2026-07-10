@@ -1,10 +1,69 @@
 # Communications Identity Platform
 
-**Status:** Phase 2 foundation implemented and certification-ready (August 2026).
+**Status:** Phase 2 foundation + Phase 3 administration (August 2026).
 
 ---
 
-## Implemented
+## Phase 3 — Location setup & identity administration
+
+### Operator surfaces
+
+Settings → **Communications** (`CommunicationsIdentityAdminClient`):
+
+| Tab | Purpose |
+|-----|---------|
+| Overview | Coverage metrics, BOS issues, default-grant policy |
+| Provider Accounts | Sanitized account health (no secrets) |
+| Identities | Canonical identity list |
+| Location Setup | Bind identities, set defaults, test send |
+| User Access | Grant / revoke identity access |
+| Legacy Bindings | Existing `communication_provider_bindings` editor |
+
+### Default-grant doctrine (frozen)
+
+| Mode | Behavior |
+|------|----------|
+| `open_until_restricted` | Backfilled identities — `communications.send` permits use until explicit grants exist |
+| `explicit_grants_required` | New identities — user must have active `can_send` grant |
+
+Code: `web/lib/communications/identity/admin/defaultGrantPolicy.ts`
+
+### Administration APIs
+
+Prefix: `/api/admin/communications/identity-platform/`
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `overview` | GET | Summary + BOS signals |
+| `location-setup` | GET | Locations list or per-location bindings |
+| `location-bindings` | POST/DELETE | Bind / remove (validates default safety) |
+| `identities/[id]` | PATCH | Display name, status, access mode |
+| `grants` | GET/POST/DELETE | User identity grants |
+| `sender-preview` | GET | Resolved sender + eligible overrides |
+| `test-send` | POST | Audited test send via canonical resolver |
+| `inbound-test-status` | GET | Recent inbound SMS resolution status |
+
+Write routes require admin/ops via `requireIdentityPlatformAdmin`.
+
+### Runtime sender presentation
+
+Family Communication Workspace composer shows **From** row via `useSenderIdentityPreview`.
+
+- Displays resolved sender address and display name
+- Override picker when multiple eligible identities and permission allows
+- `family-send` accepts optional `identity_id` (validated by resolver)
+
+### Schema (Phase 3 migration)
+
+`20260715130000_communications_identity_admin_phase3.sql`:
+
+- `communication_identities.default_access_mode`
+- Health / verification timestamps on identities and provider accounts
+- Binding audit fields (`updated_by`, `metadata`)
+
+---
+
+## Implemented (Phase 2)
 
 ### Schema
 

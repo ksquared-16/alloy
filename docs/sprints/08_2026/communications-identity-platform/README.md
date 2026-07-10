@@ -11,6 +11,7 @@
 | Phase 1 — Audit & architecture | ✅ Complete |
 | Phase 2 — Foundation implementation | ✅ Complete |
 | Phase 2 — Certification | ✅ Complete (local migration apply blocked: Docker unavailable) |
+| Phase 3 — Location setup & administration | ✅ Certified (code); migration apply blocked by duplicate migration version `20260630120000` in local Supabase |
 
 ---
 
@@ -39,6 +40,23 @@ psql $DATABASE_URL -f supabase/tests/communications_identity_backfill_certificat
 
 ---
 
-## Out of scope
+## Deferred
 
-Gmail/Outlook · inbound email · voice · internal messaging · provider-admin UX · legacy binding removal
+- Google Workspace / Microsoft 365 OAuth and sync
+- Inbound email
+- Voice / internal messaging
+- Legacy binding table removal
+
+---
+
+## Phase 3 validation
+
+```bash
+cd web && npm run test -- tests/communications/identity
+cd web && NODE_OPTIONS="--max-old-space-size=8192" npx tsc --noEmit
+cd web && npm run verify:module-imports
+```
+
+---
+
+## Out of scope (all phases)

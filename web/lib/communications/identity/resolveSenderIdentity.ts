@@ -4,6 +4,7 @@
  */
 
 import { SENDER_FAILURE, senderFailureMessage } from "./failureCodes";
+import { operatorMayUseIdentity } from "./admin/defaultGrantPolicy";
 import type {
     CommunicationIdentityRow,
     IdentityGrantRow,
@@ -47,12 +48,19 @@ function operatorAuthorized(
     hasCommunicationsSend: boolean,
     mode: "send" | "override"
 ): boolean {
-    if (!operatorUserId) return hasCommunicationsSend;
-    if (grants.length === 0) return hasCommunicationsSend;
-    const g = grants.find((x) => x.user_id === operatorUserId);
-    if (!g) return false;
-    if (mode === "override") return g.can_override_default || g.can_manage;
-    return g.can_send || g.can_manage;
+    return operatorMayUseIdentity({
+        defaultAccessMode: identity.default_access_mode ?? "open_until_restricted",
+        grants: grants.map((g) => ({
+            user_id: g.user_id,
+            can_send: g.can_send,
+            can_manage: g.can_manage,
+            can_override_default: g.can_override_default,
+            status: g.status,
+        })),
+        operatorUserId,
+        hasCommunicationsSend,
+        mode,
+    });
 }
 
 function locationBindingsFor(

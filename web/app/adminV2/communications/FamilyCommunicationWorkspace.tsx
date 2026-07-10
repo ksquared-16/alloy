@@ -92,6 +92,9 @@ export default function FamilyCommunicationWorkspace(props: {
                 onDismissSend={runtime.dismissSendResult}
                 viewerUserId={adminAuth?.userId ?? null}
                 sendCompleteToken={runtime.sendCompleteToken}
+                senderPreview={runtime.senderPreview}
+                selectedSenderIdentityId={runtime.selectedSenderIdentityId}
+                onSenderIdentityChange={runtime.setSelectedSenderIdentityId}
             />
         </section>
     );

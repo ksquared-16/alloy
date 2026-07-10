@@ -25,6 +25,7 @@ import {
     resolveThreadRecipients,
     threadsForActivityTopicRail,
 } from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
+import type { SenderPreviewState } from "@/lib/communications/identity/admin/useSenderIdentityPreview";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import {
@@ -197,6 +198,9 @@ export type FamilyCommunicationWorkspaceViewProps = {
     viewerUserId?: string | null;
     /** Increments after a confirmed send — collapses Activity reply composer. */
     sendCompleteToken?: number;
+    senderPreview?: SenderPreviewState;
+    selectedSenderIdentityId?: string | null;
+    onSenderIdentityChange?: (identityId: string | null) => void;
 };
 
 export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicationWorkspaceViewProps) {
@@ -212,6 +216,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         liveRecipientGroups, selectedRecipientIds, liveChannel, subjectDraft, bodyDraft, sendResult, sendError, sending, assignBusy,
         onClaim, onAllMessages, onOpenThread, onToggleRecipient, onSubjectChange, onBodyChange, onSendNow, onConfirmSend, onDismissSend,
         viewerUserId = null, sendCompleteToken = 0,
+        senderPreview, selectedSenderIdentityId = null, onSenderIdentityChange,
     } = props;
     const isActivityEmbed = surfaceVariant === "activity_embed";
     const isWorkspaceInbox = surfaceVariant === "workspace_inbox";
@@ -786,6 +791,39 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         <ChevronDown className="ml-auto h-3.5 w-3.5 text-alloy-midnight/35" />
                     </div>
                 )}
+
+                {(liveChannel === "email" || liveChannel === "sms") && senderPreview ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-xs shadow-sm" data-cc-sender-preview>
+                        <span className="font-medium text-alloy-midnight/45">From</span>
+                        {senderPreview.loading ? (
+                            <span className="text-alloy-midnight/45">Resolving sender…</span>
+                        ) : senderPreview.resolution?.ok && senderPreview.resolution.safe_sender_metadata ? (
+                            <span className="font-medium text-alloy-midnight">
+                                {senderPreview.resolution.safe_sender_metadata.displayName
+                                    ? `${senderPreview.resolution.safe_sender_metadata.displayName} · `
+                                    : ""}
+                                {senderPreview.resolution.safe_sender_metadata.fromAddress}
+                            </span>
+                        ) : (
+                            <span className="text-alloy-amber">{senderPreview.resolution?.message ?? senderPreview.error ?? "Sender unavailable"}</span>
+                        )}
+                        {senderPreview.canOverride && onSenderIdentityChange ? (
+                            <select
+                                aria-label="Override sender identity"
+                                className="ml-auto rounded-md border border-alloy-stone/20 px-2 py-0.5 text-[11px]"
+                                value={selectedSenderIdentityId ?? ""}
+                                onChange={(e) => onSenderIdentityChange(e.target.value || null)}
+                            >
+                                <option value="">Default</option>
+                                {senderPreview.eligibleIdentities.map((i) => (
+                                    <option key={i.id} value={i.id}>
+                                        {i.display_name ?? i.canonical_address}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : null}
+                    </div>
+                ) : null}
 
                 <input
                     aria-label="Subject"
