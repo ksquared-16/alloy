@@ -3,18 +3,33 @@
  *
  * Keeps presentation components free of domain keys; maps builder configuration into
  * `CurrentWorkTemplateConfigOverlay` consumed by `buildCurrentWorkSurfaceVM`.
+ *
+ * Resolution hierarchy for actions:
+ * 1. Explicit active Work Template configuration
+ * 2. Stage action catalog compatibility fallback
+ * 3. Record-header compatibility fallback (via classifyRecordHeaderActionsForCurrentWork)
+ * 4. Nothing
+ *
+ * Explicit empty arrays disable fallback for that bucket.
  */
 
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
 import { lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
 import type { StageActionCatalogV1, StageActionRecommendation } from "@/lib/lifecycle/stageActionCatalogV1";
-import type { StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type {
+    StageOperatingPlanV1,
+    StageWorkTemplateActionRefV1,
+    StageWorkTemplateAlternatePathRefV1,
+    StageWorkTemplateV1,
+} from "@/lib/lifecycle/stageOperatingPlanV1";
+import { isWorkTemplateTransitionRef } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import {
     lifecycleFieldRequirementById,
     type LifecycleStageFieldRules,
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import { transitionRefLabel } from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
 import { resolveCurrentWorkFieldRuleDisplayLabel } from "./resolveCurrentWorkFieldRuleDisplayLabel";
 import { getPlatformAction } from "@/lib/platform/actions/platformActionCatalog";
 
@@ -29,6 +44,7 @@ import type { PublishedStageInputsForCurrentWork } from "./resolvePublishedStage
 export type ResolveCurrentWorkTemplateFromPublishedPlanInput = PublishedStageInputsForCurrentWork & {
     stageWorkRuntime: StageWorkRuntimeProjection | null;
     recordHeaderActions?: ResolvedActionsBySlot | null;
+    processStages?: Array<{ key: string; label: string }> | null;
 };
 
 export type ResolvedCurrentWorkPublishedConfig = {
@@ -67,7 +83,7 @@ function catalogActionBucket(
     const category = canonicalCategory ?? platformCategory;
 
     if (category === "communication") return "communication";
-    if (isGenericUmbrellaLifecycleAction(actionKey)) return "alternate_path";
+    if (isGenericUmbrellaLifecycleAction(actionKey)) return null;
     if (category === "status_lifecycle") {
         if (recommendation === "recommended" || recommendation === "ready") return "supporting";
         return "alternate_path";
@@ -162,16 +178,41 @@ function completedTemplateKeys(runtime: StageWorkRuntimeProjection | null): Read
 function buildActionRegistry(args: {
     actionCatalog: StageActionCatalogV1 | null;
     recordHeaderActions?: ResolvedActionsBySlot | null;
+    activeTemplate: StageWorkTemplateV1 | null;
+    processStages?: Array<{ key: string; label: string }> | null;
 }): CurrentWorkActionRefLookup {
     const registry = new Map<string, { key: string; label: string; description?: string | null }>();
 
+    const register = (key: string, label: string, description?: string | null) => {
+        const trimmed = key.trim();
+        if (!trimmed || registry.has(trimmed)) return;
+        registry.set(trimmed, { key: trimmed, label, description: description ?? null });
+    };
+
     for (const candidate of args.actionCatalog?.candidate_actions ?? []) {
-        const key = candidate.action_key.trim();
-        if (!key || registry.has(key)) continue;
-        registry.set(key, {
-            key,
-            label: actionLabel(key, candidate.override_label),
-        });
+        register(candidate.action_key, actionLabel(candidate.action_key, candidate.override_label));
+    }
+
+    const template = args.activeTemplate;
+    if (template?.primary_action?.action_ref) {
+        register(
+            template.primary_action.action_ref,
+            actionLabel(template.primary_action.action_ref, template.primary_action.override_label),
+        );
+    }
+    for (const row of template?.helpful_actions ?? []) {
+        register(row.action_ref, actionLabel(row.action_ref, row.override_label));
+    }
+    for (const row of template?.alternate_paths ?? []) {
+        if (isWorkTemplateTransitionRef(row)) {
+            register(
+                row.transition_ref,
+                row.override_label?.trim()
+                    ?? transitionRefLabel(row.transition_ref, args.processStages ?? []),
+            );
+        } else {
+            register(row.action_ref, actionLabel(row.action_ref, row.override_label));
+        }
     }
 
     const slots = args.recordHeaderActions;
@@ -182,13 +223,7 @@ function buildActionRegistry(args: {
             ...(slots.header ?? []),
             ...(slots.overflow ?? []),
         ]) {
-            const key = action.key.trim();
-            if (!key || registry.has(key)) continue;
-            registry.set(key, {
-                key,
-                label: action.label,
-                description: action.description,
-            });
+            register(action.key, action.label, action.description);
         }
     }
 
@@ -196,12 +231,12 @@ function buildActionRegistry(args: {
 }
 
 function actionsFromCatalog(actionCatalog: StageActionCatalogV1 | null): {
-    supporting: Array<{ action_ref: string }>;
-    alternate_paths: Array<{ action_ref: string }>;
+    supporting: StageWorkTemplateActionRefV1[];
+    alternate_paths: StageWorkTemplateActionRefV1[];
     communication_actions: Array<{ action_ref: string }>;
 } {
-    const supporting: Array<{ action_ref: string }> = [];
-    const alternate_paths: Array<{ action_ref: string }> = [];
+    const supporting: StageWorkTemplateActionRefV1[] = [];
+    const alternate_paths: StageWorkTemplateActionRefV1[] = [];
     const communication_actions: Array<{ action_ref: string }> = [];
     const seen = new Set<string>();
 
@@ -223,6 +258,23 @@ function actionsFromCatalog(actionCatalog: StageActionCatalogV1 | null): {
     return { supporting, alternate_paths, communication_actions };
 }
 
+function mapAlternatePathRefs(
+    refs: StageWorkTemplateAlternatePathRefV1[],
+): CurrentWorkTemplateConfigOverlay["alternate_paths"] {
+    return refs.map((row) => {
+        if (isWorkTemplateTransitionRef(row)) {
+            return {
+                transition_ref: row.transition_ref,
+                ...(row.override_label?.trim() ? { override_label: row.override_label.trim() } : {}),
+            };
+        }
+        return {
+            action_ref: row.action_ref,
+            ...(row.override_label?.trim() ? { override_label: row.override_label.trim() } : {}),
+        };
+    });
+}
+
 /**
  * Adapt published builder configuration into a Current Work template overlay.
  * Returns null when no operating plan is available.
@@ -230,7 +282,14 @@ function actionsFromCatalog(actionCatalog: StageActionCatalogV1 | null): {
 export function resolveCurrentWorkTemplateFromPublishedPlan(
     input: ResolveCurrentWorkTemplateFromPublishedPlanInput,
 ): ResolvedCurrentWorkPublishedConfig | null {
-    const { operatingPlan, actionCatalog, fieldRules, stageWorkRuntime, recordHeaderActions } = input;
+    const {
+        operatingPlan,
+        actionCatalog,
+        fieldRules,
+        stageWorkRuntime,
+        recordHeaderActions,
+        processStages,
+    } = input;
     const activeTemplate = activeWorkTemplate(operatingPlan, stageWorkRuntime);
     const workKey = activeTemplate?.template_key ?? stageWorkRuntime?.primary?.template_key ?? "unknown";
 
@@ -240,7 +299,12 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
     );
 
     const catalogActions = actionsFromCatalog(actionCatalog);
-    const actionRegistry = buildActionRegistry({ actionCatalog, recordHeaderActions });
+    const actionRegistry = buildActionRegistry({
+        actionCatalog,
+        recordHeaderActions,
+        activeTemplate,
+        processStages,
+    });
 
     const templateConfig: CurrentWorkTemplateConfigOverlay = {
         work_key: workKey,
@@ -251,12 +315,44 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
             ?? operatingPlan.purpose?.trim()
             ?? undefined,
         checklist,
-        ...(catalogActions.supporting.length ? { supporting_actions: catalogActions.supporting } : {}),
-        ...(catalogActions.alternate_paths.length ? { alternate_paths: catalogActions.alternate_paths } : {}),
-        ...(catalogActions.communication_actions.length
-            ? { communication_actions: catalogActions.communication_actions }
-            : {}),
     };
+
+    if (activeTemplate?.primary_action?.action_ref?.trim()) {
+        templateConfig.primary_action = {
+            action_ref: activeTemplate.primary_action.action_ref.trim(),
+            ...(activeTemplate.primary_action.override_label?.trim()
+                ? { override_label: activeTemplate.primary_action.override_label.trim() }
+                : {}),
+        };
+    }
+
+    if (activeTemplate?.helpful_actions !== undefined) {
+        templateConfig.helpful_actions = activeTemplate.helpful_actions.map((row) => ({
+            action_ref: row.action_ref,
+            ...(row.override_label?.trim() ? { override_label: row.override_label.trim() } : {}),
+        }));
+        templateConfig.helpful_actions_explicit = true;
+    } else if (catalogActions.supporting.length) {
+        templateConfig.helpful_actions = catalogActions.supporting;
+    }
+
+    if (activeTemplate?.alternate_paths !== undefined) {
+        templateConfig.alternate_paths = mapAlternatePathRefs(activeTemplate.alternate_paths);
+        templateConfig.alternate_paths_explicit = true;
+    } else if (catalogActions.alternate_paths.length) {
+        templateConfig.alternate_paths = catalogActions.alternate_paths;
+    }
+
+    if (activeTemplate?.outcome_refs !== undefined) {
+        templateConfig.outcome_refs = activeTemplate.outcome_refs.map((row) => ({
+            outcome_ref: row.outcome_ref,
+        }));
+        templateConfig.outcome_refs_explicit = true;
+    }
+
+    if (catalogActions.communication_actions.length) {
+        templateConfig.communication_actions = catalogActions.communication_actions;
+    }
 
     return {
         templateConfig,

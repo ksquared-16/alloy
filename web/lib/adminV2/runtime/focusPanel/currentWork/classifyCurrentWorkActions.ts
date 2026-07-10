@@ -142,7 +142,7 @@ export function classifyRecordHeaderActionsForCurrentWork(args: {
 }
 
 export function actionsFromConfigRefs(
-    refs: Array<{ action_ref: string }> | null | undefined,
+    refs: Array<{ action_ref: string; override_label?: string }> | null | undefined,
     lookup: ReadonlyMap<string, { key: string; label: string; description?: string | null }>,
     category: CurrentWorkActionCategory,
     placement: CurrentWorkActionPlacement,
@@ -155,9 +155,10 @@ export function actionsFromConfigRefs(
         if (!ref || seen.has(ref)) continue;
         seen.add(ref);
         const resolved = lookup.get(ref) ?? { key: ref, label: ref };
+        const label = row.override_label?.trim() || resolved.label;
         out.push({
             key: resolved.key,
-            label: resolved.label,
+            label,
             description: resolved.description ?? null,
             category,
             placement,

@@ -20,6 +20,32 @@ function enrollmentLeadActionCatalog(): StageActionCatalogV1 {
     };
 }
 
+/** Apply explicit Work Template action/outcome refs for Contact Family runtime tests. */
+export function applyEnrollmentLeadWorkTemplateActions(plan: StageOperatingPlanV1): StageOperatingPlanV1 {
+    return {
+        ...plan,
+        work_templates: plan.work_templates.map((template) => {
+            if (template.template_key !== "contact_family") return template;
+            return {
+                ...template,
+                helpful_actions: [
+                    { action_ref: "schedule_tour" },
+                    { action_ref: "quick_message" },
+                    { action_ref: "add_child" },
+                    { action_ref: "send_form" },
+                ],
+                alternate_paths: [{ action_ref: "close_lead" }],
+                outcome_refs: [
+                    { outcome_ref: "reached_qualified" },
+                    { outcome_ref: "left_message" },
+                    { outcome_ref: "awaiting_response" },
+                    { outcome_ref: "unable_to_reach" },
+                ],
+            };
+        }),
+    };
+}
+
 /** Published enrollment lead stage with explicit builder field rules for checklist truth tests. */
 export function enrollmentLeadWithFieldRulesPublishedDepartmentMetadata(): Record<string, unknown> {
     const base = enrollmentLeadPublishedDepartmentMetadata();
@@ -90,7 +116,9 @@ export function buildEnrollmentRecordTruth(options: {
 
 /** Published enrollment lead stage — explicit operating plan + action catalog on stage record. */
 export function enrollmentLeadPublishedDepartmentMetadata(): Record<string, unknown> {
-    const operatingPlan = defaultStageOperatingPlanForEnrollmentStage("lead")!;
+    const operatingPlan = applyEnrollmentLeadWorkTemplateActions(
+        defaultStageOperatingPlanForEnrollmentStage("lead")!,
+    );
     return {
         [LIFECYCLE_BUILDER_METADATA_KEY]: {
             version: 1,
@@ -137,6 +165,21 @@ function billingOperatingPlan(): StageOperatingPlanV1 {
                 due_policy: { kind: "offset_days", days: 3 },
                 owner_strategy: "record_owner",
                 work_definition_key: "collect_payment",
+                primary_action: { action_ref: "record_payment" },
+                helpful_actions: [
+                    { action_ref: "send_reminder" },
+                    { action_ref: "payment_plan" },
+                    { action_ref: "send_email" },
+                    { action_ref: "adjust_invoice" },
+                ],
+                alternate_paths: [
+                    { action_ref: "waive_fee" },
+                    { action_ref: "escalate_to_director" },
+                ],
+                outcome_refs: [
+                    { outcome_ref: "payment_received" },
+                    { outcome_ref: "payment_plan" },
+                ],
             },
         ],
         outcomes: [

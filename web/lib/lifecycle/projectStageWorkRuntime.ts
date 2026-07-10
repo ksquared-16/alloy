@@ -163,7 +163,11 @@ function buildExecutionSubject(
     };
 }
 
-function outcomesForTemplate(plan: StageOperatingPlanV1, templateKey: string): WorkIntentRuntimeOutcome[] {
+function outcomesForTemplate(
+    plan: StageOperatingPlanV1,
+    template: StageWorkTemplateV1,
+): WorkIntentRuntimeOutcome[] {
+    const templateKey = template.template_key;
     const scoped = plan.outcomes
         .filter((o) => {
             const tplKey = o.work_template_key?.trim();
@@ -175,6 +179,15 @@ function outcomesForTemplate(plan: StageOperatingPlanV1, templateKey: string): W
             label: o.label,
             ...(o.successful === true ? { successful: true } : {}),
         }));
+    if (template.outcome_refs !== undefined) {
+        const order = template.outcome_refs.map((row) => row.outcome_ref.trim()).filter(Boolean);
+        const byKey = new Map(scoped.map((row) => [row.outcome_key, row]));
+        const filtered = order
+            .map((key) => byKey.get(key))
+            .filter((row): row is WorkIntentRuntimeOutcome => row != null);
+        return filtered;
+    }
+
     if (scoped.length) return scoped;
     return plan.outcomes.map((o) => ({
         outcome_key: o.outcome_key,
@@ -208,7 +221,7 @@ function buildWorkItemProjection(args: {
 }): StageWorkItemProjection {
     const { template, role, stageKey, plan, openRow, completedRow } = args;
     const policy = completionPolicyForTemplate(template);
-    const outcomes = outcomesForTemplate(plan, template.template_key);
+    const outcomes = outcomesForTemplate(plan, template);
     const automation = buildStageWorkOutcomeAutomationPreview({
         plan,
         templateKey: template.template_key,

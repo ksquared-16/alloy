@@ -25,6 +25,7 @@ import {
     buildEnrollmentRecordTruth,
     enrollmentLeadPublishedDepartmentMetadata,
     enrollmentLeadWithFieldRulesPublishedDepartmentMetadata,
+    applyEnrollmentLeadWorkTemplateActions,
     type EnrollmentFixtureChild,
 } from "./fixtures/currentWorkPublishedPlanFixtures";
 
@@ -79,13 +80,21 @@ function billingTemplateConfig(): CurrentWorkTemplateConfigOverlay {
             { key: "posted", label: "Posted", required: true },
         ],
         primary_action: { action_ref: "record_payment" },
-        supporting_actions: [
+        helpful_actions: [
             { action_ref: "send_reminder" },
             { action_ref: "payment_plan" },
             { action_ref: "send_email" },
             { action_ref: "adjust_invoice" },
         ],
+        helpful_actions_explicit: true,
         alternate_paths: [{ action_ref: "waive_fee" }, { action_ref: "escalate_to_director" }],
+        alternate_paths_explicit: true,
+        outcome_refs: [
+            { outcome_ref: "paid" },
+            { outcome_ref: "payment_plan_created" },
+            { outcome_ref: "unable_to_collect" },
+        ],
+        outcome_refs_explicit: true,
     };
 }
 
@@ -125,7 +134,7 @@ function makePublishedEnrollmentFixture(options: {
 }
 
 function enrollmentContactRuntime(): StageWorkRuntimeProjection {
-    const defaults = defaultStageOperatingPlanForEnrollmentStage("lead")!;
+    const defaults = applyEnrollmentLeadWorkTemplateActions(defaultStageOperatingPlanForEnrollmentStage("lead")!);
     const contactTemplate = defaults.work_templates.find((t) => t.template_key === "contact_family")!;
     const plan = stageOperatingPlanDraftToPersisted(
         {
@@ -205,8 +214,12 @@ describe("Current Work operational surface", () => {
         expect(vm.checklist.map((item) => item.label)).toEqual(
             expect.arrayContaining(["Review Lead", "Contact Family", "Confirm fit — location, program, start date"]),
         );
-        expect(vm.surface.supportingActions.map((a) => a.key)).toContain("schedule_tour");
-        expect(vm.surface.communicationActions.map((a) => a.key)).toContain("quick_message");
+        expect(vm.surface.supportingActions.map((a) => a.key)).toEqual([
+            "schedule_tour",
+            "quick_message",
+            "add_child",
+            "send_form",
+        ]);
         expect(vm.surface.alternatePaths.map((a) => a.key)).toEqual(["close_lead"]);
     });
 
@@ -224,7 +237,6 @@ describe("Current Work operational surface", () => {
         expect(vm.purpose).toBe("Collect payment for July 2026.");
         expect(vm.checklist.map((item) => item.label)).toEqual(["Collect Payment"]);
         expect(vm.surface.supportingActions.map((a) => a.key)).toEqual([
-            "record_payment",
             "send_reminder",
             "payment_plan",
             "send_email",
@@ -249,17 +261,18 @@ describe("Current Work operational surface", () => {
         })!;
 
         expect(resolved.templateConfig.title).toBe("Collect Payment");
-        expect(resolved.templateConfig.supporting_actions?.map((a) => a.action_ref)).toEqual([
-            "record_payment",
+        expect(resolved.templateConfig.helpful_actions?.map((a) => a.action_ref)).toEqual([
             "send_reminder",
             "payment_plan",
             "send_email",
             "adjust_invoice",
         ]);
-        expect(resolved.templateConfig.alternate_paths?.map((a) => a.action_ref)).toEqual([
-            "waive_fee",
-            "escalate_to_director",
-        ]);
+        expect(resolved.templateConfig.helpful_actions_explicit).toBe(true);
+        expect(
+            resolved.templateConfig.alternate_paths?.map((a) =>
+                "action_ref" in a ? a.action_ref : a.transition_ref,
+            ),
+        ).toEqual(["waive_fee", "escalate_to_director"]);
     });
 
     it("supports explicit template overlay for fixture-only billing checklist extensions", () => {

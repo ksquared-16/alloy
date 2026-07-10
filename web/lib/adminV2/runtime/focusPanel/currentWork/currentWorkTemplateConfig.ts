@@ -14,15 +14,41 @@ export type CurrentWorkTemplateChecklistConfig = {
     action_ref?: string;
 };
 
+export type CurrentWorkTemplateActionRefConfig = {
+    action_ref: string;
+    override_label?: string;
+};
+
+export type CurrentWorkTemplateTransitionRefConfig = {
+    transition_ref: string;
+    override_label?: string;
+};
+
+export type CurrentWorkTemplateAlternatePathConfig =
+    | CurrentWorkTemplateActionRefConfig
+    | CurrentWorkTemplateTransitionRefConfig;
+
 export type CurrentWorkTemplateConfigOverlay = {
     work_key: string;
     title?: string;
     description?: string;
     checklist?: CurrentWorkTemplateChecklistConfig[];
-    primary_action?: { action_ref: string };
-    supporting_actions?: Array<{ action_ref: string }>;
-    alternate_paths?: Array<{ action_ref: string }>;
+    primary_action?: CurrentWorkTemplateActionRefConfig;
+    /** Explicit helpful actions — undefined allows legacy fallback; [] means explicitly none. */
+    helpful_actions?: CurrentWorkTemplateActionRefConfig[];
+    /** @deprecated Use helpful_actions. Kept for fixture compat during migration. */
+    supporting_actions?: CurrentWorkTemplateActionRefConfig[];
+    /** Explicit alternate paths — undefined allows legacy fallback; [] means explicitly none. */
+    alternate_paths?: CurrentWorkTemplateAlternatePathConfig[];
     communication_actions?: Array<{ action_ref: string }>;
+    /** Ordered outcome refs — undefined uses stage/runtime outcomes; [] means explicitly none. */
+    outcome_refs?: Array<{ outcome_ref: string }>;
+    /** Tracks whether helpful_actions was explicitly configured (including empty). */
+    helpful_actions_explicit?: boolean;
+    /** Tracks whether alternate_paths was explicitly configured (including empty). */
+    alternate_paths_explicit?: boolean;
+    /** Tracks whether outcome_refs was explicitly configured (including empty). */
+    outcome_refs_explicit?: boolean;
 };
 
 /** Minimal action lookup for resolving action_ref → operator label. */
@@ -34,8 +60,22 @@ export type CurrentWorkActionRefLookup = ReadonlyMap<
 export function actionFromRef(
     lookup: CurrentWorkActionRefLookup | null | undefined,
     actionRef: string,
+    overrideLabel?: string | null,
 ): { key: string; label: string; description?: string | null } | null {
     const ref = actionRef.trim();
     if (!ref) return null;
-    return lookup?.get(ref) ?? { key: ref, label: ref.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) };
+    const override = overrideLabel?.trim();
+    if (override) return { key: ref, label: override };
+    const resolved = lookup?.get(ref);
+    if (resolved) return resolved;
+    return { key: ref, label: ref.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) };
+}
+
+export function resolvedHelpfulActionRefs(
+    config: CurrentWorkTemplateConfigOverlay | null | undefined,
+): CurrentWorkTemplateActionRefConfig[] | undefined {
+    if (!config) return undefined;
+    if (config.helpful_actions_explicit) return config.helpful_actions ?? [];
+    if (config.helpful_actions !== undefined) return config.helpful_actions;
+    return config.supporting_actions;
 }

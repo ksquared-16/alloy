@@ -7,6 +7,7 @@ import type {
 } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import { workIntentProjectionForStageWorkItem } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import { completionOutcomesForPicker } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
+import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 import {
     actionsFromConfigRefs,
@@ -16,6 +17,7 @@ import { inferWorkItemOwner } from "./inferWorkItemOwner";
 import { CURRENT_WORK_RECORD_OUTCOME_CTA } from "./currentWorkCopy";
 import {
     actionFromRef,
+    resolvedHelpfulActionRefs,
     type CurrentWorkActionRefLookup,
     type CurrentWorkTemplateConfigOverlay,
 } from "./currentWorkTemplateConfig";
@@ -31,6 +33,7 @@ import { resolveCurrentWorkChecklistTruthFromPublishedRules, type ChecklistTruth
 import { resolveCurrentWorkTemplateFromPublishedPlan } from "./resolveCurrentWorkTemplateFromPublishedPlan";
 import { resolveStageWorkOutcomeCompletionState } from "./resolveStageWorkOutcomeCompletionState";
 import { isGenericUmbrellaLifecycleAction } from "./currentWorkActionSurfacePolicy";
+import type { CurrentWorkTemplateAlternatePathConfig } from "./currentWorkTemplateConfig";
 
 export type BuildCurrentWorkSurfaceVMInput = {
     context: OperationalContext;
@@ -221,7 +224,11 @@ function buildWorkPrimaryAction(args: {
 }): CurrentWorkActionVM | null {
     if (args.templateConfig?.primary_action?.action_ref) {
         const ref = args.templateConfig.primary_action.action_ref;
-        const resolved = actionFromRef(args.actionRegistry, ref);
+        const resolved = actionFromRef(
+            args.actionRegistry,
+            ref,
+            args.templateConfig.primary_action.override_label ?? null,
+        );
         if (!resolved) return null;
         return {
             key: resolved.key,
@@ -293,14 +300,89 @@ function mergeActionVms(
     return merged;
 }
 
-/** Config-owned helpful actions: catalog/template first, registry only when config is empty. */
+/** Config-owned helpful actions: explicit template config first; legacy catalog/header fallback only when undefined. */
 function resolveHelpfulActions(args: {
+    explicitRefs: CurrentWorkTemplateConfigOverlay["helpful_actions"] | undefined;
+    explicitConfigured: boolean;
     fromConfig: CurrentWorkActionVM[];
     fromRegistry: CurrentWorkActionVM[];
 }): CurrentWorkActionVM[] {
+    if (args.explicitConfigured) {
+        return args.fromConfig.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
+    }
     const filteredConfig = args.fromConfig.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
     if (filteredConfig.length > 0) return filteredConfig;
     return args.fromRegistry.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
+}
+
+function resolveAlternatePaths(args: {
+    explicitConfigured: boolean;
+    fromConfig: CurrentWorkActionVM[];
+    fromRegistry: CurrentWorkActionVM[];
+}): CurrentWorkActionVM[] {
+    if (args.explicitConfigured) {
+        return args.fromConfig.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
+    }
+    return mergeActionVms(args.fromConfig, args.fromRegistry).filter(
+        (action) => !isGenericUmbrellaLifecycleAction(action.key),
+    );
+}
+
+function filterOutcomesByTemplateRefs(
+    outcomes: StageCompletionOutcomeV1[],
+    outcomeRefs: Array<{ outcome_ref: string }> | undefined,
+    explicitConfigured: boolean,
+): StageCompletionOutcomeV1[] {
+    if (!explicitConfigured || outcomeRefs === undefined) return outcomes;
+    if (!outcomeRefs.length) return [];
+    const order = outcomeRefs.map((row) => row.outcome_ref.trim()).filter(Boolean);
+    const byKey = new Map(outcomes.map((row) => [row.outcome_key, row]));
+    return order.map((key) => byKey.get(key)).filter((row): row is StageCompletionOutcomeV1 => row != null);
+}
+
+function alternatePathsFromConfigRefs(
+    refs: CurrentWorkTemplateAlternatePathConfig[] | null | undefined,
+    lookup: CurrentWorkActionRefLookup,
+): CurrentWorkActionVM[] {
+    if (!refs?.length) return [];
+    const out: CurrentWorkActionVM[] = [];
+    const seen = new Set<string>();
+    for (const row of refs) {
+        if ("transition_ref" in row && row.transition_ref?.trim()) {
+            const ref = row.transition_ref.trim();
+            if (seen.has(ref)) continue;
+            seen.add(ref);
+            const resolved = actionFromRef(lookup, ref, row.override_label ?? null);
+            if (!resolved) continue;
+            out.push({
+                key: resolved.key,
+                label: resolved.label,
+                description: resolved.description ?? null,
+                category: "alternate_path",
+                placement: "current_work_alternate_paths",
+                handlerKey: resolved.key,
+                actionRef: ref,
+                resolved: null,
+            });
+            continue;
+        }
+        const actionRef = "action_ref" in row ? row.action_ref?.trim() : "";
+        if (!actionRef || seen.has(actionRef)) continue;
+        seen.add(actionRef);
+        const resolved = actionFromRef(lookup, actionRef, row.override_label ?? null);
+        if (!resolved) continue;
+        out.push({
+            key: resolved.key,
+            label: resolved.label,
+            description: resolved.description ?? null,
+            category: "alternate_path",
+            placement: "current_work_alternate_paths",
+            handlerKey: resolved.key,
+            actionRef: actionRef,
+            resolved: null,
+        });
+    }
+    return out;
 }
 
 /**
@@ -323,6 +405,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   ...context.publishedStageInputs,
                   stageWorkRuntime: context.stageWorkRuntime ?? null,
                   recordHeaderActions: context.recordHeaderActions ?? null,
+                  processStages: context.publishedStageInputs.processStages ?? null,
               })
             : null;
 
@@ -350,8 +433,13 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         canMutate: context.capabilities.canMutate,
     });
     const showOutcomeCompletion = completionState.ownsPrimaryCompletion;
-    const pickerOutcomes =
+    const pickerOutcomesRaw =
         actionableWorkItem ? completionOutcomesForPicker(actionableWorkItem) : [];
+    const pickerOutcomes = filterOutcomesByTemplateRefs(
+        pickerOutcomesRaw,
+        templateConfig?.outcome_refs,
+        templateConfig?.outcome_refs_explicit === true,
+    );
     const primaryActionLabel =
         showOutcomeCompletion && actionableWorkItem?.state === "open" && pickerOutcomes.length > 0
             ? CURRENT_WORK_RECORD_OUTCOME_CTA
@@ -437,30 +525,34 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         primaryActionLabel,
     });
 
+    const helpfulRefs = resolvedHelpfulActionRefs(templateConfig);
+    const helpfulExplicit = templateConfig?.helpful_actions_explicit === true;
     const supportingFromConfig =
-        templateConfig?.supporting_actions?.length
+        helpfulRefs !== undefined
             ? actionsFromConfigRefs(
-                  templateConfig.supporting_actions,
+                  helpfulRefs,
                   actionRegistry ?? new Map(),
                   "supporting",
                   "current_work_supporting",
               )
             : [];
     const supportingActions = resolveHelpfulActions({
+        explicitRefs: helpfulRefs,
+        explicitConfigured: helpfulExplicit,
         fromConfig: supportingFromConfig,
         fromRegistry: classified.supporting,
     });
 
+    const alternateExplicit = templateConfig?.alternate_paths_explicit === true;
     const alternateFromConfig =
-        templateConfig?.alternate_paths?.length
-            ? actionsFromConfigRefs(
-                  templateConfig.alternate_paths,
-                  actionRegistry ?? new Map(),
-                  "alternate_path",
-                  "current_work_alternate_paths",
-              )
+        templateConfig?.alternate_paths !== undefined
+            ? alternatePathsFromConfigRefs(templateConfig.alternate_paths, actionRegistry ?? new Map())
             : [];
-    const alternatePaths = mergeActionVms(alternateFromConfig, classified.alternatePaths);
+    const alternatePaths = resolveAlternatePaths({
+        explicitConfigured: alternateExplicit,
+        fromConfig: alternateFromConfig,
+        fromRegistry: classified.alternatePaths,
+    });
 
     const communicationActions =
         templateConfig?.communication_actions?.length
