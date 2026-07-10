@@ -4,12 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListTodo } from "lucide-react";
 
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { defaultOperationalWorkDueLocal } from "@/lib/admin/operationalWork/operationalWorkDateTimeLocal";
-import MyTasksCreateTaskCard, {
-    type MyTasksCreateLinkMode,
-    type MyTasksCreateLinkedRecord,
-} from "@/app/adminV2/components/MyTasksCreateTaskCard";
 import MyTasksTaskCard from "@/app/adminV2/components/MyTasksTaskCard";
+import WorkItemCreateModal from "@/components/workItems/WorkItemCreateModal";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import WorkspaceQueueRow from "@/components/workspace/WorkspaceQueueRow";
 import FoldersViewsSourcesRail from "@/components/workItems/FoldersViewsSourcesRail";
@@ -37,7 +33,6 @@ import {
     myTasksRowMatchesSearch,
 } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
 import {
-    buildOperationalTaskBody,
     createOperationalTask,
     fetchWorkspaceOperationalTasks,
     patchOperationalTaskFields,
@@ -65,6 +60,9 @@ import {
     type WorkItemViewKey,
 } from "@/lib/workItems/workItemQueueScope";
 import { mapWorkItemQueueRow } from "@/lib/workItems/mapWorkItemQueueRow";
+import { draftToOperationalTaskBody } from "@/lib/workItems/commitWorkItemDraft";
+import { markSessionCommitted, type WorkItemCreationSession } from "@/lib/workItems/workItemCreationRuntime";
+import type { WorkItemDraftEntity } from "@/lib/workItems/workItemDraftV1";
 
 export type { MyTasksTaskRow };
 
@@ -144,11 +142,11 @@ export default function MyTasksPanel({
             globalAssistant.currentContext.entity_id?.trim() || null
         :   null;
     const linkedRecordLabel = globalAssistant?.currentContext?.label?.trim() || null;
-    const contextPrefill = useMemo<MyTasksCreateLinkedRecord | null>(() => {
+    const contextPrefill = useMemo<WorkItemDraftEntity | null>(() => {
         if (!linkedOpportunityId) return null;
         return {
-            entity_type: "opportunities",
-            entity_id: linkedOpportunityId,
+            type: "opportunities",
+            id: linkedOpportunityId,
             label: linkedRecordLabel || "Open record",
         };
     }, [linkedOpportunityId, linkedRecordLabel]);
@@ -180,31 +178,15 @@ export default function MyTasksPanel({
     const [editDue, setEditDue] = useState("");
     const [editNotes, setEditNotes] = useState("");
     const [createOpen, setCreateOpen] = useState(false);
-    const [createLinkMode, setCreateLinkMode] = useState<MyTasksCreateLinkMode>("general");
-    const [createLinkedRecord, setCreateLinkedRecord] = useState<MyTasksCreateLinkedRecord | null>(null);
-    const [newTitle, setNewTitle] = useState("");
-    const [newDue, setNewDue] = useState(defaultOperationalWorkDueLocal);
-    const [newNotes, setNewNotes] = useState("");
-    const [newAssignedToUserId, setNewAssignedToUserId] = useState<string | null>(null);
     const [editAssignedToUserId, setEditAssignedToUserId] = useState<string | null>(null);
     const [createBusy, setCreateBusy] = useState(false);
     const [outcomeTaskId, setOutcomeTaskId] = useState<string | null>(null);
     const [outcomeContext, setOutcomeContext] = useState<StageWorkOutcomeResolution | null>(null);
     const [outcomeOptions, setOutcomeOptions] = useState<StageCompletionOutcomeV1[]>([]);
 
-    const resetCreateForm = useCallback(() => {
-        setNewTitle("");
-        setNewDue(defaultOperationalWorkDueLocal());
-        setNewNotes("");
-        setNewAssignedToUserId(userId?.trim() || null);
-        setCreateLinkMode(contextPrefill ? "linked" : "general");
-        setCreateLinkedRecord(contextPrefill);
-    }, [contextPrefill, userId]);
-
     const openCreateForm = useCallback(() => {
-        resetCreateForm();
         setCreateOpen(true);
-    }, [resetCreateForm]);
+    }, []);
 
     const openCreateFormRef = useRef(openCreateForm);
     openCreateFormRef.current = openCreateForm;
@@ -492,26 +474,16 @@ export default function MyTasksPanel({
         }
     }, [clearForms, dispatchRefresh, editDue, load, rescheduleId]);
 
-    const onCreateTask = useCallback(async () => {
-        if (!newTitle.trim() || !newDue.trim()) return;
-        if (createLinkMode === "linked" && !createLinkedRecord?.entity_id) return;
+    const onCommitCreate = useCallback(async (session: WorkItemCreationSession) => {
         setCreateBusy(true);
         setError(null);
         try {
-            const body = buildOperationalTaskBody({
-                entityId: createLinkMode === "linked" ? createLinkedRecord?.entity_id ?? null : null,
-                title: newTitle,
-                dueAtIso: new Date(newDue).toISOString(),
-                description: newNotes,
-                source: "manual",
-                proposalId: null,
-                assignedToUserId: newAssignedToUserId,
-            });
+            const body = draftToOperationalTaskBody(session.draft);
             const res = await createOperationalTask(body);
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
+            markSessionCommitted(session);
             setCreateOpen(false);
-            resetCreateForm();
             await load();
             dispatchRefresh();
         } catch (e: unknown) {
@@ -519,7 +491,7 @@ export default function MyTasksPanel({
         } finally {
             setCreateBusy(false);
         }
-    }, [createLinkMode, createLinkedRecord, dispatchRefresh, load, newAssignedToUserId, newDue, newNotes, newTitle, resetCreateForm]);
+    }, [dispatchRefresh, load]);
 
     const emptyLabel = useMemo(() => {
         switch (scope.view) {
@@ -587,29 +559,6 @@ export default function MyTasksPanel({
         );
     };
 
-    const createCard = (
-        <MyTasksCreateTaskCard
-            open={createOpen}
-            presentation={presentation}
-            linkMode={createLinkMode}
-            linkedRecord={createLinkedRecord}
-            contextPrefill={contextPrefill}
-            workspaceSiteId={selectedSiteId}
-            title={newTitle}
-            due={newDue}
-            notes={newNotes}
-            assignedToUserId={newAssignedToUserId}
-            busy={createBusy}
-            onLinkModeChange={setCreateLinkMode}
-            onLinkedRecordChange={setCreateLinkedRecord}
-            onTitleChange={setNewTitle}
-            onDueChange={setNewDue}
-            onNotesChange={setNewNotes}
-            onAssignedToUserIdChange={setNewAssignedToUserId}
-            onCreate={() => void onCreateTask()}
-            onCancel={() => setCreateOpen(false)}
-        />
-    );
 
     const errorBanner = error ? (
         <div
@@ -691,7 +640,17 @@ export default function MyTasksPanel({
                         aria-label="Search work items"
                     />
                 </div>
-                {createCard}
+                {createOpen ? (
+                    <WorkItemCreateModal
+                        open={createOpen}
+                        busy={createBusy}
+                        presentation={presentation}
+                        workspaceSiteId={selectedSiteId}
+                        contextPrefill={contextPrefill}
+                        onCommit={onCommitCreate}
+                        onCancel={() => setCreateOpen(false)}
+                    />
+                ) : null}
                 {errorBanner}
 
                 <div>
@@ -807,7 +766,11 @@ export default function MyTasksPanel({
                         task={selectedTask}
                         taskCard={selectedTask ? <ul className="list-none">{renderTaskCard(selectedTask)}</ul> : null}
                         createOpen={createOpen}
-                        createCard={createCard}
+                        createBusy={createBusy}
+                        contextPrefill={contextPrefill}
+                        workspaceSiteId={selectedSiteId}
+                        onCommitCreate={onCommitCreate}
+                        onCancelCreate={() => setCreateOpen(false)}
                         presentation={presentation}
                         entityLabels={entityLabels}
                     />

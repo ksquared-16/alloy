@@ -8,7 +8,10 @@ import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import type { MyTasksPresentationLabels } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import { formatOperationalTaskDueDisplay } from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
+import WorkItemCreateModal from "@/components/workItems/WorkItemCreateModal";
 import { buildWorkItemBosSummary, buildWorkItemBreadcrumb } from "@/lib/workItems/mapWorkItemQueueRow";
+import type { WorkItemCreationSession } from "@/lib/workItems/workItemCreationRuntime";
+import type { WorkItemDraftEntity } from "@/lib/workItems/workItemDraftV1";
 
 type DetailTabKey = "overview" | "activity" | "conversation" | "related";
 
@@ -23,7 +26,11 @@ export type WorkItemDetailPanelProps = {
     task: MyTasksTaskRow | null;
     taskCard: ReactNode | null;
     createOpen: boolean;
-    createCard: ReactNode;
+    createBusy: boolean;
+    contextPrefill: WorkItemDraftEntity | null;
+    workspaceSiteId: string | null;
+    onCommitCreate: (session: WorkItemCreationSession) => Promise<void>;
+    onCancelCreate: () => void;
     presentation: MyTasksPresentationLabels;
     entityLabels: EntityLabelsMap;
 };
@@ -44,7 +51,11 @@ export default function WorkItemDetailPanel({
     task,
     taskCard,
     createOpen,
-    createCard,
+    createBusy,
+    contextPrefill,
+    workspaceSiteId,
+    onCommitCreate,
+    onCancelCreate,
     presentation,
     entityLabels,
 }: WorkItemDetailPanelProps) {
@@ -65,7 +76,17 @@ export default function WorkItemDetailPanel({
     }, [task]);
 
     if (createOpen) {
-        return <div className="space-y-3">{createCard}</div>;
+        return (
+            <WorkItemCreateModal
+                open={createOpen}
+                busy={createBusy}
+                presentation={presentation}
+                workspaceSiteId={workspaceSiteId}
+                contextPrefill={contextPrefill}
+                onCommit={onCommitCreate}
+                onCancel={onCancelCreate}
+            />
+        );
     }
 
     if (!task) return <EmptyDetailState />;
