@@ -9,29 +9,8 @@ import { WS_SHELL_NAV_CLASS } from "@/components/workspace/workspaceTokens";
 /**
  * @module WorkspaceModeNav
  *
- * ## Purpose
  * Two-level navigation for every operational module modal workspace: primary mode tabs
  * (Work | Studio) and sub-section tabs (Overview | Queue, Inbox | Templates, …).
- *
- * ## When to use
- * Inside `WorkspaceShell` after `WorkspaceHeader`. Pass module-specific mode and section
- * tab definitions. Use `metricsColumn` when Work-mode KPI tiles share the nav band
- * (Processing reference pattern). Use `sectionTrailing` for inline controls on the
- * sub-tab row (Communications Studio settings link).
- *
- * ## Do NOT use for
- * - Org-level `/workspace` landing navigation (use Presentation Runtime surfaces).
- * - Record drawer / Focus Panel tab strips (use Experience Builder layout tabs).
- * - Replacing the sidebar or business-process spine.
- *
- * ## Required hierarchy (never deviate)
- * ```
- * Module title + tagline   (WorkspaceHeader)
- * Work | Studio            (this component — mode rail)
- * Module tabs              (this component — section row)
- * ────────────────────────
- * Workspace body           (WorkspaceSurface + children)
- * ```
  */
 
 export default function WorkspaceModeNav<M extends string, S extends string>({
@@ -57,7 +36,7 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
     onSectionChange: (key: S) => void;
     sectionAriaLabel: string;
     sectionTrailing?: ReactNode;
-    /** Right 2/3 — spans both nav rows (module KPI band beside mode + section tabs). */
+    /** Right column — KPI band aligned with Work navigation (Processing reference). */
     metricsColumn?: ReactNode;
     navDataAttr?: string;
     sectionsDataAttr?: string;
@@ -70,22 +49,24 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
                 aria-label={modeAriaLabel}
             >
                 <div
-                    className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:grid-rows-[auto_auto]"
+                    className="grid grid-cols-1 items-center gap-y-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-x-4"
                     data-workspace-mode-split-nav="true"
                 >
-                    <div className="pt-2 lg:col-start-1 lg:row-start-1" data-workspace-mode-rail="true">
-                        <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
-                    </div>
-                    <div className="pt-2 lg:col-start-1 lg:row-start-2" data-workspace-mode-sections={sectionsDataAttr ?? "true"}>
-                        <WorkspaceSubTabs
-                            tabs={sectionTabs}
-                            activeKey={activeSection}
-                            onSelect={onSectionChange}
-                            aria-label={sectionAriaLabel}
-                        />
+                    <div className="flex min-w-0 flex-col gap-2" data-workspace-mode-nav-stack="true">
+                        <div data-workspace-mode-rail="true">
+                            <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
+                        </div>
+                        <div data-workspace-mode-sections={sectionsDataAttr ?? "true"}>
+                            <WorkspaceSubTabs
+                                tabs={sectionTabs}
+                                activeKey={activeSection}
+                                onSelect={onSectionChange}
+                                aria-label={sectionAriaLabel}
+                            />
+                        </div>
                     </div>
                     <div
-                        className="flex min-w-0 flex-col items-stretch justify-end pt-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:pl-4"
+                        className="flex min-w-0 flex-col justify-center lg:pl-2"
                         data-workspace-mode-metrics="true"
                     >
                         {metricsColumn}
@@ -101,20 +82,22 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
             data-workspace-mode-nav={navDataAttr ?? "true"}
             aria-label={modeAriaLabel}
         >
-            <div className="pt-2" data-workspace-mode-rail="true">
-                <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
-            </div>
-            <div
-                className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 pt-2"
-                data-workspace-mode-sections={sectionsDataAttr ?? "true"}
-            >
-                <WorkspaceSubTabs
-                    tabs={sectionTabs}
-                    activeKey={activeSection}
-                    onSelect={onSectionChange}
-                    aria-label={sectionAriaLabel}
-                />
-                {sectionTrailing}
+            <div className="flex flex-col gap-2">
+                <div data-workspace-mode-rail="true">
+                    <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
+                </div>
+                <div
+                    className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1"
+                    data-workspace-mode-sections={sectionsDataAttr ?? "true"}
+                >
+                    <WorkspaceSubTabs
+                        tabs={sectionTabs}
+                        activeKey={activeSection}
+                        onSelect={onSectionChange}
+                        aria-label={sectionAriaLabel}
+                    />
+                    {sectionTrailing}
+                </div>
             </div>
         </nav>
     );

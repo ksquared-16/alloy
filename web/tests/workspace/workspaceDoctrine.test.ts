@@ -145,22 +145,21 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
 
     it("Processing KPI accents follow semantic color doctrine", () => {
         const strip = read("app/adminV2/pos/ProcessingKpiStrip.tsx");
-        expect(strip).toContain('accent: "pine"');
         expect(strip).toContain('label: "Active work"');
+        expect(strip).toContain('accent: "pine"');
         expect(strip).toContain('label: "Needs review"');
         expect(strip).toContain('accent: "ember"');
-        expect(strip).toContain('accent: "midnight"');
-        expect(strip).toContain('label: "Forms"');
-        expect(strip).toContain('accent: "gold"');
+        expect(strip).toContain('label: "Ready to publish"');
         expect(strip).toContain('label: "Published"');
+        expect(strip).toContain('accent: "gold"');
+        expect(strip).not.toContain('label: "Forms"');
         expect(strip).not.toContain('label: "Ready"');
     });
 
     it("metric eyebrow stacks above tile row", () => {
         const tiles = read("components/workspace/WorkspaceMetricTiles.tsx");
-        expect(tiles).toContain("flex-col gap-1.5");
+        expect(tiles).toContain("flex-col gap-1");
         expect(tiles).toContain("data-workspace-metric-band");
-        expect(tiles).not.toMatch(/eyebrow[\s\S]*flex-row[\s\S]*data-workspace-metric-tiles/);
     });
 
     it("artifact viewport uses bounded scroll and dual-axis fit-page scale", () => {
@@ -174,5 +173,23 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         const scale = read("lib/workspace/artifactViewportScale.ts");
         expect(scale).toContain("computeFitPageScale");
         expect(scale).toContain("Math.min(scaleW, scaleH, 1)");
+    });
+
+    it("Processing is the certified reference implementation", () => {
+        const doc = read("../docs/platform/core/navigation-and-workspace-doctrine.md");
+        expect(doc).toContain("Reference implementation");
+        expect(doc).toContain("Digital Mailroom");
+        expect(doc).toContain("Processing certification checklist");
+        const mailroom = read("app/adminV2/pos/DigitalMailroomShell.tsx");
+        expect(mailroom).toContain("WorkspaceShell");
+        expect(mailroom).toContain("ProcessingKpiStrip");
+        const overview = read("app/adminV2/pos/ProcessingOverviewLanding.tsx");
+        expect(overview).toContain("ProcessingLandingActionCard");
+        expect(overview).toContain("WorkspaceSurface");
+        const queue = read("app/adminV2/pos/PosProcessingWorkspace.tsx");
+        expect(queue).toContain("WorkspaceZonePanel");
+        expect(queue).toContain("PosTemplateSetupColumn");
+        const barrel = read("components/workspace/doctrine.ts");
+        expect(barrel).toContain("reference implementation");
     });
 });

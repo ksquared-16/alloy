@@ -124,7 +124,7 @@ export default function ProcessingOverviewLanding({
                                 tier="primary"
                                 disabled={uploading}
                         testId="processing-import-action-card"
-                        icon={<FileUp className="h-5 w-5" aria-hidden />}
+                        icon={<FileUp className="h-5 w-5" aria-hidden strokeWidth={2} />}
                         title={uploading ? "Importing…" : "Import form"}
                         description="Drop a PDF to start review."
                         cta="Open"
@@ -143,7 +143,7 @@ export default function ProcessingOverviewLanding({
                     />
                             <ProcessingLandingActionCard
                                 tier="secondary"
-                                icon={<Briefcase className="h-5 w-5" aria-hidden />}
+                                icon={<Briefcase className="h-5 w-5" aria-hidden strokeWidth={2} />}
                         title="Active work"
                         description="Resume imports and question review."
                         cta="Open"
@@ -152,7 +152,7 @@ export default function ProcessingOverviewLanding({
                     />
                             <ProcessingLandingActionCard
                                 tier="tertiary"
-                                icon={<Layers className="h-5 w-5" aria-hidden />}
+                                icon={<Layers className="h-5 w-5" aria-hidden strokeWidth={2} />}
                         title="Form library"
                         description="Forms and assets in Studio."
                         cta="Open"

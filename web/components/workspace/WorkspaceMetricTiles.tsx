@@ -42,8 +42,8 @@ const ACCENT_ICON_RING: Partial<Record<ProcessCardAccent, string>> = {
  * numbers intentionally quieter than action cards; labels use secondary hierarchy.
  */
 const SIZE_OVERRIDES: Record<WorkspaceMetricTilesSize, string> = {
-    sm: `[&_[data-work-unit-header-kpi]]:min-w-0 [&_[data-work-unit-header-kpi-value]]:!font-medium [&_[data-work-unit-header-kpi-value]]:text-[16px] [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:${WS_TEXT_SECONDARY} [&_[data-work-unit-header-kpi-icon]]:!opacity-100`,
-    md: `[&_[data-work-unit-header-kpi]]:min-w-[8.05rem] [&_[data-work-unit-header-kpi]]:gap-2.5 [&_[data-work-unit-header-kpi]]:px-3 [&_[data-work-unit-header-kpi]]:py-2.5 [&_[data-work-unit-header-kpi-icon-well]]:h-[41px] [&_[data-work-unit-header-kpi-icon-well]]:w-[41px] [&_[data-work-unit-header-kpi-icon]]:!opacity-100 [&_[data-work-unit-header-kpi-value]]:!font-medium [&_[data-work-unit-header-kpi-value]]:text-[18px] [&_[data-work-unit-header-kpi-value]]:text-alloy-midnight [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:text-[11px] [&_[data-work-unit-header-kpi-label]]:${WS_TEXT_SECONDARY}`,
+    sm: `[&_[data-work-unit-header-kpi]]:min-w-0 [&_[data-work-unit-header-kpi-value]]:!font-semibold [&_[data-work-unit-header-kpi-value]]:text-[16px] [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:${WS_TEXT_SECONDARY} [&_[data-work-unit-header-kpi-icon]]:!opacity-100`,
+    md: `[&_[data-work-unit-header-kpi]]:min-w-[7.75rem] [&_[data-work-unit-header-kpi]]:gap-2 [&_[data-work-unit-header-kpi]]:px-2.5 [&_[data-work-unit-header-kpi]]:py-2 [&_[data-work-unit-header-kpi-icon-well]]:h-[38px] [&_[data-work-unit-header-kpi-icon-well]]:w-[38px] [&_[data-work-unit-header-kpi-icon]]:!h-[18px] [&_[data-work-unit-header-kpi-icon]]:!w-[18px] [&_[data-work-unit-header-kpi-icon]]:!opacity-100 [&_[data-work-unit-header-kpi-value]]:!font-semibold [&_[data-work-unit-header-kpi-value]]:text-[21px] [&_[data-work-unit-header-kpi-value]]:leading-none [&_[data-work-unit-header-kpi-value]]:text-alloy-midnight [&_[data-work-unit-header-kpi-label]]:!overflow-visible [&_[data-work-unit-header-kpi-label]]:!whitespace-normal [&_[data-work-unit-header-kpi-label]]:text-[11px] [&_[data-work-unit-header-kpi-label]]:${WS_TEXT_SECONDARY}`,
 };
 
 function toKpiVm(item: WorkspaceMetricTileItem, index: number, loading: boolean): WorkspaceHeaderKpiVm {
@@ -83,7 +83,7 @@ export default function WorkspaceMetricTiles({
 
     const tiles = (
         <div
-            className={`flex flex-wrap items-stretch gap-2.5 ${align === "end" ? "justify-end" : "justify-start"} ${SIZE_OVERRIDES[size]} ${eyebrow ? "w-full" : className}`.trim()}
+            className={`flex flex-wrap items-stretch gap-2 ${align === "end" ? "justify-end" : "justify-start"} ${SIZE_OVERRIDES[size]} ${eyebrow ? "w-full" : className}`.trim()}
             data-workspace-metric-tiles="true"
             data-testid={eyebrow ? undefined : testId}
             role="list"
@@ -111,7 +111,7 @@ export default function WorkspaceMetricTiles({
 
     return (
         <div
-            className={`flex w-full min-w-0 flex-col gap-1.5 ${className}`.trim()}
+            className={`flex w-full min-w-0 flex-col gap-1 ${className}`.trim()}
             data-workspace-metric-band="true"
             data-testid={testId}
         >

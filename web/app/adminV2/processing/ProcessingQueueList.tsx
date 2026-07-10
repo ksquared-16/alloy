@@ -88,7 +88,7 @@ const LANE_TONE: Record<string, string> = {
 };
 
 const QUEUE_ROW_CLASS =
-    "flex w-full items-center gap-1.5 border-b border-alloy-stone/10 px-2 py-1.5 text-left transition-colors hover:bg-alloy-stone/[0.04]";
+    "flex w-full items-center gap-1.5 border-b border-alloy-stone/10 px-2 py-[5px] text-left transition-colors hover:bg-alloy-stone/[0.04]";
 const QUEUE_ROW_SELECTED_CLASS =
     "border-l-2 border-l-alloy-bend-pine bg-alloy-bend-pine/[0.06] hover:bg-alloy-bend-pine/[0.08]";
 

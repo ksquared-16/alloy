@@ -12,12 +12,18 @@ import WorkspaceMetricTiles, { type WorkspaceMetricTileItem } from "@/components
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 import { useProcessingFormApi } from "./useProcessingFormApi";
 
-/** Matches ProcessingQueueList work-lane derivation for needs_review. */
+/** Matches ProcessingQueueList `deriveWorkLane` → needs_review. */
 function isNeedsReviewRow(row: { status: string; formDraftSummary?: { generatedFormId: string | null } | null }): boolean {
     if (row.status === "completed" || row.status === "archived") return false;
     if (row.formDraftSummary?.generatedFormId) return false;
     if (row.status === "ready") return false;
     return true;
+}
+
+/** Matches ProcessingQueueList `deriveWorkLane` → ready_publish. */
+function isReadyToPublishRow(row: { status: string; formDraftSummary?: { generatedFormId: string | null } | null }): boolean {
+    if (row.status === "completed" || row.status === "archived") return false;
+    return !!row.formDraftSummary?.generatedFormId;
 }
 
 export default function ProcessingKpiStrip() {
@@ -31,20 +37,15 @@ export default function ProcessingKpiStrip() {
     const rows = data?.rows ?? [];
     const active = rows.filter((r) => r.status !== "completed" && r.status !== "archived");
     const needsReview = rows.filter(isNeedsReviewRow);
+    const readyToPublish = rows.filter(isReadyToPublishRow);
+    const publishedCount = forms.filter((f) => f.has_published_version).length;
     const loading = queueLoading || !listLoaded;
 
     const items: WorkspaceMetricTileItem[] = [
         { key: "active", label: "Active work", value: String(active.length), icon: "clipboard", accent: "pine", status: "healthy" },
         { key: "needs_review", label: "Needs review", value: String(needsReview.length), icon: "shield", accent: "ember", status: "warning" },
-        { key: "forms", label: "Forms", value: String(forms.length), icon: "layers", accent: "midnight", status: "unknown" },
-        {
-            key: "published",
-            label: "Published",
-            value: String(forms.filter((f) => f.has_published_version).length),
-            icon: "book",
-            accent: "gold",
-            status: "unknown",
-        },
+        { key: "ready_publish", label: "Ready to publish", value: String(readyToPublish.length), icon: "spark", accent: "pine", status: "healthy" },
+        { key: "published", label: "Published", value: String(publishedCount), icon: "book", accent: "gold", status: "unknown" },
     ];
 
     return (

@@ -42,7 +42,7 @@ export const WS_PANEL_HEADER = DRAWER_OVERVIEW_PANEL_HEADER;
 export const WS_PANEL_ICON_BADGE = DRAWER_OVERVIEW_PANEL_ICON_BADGE;
 /** A flatter panel (no pine accent) for secondary/neutral regions. */
 export const WS_PANEL_SURFACE_FLAT =
-    "overflow-hidden rounded-xl border border-alloy-stone/18 bg-white shadow-[0_2px_8px_rgba(24,39,58,0.06)]";
+    "overflow-hidden rounded-xl border border-alloy-stone/22 bg-white shadow-[0_2px_10px_rgba(24,39,58,0.07)] ring-1 ring-alloy-stone/[0.06]";
 
 /** Search / filter field chrome — matches global search visual weight on white surfaces. */
 export const WS_FIELD_SEARCH_CHROME =
@@ -71,14 +71,13 @@ export const WS_METRIC_UNIT_CHROME =
  * Lighter than process tiles so depth reads: canvas → KPI → process tile.
  */
 export const WS_KPI_CARD_CHROME =
-    "rounded-xl border border-alloy-stone/18 bg-white shadow-[0_2px_6px_rgba(24,39,58,0.06)]";
+    "rounded-xl border border-alloy-stone/22 bg-white shadow-[0_2px_8px_rgba(24,39,58,0.07)]";
 
 /**
  * Workspace process tile chrome — primary object on the page; slightly stronger elevation than KPIs.
- * Reuses the same Alloy shadow vocabulary as layout runtime cards (no new blur radii).
  */
 export const WS_PROCESS_TILE_CHROME =
-    "rounded-xl border border-alloy-stone/20 bg-white shadow-[0_3px_10px_rgba(24,39,58,0.08)] ring-1 ring-alloy-stone/[0.06]";
+    "rounded-xl border border-alloy-stone/24 bg-white shadow-[0_3px_12px_rgba(24,39,58,0.09)] ring-1 ring-alloy-stone/[0.08]";
 
 /** Resting process tile hover — quiet confidence, not floating dashboard cards. */
 export const WS_PROCESS_TILE_CHROME_HOVER =
@@ -125,7 +124,7 @@ export const WS_FIELD_CANVAS =
     `flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1 ring-alloy-stone/25 ${WS_FIELD}`;
 
 /** Module shell nav band padding (header → mode tabs → section tabs). */
-export const WS_SHELL_NAV_CLASS = "bg-white px-4 pb-2";
+export const WS_SHELL_NAV_CLASS = "bg-white px-4 pb-3 pt-1";
 
 /** Queue / list rail — white column with visible vertical stone separator. */
 export const WS_QUEUE_RAIL = "border-r border-alloy-stone/30 bg-white";

@@ -3,36 +3,39 @@
  *
  * ## Purpose
  * Single import surface for every operational module workspace (Processing, Communications,
- * Work Items, Scheduling, Attendance, Billing, Reporting). Processing (Digital Mailroom) is
- * the reference implementation.
+ * Work Items, Scheduling, Attendance, Billing, Reporting).
+ *
+ * **Processing (Digital Mailroom) is the certified reference implementation.** Future modules
+ * compose these primitives unchanged — module code supplies data and content only.
+ *
+ * ## Visual hierarchy (five layers — frozen)
+ *
+ * | Layer | Name | Components |
+ * |-------|------|------------|
+ * | 1 | Application shell | `WorkspaceShell`, `WorkspaceHeader`, `WorkspaceModeNav`, `WorkspaceModeTabs`, `WorkspaceSubTabs` |
+ * | 2 | Workspace field | `WS_SHELL_INSET`, `WS_FIELD_CANVAS`, `WS_FIELD` |
+ * | 3 | White operational surfaces | `WorkspaceSurface`, `WorkspaceCard`, `WorkspaceZonePanel` |
+ * | 4 | Interactive objects | `WS_ACTION_PRIMARY`, `WS_ACTION_SECONDARY`, artifact controls |
+ * | 5 | Selection / Bend Pine | `WS_ROW_SELECTED`, active tabs, queue selection rails |
  *
  * ## Required hierarchy (never deviate)
  * ```
- * WorkspaceHeader        Module title + tagline + actions + close
- * WorkspaceModeTabs      Work | Studio
- * WorkspaceSubTabs       Module section tabs (Overview | Queue, …)
- * WorkspaceSurface       Stone field workspace body
- *   WorkspaceCard        White contained surfaces
- *   WorkspaceZonePanel   Multi-column zones (queue, source, inspector)
- *   WorkspaceMetricTiles Canonical metric tiles
- *   WorkspaceDivider     Subtle stone separators
- *   WorkspaceSection     Labeled content groups
+ * WorkspaceShell
+ *   WorkspaceHeader
+ *   WorkspaceModeNav → WorkspaceModeTabs + WorkspaceSubTabs [+ WorkspaceMetricTiles]
+ *   WS_SHELL_INSET → WS_FIELD_CANVAS
+ *     WorkspaceSurface / WorkspaceCard / WorkspaceZonePanel
+ *     WorkspaceDivider (zone separation)
  * ```
  *
- * ## Background doctrine
- * Stone workspace field (~4%), white surfaces, white cards, thin stone separators,
- * soft elevation. No flat white modal backgrounds. No per-module themes.
- *
- * ## Color doctrine (frozen)
+ * ## Color doctrine (frozen — no additional accent colors)
  * | Token | Use |
  * |-------|-----|
- * | Midnight Forge | structure, navigation, typography, icons, secondary actions |
- * | Bend Pine | primary action, selection, progress, success (never decoration) |
- * | Alloy Gold | attention, published |
- * | White | surfaces and cards |
- * | River Stone | workspace field |
- *
- * No other accent colors in operational module workspaces.
+ * | Midnight Forge | structure, titles, inventory icons |
+ * | Alloy Slate | metadata, counts, secondary copy |
+ * | Bend Pine | action, selection, progress, primary CTA |
+ * | Alloy Gold | publish, finalized, completed |
+ * | Alloy Ember | needs-review attention (KPI only) |
  *
  * @see docs/platform/core/navigation-and-workspace-doctrine.md — Alloy Operational Workspace Doctrine V2
  */
@@ -61,6 +64,7 @@ export {
     WS_FIELD,
     WS_SHELL_INSET,
     WS_FIELD_CANVAS,
+    WS_CONTROL_BAND_DIVIDER,
     WS_SHELL_NAV_CLASS,
     WS_QUEUE_RAIL,
     WS_CANVAS,
