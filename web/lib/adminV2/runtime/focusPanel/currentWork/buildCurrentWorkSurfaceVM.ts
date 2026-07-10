@@ -278,6 +278,20 @@ function lastActivityFromContext(
     return null;
 }
 
+function mergeActionVms(
+    primary: CurrentWorkActionVM[],
+    secondary: CurrentWorkActionVM[],
+): CurrentWorkActionVM[] {
+    const seen = new Set(primary.map((action) => action.key));
+    const merged = [...primary];
+    for (const action of secondary) {
+        if (seen.has(action.key)) continue;
+        seen.add(action.key);
+        merged.push(action);
+    }
+    return merged;
+}
+
 /**
  * Build the presentation-safe Current Work surface VM from runtime + config.
  * Deterministic; UI renders this only — no domain-specific branches in components.
@@ -373,7 +387,12 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         percent: total > 0 ? Math.round((completed / total) * 100) : 0,
     };
 
-    const isEmpty = !runtime && checklist.length === 0 && !templateConfig;
+    const isEmpty =
+        !runtime
+        && checklist.length === 0
+        && !templateConfig
+        && classified.supporting.length === 0
+        && classified.alternatePaths.length === 0;
     const blocked = attention.needsAttention && Boolean(attention.primaryReason);
     const hasOpenWork = Boolean(actionableWorkItem?.state === "open");
     const status = resolveSurfaceStatus({ isEmpty, blocked, completed, total, hasOpenWork });
@@ -407,7 +426,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         primaryActionLabel,
     });
 
-    const supportingActions =
+    const supportingFromConfig =
         templateConfig?.supporting_actions?.length
             ? actionsFromConfigRefs(
                   templateConfig.supporting_actions,
@@ -415,9 +434,10 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   "supporting",
                   "current_work_supporting",
               )
-            : classified.supporting;
+            : [];
+    const supportingActions = mergeActionVms(supportingFromConfig, classified.supporting);
 
-    const alternatePaths =
+    const alternateFromConfig =
         templateConfig?.alternate_paths?.length
             ? actionsFromConfigRefs(
                   templateConfig.alternate_paths,
@@ -425,7 +445,8 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   "alternate_path",
                   "current_work_alternate_paths",
               )
-            : classified.alternatePaths;
+            : [];
+    const alternatePaths = mergeActionVms(alternateFromConfig, classified.alternatePaths);
 
     const communicationActions =
         templateConfig?.communication_actions?.length

@@ -213,4 +213,24 @@ describe("buildDemoFocusPanelSummaryViewModel — collections are populated", ()
         expect(Array.isArray(record._inquiry_children)).toBe(true);
         expect((record._inquiry_children as unknown[]).length).toBe(2);
     });
+
+    it("seeds Current Work preview through the production pipeline (not empty placeholder)", () => {
+        const { vm } = buildDemoFocusPanelSummaryViewModel();
+        expect(vm.workspace.stage_work_runtime).not.toBeNull();
+        expect(vm.workspace.published_stage_inputs).toBeTruthy();
+        expect(vm.actions.record_header?.secondary?.length).toBeGreaterThan(0);
+
+        const cards = deriveOpportunityFocusPanelPresentation({
+            mode: "summary",
+            displayVm: vm,
+            record: vm.above_fold.record as Record<string, unknown>,
+            title: vm.header.title,
+            perspective: null,
+            statusLabel: "Tour scheduled",
+        }).cards;
+
+        const currentWork = cards.get("current_work");
+        expect(currentWork?.insight).toBe("Contact Family");
+        expect(currentWork?.insight).not.toBe("No current work configured");
+    });
 });

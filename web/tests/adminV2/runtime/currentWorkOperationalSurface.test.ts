@@ -19,6 +19,7 @@ import type {
 import type { CurrentWorkTemplateConfigOverlay } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkTemplateConfig";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { ReadinessResult } from "@/lib/completion/readinessTypes";
+import { LIFECYCLE_BUILDER_STAGE_FIELD_RULES_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
 import {
     billingCollectPaymentPublishedDepartmentMetadata,
     buildEnrollmentRecordTruth,
@@ -522,6 +523,64 @@ describe("Current Work operational surface", () => {
 
         expect(classified.bosRecommendations.map((a) => a.key)).toEqual(["ask_bos"]);
         expect(classified.supporting).toEqual([]);
+    });
+
+    it("merges catalog alternate paths with record-header alternate paths", () => {
+        const runtime = enrollmentContactRuntime();
+        const publishedStageInputs = enrollmentPublishedInputs();
+        const vm = buildCurrentWorkSurfaceVM({
+            context: baseContext({
+                stageWorkRuntime: runtime,
+                publishedStageInputs,
+                recordHeaderActions: slots({
+                    secondary: [
+                        {
+                            key: "update_enrollment_status",
+                            label: "Change Enrollment Status",
+                            description: null,
+                            action_type: "registry",
+                            icon: null,
+                            style: null,
+                            display_style: "outline",
+                            payload: {},
+                            workflow_id: null,
+                        },
+                    ],
+                }),
+            }),
+        });
+
+        expect(vm.alternatePaths.map((action) => action.key)).toEqual([
+            "close_lead",
+            "update_enrollment_status",
+        ]);
+    });
+
+    it("uses operator-facing labels for published field-rule checklist items", () => {
+        const metadata = enrollmentLeadWithFieldRulesPublishedDepartmentMetadata();
+        metadata[LIFECYCLE_BUILDER_STAGE_FIELD_RULES_METADATA_KEY] = {
+            version: 1,
+            by_stage_key: {
+                lead: {
+                    required_rule_ids: ["custom:opportunity:schools"],
+                    recommended_rule_ids: [],
+                },
+            },
+        };
+        const publishedStageInputs = resolvePublishedStageInputsForCurrentWork({
+            departmentMetadata: metadata,
+            builderStageKey: "lead",
+        })!;
+        const vm = buildCurrentWorkSurfaceVM({
+            context: baseContext({
+                publishedStageInputs,
+                stageWorkRuntime: enrollmentContactRuntime(),
+            }),
+        });
+
+        const schools = vm.checklist.find((item) => item.key === "custom:opportunity:schools");
+        expect(schools?.label).toBe("Schools");
+        expect(schools?.label).not.toContain("custom:");
     });
 
     it("does not hardcode enrollment action keys in presentation components", () => {

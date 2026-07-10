@@ -3,6 +3,8 @@ import type {
     OpportunityDrawerViewModel,
 } from "@/lib/adminV2/viewModel/drawer/types";
 
+import { enrichDemoViewModelForCurrentWorkPreview } from "./focusPanelCurrentWorkPreviewSeed";
+
 /**
  * Demo data for the Surfaces editor replica of the Enrollment Focus Panel Summary.
  *
@@ -307,6 +309,8 @@ export function buildDemoFocusPanelSummaryViewModel(): {
         background_refresh: { allowed: ["task_status", "scheduled_send_status", "readiness_values"] },
         timing: { compose_ms: 0, phases_ms: {} },
     };
+
+    enrichDemoViewModelForCurrentWorkPreview(vm);
 
     return { vm, record: vm.above_fold.record as unknown as Record<string, unknown> };
 }
