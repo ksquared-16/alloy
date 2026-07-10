@@ -25,6 +25,7 @@ export default function ProcessingFormsStudio({
     const [filter, setFilter] = useState<FormAssetFilter>("all");
     const [createOpen, setCreateOpen] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [focusFolderId, setFocusFolderId] = useState<string | null>(null);
     const initialFormApplied = useRef(false);
 
     useEffect(() => {
@@ -50,18 +51,21 @@ export default function ProcessingFormsStudio({
             accent_color: string;
             origin: "blank" | "document" | "packet";
         }) => {
+            if (creating) return;
             setCreating(true);
             try {
                 const formId = await createBlankForm(payload);
                 if (formId) {
                     setCreateOpen(false);
+                    setFilter("all");
+                    setFocusFolderId("manual");
                     setSelectedFormId(formId);
                 }
             } finally {
                 setCreating(false);
             }
         },
-        [createBlankForm]
+        [createBlankForm, creating]
     );
 
     const handleBackFromBuilder = useCallback(() => {
@@ -97,6 +101,7 @@ export default function ProcessingFormsStudio({
                         listLoaded={listLoaded}
                         listErr={listErr}
                         onRetry={() => void loadForms()}
+                        focusFolderId={focusFolderId}
                     />
                 ) : studioTab === "packets" ? (
                     <ProcessingStudioPlaceholder
@@ -120,6 +125,7 @@ export default function ProcessingFormsStudio({
                 onClose={() => setCreateOpen(false)}
                 onContinue={handleCreateContinue}
                 submitting={creating}
+                error={listErr}
             />
         </>
     );

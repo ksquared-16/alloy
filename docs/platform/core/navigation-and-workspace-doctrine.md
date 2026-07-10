@@ -144,7 +144,7 @@ This is the **canonical operational workspace visual system** for every AdminV2 
 
 - **V1** — established the component barrel and Processing reference.
 - **V2** — added inset stone field ownership in `WorkspaceShell` and certified module migrations.
-- **V3 (this revision)** — reframes the **KPI philosophy**: metrics are **contextual, operational, and section-scoped**. Boxed interactive KPI cards are retired in favor of a flat **Operational Health strip** with reserved trend intelligence.
+- **V3 (this revision)** — reframes the **KPI philosophy**: metrics are **contextual, operational, and section-scoped**. **Overview** sections render compact **Today's activity** tiles in the overview landing body (below primary action cards). **Operational** sections (Queue, Inbox, Studio tabs) use a flat **Operational Health strip** in the nav control band with reserved trend intelligence.
 
 ### KPI philosophy (V3 — the metric contract)
 
@@ -154,14 +154,25 @@ Metrics are:
 - **Operational** — they answer "what needs attention right now," not "how much exists."
 - **Not inventory** — never total-count catalogs (no "Forms: 214"); operational states only.
 - **Not workspace-wide** — the same band changes as the operator changes sections.
-- **Not interactive cards** — rendered as a flat **Operational Health strip**, not clickable tiles or pills.
+- **Not interactive cards** — operational sections use a flat **Operational Health strip** in the nav band; overview sections use compact non-interactive **`SurfaceHeaderKpiCard`** tiles in the landing body.
 
 **Metrics belong to the active section.** When the section changes, the metric set changes. One shell, many contextual health bands.
 
+**Overview vs operational placement (required):**
+
+| Section type | Metric placement | Component |
+|--------------|------------------|-----------|
+| **Overview** (Work → Overview) | Below primary action cards, above information zones | `SurfaceHeaderKpiCard` grid + **Today's activity** eyebrow in `*OverviewLanding` |
+| **Operational** (Queue, Inbox, Studio tabs) | Nav control band beside mode/section tabs | `WorkspaceOperationalHealth` via module KPI strip adapter |
+
+Overview sections **omit** the header metrics column. Operational sections **include** it. Processing and Communications are the reference pair for this split.
+
 | Section | Operational metrics |
 |---------|---------------------|
-| **Processing → Queue** | Active Work · Needs Review · Ready · Published |
-| **Communications → Inbox** | Needs Reply · Unread · Scheduled · Needs Review |
+| **Processing → Overview** | Active Work · Needs Review · Ready to Publish · Published (body tiles) |
+| **Processing → Queue** | Active Work · Needs Review · Ready · Published (header health band) |
+| **Communications → Overview** | Reply · Unread · Scheduled · Sent (body tiles) |
+| **Communications → Inbox** | Needs Reply · Unread · Scheduled · Needs Review (header health band) |
 | **Work Items → Queue** | Open · Due Today · Overdue · Completed |
 
 Each metric reserves space for **trend intelligence** (see below): e.g. `↑ 12 today`, `↓ 18% week over week`, `↑ 4 since yesterday`.
@@ -186,10 +197,11 @@ Import from `@/components/workspace/doctrine`. Tokens: `web/components/workspace
 |-----------|------|----------------------|
 | **`WorkspaceShell`** | Invariant modal hierarchy: control band + inset field + body | `DigitalMailroomShell` |
 | **`WorkspaceHeader`** | Compact identity: icon, title, subtitle, actions, Close | Digital Mailroom title band |
-| **`WorkspaceModeNav`** | Composes mode + section tabs; optional metrics column | Work \| Studio + Overview \| Queue + KPI band |
+| **`WorkspaceModeNav`** | Composes mode + section tabs; optional metrics column (operational sections only) | Work \| Studio + Overview \| Queue + KPI band when not on Overview |
 | **`WorkspaceModeTabs`** | Primary mode rail (Work \| Studio) | Work mode default |
 | **`WorkspaceSubTabs`** | Secondary section navigation | Overview \| Queue |
-| **`WorkspaceOperationalHealth`** | Flat operational health band — not cards, not pills, not interactive | `ProcessingKpiStrip` → Work + Studio contextual metrics |
+| **`SurfaceHeaderKpiCard`** | Compact non-interactive overview activity tiles — **Today's activity** eyebrow + 2×2 / 4-column grid | `ProcessingOverviewLanding`, `CommunicationsOverviewLanding` |
+| **`WorkspaceOperationalHealth`** | Flat operational health band in nav control band — not cards, not pills, not interactive | `ProcessingKpiStrip`, `CommunicationsWorkspaceKpiStrip` (Queue / Inbox / Studio only) |
 | **`WorkspaceMetricTiles`** | Legacy boxed KPI tiles — **deprecated for operational health**; Communications / Work Items pending migration | — |
 | **`WorkspaceSurface`** | Scrollable stone-field body for overview/studio | `ProcessingOverviewLanding` |
 | **`WorkspaceCard`** | White contained panel on stone field | Overview lower zones, summary groups |
@@ -200,7 +212,8 @@ Processing-specific presentation adapters (not duplicated by future modules):
 
 | Adapter | Purpose |
 |---------|---------|
-| **`ProcessingKpiStrip`** | Work vs Studio operational health adapter (data + trend placeholders only) |
+| **`ProcessingKpiStrip`** | Work vs Studio operational health adapter for **Queue / Studio** nav band (data + trend placeholders only) |
+| `useProcessingOverviewKpis` / `buildProcessingOverviewKpis` | Work → Overview activity tile data for `SurfaceHeaderKpiCard` grid |
 | `ProcessingLandingActionCard` | Overview action-card hierarchy |
 | `ProcessingSourceDocumentViewport` | Artifact fit-page / fit-width / manual zoom |
 | `ProcessingQueueList` | Folder rail + work lanes + row density |
@@ -210,8 +223,9 @@ Processing-specific presentation adapters (not duplicated by future modules):
 | Rule | Implementation |
 |------|----------------|
 | **Compact header band** | `WorkspaceHeader` — single compact row: icon + title (Midnight Forge) + Slate subtitle + actions + Close |
-| **Control band** | Header + `WorkspaceModeNav` + optional `WorkspaceOperationalHealth` wrapped in `WS_CONTROL_BAND_DIVIDER` (`border-b border-alloy-stone/30`) — full inner width |
-| **Metric band attachment** | Eyebrow stacked **above** tiles; metrics vertically aligned with Work navigation stack — not a floating card row |
+| **Control band** | Header + `WorkspaceModeNav` + optional `WorkspaceOperationalHealth` (operational sections only) wrapped in `WS_CONTROL_BAND_DIVIDER` (`border-b border-alloy-stone/30`) — full inner width |
+| **Overview activity band** | **Today's activity** eyebrow + compact `SurfaceHeaderKpiCard` grid below primary action cards, above information zones — not in header |
+| **Operational metric band attachment** | Eyebrow stacked **above** health metrics; metrics vertically aligned with Work navigation stack — not a floating card row |
 | **Queue → detail divider** | `WS_QUEUE_RAIL` (`border-r border-alloy-stone/30`, white background) — full height below control band |
 | **Artifact viewport** | `ProcessingSourceDocumentViewport` + `WorkspaceArtifactZoomControls` — bounded scroll, dual-axis fit-page, manual zoom on content wrapper |
 | **Queue typography** | `PROCESSING_QUEUE_ROW_TITLE` (11px) + `PROCESSING_QUEUE_METADATA` — compact row density |
@@ -222,7 +236,7 @@ Processing-specific presentation adapters (not duplicated by future modules):
 | Area | Rule |
 |------|------|
 | **Stone field** | `WS_FIELD` at ~7%; white cards visibly float with `WS_PROCESS_TILE_CHROME` / `WS_PANEL_SURFACE_FLAT` |
-| **KPI / health band** | Flat operational health; eyebrow above metric row; reserved trend line per metric | `WorkspaceOperationalHealth` + `ProcessingKpiStrip` |
+| **KPI / health band** | Overview: compact activity tiles in landing body. Queue/Studio: flat operational health in nav band; eyebrow above metric row; reserved trend line per metric | `SurfaceHeaderKpiCard` + `WorkspaceOperationalHealth` / `ProcessingKpiStrip` |
 | **Typography** | Three levels: Primary (`WS_TEXT_PRIMARY`), Secondary (`WS_TEXT_SECONDARY`), Muted (`WS_TEXT_MUTED`) |
 | **Action cards** | Import (strongest Pine) → Active work (Pine CTA) → Form library (Midnight inventory) — all Open CTAs interactive |
 | **Queue rows** | ~8–10% tighter vertical padding; selection Pine rail preserved |
@@ -249,11 +263,13 @@ The modal shell is **never** fully stone-tinted. The stone field is **inset** in
 WorkspaceShell
   WorkspaceHeader              Module title + tagline + actions + close
   [control band divider]
-  WorkspaceModeNav             Work | Studio + section tabs [+ WorkspaceOperationalHealth]
+  WorkspaceModeNav             Work | Studio + section tabs [+ WorkspaceOperationalHealth when not Overview]
   WS_SHELL_INSET               White gutter (~16px)
     WS_FIELD_CANVAS            Stone operational canvas (Layer 2)
       WorkspaceSurface         Scroll region (overview / studio)
-        WorkspaceCard          Action cards + information zones
+        WorkspaceCard          Action cards
+        [Overview only]        Today's activity — SurfaceHeaderKpiCard grid
+        WorkspaceCard          Information zones (recent work, folders, quick nav)
       WorkspaceZonePanel       Queue | source document | inspector (queue view)
 ```
 
@@ -295,7 +311,9 @@ Scale helpers: `web/lib/workspace/artifactViewportScale.ts`
 
 ### Operational health doctrine (V3 — replaces boxed KPI cards)
 
-`WorkspaceOperationalHealth` is the **canonical operational health primitive** for module nav bands. Processing is the reference implementation.
+`WorkspaceOperationalHealth` is the **canonical operational health primitive** for module **nav bands on operational sections** (Queue, Inbox, Studio tabs). Processing and Communications are the reference implementations.
+
+**Overview sections do not use the nav-band health strip.** Work → Overview renders **Today's activity** as compact `SurfaceHeaderKpiCard` tiles in the overview landing body, below primary action cards and above information zones — matching Communications.
 
 **Not cards. Not pills. Not interactive.** Operational health only — lighter and less dominant than boxed KPI tiles.
 
@@ -324,8 +342,10 @@ Metrics **belong to the active section**, not the mode or the workspace. When th
 
 | Module | Section | Operational metrics |
 |--------|---------|---------------------|
-| **Processing** | Queue | Active Work · Needs Review · Ready · Published |
+| **Processing** | Overview | Active Work · Needs Review · Ready to Publish · Published (`SurfaceHeaderKpiCard` in body) |
+| **Processing** | Queue | Active Work · Needs Review · Ready · Published (`WorkspaceOperationalHealth` in nav band) |
 | **Processing** | Studio | Forms · Published · Draft · Generated |
+| **Communications** | Overview | Reply · Unread · Scheduled · Sent (`SurfaceHeaderKpiCard` in body) |
 | **Communications** | Inbox | Needs Reply · Unread · Scheduled · Needs Review |
 | **Work Items** | Queue | Open · Due Today · Overdue · Completed |
 
@@ -404,7 +424,9 @@ Eyebrow labels stack **above** the metric row — never beside metrics in a hori
 
 ### Metric doctrine
 
-`WorkspaceOperationalHealth` is the **operational health primitive** for module nav bands (Processing reference). Module adapters (e.g. `ProcessingKpiStrip`) supply **data and trend placeholders only**.
+**Overview sections:** compact **Today's activity** tiles via `SurfaceHeaderKpiCard` in `*OverviewLanding` — below action cards, non-interactive, same grid density as Communications (`grid-cols-2 lg:grid-cols-4`, `space-y-5` rhythm).
+
+**Operational sections:** `WorkspaceOperationalHealth` in the nav control band. Module adapters (e.g. `ProcessingKpiStrip`, `CommunicationsWorkspaceKpiStrip`) supply **data and trend placeholders only**. Shell adapters omit `metricsColumn` when the active section is Overview.
 
 `WorkspaceMetricTiles` is **legacy** — Communications and Work Items only until migrated. No `CompactKpiStrip`, no custom card variants, no alternate KPI styles for new work.
 
@@ -423,7 +445,8 @@ Eyebrow labels stack **above** the metric row — never beside metrics in a hori
 | `WorkspaceSurface` | Scrollable overview/studio body inside the stone canvas |
 | `WorkspaceCard` | Single contained white panel (overview sections, summary groups) |
 | `WorkspaceZonePanel` | Multi-column operational layout (queue, source document, inspector) |
-| `WorkspaceOperationalHealth` | Operational health strip in nav band (flat, non-interactive) |
+| `SurfaceHeaderKpiCard` | Overview **Today's activity** compact tile grid in landing body |
+| `WorkspaceOperationalHealth` | Operational health strip in nav band (Queue / Inbox / Studio) |
 | `WorkspaceMetricTiles` | Legacy boxed KPI tiles (pending migration) |
 | `WorkspaceDivider` | Vertical/horizontal separation between zones |
 
@@ -435,8 +458,8 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 
 | Module | Status | Shell | Metrics | Notes |
 |--------|--------|-------|---------|-------|
-| **Processing (Digital Mailroom)** | **Reference implementation** | `DigitalMailroomShell` → `WorkspaceShell` | `ProcessingKpiStrip` → `WorkspaceOperationalHealth` | Work + Studio contextual health; overview action cards, queue rail, artifact viewport |
-| **Communications** | Certified (health-band migration pending) | `CommunicationsWorkspaceShell` → `WorkspaceShell` | `CommunicationsWorkspaceKpiStrip` → `WorkspaceMetricTiles` | Inbox target metrics: Needs Reply · Unread · Scheduled · Needs Review |
+| **Processing (Digital Mailroom)** | **Reference implementation** | `DigitalMailroomShell` → `WorkspaceShell` | Overview: `useProcessingOverviewKpis` → `SurfaceHeaderKpiCard`. Queue/Studio: `ProcessingKpiStrip` → `WorkspaceOperationalHealth` | Overview activity tiles below action cards; queue rail, artifact viewport |
+| **Communications** | Certified | `CommunicationsWorkspaceShell` → `WorkspaceShell` | Overview: `SurfaceHeaderKpiCard`. Inbox/Studio: `CommunicationsWorkspaceKpiStrip` | Same overview vs operational metric split as Processing |
 | **Work Items** | Certified (health-band migration pending) | `WorkItemsShell` → `WorkspaceShell` | `WorkItemsKpiStrip` → `WorkspaceMetricTiles` | Queue target metrics: Open · Due Today · Overdue · Completed |
 
 ### Processing certification checklist (reference — all satisfied)
@@ -446,7 +469,8 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 | Header | Compact identity band, no hero | `WorkspaceHeader` via `DigitalMailroomShell` |
 | Modes | Work \| Studio primary tabs | `WorkspaceModeTabs` |
 | Subnavigation | Overview \| Queue under Work | `WorkspaceSubTabs` |
-| Metric band | Flat operational health; Work vs Studio metrics; trend line reserved | `ProcessingKpiStrip` → `WorkspaceOperationalHealth` |
+| Metric band | Overview: body activity tiles. Queue/Studio: flat operational health in nav band; trend line reserved | `SurfaceHeaderKpiCard` + `ProcessingKpiStrip` → `WorkspaceOperationalHealth` |
+| Overview activity | **Today's activity** below action cards, above information zones | `ProcessingOverviewLanding` + `useProcessingOverviewKpis` |
 | Action cards | Three-tier semantic hierarchy | `ProcessingLandingActionCard` on overview |
 | Containment | Stone field + white surfaces | `WorkspaceShell` inset + `WorkspaceSurface` / `WorkspaceCard` |
 | Queue | Folder rail, compact rows, Pine selection | `ProcessingQueueList` + `WS_QUEUE_RAIL` |
@@ -462,7 +486,7 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 3. Do not duplicate shell layout in module folders.
 4. Do not introduce module-specific themes or accent colors.
 5. Do not create competing KPI or surface components.
-6. Metrics are **section-scoped and operational** — never inventory totals, never workspace-wide rollups, never interactive cards. Use `WorkspaceOperationalHealth` with a per-section metric set and reserved trend line.
+6. Metrics are **section-scoped and operational** — never inventory totals, never workspace-wide rollups. **Overview:** compact activity tiles in landing body (`SurfaceHeaderKpiCard`). **Queue/Inbox/Studio:** `WorkspaceOperationalHealth` in nav band with per-section metric set and reserved trend line.
 
 ---
 
@@ -471,7 +495,7 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 - **V1** established the component barrel and Processing reference (July 2026).
 - **V2** added inset stone field ownership in `WorkspaceShell` and certified Communications + Work Items.
 
-**V3 above is authoritative** — contextual, operational, section-scoped metrics rendered as a flat Operational Health strip with reserved trend intelligence. Boxed interactive KPI cards are retired.
+**V3 above is authoritative** — contextual, operational, section-scoped metrics. **Overview** sections use compact **Today's activity** tiles in the landing body. **Operational** sections use a flat Operational Health strip in the nav band with reserved trend intelligence.
 
 ---
 

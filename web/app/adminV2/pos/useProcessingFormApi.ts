@@ -207,12 +207,16 @@ export function useProcessingFormApi() {
                 if (!defRes.ok || !defBody.data?.id) throw new Error(defBody.error || `Create failed (${defRes.status})`);
                 const formId = defBody.data.id;
                 const blankSchema = createBlankSchema(name);
-                await fetch(`/api/admin/forms/${formId}/versions`, {
+                const versionRes = await fetch(`/api/admin/forms/${formId}/versions`, {
                     method: "POST",
                     credentials: "same-origin",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ schema_json: blankSchema }),
                 });
+                const versionBody = (await versionRes.json().catch(() => ({}))) as { data?: { id?: string }; error?: string };
+                if (!versionRes.ok || !versionBody.data?.id) {
+                    throw new Error(versionBody.error || `Failed to create initial form version (${versionRes.status})`);
+                }
                 await syncFormStats(formId, blankSchema, {
                     description: input.description?.trim() || null,
                     branding: {
