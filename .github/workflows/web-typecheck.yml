@@ -1,4 +1,5 @@
-# Catches TypeScript drift (e.g. route uses fields missing from enrich stub result) before merge.
+# Catches TypeScript drift before merge.
+# Production graph (app + API) on every PR; full test graph in a separate required job.
 name: Web typecheck
 on:
   pull_request:
@@ -12,15 +13,27 @@ defaults:
 
 jobs:
   typecheck:
+    name: Production graph
     runs-on: ubuntu-latest
-    env:
-      NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: "web/.nvmrc"
           cache: "npm"
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+
+  typecheck-tests:
+    name: Full graph (tests + scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: "web/.nvmrc"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck:tests

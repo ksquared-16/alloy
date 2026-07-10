@@ -10,9 +10,17 @@
 cd web && npm run typecheck
 ```
 
-Platform CI gate (`npm run typecheck` includes tests and scripts). Required before merge on any `web/` TypeScript change.
+Platform CI gate (production/build graph — app, API routes, components, `lib/`; excludes tests and scripts). Required before merge on any `web/` TypeScript change. Same graph `next build` uses.
 
-Build-only subset (does not replace the platform gate):
+Full strict graph (tests + scripts + Playwright):
+
+```bash
+cd web && npm run typecheck:tests
+```
+
+Required when changing test files, scripts, Playwright specs, or shared types that tests import. CI runs both jobs on every `web/**` PR. See `docs/governance/typescript-performance.md`.
+
+Build-only alias (identical to `typecheck`):
 
 ```bash
 cd web && npm run typecheck:build

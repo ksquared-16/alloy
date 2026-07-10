@@ -64,4 +64,10 @@ cd web && npm run test -- \
   tests/lib/workspace/routeSessionCacheAndReveal.test.ts
 ```
 
-Also run `cd web && npm run typecheck` before merge on TypeScript changes.
+## Verification
+
+```bash
+cd web && npm run typecheck
+```
+
+Before merge on TypeScript changes (production/build graph). For test-only or test-adjacent changes, also run `npm run typecheck:tests`. See `docs/governance/typescript-performance.md`.

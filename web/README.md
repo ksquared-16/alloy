@@ -26,15 +26,18 @@ Run all commands from `web/`.
 
 | Command | Scope | Approx. warm time |
 | --- | --- | --- |
-| `npm run typecheck:build` | App + API routes only (`tsconfig.build.json`, same config `next build` uses). Excludes tests, scripts, Playwright. **Use this for day-to-day app type checks.** | ~3.5 min |
-| `npm run typecheck` | Full project (`tsconfig.json`): app + tests + scripts. Use before merging shared/test changes. | ~5.5 min |
+| `npm run typecheck` | **Production/build graph** (`tsconfig.build.json` — same config `next build` uses). App + API + `lib/`; excludes tests, scripts, Playwright. **Canonical pre-merge check.** | ~1.5 min warm |
+| `npm run typecheck:build` | Alias for `npm run typecheck` (production/build graph). | ~1.5 min warm |
+| `npm run typecheck:tests` | **Full graph** (`tsconfig.json`): production + tests + scripts + Playwright. Use when changing test or script TypeScript. | ~3–5 min warm |
 | `npm run test` | Vitest run over `tests/**`. | ~2 min wall |
 
 Notes:
 
-- Both typecheck configs are **incremental** and write separate `*.tsbuildinfo` files; the first run after a large change is slower than subsequent runs.
-- These are large, `strict` TypeScript projects (~6k source files). `tsc` is CPU-bound, so avoid running multiple full type checks at once.
-- **Do not leave background `tsc`/`vitest`/`next dev` processes running.** Several concurrent `tsc --noEmit` processes will starve CPU/RAM and make every terminal command feel slow. If commands are unexpectedly slow, check for and kill stale processes (e.g. `ps aux | grep tsc`).
+- All typecheck scripts use an **8 GB Node heap** and are **incremental** with separate `tsconfig.tsbuildinfo` / `tsconfig.build.tsbuildinfo` files.
+- First run after a large change is slower than subsequent runs.
+- These are large, `strict` TypeScript projects (~6.8k program files). `tsc` is CPU-bound — avoid running multiple full type checks at once.
+- **Do not use raw `npx tsc --noEmit`** — it skips the heap override and may OOM. See `docs/governance/typescript-performance.md`.
+- **Do not leave background `tsc`/`vitest`/`next dev` processes running.** Several concurrent `tsc` processes will starve CPU/RAM. Close unused Cursor worktrees when possible.
 
 ## Learn More
 
