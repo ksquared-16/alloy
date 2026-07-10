@@ -63,6 +63,7 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(shell).toContain("WorkspaceShell");
         expect(shell).toContain("WorkspaceSurface");
         expect(shell).toContain("WorkItemsKpiStrip");
+        expect(shell).toContain("hideHeaderMetrics");
         expect(shell).not.toContain("OperationalModalHeader");
         const strip = read("app/adminV2/tasks/WorkItemsKpiStrip.tsx");
         expect(strip).toContain("WorkspaceOperationalHealth");

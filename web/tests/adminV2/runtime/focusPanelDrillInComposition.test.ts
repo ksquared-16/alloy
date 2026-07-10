@@ -256,6 +256,10 @@ describe("Add Field / centered drill-in composer wiring", () => {
         expect(runtimeCss).toMatch(
             /\[data-fp-composer-depth-active="true"\][\s\S]*\.alloy-os-fp-composer__body[\s\S]*position: static/,
         );
+        // Composer shell must not trap abspos on the elevated card.
+        expect(runtimeCss).toMatch(
+            /\[data-fp-composer-depth-active="true"\][\s\S]*\.alloy-os-fp-composer-cell[\s\S]*position: static/,
+        );
     });
 });
 
@@ -391,7 +395,8 @@ describe("Focus Panel in-canvas drill-in composer wiring", () => {
         expect(cardInspector).toContain("metadataOnly");
     });
 
-    it("Configure Household opens in-place drill-in via requestFocus, not route change", () => {
+    it("Configure opens in-place drill-in via requestFocus, not route change", () => {
+        expect(canvas).toContain("onEnterDrillIn?.()");
         expect(canvas).toContain("requestFocus(typeKey, null)");
         expect(canvas).not.toContain("onOpenNestedSurface");
     });

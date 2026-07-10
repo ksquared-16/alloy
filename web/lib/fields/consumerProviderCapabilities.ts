@@ -55,7 +55,8 @@ const FOCUS_PANEL_CAPABILITY: ConsumerProviderCapability = {
     ...QUEUE_ROW_CAPABILITY,
 };
 
-const FORMS_CAPABILITY: ConsumerProviderCapability = {
+/** Shared capability for Forms builder and Documents composition (P0 scalar only). */
+export const FORMS_DOCUMENTS_CAPABILITY: ConsumerProviderCapability = {
     pickerKinds: new Set(["business_field", "platform_field"]),
     pickerShapes: new Set(["scalar"]),
     publishKinds: new Set(["business_field", "platform_field"]),
@@ -63,6 +64,11 @@ const FORMS_CAPABILITY: ConsumerProviderCapability = {
     collectionProjectionsAllowed: false,
     relationshipLeavesAllowed: false,
 };
+
+/** Primary consumer surface for Forms / Documents publish and picker gates. */
+export const FORMS_DOCUMENTS_CONSUMER: CanonicalDataConsumerSurface = "forms";
+
+const FORMS_CAPABILITY: ConsumerProviderCapability = FORMS_DOCUMENTS_CAPABILITY;
 
 const DRAWER_CAPABILITY: ConsumerProviderCapability = {
     pickerKinds: new Set([

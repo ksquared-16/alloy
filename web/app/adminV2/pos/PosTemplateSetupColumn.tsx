@@ -226,7 +226,8 @@ export default function PosTemplateSetupColumn({
                     patch.field_source === undefined &&
                     (patch.questionSubject !== undefined ||
                         patch.nameRepresentation !== undefined ||
-                        patch.displayLabel !== undefined)
+                        patch.displayLabel !== undefined ||
+                        patch.destinationFieldId !== undefined)
                 ) {
                     const intent = inferQuestionIntent(merged.evidenceLabel || merged.displayLabel);
                     const subject = merged.questionSubject ?? defaultSubjectForIntent(intent);
@@ -236,6 +237,7 @@ export default function PosTemplateSetupColumn({
                         intent,
                         displayLabel: merged.displayLabel,
                         type: merged.type,
+                        destinationFieldId: merged.destinationFieldId,
                     });
                 }
                 return merged;

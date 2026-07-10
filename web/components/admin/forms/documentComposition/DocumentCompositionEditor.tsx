@@ -22,7 +22,7 @@ import {
 } from "@/lib/forms/documentCompositionAuthoring";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { useFormSchemaFieldAuthoring } from "@/lib/forms/useFormSchemaFieldAuthoring";
-import { OPERATIONAL_FORM_SYSTEM_FIELDS } from "@/lib/forms/systemFieldRegistry";
+import { useFormSystemFieldPicker } from "@/lib/fields/useFormSystemFieldPicker";
 import { customUnmappedTextField, formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
 import {
     opGroupedSurface,
@@ -58,7 +58,8 @@ export function DocumentCompositionEditor({
     const composition = resolveDocumentComposition(schema);
     const sortedBlocks = sortDocumentBlocks(composition.blocks);
     const fieldRegions = listFieldRegionBlocks(composition);
-    const fieldAuthoring = useFormSchemaFieldAuthoring(schema, onChange);
+    const { systemFields, loading: pickerLoading, error: pickerError } = useFormSystemFieldPicker();
+    const fieldAuthoring = useFormSchemaFieldAuthoring(schema, onChange, { systemFields });
 
     const applyComposition = (next: DocumentComposition) => {
         onChange(patchSchemaComposition(schema, next));
@@ -121,7 +122,7 @@ export function DocumentCompositionEditor({
 
     const addFieldToRegion = (regionId: string) => {
         const used = new Set(schema.fields.map((f) => f.id));
-        const nextSys = OPERATIONAL_FORM_SYSTEM_FIELDS.find((e) => !used.has(e.field_key));
+        const nextSys = systemFields.find((e) => !used.has(e.field_key));
         const f = nextSys ? formFieldFromRegistryEntry(nextSys, {}) : customUnmappedTextField();
         const sec0 = schema.sections[0] ?? { id: "main", title: "Questions", field_ids: [] as string[] };
         const nextComp = addFieldIdToRegion(composition, regionId, f.id);
@@ -163,6 +164,11 @@ export function DocumentCompositionEditor({
     return (
         <div className="space-y-2" data-testid="document-composition-editor">
             <p className={opMetadata}>{COMPOSITION_BLOCK_COPY.workspaceLead}</p>
+            {pickerError ?
+                <p className="text-xs text-amber-800" data-testid="form-field-picker-load-error" role="status">
+                    {pickerError}
+                </p>
+            :   null}
 
             <div className="space-y-2">
                 {sortedBlocks.map((block) => {
@@ -213,7 +219,9 @@ export function DocumentCompositionEditor({
                                                         locked={fieldAuthoring.isTypeLocked(entry, custom)}
                                                         kind={fieldAuthoring.uiKindForField(field)}
                                                         pickerValue={fieldAuthoring.pickerValueForField(field)}
-                                                        systemFields={OPERATIONAL_FORM_SYSTEM_FIELDS}
+                                                        systemFields={systemFields}
+                                                        pickerLoading={pickerLoading}
+                                                        pickerError={pickerError}
                                                         takenFieldIds={fieldAuthoring.takenIdsForIndex(idx)}
                                                         onPickerChange={fieldAuthoring.handlePickerChange}
                                                         onFieldChange={fieldAuthoring.setFieldAt}
