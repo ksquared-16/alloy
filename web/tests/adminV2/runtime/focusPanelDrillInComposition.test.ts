@@ -246,12 +246,16 @@ describe("Add Field / centered drill-in composer wiring", () => {
         expect(canvas).toContain("data-fp-composer-depth-active");
     });
 
-    it("anchors the elevated drill-in card to the visible composer canvas (no cutoff)", () => {
-        expect(runtimeCss).toContain('[data-fp-composer-depth-active="true"]');
-        expect(runtimeCss).toContain("min-height: min(360px, calc(75vh - 48px))");
-        expect(runtimeCss).toContain("max-height: min(75vh, calc(100dvh - 120px))");
+    it("vertically centers the elevated drill-in inside the visible composer body", () => {
+        expect(runtimeCss).toContain(".alloy-os-fp-composer__body");
+        expect(runtimeCss).toContain("top: 50%");
+        expect(runtimeCss).toContain("transform: translate(-50%, -50%)");
+        expect(runtimeCss).toContain("max-height: min(75vh, calc(100% - 32px), calc(100dvh - 120px))");
         expect(runtimeCss).not.toContain("max-height: min(calc(100% - 44px)");
-        expect(runtimeCss).not.toContain("position: static");
+        // Grid is static only inside the composer body — re-parents abspos to the viewport.
+        expect(runtimeCss).toMatch(
+            /\[data-fp-composer-depth-active="true"\][\s\S]*\.alloy-os-fp-composer__body[\s\S]*position: static/,
+        );
     });
 });
 
