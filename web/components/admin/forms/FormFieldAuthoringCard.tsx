@@ -33,6 +33,9 @@ export type FormFieldAuthoringCardProps = {
     kind: UiScalarKind;
     pickerValue: string;
     systemFields: readonly SystemFieldRegistryEntry[];
+    /** Tenant field_definitions still loading — platform fields remain listed. */
+    pickerLoading?: boolean;
+    pickerError?: string | null;
     takenFieldIds: Set<string>;
     onPickerChange: (index: number, value: string) => void;
     onFieldChange: (index: number, next: FormField) => void;
@@ -62,6 +65,8 @@ export function FormFieldAuthoringCard({
     kind,
     pickerValue,
     systemFields,
+    pickerLoading = false,
+    pickerError = null,
     takenFieldIds,
     onPickerChange,
     onFieldChange,
@@ -162,6 +167,8 @@ export function FormFieldAuthoringCard({
                                 value={pickerValue}
                                 onChange={(e) => onPickerChange(index, e.target.value)}
                                 data-testid={`form-field-prefill-${field.id}`}
+                                aria-busy={pickerLoading || undefined}
+                                title={pickerLoading ? "Loading organization fields…" : undefined}
                             >
                                 {systemFieldGroups.map((group) => (
                                     <optgroup key={group.id} label={group.label}>
@@ -184,6 +191,11 @@ export function FormFieldAuthoringCard({
                                     <option value="__custom">{FIELD_AUTHORING_COPY.customField}</option>
                                 </optgroup>
                             </select>
+                            {pickerError ?
+                                <p className="text-[11px] text-amber-800" data-testid={`form-field-picker-error-${field.id}`}>
+                                    {pickerError}
+                                </p>
+                            :   null}
                         </label>
                         {field.type === "select" ?
                             <label className="block space-y-0.5 sm:col-span-2">

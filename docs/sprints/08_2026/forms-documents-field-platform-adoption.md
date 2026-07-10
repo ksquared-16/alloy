@@ -515,3 +515,140 @@ Evidence-based order (adjust after P0 spike):
 ---
 
 *Audit complete. No product code changed. Document not committed — awaiting review.*
+
+---
+
+## 20. Implementation closeout — P0 / P1 / P1b (2026-07-10)
+
+**Branch:** `feat/field-platform-forms-documents-adoption`  
+**Audit commit:** `7f85ae0df` — `docs(fields): audit Forms and Documents consumer adoption`  
+**Rebase base:** `964748cac` (`origin/staging` at implementation start)  
+**Product code:** uncommitted — awaiting review (per sprint instructions)
+
+### P0 capability declaration (`forms_documents` / `FORMS_DOCUMENTS_CAPABILITY`)
+
+| Gate | Allowed |
+| --- | --- |
+| Provider kinds (picker + publish) | `business_field`, `platform_field` |
+| Output shapes | `scalar` only |
+| Relationship leaves | **excluded** |
+| Collections | **excluded** |
+| Calculated fields | **excluded** |
+| Runtime signals | **excluded** |
+| Legacy-only providers | picker excluded, publish/hydration via compat matrix |
+
+Consumer surface constant: `FORMS_DOCUMENTS_CONSUMER = "forms"` (shared with `documents` via `FORMS_DOCUMENTS_CAPABILITY`).
+
+### Canonical derivation source map
+
+| Source module | Role |
+| --- | --- |
+| `canonicalFormsProviderDerivation.ts` | Derives scalar seeds from platform catalog + legacy compat |
+| `field_definitions` (org API) | Primary tenant business fields |
+| `platformFieldCatalog.ts` | Scalar platform_field seeds for picker entity grains |
+| `fieldRegistryReferenceMatrix.ts` | Identity bridge — not ownership |
+| `formsLegacyCompatibility.ts` | Explicit legacy system-field matrix |
+| `consumerProviderCapabilities.ts` | P0 exclusion gates |
+| `formsProviderEligibility.ts` | Distinguishable picker/publish/resolvable reasons |
+
+### Before / after picker flow
+
+**Before:** `DocumentCompositionEditor` → `OPERATIONAL_FORM_SYSTEM_FIELDS` (static) → `useFormSchemaFieldAuthoring` → `field_source`.
+
+**After:** `DocumentCompositionEditor` → `useFormSystemFieldPicker` (fetch `field_definitions`) → `buildFormSystemFieldPicker` → `filterFormsDocumentsDataProviders` → `providerToFormRegistryEntry` → `useFormSchemaFieldAuthoring` → unchanged `field_source` shape via `formFieldFromRegistryEntry` / `canonicalProviderToFormFieldSource`.
+
+`OPERATIONAL_FORM_SYSTEM_FIELDS` remains legacy compat + gap fill only.
+
+### Binding conversion design
+
+| Helper | Direction |
+| --- | --- |
+| `canonicalProviderToFormFieldSource` | Canonical provider → persisted `field_source` (storage vocabulary preserved) |
+| `formFieldSourceToCanonicalProvider` | Persisted `field_source` → canonical ref + compat status |
+| `expandFieldDefinitionKeySetForFormsValidation` | Registry keys ↔ Forms alias keys at publish |
+
+No new required `provider_ref` field in published schemas.
+
+### Legacy system-field compatibility matrix
+
+See `web/lib/fields/formsLegacyCompatibility.ts` (`FORMS_LEGACY_COMPATIBILITY_MATRIX`).
+
+| Class | Examples |
+| --- | --- |
+| `alias_to_canonical` | `guardian_email` → `person.email`, `child_first_name` → `customer_member.first_name` |
+| `exact_canonical` | (none at storage grain — Forms uses alias keys) |
+| `legacy_load_only` | `enrollment_acknowledgement_signature` (signature artifact, not data provider) |
+| `obsolete_renderable` | `child_room_cohort` |
+| `unsupported` | unknown ids |
+
+### Publish validation flow (P1b)
+
+`validatePosConnectedFieldBinding` / `validateFormsDocumentsFieldBindingsAtPublish`:
+
+1. Walk value-bearing fields (incl. groups)
+2. Resolve `field_source` via `formFieldSourceToCanonicalProvider`
+3. Expand org registry keys to Forms vocabulary aliases
+4. Accept legacy compat entries that `publishes: true`
+5. Gate canonical providers through `evaluateFormsProviderEligibility`
+6. Block unknown / unsupported kinds / missing controls
+
+POS-connected surfaces still skip enforcement when marker absent (`evaluatePosConnectedBinding`).
+
+### Choice-option behavior
+
+- Tenant `field_definitions` with `config.option_set_key` → `default_option_set_key` on registry entry (canonical)
+- Legacy inline `select_options_lines` preserved on compat entries without option sets
+- Form-local answer choices (`static_options` on custom fields) remain independent of canonical choice metadata
+
+### Packet compatibility evidence
+
+`tests/pos/packet/packetFieldPlan.test.ts` — **green**. Picker migration does not alter `field_source.entity_type` / `field_key` persistence; dedupe keys unchanged.
+
+### Processing boundary evidence
+
+No imports from Processing catalogs into Forms authoring. Submission `field_source` shape unchanged. Processing dialect mismatch remains documented for P4.
+
+### Delete-safety remaining risk
+
+`fieldDeleteSafety` does not scan `form_definition_versions.schema_json`. Contract test: `tests/fields/formsDocumentsDeleteSafetyContract.test.ts`.
+
+### Tests added
+
+- `tests/fields/canonicalFormsProviderDerivation.test.ts`
+- `tests/fields/formsFieldSourceBinding.test.ts`
+- `tests/fields/formsLegacyCompatibility.test.ts`
+- `tests/fields/formsDocumentsDeleteSafetyContract.test.ts`
+- `tests/forms/formsDocumentsPublishValidation.test.ts`
+- Updated `tests/fields/formFieldRegistryPicker.test.ts`
+
+### Validation results
+
+- `NODE_OPTIONS=--max-old-space-size=8192 npm run typecheck` — **pass**
+- Focused sprint tests — **pass** (41 tests in targeted suite)
+- Pre-existing baseline failure: `tests/forms/structuredFormSchemaEditor.test.tsx` (`form-add-question` vs `document-add-question-*`) — reproduces on staging without product changes
+
+### Deferred P2–P4
+
+| Phase | Scope |
+| --- | --- |
+| **P2** | Relationship-derived leaf authoring, repeatable sections, collection-bound sections |
+| **P3** | Canonical resolver convergence for Forms runtime |
+| **P4** | Processing field-platform migration, `document_field_definitions` bridge, full delete-safety indexing |
+
+### First-paint / loading behavior (hardening)
+
+| Concern | Behavior |
+| --- | --- |
+| Empty picker on first paint | **Fixed** — `buildFormSystemFieldPickerPlatformBaseline()` seeds synchronous platform-supported fields |
+| Tenant merge | Org `field_definitions` merge after fetch; canonical ref dedupe prevents duplicates |
+| Loading indicator | `aria-busy` on prefill select + workspace status when tenant fetch in flight |
+| API failure | Platform fields preserved; error banner shown; **no** `OPERATIONAL_FORM_SYSTEM_FIELDS` full-catalog fallback |
+| Option flicker | Stable sort by label; tenant merge updates labels in-place by canonical ref key |
+| Legacy gap fill | Operational catalog used only for hydration gaps **after** successful tenant merge |
+
+### Recommendation
+
+**Safe to merge** after review — product diff is scoped to picker derivation, binding adapters, publish validation, and first-paint hardening. Audit commit (`7f85ae0df` → rebased `56f05a9ac`) remains separate from product commit.
+
+**Next phase after merge:** P2 relationship-derived leaf authoring and repeatable sections (separate branch).
+

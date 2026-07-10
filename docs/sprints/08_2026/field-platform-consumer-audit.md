@@ -130,7 +130,7 @@ flowchart TB
 
 | Duplicate catalog / label layer | Path | Canonical alternative | Consumers affected |
 | --- | --- | --- | --- |
-| `OPERATIONAL_FORM_SYSTEM_FIELDS` | `web/lib/forms/systemFieldRegistry.ts` | `field_definitions` + `formFieldRegistryPicker.ts` | Forms, Documents, Processing |
+| `OPERATIONAL_FORM_SYSTEM_FIELDS` | `web/lib/forms/systemFieldRegistry.ts` | `canonicalFormsProviderDerivation` + `field_definitions` | Legacy compat only (Forms P0) |
 | `PROCESSING_BUILDER_CANONICAL_FIELDS` | `web/lib/forms/processingFormBuilderLibrary.ts` | Same registry picker | Processing |
 | `QUEUE_FIELD_CATALOG` | `web/lib/adminV2/settings/surfaces/compositionFieldAdapter.ts` | `canonicalBuilderFieldLibrary` / `platformFieldCatalog` | Surface Builder, Queue Rows, Focus Panel (nested) |
 | `queueRecordValidatorAllowList` | `web/lib/layout/queueRecordValidatorAllowList.ts` | Derived from resolver registry (partially in tests) | Queue Rows publish gate |
@@ -169,10 +169,10 @@ Only (1) is canonical per Configuration Workspace Doctrine.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Data Model** (reference) | `fieldCatalogForSettings` | Entity-owned catalog | `config.options` / option sets | View-only filter | `entityRelationshipCatalog` | `configurationEntityCatalog` | Full | **Reference** |
 | **Surface Builder** | Static `QUEUE_FIELD_CATALOG` + partial tenant defs | Hardcoded library cats | Not at config layer | Duplicated in static catalog | Concept paths / surface specs | Hardcoded | Shell only | **Low** |
-| **Forms Builder** | Legacy `OPERATIONAL_FORM_SYSTEM_FIELDS` (registry API unwired) | Forms-local groups | Static textarea; not `config.options` | Correctly excluded | Grain bridge exists, unused in UI | Hardcoded | Not adopted | **Low** |
+| **Forms Builder** | ~~Legacy catalog live~~ → `canonicalFormsProviderDerivation` + org `field_definitions` (P0 wired) | Forms-local groups (display) | Canonical option sets via registry; legacy inline preserved | Correctly excluded | Grain bridge via `formsFieldSourceBinding` | Hardcoded | Partial P0 | **Partial → improving** |
 | **Processing** | Hardcoded library + Forms `field_source` seam | Local folder rails | Registry metadata only | Not referenced | Heuristic mapping | Hardcoded | Not adopted | **Minimal** |
 | **Business Processes** | Catalog merge + partial `field_definitions` | Doctrine visibility classes | Not in picker | Excluded from picker | Filtered via doctrine | Partial tenant labels | Not adopted | **Partial** |
-| **Documents / Packets** | Same as Forms (legacy catalog) | Composition blocks, not DM categories | Static inline options | Correctly excluded | Entity binding via `field_source` | Hardcoded | Not adopted | **Low** |
+| **Documents / Packets** | Same picker path as Forms (P0 canonical derivation) | Composition blocks, not DM categories | Canonical option sets where bound | Correctly excluded | Entity binding via `field_source` | Hardcoded | Partial P0 | **Partial → improving** |
 | **Communications** | Hardcoded token catalog | Free-text template categories | Not consumed | Not integrated | Implicit dot paths | Hardcoded | Not adopted | **None** |
 | **Focus Panel** | Dual: concept tree (cards) + adapter (nested) | Hardcoded library cats | Renderer enums only | Not in picker | Concept branches | Hardcoded | Not adopted | **Low–partial** |
 | **Queue Rows** | Validator allow-list + static catalog + tenant defs | Three parallel taxonomies | Not at config | In static catalog | Contact-role refKeys | Multi-layer overrides | Not adopted | **Partial** |
