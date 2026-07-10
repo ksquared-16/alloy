@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  * existing Forms infrastructure. Idempotent — repeat calls return the existing form,
  * never a duplicate. No publish, no public link, no records, no matching.
  */
-export async function POST(_request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") return jsonError("Forbidden", 403);
@@ -27,9 +27,50 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const caseId = parseUuidParam(rawCaseId, "caseId");
     if (caseId instanceof NextResponse) return caseId;
 
+    let formNameOverride: string | null = null;
+    try {
+        const body = (await request.json()) as { form_name?: unknown };
+        if (typeof body.form_name === "string" && body.form_name.trim()) {
+            formNameOverride = body.form_name.trim();
+        }
+    } catch {
+        // Empty body is allowed — create uses stored preview name.
+    }
+
     const supabase = createAdminClient();
 
     try {
+        if (formNameOverride) {
+            const { data: caseRow, error: caseErr } = await supabase
+                .from("processing_cases")
+                .select("metadata")
+                .eq("org_id", ctx.orgId)
+                .eq("id", caseId)
+                .maybeSingle();
+            if (caseErr) throw new Error(caseErr.message);
+            if (!caseRow) return jsonError("Not found", 404);
+            const metadata =
+                caseRow.metadata && typeof caseRow.metadata === "object" && !Array.isArray(caseRow.metadata)
+                    ? (caseRow.metadata as Record<string, unknown>)
+                    : {};
+            const previewRaw = metadata.form_draft_preview;
+            if (previewRaw && typeof previewRaw === "object" && !Array.isArray(previewRaw)) {
+                await supabase
+                    .from("processing_cases")
+                    .update({
+                        metadata: {
+                            ...metadata,
+                            form_draft_preview: {
+                                ...(previewRaw as Record<string, unknown>),
+                                generated_form_name: formNameOverride,
+                            },
+                        },
+                    })
+                    .eq("org_id", ctx.orgId)
+                    .eq("id", caseId);
+            }
+        }
+
         const result = await createFormFromCaseDraft(makeCreateFormDepsFromSupabase(supabase), {
             orgId: ctx.orgId,
             caseId,

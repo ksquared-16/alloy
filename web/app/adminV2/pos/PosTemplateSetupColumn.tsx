@@ -48,6 +48,8 @@ import {
     type ReviewQuestionInput,
 } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import { detectionModeLabel } from "@/lib/pos/processingCase/formDraft/detectionModeLabel";
+import { proposeGeneratedFormName } from "@/lib/pos/documentInstanceNaming";
+import ProcessingNativeFormCreatingState from "./ProcessingNativeFormCreatingState";
 
 function formatWhen(iso: string | null | undefined): string {
     if (!iso) return "—";
@@ -119,6 +121,8 @@ export default function PosTemplateSetupColumn({
     const [pendingSaveBusy, setPendingSaveBusy] = useState(false);
     const pendingSaveLockRef = useRef(false);
     const [phase, setPhase] = useState<"review" | "generate">("review");
+    const [formName, setFormName] = useState("");
+    const [creatingPhase, setCreatingPhase] = useState(0);
 
     const clearSelection = () => {
         setSelectedQuestionId(null);
@@ -233,6 +237,40 @@ export default function PosTemplateSetupColumn({
         return { page: pendingManualRegion.page, ...rect };
     }, [pendingManualRegion, pageMaps]);
 
+    const summaryCounts = useMemo(() => {
+        let resolved = 0;
+        let processingOnly = 0;
+        let ignored = 0;
+        let unresolved = 0;
+        for (const q of reviewQuestions) {
+            if (q.ignored) {
+                ignored += 1;
+                continue;
+            }
+            const fieldKey = q.field_source?.field_key;
+            const hasBinding = Boolean(fieldKey && fieldKey !== "unmapped" && fieldKey !== "custom");
+            if (q.questionSubject === "processing_only") {
+                processingOnly += 1;
+            } else if (!hasBinding) {
+                unresolved += 1;
+            } else {
+                resolved += 1;
+            }
+        }
+        return { resolved, processingOnly, ignored, unresolved };
+    }, [reviewQuestions]);
+
+    const includedQuestions = useMemo(() => {
+        return expandQuestionsForDraftSave(reviewQuestions).map((f) => ({
+            label: f.label,
+            section: f.section,
+            destination:
+                f.field_source?.field_key && f.field_source.field_key !== "custom" && f.field_source.field_key !== "unmapped"
+                    ? f.field_source.field_key
+                    : "Form field only",
+        }));
+    }, [reviewQuestions]);
+
     if (!detail) return null;
 
     const created = detail.formDraftCreated;
@@ -252,28 +290,7 @@ export default function PosTemplateSetupColumn({
             ? "strong"
             : "weak";
     const hasRegions = pageMaps.some((p) => p.rects.length > 0);
-
-    const summaryCounts = useMemo(() => {
-        let resolved = 0;
-        let processingOnly = 0;
-        let ignored = 0;
-        for (const q of reviewQuestions) {
-            if (q.ignored) {
-                ignored += 1;
-                continue;
-            }
-            if (q.questionSubject === "processing_only") processingOnly += 1;
-            else resolved += 1;
-        }
-        return { resolved, processingOnly, ignored };
-    }, [reviewQuestions]);
-
-    const includedQuestions = useMemo(() => {
-        return expandQuestionsForDraftSave(reviewQuestions).map((f) => ({
-            label: f.label,
-            section: f.section,
-        }));
-    }, [reviewQuestions]);
+    const sourceFilename = primary?.display.label ?? docTitle;
 
     // ---- question-list editing ----
     const updateQuestion = (id: string, patch: Partial<ReviewQuestionInput>) =>
@@ -462,20 +479,28 @@ export default function PosTemplateSetupColumn({
     };
 
     const handleCreate = async () => {
+        const trimmedFormName = formName.trim();
+        if (!trimmedFormName) {
+            setErr("Enter a form name before generating.");
+            return;
+        }
         const expanded = expandQuestionsForDraftSave(reviewQuestionsRef.current);
         if (expanded.length === 0) {
             setErr("Add at least one active question before generating the form.");
             return;
         }
         setCreating(true);
+        setCreatingPhase(0);
         setErr(null);
         try {
+            setCreatingPhase(1);
             const saveRes = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
-                    title: draft?.title || docTitle,
+                    title: docTitle,
+                    form_name: trimmedFormName,
                     fields: expanded.map((f) => ({
                         label: f.label,
                         type: f.type,
@@ -492,9 +517,16 @@ export default function PosTemplateSetupColumn({
             const saveBody = (await saveRes.json().catch(() => ({}))) as { error?: string };
             if (!saveRes.ok) throw new Error(saveBody.error || `Couldn't save questions (${saveRes.status})`);
 
-            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/create`, { method: "POST", credentials: "same-origin" });
+            setCreatingPhase(2);
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/create`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ form_name: trimmedFormName }),
+            });
             const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string }; error?: string };
             if (!res.ok) throw new Error(body.error || `Couldn't create the form (${res.status})`);
+            setCreatingPhase(3);
             await reload();
             const formId = body.data?.form_id ?? null;
             if (formId && onOpenForm) onOpenForm(formId);
@@ -553,65 +585,100 @@ export default function PosTemplateSetupColumn({
                 </div>
             </div>
 
-            {phase === "generate" && !created ? (
+            {creating ? (
+                <ProcessingNativeFormCreatingState
+                    phaseIndex={creatingPhase}
+                    error={err}
+                    onRetry={err ? () => void handleCreate() : undefined}
+                />
+            ) : phase === "generate" && !created ? (
                 <>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                    <div className="grid gap-3 lg:grid-cols-3">
-                        <SummaryPanel title="Summary">
-                            <SummaryRow label="Resolved" value={summaryCounts.resolved} tone="pine" />
-                            <SummaryRow label="Processing only" value={summaryCounts.processingOnly} tone="midnight" />
-                            <SummaryRow label="Ignored" value={summaryCounts.ignored} tone="muted" />
-                        </SummaryPanel>
-                        <SummaryPanel title="What will be included">
-                            {includedQuestions.length === 0 ? (
-                                <p className="text-[11px] text-alloy-midnight/40">No active questions to include.</p>
-                            ) : (
-                                <ul className="space-y-1.5">
-                                    {includedQuestions.map((q) => (
-                                        <li key={`${q.section}-${q.label}`} className="flex items-start gap-2 text-[11px]" data-testid={`generate-included-${q.label.replace(/\s+/g, "-").toLowerCase()}`}>
-                                            <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-bend-pine" aria-hidden />
-                                            <span>
-                                                <span className="font-medium text-alloy-midnight">{q.label}</span>
-                                                <span className="block text-alloy-midnight/40">{q.section}</span>
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </SummaryPanel>
-                        <SummaryPanel title="Document details">
-                            <dl className="space-y-1.5 text-[11px]">
-                                <DetailRow label="Filename" value={docTitle} />
-                                <DetailRow label="Detection mode" value={detectionModeLabel(draft)} />
-                                <DetailRow
-                                    label="Detection quality"
-                                    value={quality === "strong" ? "High" : quality === "weak" ? "Needs review" : "Low"}
+                    <header className="mb-4">
+                        <h2 className="text-[15px] font-semibold text-alloy-midnight">Ready to create your native form</h2>
+                        <p className="mt-1 text-[12px] text-alloy-midnight/55">Review what Alloy will include before generating.</p>
+                    </header>
+
+                    <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-white p-4">
+                        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Form setup</h3>
+                        <div className="mt-3 space-y-3">
+                            <label className="block">
+                                <span className="mb-1 block text-[11px] font-semibold text-alloy-midnight">Form name</span>
+                                <input
+                                    type="text"
+                                    value={formName}
+                                    onChange={(e) => setFormName(e.target.value)}
+                                    className="w-full rounded-lg border border-alloy-stone/20 px-3 py-2 text-[12px] outline-none focus:border-alloy-bend-pine/40"
+                                    data-testid="processing-generate-form-name"
                                 />
-                                <DetailRow label="Sections" value={String(sectionCount)} />
-                                <DetailRow label="Questions" value={String(activeFieldCount)} />
-                            </dl>
-                        </SummaryPanel>
-                    </div>
+                            </label>
+                            <DetailRow label="Source document" value={sourceFilename} />
+                            <DetailRow label="Document display name" value={docTitle} />
+                            <DetailRow label="Detected document type" value={detectionModeLabel(draft)} />
+                        </div>
+                    </section>
+
+                    <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.03] p-3">
+                        <div className="flex flex-wrap gap-3">
+                            <SummaryRow label="Mapped" value={summaryCounts.resolved} tone="pine" />
+                            <SummaryRow label="Processing only" value={summaryCounts.processingOnly} tone="midnight" />
+                            <SummaryRow label="Unresolved" value={summaryCounts.unresolved} tone="muted" />
+                            <SummaryRow label="Ignored" value={summaryCounts.ignored} tone="muted" />
+                        </div>
+                        {summaryCounts.unresolved > 0 ? (
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2">
+                                <p className="text-[11px] text-amber-900">
+                                    {summaryCounts.unresolved} question{summaryCounts.unresolved === 1 ? "" : "s"} still need mapping
+                                </p>
+                                <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
+                                    Back to review
+                                </button>
+                            </div>
+                        ) : null}
+                    </section>
+
+                    <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-white p-4">
+                        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Included fields</h3>
+                        {includedQuestions.length === 0 ? (
+                            <p className="mt-2 text-[11px] text-alloy-midnight/40">No active questions to include.</p>
+                        ) : (
+                            <ul className="mt-2 space-y-1.5">
+                                {includedQuestions.map((q) => (
+                                    <li key={`${q.section}-${q.label}`} className="flex items-start justify-between gap-3 text-[11px]" data-testid={`generate-included-${q.label.replace(/\s+/g, "-").toLowerCase()}`}>
+                                        <span className="font-medium text-alloy-midnight">{q.label}</span>
+                                        <span className="shrink-0 text-alloy-midnight/45">{q.destination}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
+
+                    <section className="rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.02] p-3 text-[11px]">
+                        <h3 className="font-semibold uppercase tracking-wide text-alloy-midnight/35">Source details</h3>
+                        <dl className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                            <DetailRow label="Source filename" value={sourceFilename} />
+                            <DetailRow label="Document type" value={detectionModeLabel(draft)} />
+                            <DetailRow label="Pages" value={String(draft.pdf_pages?.length ?? "—")} />
+                            <DetailRow label="Questions detected" value={String(activeFieldCount)} />
+                            <DetailRow label="Extraction quality" value={quality === "strong" ? "High" : quality === "weak" ? "Needs review" : "Low"} />
+                        </dl>
+                    </section>
                 </div>
                 <div className="shrink-0 border-t border-alloy-stone/12 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
                     {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
-                    <div className="flex items-center justify-between gap-3">
-                        <p className="min-w-0 text-[10px] text-alloy-midnight/40">
-                            Alloy will create an unpublished native form from your reviewed questions.
-                        </p>
-                        <div className="flex shrink-0 items-center gap-2">
-                            <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
-                                Back to review
-                            </button>
-                            <button
-                                type="button"
-                                disabled={creating || busy || activeFieldCount === 0}
-                                onClick={() => void handleCreate()}
-                                className={WS_ACTION_PRIMARY}
-                            >
-                                {creating ? "Generating…" : "Generate native form"}
-                            </button>
-                        </div>
+                    <div className="flex items-center justify-end gap-2">
+                        <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
+                            Back to review
+                        </button>
+                        <button
+                            type="button"
+                            disabled={creating || busy || activeFieldCount === 0 || !formName.trim()}
+                            onClick={() => void handleCreate()}
+                            className={WS_ACTION_PRIMARY}
+                            data-testid="processing-generate-native-form"
+                        >
+                            Generate native form
+                        </button>
                     </div>
                 </div>
                 </>
@@ -845,7 +912,10 @@ export default function PosTemplateSetupColumn({
                             <button
                                 type="button"
                                 disabled={activeFieldCount === 0}
-                                onClick={() => setPhase("generate")}
+                                onClick={() => {
+                                    setFormName((cur) => cur.trim() || proposeGeneratedFormName(docTitle));
+                                    setPhase("generate");
+                                }}
                                 className={WS_ACTION_PRIMARY}
                             >
                                 Continue to generate

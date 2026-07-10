@@ -6,6 +6,7 @@ import {
     PROCESSING_DEV_CLEANUP_CONFIRM_TOKEN,
     applyProcessingDevCleanup,
     assertProcessingDevCleanupAllowed,
+    countRemainingProcessingArtifacts,
     planProcessingDevCleanup,
 } from "@/lib/pos/processingDevCleanup";
 
@@ -27,8 +28,13 @@ export async function POST(request: NextRequest) {
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") return jsonError("Forbidden", 403);
 
-    const body = (await request.json().catch(() => ({}))) as { apply?: boolean; confirm?: string };
+    const body = (await request.json().catch(() => ({}))) as {
+        apply?: boolean;
+        confirm?: string;
+        clear_all?: boolean;
+    };
     const apply = body.apply === true;
+    const clearAllForms = body.clear_all === true;
     if (apply && body.confirm !== PROCESSING_DEV_CLEANUP_CONFIRM_TOKEN) {
         return jsonError(`Confirmation token required: ${PROCESSING_DEV_CLEANUP_CONFIRM_TOKEN}`, 400);
     }
@@ -36,10 +42,11 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
     try {
         if (!apply) {
-            const plan = await planProcessingDevCleanup(supabase, ctx.orgId);
-            return jsonData(plan);
+            const plan = await planProcessingDevCleanup(supabase, ctx.orgId, { clearAllForms });
+            const remaining = await countRemainingProcessingArtifacts(supabase, ctx.orgId);
+            return jsonData({ ...plan, remaining });
         }
-        const result = await applyProcessingDevCleanup(supabase, ctx.orgId);
+        const result = await applyProcessingDevCleanup(supabase, ctx.orgId, { clearAllForms });
         return jsonData(result);
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Cleanup failed" }, { status: 500 });

@@ -2,6 +2,7 @@
  * Draft helpers for stage_operating_plan_v1 editor.
  */
 
+import { MANUAL_AD_HOC_WORK_DEFINITION_KEY } from "@/lib/admin/operationalWork/operationalWorkDedupe";
 import type {
     StageCompletionOutcomeV1,
     StageOperatingPlanV1,
@@ -49,10 +50,16 @@ export function stageOperatingPlanDraftFromSaved(
     };
 }
 
+export type StageOperatingPlanDraftPersistOptions = {
+    /** When false, skip work-definition validation (editor dirty-state only). Default true. */
+    validate?: boolean;
+};
+
 export function stageOperatingPlanDraftToPersisted(
     draft: StageOperatingPlanEditorDraft,
     stageKey: string,
     lifecycleKey: string = ENROLLMENT_PROCESS_KEY,
+    options?: StageOperatingPlanDraftPersistOptions,
 ): StageOperatingPlanV1 | null {
     const sk = stageKey.trim();
     if (!sk) return null;
@@ -75,10 +82,13 @@ export function stageOperatingPlanDraftToPersisted(
     const purpose = normalized.purpose.trim();
     if (purpose) plan.purpose = purpose;
 
-    const validation = validateStageOperatingPlanWorkDefinitions(plan);
-    if (!validation.ok) {
-        const first = validation.issues[0]!;
-        throw new Error(first.message);
+    const shouldValidate = options?.validate !== false;
+    if (shouldValidate) {
+        const validation = validateStageOperatingPlanWorkDefinitions(plan);
+        if (!validation.ok) {
+            const first = validation.issues[0]!;
+            throw new Error(first.message);
+        }
     }
 
     return parseStageOperatingPlanV1(plan);
@@ -89,7 +99,9 @@ export function stageOperatingPlanDraftDirty(
     draft: StageOperatingPlanEditorDraft,
     stageKey: string,
 ): boolean {
-    const persisted = stageOperatingPlanDraftToPersisted(draft, stageKey);
+    const persisted = stageOperatingPlanDraftToPersisted(draft, stageKey, ENROLLMENT_PROCESS_KEY, {
+        validate: false,
+    });
     const savedNorm = saved ? parseStageOperatingPlanV1(saved) : null;
     return JSON.stringify(persisted) !== JSON.stringify(savedNorm);
 }
@@ -101,6 +113,7 @@ export function newWorkTemplateDraft(index: number): StageWorkTemplateV1 {
         required: false,
         due_policy: { kind: "offset_days", days: 1 },
         owner_strategy: "record_owner",
+        work_definition_key: MANUAL_AD_HOC_WORK_DEFINITION_KEY,
     };
 }
 

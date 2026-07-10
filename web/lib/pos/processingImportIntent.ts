@@ -1,0 +1,58 @@
+/**
+ * Processing import intent vocabulary — persisted on case/document metadata.
+ * Do not infer intent from UI state after upload.
+ */
+
+export type ProcessingImportIntent =
+    | "generate_form"
+    | "process_information"
+    | "store_document"
+    | "packet_source";
+
+export const PROCESSING_IMPORT_INTENT_OPTIONS: ReadonlyArray<{
+    value: ProcessingImportIntent;
+    label: string;
+    description: string;
+    available: boolean;
+}> = [
+    {
+        value: "generate_form",
+        label: "Create a native form",
+        description: "Detect questions, review mappings, and generate an editable Alloy form.",
+        available: true,
+    },
+    {
+        value: "process_information",
+        label: "Process information",
+        description: "Extract information for review and eventual record updates.",
+        available: true,
+    },
+    {
+        value: "store_document",
+        label: "Store on a record",
+        description: "Upload and attach the document without generating a form.",
+        available: true,
+    },
+    {
+        value: "packet_source",
+        label: "Add to a packet",
+        description: "Coming soon — packet intake is not available in V1.",
+        available: false,
+    },
+] as const;
+
+export function isProcessingImportIntent(value: unknown): value is ProcessingImportIntent {
+    return (
+        value === "generate_form" ||
+        value === "process_information" ||
+        value === "store_document" ||
+        value === "packet_source"
+    );
+}
+
+export function processingIntentMetadata(intent: ProcessingImportIntent): Record<string, unknown> {
+    return {
+        processing_intent: intent,
+        import_purpose: intent,
+    };
+}

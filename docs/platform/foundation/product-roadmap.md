@@ -2,6 +2,8 @@
 
 **Status:** Canonical (June 2026 rebaseline). Sequencing and gaps — not a commit log.
 
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The "Future" framing of **Attendance/labor** and **Billing/payments** below is stale for the *backend truth-flow*: the L1–L4 operational spine (config rules, agreements/placements/schedule assignments, immutable attendance facts, expected/actual occupancy & staffing read models) and the L4→L5 Operational Consumption runtime (Slices 1–4, draft obligations) are **built** — see [`../operational-expansion-phase1-architecture-rfc.md`](../operational-expansion-phase1-architecture-rfc.md) §1 and the module docs (`../modules/attendance-system.md`, `../modules/billing-financials-platform.md`, `../modules/operational-consumption-platform.md`). What remains *future* is the operator-facing product (surfaces, Posting/authoritative money, staffing supply, forecasting) — the Implementation Waves in the RFC §6. Treat the RFC as canonical for expansion sequencing.
+
 For capability inventory see `platform-capabilities.md`. For shipped milestones see `release-history.md`.
 
 ---

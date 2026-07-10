@@ -9,7 +9,6 @@ import {
 } from "@/lib/pos/processingPublicLinkMetadata";
 import { resolveProcessingPublicSlug } from "@/lib/pos/processingPublicRuntime";
 import { safeParseFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
-import { createBlankSchema } from "@/lib/forms/formBuilderSchema";
 
 export interface ProcessingFormRow {
     id: string;
@@ -88,17 +87,24 @@ export function useProcessingFormApi() {
                 const body = (await res.json()) as { data?: ProcessingFormRow & { versions?: ProcessingFormVersionRow[] } };
                 const formRow = body.data ?? null;
                 const versions = formRow?.versions ?? [];
-                if (versions.length === 0) return { schema: null, editVersionId: null, state: "empty", formRow };
+                const hasPublishedFromVersions = versions.some((v) => v.status === "published");
+                const enrichedFormRow = formRow
+                    ? {
+                          ...formRow,
+                          has_published_version: Boolean(formRow.has_published_version ?? hasPublishedFromVersions),
+                      }
+                    : null;
+                if (versions.length === 0) return { schema: null, editVersionId: null, state: "empty", formRow: enrichedFormRow };
 
                 const latest = [...versions].sort((a, b) => b.version_number - a.version_number)[0]!;
                 const vRes = await fetch(`/api/admin/forms/${formId}/versions/${latest.id}`, { credentials: "same-origin" });
                 if (!vRes.ok) throw new Error(`Request failed (${vRes.status})`);
                 const vBody = (await vRes.json()) as { data?: { schema_json?: unknown } };
                 const parsed = safeParseFormSchema(vBody.data?.schema_json);
-                if (!parsed.success) return { schema: null, editVersionId: null, state: "empty", formRow };
+                if (!parsed.success) return { schema: null, editVersionId: null, state: "empty", formRow: enrichedFormRow };
 
                 if (latest.status === "draft") {
-                    return { schema: parsed.data, editVersionId: latest.id, state: "ready", formRow };
+                    return { schema: parsed.data, editVersionId: latest.id, state: "ready", formRow: enrichedFormRow };
                 }
 
                 const draftRes = await fetch(`/api/admin/forms/${formId}/versions`, {
@@ -108,14 +114,14 @@ export function useProcessingFormApi() {
                     body: JSON.stringify({ schema_json: parsed.data }),
                 });
                 if (!draftRes.ok) {
-                    return { schema: parsed.data, editVersionId: null, state: "ready", formRow };
+                    return { schema: parsed.data, editVersionId: null, state: "ready", formRow: enrichedFormRow };
                 }
                 const draftBody = (await draftRes.json()) as { data?: { id?: string } };
                 return {
                     schema: parsed.data,
                     editVersionId: draftBody.data?.id ?? null,
                     state: "ready",
-                    formRow,
+                    formRow: enrichedFormRow,
                 };
             } catch {
                 return { schema: null, editVersionId: null, state: "error", formRow: null };
@@ -184,57 +190,39 @@ export function useProcessingFormApi() {
             origin?: "blank" | "document" | "packet";
         }): Promise<string | null> => {
             const name = input.name.trim();
+            if (!name) {
+                setListErr("Form name is required");
+                return null;
+            }
             setListErr(null);
             try {
-                const brandingMeta = brandingMetadataPatch({
-                    brand_name: input.brand_name?.trim() ?? "",
-                    accent_color: input.accent_color ?? "#00A283",
-                    logo_url: null,
-                    description: input.description?.trim() ?? "",
-                });
-                const defRes = await fetch("/api/admin/forms", {
+                const res = await fetch("/api/admin/forms/blank", {
                     method: "POST",
                     credentials: "same-origin",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         name,
-                        kind: "center",
                         description: input.description?.trim() || null,
-                        metadata: { source: "processing", origin: input.origin ?? "blank", ...brandingMeta },
-                    }),
-                });
-                const defBody = (await defRes.json().catch(() => ({}))) as { data?: { id: string }; error?: string };
-                if (!defRes.ok || !defBody.data?.id) throw new Error(defBody.error || `Create failed (${defRes.status})`);
-                const formId = defBody.data.id;
-                const blankSchema = createBlankSchema(name);
-                const versionRes = await fetch(`/api/admin/forms/${formId}/versions`, {
-                    method: "POST",
-                    credentials: "same-origin",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ schema_json: blankSchema }),
-                });
-                const versionBody = (await versionRes.json().catch(() => ({}))) as { data?: { id?: string }; error?: string };
-                if (!versionRes.ok || !versionBody.data?.id) {
-                    throw new Error(versionBody.error || `Failed to create initial form version (${versionRes.status})`);
-                }
-                await syncFormStats(formId, blankSchema, {
-                    description: input.description?.trim() || null,
-                    branding: {
                         brand_name: input.brand_name?.trim() ?? "",
                         accent_color: input.accent_color ?? "#00A283",
-                        logo_url: null,
-                        description: input.description?.trim() ?? "",
-                    },
-                    existingMeta: { source: "processing", origin: input.origin ?? "blank" },
+                        origin: input.origin ?? "blank",
+                    }),
                 });
+                const body = (await res.json().catch(() => ({}))) as {
+                    data?: { form_id?: string };
+                    error?: string;
+                };
+                if (!res.ok || !body.data?.form_id) {
+                    throw new Error(body.error || `Create failed (${res.status})`);
+                }
                 await loadForms();
-                return formId;
+                return body.data.form_id;
             } catch (e) {
                 setListErr(e instanceof Error ? e.message : "Failed to create form");
                 return null;
             }
         },
-        [loadForms, syncFormStats]
+        [loadForms]
     );
 
     const saveDraft = useCallback(

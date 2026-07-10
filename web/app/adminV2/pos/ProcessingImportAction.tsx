@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Import existing form — a Work action, not navigation.
- * Uploads PDF, opens processing case for review. Engine path unchanged.
+ * Import document — a Work action, not navigation.
+ * Opens intent modal, uploads with explicit purpose metadata, opens processing case.
  */
 
 import { useRef, useState, type DragEvent } from "react";
@@ -10,7 +10,10 @@ import { FileUp } from "lucide-react";
 import clsx from "clsx";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import { uploadProcessingDocument } from "@/lib/pos/processingDocumentUpload";
+import { processingImportAcceptList } from "@/lib/pos/processingSourceCapabilities";
 import ProcessingActionCard from "./ProcessingActionCard";
+import ProcessingImportIntentModal from "./ProcessingImportIntentModal";
 
 export default function ProcessingImportAction({
     onImported,
@@ -25,30 +28,33 @@ export default function ProcessingImportAction({
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [dragActive, setDragActive] = useState(false);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [pendingFile, setPendingFile] = useState<File | null>(null);
 
-    async function handleFile(file: File) {
+    function openModal(file: File | null = null) {
+        setPendingFile(file);
+        setModalOpen(true);
+        setError(null);
+    }
+
+    async function submitImport(payload: {
+        file: File;
+        intent: import("@/lib/pos/processingImportIntent").ProcessingImportIntent;
+        displayName: string;
+    }) {
         setUploading(true);
         setError(null);
         try {
-            const form = new FormData();
-            form.append("file", file);
-            form.append("open_processing_case", "true");
-            const res = await fetch("/api/admin/documents/upload", {
-                method: "POST",
-                credentials: "same-origin",
-                body: form,
+            const body = await uploadProcessingDocument({
+                file: payload.file,
+                intent: payload.intent,
+                displayName: payload.displayName,
             });
-            const body = (await res.json().catch(() => ({}))) as {
-                error?: string;
-                processing_case_id?: string | null;
-            };
-            if (!res.ok) throw new Error(body.error || `Upload failed (${res.status})`);
             void warmProcessingQueueCache({ force: true });
-            if (body.processing_case_id) {
-                onImported(body.processing_case_id);
-            } else {
-                throw new Error("Import succeeded but no review case was created.");
-            }
+            setModalOpen(false);
+            setPendingFile(null);
+            if (body.processing_case_id) onImported(body.processing_case_id);
+            else throw new Error("Import succeeded but no review case was created.");
         } catch (e) {
             setError(e instanceof Error ? e.message : "Upload failed");
         } finally {
@@ -69,9 +75,25 @@ export default function ProcessingImportAction({
     function onDrop(e: DragEvent) {
         e.preventDefault();
         const file = e.dataTransfer.files?.[0];
-        if (file) void handleFile(file);
+        if (file) openModal(file);
         else setDragActive(false);
     }
+
+    const modal = (
+        <ProcessingImportIntentModal
+            open={modalOpen}
+            onClose={() => {
+                if (!uploading) {
+                    setModalOpen(false);
+                    setPendingFile(null);
+                }
+            }}
+            onSubmit={submitImport}
+            submitting={uploading}
+            error={error}
+            initialFile={pendingFile}
+        />
+    );
 
     if (variant === "card") {
         return (
@@ -79,31 +101,27 @@ export default function ProcessingImportAction({
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf,application/pdf"
+                    accept={processingImportAcceptList()}
                     className="hidden"
                     onChange={(e) => {
                         const f = e.target.files?.[0];
-                        if (f) void handleFile(f);
+                        if (f) openModal(f);
                         e.target.value = "";
                     }}
                 />
-                <div
-                    onDragOver={onDragOver}
-                    onDragLeave={onDragLeave}
-                    onDrop={onDrop}
-                    className={clsx(dragActive && "ring-2 ring-alloy-bend-pine/40 ring-offset-2 rounded-xl")}
-                >
+                <div onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} className={clsx(dragActive && "ring-2 ring-alloy-bend-pine/40 ring-offset-2 rounded-xl")}>
                     <ProcessingActionCard
                         primary
                         disabled={uploading}
                         testId="processing-import-action-card"
                         icon={<FileUp className="h-4 w-4" aria-hidden />}
-                        title={uploading ? "Importing…" : "Import form"}
-                        description="PDF, form, or document — click to browse or drop a file here."
-                        onClick={() => fileInputRef.current?.click()}
+                        title={uploading ? "Importing…" : "Import document"}
+                        description="PDF, Word, images, or text — choose what Alloy should do."
+                        onClick={() => openModal()}
                     />
                 </div>
-                {error ? <p className="mt-1.5 text-[11px] text-alloy-midnight/60">{error}</p> : null}
+                {error && !modalOpen ? <p className="mt-1.5 text-[11px] text-alloy-midnight/60">{error}</p> : null}
+                {modal}
             </div>
         );
     }
@@ -113,24 +131,25 @@ export default function ProcessingImportAction({
             <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,application/pdf"
+                accept={processingImportAcceptList()}
                 className="hidden"
                 onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) void handleFile(f);
+                    if (f) openModal(f);
                     e.target.value = "";
                 }}
             />
             <button
                 type="button"
                 disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => openModal()}
                 className={`${WS_ACTION_PRIMARY} inline-flex items-center gap-1.5 ${compact ? "px-2 py-1 text-[11px]" : ""}`}
             >
                 <FileUp className="h-3.5 w-3.5" aria-hidden />
-                {uploading ? "Importing…" : "Import form"}
+                {uploading ? "Importing…" : "Import document"}
             </button>
-            {error ? <span className="max-w-[14rem] text-right text-[10px] text-alloy-midnight/60">{error}</span> : null}
+            {error && !modalOpen ? <span className="max-w-[14rem] text-right text-[10px] text-alloy-midnight/60">{error}</span> : null}
+            {modal}
         </div>
     );
 }

@@ -5,12 +5,19 @@ import ProcessingAlloyDialog from "./ProcessingAlloyDialog";
 import { PROCESSING_DEV_CLEANUP_CONFIRM_TOKEN } from "@/lib/pos/processingDevCleanup";
 
 type CleanupPlan = {
+    clearAllForms?: boolean;
     counts: {
         documents: number;
         processingCases: number;
         forms: number;
         formSubmissions: number;
         formPublicLinks: number;
+    };
+    remaining?: {
+        documents: number;
+        processingCases: number;
+        forms: number;
+        formSubmissions: number;
     };
 };
 
@@ -24,9 +31,11 @@ export default function ProcessingDevCleanupDialog({
     onApplied?: () => void;
 }) {
     const [plan, setPlan] = useState<CleanupPlan | null>(null);
+    const [clearAllForms, setClearAllForms] = useState(false);
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [applied, setApplied] = useState(false);
+    const [remaining, setRemaining] = useState<CleanupPlan["remaining"] | null>(null);
 
     const runDryRun = useCallback(async () => {
         setBusy(true);
@@ -36,17 +45,18 @@ export default function ProcessingDevCleanupDialog({
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ apply: false }),
+                body: JSON.stringify({ apply: false, clear_all: clearAllForms }),
             });
             const body = (await res.json().catch(() => ({}))) as CleanupPlan & { error?: string };
             if (!res.ok) throw new Error(body.error || `Dry run failed (${res.status})`);
             setPlan(body);
+            setRemaining(body.remaining ?? null);
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Dry run failed");
         } finally {
             setBusy(false);
         }
-    }, []);
+    }, [clearAllForms]);
 
     const runApply = useCallback(async () => {
         setBusy(true);
@@ -56,18 +66,23 @@ export default function ProcessingDevCleanupDialog({
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ apply: true, confirm: PROCESSING_DEV_CLEANUP_CONFIRM_TOKEN }),
+                body: JSON.stringify({
+                    apply: true,
+                    clear_all: clearAllForms,
+                    confirm: PROCESSING_DEV_CLEANUP_CONFIRM_TOKEN,
+                }),
             });
-            const body = (await res.json().catch(() => ({}))) as { error?: string };
+            const body = (await res.json().catch(() => ({}))) as CleanupPlan & { error?: string; remaining?: CleanupPlan["remaining"] };
             if (!res.ok) throw new Error(body.error || `Apply failed (${res.status})`);
             setApplied(true);
+            setRemaining(body.remaining ?? null);
             onApplied?.();
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Apply failed");
         } finally {
             setBusy(false);
         }
-    }, [onApplied]);
+    }, [clearAllForms, onApplied]);
 
     return (
         <ProcessingAlloyDialog
@@ -108,6 +123,25 @@ export default function ProcessingDevCleanupDialog({
         >
             <div className="space-y-3 text-[12px] text-alloy-midnight/70">
                 <p>This removes imported documents, processing cases, generated/manual Processing forms, public test submissions, and orphaned review artifacts.</p>
+                <label className="flex items-start gap-2 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] px-3 py-2">
+                    <input
+                        type="checkbox"
+                        checked={clearAllForms}
+                        onChange={(e) => {
+                            setClearAllForms(e.target.checked);
+                            setPlan(null);
+                            setRemaining(null);
+                        }}
+                        className="mt-0.5"
+                        data-testid="processing-dev-cleanup-clear-all"
+                    />
+                    <span>
+                        <span className="block font-semibold text-alloy-midnight">Clear all Processing test data</span>
+                        <span className="mt-0.5 block text-[11px] text-alloy-midnight/45">
+                            Deletes every org form definition when heuristics miss legacy test forms. Staging/dev only.
+                        </span>
+                    </span>
+                </label>
                 {plan ? (
                     <dl className="grid grid-cols-2 gap-2 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] p-3">
                         <CountRow label="Documents" value={plan.counts.documents} />
@@ -119,6 +153,14 @@ export default function ProcessingDevCleanupDialog({
                 ) : (
                     <p className="text-alloy-midnight/45">Run a dry-run to see exact counts before applying.</p>
                 )}
+                {remaining ? (
+                    <dl className="grid grid-cols-2 gap-2 rounded-lg border border-alloy-bend-pine/15 bg-alloy-bend-pine/[0.04] p-3">
+                        <CountRow label="Remaining documents" value={remaining.documents} />
+                        <CountRow label="Remaining cases" value={remaining.processingCases} />
+                        <CountRow label="Remaining forms" value={remaining.forms} />
+                        <CountRow label="Remaining submissions" value={remaining.formSubmissions} />
+                    </dl>
+                ) : null}
                 {applied ? <p className="font-medium text-alloy-bend-pine">Cleanup applied. Work and Studio should now be blank.</p> : null}
                 {err ? <p className="text-red-700">{err}</p> : null}
             </div>

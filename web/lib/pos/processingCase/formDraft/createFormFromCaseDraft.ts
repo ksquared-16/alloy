@@ -88,7 +88,10 @@ export async function createFormFromCaseDraft(
         return { ok: false, code: "invalid_schema", message: "The generated draft did not validate as a form schema." };
     }
 
-    const name = preview.title?.trim() || "Untitled form";
+    const name = preview.generated_form_name?.trim() || preview.title?.trim();
+    if (!name || name === "Untitled document" || name === "Untitled form") {
+        return { ok: false, code: "invalid_schema", message: "A form name is required before generating the native form." };
+    }
     const taken = await deps.listFormKeys(args.orgId);
     const key = allocateUniqueKey(slugKeyFromDisplayName(name), taken);
 
