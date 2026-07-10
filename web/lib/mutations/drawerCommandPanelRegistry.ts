@@ -2,7 +2,7 @@
  * Drawer Mutation Command Panel Registry.
  *
  * Maps command keys to the React component that renders the command surface
- * inside the opportunity Focus Panel (AdminEntityDrawerLegacy).
+ * inside the opportunity Focus Panel (canonical VM runtime).
  *
  * To add a new lead-grain or opportunity-grain mutation command panel:
  *   1. Import its component
