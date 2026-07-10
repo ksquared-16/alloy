@@ -20,6 +20,12 @@ import {
 } from "@/lib/fields/consumerProviderCapabilities";
 import { buildQueueRowProviderSeeds } from "@/lib/fields/canonicalDataProviderSeeds";
 import {
+    buildFormsProviderSeeds,
+    mergeFormsProviderCatalog,
+} from "@/lib/fields/canonicalFormsProviderDerivation";
+import type { FieldDefinitionPickerRow } from "@/lib/fields/formFieldRegistryPicker";
+import { filterFormsDocumentsPickerProviders } from "@/lib/fields/formsProviderEligibility";
+import {
     isLegacyQueueRowCompatibilityRefKey,
     LEGACY_QUEUE_ROW_COMPATIBILITY_REFS,
     legacyQueueRowCompatibilityEntry,
@@ -33,6 +39,7 @@ import { isChildcareOperatorPickerVisible } from "@/lib/fields/childcareFieldCat
 import { isWaitlistOnlyFieldKey } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 
 let cachedSeeds: CanonicalDataProvider[] | null = null;
+let cachedFormsSeeds: CanonicalDataProvider[] | null = null;
 
 function queueLayoutSurface(isWaitlist: boolean): TenantLayoutFieldSurface {
     return isWaitlist ? "waitlist_queue_row" : "pipeline_queue_row";
@@ -86,9 +93,56 @@ function allSeedProviders(): CanonicalDataProvider[] {
     return cachedSeeds;
 }
 
+function allFormsSeedProviders(): CanonicalDataProvider[] {
+    if (!cachedFormsSeeds) {
+        cachedFormsSeeds = buildFormsProviderSeeds();
+    }
+    return cachedFormsSeeds;
+}
+
 /** Reset cached seeds — test helper only. */
 export function resetCanonicalDataProviderCacheForTests(): void {
     cachedSeeds = null;
+    cachedFormsSeeds = null;
+}
+
+export function buildFormsDocumentsProviderCatalog(options?: {
+    tenantFieldDefinitions?: readonly FieldDefinitionPickerRow[];
+}): CanonicalDataProvider[] {
+    const tenant = options?.tenantFieldDefinitions;
+    if (tenant?.length) {
+        return mergeFormsProviderCatalog(tenant);
+    }
+    return [...allFormsSeedProviders()];
+}
+
+export function findFormsDocumentsDataProvider(
+    refKey: string,
+    options?: { tenantFieldDefinitions?: readonly FieldDefinitionPickerRow[] },
+): CanonicalDataProvider | undefined {
+    const trimmed = refKey.trim();
+    return buildFormsDocumentsProviderCatalog(options).find((p) => p.refKey === trimmed);
+}
+
+export function filterFormsDocumentsDataProviders(options?: {
+    tenantFieldDefinitions?: readonly FieldDefinitionPickerRow[];
+    includeLegacyOnly?: boolean;
+}): CanonicalDataProvider[] {
+    const catalog = buildFormsDocumentsProviderCatalog({
+        tenantFieldDefinitions: options?.tenantFieldDefinitions,
+    });
+    return filterFormsDocumentsPickerProviders(
+        catalog.filter((provider) => options?.includeLegacyOnly || !provider.legacyOnly),
+    );
+}
+
+export function isFormsDocumentsProviderPublishable(
+    refKey: string,
+    tenantFieldDefinitions?: readonly FieldDefinitionPickerRow[],
+): boolean {
+    const provider = findFormsDocumentsDataProvider(refKey, { tenantFieldDefinitions });
+    if (!provider) return false;
+    return consumerSupportsProviderAtPublish("forms", provider, false);
 }
 
 export function buildCanonicalDataProviderCatalog(options?: {

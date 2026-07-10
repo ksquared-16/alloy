@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import {
     buildFormSystemFieldPicker,
+    buildFormSystemFieldPickerPlatformBaseline,
     FORM_PICKER_ENTITY_TYPES,
     type FieldDefinitionPickerRow,
 } from "@/lib/fields/formFieldRegistryPicker";
-import {
-    OPERATIONAL_FORM_SYSTEM_FIELDS,
-    type SystemFieldRegistryEntry,
-} from "@/lib/forms/systemFieldRegistry";
+import type { SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
 
 function toPickerRow(r: Record<string, unknown>): FieldDefinitionPickerRow {
     return {
@@ -26,38 +24,48 @@ function toPickerRow(r: Record<string, unknown>): FieldDefinitionPickerRow {
     };
 }
 
-/**
- * Loads org field_definitions for Forms Builder system-field picker (registry-first).
- * Falls back to OPERATIONAL_FORM_SYSTEM_FIELDS when fetch fails or returns empty.
- */
-export function useFormSystemFieldPicker(): {
+export type FormSystemFieldPickerState = {
+    /** Platform baseline immediately; tenant business fields merge after load. */
     systemFields: readonly SystemFieldRegistryEntry[];
+    /** True while org field_definitions fetch is in flight. Platform fields remain available. */
     loading: boolean;
+    /** Set when tenant fetch fails — platform fields are preserved. */
+    error: string | null;
     reload: () => void;
-} {
-    const [systemFields, setSystemFields] = useState<readonly SystemFieldRegistryEntry[]>(
-        OPERATIONAL_FORM_SYSTEM_FIELDS
+};
+
+/**
+ * Loads org field_definitions for Forms Builder system-field picker (canonical derivation).
+ *
+ * First paint: synchronous platform-supported canonical fields (no empty state).
+ * After load: tenant field_definitions merge in; legacy operational catalog fills hydration gaps only.
+ */
+export function useFormSystemFieldPicker(): FormSystemFieldPickerState {
+    const [systemFields, setSystemFields] = useState<readonly SystemFieldRegistryEntry[]>(() =>
+        buildFormSystemFieldPickerPlatformBaseline(),
     );
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             const results = await Promise.all(
                 FORM_PICKER_ENTITY_TYPES.map(async (entityType) => {
                     const res = await fetch(
                         `/api/admin/field-definitions?entity_type=${encodeURIComponent(entityType)}`,
-                        { cache: "no-store" }
+                        { cache: "no-store" },
                     );
                     if (!res.ok) return [] as FieldDefinitionPickerRow[];
                     const json = (await res.json()) as { field_definitions?: Record<string, unknown>[] };
                     return (json.field_definitions ?? []).map(toPickerRow);
-                })
+                }),
             );
             const allRows = results.flat();
             setSystemFields(buildFormSystemFieldPicker(allRows));
         } catch {
-            setSystemFields(OPERATIONAL_FORM_SYSTEM_FIELDS);
+            setError("Organization fields could not be loaded. Platform fields remain available.");
         } finally {
             setLoading(false);
         }
@@ -67,5 +75,5 @@ export function useFormSystemFieldPicker(): {
         void load();
     }, [load]);
 
-    return { systemFields, loading, reload: load };
+    return { systemFields, loading, error, reload: load };
 }
