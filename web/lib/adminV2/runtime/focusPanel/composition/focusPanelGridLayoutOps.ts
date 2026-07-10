@@ -127,6 +127,67 @@ export function setAreaHeight(
     return placeArea(grid, { ...area, height });
 }
 
+export const COMPOSER_GRID_ROW_UNIT_PX = 76;
+export const COMPOSER_GRID_GAP_PX = 10;
+
+/** Snap a drag target so cards align/stack predictably on the composer grid. PURE. */
+export function snapMoveTarget(
+    grid: FocusPanelGridLayout,
+    moving: FocusPanelGridArea,
+    colStart: number,
+    rowStart: number,
+): FocusPanelGridArea {
+    let next = clampArea(grid, { ...moving, colStart, rowStart });
+    const rightHalfStart = Math.floor(grid.columns / 2) + 1;
+
+    // Right-column cards snap their top to the left column's primary anchor (e.g. Current Work).
+    if (next.colStart >= rightHalfStart) {
+        const leftAnchors = grid.areas
+            .filter((area) => area.card !== moving.card && area.colStart < rightHalfStart)
+            .map((area) => area.rowStart);
+        if (leftAnchors.length > 0) {
+            const alignTop = Math.min(...leftAnchors);
+            if (Math.abs(next.rowStart - alignTop) <= 2) {
+                next = { ...next, rowStart: alignTop };
+            }
+        }
+    }
+
+    // Stack directly beneath a card already occupying this column.
+    for (const neighbor of grid.areas) {
+        if (neighbor.card === moving.card || neighbor.colStart !== next.colStart) continue;
+        const stackBelow = neighbor.rowStart + neighbor.rowSpan;
+        if (next.rowStart > neighbor.rowStart && next.rowStart < stackBelow + 1) {
+            next = { ...next, rowStart: stackBelow };
+        }
+    }
+
+    return clampArea(grid, next);
+}
+
+/** Pixel bounds for a composer ghost overlay (matches fixed 76px authoring tracks). */
+export function composerGhostBounds(args: {
+    colStart: number;
+    colSpan: number;
+    rowStart: number;
+    rowSpan: number;
+    columns: number;
+    surfaceWidthPx: number;
+    paddingX?: number;
+    paddingY?: number;
+}): { left: number; top: number; width: number; height: number } {
+    const paddingX = args.paddingX ?? 0;
+    const paddingY = args.paddingY ?? 0;
+    const colWidth = args.surfaceWidthPx / args.columns;
+    const track = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
+    return {
+        left: paddingX + (args.colStart - 1) * colWidth,
+        top: paddingY + (args.rowStart - 1) * track,
+        width: args.colSpan * colWidth - COMPOSER_GRID_GAP_PX,
+        height: args.rowSpan * COMPOSER_GRID_ROW_UNIT_PX + (args.rowSpan - 1) * COMPOSER_GRID_GAP_PX,
+    };
+}
+
 /** Remove a card's region. PURE. */
 export function removeArea(grid: FocusPanelGridLayout, card: FocusPanelCardKey): FocusPanelGridLayout {
     return { ...grid, areas: grid.areas.filter((a) => a.card !== card) };

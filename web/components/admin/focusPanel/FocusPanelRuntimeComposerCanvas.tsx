@@ -26,11 +26,15 @@ import {
     buildPublishedLayoutFromGrid,
     cardsInGrid,
     clampArea,
+    COMPOSER_GRID_GAP_PX,
+    COMPOSER_GRID_ROW_UNIT_PX,
+    composerGhostBounds,
     defaultRowSpanForCard,
     gridFromPublishedLayout,
     moveArea,
     removeArea,
     resizeArea,
+    snapMoveTarget,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 import { composeEffectiveCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
@@ -260,16 +264,46 @@ export default function FocusPanelRuntimeComposerCanvas({
 
     const cellFromPointer = useCallback(
         (clientX: number, clientY: number) => {
-            const el = surfaceRef.current;
+            const canvas = gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid");
+            const el = canvas ?? gridContainerRef.current;
             if (!el) return { col: 1, row: 1 };
             const r = el.getBoundingClientRect();
             const colW = r.width / cols;
-            const rowUnit = 76;
+            const rowUnit = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
             const col = Math.min(cols, Math.max(1, Math.floor((clientX - r.left) / colW) + 1));
             const row = Math.max(1, Math.floor((clientY - r.top) / rowUnit) + 1);
             return { col, row };
         },
         [cols],
+    );
+
+    const ghostBounds = useMemo(() => {
+        if (!ghost || !gridContainerRef.current) return null;
+        const container = gridContainerRef.current;
+        const canvas = container.querySelector(".alloy-os-fp-canvas--grid");
+        if (!canvas) return null;
+        const cRect = container.getBoundingClientRect();
+        const gRect = canvas.getBoundingClientRect();
+        return composerGhostBounds({
+            ...ghost,
+            columns: cols,
+            surfaceWidthPx: gRect.width,
+            paddingX: gRect.left - cRect.left,
+            paddingY: gRect.top - cRect.top,
+        });
+    }, [ghost, cols, grid]);
+
+    const applySnappedMove = useCallback(
+        (area: FocusPanelGridArea, col: number, row: number) => {
+            const snapped = snapMoveTarget(grid, area, Math.min(col, cols - area.colSpan + 1), row);
+            return {
+                colStart: snapped.colStart,
+                colSpan: snapped.colSpan,
+                rowStart: snapped.rowStart,
+                rowSpan: snapped.rowSpan,
+            };
+        },
+        [grid, cols],
     );
 
     const startMove = (e: PointerEvent, area: FocusPanelGridArea) => {
@@ -278,23 +312,30 @@ export default function FocusPanelRuntimeComposerCanvas({
         setArranging(true);
         e.preventDefault();
         e.stopPropagation();
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         const move = (ev: globalThis.PointerEvent) => {
             const { col, row } = cellFromPointer(ev.clientX, ev.clientY);
-            const colStart = Math.min(col, cols - area.colSpan + 1);
-            const next = clampArea(grid, { ...area, colStart, rowStart: row });
-            setGhost({ colStart: next.colStart, colSpan: next.colSpan, rowStart: next.rowStart, rowSpan: next.rowSpan });
+            setGhost(applySnappedMove(area, col, row));
         };
         const up = (ev: globalThis.PointerEvent) => {
             const { col, row } = cellFromPointer(ev.clientX, ev.clientY);
-            applyGrid(moveArea(grid, area.card, Math.min(col, cols - area.colSpan + 1), row));
+            const snapped = applySnappedMove(area, col, row);
+            applyGrid(moveArea(grid, area.card, snapped.colStart, snapped.rowStart));
             setGhost(null);
             interacting.current = false;
             setArranging(false);
+            try {
+                (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+            } catch {
+                /* pointer already released */
+            }
             window.removeEventListener("pointermove", move);
             window.removeEventListener("pointerup", up);
+            window.removeEventListener("pointercancel", up);
         };
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
     };
 
     const startResize = (e: PointerEvent, area: FocusPanelGridArea, axis: "w" | "h" | "wh") => {
@@ -303,12 +344,14 @@ export default function FocusPanelRuntimeComposerCanvas({
         setArranging(true);
         e.preventDefault();
         e.stopPropagation();
-        const el = surfaceRef.current;
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        const canvas = gridContainerRef.current?.querySelector(".alloy-os-fp-canvas--grid");
+        const measureEl = canvas ?? gridContainerRef.current;
         const move = (ev: globalThis.PointerEvent) => {
-            if (!el) return;
-            const r = el.getBoundingClientRect();
+            if (!measureEl) return;
+            const r = measureEl.getBoundingClientRect();
             const colW = r.width / cols;
-            const rowUnit = 76;
+            const rowUnit = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
             const colSpan =
                 axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / colW) - area.colStart + 1);
             const rowSpan =
@@ -317,10 +360,10 @@ export default function FocusPanelRuntimeComposerCanvas({
             setGhost({ colStart: next.colStart, colSpan: next.colSpan, rowStart: next.rowStart, rowSpan: next.rowSpan });
         };
         const up = (ev: globalThis.PointerEvent) => {
-            if (el) {
-                const r = el.getBoundingClientRect();
+            if (measureEl) {
+                const r = measureEl.getBoundingClientRect();
                 const colW = r.width / cols;
-                const rowUnit = 76;
+                const rowUnit = COMPOSER_GRID_ROW_UNIT_PX + COMPOSER_GRID_GAP_PX;
                 const colSpan =
                     axis === "h" ? area.colSpan : Math.max(1, Math.round((ev.clientX - r.left) / colW) - area.colStart + 1);
                 const rowSpan =
@@ -330,11 +373,18 @@ export default function FocusPanelRuntimeComposerCanvas({
             setGhost(null);
             interacting.current = false;
             setArranging(false);
+            try {
+                (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+            } catch {
+                /* pointer already released */
+            }
             window.removeEventListener("pointermove", move);
             window.removeEventListener("pointerup", up);
+            window.removeEventListener("pointercancel", up);
         };
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
     };
 
     const onAddCard = (card: FocusPanelCardKey) => {
@@ -459,13 +509,15 @@ export default function FocusPanelRuntimeComposerCanvas({
                 >
                     {activeMode === "summary" ?
                         <div ref={gridContainerRef} className="relative">
-                            {ghost ?
+                            {ghostBounds ?
                                 <div
                                     className="alloy-os-fp-composer__ghost"
                                     aria-hidden
                                     style={{
-                                        gridColumn: `${ghost.colStart} / span ${ghost.colSpan}`,
-                                        gridRow: `${ghost.rowStart} / span ${ghost.rowSpan}`,
+                                        left: ghostBounds.left,
+                                        top: ghostBounds.top,
+                                        width: ghostBounds.width,
+                                        height: ghostBounds.height,
                                     }}
                                 />
                             :   null}
@@ -551,6 +603,16 @@ function ComposerCellShell({
             data-fp-composer-cell={cardKey}
         >
             {children}
+            {onStartMove ?
+                <div
+                    className="alloy-os-fp-composer-cell__drag-bar"
+                    aria-hidden
+                    onPointerDown={(e) => {
+                        e.stopPropagation();
+                        onStartMove(e);
+                    }}
+                />
+            :   null}
             <div className="alloy-os-fp-composer-cell__chrome" aria-hidden={!selected}>
                 <button
                     type="button"

@@ -15,12 +15,16 @@ import {
     buildPublishedLayoutFromGrid,
     cardsInGrid,
     clampArea,
+    COMPOSER_GRID_GAP_PX,
+    COMPOSER_GRID_ROW_UNIT_PX,
+    composerGhostBounds,
     defaultRowSpanForCard,
     emptyGridLayout,
     gridFromPublishedLayout,
     moveArea,
     removeArea,
     resizeArea,
+    snapMoveTarget,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelGridLayoutOps";
 
 // The three validation layouts from the EB V5 brief, in 12-column grid placement.
@@ -216,5 +220,39 @@ describe("focusPanelGridLayoutOps", () => {
             rowStart: 1,
             rowSpan: 1,
         });
+    });
+
+    it("snapMoveTarget aligns right-column cards to the left-column anchor row", () => {
+        const grid: FocusPanelGridLayout = {
+            columns: 12,
+            areas: [
+                { card: "current_work", colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+                { card: "household", colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 2 },
+                { card: "children", colStart: 7, colSpan: 6, rowStart: 3, rowSpan: 2 },
+            ],
+        };
+        const moving = grid.areas.find((a) => a.card === "children")!;
+        const snapped = snapMoveTarget(grid, moving, 7, 2);
+        expect(snapped.rowStart).toBe(1);
+        expect(snapped.colStart).toBe(7);
+    });
+
+    it("composerGhostBounds maps grid placement to pixel coordinates", () => {
+        const bounds = composerGhostBounds({
+            colStart: 7,
+            colSpan: 6,
+            rowStart: 1,
+            rowSpan: 2,
+            columns: 12,
+            surfaceWidthPx: 1200,
+            paddingX: 10,
+            paddingY: 10,
+        });
+        expect(bounds.left).toBe(10 + 6 * (1200 / 12));
+        expect(bounds.top).toBe(10);
+        expect(bounds.width).toBeCloseTo(6 * (1200 / 12) - COMPOSER_GRID_GAP_PX);
+        expect(bounds.height).toBe(
+            2 * COMPOSER_GRID_ROW_UNIT_PX + (2 - 1) * COMPOSER_GRID_GAP_PX,
+        );
     });
 });
