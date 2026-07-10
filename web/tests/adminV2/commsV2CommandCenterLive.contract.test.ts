@@ -27,7 +27,7 @@ describe("command center live wiring", () => {
     });
     it("renders metrics, filters, queues, and a timeline", () => {
         expect(kpiStripSrc).toMatch(/data-comms-workspace-kpi-band/);
-        expect(kpiStripSrc).toMatch(/WorkspaceMetricTiles/);
+        expect(kpiStripSrc).toMatch(/WorkspaceOperationalHealth/);
         expect(shellSrc).toMatch(/setInboxKpis/);
         expect(src).toMatch(/data-cc-filters/);
         expect(src).toMatch(/visibleCommandCenterQueues/);
@@ -74,7 +74,7 @@ describe("command center live wiring", () => {
     });
     it("uses conservative health labels and needs-review KPI", () => {
         expect(shellSrc).toMatch(/resolveCommandCenterHealthDisplay/);
-        expect(kpiStripSrc).toMatch(/NEEDS_REVIEW_STATUS_LABEL/);
+        expect(kpiStripSrc).toMatch(/Needs Review/);
         expect(shellSrc).not.toMatch(/Unresponsive/);
     });
     it("resolves business process stage labels via shared drawer batch helper", () => {

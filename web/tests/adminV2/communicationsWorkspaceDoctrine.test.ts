@@ -39,9 +39,13 @@ describe("Communications doctrine adoption", () => {
         expect(shell).not.toContain("OperationalModalHeader");
     });
 
-    it("KPI strip uses WorkspaceMetricTiles", () => {
+    it("KPI strip uses Operational Health Doctrine V3", () => {
         const kpi = read("app/adminV2/communications/CommunicationsWorkspaceKpiStrip.tsx");
-        expect(kpi).toContain("WorkspaceMetricTiles");
-        expect(kpi).toContain('rules: "Rules"');
+        expect(kpi).toContain("WorkspaceOperationalHealth");
+        expect(kpi).toContain("Needs Reply");
+        expect(kpi).toContain("Needs Review");
+        expect(kpi).not.toContain("WorkspaceMetricTiles");
+        expect(kpi).not.toContain("Categories");
+        expect(kpi).not.toContain("Overdue");
     });
 });

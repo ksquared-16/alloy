@@ -59,3 +59,25 @@ describe("Alloy Operational Health Doctrine V3 — Work Items", () => {
         expect(adapter).not.toContain("WorkspaceMetricTiles");
     });
 });
+
+describe("Alloy Operational Health Doctrine V3 — Communications", () => {
+    it("Communications Inbox metrics: Needs Reply, Unread, Scheduled, Needs Review", () => {
+        const adapter = read("app/adminV2/communications/CommunicationsWorkspaceKpiStrip.tsx");
+        expect(adapter).toContain('label: "Needs Reply"');
+        expect(adapter).toContain('label: "Unread"');
+        expect(adapter).toContain('label: "Scheduled"');
+        expect(adapter).toContain('label: "Needs Review"');
+    });
+
+    it("Communications composes WorkspaceOperationalHealth", () => {
+        const adapter = read("app/adminV2/communications/CommunicationsWorkspaceKpiStrip.tsx");
+        expect(adapter).toContain("WorkspaceOperationalHealth");
+        expect(adapter).not.toContain("WorkspaceMetricTiles");
+    });
+
+    it("CommunicationsWorkspaceShell omits nav metrics on Overview", () => {
+        const shell = read("app/adminV2/communications/CommunicationsWorkspaceShell.tsx");
+        expect(shell).toContain('activeTab !== "overview"');
+        expect(shell).toContain("CommunicationsWorkspaceKpiStrip");
+    });
+});

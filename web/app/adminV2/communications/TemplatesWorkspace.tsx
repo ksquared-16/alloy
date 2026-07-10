@@ -259,6 +259,7 @@ export default function TemplatesWorkspace() {
                 status: t.status,
                 category: t.category,
                 updated_at: t.updated_at,
+                has_version: Boolean(t.current_version_id),
             })),
             listResolved,
         });

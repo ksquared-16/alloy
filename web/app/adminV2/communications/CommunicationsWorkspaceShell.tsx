@@ -28,7 +28,7 @@ export type CommunicationsWorkspaceShellProps = {
 };
 
 /**
- * Communications operational workspace — composes canonical WorkspaceShell + WorkspaceMetricTiles.
+ * Communications operational workspace — composes canonical WorkspaceShell + WorkspaceOperationalHealth (V3).
  */
 export default function CommunicationsWorkspaceShell({
     tabs,

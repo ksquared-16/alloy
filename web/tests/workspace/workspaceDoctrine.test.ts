@@ -48,13 +48,14 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(strip).not.toContain("WorkspaceMetricTiles");
     });
 
-    it("Communications composes WorkspaceShell + WorkspaceMetricTiles", () => {
+    it("Communications composes WorkspaceShell + WorkspaceOperationalHealth", () => {
         const shell = read("app/adminV2/communications/CommunicationsWorkspaceShell.tsx");
         expect(shell).toContain("WorkspaceShell");
         expect(shell).not.toContain("OperationalModalHeader");
         expect(shell).not.toContain("CompactKpiStrip");
         const strip = read("app/adminV2/communications/CommunicationsWorkspaceKpiStrip.tsx");
-        expect(strip).toContain("WorkspaceMetricTiles");
+        expect(strip).toContain("WorkspaceOperationalHealth");
+        expect(strip).not.toContain("WorkspaceMetricTiles");
         expect(strip).not.toContain("CompactKpiStrip");
     });
 

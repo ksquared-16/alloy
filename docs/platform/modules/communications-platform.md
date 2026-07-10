@@ -59,6 +59,8 @@ Default Work tab on open: **Overview**. Header action: **Compose New** (Overview
 
 Implementation: `CommunicationsWorkspaceShell`, `CommunicationsModalTabPanel`, `InboxModal`. Sprint closeout: [`../../sprints/07_2026/communications-product-shell-translation/README.md`](../../sprints/07_2026/communications-product-shell-translation/README.md).
 
+**Operational health (Doctrine V3):** Work → Inbox, Announcements, and Scheduled (and Studio → Templates) render a flat `WorkspaceOperationalHealth` nav band via `CommunicationsWorkspaceKpiStrip` — same primitive and adapter pattern as Processing and Work Items. Overview omits the nav band. Metrics are operational only (no inventory totals such as Categories or Sent 7d). Each metric reserves a trend placeholder line.
+
 Templates and Announcements inside the modal do not require separate feature flags beyond command center. See `../../sprints/06_2026/communications-v2/operator-surface-consolidation.md`.
 
 ### Canonical communications runtime (Phase 2, July 2026)

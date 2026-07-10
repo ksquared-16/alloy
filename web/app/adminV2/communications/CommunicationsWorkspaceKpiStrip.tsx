@@ -1,163 +1,182 @@
 "use client";
 
 /**
- * Communications → metrics band (Work + Studio tabs).
+ * Communications operational health — Work + Studio contextual metrics (Doctrine V3).
  *
- * Data-only adapter: renders canonical `WorkspaceMetricTiles` from already-loaded workspace KPI context.
+ * Data-only adapter: derives counts from workspace KPI context and renders
+ * canonical `WorkspaceOperationalHealth`. No layout or trend styling lives here.
  */
 
-import WorkspaceMetricTiles, {
-    type WorkspaceMetricStatus,
-    type WorkspaceMetricTileItem,
-} from "@/components/workspace/WorkspaceMetricTiles";
+import { useMemo } from "react";
+import WorkspaceOperationalHealth, {
+    type WorkspaceOperationalHealthItem,
+    type WorkspaceOperationalHealthTrend,
+} from "@/components/workspace/WorkspaceOperationalHealth";
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 import { useCommunicationsWorkspaceKpi } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
-import { NEEDS_REVIEW_STATUS_LABEL } from "@/lib/communications/v2/commandCenterViewModel";
 import {
-    computeAnnouncementWorkspaceKpis,
-    computeTemplateWorkspaceKpis,
-} from "@/lib/communications/v2/communicationsWorkspaceKpiModel";
-import type { KpiState } from "@/components/workspace/kpiSemantics";
-import type { ProcessCardAccent, ProcessCardIcon } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
+    computeAnnouncementOperationalHealth,
+    computeInboxOperationalHealth,
+    computeTemplateOperationalHealth,
+} from "@/lib/communications/v2/communicationsOperationalHealthModel";
 
-function accentForState(state: KpiState): ProcessCardAccent {
-    switch (state) {
-        case "ready":
-            return "pine";
-        case "attention":
-            return "gold";
-        case "done":
-            return "midnight";
-        default:
-            return "stone";
-    }
-}
+/** Static trend placeholders until historical comparison APIs exist. */
+const PLACEHOLDER_TREND: WorkspaceOperationalHealthTrend = { direction: "none", label: "—" };
 
-function statusForState(state: KpiState): WorkspaceMetricStatus {
-    switch (state) {
-        case "ready":
-            return "healthy";
-        case "attention":
-            return "warning";
-        default:
-            return "unknown";
-    }
-}
+const INBOX_TRENDS = {
+    needs_reply: PLACEHOLDER_TREND,
+    unread: PLACEHOLDER_TREND,
+    scheduled: PLACEHOLDER_TREND,
+    needs_review: { direction: "none" as const, label: "—", tone: "ember" as const },
+};
 
-function metric(
-    key: string,
-    label: string,
-    value: string,
-    state: KpiState,
-    icon: ProcessCardIcon
-): WorkspaceMetricTileItem {
-    return {
-        key,
-        label,
-        value,
-        icon,
-        accent: accentForState(state),
-        status: statusForState(state),
-    };
-}
+const ANNOUNCEMENT_TRENDS = {
+    draft: PLACEHOLDER_TREND,
+    scheduled: PLACEHOLDER_TREND,
+    sent_today: { direction: "none" as const, label: "—", tone: "gold" as const },
+    failed: { direction: "none" as const, label: "—", tone: "ember" as const },
+};
 
-const TAB_EYEBROW: Partial<Record<CommunicationsModalTab, string>> = {
-    overview: "Overview",
+const TEMPLATE_TRENDS = {
+    active: PLACEHOLDER_TREND,
+    draft: PLACEHOLDER_TREND,
+    needs_review: { direction: "none" as const, label: "—", tone: "ember" as const },
+    recently_updated: { direction: "none" as const, label: "—", tone: "gold" as const },
+};
+
+const SECTION_EYEBROW: Partial<Record<CommunicationsModalTab, string>> = {
     inbox: "Inbox",
-    templates: "Templates",
     announcements: "Announcements",
     scheduled: "Scheduled",
-    channels: "Channels",
-    rules: "Rules",
+    templates: "Templates",
 };
 
 export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeTab: CommunicationsModalTab }) {
     const { inbox, templates, announcements } = useCommunicationsWorkspaceKpi();
 
+    const announcementHealth = computeAnnouncementOperationalHealth(announcements.rows);
+    const inboxHealth = computeInboxOperationalHealth(inbox.metrics, announcementHealth.scheduled);
+    const templateHealth = computeTemplateOperationalHealth(templates.rows);
+
     const inboxLoading = inbox.loading && inbox.metrics === null;
     const templatesLoading = !templates.listResolved;
     const announcementsLoading = !announcements.listResolved;
 
-    let items: WorkspaceMetricTileItem[] = [];
+    let items: WorkspaceOperationalHealthItem[] = [];
     let loading = false;
+    let eyebrow = SECTION_EYEBROW[activeTab];
 
-    if (activeTab === "overview") {
-        const m = inbox.metrics;
-        const announcementKpis = computeAnnouncementWorkspaceKpis(announcements.rows);
-        loading = inboxLoading || announcementsLoading;
-        items = [
-            metric("needs_reply", "Needs reply", String(m?.requiresResponse ?? 0), "pending", "message"),
-            metric("unread", "Unread", String(m?.unread ?? 0), "attention", "book"),
-            metric("scheduled", "Scheduled", String(announcementKpis.scheduled), "pending", "calendar"),
-            metric("sent", "Sent (7d)", String(announcementKpis.sentRecently), "done", "book"),
-        ];
-    } else if (activeTab === "inbox") {
-        const m = inbox.metrics;
+    if (activeTab === "inbox") {
         loading = inboxLoading;
         items = [
-            metric("needs_reply", "Needs reply", String(m?.requiresResponse ?? 0), "pending", "message"),
-            metric("overdue", "Overdue", String(m?.slaAtRisk ?? 0), "attention", "shield"),
-            metric("unread", "Unread", String(m?.unread ?? 0), "attention", "book"),
-            metric("needs_review", NEEDS_REVIEW_STATUS_LABEL, String(m?.unclassified ?? 0), "pending", "clipboard"),
+            {
+                key: "needs_reply",
+                label: "Needs Reply",
+                value: String(inboxHealth.needsReply),
+                tone: "ember",
+                trend: INBOX_TRENDS.needs_reply,
+            },
+            {
+                key: "unread",
+                label: "Unread",
+                value: String(inboxHealth.unread),
+                tone: "gold",
+                trend: INBOX_TRENDS.unread,
+            },
+            {
+                key: "scheduled",
+                label: "Scheduled",
+                value: String(inboxHealth.scheduled),
+                tone: "pine",
+                trend: INBOX_TRENDS.scheduled,
+            },
+            {
+                key: "needs_review",
+                label: "Needs Review",
+                value: String(inboxHealth.needsReview),
+                tone: "ember",
+                trend: INBOX_TRENDS.needs_review,
+            },
+        ];
+    } else if (activeTab === "announcements" || activeTab === "scheduled") {
+        loading = announcementsLoading;
+        items = [
+            {
+                key: "draft",
+                label: "Draft",
+                value: String(announcementHealth.draft),
+                tone: "midnight",
+                trend: ANNOUNCEMENT_TRENDS.draft,
+            },
+            {
+                key: "scheduled",
+                label: "Scheduled",
+                value: String(announcementHealth.scheduled),
+                tone: "pine",
+                trend: ANNOUNCEMENT_TRENDS.scheduled,
+            },
+            {
+                key: "sent_today",
+                label: "Sent Today",
+                value: String(announcementHealth.sentToday),
+                tone: "gold",
+                trend: ANNOUNCEMENT_TRENDS.sent_today,
+            },
+            {
+                key: "failed",
+                label: "Failed",
+                value: String(announcementHealth.failed),
+                tone: "ember",
+                trend: ANNOUNCEMENT_TRENDS.failed,
+            },
         ];
     } else if (activeTab === "templates") {
-        const k = computeTemplateWorkspaceKpis(templates.rows);
         loading = templatesLoading;
         items = [
-            metric("active", "Active", String(k.active), "ready", "spark"),
-            metric("draft", "Draft", String(k.draft), "pending", "layers"),
-            metric("categories", "Categories", String(k.categories), "neutral", "grid"),
-            metric("last_updated", "Last updated", k.lastUpdatedLabel, "done", "calendar"),
-        ];
-    } else if (activeTab === "announcements") {
-        const k = computeAnnouncementWorkspaceKpis(announcements.rows);
-        loading = announcementsLoading;
-        items = [
-            metric("draft", "Draft", String(k.draft), "pending", "layers"),
-            metric("scheduled", "Scheduled", String(k.scheduled), "pending", "calendar"),
-            metric("active", "Active", String(k.active), "ready", "spark"),
-            metric("sent_recently", "Sent (7d)", String(k.sentRecently), "done", "book"),
-        ];
-    } else if (activeTab === "scheduled") {
-        const k = computeAnnouncementWorkspaceKpis(announcements.rows);
-        loading = announcementsLoading;
-        items = [
-            metric("scheduled", "Scheduled", String(k.scheduled), "pending", "calendar"),
-            metric("draft", "Draft", String(k.draft), "neutral", "layers"),
-            metric("active", "Active", String(k.active), "ready", "spark"),
-            metric("sent_recently", "Sent (7d)", String(k.sentRecently), "done", "book"),
-        ];
-    } else if (activeTab === "channels") {
-        items = [
-            metric("email", "Email", "-", "ready", "message"),
-            metric("sms", "SMS", "-", "ready", "message"),
-            metric("in_app", "In-app", "Active", "ready", "spark"),
-            metric("push", "Push", "Soon", "neutral", "bolt"),
-        ];
-    } else if (activeTab === "rules") {
-        items = [
-            metric("identity", "Identity", "-", "neutral", "grid"),
-            metric("reply_to", "Reply-to", "-", "neutral", "message"),
-            metric("signature", "Signature", "-", "neutral", "book"),
-            metric("colors", "Colors", "-", "neutral", "layers"),
+            {
+                key: "active",
+                label: "Active",
+                value: String(templateHealth.active),
+                tone: "pine",
+                trend: TEMPLATE_TRENDS.active,
+            },
+            {
+                key: "draft",
+                label: "Draft",
+                value: String(templateHealth.draft),
+                tone: "midnight",
+                trend: TEMPLATE_TRENDS.draft,
+            },
+            {
+                key: "needs_review",
+                label: "Needs Review",
+                value: String(templateHealth.needsReview),
+                tone: "ember",
+                trend: TEMPLATE_TRENDS.needs_review,
+            },
+            {
+                key: "recently_updated",
+                label: "Recently Updated",
+                value: String(templateHealth.recentlyUpdated),
+                tone: "gold",
+                trend: TEMPLATE_TRENDS.recently_updated,
+            },
         ];
     }
 
-    if (items.length === 0) return null;
+    if (items.length === 0 || !eyebrow) return null;
 
-    const eyebrowLabel = TAB_EYEBROW[activeTab] ?? "Status";
+    const ariaLabel = `${eyebrow} operational health`;
 
     return (
         <div data-comms-workspace-kpi-band="true" className="w-full min-w-0">
-            <WorkspaceMetricTiles
-                eyebrow={eyebrowLabel}
+            <WorkspaceOperationalHealth
+                eyebrow={eyebrow}
                 items={items}
-                size="md"
-                align="start"
                 loading={loading}
-                ariaLabel="Communications status"
+                ariaLabel={ariaLabel}
                 className="w-full"
-                data-testid="comms-workspace-kpi-band"
+                data-testid="comms-workspace-health-band"
             />
         </div>
     );

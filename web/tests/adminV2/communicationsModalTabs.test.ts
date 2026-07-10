@@ -100,6 +100,7 @@ describe("Communications modal tabs", () => {
         const shell = read(SHELL);
         expect(shell).not.toContain("OperationalModalHeader");
         expect(shell).toContain("@/components/workspace/WorkspaceShell");
+        expect(read(DOCTRINE)).toContain("WorkspaceOperationalHealth");
         expect(read(DOCTRINE)).toContain("WorkspaceMetricTiles");
     });
 

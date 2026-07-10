@@ -11,6 +11,7 @@ export type CommsTemplateKpiRow = {
     status: string;
     category: string;
     updated_at: string | null;
+    has_version?: boolean;
 };
 
 export type CommsAnnouncementKpiRow = {
