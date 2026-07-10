@@ -392,7 +392,7 @@ Trend direction uses semantic color:
 
 ### Legacy metric KPI tiles (superseded for operational health)
 
-`WorkspaceMetricTiles` remains for Communications until migrated. **Do not use for new operational health bands.**
+`WorkspaceMetricTiles` is **legacy** — superseded by `WorkspaceOperationalHealth` for all certified modules. **Do not use for new operational health bands.**
 
 Previous boxed tile accents (for migration reference):
 
@@ -430,7 +430,7 @@ Eyebrow labels stack **above** the metric row — never beside metrics in a hori
 
 **Operational sections:** `WorkspaceOperationalHealth` in the nav control band. Module adapters (e.g. `ProcessingKpiStrip`, `CommunicationsWorkspaceKpiStrip`) supply **data and trend placeholders only**. Shell adapters omit `metricsColumn` when the active section is Overview.
 
-`WorkspaceMetricTiles` is **legacy** — Communications only until migrated. No `CompactKpiStrip`, no custom card variants, no alternate KPI styles for new work.
+`WorkspaceMetricTiles` is **legacy** — no remaining operational health adopters. No `CompactKpiStrip`, no custom card variants, no alternate KPI styles for new work.
 
 ### Containment doctrine
 
@@ -461,7 +461,7 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 | Module | Status | Shell | Metrics | Notes |
 |--------|--------|-------|---------|-------|
 | **Processing (Digital Mailroom)** | **Reference implementation** | `DigitalMailroomShell` → `WorkspaceShell` | Overview: `useProcessingOverviewKpis` → `SurfaceHeaderKpiCard`. Queue/Studio: `ProcessingKpiStrip` → `WorkspaceOperationalHealth` | Overview activity tiles below action cards; queue rail, artifact viewport |
-| **Communications** | Certified | `CommunicationsWorkspaceShell` → `WorkspaceShell` | Overview: `SurfaceHeaderKpiCard`. Inbox/Studio: `CommunicationsWorkspaceKpiStrip` | Same overview vs operational metric split as Processing |
+| **Communications** | Certified | `CommunicationsWorkspaceShell` → `WorkspaceShell` | Overview: body tiles (pending `SurfaceHeaderKpiCard`). Inbox/Announcements/Scheduled/Templates: `CommunicationsWorkspaceKpiStrip` → `WorkspaceOperationalHealth` | Same overview vs operational metric split as Processing |
 | **Work Items** | Certified | `WorkItemsShell` → `WorkspaceShell` | Queue: `WorkItemsKpiStrip` → `WorkspaceOperationalHealth` | Overview omits metrics; Queue section-scoped health band |
 
 ### Processing certification checklist (reference — all satisfied)

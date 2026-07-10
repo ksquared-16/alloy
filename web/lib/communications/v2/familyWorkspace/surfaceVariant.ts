@@ -1,2 +1,2 @@
-/** Layout scope for FamilyCommunicationWorkspaceView — default is full modal/drawer; activity_embed is Focus Panel Activity cockpit. */
-export type FamilyWorkspaceSurfaceVariant = "default" | "activity_embed";
+/** Layout scope for FamilyCommunicationWorkspaceView. Runtime behavior is shared; variants alter presentation only. */
+export type FamilyWorkspaceSurfaceVariant = "default" | "activity_embed" | "workspace_inbox";

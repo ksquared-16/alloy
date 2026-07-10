@@ -10,8 +10,9 @@ import {
     type ConversationSummary,
 } from "@/lib/communications/v2/commandCenterViewModel";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import type { FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type { ComposerChannel, FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { prefetchDrawerFamilyWorkspace } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 
 const CACHE_TTL_MS = 90_000;
 
@@ -109,18 +110,18 @@ async function warmFirstConversationWorkspace(
 
     try {
         if (liveWorkspace && customerId) {
-            const res = await fetch(
-                `/api/admin/communications/family-workspace?customer_id=${encodeURIComponent(customerId)}&thread_id=${encodeURIComponent(firstId)}`,
-                { credentials: "include" }
-            );
-            if (!res.ok) return;
-            const data = (await res.json()) as { workspace?: FamilyCommunicationWorkspaceVM };
-            if (!data.workspace) return;
+            const composerChannel: ComposerChannel = conv?.channel === "sms" ? "sms" : "email";
+            const workspace = await prefetchDrawerFamilyWorkspace({
+                customerId,
+                threadId: firstId,
+                composerChannel,
+            });
+            if (!workspace) return;
             firstConversationWarm = {
                 conversationId: firstId,
                 customerId,
-                workspace: data.workspace,
-                threadMessages: mapTimelineToThreadMessages(data.workspace.messages ?? []),
+                workspace,
+                threadMessages: mapTimelineToThreadMessages(workspace.messages ?? []),
                 fetchedAt: Date.now(),
             };
             notify();
