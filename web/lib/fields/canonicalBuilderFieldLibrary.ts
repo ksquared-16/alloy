@@ -1,11 +1,11 @@
 /**
- * Canonical builder field library — single source for all surface builders.
+ * Canonical builder provider library — single source for configurable consumer pickers.
  *
- * Queue Row, Focus Panel, Drawer, Forms, Table, and Business Process builders
- * consume field lists through this module. Surface differences come from
- * fieldCapabilityEngine / fieldResolverRegistry only.
+ * Evolved from canonicalBuilderFieldLibrary to expose the full canonical data-provider
+ * model (fields, relationships, collections, runtime signals).
  *
  * @see docs/sprints/07_2026/field-runtime-unification.md
+ * @see docs/sprints/08_2026/field-platform-consumer-convergence.md
  */
 
 import { buildFormSystemFieldPicker, type FieldDefinitionPickerRow } from "@/lib/fields/formFieldRegistryPicker";
@@ -18,12 +18,22 @@ import {
 import type { FieldConsumerSurface } from "@/lib/fields/fieldSurfaceAvailability";
 import { deriveFieldCapability } from "@/lib/fields/fieldCapabilityEngine";
 import type { FieldResolverInput } from "@/lib/fields/fieldResolverRegistry";
+import {
+    filterCanonicalDataProviders,
+    buildCanonicalDataProviderCatalog,
+} from "@/lib/fields/canonicalDataProviderRegistry";
+import type { CanonicalDataProvider, CanonicalDataProviderKind } from "@/lib/fields/canonicalDataProviderModel";
 
 export type CanonicalBuilderField = {
     key: string;
     label: string;
     entityNamespace: string;
     isSystemField: boolean;
+    surfaces: FieldConsumerSurface[];
+    providerKind?: CanonicalDataProviderKind;
+};
+
+export type CanonicalBuilderProvider = CanonicalDataProvider & {
     surfaces: FieldConsumerSurface[];
 };
 
@@ -55,8 +65,42 @@ function supportedBuilderSurfaces(input: FieldResolverInput): FieldConsumerSurfa
     return surfaces.filter((s) => deriveFieldCapability(s, input).status === "available");
 }
 
-/** Queue / Focus Panel builder fields — derived from validator allow-list. */
+function providerToBuilderField(provider: CanonicalDataProvider, surfaces: FieldConsumerSurface[]): CanonicalBuilderField {
+    return {
+        key: provider.refKey,
+        label: provider.label,
+        entityNamespace: provider.entityNamespace,
+        isSystemField: provider.isSystem,
+        surfaces,
+        providerKind: provider.kind,
+    };
+}
+
+/** Queue / Focus Panel builder providers — canonical data-provider catalog. */
+export function canonicalQueueBuilderProviders(options?: {
+    isWaitlist?: boolean;
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+}): CanonicalBuilderProvider[] {
+    const isWaitlist = options?.isWaitlist ?? false;
+    return filterCanonicalDataProviders({
+        consumer: "queue_row",
+        isWaitlist,
+        tenantFieldDefinitions: options?.tenantFieldDefinitions,
+    }).map((provider) => ({
+        ...provider,
+        surfaces: ["queue_row", "focus_panel"] as FieldConsumerSurface[],
+    }));
+}
+
+/** Queue / Focus Panel builder fields — derived from canonical provider catalog. */
 export function canonicalQueueBuilderFields(isWaitlist = false): CanonicalBuilderField[] {
+    return canonicalQueueBuilderProviders({ isWaitlist }).map((provider) =>
+        providerToBuilderField(provider, provider.surfaces),
+    );
+}
+
+/** Legacy alias — resolver-backed field list (includes computed aliases). */
+export function canonicalQueueBuilderFieldsFromResolver(isWaitlist = false): CanonicalBuilderField[] {
     return buildCanonicalQueueBuilderFields(isWaitlist).map((entry) => ({
         key: entry.key,
         label: entry.label,
@@ -101,6 +145,7 @@ export function canonicalDrawerBuilderFields(
             entityNamespace: field.entityKey,
             isSystemField: def?.is_system ?? true,
             surfaces: supportedBuilderSurfaces(input),
+            providerKind: "business_field",
         };
     });
 }
@@ -123,6 +168,10 @@ export function canonicalFormsBuilderFields(orgDefs: readonly FieldDefinitionPic
             entityNamespace: entry.entity_type,
             isSystemField: true,
             surfaces: supportedBuilderSurfaces(input),
+            providerKind: "business_field",
         };
     });
 }
+
+export { filterCanonicalDataProviders, buildCanonicalDataProviderCatalog } from "@/lib/fields/canonicalDataProviderRegistry";
+export type { CanonicalDataProvider, CanonicalDataProviderKind } from "@/lib/fields/canonicalDataProviderModel";
