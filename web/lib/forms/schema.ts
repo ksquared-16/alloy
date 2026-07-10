@@ -49,16 +49,56 @@ type FormValidateRules = z.infer<typeof formValidateRulesSchema>;
 type FormRepeatRules = z.infer<typeof formRepeatRulesSchema>;
 type FormSignatureConfig = z.infer<typeof formSignatureConfigSchema>;
 
+export const formFieldSourceRelationshipSchema = z
+    .object({
+        /** Canonical relationship leaf provider refKey (Forms registry grain). */
+        provider_ref_key: z.string().min(1),
+        relationship_id: z.string().min(1),
+        role: z.string().optional(),
+        /** Manifest/platform leaf refKey — canonical scalar leaf identity (e.g. person.primary_email). */
+        leaf_provider_ref_key: z.string().min(1),
+        /** Leaf discriminator within the relationship edge — not canonical identity alone. */
+        leaf_key: z.string().min(1),
+        target_entity_type: z.string().optional(),
+    })
+    .strict();
+
+export type FormFieldSourceRelationship = z.infer<typeof formFieldSourceRelationshipSchema>;
+
 export const formFieldSourceSchema = z
     .object({
         entity_type: z.string().min(1),
         field_key: z.string().min(1),
         shared_value_key: z.string().optional(),
         crm_mapping_key: z.string().optional(),
+        /** Optional relationship lineage — backward compatible for scalar-only bindings. */
+        relationship: formFieldSourceRelationshipSchema.optional(),
     })
     .strict();
 
 export type FormFieldSource = z.infer<typeof formFieldSourceSchema>;
+
+export const formGroupCollectionBindingSchema = z
+    .object({
+        /** Canonical whole-collection provider refKey (e.g. children, household.members). */
+        collection_provider_ref: z.string().min(1),
+        iteration_entity_type: z.string().min(1),
+        iteration_alias: z.string().optional(),
+    })
+    .strict();
+
+export type FormGroupCollectionBinding = z.infer<typeof formGroupCollectionBindingSchema>;
+
+export const formIterationContextSchema = z
+    .object({
+        scope: z.literal("collection_item"),
+        collection_provider_ref: z.string().min(1),
+        iteration_entity_type: z.string().min(1),
+        iteration_alias: z.string().optional(),
+    })
+    .strict();
+
+export type FormIterationContext = z.infer<typeof formIterationContextSchema>;
 
 export type FormFieldLayoutWidth = "full" | "half";
 
@@ -103,7 +143,13 @@ export type FormField =
       })
     | (FormFieldBase & { type: "file_ref" })
     | (FormFieldBase & { type: "signature"; signature?: FormSignatureConfig })
-    | (FormFieldBase & { type: "group"; fields: FormField[]; repeat?: FormRepeatRules });
+    | (FormFieldBase & {
+          type: "group";
+          fields: FormField[];
+          repeat?: FormRepeatRules;
+          /** When set, repeat instances bind to a canonical collection provider. */
+          collection_binding?: FormGroupCollectionBinding;
+      });
 
 const staticOptionRowSchema = z
     .object({
@@ -190,6 +236,7 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
                 type: z.literal("group"),
                 fields: z.array(formFieldSchema).min(1),
                 repeat: formRepeatRulesSchema.optional(),
+                collection_binding: formGroupCollectionBindingSchema.optional(),
             })
             .strict(),
     ])

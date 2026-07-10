@@ -1,4 +1,6 @@
 import type { FormField, FormFieldSource } from "@/lib/forms/schema";
+import { findFormsRelationshipProvider } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
+import { relationshipProviderToFormFieldSource } from "@/lib/fields/formsRelationshipFieldSourceBinding";
 import {
     EMAIL_PATTERN,
     PHONE_PATTERN,
@@ -7,6 +9,10 @@ import {
 } from "@/lib/forms/systemFieldRegistry";
 
 function sourceFromEntry(entry: SystemFieldRegistryEntry): FormFieldSource {
+    if (entry.id.startsWith("rel:")) {
+        const provider = findFormsRelationshipProvider(entry.id.slice(4));
+        if (provider) return relationshipProviderToFormFieldSource(provider);
+    }
     return {
         entity_type: entry.entity_type,
         field_key: entry.field_key,
@@ -32,7 +38,7 @@ export function formFieldFromRegistryEntry(entry: SystemFieldRegistryEntry, o: O
     const src = sourceFromEntry(entry);
     const id = entry.field_key;
 
-    const baseCommon = { id, label, required, description, placeholder, field_source: src };
+    const baseCommon = { id, label, required, description, placeholder, field_source: src, read_only: entry.id.startsWith("rel:") ? true : undefined };
 
     switch (entry.suggested_kind) {
         case "text":

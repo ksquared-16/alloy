@@ -20,6 +20,10 @@ import {
 } from "@/lib/fields/formsLegacyCompatibility";
 import type { FieldDefinitionPickerRow } from "@/lib/fields/formFieldRegistryPicker";
 import type { SystemFieldValueKind } from "@/lib/forms/systemFieldRegistry";
+import {
+    isFormsRelationshipAuthorableInP2,
+    isFormsRelationshipPublishableInP2,
+} from "@/lib/fields/formsRelationshipOperationalSupport";
 
 const COMPATIBLE_CONTROL_KINDS = new Set<SystemFieldValueKind>([
     "text",
@@ -58,9 +62,14 @@ function evaluateCanonicalProvider(provider: CanonicalDataProvider): QueueRowPro
     const reasons: QueueRowProviderExclusionReason[] = [];
 
     if (provider.legacyOnly) pushReason(reasons, "legacy_only");
-    if (provider.outputShape !== "scalar") pushReason(reasons, "unsupported_shape");
-    if (provider.kind === "relationship" || provider.kind === "collection") {
+    if (provider.kind === "collection" && provider.outputShape === "collection") {
         pushReason(reasons, "unsupported_kind");
+    }
+    if (provider.kind === "collection" && provider.collectionProjection) {
+        pushReason(reasons, "unsupported_kind");
+    }
+    if (provider.outputShape !== "scalar" && provider.kind !== "relationship") {
+        pushReason(reasons, "unsupported_shape");
     }
     if (provider.kind === "calculated_field" || provider.kind === "runtime_signal") {
         pushReason(reasons, "unsupported_kind");
@@ -83,6 +92,26 @@ function evaluateCanonicalProvider(provider: CanonicalDataProvider): QueueRowPro
         resolvable: publishCap,
         reasons,
     };
+}
+
+export function evaluateFormsRelationshipProviderEligibility(
+    refKey: string,
+): QueueRowProviderEligibility {
+    const provider = findFormsDocumentsDataProvider(refKey);
+    if (!provider || provider.kind !== "relationship") {
+        return { refKey, picker: false, publish: false, resolvable: false, reasons: ["unknown_provider"] };
+    }
+    const base = evaluateCanonicalProvider(provider);
+    if (!isFormsRelationshipPublishableInP2(provider)) {
+        return {
+            ...base,
+            picker: false,
+            publish: false,
+            resolvable: false,
+            reasons: [...base.reasons, "consumer_capability_blocked"],
+        };
+    }
+    return base;
 }
 
 export function evaluateFormsProviderEligibility(
@@ -119,7 +148,20 @@ function evaluateLegacyCompatibilityEntry(entry: FormsLegacyCompatibilityEntry):
 export function filterFormsDocumentsPickerProviders(
     providers: readonly CanonicalDataProvider[],
 ): CanonicalDataProvider[] {
-    return providers.filter((provider) => evaluateCanonicalProvider(provider).picker);
+    return providers.filter(
+        (provider) => provider.kind !== "relationship" && evaluateCanonicalProvider(provider).picker,
+    );
+}
+
+export function filterFormsDocumentsRelationshipPickerProviders(
+    providers: readonly CanonicalDataProvider[],
+): CanonicalDataProvider[] {
+    return providers.filter(
+        (provider) =>
+            provider.kind === "relationship"
+            && evaluateCanonicalProvider(provider).picker
+            && isFormsRelationshipAuthorableInP2(provider),
+    );
 }
 
 export { hasCompatibleControl as formsProviderHasCompatibleControl };

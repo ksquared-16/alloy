@@ -11,6 +11,7 @@ import {
     describePrefillMode,
     describePrefillSource,
     groupSystemFieldsForPicker,
+    groupRelationshipFieldsForPicker,
     type UiScalarKind,
 } from "@/lib/forms/formFieldAuthoringPresentation";
 import { linesToStaticOptions, type SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
@@ -33,6 +34,7 @@ export type FormFieldAuthoringCardProps = {
     kind: UiScalarKind;
     pickerValue: string;
     systemFields: readonly SystemFieldRegistryEntry[];
+    relationshipFields?: readonly SystemFieldRegistryEntry[];
     /** Tenant field_definitions still loading — platform fields remain listed. */
     pickerLoading?: boolean;
     pickerError?: string | null;
@@ -65,6 +67,7 @@ export function FormFieldAuthoringCard({
     kind,
     pickerValue,
     systemFields,
+    relationshipFields = [],
     pickerLoading = false,
     pickerError = null,
     takenFieldIds,
@@ -84,6 +87,7 @@ export function FormFieldAuthoringCard({
     const pos = regionPosition ?? index;
     const posTotal = regionTotal ?? total;
     const systemFieldGroups = groupSystemFieldsForPicker(systemFields);
+    const relationshipFieldGroups = groupRelationshipFieldsForPicker(relationshipFields);
 
     if (compact) {
         return (
@@ -185,6 +189,15 @@ export function FormFieldAuthoringCard({
                                                 </option>
                                             );
                                         })}
+                                    </optgroup>
+                                ))}
+                                {relationshipFieldGroups.map((group) => (
+                                    <optgroup key={`rel-${group.id}`} label={group.label}>
+                                        {group.fields.map((e) => (
+                                            <option key={e.id} value={`sys:${e.id}`}>
+                                                {e.default_label}
+                                            </option>
+                                        ))}
                                     </optgroup>
                                 ))}
                                 <optgroup label="Advanced / Custom">
