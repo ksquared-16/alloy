@@ -162,7 +162,8 @@ Metrics are:
 |---------|---------------------|
 | **Processing → Queue** | Active Work · Needs Review · Ready · Published |
 | **Communications → Inbox** | Needs Reply · Unread · Scheduled · Needs Review |
-| **Work Items → Queue** | Open · Due Today · Overdue · Completed |
+| **Work Items → Overview** | Open · Due Today · Overdue · Completed Today |
+| **Work Items → Queue** | Assigned · Waiting · Due Soon · Overdue |
 
 Each metric reserves space for **trend intelligence** (see below): e.g. `↑ 12 today`, `↓ 18% week over week`, `↑ 4 since yesterday`.
 
@@ -190,7 +191,7 @@ Import from `@/components/workspace/doctrine`. Tokens: `web/components/workspace
 | **`WorkspaceModeTabs`** | Primary mode rail (Work \| Studio) | Work mode default |
 | **`WorkspaceSubTabs`** | Secondary section navigation | Overview \| Queue |
 | **`WorkspaceOperationalHealth`** | Flat operational health band — not cards, not pills, not interactive | `ProcessingKpiStrip` → Work + Studio contextual metrics |
-| **`WorkspaceMetricTiles`** | Legacy boxed KPI tiles — **deprecated for operational health**; Communications / Work Items pending migration | — |
+| **`WorkspaceMetricTiles`** | Legacy boxed KPI tiles — **deprecated for operational health**; Communications pending migration | — |
 | **`WorkspaceSurface`** | Scrollable stone-field body for overview/studio | `ProcessingOverviewLanding` |
 | **`WorkspaceCard`** | White contained panel on stone field | Overview lower zones, summary groups |
 | **`WorkspaceZonePanel`** | Multi-column zone with header + body (queue, source, inspector) | Queue / Source document / Review questions |
@@ -327,7 +328,8 @@ Metrics **belong to the active section**, not the mode or the workspace. When th
 | **Processing** | Queue | Active Work · Needs Review · Ready · Published |
 | **Processing** | Studio | Forms · Published · Draft · Generated |
 | **Communications** | Inbox | Needs Reply · Unread · Scheduled · Needs Review |
-| **Work Items** | Queue | Open · Due Today · Overdue · Completed |
+| **Work Items** | Overview | Open · Due Today · Overdue · Completed Today |
+| **Work Items** | Queue | Assigned · Waiting · Due Soon · Overdue |
 
 Rules:
 
@@ -370,7 +372,7 @@ Trend direction uses semantic color:
 
 ### Legacy metric KPI tiles (superseded for operational health)
 
-`WorkspaceMetricTiles` remains for Communications and Work Items until migrated. **Do not use for new operational health bands.**
+`WorkspaceMetricTiles` remains for Communications until migrated. **Do not use for new operational health bands.**
 
 Previous boxed tile accents (for migration reference):
 
@@ -406,7 +408,7 @@ Eyebrow labels stack **above** the metric row — never beside metrics in a hori
 
 `WorkspaceOperationalHealth` is the **operational health primitive** for module nav bands (Processing reference). Module adapters (e.g. `ProcessingKpiStrip`) supply **data and trend placeholders only**.
 
-`WorkspaceMetricTiles` is **legacy** — Communications and Work Items only until migrated. No `CompactKpiStrip`, no custom card variants, no alternate KPI styles for new work.
+`WorkspaceMetricTiles` is **legacy** — Communications only until migrated. No `CompactKpiStrip`, no custom card variants, no alternate KPI styles for new work.
 
 ### Containment doctrine
 
@@ -437,7 +439,7 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 |--------|--------|-------|---------|-------|
 | **Processing (Digital Mailroom)** | **Reference implementation** | `DigitalMailroomShell` → `WorkspaceShell` | `ProcessingKpiStrip` → `WorkspaceOperationalHealth` | Work + Studio contextual health; overview action cards, queue rail, artifact viewport |
 | **Communications** | Certified (health-band migration pending) | `CommunicationsWorkspaceShell` → `WorkspaceShell` | `CommunicationsWorkspaceKpiStrip` → `WorkspaceMetricTiles` | Inbox target metrics: Needs Reply · Unread · Scheduled · Needs Review |
-| **Work Items** | Certified (health-band migration pending) | `WorkItemsShell` → `WorkspaceShell` | `WorkItemsKpiStrip` → `WorkspaceMetricTiles` | Queue target metrics: Open · Due Today · Overdue · Completed |
+| **Work Items** | Certified | `WorkItemsShell` → `WorkspaceShell` | `WorkItemsKpiStrip` → `WorkspaceOperationalHealth` | Overview + Queue section-scoped metrics |
 
 ### Processing certification checklist (reference — all satisfied)
 

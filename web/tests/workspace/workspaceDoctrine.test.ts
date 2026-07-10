@@ -58,14 +58,15 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(strip).not.toContain("CompactKpiStrip");
     });
 
-    it("Work Items composes WorkspaceShell + WorkspaceMetricTiles + WorkspaceSurface", () => {
+    it("Work Items composes WorkspaceShell + WorkspaceOperationalHealth + WorkspaceSurface", () => {
         const shell = read("app/adminV2/tasks/WorkItemsShell.tsx");
         expect(shell).toContain("WorkspaceShell");
         expect(shell).toContain("WorkspaceSurface");
         expect(shell).toContain("WorkItemsKpiStrip");
         expect(shell).not.toContain("OperationalModalHeader");
         const strip = read("app/adminV2/tasks/WorkItemsKpiStrip.tsx");
-        expect(strip).toContain("WorkspaceMetricTiles");
+        expect(strip).toContain("WorkspaceOperationalHealth");
+        expect(strip).not.toContain("WorkspaceMetricTiles");
     });
 
     it("Processing queue workspace uses shared zone panel and tokens", () => {
