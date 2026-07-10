@@ -24,7 +24,7 @@ export interface DraftFormField {
     type: DraftFormFieldType;
     required: boolean;
     /** Basic layout hint: "half" pairs with the next half into a 2-up row (FormSchemaV1 layout_width). */
-    layout_width?: "full" | "half";
+    layout_width?: "full" | "half" | "third" | "quarter";
     description?: string;
     confidence: DraftFieldConfidence;
     /** Where this field came from in the source document (provenance, not promoted). */

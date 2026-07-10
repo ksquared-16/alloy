@@ -108,7 +108,7 @@ export default function ProcessingFormBuilderLibraryPanel({
                             onClick={() => setTab("question-types")}
                             className={`flex-1 rounded-md px-2 py-1 text-[11px] font-semibold ${tab === "question-types" ? "bg-white text-alloy-midnight shadow-sm" : "text-alloy-midnight/55"}`}
                         >
-                            Question types
+                            Answer types
                         </button>
                     </div>
                 </header>

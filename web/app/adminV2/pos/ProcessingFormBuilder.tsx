@@ -2,10 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    SURFACE_FIELD_PLACEMENT_LABELS,
-    type SurfaceFieldPlacementMode,
-} from "@/lib/adminV2/settings/surfaces/surfaceFieldComposer";
-import {
     addField,
     addRegistryField,
     addSection,
@@ -19,20 +15,14 @@ import {
 import {
     groupFieldsIntoRows,
     moveFieldBetweenSections,
-    moveFieldWithinSection,
-    placementFromField,
     reorderField,
     reorderFieldAfter,
-    setFieldPlacement,
-    type FormRowPlacement,
+    setFieldLayoutWidth,
+    fieldLayoutFlexClass,
 } from "@/lib/forms/formRowComposition";
 import type { ProcessingBuilderCanonicalField } from "@/lib/forms/processingFormBuilderLibrary";
-import {
-    PROCESSING_BUILDER_CANONICAL_FIELDS,
-    resolveProcessingBuilderRegistryEntry,
-} from "@/lib/forms/processingFormBuilderLibrary";
-import type { FormField, FormFieldSource, FormSchemaV1 } from "@/lib/forms/schema";
-import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
+import { resolveProcessingBuilderRegistryEntry } from "@/lib/forms/processingFormBuilderLibrary";
+import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import ProcessingFormBuilderLibraryPanel from "./ProcessingFormBuilderLibraryPanel";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
 import ProcessingFormCanvas, { type CanvasDropTarget } from "./ProcessingFormCanvas";
@@ -64,59 +54,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 type BuilderMode = "edit" | "preview" | "runtime";
-
-function destinationLabel(field: FormField): string {
-    const source = field.field_source;
-    if (!source) {
-        if (field.description === PROCESSING_NEEDS_DESTINATION_DESCRIPTION) return "Needs destination";
-        return "Form field only";
-    }
-    if (source.entity_type === "child" || source.entity_type === "customer_member") return "Child";
-    if (source.entity_type === "guardian" || source.entity_type === "person") return "Parent / Guardian";
-    if (source.entity_type === "enrollment") return "Enrollment";
-    if (source.entity_type === "customer") return "Household";
-    return "Record";
-}
-
-const STORE_OPTIONS = [
-    { value: "processing_only", label: "Form field only" },
-    { value: "child", label: "Child" },
-    { value: "parent", label: "Parent / Guardian" },
-    { value: "enrollment", label: "Enrollment" },
-    { value: "household", label: "Household" },
-] as const;
-
-function storeValueFromField(field: FormField): string {
-    const source = field.field_source;
-    if (!source) return "processing_only";
-    if (source.entity_type === "child" || source.entity_type === "customer_member") return "child";
-    if (source.entity_type === "guardian" || source.entity_type === "person") return "parent";
-    if (source.entity_type === "enrollment") return "enrollment";
-    if (source.entity_type === "customer") return "household";
-    return "processing_only";
-}
-
-function fieldSourceForDestination(field: FormField, value: string): FormFieldSource | undefined {
-    if (value === "processing_only") return undefined;
-    const entity_type =
-        value === "child" ? "child" : value === "parent" ? "guardian" : value === "enrollment" ? "enrollment" : value === "household" ? "customer" : "custom";
-    const existing = field.field_source;
-    if (existing?.field_key && existing.field_key !== "custom" && existing.field_key !== "unmapped") {
-        return {
-            entity_type,
-            field_key: existing.field_key,
-            ...(existing.shared_value_key ? { shared_value_key: existing.shared_value_key } : {}),
-            ...(existing.crm_mapping_key ? { crm_mapping_key: existing.crm_mapping_key } : {}),
-        };
-    }
-    return { entity_type, field_key: "custom" };
-}
-
-function typeLabel(field: FormField): string {
-    if (field.type === "text" && field.multiline) return "Long text";
-    if (field.type === "text_block") return "Text block";
-    return field.type;
-}
 
 export default function ProcessingFormBuilder({
     formId,
@@ -153,7 +90,6 @@ export default function ProcessingFormBuilder({
     const [builderErr, setBuilderErr] = useState<string | null>(null);
     const [dragFieldId, setDragFieldId] = useState<string | null>(null);
     const [dropTarget, setDropTarget] = useState<CanvasDropTarget | null>(null);
-    const [showAdvanced, setShowAdvanced] = useState(false);
     const [sectionDialogOpen, setSectionDialogOpen] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
     const [branding, setBranding] = useState<ProcessingFormBranding>(() =>
@@ -265,7 +201,7 @@ export default function ProcessingFormBuilder({
         } else {
             next = reorderFieldAfter(schema, dragFieldId, dropTarget.sectionId, dropTarget.fieldId);
         }
-        next = setFieldPlacement(next, dragFieldId, dropTarget.rowIntent === "same-line" ? "same-line" : "new-line-below");
+        next = setFieldLayoutWidth(next, dragFieldId, dropTarget.rowIntent === "same-line" ? "half" : "full");
         setSchema(next);
         setDirty(true);
         setDragFieldId(null);
@@ -370,17 +306,7 @@ export default function ProcessingFormBuilder({
                         >
                             {saving ? "Saving…" : "Save draft"}
                         </button>
-                        {hasPublishedVersion ? (
-                            <button
-                                type="button"
-                                disabled={publishing}
-                                onClick={() => void publish()}
-                                className="config-secondary-btn text-[11px] disabled:opacity-50"
-                                data-testid="form-builder-republish"
-                            >
-                                {publishing ? "Republishing…" : "Republish"}
-                            </button>
-                        ) : (
+                        {!hasPublishedVersion ? (
                             <button
                                 type="button"
                                 disabled={publishing}
@@ -390,10 +316,24 @@ export default function ProcessingFormBuilder({
                             >
                                 {publishing ? "Publishing…" : "Publish"}
                             </button>
-                        )}
+                        ) : null}
                     </>
                 ) : null}
             </div>
+
+            {hasPublishedVersion ? (
+                <ProcessingFormPublishedBar
+                    formId={formId}
+                    formKey={formMeta?.key ?? formId}
+                    formName={displayFormName}
+                    existingMeta={formMetaSnapshot}
+                    listPublicLinks={listPublicLinks}
+                    onManageDistribution={() => setInspectorSection("distribution")}
+                    onRepublish={editable ? () => void publish() : undefined}
+                    onBackToForms={onBack}
+                    republishBusy={publishing}
+                />
+            ) : null}
 
             {mode === "preview" ? (
                 <div className="flex shrink-0 items-center gap-2 border-b border-alloy-midnight/[0.06] bg-alloy-midnight/[0.03] px-4 py-1.5 text-[11px] font-semibold text-alloy-midnight/55">
@@ -499,253 +439,17 @@ export default function ProcessingFormBuilder({
                             onOpenChange={(open) => open && setInspectorSection("distribution")}
                         />
                         {selectedField ? (
-                            <div data-surface-composer-inspector="field">
-                                <ProcessingCollapsibleInspectorSection
-                                    title="Content"
-                                    subtitle="Label and help text"
-                                    open={inspectorSection === "question"}
-                                    onOpenChange={(open) => open && setInspectorSection("question")}
-                                    accent
-                                >
-                                    <div className="space-y-3">
-                                <div>
-                                    <p className="config-typo-sublabel mb-1">Display as</p>
-                                    {editable ? (
-                                        <input
-                                            type="text"
-                                            value={selectedField.label}
-                                            onChange={(e) => mutate((s) => updateField(s, selectedField.id, { label: e.target.value }))}
-                                            className="w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm"
-                                            data-inspector-field-label
-                                            data-testid="form-builder-field-label"
-                                        />
-                                    ) : (
-                                        <p className="text-sm font-medium">{selectedField.label}</p>
-                                    )}
-                                </div>
-                                <div>
-                                    <p className="config-typo-sublabel mb-1">Question type</p>
-                                    <p className="text-[12px] text-alloy-midnight/70">{typeLabel(selectedField)}</p>
-                                </div>
-                                {selectedField.description === PROCESSING_NEEDS_DESTINATION_DESCRIPTION ? (
-                                    <p className="rounded-md border border-amber-200/70 bg-amber-50/80 px-2 py-1.5 text-[11px] text-amber-900" data-testid="form-builder-needs-destination">
-                                        Needs destination configuration — answers will not write to business records until you set a destination below.
-                                    </p>
-                                ) : null}
-                                {editable && selectedField.type !== "text_block" ? (
-                                    <label className="flex items-center gap-2 text-[12px]">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedField.required}
-                                            onChange={(e) => mutate((s) => updateField(s, selectedField.id, { required: e.target.checked }))}
-                                        />
-                                        Required
-                                    </label>
-                                ) : null}
-                                {selectedField.type === "text_block" ? (
-                                    <div data-inspector-text-block className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.05] p-3">
-                                        <p className="config-typo-sublabel mb-1">Inline text</p>
-                                        <textarea
-                                            value={selectedField.content}
-                                            disabled={!editable}
-                                            onChange={(e) => mutate((s) => updateField(s, selectedField.id, { content: e.target.value }))}
-                                            className="w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px]"
-                                            rows={4}
-                                            data-testid="form-builder-text-block-content"
-                                        />
-                                        <p className="mt-2 text-[10px] leading-snug text-alloy-midnight/45">
-                                            Insert Alloy tokens into authorization language. Preview renders them as placeholders.
-                                        </p>
-                                        <div className="mt-2 flex flex-wrap gap-1.5">
-                                            {PROCESSING_BUILDER_CANONICAL_FIELDS.slice(0, 8).map((token) => (
-                                                <button
-                                                    key={token.id}
-                                                    type="button"
-                                                    disabled={!editable}
-                                                    className="rounded-full border border-alloy-bend-pine/20 bg-white px-2 py-1 text-[10px] font-semibold text-alloy-bend-pine hover:bg-alloy-bend-pine/[0.06]"
-                                                    onClick={() => {
-                                                        const label = token.pickerLabel.replace(/^Child /, "Child ").replace(/^Parent \/ guardian /, "Primary contact ");
-                                                        const nextContent = `${selectedField.content || ""}${selectedField.content ? " " : ""}{${label}}`;
-                                                        const nextTokens = Array.from(new Set([...(selectedField.token_ids ?? []), token.id]));
-                                                        mutate((s) => updateField(s, selectedField.id, { content: nextContent, token_ids: nextTokens }));
-                                                    }}
-                                                >
-                                                    {token.pickerLabel}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : null}
-                                <div>
-                                    <p className="config-typo-sublabel mb-1">Help text</p>
-                                    {editable ? (
-                                        <textarea
-                                            value={selectedField.description ?? ""}
-                                            onChange={(e) => mutate((s) => updateField(s, selectedField.id, { description: e.target.value }))}
-                                            className="w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm"
-                                            rows={2}
-                                        />
-                                    ) : (
-                                        <p className="text-[12px] text-alloy-midnight/60">{selectedField.description || "—"}</p>
-                                    )}
-                                </div>
-                                    </div>
-                                </ProcessingCollapsibleInspectorSection>
-                                <ProcessingCollapsibleInspectorSection
-                                    title="Layout"
-                                    subtitle="Section and row placement"
-                                    open={inspectorSection === "layout"}
-                                    onOpenChange={(open) => open && setInspectorSection("layout")}
-                                >
-                                    <div className="space-y-3">
-                                <div data-inspector-section>
-                                    <p className="config-typo-sublabel mb-1">Section</p>
-                                    <p className="mb-2 text-[10px] leading-snug text-alloy-midnight/45">Section chooses where the field appears on the surface.</p>
-                                    <div className="flex flex-wrap gap-1">
-                                        {schema.sections.map((sec) => (
-                                            <button
-                                                key={sec.id}
-                                                type="button"
-                                                disabled={!editable}
-                                                onClick={() => mutate((s) => moveFieldBetweenSections(s, selectedField.id, sec.id))}
-                                                className={`rounded-md border px-2 py-1 text-[11px] font-medium ${
-                                                    schema.sections.find((s) => s.field_ids.includes(selectedField.id))?.id === sec.id
-                                                        ? "border-alloy-bend-pine/40 bg-alloy-bend-pine/[0.08] text-alloy-bend-pine"
-                                                        : "border-alloy-stone/20 text-alloy-midnight/70"
-                                                }`}
-                                                data-inspector-section-option={sec.id}
-                                            >
-                                                {sec.title}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                {selectedField.type !== "text_block" ? (
-                                <div data-inspector-placement className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.06] p-3">
-                                    <p className="config-typo-sublabel mb-1">How should this sit?</p>
-                                    <p className="mb-2 text-[10px] leading-snug text-alloy-midnight/50">
-                                        Same line places this question beside the one above. New line starts a fresh row.
-                                    </p>
-                                    <div className="grid gap-1.5">
-                                        {(Object.keys(SURFACE_FIELD_PLACEMENT_LABELS) as SurfaceFieldPlacementMode[]).map((pm) => {
-                                            const rowPlacement: FormRowPlacement = pm === "same-line" ? "same-line" : "new-line-below";
-                                            const active = placementFromField(selectedField) === rowPlacement;
-                                            return (
-                                                <button
-                                                    key={pm}
-                                                    type="button"
-                                                    disabled={!editable}
-                                                    onClick={() => mutate((s) => setFieldPlacement(s, selectedField.id, rowPlacement))}
-                                                    className={`rounded-md border px-3 py-2 text-left text-[12px] font-semibold ${
-                                                        active
-                                                            ? "border-alloy-bend-pine/45 bg-white text-alloy-bend-pine shadow-sm"
-                                                            : "border-alloy-stone/20 bg-white text-alloy-midnight/70 hover:border-alloy-bend-pine/25"
-                                                    }`}
-                                                    data-inspector-placement-option={pm}
-                                                    data-testid={`form-builder-placement-${pm}`}
-                                                >
-                                                    <span className="block">{SURFACE_FIELD_PLACEMENT_LABELS[pm]}</span>
-                                                    <span className="mt-0.5 block text-[10px] font-medium text-alloy-midnight/40">
-                                                        {pm === "same-line" ? "First name | Last name" : "Full width below"}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                                ) : null}
-                                    </div>
-                                </ProcessingCollapsibleInspectorSection>
-                                {selectedField.type !== "text_block" ? (
-                                <ProcessingCollapsibleInspectorSection
-                                    title="Destination"
-                                    subtitle="Where answers are stored"
-                                    open={inspectorSection === "destination"}
-                                    onOpenChange={(open) => open && setInspectorSection("destination")}
-                                >
-                                <div data-inspector-destination>
-                                    <p className="config-typo-sublabel mb-1">Where should this answer go?</p>
-                                    {editable ? (
-                                        <select
-                                            value={storeValueFromField(selectedField)}
-                                            onChange={(e) =>
-                                                mutate((s) => {
-                                                    const field = s.fields.find((f) => f.id === selectedField.id);
-                                                    if (!field) return s;
-                                                    const fs = fieldSourceForDestination(field, e.target.value);
-                                                    return updateField(s, selectedField.id, { field_source: fs });
-                                                })
-                                            }
-                                            className="w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm"
-                                            data-testid="form-builder-destination"
-                                        >
-                                            {STORE_OPTIONS.map((o) => (
-                                                <option key={o.value} value={o.value}>
-                                                    {o.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <p className="text-[12px] font-medium">{destinationLabel(selectedField)}</p>
-                                    )}
-                                </div>
-                                </ProcessingCollapsibleInspectorSection>
-                                ) : null}
-                                <ProcessingCollapsibleInspectorSection
-                                    title="Advanced"
-                                    subtitle="Field source and reorder"
-                                    open={inspectorSection === "advanced"}
-                                    onOpenChange={(open) => open && setInspectorSection("advanced")}
-                                >
-                                <details className="text-[11px] text-alloy-midnight/45" open={showAdvanced} onToggle={(e) => setShowAdvanced((e.target as HTMLDetailsElement).open)}>
-                                    <summary className="sr-only">Advanced</summary>
-                                    <p className="font-mono text-[10px]">
-                                        {selectedField.field_source
-                                            ? `${selectedField.field_source.entity_type}.${selectedField.field_source.field_key}`
-                                            : "processing_only"}
-                                    </p>
-                                </details>
-                                <div data-inspector-field-list className="mt-3">
-                                    <details className="text-[11px] text-alloy-midnight/45">
-                                        <summary className="cursor-pointer font-semibold text-alloy-midnight/60">Reorder</summary>
-                                        <div className="mt-2 flex flex-wrap gap-2">
-                                            <button
-                                                type="button"
-                                                disabled={!editable}
-                                                className="config-secondary-btn text-xs"
-                                                data-inspector-move-earlier
-                                                data-testid="form-builder-move-earlier"
-                                                onClick={() => mutate((s) => moveFieldWithinSection(s, selectedField.id, -1))}
-                                            >
-                                                Earlier
-                                            </button>
-                                            <button
-                                                type="button"
-                                                disabled={!editable}
-                                                className="config-secondary-btn text-xs"
-                                                data-inspector-move-later
-                                                data-testid="form-builder-move-later"
-                                                onClick={() => mutate((s) => moveFieldWithinSection(s, selectedField.id, 1))}
-                                            >
-                                                Later
-                                            </button>
-                                        </div>
-                                    </details>
-                                    <button
-                                        type="button"
-                                        disabled={!editable}
-                                        className="mt-3 text-[11px] font-semibold text-rose-600"
-                                        data-inspector-remove
-                                        onClick={() => {
-                                            mutate((s) => removeField(s, selectedField.id));
-                                            setSelectedFieldId(null);
-                                        }}
-                                    >
-                                        Remove question
-                                    </button>
-                                </div>
-                                </ProcessingCollapsibleInspectorSection>
-                            </div>
+                            <ProcessingFormQuestionInspector
+                                field={selectedField}
+                                schema={schema}
+                                editable={editable}
+                                mutate={mutate}
+                                onRemove={() => {
+                                    mutate((s) => removeField(s, selectedField.id));
+                                    setSelectedFieldId(null);
+                                }}
+                                onOpenDistribution={() => setInspectorSection("distribution")}
+                            />
                         ) : selectedSection ? (
                             <div className="space-y-3" data-surface-composer-inspector="section">
                                 <ProcessingCollapsibleInspectorSection title="Section" subtitle="Title and questions" defaultOpen accent>
@@ -857,12 +561,14 @@ function FormPreview({
                                         {row.map((fid) => {
                                             const field = fieldById.get(fid);
                                             if (!field) return null;
-                                            const half = field.layout_width === "half";
+                                            const width =
+                                                field.layout_width === "half" ||
+                                                field.layout_width === "third" ||
+                                                field.layout_width === "quarter"
+                                                    ? field.layout_width
+                                                    : "full";
                                             return (
-                                                <div
-                                                    key={fid}
-                                                    className={half ? "min-w-[calc(50%-0.375rem)] flex-[1_1_calc(50%-0.375rem)]" : "w-full flex-[1_1_100%]"}
-                                                >
+                                                <div key={fid} className={fieldLayoutFlexClass(width)}>
                                                     {field.type === "text_block" ? (
                                                         <div className="rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.05] px-4 py-3 text-[13px] leading-relaxed text-alloy-midnight/70">
                                                             <PreviewTokenText value={field.content} />

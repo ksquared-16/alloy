@@ -4,6 +4,7 @@ import {
     groupFieldsIntoRows,
     placementFromField,
     setFieldPlacement,
+    setFieldLayoutWidth,
     moveFieldBetweenSections,
     reorderField,
     reorderFieldAfter,
@@ -97,6 +98,83 @@ describe("formRowComposition", () => {
         schema = reorderFieldAfter(schema, c.fieldId, sec, a.fieldId);
         const ids = schema.sections[0]!.field_ids;
         expect(ids).toEqual([a.fieldId, c.fieldId, b.fieldId]);
+    });
+
+    it("groups quarter-width fields up to four per row", () => {
+        let schema = createBlankSchema("Test");
+        const sec = schema.sections[0]!.id;
+        for (let i = 0; i < 4; i++) {
+            const r = addField(schema, { type: "short_text", label: `Q${i + 1}`, sectionId: sec });
+            schema = setFieldLayoutWidth(r.schema, r.fieldId, "quarter");
+        }
+        const map = new Map(schema.fields.map((f) => [f.id, f]));
+        const rows = groupFieldsIntoRows(schema.sections[0]!.field_ids, map);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toHaveLength(4);
+    });
+
+    it("starts new row when width units exceed 12", () => {
+        let schema = createBlankSchema("Test");
+        const sec = schema.sections[0]!.id;
+        let r = addField(schema, { type: "short_text", label: "A", sectionId: sec });
+        schema = setFieldLayoutWidth(r.schema, r.fieldId, "third");
+        r = addField(schema, { type: "short_text", label: "B", sectionId: sec });
+        schema = setFieldLayoutWidth(r.schema, r.fieldId, "third");
+        r = addField(schema, { type: "short_text", label: "C", sectionId: sec });
+        schema = setFieldLayoutWidth(r.schema, r.fieldId, "third");
+        r = addField(schema, { type: "short_text", label: "D", sectionId: sec });
+        schema = setFieldLayoutWidth(r.schema, r.fieldId, "third");
+        const map = new Map(schema.fields.map((f) => [f.id, f]));
+        const rows = groupFieldsIntoRows(schema.sections[0]!.field_ids, map);
+        expect(rows).toHaveLength(2);
+        expect(rows[0]).toHaveLength(3);
+        expect(rows[1]).toHaveLength(1);
+    });
+
+    it("packs two half rows across four consecutive half-width fields", () => {
+        let schema = createBlankSchema("Test");
+        const sec = schema.sections[0]!.id;
+        const labels = ["R1-A", "R1-B", "R2-A", "R2-B"];
+        for (const label of labels) {
+            const r = addField(schema, { type: "short_text", label, sectionId: sec });
+            schema = setFieldLayoutWidth(r.schema, r.fieldId, "half");
+        }
+        const map = new Map(schema.fields.map((f) => [f.id, f]));
+        const rows = groupFieldsIntoRows(schema.sections[0]!.field_ids, map);
+        expect(rows).toHaveLength(2);
+        expect(rows[0]).toHaveLength(2);
+        expect(rows[1]).toHaveLength(2);
+        expect(rows[0]!.map((id) => map.get(id)?.label)).toEqual(["R1-A", "R1-B"]);
+        expect(rows[1]!.map((id) => map.get(id)?.label)).toEqual(["R2-A", "R2-B"]);
+    });
+
+    it("packs mixed third, half, and quarter rows on the 12-unit grid", () => {
+        let schema = createBlankSchema("Test");
+        const sec = schema.sections[0]!.id;
+        const specs: Array<{ label: string; width: "third" | "half" | "quarter" }> = [
+            { label: "T1", width: "third" },
+            { label: "T2", width: "third" },
+            { label: "T3", width: "third" },
+            { label: "H1", width: "half" },
+            { label: "H2", width: "half" },
+            { label: "Q1", width: "quarter" },
+            { label: "Q2", width: "quarter" },
+            { label: "Q3", width: "quarter" },
+            { label: "Q4", width: "quarter" },
+        ];
+        for (const spec of specs) {
+            const r = addField(schema, { type: "short_text", label: spec.label, sectionId: sec });
+            schema = setFieldLayoutWidth(r.schema, r.fieldId, spec.width);
+        }
+        const map = new Map(schema.fields.map((f) => [f.id, f]));
+        const rows = groupFieldsIntoRows(schema.sections[0]!.field_ids, map);
+        expect(rows).toHaveLength(3);
+        expect(rows[0]).toHaveLength(3);
+        expect(rows[1]).toHaveLength(2);
+        expect(rows[2]).toHaveLength(4);
+        expect(rows[0]!.map((id) => map.get(id)?.label)).toEqual(["T1", "T2", "T3"]);
+        expect(rows[1]!.map((id) => map.get(id)?.label)).toEqual(["H1", "H2"]);
+        expect(rows[2]!.map((id) => map.get(id)?.label)).toEqual(["Q1", "Q2", "Q3", "Q4"]);
     });
 });
 

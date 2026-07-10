@@ -22,6 +22,7 @@ import {
     detectedInputFormatLabel,
     normalizeFieldValue,
 } from "@/lib/pos/processingCase/formDraft/fieldNormalization";
+import { AlloyFieldLabel, AlloySelect, AlloyTextInput } from "./ProcessingAlloyControls";
 
 function resolvedFieldSource(question: ReviewQuestionInput) {
     const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
@@ -241,17 +242,15 @@ export function ProcessingQuestionReviewList({
 
                                         {isEditing && !q.ignored ? (
                                             <div className="mt-1.5 space-y-1 border-t border-alloy-stone/[0.08] pt-1.5">
-                                                <input
+                                                <AlloyTextInput
                                                     value={q.displayLabel}
-                                                    onChange={(e) => onUpdate(q.id, { displayLabel: e.target.value })}
-                                                    placeholder="Display label"
-                                                    className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] focus:border-alloy-bend-pine/40 focus:outline-none"
+                                                    onChange={(displayLabel) => onUpdate(q.id, { displayLabel })}
+                                                    placeholder="Question label"
                                                 />
-                                                <input
+                                                <AlloyTextInput
                                                     value={q.section}
-                                                    onChange={(e) => onUpdate(q.id, { section: e.target.value })}
+                                                    onChange={(section) => onUpdate(q.id, { section })}
                                                     placeholder="Section"
-                                                    className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[9px] focus:border-alloy-bend-pine/40 focus:outline-none"
                                                 />
                                             </div>
                                         ) : null}
@@ -295,51 +294,39 @@ function ReviewQuestionInspector({
 
     return (
         <div className="mt-1.5 space-y-2 border-t border-alloy-stone/[0.08] pt-1.5" data-testid={`review-inspector-${question.id}`}>
-            <InspectorRow label="Detected type">
+            <InspectorRow label="Answer type">
                 <span className="text-[10px] text-alloy-midnight/70">{TYPE_LABEL[question.type] ?? question.type}</span>
             </InspectorRow>
 
-            <InspectorRow label="Destination">
-                <select
+            <InspectorRow label="Store answer in">
+                <AlloySelect
                     value={question.questionSubject ?? "processing_only"}
-                    data-testid={`review-subject-${question.id}`}
-                    onChange={(e) =>
+                    onChange={(value) =>
                         onUpdate(question.id, {
-                            questionSubject: e.target.value as ReviewQuestionInput["questionSubject"],
+                            questionSubject: value as ReviewQuestionInput["questionSubject"],
                             destinationFieldId: undefined,
                             field_source: undefined,
                         })
                     }
-                    className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] text-alloy-midnight focus:border-alloy-bend-pine/40 focus:outline-none"
-                >
-                    {QUESTION_SUBJECT_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                            {o.label}
-                        </option>
-                    ))}
-                </select>
+                    options={QUESTION_SUBJECT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                    testId={`review-subject-${question.id}`}
+                />
             </InspectorRow>
 
             {subject !== "processing_only" ? (
-                <InspectorRow label="Destination field">
-                    <select
+                <InspectorRow label="Field">
+                    <AlloySelect
                         value={selectedFieldId}
-                        data-testid={`review-destination-field-${question.id}`}
-                        onChange={(e) =>
+                        onChange={(value) =>
                             onUpdate(question.id, {
-                                destinationFieldId: e.target.value || undefined,
+                                destinationFieldId: value || undefined,
                                 field_source: undefined,
                             })
                         }
-                        className="w-full rounded border border-alloy-stone/20 bg-white px-2 py-1 text-[10px] text-alloy-midnight focus:border-alloy-bend-pine/40 focus:outline-none"
-                    >
-                        <option value="">Choose a field…</option>
-                        {eligibleFields.map((field) => (
-                            <option key={field.id} value={field.id}>
-                                {field.label}
-                            </option>
-                        ))}
-                    </select>
+                        placeholder="Choose a field…"
+                        options={eligibleFields.map((field) => ({ value: field.id, label: field.label }))}
+                        testId={`review-destination-field-${question.id}`}
+                    />
                 </InspectorRow>
             ) : null}
 
