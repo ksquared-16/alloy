@@ -226,7 +226,7 @@ Also recommended for broader drawer/queue edits:
 - `tests/adminV2/workUnitRevealGate.test.ts`
 - `tests/adminV2/runtime/adminV2RuntimeContract.test.ts`
 
-Before merge on TypeScript changes: `cd web && npx tsc --noEmit`.
+Before merge on TypeScript changes: `cd web && npm run typecheck`. When tests or scripts change, also run `npm run typecheck:tests`. See `docs/governance/typescript-performance.md`.
 
 ---
 

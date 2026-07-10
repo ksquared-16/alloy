@@ -50,7 +50,8 @@ Use audit -> design -> build for substantial work.
 
 Prefer focused checks first:
 
-- `cd web && npx tsc --noEmit` — **required before merge** on any `web/` TypeScript change (catches errors Vitest may miss).
+- `cd web && npm run typecheck` — **required before merge** on any `web/` TypeScript change (production/build graph; same config `next build` uses). Catches errors Vitest may miss.
+- `cd web && npm run typecheck:tests` — **required when changing tests, scripts, Playwright, or shared types consumed by tests** (full graph including `tests/`). See `docs/governance/typescript-performance.md`.
 - `cd web && npm run verify:module-imports` — **required before staging deploy** when adding `@/lib/**` imports; catches new files not committed (Vercel `Module not found`).
 - `cd web && npm run lint`
 - `cd web && npm run test -- <relevant test path>` when changing covered behavior
@@ -66,7 +67,7 @@ When a symbol appears **only as a type** (component props, function parameters, 
 
 **Example (forms field authoring, May 2026):** `FormFieldAuthoringCard.tsx` referenced `SystemFieldRegistryEntry` in props after `import { linesToStaticOptions }` — fix: `import { linesToStaticOptions, type SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry"`.
 
-**Rule:** After splitting or editing imports, run `cd web && npx tsc --noEmit` before pushing.
+**Rule:** After splitting or editing imports, run `cd web && npm run typecheck` before pushing. Do **not** use raw `npx tsc --noEmit` — it omits the 8 GB heap and may target the wrong graph.
 
 ## Final Response Contract
 
