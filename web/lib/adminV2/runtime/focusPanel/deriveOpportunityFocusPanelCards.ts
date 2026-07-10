@@ -786,25 +786,25 @@ const summaryCell = (
 export const SUMMARY_GRID: FocusPanelCardGridSpec = {
     rows: [
         {
-            cells: [summaryCell("current_work", "standard", "work")],
-        },
-        {
             cells: [
+                summaryCell("current_work", "standard", "work"),
                 summaryCell("household", "standard", "reference"),
+            ],
+        },
+        {
+            cells: [
                 summaryCell("children", "standard", "reference"),
-            ],
-        },
-        {
-            cells: [
                 summaryCell("readiness_kpi", "compact", "metric"),
-                summaryCell("tour_summary", "compact", "context"),
             ],
         },
         {
             cells: [
+                summaryCell("tour_summary", "compact", "context"),
                 summaryCell("communications", "standard", "reference"),
-                summaryCell("documents", "standard", "reference"),
             ],
+        },
+        {
+            cells: [summaryCell("documents", "standard", "reference")],
         },
     ],
 };
