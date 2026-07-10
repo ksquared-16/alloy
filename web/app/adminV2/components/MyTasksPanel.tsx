@@ -60,6 +60,8 @@ import {
     type WorkItemViewKey,
 } from "@/lib/workItems/workItemQueueScope";
 import { mapWorkItemQueueRow } from "@/lib/workItems/mapWorkItemQueueRow";
+import { buildWorkItemProcessLabelsFromTasks } from "@/lib/workItems/workItemBpProvenance";
+import { dispatchFocusCurrentWork } from "@/lib/workItems/workItemsNavigation";
 import { draftToOperationalTaskBody } from "@/lib/workItems/commitWorkItemDraft";
 import { markSessionCommitted, type WorkItemCreationSession } from "@/lib/workItems/workItemCreationRuntime";
 import type { WorkItemDraftEntity } from "@/lib/workItems/workItemDraftV1";
@@ -251,9 +253,21 @@ export default function MyTasksPanel({
         });
     }, [selectedSiteId, tasks]);
 
-    const processGroups = useMemo(
-        () => deriveWorkItemsProcessGroups(siteScopedTasks, { fallbackProcessLabel: "Enrollment" }),
+    const bpLabelOptions = useMemo(
+        () => ({
+            processLabels: buildWorkItemProcessLabelsFromTasks(siteScopedTasks, "Enrollment"),
+            fallbackProcessLabel: "Enrollment",
+        }),
         [siteScopedTasks],
+    );
+
+    const processGroups = useMemo(
+        () =>
+            deriveWorkItemsProcessGroups(siteScopedTasks, {
+                fallbackProcessLabel: "Enrollment",
+                processLabels: bpLabelOptions.processLabels,
+            }),
+        [bpLabelOptions.processLabels, siteScopedTasks],
     );
 
     const scopedTasks = useMemo(() => {
@@ -334,6 +348,20 @@ export default function MyTasksPanel({
                     }),
                 );
             }
+            onClose?.();
+        },
+        [adminDrawer, onClose],
+    );
+
+    const onOpenCurrentWork = useCallback(
+        (task: MyTasksTaskRow) => {
+            if (task.entity_type !== "opportunities" || !task.entity_id?.trim() || !adminDrawer) return;
+            adminDrawer.openDrawer({
+                type: "opportunities",
+                id: task.entity_id,
+                opportunityWorkspaceContext: null,
+            });
+            dispatchFocusCurrentWork({ opportunity_id: task.entity_id, task_id: task.id });
             onClose?.();
         },
         [adminDrawer, onClose],
@@ -674,7 +702,7 @@ export default function MyTasksPanel({
 
     const queueRows = visibleTasks.map((task) => ({
         task,
-        row: mapWorkItemQueueRow(task, { presentation, entityLabels }),
+        row: mapWorkItemQueueRow(task, { presentation, entityLabels, labelOptions: bpLabelOptions }),
     }));
 
     return (
@@ -773,6 +801,9 @@ export default function MyTasksPanel({
                         onCancelCreate={() => setCreateOpen(false)}
                         presentation={presentation}
                         entityLabels={entityLabels}
+                        bpLabelOptions={bpLabelOptions}
+                        onOpenRecord={selectedTask ? () => onOpenRecord(selectedTask) : undefined}
+                        onOpenCurrentWork={selectedTask ? () => onOpenCurrentWork(selectedTask) : undefined}
                     />
                 </div>
             </WorkspaceZonePanel>

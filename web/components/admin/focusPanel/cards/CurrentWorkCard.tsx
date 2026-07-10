@@ -33,6 +33,8 @@ import {
     useReportPerspective,
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
+import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
 import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 
 type Props = {
@@ -95,6 +97,19 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
 
     const level: FocusPanelPerspectiveLevel = focused ? "focused" : "base";
     useReportPerspective(coordination, "current_work", level);
+
+    useEffect(() => {
+        const onFocusCurrentWork = (event: Event) => {
+            const detail = (event as CustomEvent<{ opportunity_id?: string; task_id?: string | null }>).detail;
+            if (detail?.opportunity_id !== opportunityId) return;
+            setFocused(true);
+            resetCompletion();
+            closeActionPanel();
+        };
+        window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
+    }, [closeActionPanel, opportunityId, resetCompletion]);
+
     useDismissSignal(coordination, "current_work", () => {
         setFocused(false);
         resetCompletion();
@@ -367,6 +382,8 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
             </>
         :   <SummaryBody
                 surface={surface}
+                primaryWorkItem={vm.primaryWorkItem}
+                opportunityId={opportunityId}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
                 activityPreviewOpen={activityPreviewOpen}
@@ -577,6 +594,8 @@ function ActivityFooter({
 
 function SummaryBody({
     surface,
+    primaryWorkItem,
+    opportunityId,
     onChecklistItem,
     onAction,
     activityPreviewOpen,
@@ -585,6 +604,8 @@ function SummaryBody({
     activityPreviewItems,
 }: {
     surface: CurrentWorkSurfaceVM;
+    primaryWorkItem: CurrentWorkSurfaceVM["primaryWorkItem"];
+    opportunityId: string;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
     activityPreviewOpen: boolean;
@@ -595,6 +616,12 @@ function SummaryBody({
     const helpfulActions = [...surface.supportingActions, ...surface.communicationActions];
     return (
         <div className="alloy-os-currentwork__summary" data-work-summary="true">
+            {primaryWorkItem?.work_id ?
+                <div className="mb-2 flex flex-wrap items-center gap-2" data-current-work-work-items-link="true">
+                    <p className="text-[11px] text-alloy-midnight/55">Also tracked in Work Items.</p>
+                    <ViewInWorkItemsLink taskId={primaryWorkItem.work_id} opportunityId={opportunityId} />
+                </div>
+            :   null}
             <SurfaceProgress progress={surface.progress} />
             <ChecklistStepper items={surface.checklist} onNavigate={onChecklistItem} />
             {surface.primaryAction ?

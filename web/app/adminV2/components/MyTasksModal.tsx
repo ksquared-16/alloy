@@ -12,6 +12,10 @@ import WorkItemsOverviewLanding from "@/app/adminV2/tasks/WorkItemsOverviewLandi
 import WorkItemsShell, { type WorkItemsWorkView } from "@/app/adminV2/tasks/WorkItemsShell";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import type { OperationalTaskWorkspaceFilter } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import {
+    ADMIN_V2_OPEN_WORK_ITEMS_TASK,
+    type OpenWorkItemsTaskDetail,
+} from "@/lib/workItems/workItemsNavigation";
 
 export type MyTasksModalProps = {
     open: boolean;
@@ -30,7 +34,6 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
             prefetchWorkspaceOperationalTasks("completed");
         }
     }, [open]);
-
     const handleClose = useCallback(() => {
         setWorkView("overview");
         setNavFilter("open");
@@ -48,6 +51,18 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
         setNavFilter(filter);
         setWorkView("queue");
     }, []);
+
+
+    useEffect(() => {
+        const onOpenWorkItemsTask = (event: Event) => {
+            const detail = (event as CustomEvent<OpenWorkItemsTaskDetail>).detail;
+            const taskId = detail?.task_id?.trim();
+            if (!taskId) return;
+            openTask(taskId, detail.filter ?? "open");
+        };
+        window.addEventListener(ADMIN_V2_OPEN_WORK_ITEMS_TASK, onOpenWorkItemsTask as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_WORK_ITEMS_TASK, onOpenWorkItemsTask as EventListener);
+    }, [openTask]);
 
     const navigateFilter = useCallback((filter: OperationalTaskWorkspaceFilter) => {
         setNavFilter(filter);

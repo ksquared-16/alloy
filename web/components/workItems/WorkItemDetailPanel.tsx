@@ -8,10 +8,12 @@ import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import type { MyTasksPresentationLabels } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import { formatOperationalTaskDueDisplay } from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
+import WorkItemBpContextPanel from "@/components/workItems/WorkItemBpContextPanel";
 import WorkItemCreateModal from "@/components/workItems/WorkItemCreateModal";
 import { buildWorkItemBosSummary, buildWorkItemBreadcrumb } from "@/lib/workItems/mapWorkItemQueueRow";
 import type { WorkItemCreationSession } from "@/lib/workItems/workItemCreationRuntime";
 import type { WorkItemDraftEntity } from "@/lib/workItems/workItemDraftV1";
+import type { WorkItemBpLabelOptions } from "@/lib/workItems/workItemBpProvenance";
 
 type DetailTabKey = "overview" | "activity" | "conversation" | "related";
 
@@ -33,6 +35,9 @@ export type WorkItemDetailPanelProps = {
     onCancelCreate: () => void;
     presentation: MyTasksPresentationLabels;
     entityLabels: EntityLabelsMap;
+    bpLabelOptions?: WorkItemBpLabelOptions;
+    onOpenRecord?: () => void;
+    onOpenCurrentWork?: () => void;
 };
 
 function EmptyDetailState() {
@@ -58,6 +63,9 @@ export default function WorkItemDetailPanel({
     onCancelCreate,
     presentation,
     entityLabels,
+    bpLabelOptions,
+    onOpenRecord,
+    onOpenCurrentWork,
 }: WorkItemDetailPanelProps) {
     const [activeTab, setActiveTab] = useState<DetailTabKey>("overview");
 
@@ -67,13 +75,13 @@ export default function WorkItemDetailPanel({
 
     const breadcrumb = useMemo(() => {
         if (!task) return null;
-        return buildWorkItemBreadcrumb(task, presentation, entityLabels);
+        return buildWorkItemBreadcrumb(task, presentation, entityLabels, bpLabelOptions);
     }, [entityLabels, presentation, task]);
 
     const bosSummary = useMemo(() => {
         if (!task) return null;
-        return buildWorkItemBosSummary(task);
-    }, [task]);
+        return buildWorkItemBosSummary(task, bpLabelOptions);
+    }, [bpLabelOptions, task]);
 
     if (createOpen) {
         return (
@@ -119,6 +127,12 @@ export default function WorkItemDetailPanel({
             <div className="min-h-0 flex-1 overflow-y-auto pt-3">
                 {activeTab === "overview" ? (
                     <div className="space-y-3">
+                        <WorkItemBpContextPanel
+                            task={task}
+                            labelOptions={bpLabelOptions}
+                            onOpenRecord={onOpenRecord}
+                            onOpenCurrentWork={onOpenCurrentWork}
+                        />
                         <div className="rounded-lg border border-alloy-juniper/20 bg-alloy-juniper/[0.06] px-3 py-2" data-work-items-bos-summary="true">
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-juniper/80">BOS summary</p>
                             <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/72">{bosSummary}</p>
@@ -163,8 +177,16 @@ export default function WorkItemDetailPanel({
                 ) : null}
 
                 {activeTab === "related" ? (
-                    <div className="rounded-lg border border-dashed border-alloy-stone/20 px-3 py-8 text-center text-[12px] text-alloy-midnight/48">
-                        Related records and links land in the next slice.
+                    <div className="space-y-3">
+                        <WorkItemBpContextPanel
+                            task={task}
+                            labelOptions={bpLabelOptions}
+                            onOpenRecord={onOpenRecord}
+                            onOpenCurrentWork={onOpenCurrentWork}
+                        />
+                        <p className="text-[11px] text-alloy-midnight/55">
+                            This work item shares execution state with Current Work on the linked record.
+                        </p>
                     </div>
                 ) : null}
             </div>
