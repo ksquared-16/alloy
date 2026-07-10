@@ -49,15 +49,58 @@ describe("artifactViewportScale", () => {
         expect(scale).toBeCloseTo((420 - 16) / 400, 2);
     });
 
-    it("resolveArtifactScale respects manual mode", () => {
+    it("manual 50% produces effective scale of 0.5", () => {
         const scale = resolveArtifactScale({
             mode: "manual",
             viewportW: 500,
             viewportH: 400,
             contentW: 400,
             firstPageH: 600,
-            manualScale: 1.25,
+            manualScale: 0.5,
         });
-        expect(scale).toBe(1.25);
+        expect(scale).toBe(0.5);
+    });
+
+    it("manual 150% produces effective scale of 1.5", () => {
+        const scale = resolveArtifactScale({
+            mode: "manual",
+            viewportW: 500,
+            viewportH: 400,
+            contentW: 400,
+            firstPageH: 600,
+            manualScale: 1.5,
+        });
+        expect(scale).toBe(1.5);
+    });
+
+    it("manual mode is not replaced by fit-page math", () => {
+        const fitPage = computeFitPageScale({
+            viewportW: 420,
+            viewportH: 320,
+            contentW: 400,
+            firstPageH: estimateArtifactPageHeight(400, letterPage),
+        });
+        const manual = resolveArtifactScale({
+            mode: "manual",
+            viewportW: 420,
+            viewportH: 320,
+            contentW: 400,
+            firstPageH: estimateArtifactPageHeight(400, letterPage),
+            manualScale: 1.5,
+        });
+        expect(manual).toBe(1.5);
+        expect(manual).not.toBe(fitPage);
+    });
+
+    it("fit-width mode ignores viewport height", () => {
+        const scale = resolveArtifactScale({
+            mode: "fit-width",
+            viewportW: 420,
+            viewportH: 200,
+            contentW: 400,
+            firstPageH: 900,
+            manualScale: 1,
+        });
+        expect(scale).toBeCloseTo((420 - 16) / 400, 2);
     });
 });

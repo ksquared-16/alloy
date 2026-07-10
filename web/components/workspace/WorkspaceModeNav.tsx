@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import WorkspaceModeTabs, { type WorkspaceMode } from "@/components/workspace/WorkspaceModeTabs";
 import WorkspaceSubTabs from "@/components/workspace/WorkspaceSubTabs";
-import { WS_NAV_CONTENT_DIVIDER, WS_SHELL_NAV_CLASS } from "@/components/workspace/workspaceTokens";
+import { WS_SHELL_NAV_CLASS } from "@/components/workspace/workspaceTokens";
 
 /**
  * @module WorkspaceModeNav
@@ -65,7 +65,7 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
     if (metricsColumn) {
         return (
             <nav
-                className={`${WS_SHELL_NAV_CLASS} ${WS_NAV_CONTENT_DIVIDER}`}
+                className={WS_SHELL_NAV_CLASS}
                 data-workspace-mode-nav={navDataAttr ?? "true"}
                 aria-label={modeAriaLabel}
             >
@@ -73,16 +73,10 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
                     className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:grid-rows-[auto_auto]"
                     data-workspace-mode-split-nav="true"
                 >
-                    <div
-                        className="pb-2 lg:col-start-1 lg:row-start-1"
-                        data-workspace-mode-rail="true"
-                    >
+                    <div className="pt-2 lg:col-start-1 lg:row-start-1" data-workspace-mode-rail="true">
                         <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
                     </div>
-                    <div
-                        className="pt-1.5 pb-0 lg:col-start-1 lg:row-start-2"
-                        data-workspace-mode-sections={sectionsDataAttr ?? "true"}
-                    >
+                    <div className="pt-2 lg:col-start-1 lg:row-start-2" data-workspace-mode-sections={sectionsDataAttr ?? "true"}>
                         <WorkspaceSubTabs
                             tabs={sectionTabs}
                             activeKey={activeSection}
@@ -91,7 +85,7 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
                         />
                     </div>
                     <div
-                        className="flex min-w-0 flex-col items-stretch justify-center border-t border-alloy-stone/15 py-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:border-t-0 lg:pl-4 lg:py-1"
+                        className="flex min-w-0 flex-col items-stretch justify-end pt-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:pl-4"
                         data-workspace-mode-metrics="true"
                     >
                         {metricsColumn}
@@ -103,15 +97,15 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
 
     return (
         <nav
-            className={`${WS_SHELL_NAV_CLASS} ${WS_NAV_CONTENT_DIVIDER}`}
+            className={WS_SHELL_NAV_CLASS}
             data-workspace-mode-nav={navDataAttr ?? "true"}
             aria-label={modeAriaLabel}
         >
-            <div className="pb-2" data-workspace-mode-rail="true">
+            <div className="pt-2" data-workspace-mode-rail="true">
                 <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
             </div>
             <div
-                className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 pt-1"
+                className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 pt-2"
                 data-workspace-mode-sections={sectionsDataAttr ?? "true"}
             >
                 <WorkspaceSubTabs

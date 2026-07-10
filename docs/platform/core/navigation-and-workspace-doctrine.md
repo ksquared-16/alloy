@@ -215,6 +215,8 @@ Requirements:
 - Multi-page stacks scroll inside the source-document panel; footer CTA stays fixed outside scroll
 - Regions and PDF modes share fit/zoom semantics
 - Manual zoom must never clip content inside an inaccessible wrapper
+- The displayed percentage must match the applied `effectiveScale` on the content wrapper (`zoom` or equivalent in-flow scale)
+- `ResizeObserver` remeasurement must not reset manual zoom (never force `zoom: 1` during measure while manual mode is active)
 
 Scale helpers: `web/lib/workspace/artifactViewportScale.ts`
 
@@ -225,7 +227,7 @@ Scale helpers: `web/lib/workspace/artifactViewportScale.ts`
 | Metric | Accent | Meaning |
 |--------|--------|---------|
 | Active work | Bend Pine | Actionable queue |
-| Ready | Bend Pine | Actionable / healthy |
+| Needs review | Alloy Ember / warning | Operator review required |
 | Forms | Midnight Forge | Inventory |
 | Published | Alloy Gold | Finalized |
 

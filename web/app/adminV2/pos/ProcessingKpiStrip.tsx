@@ -12,6 +12,14 @@ import WorkspaceMetricTiles, { type WorkspaceMetricTileItem } from "@/components
 import { useProcessingQueueWarm } from "@/lib/pos/useProcessingQueueWarm";
 import { useProcessingFormApi } from "./useProcessingFormApi";
 
+/** Matches ProcessingQueueList work-lane derivation for needs_review. */
+function isNeedsReviewRow(row: { status: string; formDraftSummary?: { generatedFormId: string | null } | null }): boolean {
+    if (row.status === "completed" || row.status === "archived") return false;
+    if (row.formDraftSummary?.generatedFormId) return false;
+    if (row.status === "ready") return false;
+    return true;
+}
+
 export default function ProcessingKpiStrip() {
     const { data, loading: queueLoading } = useProcessingQueueWarm();
     const { forms, listLoaded, loadForms } = useProcessingFormApi();
@@ -22,12 +30,12 @@ export default function ProcessingKpiStrip() {
 
     const rows = data?.rows ?? [];
     const active = rows.filter((r) => r.status !== "completed" && r.status !== "archived");
-    const ready = rows.filter((r) => r.status === "ready" || r.formDraftSummary?.generatedFormId);
+    const needsReview = rows.filter(isNeedsReviewRow);
     const loading = queueLoading || !listLoaded;
 
     const items: WorkspaceMetricTileItem[] = [
         { key: "active", label: "Active work", value: String(active.length), icon: "clipboard", accent: "pine", status: "healthy" },
-        { key: "ready", label: "Ready", value: String(ready.length), icon: "spark", accent: "pine", status: "healthy" },
+        { key: "needs_review", label: "Needs review", value: String(needsReview.length), icon: "shield", accent: "ember", status: "warning" },
         { key: "forms", label: "Forms", value: String(forms.length), icon: "layers", accent: "midnight", status: "unknown" },
         {
             key: "published",

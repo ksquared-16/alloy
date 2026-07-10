@@ -49,7 +49,7 @@ export default function OperationalModalHeader({
 }) {
     return (
         <header
-            className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-alloy-stone/18 border-l-2 border-l-alloy-bend-pine bg-white px-4 py-1.5"
+            className="flex w-full shrink-0 items-center justify-between gap-3 border-l-2 border-l-alloy-bend-pine bg-white px-4 pb-0 pt-1.5"
             data-operational-modal-header="true"
             data-workspace-header-compact="true"
         >

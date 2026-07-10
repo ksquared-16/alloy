@@ -400,7 +400,7 @@ export default function PosTemplateSetupColumn({
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
-            <div className="shrink-0 border-b border-alloy-stone/10 bg-white px-1.5 py-0.5">
+            <div className="mb-2 shrink-0 bg-white px-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                     <ProcessingWorkflowStepper
                         compact
@@ -482,7 +482,7 @@ export default function PosTemplateSetupColumn({
                 </>
             ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="flex min-h-0 flex-1 gap-4 overflow-hidden p-2 pt-0">
+            <div className="flex min-h-0 flex-1 gap-3 overflow-hidden px-2 pb-2">
                 <WorkspaceZonePanel
                     title="Source document"
                     className="min-h-0 min-w-0 flex-[55] self-stretch"

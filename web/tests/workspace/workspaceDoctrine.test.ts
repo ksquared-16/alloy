@@ -68,7 +68,6 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
     it("Processing queue workspace uses shared zone panel and tokens", () => {
         const workspace = read("app/adminV2/pos/PosProcessingWorkspace.tsx");
         expect(workspace).toContain("WorkspaceZonePanel");
-        expect(workspace).toContain("WorkspaceDivider");
         expect(workspace).toContain("WS_QUEUE_RAIL");
         expect(workspace).not.toContain("ProcessingParentPanel");
     });
@@ -83,9 +82,10 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
     it("compact header and visible nav/content dividers are doctrine-owned", () => {
         const header = read("app/adminV2/components/OperationalModalHeader.tsx");
         expect(header).toContain('data-workspace-header-compact="true"');
-        expect(header).toContain("py-1.5");
-        const nav = read("components/workspace/WorkspaceModeNav.tsx");
-        expect(nav).toContain("WS_NAV_CONTENT_DIVIDER");
+        const shell = read("components/workspace/WorkspaceShell.tsx");
+        expect(shell).toContain("WS_CONTROL_BAND_DIVIDER");
+        const tokens = read("components/workspace/workspaceTokens.ts");
+        expect(tokens).toContain("border-alloy-stone/30");
         const divider = read("components/workspace/WorkspaceDivider.tsx");
         expect(divider).toContain("WS_DIVIDER_FILL");
     });
@@ -102,10 +102,10 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
 
     it("WorkspaceShell separates nav chrome from workspace body", () => {
         const shell = read("components/workspace/WorkspaceShell.tsx");
-        expect(shell).toContain("WorkspaceDivider");
-        expect(shell).toContain('data-testid="workspace-shell-body-divider"');
+        expect(shell).toContain("WS_CONTROL_BAND_DIVIDER");
+        expect(shell).toContain("data-workspace-control-band");
         const tokens = read("components/workspace/workspaceTokens.ts");
-        expect(tokens).toContain("WS_SHELL_BODY_SEPARATOR");
+        expect(tokens).toContain("export const WS_CONTROL_BAND_DIVIDER");
     });
 
     it("Processing uses artifact viewport with zoom controls", () => {
@@ -130,7 +130,6 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(viewport).toContain("WS_ARTIFACT_CANVAS");
         expect(viewport).toContain('data-workspace-artifact-viewport="true"');
         const workspace = read("app/adminV2/pos/PosProcessingWorkspace.tsx");
-        expect(workspace).toContain("WorkspaceDivider");
         expect(workspace).toContain("WS_QUEUE_RAIL");
         const tokens = read("lib/pos/processingPresentationTokens.ts");
         expect(tokens).toContain("PROCESSING_QUEUE_ROW_TITLE");
@@ -148,11 +147,13 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         const strip = read("app/adminV2/pos/ProcessingKpiStrip.tsx");
         expect(strip).toContain('accent: "pine"');
         expect(strip).toContain('label: "Active work"');
-        expect(strip).toContain('label: "Ready"');
+        expect(strip).toContain('label: "Needs review"');
+        expect(strip).toContain('accent: "ember"');
         expect(strip).toContain('accent: "midnight"');
         expect(strip).toContain('label: "Forms"');
         expect(strip).toContain('accent: "gold"');
         expect(strip).toContain('label: "Published"');
+        expect(strip).not.toContain('label: "Ready"');
     });
 
     it("metric eyebrow stacks above tile row", () => {
@@ -168,6 +169,8 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(viewport).toContain("ResizeObserver");
         expect(viewport).toContain("basis-0");
         expect(viewport).toContain("data-workspace-artifact-scale-mode");
+        expect(viewport).toContain("data-workspace-artifact-effective-scale");
+        expect(viewport).toContain("zoom: effectiveScale");
         const scale = read("lib/workspace/artifactViewportScale.ts");
         expect(scale).toContain("computeFitPageScale");
         expect(scale).toContain("Math.min(scaleW, scaleH, 1)");

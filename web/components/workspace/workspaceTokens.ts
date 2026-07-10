@@ -29,7 +29,10 @@ export const WS_DIVIDER = "border-alloy-stone/22";
 /** Divider fill for WorkspaceDivider spans (matches WS_DIVIDER). */
 export const WS_DIVIDER_FILL = "bg-alloy-stone/22";
 /** Nav band → workspace content separator (full-width under secondary tabs). */
-export const WS_NAV_CONTENT_DIVIDER = "border-b border-alloy-stone/22";
+export const WS_NAV_CONTENT_DIVIDER = "";
+
+/** Top control band → workspace body (full inner width). */
+export const WS_CONTROL_BAND_DIVIDER = "border-b border-alloy-stone/30";
 /** Title bar: white, subtle bottom border, midnight text (never navy). */
 export const WS_TITLEBAR = "border-b border-alloy-stone/15 bg-white";
 
@@ -111,22 +114,21 @@ export const WS_ACTION_SECONDARY =
 export const WS_FIELD = "bg-alloy-stone/[0.07]";
 
 /** Nav band → workspace body separator (full-width under shell chrome). */
-export const WS_SHELL_BODY_SEPARATOR = "border-t border-alloy-stone/25";
+export const WS_SHELL_BODY_SEPARATOR = "";
 
 /** White gutter inset between modal shell chrome and the stone workspace field (~16px). */
 export const WS_SHELL_INSET =
-    `flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 pb-4 pt-3 ${WS_SHELL_BODY_SEPARATOR}`;
+    "flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 pb-4 pt-3";
 
 /** Rounded stone operational canvas inside the shell inset (Layer 2). */
 export const WS_FIELD_CANVAS =
     `flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl ring-1 ring-alloy-stone/25 ${WS_FIELD}`;
 
 /** Module shell nav band padding (header → mode tabs → section tabs). */
-export const WS_SHELL_NAV_CLASS = "shrink-0 bg-white px-4 py-2";
+export const WS_SHELL_NAV_CLASS = "bg-white px-4 pb-2";
 
-/** Queue / list rail — recessed column with visible vertical stone separator. */
-export const WS_QUEUE_RAIL =
-    "border-r border-alloy-stone/22 bg-alloy-stone/[0.03] shadow-[inset_-1px_0_0_rgba(24,39,58,0.04)]";
+/** Queue / list rail — white column with visible vertical stone separator. */
+export const WS_QUEUE_RAIL = "border-r border-alloy-stone/30 bg-white";
 
 /** Primary working canvas inside a module workspace. */
 export const WS_CANVAS = "bg-white shadow-[0_1px_6px_rgba(24,39,58,0.06)]";
@@ -163,7 +165,7 @@ export const WS_ARTIFACT_VIEWPORT = "flex min-h-0 flex-1 flex-col overflow-hidde
 
 /** Internal scroll region for stacked artifact pages (bottom padding avoids clipped edge). */
 export const WS_ARTIFACT_VIEWPORT_SCROLL =
-    "min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-y-contain px-2 pb-6 pt-1.5";
+    "min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-y-contain px-3 pb-4 pt-0";
 
 /* ── Typography hierarchy (three levels only — Workspace Doctrine V2 freeze) ─── */
 

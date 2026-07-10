@@ -4,9 +4,8 @@ import type { ReactNode } from "react";
 
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import WorkspaceModeNav from "@/components/workspace/WorkspaceModeNav";
-import WorkspaceDivider from "@/components/workspace/WorkspaceDivider";
 import type { WorkspaceMode } from "@/components/workspace/WorkspaceModeTabs";
-import { WS_FIELD_CANVAS, WS_SHELL_INSET } from "@/components/workspace/workspaceTokens";
+import { WS_CONTROL_BAND_DIVIDER, WS_FIELD_CANVAS, WS_SHELL_INSET } from "@/components/workspace/workspaceTokens";
 
 /**
  * @module WorkspaceShell
@@ -100,35 +99,35 @@ export default function WorkspaceShell<M extends string, S extends string>({
             data-testid={dataTestId}
             {...shellDataAttrs}
         >
-            <WorkspaceHeader
-                icon={header.icon}
-                title={header.title}
-                subtitle={header.subtitle}
-                titleId={header.titleId}
-                actions={header.actions}
-                secondaryActions={header.secondaryActions}
-                onClose={header.onClose}
-                closeLabel={header.closeLabel}
-            />
+            <div className={`shrink-0 ${WS_CONTROL_BAND_DIVIDER}`} data-workspace-control-band="true">
+                <WorkspaceHeader
+                    icon={header.icon}
+                    title={header.title}
+                    subtitle={header.subtitle}
+                    titleId={header.titleId}
+                    actions={header.actions}
+                    secondaryActions={header.secondaryActions}
+                    onClose={header.onClose}
+                    closeLabel={header.closeLabel}
+                />
 
-            {kpiBand}
+                {kpiBand}
 
-            <WorkspaceModeNav
-                modes={modes}
-                activeMode={activeMode}
-                onModeChange={onModeChange}
-                modeAriaLabel={modeAriaLabel}
-                sectionTabs={sectionTabs}
-                activeSection={activeSection}
-                onSectionChange={onSectionChange}
-                sectionAriaLabel={sectionAriaLabel}
-                metricsColumn={metricsColumn}
-                sectionTrailing={sectionTrailing}
-                navDataAttr={navDataAttr}
-                sectionsDataAttr={sectionsDataAttr}
-            />
-
-            <WorkspaceDivider orientation="horizontal" className="shrink-0" data-testid="workspace-shell-body-divider" />
+                <WorkspaceModeNav
+                    modes={modes}
+                    activeMode={activeMode}
+                    onModeChange={onModeChange}
+                    modeAriaLabel={modeAriaLabel}
+                    sectionTabs={sectionTabs}
+                    activeSection={activeSection}
+                    onSectionChange={onSectionChange}
+                    sectionAriaLabel={sectionAriaLabel}
+                    metricsColumn={metricsColumn}
+                    sectionTrailing={sectionTrailing}
+                    navDataAttr={navDataAttr}
+                    sectionsDataAttr={sectionsDataAttr}
+                />
+            </div>
 
             <div className={WS_SHELL_INSET} data-workspace-shell-inset="true">
                 <div

@@ -7,7 +7,6 @@
 
 import { useCallback, useRef, useState } from "react";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
-import WorkspaceDivider from "@/components/workspace/WorkspaceDivider";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import { WS_ACTION_SECONDARY, WS_CANVAS, WS_INSPECTOR, WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
 import ProcessingQueueList from "@/app/adminV2/processing/ProcessingQueueList";
@@ -105,8 +104,6 @@ export default function PosProcessingWorkspace({
                         />
                     </div>
                 </WorkspaceZonePanel>
-
-                <WorkspaceDivider orientation="vertical" className="shrink-0" />
 
                 {!selectedCaseId ? (
                     <div className={`flex min-w-[20rem] flex-1 flex-col overflow-hidden p-5 ${WS_CANVAS}`}>
