@@ -2,6 +2,8 @@
 
 **Status:** Canonical platform milestones (June 2026 rebaseline). **Not** a commit or sprint task log.
 
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** This history predates the operational truth-flow backend. Recorded here for completeness: the **L1–L4 operational spine** (config rules; effective-dated agreements/placements/schedule assignments; immutable attendance facts; expected/actual occupancy & staffing read models) and the **L4→L5 Operational Consumption runtime** (Consumption Events → Resolved Obligations → draft Charges, Slices 1–4) shipped as flag-gated/simulator backend across June–July 2026. The frozen architecture governing their productization is [`../operational-expansion-phase1-architecture-rfc.md`](../operational-expansion-phase1-architecture-rfc.md); its first delivery step is defined in [`../operational-expansion-wave1-implementation-spec.md`](../operational-expansion-wave1-implementation-spec.md).
+
 ---
 
 ## 2026 H1 — Platform maturation

@@ -2,6 +2,8 @@
 
 **Status:** Canonical foundation (June 2026). Defines ownership boundaries for School → Program → Room → Schedule before scheduling/attendance runtime.
 
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** Where this doc frames a dedicated **`child_placements` / `schedule_assignments`** runtime as "future," that framing is stale: the effective-dated committed foundation (`child_enrollment_agreements` → `child_placements` → `schedule_assignments`, with supersede-not-patch and provenance FKs) is **built** and is the canonical **L2 Operational Intent** layer — see the "Enrollment proposal vs operational contract" table below and [`../operational-expansion-phase1-architecture-rfc.md`](../operational-expansion-phase1-architecture-rfc.md) §1/§3. The OCM-column MVP storage remains the *enrollment proposal*; the committed placement/schedule tables own operational truth after the approve handoff.
+
 ---
 
 ## Definition

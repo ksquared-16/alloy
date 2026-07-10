@@ -4,6 +4,14 @@
 
 > **This doctrine is complementary, not a replacement.** It introduces a second axis over the existing operating model; it does **not** modify the frozen five-plane surface model in [`./operational-ux-doctrine.md`](./operational-ux-doctrine.md). The two axes compose. See "Two orthogonal axes" below.
 
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The frozen [`./operational-expansion-phase1-architecture-rfc.md`](./operational-expansion-phase1-architecture-rfc.md) ratifies the following additions to this doctrine; treat them as canonical alongside the five layers and four laws below:
+> - **No sixth layer (RFC D1).** L1–L5 is sufficient; Forecasting lives in the Planning **plane** consuming L3+L4, not as a truth-flow layer.
+> - **Operational Fact contract (RFC D2).** L4 fact streams conform to a domain-neutral contract (immutable/append-only, corrected-by-reference, event-emitting, provenance FK, versioned emitted event) — a contract + conformance test, not a base class or shared table.
+> - **Facts vs events / per-domain storage (RFC D3).** Canonical operational facts live in **domain-owned authoritative stores**; `workflow_events` is the universal **event** log that *communicates* fact lifecycle and is **never** an authoritative fact store. No universal `operational_facts` table. Cross-domain timelines are a subject-indexed read-model projection.
+> - **Consequence authority by commitment boundary (RFC D5).** L4 Facts are authoritative per their domain fact contract; L5 Consequences are authoritative only **past a domain-defined commitment boundary** (Posting for financial charges; `approved`/`committed` for others), not universally "posted." Standard vocabulary: `draft→proposed→reviewed→approved→committed→posted→voided→reversed`.
+> - **Projections are governed calculations, never entities (RFC D4/D5).** Expected occupancy/staffing/variance/forecast are deterministic, registered Operational Calculations — never authoritative stored rows.
+> - **Fact→Consumption trigger edge is a named, pending seam (RFC D12).** The consumption pipeline exists as a library; wiring real facts to it (correction-aware) is Implementation Wave 1 (D12a) then D12b.
+
 ---
 
 ## Why this doctrine exists

@@ -3,6 +3,8 @@
 **Status:** Canonical (July 2026) — merged to staging via PR #95  
 **Related:** [actions-current-work-alignment.md](./actions-current-work-alignment.md)
 
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze — RFC D7).** The frozen [`../operational-expansion-phase1-architecture-rfc.md`](../operational-expansion-phase1-architecture-rfc.md) codifies the **Current Work threshold** and **reconciliation identity**: a condition becomes Current Work only when it is decision-bearing, **materially intervention-worthy**, governed by a configured rule/operating plan, actionable in context, **and assignable to an accountable owner** — all five. A raw variance/read-model signal is **not** Current Work. Each item carries a stable reconciliation identity `(governing_rule, subject, condition_key)`: the same active condition **reconciles** the existing item (no duplicate); a material change **updates/supersedes** it; a cleared condition **resolves or withdraws** per the governing rule; a recurrence after resolution creates a **new instance with lineage**; an idempotent event replay creates **no duplicate**.
+
 ---
 
 ## What Current Work is

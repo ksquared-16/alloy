@@ -4,6 +4,8 @@
 
 **Supersedes:** Work Unit System as the **primary documentation abstraction**. Work units remain a runtime construct — documented here, not as the operator-facing spine.
 
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze — RFC D8).** The frozen [`../operational-expansion-phase1-architecture-rfc.md`](../operational-expansion-phase1-architecture-rfc.md) codifies the **process-promotion criteria**: an operational sequence becomes a **Business Process** only when **all four** hold — durable per-subject stage/state, human-confirmed outcomes as the mutation path, queue/work membership, and readiness gates. Otherwise it is modeled with **Actions + status domains** (and surfaced via queues + Current Work). Applied to the expansion: **Attendance** = fact authoring on a roster (not a process); **Billing obligation review** = a consequence lifecycle (not a process); **AR/collections/dunning** = a process *candidate* (meets all four); **Scheduling/Staffing** = actions/facts by default, promoted only on evidence of staged governance.
+
 ---
 
 ## Operator mental model (canonical)
