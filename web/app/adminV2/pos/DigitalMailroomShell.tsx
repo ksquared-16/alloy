@@ -67,6 +67,7 @@ export default function DigitalMailroomShell({
     }
 
     const isWork = mode === "work";
+    const hideHeaderMetrics = isWork && workView === "overview";
 
     return (
         <WorkspaceShell
@@ -90,7 +91,7 @@ export default function DigitalMailroomShell({
                 else onStudioTabChange(key as ProcessingStudioTab);
             }}
             sectionAriaLabel={isWork ? "Work sections" : "Studio sections"}
-            metricsColumn={<ProcessingKpiStrip mode={mode} />}
+            metricsColumn={hideHeaderMetrics ? undefined : <ProcessingKpiStrip mode={mode} />}
             navDataAttr="mailroom"
             sectionsDataAttr="mailroom"
         >

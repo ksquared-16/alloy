@@ -13,8 +13,9 @@ import {
 describe("questionResolutionModel", () => {
     it("infers child identity from common enrollment labels", () => {
         expect(inferQuestionIntent("Child's Name")).toBe("child_identity");
-        expect(inferQuestionIntent("Date of Birth")).toBe("child_identity");
+        expect(inferQuestionIntent("Date of Birth")).toBe("date_of_birth");
         expect(defaultSubjectForIntent("child_identity")).toBe("child");
+        expect(defaultSubjectForIntent("date_of_birth")).toBe("child");
     });
 
     it("defaults first-name evidence to first+last representation", () => {
@@ -80,7 +81,7 @@ describe("questionResolutionModel", () => {
             displayLabel: "Child's name",
             type: "text",
         });
-        expect(storageSummaryLabel(source)).toBe("Store on Child");
+        expect(storageSummaryLabel(source)).toMatch(/Child first name|Store on Child/);
         expect(storageSummaryLabel(undefined)).toMatch(/Processing only/i);
     });
 

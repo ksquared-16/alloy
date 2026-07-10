@@ -59,7 +59,7 @@ export default function WorkItemsShell({
             activeSection={workView}
             onSectionChange={onWorkViewChange}
             sectionAriaLabel="Work sections"
-            metricsColumn={<WorkItemsKpiStrip />}
+            metricsColumn={<WorkItemsKpiStrip workView={workView} />}
             navDataAttr="work-items"
             sectionsDataAttr="work-items"
         >

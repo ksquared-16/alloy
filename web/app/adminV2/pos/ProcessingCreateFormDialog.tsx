@@ -11,6 +11,7 @@ export default function ProcessingCreateFormDialog({
     onClose,
     onContinue,
     submitting,
+    error,
 }: {
     open: boolean;
     onClose: () => void;
@@ -22,6 +23,7 @@ export default function ProcessingCreateFormDialog({
         origin: CreateFormOrigin;
     }) => void | Promise<void>;
     submitting?: boolean;
+    error?: string | null;
 }) {
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
@@ -80,6 +82,11 @@ export default function ProcessingCreateFormDialog({
             }
         >
             <div className="space-y-5">
+                {error ? (
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-800" role="alert">
+                        {error}
+                    </p>
+                ) : null}
                 <label className="block">
                     <span className="mb-1.5 block text-[12px] font-semibold text-alloy-midnight">Form name</span>
                     <input

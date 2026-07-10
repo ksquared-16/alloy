@@ -9,25 +9,19 @@ import {
 } from "@/lib/forms/formFieldAuthoringPresentation";
 import { patchSchemaComposition, resolveDocumentComposition } from "@/lib/forms/documentCompositionAuthoring";
 import {
+    registryEntryForFormField,
+    pickerValueForFormField,
+    systemFieldByIdFromPicker,
+    type FieldDefinitionPickerRow,
+} from "@/lib/fields/formFieldRegistryPicker";
+import {
     OPERATIONAL_FORM_SYSTEM_FIELDS,
-    SYSTEM_FIELD_BY_ID,
     type SystemFieldRegistryEntry,
 } from "@/lib/forms/systemFieldRegistry";
 import { customUnmappedTextField, formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
 
 const EMAIL_PATTERN = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
 const PHONE_PATTERN = "^[+0-9()\\-\\s]{7,}$";
-
-function registryEntryForField(f: FormField): SystemFieldRegistryEntry | null {
-    if (f.field_source?.entity_type === "custom") return null;
-    return OPERATIONAL_FORM_SYSTEM_FIELDS.find((e) => e.field_key === f.id) ?? null;
-}
-
-function pickerValueForField(f: FormField): string {
-    if (f.field_source?.entity_type === "custom" && f.field_source.field_key === "unmapped") return "__custom";
-    const hit = OPERATIONAL_FORM_SYSTEM_FIELDS.find((e) => e.field_key === f.id);
-    return hit ? `sys:${hit.id}` : "__custom";
-}
 
 function isTypeLocked(entry: SystemFieldRegistryEntry | null, custom: boolean): boolean {
     if (custom || !entry) return false;
@@ -101,18 +95,30 @@ function commitSchema(next: FormSchemaV1, onChange: (next: FormSchemaV1) => void
     onChange(patchSchemaComposition(next, composition));
 }
 
-export function useFormSchemaFieldAuthoring(schema: FormSchemaV1, onChange: (next: FormSchemaV1) => void) {
+export type FormSchemaFieldAuthoringOptions = {
+    /** Canonical-derived picker entries — not OPERATIONAL_FORM_SYSTEM_FIELDS directly. */
+    systemFields?: readonly SystemFieldRegistryEntry[];
+};
+
+export function useFormSchemaFieldAuthoring(
+    schema: FormSchemaV1,
+    onChange: (next: FormSchemaV1) => void,
+    options?: FormSchemaFieldAuthoringOptions,
+) {
+    const systemFields = options?.systemFields ?? OPERATIONAL_FORM_SYSTEM_FIELDS;
+    const systemFieldById = useMemo(() => systemFieldByIdFromPicker(systemFields), [systemFields]);
+
     const mainSection = schema.sections[0];
     const topFields = useMemo(
         () => mainSection?.field_ids.map((id) => schema.fields.find((f) => f.id === id)).filter(Boolean) as FormField[],
-        [mainSection?.field_ids, schema.fields]
+        [mainSection?.field_ids, schema.fields],
     );
 
     const patchSchema = useCallback(
         (patch: Partial<FormSchemaV1>) => {
             commitSchema({ ...schema, ...patch }, onChange);
         },
-        [onChange, schema]
+        [onChange, schema],
     );
 
     const setFieldAt = useCallback(
@@ -137,19 +143,19 @@ export function useFormSchemaFieldAuthoring(schema: FormSchemaV1, onChange: (nex
             }
             patchSchema({ fields: nextFields });
         },
-        [mainSection?.field_ids, patchSchema, schema]
+        [mainSection?.field_ids, patchSchema, schema],
     );
 
     const addField = useCallback(() => {
         const used = new Set(topFields.map((f) => f.id));
-        const nextSys = OPERATIONAL_FORM_SYSTEM_FIELDS.find((e) => !used.has(e.field_key));
+        const nextSys = systemFields.find((e) => !used.has(e.field_key));
         const f = nextSys ? formFieldFromRegistryEntry(nextSys, {}) : customUnmappedTextField();
         const sec0 = schema.sections[0] ?? { id: "main", title: "Questions", field_ids: [] as string[] };
         patchSchema({
             fields: [...schema.fields, f],
             sections: [{ ...sec0, field_ids: [...sec0.field_ids, f.id] }, ...schema.sections.slice(1)],
         });
-    }, [patchSchema, schema.fields, schema.sections, topFields]);
+    }, [patchSchema, schema.fields, schema.sections, systemFields, topFields]);
 
     const removeFieldAt = useCallback(
         (index: number) => {
@@ -159,11 +165,11 @@ export function useFormSchemaFieldAuthoring(schema: FormSchemaV1, onChange: (nex
             ids.splice(index, 1);
             const nextFields = schema.fields.filter((x) => x.id !== rid);
             const nextSecs = schema.sections.map((s, i) =>
-                i === 0 ? { ...s, field_ids: ids.filter((fid) => nextFields.some((f) => f.id === fid)) } : s
+                i === 0 ? { ...s, field_ids: ids.filter((fid) => nextFields.some((f) => f.id === fid)) } : s,
             );
             patchSchema({ fields: nextFields, sections: nextSecs });
         },
-        [mainSection?.field_ids, patchSchema, schema]
+        [mainSection?.field_ids, patchSchema, schema],
     );
 
     const removeFieldById = useCallback(
@@ -171,7 +177,7 @@ export function useFormSchemaFieldAuthoring(schema: FormSchemaV1, onChange: (nex
             const idx = topFields.findIndex((f) => f.id === fieldId);
             if (idx >= 0) removeFieldAt(idx);
         },
-        [removeFieldAt, topFields]
+        [removeFieldAt, topFields],
     );
 
     const move = useCallback(
@@ -186,7 +192,7 @@ export function useFormSchemaFieldAuthoring(schema: FormSchemaV1, onChange: (nex
             if (!s0) return;
             patchSchema({ sections: [{ ...s0, field_ids: ids }, ...schema.sections.slice(1)] });
         },
-        [mainSection?.field_ids, patchSchema, schema.sections]
+        [mainSection?.field_ids, patchSchema, schema.sections],
     );
 
     const moveFieldById = useCallback(
@@ -194,7 +200,17 @@ export function useFormSchemaFieldAuthoring(schema: FormSchemaV1, onChange: (nex
             const idx = topFields.findIndex((f) => f.id === fieldId);
             if (idx >= 0) move(idx, dir);
         },
-        [move, topFields]
+        [move, topFields],
+    );
+
+    const registryEntryForField = useCallback(
+        (f: FormField) => registryEntryForFormField(f, systemFields),
+        [systemFields],
+    );
+
+    const pickerValueForField = useCallback(
+        (f: FormField) => pickerValueForFormField(f, systemFields),
+        [systemFields],
     );
 
     const handlePickerChange = useCallback(
@@ -233,16 +249,16 @@ export function useFormSchemaFieldAuthoring(schema: FormSchemaV1, onChange: (nex
             }
             if (value.startsWith("sys:")) {
                 const rid = value.slice(4);
-                const ent = SYSTEM_FIELD_BY_ID.get(rid);
+                const ent = systemFieldById.get(rid);
                 if (ent) setFieldAt(index, formFieldFromRegistryEntry(ent, {}));
             }
         },
-        [setFieldAt, topFields]
+        [registryEntryForField, setFieldAt, systemFieldById, topFields],
     );
 
     const takenIdsForIndex = useCallback(
         (index: number) => new Set(topFields.filter((_, i) => i !== index).map((f) => f.id)),
-        [topFields]
+        [topFields],
     );
 
     const fieldIndexById = useCallback((fieldId: string) => topFields.findIndex((f) => f.id === fieldId), [topFields]);
@@ -264,5 +280,8 @@ export function useFormSchemaFieldAuthoring(schema: FormSchemaV1, onChange: (nex
         isTypeLocked,
         isCustomUnmappedField,
         uiKindForField,
+        systemFields,
     };
 }
+
+export type { FieldDefinitionPickerRow };

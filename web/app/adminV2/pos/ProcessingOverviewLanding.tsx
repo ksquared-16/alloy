@@ -18,6 +18,9 @@ import { useProcessingFormApi } from "./useProcessingFormApi";
 import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import ProcessingDevCleanupDialog from "./ProcessingDevCleanupDialog";
+import { useProcessingOverviewKpis } from "@/lib/pos/processingOverviewKpis";
+import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
 
 function formatAge(iso: string | null): string {
     if (!iso) return "Recently";
@@ -59,6 +62,8 @@ export default function ProcessingOverviewLanding({
     const [uploading, setUploading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
     const [importErr, setImportErr] = useState<string | null>(null);
+    const [cleanupOpen, setCleanupOpen] = useState(false);
+    const { kpis: overviewKpis, loading: overviewKpisLoading } = useProcessingOverviewKpis();
 
     useEffect(() => {
         if (!listLoaded) void loadForms();
@@ -118,7 +123,7 @@ export default function ProcessingOverviewLanding({
                 }}
             />
 
-            <div className="mx-auto max-w-6xl space-y-7">
+            <div className="mx-auto max-w-6xl space-y-5">
                 <section className="grid gap-3 md:grid-cols-3">
                             <ProcessingLandingActionCard
                                 tier="primary"
@@ -162,7 +167,24 @@ export default function ProcessingOverviewLanding({
                 </section>
                 {importErr ? <p className={`text-[11px] ${WS_TEXT_SECONDARY}`}>{importErr}</p> : null}
 
-                <div className="grid gap-6 lg:grid-cols-3">
+                <section data-testid="processing-overview-activity-kpis">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/35">
+                        Today&apos;s activity
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-busy={overviewKpisLoading}>
+                        {overviewKpis.map((kpi) => (
+                            <SurfaceHeaderKpiCard
+                                key={kpi.slot}
+                                kpi={kpi}
+                                interactive={false}
+                                variant="work-unit"
+                                density="compact"
+                            />
+                        ))}
+                    </div>
+                </section>
+
+                <div className="grid gap-4 lg:grid-cols-3">
                     <ContinuePanel title="Recent work" action="View all" onAction={onOpenWork}>
                         {recentRows.length === 0 ? (
                             <EmptyHint>No active imports yet — import a form to begin.</EmptyHint>
@@ -243,7 +265,32 @@ export default function ProcessingOverviewLanding({
                         </ul>
                     </WorkspaceCard>
                 </div>
+                {process.env.NODE_ENV !== "production" ? (
+                    <div className="rounded-lg border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-[11px] text-amber-950">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span>
+                                <span className="font-semibold">Dev reset:</span> Remove all Processing test artifacts and return Work + Studio to blank.
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setCleanupOpen(true)}
+                                className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-amber-950 hover:bg-amber-100/60"
+                                data-testid="processing-dev-cleanup-open"
+                            >
+                                Reset test data
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
             </div>
+            <ProcessingDevCleanupDialog
+                open={cleanupOpen}
+                onClose={() => setCleanupOpen(false)}
+                onApplied={() => {
+                    void warmProcessingQueueCache({ force: true });
+                    void loadForms();
+                }}
+            />
         </WorkspaceSurface>
     );
 }
