@@ -2289,6 +2289,12 @@ html[data-alloy-os-runtime="on"]
   background: #fff;
 }
 
+.alloy-os-ucard__status:has(.alloy-os-currentwork__status-progress-pill) {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
 .alloy-os-ucard__secondary-line {
   margin: 0;
   font-size: 12px;
@@ -4794,6 +4800,9 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 10%, transparent);
   outline: 2px dashed color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 45%, transparent);
 }
+.alloy-os-fp-composer .alloy-os-fp-canvas--grid {
+  grid-auto-rows: 76px;
+}
 .alloy-os-fp-composer__tray {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   padding: 6px 10px; border-radius: 999px;
@@ -4809,6 +4818,36 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-fp-composer__chip:hover { border-color: var(--alloy-os-accent, #2f6f4f); color: var(--alloy-os-accent, #2f6f4f); }
 
 .alloy-os-fp-composer-cell { position: relative; }
+.alloy-os-fp-composer-cell.is-arranging > :first-child {
+  pointer-events: none;
+  user-select: none;
+}
+.alloy-os-fp-composer-cell__drag-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 7;
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+  opacity: 0;
+  border-radius: inherit;
+}
+.alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__drag-bar {
+  cursor: grabbing;
+}
+.alloy-os-fp-composer-cell:hover .alloy-os-fp-composer-cell__drag-bar,
+.alloy-os-fp-composer-cell.is-selected .alloy-os-fp-composer-cell__drag-bar,
+.alloy-os-fp-composer-cell.is-arranging .alloy-os-fp-composer-cell__drag-bar {
+  opacity: 1;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 10%, transparent),
+    transparent
+  );
+}
 .alloy-os-fp-composer-cell__chrome {
   position: absolute; inset: 0; z-index: 5; pointer-events: none;
   border-radius: inherit; transition: box-shadow 120ms, outline 120ms;
@@ -5274,7 +5313,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   overflow: hidden;
   border-radius: 999px;
   padding: 0.18rem 0.62rem;
-  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, #fff);
+  background: #fff;
+  border: 1px solid var(--alloy-os-bend-pine, #00a283);
   min-width: 5.5rem;
 }
 
