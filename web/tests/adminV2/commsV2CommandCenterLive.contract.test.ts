@@ -17,7 +17,11 @@ describe("command center live wiring", () => {
         join(process.cwd(), "app", "adminV2", "communications", "CommunicationsWorkspaceKpiContext.tsx"),
         "utf8"
     );
-    const src = `${shellSrc}\n${workspaceSrc}\n${kpiStripSrc}\n${kpiContextSrc}`;
+    const runtimeSrc = readFileSync(
+        join(process.cwd(), "lib", "communications", "v2", "familyWorkspace", "useFamilyCommunicationRuntime.ts"),
+        "utf8"
+    );
+    const src = `${shellSrc}\n${workspaceSrc}\n${kpiStripSrc}\n${kpiContextSrc}\n${runtimeSrc}`;
     it("fetches conversations from the dark API", () => {
         expect(src).toMatch(/\/api\/admin\/communications\/conversations/);
     });
@@ -46,9 +50,10 @@ describe("command center live wiring", () => {
         expect(shellSrc).not.toMatch(/data-cc-loading-overlay/);
         expect(shellSrc).not.toMatch(/Select a family from the queue/);
     });
-    it("loads thread-scoped timeline and hides assignment UI by default", () => {
-        expect(shellSrc).toMatch(/thread_id=\$\{encodeURIComponent\(threadId\)\}/);
-        expect(shellSrc).toMatch(/fetchCommandCenterThreadMessages/);
+    it("loads thread-scoped timeline via shared family runtime and hides assignment UI by default", () => {
+        expect(shellSrc).toMatch(/useFamilyCommunicationRuntime/);
+        expect(shellSrc).toMatch(/surfaceVariant:\s*"workspace_inbox"/);
+        expect(runtimeSrc).toMatch(/prefetchDrawerFamilyWorkspace/);
         expect(shellSrc).toMatch(/showClaim=\{ASSIGNMENT_ENABLED\}/);
         expect(workspaceSrc).not.toMatch(/assignment_state \?\? "—"/);
         expect(shellSrc).not.toMatch(/FALLBACK_QUEUE_EXPLANATION/);
@@ -109,5 +114,16 @@ describe("command center live wiring", () => {
     it("does not send or embed a BOS panel", () => {
         expect(src).not.toMatch(/executeCommunicationsSend|enqueueCanonicalOutboundMessage|\/communications\/send/);
         expect(src).not.toMatch(/aiCommandSurface\/[A-Za-z]*Panel/);
+    });
+    it("delegates send/thread/draft lifecycle to the shared runtime (no Command Center fork)", () => {
+        // The shell must not own the send lifecycle — only the runtime hook calls family-send.
+        expect(shellSrc).not.toMatch(/communications\/family-send/);
+        expect(shellSrc).not.toMatch(/orchestrateFamilySend/);
+        expect(shellSrc).toMatch(/useFamilyCommunicationRuntime/);
+        expect(shellSrc).toMatch(/runtime\.send/);
+        expect(runtimeSrc).toMatch(/communications\/family-send/);
+        // Shell must not maintain its own thread/draft/recipient lifecycle state.
+        expect(shellSrc).not.toMatch(/useState[^;]*bodyDraft/);
+        expect(shellSrc).not.toMatch(/useState[^;]*selectedThreadId/);
     });
 });

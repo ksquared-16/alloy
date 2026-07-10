@@ -61,6 +61,14 @@ Implementation: `CommunicationsWorkspaceShell`, `CommunicationsModalTabPanel`, `
 
 Templates and Announcements inside the modal do not require separate feature flags beyond command center. See `../../sprints/06_2026/communications-v2/operator-surface-consolidation.md`.
 
+### Canonical communications runtime (Phase 2, July 2026)
+
+Communications has **one canonical runtime** with multiple presentation surfaces. Activity (`activity_embed`) is the compact presentation; Workspace Inbox (`workspace_inbox`) is the operational presentation. Both consume the same runtime contract for Preview VM hydration, thread selection, composer state, recipient state, send preflight/confirm, stale request protection, post-send refresh, reply collapse, and cache ownership.
+
+Canonical contract: [`communications-runtime-contract.md`](communications-runtime-contract.md).
+
+Workspace Inbox owns only the operational queue and surrounding context controls. It must not maintain a separate family-workspace load/send/thread lifecycle.
+
 ---
 
 ## Template Library (Communications V2)

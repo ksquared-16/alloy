@@ -214,7 +214,9 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         viewerUserId = null, sendCompleteToken = 0,
     } = props;
     const isActivityEmbed = surfaceVariant === "activity_embed";
-    const isNewMessageMode = isActivityEmbed && selectedThreadId == null;
+    const isWorkspaceInbox = surfaceVariant === "workspace_inbox";
+    const usesReplyLifecycle = isActivityEmbed || isWorkspaceInbox;
+    const isNewMessageMode = usesReplyLifecycle && selectedThreadId == null;
     const [replyComposerExpanded, setReplyComposerExpanded] = useState(false);
     const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
     const [showCcBcc, setShowCcBcc] = useState(false);
@@ -229,17 +231,17 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const timelineScrollRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
-        if (!isActivityEmbed) return;
+        if (!usesReplyLifecycle) return;
         setReplyComposerExpanded(isNewMessageMode);
-    }, [isActivityEmbed, selectedThreadId, isNewMessageMode]);
+    }, [usesReplyLifecycle, selectedThreadId, isNewMessageMode]);
 
     useEffect(() => {
-        if (!isActivityEmbed || sendCompleteToken === 0) return;
+        if (!usesReplyLifecycle || sendCompleteToken === 0) return;
         setReplyComposerExpanded(false);
         window.requestAnimationFrame(() => {
             timelineScrollRef.current?.scrollTo({ top: timelineScrollRef.current.scrollHeight, behavior: "smooth" });
         });
-    }, [isActivityEmbed, sendCompleteToken]);
+    }, [usesReplyLifecycle, sendCompleteToken]);
 
     const expandReplyComposer = useCallback(() => {
         setReplyComposerExpanded(true);
@@ -264,7 +266,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const composeMode = workspaceMode === "email" || workspaceMode === "sms";
     const activityPrimaryBtnClass = isActivityEmbed ? COMMS_ACTIVITY_PRIMARY_BTN_CLASS : `${COMMS_PRIMARY_BTN_CLASS} !px-3 !py-2 !text-sm`;
     const activitySecondaryBtnClass = isActivityEmbed ? COMMS_ACTIVITY_SECONDARY_BTN_CLASS : `${COMMS_SECONDARY_BTN_CLASS} !px-2.5 !py-2 !text-sm`;
-    const showActivityComposer = !isActivityEmbed || isNewMessageMode || replyComposerExpanded;
+    const showRuntimeComposer = !usesReplyLifecycle || isNewMessageMode || replyComposerExpanded;
     const activeModeReason =
         workspaceMode === "note" || workspaceMode === "tasks" ? null : modeAvailability[workspaceMode]?.reason ?? null;
 
@@ -790,7 +792,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     placeholder="Subject"
                     value={subjectDraft}
                     onChange={(e) => onSubjectChange(e.target.value)}
-                    className={`mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35 ${workspaceMode === "sms" || (isActivityEmbed && !isNewMessageMode) ? "hidden" : ""}`}
+                    className={`mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35 ${workspaceMode === "sms" || (usesReplyLifecycle && !isNewMessageMode) ? "hidden" : ""}`}
                 />
 
                 <div
@@ -1019,7 +1021,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     messageListBody
                                 )}
                             </div>
-                            {showActivityComposer ? (
+                            {showRuntimeComposer ? (
                                 composerColumn
                             ) : (
                                 <div
@@ -1052,8 +1054,8 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
             {/* CONVERSATION — compact snapshot band + chat history */}
             <div data-cc-ws-column="timeline" className="flex min-h-0 flex-col border-r border-alloy-stone/20 bg-white">
                 {snapshotBand}
-                <div data-cc-ws-section="timeline" className={`min-h-0 flex-1 overflow-auto ${COMMS_SURFACE_MUTED_CLASS} px-3.5 py-3`}>
-                    {LIVE_WORKSPACE && selectedThreadId ? (
+                <div ref={timelineScrollRef} data-cc-ws-section="timeline" className={`min-h-0 flex-1 overflow-auto ${COMMS_SURFACE_MUTED_CLASS} px-3.5 py-3`}>
+                    {LIVE_WORKSPACE && selectedThreadId && !isWorkspaceInbox ? (
                         <div className="mb-2 flex items-center justify-between rounded-md border border-alloy-juniper/50 bg-alloy-juniper/10 px-2 py-1 text-[10px] text-alloy-juniper">
                             <span>Viewing one thread</span>
                             <button type="button" onClick={onAllMessages} className="font-semibold underline">All messages</button>
@@ -1062,7 +1064,28 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     {messageListBody}
                 </div>
             </div>
-            {composerColumn}
+            {showRuntimeComposer ? (
+                composerColumn
+            ) : (
+                <div
+                    data-cc-ws-column="composer"
+                    data-cc-reply-collapsed
+                    className="flex min-h-0 flex-col justify-center border-l border-alloy-stone/20 bg-white px-4 py-3"
+                >
+                    <button
+                        type="button"
+                        data-cc-reply-expand
+                        onClick={expandReplyComposer}
+                        className={`inline-flex w-fit items-center gap-1.5 ${COMMS_SECONDARY_BTN_CLASS}`}
+                    >
+                        <Send className="h-3.5 w-3.5" />
+                        Reply
+                    </button>
+                    <p className="mt-2 max-w-xs text-[11px] leading-relaxed text-alloy-midnight/45">
+                        Reply uses the same reviewed send lifecycle as Activity.
+                    </p>
+                </div>
+            )}
         </div>
     );
 }

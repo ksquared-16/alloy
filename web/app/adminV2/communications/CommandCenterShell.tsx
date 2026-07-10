@@ -21,15 +21,12 @@ import {
 } from "@/lib/communications/v2/commandCenterViewModel";
 import {
     getCommandCenterCacheSnapshot,
-    getCommandCenterFirstConversationWarm,
     getCommandCenterWarmSelectedConversationId,
     prefetchCommandCenterConversations,
     subscribeCommandCenterCache,
 } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import { buildCommandCenterRecordLinks, type CommandCenterRecordLink } from "@/lib/communications/v2/commandCenterRecordLinks";
-import { fetchCommandCenterThreadMessages, type CommandCenterTimelineMessage } from "@/lib/communications/v2/commandCenterThreadMessages";
 import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
-import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import FamilyCommunicationWorkspaceView, { type WorkspaceDetail } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import {
@@ -41,10 +38,8 @@ import {
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
-import type { FamilyCommunicationWorkspaceVM, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
-import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
-import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
-import { resolveWorkspaceModeAvailability, type WorkspaceMode } from "@/lib/communications/v2/workspaceModeAvailability";
+import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
+import { useFamilyCommunicationRuntime } from "@/lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime";
 import { conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
 import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
 import {
@@ -55,7 +50,6 @@ import {
 import {
     COMMS_FIXTURES_ENABLED,
     FIXTURE_CONVERSATIONS,
-    FIXTURE_MESSAGES,
     FIXTURE_FAMILY_DETAILS,
     type FixtureFamilyDetail,
 } from "@/app/adminV2/communications/fixtures";
@@ -68,52 +62,6 @@ import {
  *   - Composer = top-anchored, full-height, message body the dominant surface.
  * Presentation only; fixture mode kept; no data/route/outer-geometry/BOS/flag change.
  */
-type TimelineMessage = CommandCenterTimelineMessage;
-
-function mapLiveEvents(events: FamilyCommunicationWorkspaceVM["timelineEvents"]): TimelineMessage[] {
-    return events.map((e) => ({
-        id: e.id,
-        direction: e.direction,
-        channel: e.channel,
-        body: e.body,
-        created_at: e.createdAt,
-        kind: e.kind,
-        opened_at: e.openedAt,
-        replied_at: e.repliedAt,
-        thread_id: e.threadId,
-        status: e.status,
-    }));
-}
-
-function initialWorkspaceFromWarm(): {
-    messages: TimelineMessage[];
-    liveChildren: string[] | null;
-    liveRecipientGroups: RecipientGroup[] | null;
-    selectedRecipientIds: string[];
-} | null {
-    const warm = getCommandCenterFirstConversationWarm();
-    if (!warm) return null;
-    if (warm.workspace) {
-        const threadMsgs = warm.threadMessages?.length
-            ? warm.threadMessages
-            : mapLiveEvents(warm.workspace.messages.length ? warm.workspace.messages : warm.workspace.timelineEvents);
-        return {
-            messages: threadMsgs,
-            liveChildren: warm.workspace.children.map((c) => c.name),
-            liveRecipientGroups: warm.workspace.recipientGroups,
-            selectedRecipientIds: warm.workspace.selectedRecipients,
-        };
-    }
-    if (warm.threadMessages) {
-        return {
-            messages: warm.threadMessages,
-            liveChildren: null,
-            liveRecipientGroups: null,
-            selectedRecipientIds: [],
-        };
-    }
-    return null;
-}
 
 function initialConversations(): ConversationSummary[] {
     if (COMMS_FIXTURES_ENABLED) return FIXTURE_CONVERSATIONS;
@@ -128,12 +76,6 @@ function initialSelectedId(): string | null {
 function initialLoading(): boolean {
     if (COMMS_FIXTURES_ENABLED) return false;
     return !getCommandCenterCacheSnapshot();
-}
-
-function initialHydratingWorkspace(): boolean {
-    if (COMMS_FIXTURES_ENABLED) return false;
-    if (getCommandCenterFirstConversationWarm()) return false;
-    return Boolean(getCommandCenterCacheSnapshot()?.conversations.length);
 }
 
 const attnAccent = (a: string | null | undefined): { rail: string; tint: string; dot: string } => {
@@ -154,38 +96,16 @@ const attnAccent = (a: string | null | undefined): { rail: string; tint: string;
 const LIVE_WORKSPACE = isCommsV2FlagEnabled("comms_v2_live_workspace");
 const ASSIGNMENT_ENABLED = isCommsV2FlagEnabled("comms_v2_assignment");
 
-const warmWorkspaceSeed = initialWorkspaceFromWarm();
-
 export default function CommandCenterShell() {
     const adminDrawer = useAdminDrawerOptional();
+    const adminAuth = useAdminAuthOptional();
     const kpiContext = useCommunicationsWorkspaceKpiOptional();
     const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations);
     const [loading, setLoading] = useState(initialLoading);
     const [error, setError] = useState<string | null>(null);
     const [filters, setFilters] = useState<CommandCenterFilters>({});
     const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
-    const [messages, setMessages] = useState<TimelineMessage[]>(
-        COMMS_FIXTURES_ENABLED
-            ? (FIXTURE_MESSAGES[FIXTURE_CONVERSATIONS[0]?.id ?? ""] ?? [])
-            : (warmWorkspaceSeed?.messages ?? [])
-    );
-    const [liveWorkspaceVm, setLiveWorkspaceVm] = useState<FamilyCommunicationWorkspaceVM | null>(null);
     const [assignBusy, setAssignBusy] = useState(false);
-    const [liveChildren, setLiveChildren] = useState<string[] | null>(warmWorkspaceSeed?.liveChildren ?? null);
-    const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-    const [liveRecipientGroups, setLiveRecipientGroups] = useState<RecipientGroup[] | null>(
-        warmWorkspaceSeed?.liveRecipientGroups ?? null
-    );
-    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>(
-        warmWorkspaceSeed?.selectedRecipientIds ?? []
-    );
-    const [subjectDraft, setSubjectDraft] = useState("");
-    const [bodyDraft, setBodyDraft] = useState("");
-    const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
-    const [sending, setSending] = useState(false);
-    const [sendError, setSendError] = useState<string | null>(null);
-    const [hydratingWorkspace, setHydratingWorkspace] = useState(initialHydratingWorkspace);
-    const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("email");
     const [noteDraft, setNoteDraft] = useState("");
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteError, setNoteError] = useState<string | null>(null);
@@ -196,28 +116,16 @@ export default function CommandCenterShell() {
     const [preferenceSaving, setPreferenceSaving] = useState(false);
     const [triageBusy, setTriageBusy] = useState(false);
 
-    const loadLive = useCallback(async (customerId: string, threadId: string, resetSelection = false, composerChannel: ComposerChannel = "email") => {
-        try {
-            const qs = `customer_id=${encodeURIComponent(customerId)}&thread_id=${encodeURIComponent(threadId)}&composer_channel=${encodeURIComponent(composerChannel)}`;
-            const res = await fetch(`/api/admin/communications/family-workspace?${qs}`);
-            if (!res.ok) return null;
-            const data = (await res.json()) as { workspace?: FamilyCommunicationWorkspaceVM };
-            const vm = data.workspace;
-            if (!vm) return null;
-            let msgs = mapLiveEvents(vm.messages.length ? vm.messages : vm.timelineEvents);
-            if (msgs.length === 0) {
-                msgs = await fetchCommandCenterThreadMessages(threadId);
-            }
-            setLiveWorkspaceVm(vm);
-            setMessages(msgs);
-            setLiveChildren(vm.children.map((c) => c.name));
-            setLiveRecipientGroups(vm.recipientGroups);
-            if (resetSelection) setSelectedRecipientIds(vm.selectedRecipients);
-            return vm;
-        } catch {
-            return null;
-        }
-    }, []);
+    const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
+    const selectedCustomerId = useMemo(() => {
+        if (COMMS_FIXTURES_ENABLED && selectedId) return FIXTURE_FAMILY_DETAILS[selectedId]?.customerId ?? null;
+        return selected?.customer_id ?? null;
+    }, [selected, selectedId]);
+    const runtime = useFamilyCommunicationRuntime({
+        customerId: LIVE_WORKSPACE ? selectedCustomerId ?? undefined : undefined,
+        initialThreadId: selectedId,
+        surfaceVariant: "workspace_inbox",
+    });
 
     const loadConversations = useCallback(async (opts?: { background?: boolean }) => {
         if (COMMS_FIXTURES_ENABLED) return;
@@ -244,74 +152,17 @@ export default function CommandCenterShell() {
         return subscribeCommandCenterCache(() => {
             const snap = getCommandCenterCacheSnapshot();
             if (snap) setConversations(snap.conversations);
-            const warm = getCommandCenterFirstConversationWarm();
-            if (!warm) return;
-            const seeded = initialWorkspaceFromWarm();
-            if (!seeded) return;
-            setSelectedId((prev) => prev ?? warm.conversationId);
-            setMessages(seeded.messages);
-            setLiveChildren(seeded.liveChildren);
-            setLiveRecipientGroups(seeded.liveRecipientGroups);
-            setSelectedRecipientIds(seeded.selectedRecipientIds);
-            setHydratingWorkspace(false);
+            setSelectedId((prev) => prev ?? getCommandCenterWarmSelectedConversationId());
         });
     }, []);
 
     useEffect(() => {
         void loadConversations({ background: !!getCommandCenterCacheSnapshot() });
-        if (LIVE_WORKSPACE && COMMS_FIXTURES_ENABLED) {
-            const c = FIXTURE_FAMILY_DETAILS[FIXTURE_CONVERSATIONS[0]?.id ?? ""]?.customerId;
-            const tid = FIXTURE_CONVERSATIONS[0]?.id;
-            if (c && tid) void loadLive(c, tid, true);
-        }
-    }, [loadConversations, loadLive]);
+    }, [loadConversations]);
 
-    const openConversation = useCallback(async (id: string) => {
+    const openConversation = useCallback((id: string) => {
         setSelectedId(id);
-        setSelectedThreadId(null);
-        setWorkspaceMode("email");
-        setSubjectDraft("");
-        setBodyDraft("");
-        setLiveWorkspaceVm(null);
-        const conv = conversations.find((c) => c.id === id);
-        const warm = getCommandCenterFirstConversationWarm();
-        if (warm?.conversationId === id) {
-            const seeded = initialWorkspaceFromWarm();
-            if (seeded) {
-                setMessages(seeded.messages);
-                setLiveChildren(seeded.liveChildren);
-                setLiveRecipientGroups(seeded.liveRecipientGroups);
-                setSelectedRecipientIds(seeded.selectedRecipientIds);
-                if (warm.workspace) setLiveWorkspaceVm(warm.workspace);
-                return;
-            }
-        }
-        setHydratingWorkspace(true);
-        try {
-            if (COMMS_FIXTURES_ENABLED) {
-                const liveCustomerId = LIVE_WORKSPACE ? FIXTURE_FAMILY_DETAILS[id]?.customerId : undefined;
-                if (liveCustomerId) {
-                    await loadLive(liveCustomerId, id, true);
-                    return;
-                }
-                setMessages(FIXTURE_MESSAGES[id] ?? []);
-                setLiveChildren(null);
-                return;
-            }
-            setMessages([]);
-            const liveCustomerId = LIVE_WORKSPACE ? conv?.customer_id : undefined;
-            if (liveCustomerId) {
-                const vm = await loadLive(liveCustomerId, id, true);
-                if (!vm && conv?.last_message_preview) {
-                    setMessages(await fetchCommandCenterThreadMessages(id));
-                }
-                return;
-            }
-            setMessages(await fetchCommandCenterThreadMessages(id));
-        } finally {
-            setHydratingWorkspace(false);
-        }
-    }, [loadLive, conversations]);
+    }, []);
 
     const claim = useCallback(
         async (id: string) => {
@@ -331,33 +182,17 @@ export default function CommandCenterShell() {
         [loadConversations]
     );
 
-    const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
-    const selectedCustomerId = useMemo(() => {
-        if (COMMS_FIXTURES_ENABLED && selectedId) return FIXTURE_FAMILY_DETAILS[selectedId]?.customerId ?? null;
-        return selected?.customer_id ?? null;
-    }, [selected, selectedId]);
-
-    const openThread = useCallback(
-        async (threadId: string) => {
-            if (!LIVE_WORKSPACE) return;
-            setSelectedThreadId(threadId);
-            const cust = selectedCustomerId;
-            if (cust) await loadLive(cust, threadId);
-        },
-        [loadLive, selectedCustomerId]
-    );
-
     const recordLinks = useMemo((): CommandCenterRecordLink[] => {
         if (!selected) return [];
         const childLinks =
-            liveWorkspaceVm?.children.map((c) => ({ id: c.id, name: c.name })) ??
+            runtime.vm?.children.map((c) => ({ id: c.id, name: c.name })) ??
             selected.child_links ??
             null;
-        const stageDisplay = selected.stage_label ?? liveWorkspaceVm?.family.stage ?? null;
+        const stageDisplay = selected.stage_label ?? runtime.vm?.family.stage ?? null;
         return buildCommandCenterRecordLinks(selected, childLinks).map((link) =>
             link.type === "opportunities" && stageDisplay ? { ...link, label: stageDisplay } : link
         );
-    }, [selected, liveWorkspaceVm]);
+    }, [selected, runtime.vm]);
 
     const openRecordLink = useCallback(
         (link: CommandCenterRecordLink) => {
@@ -367,37 +202,10 @@ export default function CommandCenterShell() {
         [adminDrawer]
     );
 
-    const workspaceModeAvailability = useMemo(
-        () => resolveWorkspaceModeAvailability(liveWorkspaceVm, liveWorkspaceVm?.relatedTasks.length ?? 0),
-        [liveWorkspaceVm]
-    );
-
-    const liveChannel: ComposerChannel = workspaceMode === "sms" ? "sms" : "email";
-
-    const liveWorkspaceDetail = useMemo(() => {
-        if (!liveWorkspaceVm) return undefined;
-        const primaryRecipient =
-            liveWorkspaceVm.recipientGroups.flatMap((g) => g.recipients).find((r) => r.isPrimary) ??
-            liveWorkspaceVm.recipientGroups.flatMap((g) => g.recipients)[0];
-        return {
-            owner: liveWorkspaceVm.family.ownerLabel ?? "Unassigned",
-            contactName: primaryRecipient?.displayName ?? liveWorkspaceVm.family.label,
-            program: liveWorkspaceVm.family.program,
-            stage: liveWorkspaceVm.family.stage,
-            consent: liveWorkspaceVm.consentSummary.household,
-            preferenceProfile: liveWorkspaceVm.consentSummary.preferenceProfile,
-        };
-    }, [liveWorkspaceVm]);
-
-    const refreshWorkspace = useCallback(async () => {
-        if (!selectedCustomerId || !selectedId) return;
-        await loadLive(selectedCustomerId, selectedThreadId ?? selectedId, false, liveChannel);
-    }, [loadLive, selectedCustomerId, selectedId, selectedThreadId, liveChannel]);
-
     const primaryPersonId = useMemo(() => {
-        const primary = liveWorkspaceVm?.recipientGroups.flatMap((g) => g.recipients).find((r) => r.isPrimary);
-        return primary?.id ?? liveWorkspaceVm?.selectedRecipients[0] ?? selected?.primary_contact_person_id ?? null;
-    }, [liveWorkspaceVm, selected]);
+        const primary = runtime.vm?.recipientGroups.flatMap((g) => g.recipients).find((r) => r.isPrimary);
+        return primary?.id ?? runtime.vm?.selectedRecipients[0] ?? selected?.primary_contact_person_id ?? null;
+    }, [runtime.vm, selected]);
 
     const runAddNote = useCallback(async () => {
         if (!LIVE_WORKSPACE || !selectedCustomerId || !noteDraft.trim()) return;
@@ -410,7 +218,7 @@ export default function CommandCenterShell() {
                 body: JSON.stringify({
                     customer_id: selectedCustomerId,
                     body: noteDraft,
-                    opportunity_id: liveWorkspaceVm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null,
+                    opportunity_id: runtime.vm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null,
                     person_id: primaryPersonId,
                 }),
             });
@@ -420,16 +228,16 @@ export default function CommandCenterShell() {
                 return;
             }
             setNoteDraft("");
-            await refreshWorkspace();
+            await runtime.refreshCurrent();
         } catch {
             setNoteError("Failed to save note");
         } finally {
             setNoteSaving(false);
         }
-    }, [LIVE_WORKSPACE, selectedCustomerId, noteDraft, liveWorkspaceVm, selected, primaryPersonId, refreshWorkspace]);
+    }, [LIVE_WORKSPACE, selectedCustomerId, noteDraft, runtime, selected, primaryPersonId]);
 
     const runCreateTask = useCallback(async () => {
-        const oppId = liveWorkspaceVm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null;
+        const oppId = runtime.vm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null;
         if (!oppId || !taskTitleDraft.trim()) {
             setTaskError("Link an opportunity before creating tasks.");
             return;
@@ -448,13 +256,13 @@ export default function CommandCenterShell() {
             }
             setTaskTitleDraft("");
             setTaskDueDraft("");
-            await refreshWorkspace();
+            await runtime.refreshCurrent();
         } catch {
             setTaskError("Failed to create task");
         } finally {
             setTaskSaving(false);
         }
-    }, [liveWorkspaceVm, selected, taskTitleDraft, taskDueDraft, refreshWorkspace]);
+    }, [runtime, selected, taskTitleDraft, taskDueDraft]);
 
     const runCompleteTask = useCallback(
         async (taskId: string) => {
@@ -467,14 +275,14 @@ export default function CommandCenterShell() {
                     setTaskError(data.error ?? "Failed to complete task");
                     return;
                 }
-                await refreshWorkspace();
+                await runtime.refreshCurrent();
             } catch {
                 setTaskError("Failed to complete task");
             } finally {
                 setTaskSaving(false);
             }
         },
-        [refreshWorkspace]
+        [runtime]
     );
 
     const runTriage = useCallback(
@@ -520,58 +328,13 @@ export default function CommandCenterShell() {
                     body: JSON.stringify({ person_id: primaryPersonId, field, status }),
                 });
                 if (!res.ok) return;
-                await refreshWorkspace();
+                await runtime.refreshCurrent();
             } finally {
                 setPreferenceSaving(false);
             }
         },
-        [primaryPersonId, refreshWorkspace]
+        [primaryPersonId, runtime]
     );
-
-    const runFamilySend = useCallback(
-        async (confirm: boolean) => {
-            if (!LIVE_WORKSPACE) return;
-            const cust = selectedCustomerId;
-            if (!cust || selectedRecipientIds.length === 0 || !bodyDraft.trim()) return;
-            setSending(true);
-            setSendError(null);
-            try {
-                const res = await fetch("/api/admin/communications/family-send", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        customer_id: cust,
-                        recipient_person_ids: selectedRecipientIds,
-                        channel: liveChannel,
-                        subject: subjectDraft,
-                        body: bodyDraft,
-                        reply_to_thread_id: selectedThreadId,
-                        confirm,
-                    }),
-                });
-                const data = (await res.json()) as (FamilySendResult & { error?: string });
-                if (!res.ok) {
-                    setSendError(data.error ?? "Send failed");
-                    return;
-                }
-                setSendResult(data);
-                if (confirm) {
-                    await loadLive(cust, selectedThreadId ?? selectedId ?? "", false);
-                }
-            } catch {
-                setSendError("Send failed");
-            } finally {
-                setSending(false);
-            }
-        },
-        [loadLive, selectedCustomerId, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel]
-    );
-
-    useEffect(() => {
-        if (!LIVE_WORKSPACE || !selectedCustomerId || !selectedId) return;
-        if (workspaceMode !== "email" && workspaceMode !== "sms") return;
-        void loadLive(selectedCustomerId, selectedThreadId ?? selectedId, false, liveChannel);
-    }, [workspaceMode, liveChannel, selectedCustomerId, selectedId, selectedThreadId, loadLive]);
 
     const filtered = useMemo(() => applyQueueFilters(conversations, filters), [conversations, filters]);
     const grouped = useMemo(() => groupConversationsByQueue(filtered), [filtered]);
@@ -592,16 +355,16 @@ export default function CommandCenterShell() {
     }, [kpiContext, metrics, loading]);
 
     const detail: WorkspaceDetail | FixtureFamilyDetail | undefined =
-        COMMS_FIXTURES_ENABLED && selected ? FIXTURE_FAMILY_DETAILS[selected.id] : liveWorkspaceDetail;
+        COMMS_FIXTURES_ENABLED && selected ? FIXTURE_FAMILY_DETAILS[selected.id] : runtime.detail;
     const childNames = useMemo(
         () => {
-            if (LIVE_WORKSPACE && liveChildren) return liveChildren;
+            if (LIVE_WORKSPACE && runtime.childNames.length > 0) return runtime.childNames;
             if (detail && "children" in detail && typeof detail.children === "string") {
                 return detail.children.split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean);
             }
             return [];
         },
-        [detail, liveChildren]
+        [detail, runtime.childNames]
     );
 
     useEffect(() => {
@@ -611,36 +374,23 @@ export default function CommandCenterShell() {
             void openConversation(nextId);
         } else if (!nextId && selectedId) {
             setSelectedId(null);
-            setMessages([]);
-            setLiveChildren(null);
-            setLiveRecipientGroups(null);
         }
     }, [loading, visibleIds, selectedId, openConversation]);
 
     const timelineMessageCount = useMemo(
-        () => messages.filter((m) => !m.kind || m.kind === "message").length,
-        [messages]
-    );
-    const health = useMemo(
-        () =>
-            computeCommunicationHealth({
-                messages: messages
-                    .filter((m) => !m.kind || m.kind === "message")
-                    .map((m) => ({ direction: m.direction, created_at: m.created_at, channel: m.channel, opened_at: m.opened_at, replied_at: m.replied_at })),
-                unreadCount: selected?.unread ?? undefined,
-            }),
-        [messages, selected]
+        () => runtime.messages.filter((m) => !m.kind || m.kind === "message").length,
+        [runtime.messages]
     );
     const healthDisplay = useMemo(
-        () => resolveCommandCenterHealthDisplay(selected, timelineMessageCount, health.engagementScore),
-        [selected, timelineMessageCount, health.engagementScore]
+        () => resolveCommandCenterHealthDisplay(selected, timelineMessageCount, runtime.vm?.healthSummary.engagementScore ?? 0),
+        [selected, timelineMessageCount, runtime.vm?.healthSummary.engagementScore]
     );
 
     const queueUnresolved = loading && conversations.length === 0;
     const workspaceHydrating =
         !COMMS_FIXTURES_ENABLED &&
         filtered.length > 0 &&
-        (loading || hydratingWorkspace || !selectedId) &&
+        (loading || runtime.loading || !selectedId) &&
         !selected;
 
     return (
@@ -756,23 +506,24 @@ export default function CommandCenterShell() {
 
                 {/* WORKSPACE — Conversation (context) | Composer (action) */}
                 <section data-cc-column="workspace" data-cc-workspace="family-communication" aria-label="Family communication workspace" className={`flex min-h-0 flex-col overflow-hidden ${COMMS_PANEL_SHELL_CLASS}`}>
-                    {selected ? (
+                    {selected && runtime.vm ? (
                         <FamilyCommunicationWorkspaceView
+                            surfaceVariant="workspace_inbox"
                             selected={selected}
                             detail={detail}
                             childNames={childNames}
-                            stageLabel={selected.stage_label ?? liveWorkspaceVm?.family.stage ?? detail?.stage ?? null}
+                            stageLabel={selected.stage_label ?? runtime.vm.family.stage ?? detail?.stage ?? null}
                             healthTone={healthDisplay.tone}
                             healthDot={healthDisplay.dot}
                             healthLabel={healthDisplay.label}
                             recordLinks={recordLinks}
                             onOpenRecordLink={adminDrawer ? openRecordLink : undefined}
                             showClaim={ASSIGNMENT_ENABLED}
-                            workspaceMode={workspaceMode}
-                            onWorkspaceModeChange={setWorkspaceMode}
-                            workspaceModeAvailability={workspaceModeAvailability}
-                            relatedTasks={liveWorkspaceVm?.relatedTasks ?? []}
-                            preferenceProfile={liveWorkspaceVm?.consentSummary.preferenceProfile}
+                            workspaceMode={runtime.workspaceMode}
+                            onWorkspaceModeChange={runtime.setWorkspaceMode}
+                            workspaceModeAvailability={runtime.workspaceModeAvailability}
+                            relatedTasks={runtime.vm.relatedTasks ?? []}
+                            preferenceProfile={runtime.vm.consentSummary.preferenceProfile}
                             canEditPreferences={LIVE_WORKSPACE && !!primaryPersonId}
                             preferenceSaving={preferenceSaving}
                             onPreferenceChange={(field, status) => void runPreferenceChange(field, status)}
@@ -793,27 +544,33 @@ export default function CommandCenterShell() {
                             taskSaving={taskSaving}
                             taskError={taskError}
                             LIVE_WORKSPACE={LIVE_WORKSPACE}
-                            selectedThreadId={selectedThreadId}
-                            messages={messages}
-                            liveRecipientGroups={liveRecipientGroups}
-                            selectedRecipientIds={selectedRecipientIds}
-                            liveChannel={liveChannel}
-                            subjectDraft={subjectDraft}
-                            bodyDraft={bodyDraft}
-                            sendResult={sendResult}
-                            sendError={sendError}
-                            sending={sending}
+                            selectedThreadId={runtime.selectedThreadId}
+                            selectedThread={runtime.selectedThread}
+                            messages={runtime.messages}
+                            timelineMessages={runtime.timelineMessages}
+                            liveRecipientGroups={runtime.vm.recipientGroups}
+                            selectedRecipientIds={runtime.selectedRecipientIds}
+                            liveChannel={runtime.liveChannel}
+                            subjectDraft={runtime.subjectDraft}
+                            bodyDraft={runtime.bodyDraft}
+                            sendResult={runtime.sendResult}
+                            sendError={runtime.sendError}
+                            sending={runtime.sending}
                             assignBusy={assignBusy}
                             onClaim={(id) => claim(id)}
-                            onAllMessages={() => { setSelectedThreadId(null); if (selectedCustomerId && selectedId) void loadLive(selectedCustomerId, selectedId, false); }}
-                            onOpenThread={(t) => void openThread(t)}
-                            onToggleRecipient={(id) => setSelectedRecipientIds((prev) => toggleRecipientSelection(prev, id, true))}
-                            onSubjectChange={setSubjectDraft}
-                            onBodyChange={setBodyDraft}
-                            onSendNow={() => void runFamilySend(false)}
-                            onConfirmSend={() => void runFamilySend(true)}
-                            onDismissSend={() => { setSendResult(null); setSendError(null); }}
+                            onAllMessages={runtime.showAllMessages}
+                            onOpenThread={runtime.openThread}
+                            onToggleRecipient={runtime.toggleRecipient}
+                            onSubjectChange={runtime.setSubjectDraft}
+                            onBodyChange={runtime.setBodyDraft}
+                            onSendNow={() => void runtime.send(false)}
+                            onConfirmSend={() => void runtime.send(true)}
+                            onDismissSend={runtime.dismissSendResult}
+                            viewerUserId={adminAuth?.userId ?? null}
+                            sendCompleteToken={runtime.sendCompleteToken}
                         />
+                    ) : selected && runtime.loading ? (
+                        <CommsWorkspacePanelReserve label="Loading conversation" />
                     ) : workspaceHydrating ? (
                         <CommsWorkspacePanelReserve label="Loading first conversation" />
                     ) : !loading && filtered.length === 0 ? (

@@ -1,488 +1,53 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
-import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type {
-    ComposerChannel,
     FamilyCommunicationWorkspacePreviewVM,
-    FamilyCommunicationWorkspaceVM,
-    PersonPreferenceProfile,
-    TimelineEventVM,
 } from "@/lib/communications/v2/familyWorkspace/types";
-import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
-import {
-    getDrawerFamilyWorkspaceInflight,
-    getDrawerFamilyWorkspaceWarm,
-    invalidateDrawerFamilyWorkspaceCache,
-    prefetchDrawerFamilyWorkspace,
-    subscribeDrawerFamilyWorkspaceCache,
-    type DrawerFamilyWorkspacePrefetchParams,
-} from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
-import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
-import {
-    resolveWorkspaceModeAvailability,
-    type WorkspaceMode,
-} from "@/lib/communications/v2/workspaceModeAvailability";
-import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
+import FamilyCommunicationWorkspaceView from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { CommsActivityEmbedHydratingShell, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
-import {
-    deriveThreadReplyRecipientIds,
-    threadChannelToWorkspaceMode,
-} from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
 import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
-
-/**
- * UI-6 / UI-6.1 — drawer Family Communication Workspace (no queue). Thin container: fetches the VM by
- * customerId or drawer entity and renders the CANONICAL FamilyCommunicationWorkspaceView (the same
- * markup the full Communications modal uses). All timeline/composer UI lives in the View, once.
- */
-const toWorkspaceMessage = (e: TimelineEventVM): WorkspaceTimelineMessage => ({
-    id: e.id,
-    direction: e.direction,
-    channel: e.channel,
-    body: e.body,
-    created_at: e.createdAt,
-    kind: e.kind,
-    thread_id: e.threadId,
-    status: e.status,
-    recipient_person_id: e.recipientPersonId ?? null,
-    sender_user_id: e.senderUserId ?? null,
-    sender_display_name: e.senderDisplayName ?? null,
-    opened_at: e.openedAt ?? null,
-    delivered_at: e.deliveredAt ?? null,
-});
-
-const toThreadPreviewMessage = (e: TimelineEventVM) => ({
-    thread_id: e.threadId,
-    body: e.body,
-    created_at: e.createdAt,
-    kind: e.kind,
-    direction: e.direction,
-    recipient_person_id: e.recipientPersonId ?? null,
-});
-
-const UNSET_PREFERENCE_PROFILE: PersonPreferenceProfile = {
-    email_transactional: "unset",
-    sms_transactional: "unset",
-    email_marketing: "unset",
-    sms_marketing: "unset",
-};
-
-function workspaceFromPreview(preview: FamilyCommunicationWorkspacePreviewVM): FamilyCommunicationWorkspaceVM {
-    const contactIds = [...preview.eligibleRecipients, ...preview.disabledRecipients].map((r) => r.id);
-    const byContact = Object.fromEntries(
-        contactIds.map((id) => [id, { email: "unset" as const, sms: "unset" as const, marketing: "unset" as const }])
-    );
-    return {
-        family: preview.family,
-        children: preview.children,
-        recipientGroups: preview.recipientGroups,
-        eligibleRecipients: preview.eligibleRecipients,
-        disabledRecipients: preview.disabledRecipients,
-        selectedRecipients: preview.selectedRecipients,
-        consentSummary: {
-            byContact,
-            household: { email: "unset", sms: "unset", marketing: "unset" },
-            preferenceProfile: UNSET_PREFERENCE_PROFILE,
-            displayFlags: { email: true, sms: true, marketing: true },
-        },
-        composerDraft: preview.composerDraft,
-        scope: preview.scope,
-        threads: preview.recentThreads,
-        selectedThread: null,
-        messages: [],
-        timelineEvents: preview.recentTimelineEvents,
-        healthSummary: {
-            status: "healthy",
-            engagementScore: 66,
-            responseRate: null,
-            lastContactAt: preview.recentTimelineEvents.at(-1)?.createdAt ?? null,
-            unreadCount: 0,
-        },
-        relatedTasks: [],
-    };
-}
-
-function resolvePrefetchParams(
-    props: {
-        customerId?: string;
-        entity?: { entityType: string; entityId: string };
-    },
-    composerChannel: ComposerChannel,
-    threadId: string | null
-): DrawerFamilyWorkspacePrefetchParams | null {
-    if (props.customerId) {
-        return { customerId: props.customerId, composerChannel, threadId };
-    }
-    if (props.entity?.entityId) {
-        return {
-            entityType: props.entity.entityType,
-            entityId: props.entity.entityId,
-            composerChannel,
-            threadId,
-        };
-    }
-    return null;
-}
-
-function resolveInvalidateScope(props: {
-    customerId?: string;
-    entity?: { entityType: string; entityId: string };
-}): { customerId?: string; entityType?: string; entityId?: string } | undefined {
-    if (props.customerId) return { customerId: props.customerId };
-    if (props.entity?.entityId) {
-        return { entityType: props.entity.entityType, entityId: props.entity.entityId };
-    }
-    return undefined;
-}
-
-function resolveLoadComposerChannel(
-    threadId: string | null,
-    workspace: FamilyCommunicationWorkspaceVM | null,
-    fallback: ComposerChannel,
-): ComposerChannel {
-    if (!threadId || !workspace) return fallback;
-    const thread = workspace.threads.find((t) => t.id === threadId);
-    if (!thread) return fallback;
-    return threadChannelToWorkspaceMode(thread.channel) === "sms" ? "sms" : "email";
-}
+import { useFamilyCommunicationRuntime } from "@/lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime";
 
 export default function FamilyCommunicationWorkspace(props: {
     customerId?: string;
     entity?: { entityType: string; entityId: string };
     channel?: "email" | "sms";
     initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
+    initialThreadId?: string | null;
     /** Activity cockpit embed — compact loading shell while warm cache resolves. */
     compactActivityLoading?: boolean;
     surfaceVariant?: FamilyWorkspaceSurfaceVariant;
 }) {
-    const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
-        props.channel === "sms" ? "sms" : "email",
-    );
-    const liveChannel: ComposerChannel = workspaceMode === "sms" ? "sms" : "email";
-    const initialPrefetchParams = useMemo(
-        () => resolvePrefetchParams(props, liveChannel, null),
-        [props.customerId, props.entity?.entityType, props.entity?.entityId, liveChannel]
-    );
-    const [vm, setVm] = useState<FamilyCommunicationWorkspaceVM | null>(() => {
-        const warm = initialPrefetchParams ? getDrawerFamilyWorkspaceWarm(initialPrefetchParams) : null;
-        if (warm) return warm;
-        return props.initialPreviewVm ? workspaceFromPreview(props.initialPreviewVm) : null;
-    });
-    const [loading, setLoading] = useState(() => !vm);
-    const [servedFromWarmCache, setServedFromWarmCache] = useState(() => Boolean(vm));
-    const [error, setError] = useState<string | null>(null);
-    const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>(() => vm?.selectedRecipients ?? []);
-    const [subjectDraft, setSubjectDraft] = useState("");
-    const [bodyDraft, setBodyDraft] = useState("");
-    const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
-    const [sendError, setSendError] = useState<string | null>(null);
-    const [sending, setSending] = useState(false);
-    const [sendCompleteToken, setSendCompleteToken] = useState(0);
-    const mountedRef = useRef(false);
-    const activityEmbedBootstrappedRef = useRef(false);
-    const hasUserThreadSelectionRef = useRef(false);
-    const loadRequestSeqRef = useRef(0);
-    const selectedThreadIdRef = useRef<string | null>(null);
-    selectedThreadIdRef.current = selectedThreadId;
     const adminAuth = useAdminAuthOptional();
+    const runtime = useFamilyCommunicationRuntime(props);
     const isActivityEmbed = props.surfaceVariant === "activity_embed";
-    const familyScopeKey = useMemo(
-        () => `${props.customerId ?? ""}|${props.entity?.entityType ?? ""}|${props.entity?.entityId ?? ""}`,
-        [props.customerId, props.entity?.entityType, props.entity?.entityId],
-    );
 
-    const syncActivityThreadContext = useCallback(
-        (threadId: string | null, workspace: FamilyCommunicationWorkspaceVM) => {
-            if (!isActivityEmbed) return;
-            if (!threadId) {
-                setSelectedRecipientIds(workspace.selectedRecipients);
-                return;
-            }
-            const thread = workspace.threads.find((t) => t.id === threadId);
-            if (!thread) return;
-            setWorkspaceMode(threadChannelToWorkspaceMode(thread.channel));
-            const threadMessages = workspace.timelineEvents.filter((e) => e.threadId === threadId).map(toThreadPreviewMessage);
-            const recipientIds = deriveThreadReplyRecipientIds(thread, threadMessages);
-            if (recipientIds.length > 0) setSelectedRecipientIds(recipientIds);
-        },
-        [isActivityEmbed],
-    );
+    if (runtime.error && !runtime.vm) return <div className="p-4 text-xs text-alloy-ember">{runtime.error}</div>;
 
-    useEffect(() => {
-        if (mountedRef.current) return;
-        mountedRef.current = true;
-        markDrawerFamilyWorkspaceTiming("workspace_mounted", {
-            entity_type: props.entity?.entityType,
-            entity_id: props.entity?.entityId,
-            customer_id: props.customerId,
-            compact_activity: props.compactActivityLoading ?? false,
-        });
-        const params = resolvePrefetchParams(props, liveChannel, null);
-        markDrawerFamilyWorkspaceTiming(
-            params && (getDrawerFamilyWorkspaceWarm(params) || props.initialPreviewVm) ? "warm_cache_hit" : "warm_cache_miss",
-            {
-                entity_type: props.entity?.entityType,
-                entity_id: props.entity?.entityId,
-                customer_id: props.customerId,
-                source: params && getDrawerFamilyWorkspaceWarm(params) ? "full_cache" : props.initialPreviewVm ? "preview_vm" : "miss",
-            }
-        );
-    }, [liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId, props.compactActivityLoading, props.initialPreviewVm]);
-
-    const applyWorkspace = useCallback((workspace: FamilyCommunicationWorkspaceVM, resetSelection: boolean) => {
-        setVm(workspace);
-        if (resetSelection) setSelectedRecipientIds(workspace.selectedRecipients);
-        setError(null);
-    }, []);
-
-    const load = useCallback(
-        async (
-            threadId: string | null,
-            resetSelection: boolean,
-            opts?: { force?: boolean; channel?: ComposerChannel },
-        ) => {
-            const requestSeq = ++loadRequestSeqRef.current;
-            const requestThreadId = threadId;
-            const channel = opts?.channel ?? resolveLoadComposerChannel(threadId, vm, liveChannel);
-            const shouldApply = () => {
-                if (requestSeq !== loadRequestSeqRef.current) return false;
-                if (isActivityEmbed && requestThreadId !== selectedThreadIdRef.current) return false;
-                return true;
-            };
-            const applyIfCurrent = (workspace: FamilyCommunicationWorkspaceVM, reset: boolean) => {
-                if (!shouldApply()) return;
-                applyWorkspace(workspace, reset);
-            };
-
-            const params = resolvePrefetchParams(props, channel, threadId);
-            if (!params) {
-                if (shouldApply()) setLoading(false);
-                return;
-            }
-
-            const warm = !opts?.force ? getDrawerFamilyWorkspaceWarm(params) : null;
-            if (warm) {
-                applyIfCurrent(warm, resetSelection);
-                if (shouldApply()) {
-                    setLoading(false);
-                    setServedFromWarmCache(true);
-                }
-                void prefetchDrawerFamilyWorkspace(params, { force: true }).then((fresh) => {
-                    if (fresh) applyIfCurrent(fresh, resetSelection);
-                });
-                return;
-            }
-
-            if (shouldApply()) {
-                setLoading(true);
-                setError(null);
-            }
-            try {
-                const pending = !opts?.force ? getDrawerFamilyWorkspaceInflight(params) : null;
-                const workspace = pending ? await pending : await prefetchDrawerFamilyWorkspace(params, opts);
-                if (!workspace) {
-                    if (shouldApply()) setError("Failed to load");
-                    return;
-                }
-                applyIfCurrent(workspace, resetSelection);
-            } catch {
-                if (shouldApply()) setError("Failed to load");
-            } finally {
-                if (shouldApply()) setLoading(false);
-            }
-        },
-        [applyWorkspace, isActivityEmbed, liveChannel, props.customerId, props.entity?.entityType, props.entity?.entityId, vm]
-    );
-
-    const loadRef = useRef(load);
-    loadRef.current = load;
-
-    useEffect(() => {
-        loadRequestSeqRef.current += 1;
-        hasUserThreadSelectionRef.current = false;
-        setSelectedThreadId(null);
-        setSubjectDraft("");
-        setBodyDraft("");
-        setSendResult(null);
-        activityEmbedBootstrappedRef.current = false;
-        const params = resolvePrefetchParams(props, liveChannel, null);
-        const warm = params ? getDrawerFamilyWorkspaceWarm(params) : null;
-        setServedFromWarmCache(Boolean(warm || props.initialPreviewVm));
-        void loadRef.current(null, true);
-        // Scope reset only — must not re-run when liveChannel/load identity changes (thread switch).
-    }, [familyScopeKey, props.initialPreviewVm]);
-
-    useEffect(() => {
-        const params = resolvePrefetchParams(props, liveChannel, selectedThreadId);
-        if (!params || vm) return;
-        return subscribeDrawerFamilyWorkspaceCache(() => {
-            const warm = getDrawerFamilyWorkspaceWarm(params);
-            if (!warm) return;
-            applyWorkspace(warm, true);
-            setLoading(false);
-            setServedFromWarmCache(true);
-        });
-    }, [
-        applyWorkspace,
-        liveChannel,
-        props.customerId,
-        props.entity?.entityType,
-        props.entity?.entityId,
-        selectedThreadId,
-        vm,
-    ]);
-
-    const openThread = useCallback((threadId: string) => {
-        hasUserThreadSelectionRef.current = true;
-        setSelectedThreadId(threadId);
-        selectedThreadIdRef.current = threadId;
-        setBodyDraft("");
-        setSendResult(null);
-        setSendError(null);
-        const channel = resolveLoadComposerChannel(threadId, vm, liveChannel);
-        if (vm) syncActivityThreadContext(threadId, vm);
-        void load(threadId, false, { channel });
-    }, [load, liveChannel, syncActivityThreadContext, vm]);
-
-    useEffect(() => {
-        if (!isActivityEmbed || !vm || !selectedThreadId) return;
-        syncActivityThreadContext(selectedThreadId, vm);
-    }, [isActivityEmbed, selectedThreadId, syncActivityThreadContext, vm]);
-
-    useEffect(() => {
-        if (!isActivityEmbed || !vm || activityEmbedBootstrappedRef.current) return;
-        if (hasUserThreadSelectionRef.current || selectedThreadId) return;
-        activityEmbedBootstrappedRef.current = true;
-        const firstThread = vm.threads.find((t) => t.messageCount > 0);
-        if (!firstThread) return;
-        selectedThreadIdRef.current = firstThread.id;
-        setSelectedThreadId(firstThread.id);
-        syncActivityThreadContext(firstThread.id, vm);
-        const channel = resolveLoadComposerChannel(firstThread.id, vm, liveChannel);
-        void load(firstThread.id, false, { channel });
-    }, [isActivityEmbed, liveChannel, load, selectedThreadId, syncActivityThreadContext, vm]);
-
-    const startNewMessage = useCallback(() => {
-        hasUserThreadSelectionRef.current = true;
-        setSelectedThreadId(null);
-        selectedThreadIdRef.current = null;
-        setSubjectDraft("");
-        setBodyDraft("");
-        setSendResult(null);
-        setSendError(null);
-        if (vm) syncActivityThreadContext(null, vm);
-        void load(null, false);
-    }, [load, syncActivityThreadContext, vm]);
-
-    const runSend = useCallback(
-        async (confirm: boolean) => {
-            const cust = vm?.scope.customerId;
-            if (!cust || selectedRecipientIds.length === 0 || !bodyDraft.trim()) return;
-            setSending(true);
-            setSendError(null);
-            try {
-                const res = await fetch("/api/admin/communications/family-send", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ customer_id: cust, recipient_person_ids: selectedRecipientIds, channel: liveChannel, subject: subjectDraft, body: bodyDraft, reply_to_thread_id: selectedThreadId, confirm }),
-                });
-                const data = (await res.json()) as FamilySendResult & { error?: string };
-                if (!res.ok) { setSendError(data.error ?? "Send failed"); return; }
-                setSendResult(data);
-                if (confirm) {
-                    const scope = resolveInvalidateScope(props);
-                    if (scope) invalidateDrawerFamilyWorkspaceCache(scope);
-                    const priorThreadId = selectedThreadId;
-                    const createdThreadId =
-                        data.results.find((r) => r.status === "sent" && r.thread_id)?.thread_id ?? null;
-                    const threadToOpen = priorThreadId ?? createdThreadId;
-                    if (threadToOpen) {
-                        setSelectedThreadId(threadToOpen);
-                        selectedThreadIdRef.current = threadToOpen;
-                        const channel = resolveLoadComposerChannel(threadToOpen, vm, liveChannel);
-                        await load(threadToOpen, false, { force: true, channel });
-                    } else {
-                        await load(null, false, { force: true });
-                    }
-                    setBodyDraft("");
-                    if (!priorThreadId) setSubjectDraft("");
-                    setSendResult(null);
-                    setSendError(null);
-                    setSendCompleteToken((n) => n + 1);
-                }
-            } catch {
-                setSendError("Send failed");
-            } finally {
-                setSending(false);
-            }
-        },
-        [vm, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel, load, props.customerId, props.entity?.entityType, props.entity?.entityId]
-    );
-
-    const workspaceModeAvailability = useMemo(
-        () => resolveWorkspaceModeAvailability(vm, vm?.relatedTasks.length ?? 0),
-        [vm],
-    );
-
-    const events: TimelineEventVM[] = vm
-        ? isActivityEmbed
-            ? selectedThreadId
-                ? vm.messages
-                : []
-            : selectedThreadId
-              ? vm.messages
-              : vm.timelineEvents
-        : [];
-    const messages = useMemo(() => events.map(toWorkspaceMessage), [events]);
-    const health = useMemo(
-        () => computeCommunicationHealth({ messages: events.filter((e) => !e.kind || e.kind === "message").map((e) => ({ direction: e.direction, created_at: e.createdAt, channel: e.channel, opened_at: e.openedAt, replied_at: e.repliedAt })) }),
-        [events]
-    );
-    const healthLabel = health.engagementScore >= 66 ? "Healthy" : health.engagementScore >= 33 ? "At risk" : "Unresponsive";
-    const healthTone = health.engagementScore >= 66 ? "text-alloy-juniper" : health.engagementScore >= 33 ? "text-alloy-amber" : "text-red-600";
-    const healthDot = health.engagementScore >= 66 ? "bg-alloy-juniper" : health.engagementScore >= 33 ? "bg-alloy-amber" : "bg-red-500";
-
-    if (error && !vm) return <div className="p-4 text-xs text-alloy-ember">{error}</div>;
-
-    if (!vm) {
+    if (!runtime.vm) {
         if (props.compactActivityLoading) {
             return (
                 <section
                     data-cc-column="workspace"
                     data-cc-drawer-workspace
-                    data-drawer-family-workspace-warm={servedFromWarmCache ? "true" : undefined}
+                    data-drawer-family-workspace-warm={runtime.servedFromWarmCache ? "true" : undefined}
                     className="flex min-h-0 flex-col overflow-hidden"
                 >
-                    <CommsActivityEmbedHydratingShell joining={loading} />
+                    <CommsActivityEmbedHydratingShell joining={runtime.loading} />
                 </section>
             );
         }
-        if (loading) return <CommsWorkspacePanelReserve />;
+        if (runtime.loading) return <CommsWorkspacePanelReserve />;
         return <div className="p-4 text-xs text-alloy-midnight/45">No conversation.</div>;
     }
-
-    const allRecipients = vm.recipientGroups.flatMap((g) => g.recipients);
-    const childNames = vm.children.map((c) => (c.ageLabel ? `${c.name} (${c.ageLabel})` : c.name));
-    const detail = {
-        owner: vm.family.ownerLabel ?? "Unassigned",
-        contactName: allRecipients[0]?.displayName ?? vm.family.label,
-        program: vm.family.program,
-        stage: vm.family.stage,
-        consent: vm.consentSummary.household,
-    };
-    const selected = { id: vm.scope.customerId, family_label: vm.family.label, sla_state: null, assignment_state: "unassigned" };
-    const timelineMessages = vm.timelineEvents.map(toWorkspaceMessage);
 
     return (
         <section
             data-cc-column="workspace"
             data-cc-drawer-workspace
             data-cc-surface-variant={props.surfaceVariant ?? "default"}
-            data-drawer-family-workspace-warm={servedFromWarmCache ? "true" : undefined}
+            data-drawer-family-workspace-warm={runtime.servedFromWarmCache ? "true" : undefined}
             className={
                 isActivityEmbed
                     ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]"
@@ -491,42 +56,42 @@ export default function FamilyCommunicationWorkspace(props: {
         >
             <FamilyCommunicationWorkspaceView
                 surfaceVariant={props.surfaceVariant}
-                threads={vm.threads}
-                onNewMessage={startNewMessage}
-                selected={selected}
-                detail={detail}
-                childNames={childNames}
-                healthTone={healthTone}
-                healthDot={healthDot}
-                healthLabel={healthLabel}
-                workspaceMode={workspaceMode}
-                onWorkspaceModeChange={setWorkspaceMode}
-                workspaceModeAvailability={workspaceModeAvailability}
+                threads={runtime.vm.threads}
+                onNewMessage={runtime.startNewMessage}
+                selected={runtime.selected!}
+                detail={runtime.detail}
+                childNames={runtime.childNames}
+                healthTone={runtime.healthTone}
+                healthDot={runtime.healthDot}
+                healthLabel={runtime.healthLabel}
+                workspaceMode={runtime.workspaceMode}
+                onWorkspaceModeChange={runtime.setWorkspaceMode}
+                workspaceModeAvailability={runtime.workspaceModeAvailability}
                 LIVE_WORKSPACE={true}
-                selectedThreadId={selectedThreadId}
-                selectedThread={vm.threads.find((t) => t.id === selectedThreadId) ?? null}
-                messages={messages}
-                timelineMessages={isActivityEmbed ? timelineMessages : undefined}
-                liveRecipientGroups={vm.recipientGroups}
-                selectedRecipientIds={selectedRecipientIds}
-                liveChannel={liveChannel}
-                subjectDraft={subjectDraft}
-                bodyDraft={bodyDraft}
-                sendResult={sendResult}
-                sendError={sendError}
-                sending={sending}
+                selectedThreadId={runtime.selectedThreadId}
+                selectedThread={runtime.selectedThread}
+                messages={runtime.messages}
+                timelineMessages={isActivityEmbed ? runtime.timelineMessages : undefined}
+                liveRecipientGroups={runtime.vm.recipientGroups}
+                selectedRecipientIds={runtime.selectedRecipientIds}
+                liveChannel={runtime.liveChannel}
+                subjectDraft={runtime.subjectDraft}
+                bodyDraft={runtime.bodyDraft}
+                sendResult={runtime.sendResult}
+                sendError={runtime.sendError}
+                sending={runtime.sending}
                 assignBusy={false}
                 onClaim={() => {}}
-                onAllMessages={() => { setSelectedThreadId(null); void load(null, false); }}
-                onOpenThread={openThread}
-                onToggleRecipient={(id) => setSelectedRecipientIds((prev) => toggleRecipientSelection(prev, id, true))}
-                onSubjectChange={setSubjectDraft}
-                onBodyChange={setBodyDraft}
-                onSendNow={() => void runSend(false)}
-                onConfirmSend={() => void runSend(true)}
-                onDismissSend={() => { setSendResult(null); setSendError(null); }}
+                onAllMessages={runtime.showAllMessages}
+                onOpenThread={runtime.openThread}
+                onToggleRecipient={runtime.toggleRecipient}
+                onSubjectChange={runtime.setSubjectDraft}
+                onBodyChange={runtime.setBodyDraft}
+                onSendNow={() => void runtime.send(false)}
+                onConfirmSend={() => void runtime.send(true)}
+                onDismissSend={runtime.dismissSendResult}
                 viewerUserId={adminAuth?.userId ?? null}
-                sendCompleteToken={sendCompleteToken}
+                sendCompleteToken={runtime.sendCompleteToken}
             />
         </section>
     );
