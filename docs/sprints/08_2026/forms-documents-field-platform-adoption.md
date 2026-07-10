@@ -627,13 +627,98 @@ No imports from Processing catalogs into Forms authoring. Submission `field_sour
 - Focused sprint tests — **pass** (41 tests in targeted suite)
 - Pre-existing baseline failure: `tests/forms/structuredFormSchemaEditor.test.tsx` (`form-add-question` vs `document-add-question-*`) — reproduces on staging without product changes
 
-### Deferred P2–P4
+### Deferred P3–P4
 
 | Phase | Scope |
 | --- | --- |
-| **P2** | Relationship-derived leaf authoring, repeatable sections, collection-bound sections |
-| **P3** | Canonical resolver convergence for Forms runtime |
+| **P3** | Canonical resolver convergence for Forms runtime (non-primary relationship prefill, write targets) |
 | **P4** | Processing field-platform migration, `document_field_definitions` bridge, full delete-safety indexing |
+
+---
+
+## 21. P2 — Relationship leaves and collection-bound repeaters (hardening pass)
+
+**Status:** **Committed** — PR pending merge  
+**Branch:** `feat/forms-documents-relationship-repeaters`  
+**Baseline:** staging `c906fd028` (Merge PR #131)
+
+### Worktree safety
+
+- P2 work only in `/Users/Kelly/.cursor/worktrees/Alloy/forms-documents-relationship-repeaters`
+- `stash@{0}: identity-platform-docs-wip` on `cursor/66605932` — **untouched**
+
+### Chosen storage strategy — **Strategy C** (compatibility transport + canonical relationship metadata)
+
+| Layer | Identity |
+| --- | --- |
+| **Canonical relationship** | `relationship.provider_ref_key`, `relationship_id`, `role` |
+| **Canonical leaf** | `relationship.leaf_provider_ref_key` (manifest ref, e.g. `person.primary_email`) |
+| **Transport (compat only)** | `entity_type` + `field_key` from manifest grain (`guardian` + `primary_email`) — **not** invented `primary_contact_email` |
+| **Legacy ambiguous** | `guardian_email` etc. — unchanged, no relationship block on read |
+
+Manifest refKeys are parsed **without** layout alias normalization (`person.primary_email` must not collapse to `person.email` → `guardian_email` for role-specific bindings).
+
+### Enabled vs deferred (P2)
+
+| Role / leaf | Authoring | Prefill | Write | Class |
+| --- | --- | --- | --- | --- |
+| Primary Contact (name, email, phone) | **Yes** | **Yes** (via `contact.*`) | **No** — `read_only: true` required | `authorable_prefill_readonly` |
+| Secondary, Parents, Billing, Emergency | **No** | Deferred P3 | No | `deferred` |
+| Legacy `guardian_*` | Load/hydrate only | Existing paths | Existing intake dialect | `legacy_load_only` |
+
+Relationship leaves are **read-only prefill in P2** — submission may include informational payload values; Processing and CRM intake paths do **not** treat relationship-bound fields as authoritative write targets. Publish validation rejects editable relationship leaves.
+
+### Submission / Processing boundary
+
+| Path | Behavior |
+| --- | --- |
+| Prefill | `formsRelationshipPrefillMap` → `contact.{column}` via existing primary-contact resolver |
+| Form submission payload | Values stored as submitted; no new CRM write adapter |
+| Processing bridge | Unchanged — legacy `entity_type:field_key` dialect only |
+| Intake meta | Hardcoded `guardian_email` paths unchanged; Primary Contact relationship fields do not auto-write CRM |
+
+### Recommendation
+
+**Safe to merge** after CI green — scoped to Primary Contact read-only prefill, foundation-only collection bindings, Strategy C transport identity, and legacy-safe hydration.
+
+**Next phase after merge:** P3 relationship resolver convergence (non-primary prefill, write targets); collection authoring UI and publish when product-ready.
+
+### Collection repeaters — **Option 2: foundation-only**
+
+- Schema + typed helpers + validation exist
+- `FORMS_COLLECTION_BINDING_AUTHORING_ENABLED = false`
+- Publish rejects any `collection_binding` with foundation-only message
+- No operator UI for collection picker in P2
+- `collection_binding` shape: `{ collection_provider_ref, iteration_entity_type, iteration_alias? }` — **no redundant `collection_ref`**
+
+### Child / enrollment grain
+
+| Display concept | Owner | In Children repeater (P2) |
+| --- | --- | --- |
+| Child First Name | `customer_member.first_name` | Allowed (legacy `child.child_first_name` transport) |
+| Date of Birth | `customer_member.dob` | Allowed |
+| Program | `inquiry_child.program_category_id` | **Rejected** — requires enrollment/opportunity context |
+| Desired Start Date | `inquiry_child.start_date` | **Rejected** |
+| Current Classroom | enrollment projection | **Rejected** (P3) |
+| Enrollment Status | `opportunity` / OCM | **Rejected** |
+
+### Key files (hardening additions)
+
+- `web/lib/fields/formsRelationshipTransport.ts` — manifest-grain transport without alias collapse
+- `web/lib/fields/formsRelationshipOperationalSupport.ts` — P2 operational matrix
+- `web/lib/fields/formsRelationshipWriteSemantics.ts` — read-only prefill enforcement
+
+### Validation (local, post-hardening)
+
+- Focused P0/P2 tests: **66/66 pass** (6 files)
+- `NODE_OPTIONS=--max-old-space-size=8192 npm run typecheck` — **pass**
+
+### Remaining risks
+
+- Non-primary relationship prefill/write — P3
+- Collection-bound repeater operator UI — follow-up after foundation
+- Processing still uses legacy `entity_type:field_key` dialect — unchanged boundary
+- Primary Contact prefill uses existing `customers.primary_contact_id → contact` adapter only
 
 ### First-paint / loading behavior (hardening)
 
@@ -645,10 +730,3 @@ No imports from Processing catalogs into Forms authoring. Submission `field_sour
 | API failure | Platform fields preserved; error banner shown; **no** `OPERATIONAL_FORM_SYSTEM_FIELDS` full-catalog fallback |
 | Option flicker | Stable sort by label; tenant merge updates labels in-place by canonical ref key |
 | Legacy gap fill | Operational catalog used only for hydration gaps **after** successful tenant merge |
-
-### Recommendation
-
-**Safe to merge** after review — product diff is scoped to picker derivation, binding adapters, publish validation, and first-paint hardening. Audit commit (`7f85ae0df` → rebased `56f05a9ac`) remains separate from product commit.
-
-**Next phase after merge:** P2 relationship-derived leaf authoring and repeatable sections (separate branch).
-

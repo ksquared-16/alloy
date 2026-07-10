@@ -45,6 +45,47 @@ export const FIELD_AUTHORING_COPY = {
     customNote: "Custom — not auto-linked to CRM.",
 } as const;
 
+/** Operator-facing groups for relationship role leaves. */
+export const RELATIONSHIP_FIELD_PICKER_GROUP_ORDER = [
+    "primary",
+    "parents",
+    "secondary",
+    "billing",
+    "emergency",
+] as const;
+
+export type RelationshipFieldPickerGroupId = (typeof RELATIONSHIP_FIELD_PICKER_GROUP_ORDER)[number];
+
+export const RELATIONSHIP_FIELD_PICKER_GROUP_LABELS: Record<RelationshipFieldPickerGroupId, string> = {
+    primary: "Primary Contact",
+    parents: "Parent / Guardian",
+    secondary: "Secondary Contact",
+    billing: "Billing Contact",
+    emergency: "Emergency Contact",
+};
+
+export function groupRelationshipFieldsForPicker(
+    fields: readonly SystemFieldRegistryEntry[],
+): { id: RelationshipFieldPickerGroupId; label: string; fields: SystemFieldRegistryEntry[] }[] {
+    const buckets = new Map<RelationshipFieldPickerGroupId, SystemFieldRegistryEntry[]>();
+    for (const id of RELATIONSHIP_FIELD_PICKER_GROUP_ORDER) buckets.set(id, []);
+    for (const field of fields) {
+        if (!field.id.startsWith("rel:")) continue;
+        const key = field.field_key;
+        let group: RelationshipFieldPickerGroupId = "primary";
+        if (key.startsWith("secondary_") || key.includes("secondary")) group = "secondary";
+        else if (key.startsWith("billing_") || key.includes("billing")) group = "billing";
+        else if (key.startsWith("emergency_") || key.includes("emergency")) group = "emergency";
+        else if (key.startsWith("secondary_contact") || key === "secondary_email" || key === "secondary_phone") group = "secondary";
+        buckets.get(group)!.push(field);
+    }
+    return RELATIONSHIP_FIELD_PICKER_GROUP_ORDER.map((id) => ({
+        id,
+        label: RELATIONSHIP_FIELD_PICKER_GROUP_LABELS[id],
+        fields: buckets.get(id) ?? [],
+    })).filter((g) => g.fields.length > 0);
+}
+
 export function entityTypeLabel(entityType: string): string {
     const map: Record<string, string> = {
         child: "Child",

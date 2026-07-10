@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     buildFormSystemFieldPicker,
+    buildFormRelationshipFieldPickerPlatformBaseline,
     fieldDefToFormRegistryEntry,
     pickerUsesCanonicalProviderDerivation,
     providerToFormRegistryEntry,
@@ -45,11 +46,13 @@ describe("formFieldRegistryPicker", () => {
         expect(guardianEntries[0]?.id).toBe("guardian_first_name");
     });
 
-    it("empty org defs still yields canonical platform seeds plus legacy gap fill", () => {
+    it("empty org defs still yields canonical platform seeds; ambiguous guardian_email uses relationship picker", () => {
         resetCanonicalDataProviderCacheForTests();
         const picker = buildFormSystemFieldPicker([], OPERATIONAL_FORM_SYSTEM_FIELDS);
-        expect(picker.length).toBeGreaterThan(OPERATIONAL_FORM_SYSTEM_FIELDS.length);
-        expect(picker.some((e) => e.id === "guardian_email")).toBe(true);
+        expect(picker.length).toBeGreaterThan(0);
+        expect(picker.some((e) => e.id === "guardian_email")).toBe(false);
+        const relationshipPicker = buildFormRelationshipFieldPickerPlatformBaseline();
+        expect(relationshipPicker.some((e) => e.id === "rel:person.contact_role.primary.email")).toBe(true);
     });
 
     it("tenant business fields appear in picker output", () => {

@@ -10,6 +10,7 @@ import {
     PREFILL_SOURCE_PATH_RE,
 } from "@/lib/forms/prefill/prefillFieldMap";
 import { buildCanonicalPrefillFieldMap } from "@/lib/forms/prefill/canonicalPrefillMap";
+import { buildRelationshipPrefillFieldMap } from "@/lib/forms/prefill/formsRelationshipPrefillMap";
 import {
     CONTACT_COMPAT_SELECT,
     CUSTOMER_CANONICAL_ADMIN_SELECT,
@@ -71,8 +72,9 @@ export async function resolveFormPrefillValues(
     // match the legacy prefill_field_map keys (e.g. a child Name/DOB bound to customer_member).
     // The explicit prefill_field_map still wins on conflicts.
     const canonical = buildCanonicalPrefillFieldMap(schema);
+    const relationship = buildRelationshipPrefillFieldMap(schema);
     const explicit = mergeDefinitionAndLinkPrefillMaps(formDefinitionMetadata ?? null, linkMetadata) ?? {};
-    const combined = { ...canonical, ...explicit };
+    const combined = { ...canonical, ...relationship, ...explicit };
     if (Object.keys(combined).length === 0) return {};
 
     const allowed = collectScalarFormFieldIds(schema);

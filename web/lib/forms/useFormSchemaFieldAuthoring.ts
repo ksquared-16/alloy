@@ -98,6 +98,7 @@ function commitSchema(next: FormSchemaV1, onChange: (next: FormSchemaV1) => void
 export type FormSchemaFieldAuthoringOptions = {
     /** Canonical-derived picker entries — not OPERATIONAL_FORM_SYSTEM_FIELDS directly. */
     systemFields?: readonly SystemFieldRegistryEntry[];
+    relationshipFields?: readonly SystemFieldRegistryEntry[];
 };
 
 export function useFormSchemaFieldAuthoring(
@@ -106,7 +107,11 @@ export function useFormSchemaFieldAuthoring(
     options?: FormSchemaFieldAuthoringOptions,
 ) {
     const systemFields = options?.systemFields ?? OPERATIONAL_FORM_SYSTEM_FIELDS;
-    const systemFieldById = useMemo(() => systemFieldByIdFromPicker(systemFields), [systemFields]);
+    const relationshipFields = options?.relationshipFields ?? [];
+    const systemFieldById = useMemo(
+        () => systemFieldByIdFromPicker([...systemFields, ...relationshipFields]),
+        [systemFields, relationshipFields],
+    );
 
     const mainSection = schema.sections[0];
     const topFields = useMemo(
@@ -204,13 +209,13 @@ export function useFormSchemaFieldAuthoring(
     );
 
     const registryEntryForField = useCallback(
-        (f: FormField) => registryEntryForFormField(f, systemFields),
-        [systemFields],
+        (f: FormField) => registryEntryForFormField(f, systemFields, relationshipFields),
+        [systemFields, relationshipFields],
     );
 
     const pickerValueForField = useCallback(
-        (f: FormField) => pickerValueForFormField(f, systemFields),
-        [systemFields],
+        (f: FormField) => pickerValueForFormField(f, systemFields, relationshipFields),
+        [systemFields, relationshipFields],
     );
 
     const handlePickerChange = useCallback(
@@ -281,6 +286,7 @@ export function useFormSchemaFieldAuthoring(
         isCustomUnmappedField,
         uiKindForField,
         systemFields,
+        relationshipFields,
     };
 }
 

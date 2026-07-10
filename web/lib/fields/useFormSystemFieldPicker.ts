@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import {
     buildFormSystemFieldPicker,
     buildFormSystemFieldPickerPlatformBaseline,
+    buildFormRelationshipFieldPicker,
+    buildFormRelationshipFieldPickerPlatformBaseline,
     FORM_PICKER_ENTITY_TYPES,
     type FieldDefinitionPickerRow,
 } from "@/lib/fields/formFieldRegistryPicker";
@@ -27,6 +29,8 @@ function toPickerRow(r: Record<string, unknown>): FieldDefinitionPickerRow {
 export type FormSystemFieldPickerState = {
     /** Platform baseline immediately; tenant business fields merge after load. */
     systemFields: readonly SystemFieldRegistryEntry[];
+    /** Relationship role leaves — separate optgroups from scalar mapped fields. */
+    relationshipFields: readonly SystemFieldRegistryEntry[];
     /** True while org field_definitions fetch is in flight. Platform fields remain available. */
     loading: boolean;
     /** Set when tenant fetch fails — platform fields are preserved. */
@@ -43,6 +47,9 @@ export type FormSystemFieldPickerState = {
 export function useFormSystemFieldPicker(): FormSystemFieldPickerState {
     const [systemFields, setSystemFields] = useState<readonly SystemFieldRegistryEntry[]>(() =>
         buildFormSystemFieldPickerPlatformBaseline(),
+    );
+    const [relationshipFields, setRelationshipFields] = useState<readonly SystemFieldRegistryEntry[]>(() =>
+        buildFormRelationshipFieldPickerPlatformBaseline(),
     );
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -64,6 +71,7 @@ export function useFormSystemFieldPicker(): FormSystemFieldPickerState {
             );
             const allRows = results.flat();
             setSystemFields(buildFormSystemFieldPicker(allRows));
+            setRelationshipFields(buildFormRelationshipFieldPicker(allRows));
         } catch {
             setError("Organization fields could not be loaded. Platform fields remain available.");
         } finally {
@@ -75,5 +83,5 @@ export function useFormSystemFieldPicker(): FormSystemFieldPickerState {
         void load();
     }, [load]);
 
-    return { systemFields, loading, error, reload: load };
+    return { systemFields, relationshipFields, loading, error, reload: load };
 }

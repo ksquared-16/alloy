@@ -30,6 +30,8 @@ import {
     formsLegacyCompatibilityEntry,
     isFormsLegacyLoadOnlySystemFieldId,
 } from "@/lib/fields/formsLegacyCompatibility";
+import { isLegacyAmbiguousContactSystemFieldId, isFormsAmbiguousPersonScalarRef } from "@/lib/fields/formsLegacyContactRoleCompatibility";
+import { buildFormsRelationshipProviderSeeds } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 import { systemFieldIdToCanonicalRef } from "@/lib/fields/fieldRegistryReferenceMatrix";
 
 const BOTH: CanonicalDataProvider["availability"] = { pipeline: true, waitlist: true };
@@ -82,6 +84,7 @@ function providerFromPlatformField(pf: PlatformFieldDefinition): CanonicalDataPr
         valueType: valueTypeFromFieldType(pf.field_type),
         isSystem: true,
         availability: BOTH,
+        legacyOnly: isFormsAmbiguousPersonScalarRef(pf.refKey),
         source: sourceMeta("platform_field_catalog", "web/lib/fields/platformFieldCatalog.ts"),
         resolverOwner: "web/lib/fields/platformFieldCatalog.ts",
     };
@@ -130,7 +133,9 @@ function providerFromLegacyOperational(systemFieldId: string): CanonicalDataProv
         valueType: valueTypeFromFieldType(entry.suggested_kind),
         isSystem: true,
         availability: BOTH,
-        legacyOnly: isFormsLegacyLoadOnlySystemFieldId(systemFieldId) || compat?.appearsInNewPickers === false,
+        legacyOnly: isFormsLegacyLoadOnlySystemFieldId(systemFieldId)
+            || isLegacyAmbiguousContactSystemFieldId(systemFieldId)
+            || compat?.appearsInNewPickers === false,
         source: sourceMeta("legacy_compatibility", "web/lib/forms/systemFieldRegistry.ts"),
         resolverOwner: "web/lib/forms/systemFieldRegistry.ts",
     };
@@ -204,6 +209,9 @@ export function mergeFormsProviderCatalog(
     const seen = new Map<string, CanonicalDataProvider>();
     for (const provider of buildFormsProviderSeeds()) {
         seen.set(provider.refKey, provider);
+    }
+    for (const provider of buildFormsRelationshipProviderSeeds()) {
+        if (!seen.has(provider.refKey)) seen.set(provider.refKey, provider);
     }
     if (tenantDefs?.length) {
         for (const provider of buildFormsTenantProviderSeeds(tenantDefs)) {

@@ -17,9 +17,24 @@ The first convergence sprint implemented the **canonical data-provider model** a
 | --- | --- | --- |
 | **Queue Rows** | Partial — static catalog + manual validator | **Reference adoption complete** (provider library wired) |
 | **Surface Composer (queue zones)** | Low | **Partial** — `compositionFieldAdapter` now uses provider registry |
-| **Forms / Documents / Processing / BP / Communications / Focus Panel** | Unchanged | Pending — see convergence doc |
+| **Forms / Documents / Processing / BP / Communications / Focus Panel** | Unchanged | **Partial** — Forms P2 relationship leaves + collection foundation (July 2026) |
 
 Audit conclusions about duplicate catalogs remain valid for non-migrated consumers. Queue Row-specific findings for static catalog and manual allow-list are **resolved**.
+
+### Forms / Documents P2 update (July 2026)
+
+Forms / Documents now consumes **relationship leaf** and **collection binding** provider seeds from the canonical data-provider registry — not a parallel catalog.
+
+| Capability | Status |
+| --- | --- |
+| Primary Contact → Name, Email, Phone | **Enabled** — read-only prefill via existing `contact.*` runtime |
+| Secondary, Parents, Billing, Emergency | **Declared unavailable** — excluded from picker and publish |
+| Legacy `guardian_*` flat bindings | **Load/hydrate only** — unchanged on hydration |
+| `collection_binding` schema + validation | **Foundation-only** — publish rejected; authoring UI disabled |
+| Relationship writes / non-primary resolver | **Deferred P3** |
+| Collection-bound operator authoring / publish | **Deferred** |
+
+See [forms-documents-field-platform-adoption.md](./forms-documents-field-platform-adoption.md) §21 for binding identity (Strategy C) and validation contracts.
 
 ---
 

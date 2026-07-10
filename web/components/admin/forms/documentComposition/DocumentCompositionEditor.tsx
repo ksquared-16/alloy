@@ -58,8 +58,8 @@ export function DocumentCompositionEditor({
     const composition = resolveDocumentComposition(schema);
     const sortedBlocks = sortDocumentBlocks(composition.blocks);
     const fieldRegions = listFieldRegionBlocks(composition);
-    const { systemFields, loading: pickerLoading, error: pickerError } = useFormSystemFieldPicker();
-    const fieldAuthoring = useFormSchemaFieldAuthoring(schema, onChange, { systemFields });
+    const { systemFields, relationshipFields, loading: pickerLoading, error: pickerError } = useFormSystemFieldPicker();
+    const fieldAuthoring = useFormSchemaFieldAuthoring(schema, onChange, { systemFields, relationshipFields });
 
     const applyComposition = (next: DocumentComposition) => {
         onChange(patchSchemaComposition(schema, next));
@@ -220,6 +220,7 @@ export function DocumentCompositionEditor({
                                                         kind={fieldAuthoring.uiKindForField(field)}
                                                         pickerValue={fieldAuthoring.pickerValueForField(field)}
                                                         systemFields={systemFields}
+                                                        relationshipFields={relationshipFields}
                                                         pickerLoading={pickerLoading}
                                                         pickerError={pickerError}
                                                         takenFieldIds={fieldAuthoring.takenIdsForIndex(idx)}

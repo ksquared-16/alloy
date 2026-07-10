@@ -23,6 +23,12 @@ import {
     formsLegacyCompatibilityForCanonicalRef,
     type FormsLegacyCompatibilityClass,
 } from "@/lib/fields/formsLegacyCompatibility";
+import {
+    formFieldSourceHasRelationshipLineage,
+    isRelationshipLeafProvider,
+    relationshipProviderRefFromFieldSource,
+    relationshipProviderToFormFieldSource,
+} from "@/lib/fields/formsRelationshipFieldSourceBinding";
 import { OPERATIONAL_FORM_SYSTEM_FIELDS } from "@/lib/forms/systemFieldRegistry";
 
 export type FormFieldSourceResolutionStatus =
@@ -69,6 +75,10 @@ export function canonicalProviderToFormFieldSource(
     provider: CanonicalDataProvider,
     options?: { legacySystemFieldId?: string },
 ): FormFieldSource {
+    if (isRelationshipLeafProvider(provider)) {
+        return relationshipProviderToFormFieldSource(provider);
+    }
+
     const canonicalRef = canonicalRefFromProvider(provider);
     const legacyId = options?.legacySystemFieldId ?? formsRegistryEntryIdForCanonicalRef(canonicalRef);
     const legacyEntry =
@@ -110,6 +120,15 @@ function canonicalRefFromPersistedSource(source: FormFieldSource): CanonicalRegi
     return { entity_type: defEntity, field_key: fieldKey };
 }
 
+function canonicalRefFromRelationshipProviderRef(providerRefKey: string): CanonicalRegistryRef | null {
+    const dot = providerRefKey.indexOf(".");
+    if (dot < 0) return null;
+    return {
+        entity_type: providerRefKey.slice(0, dot),
+        field_key: providerRefKey.slice(dot + 1),
+    };
+}
+
 /** Existing field_source → canonical ref or safe unresolved state. */
 export function formFieldSourceToCanonicalProvider(source: FormFieldSource | null | undefined): FormFieldSourceResolution {
     if (!source) {
@@ -126,6 +145,19 @@ export function formFieldSourceToCanonicalProvider(source: FormFieldSource | nul
         return {
             status: "custom",
             canonicalRef: null,
+            legacySystemFieldId: null,
+            legacyClassification: null,
+            persistedSource: source,
+        };
+    }
+
+    if (formFieldSourceHasRelationshipLineage(source)) {
+        const providerRef = relationshipProviderRefFromFieldSource(source)!;
+        const leafRef = source.relationship!.leaf_provider_ref_key.trim();
+        const canonicalRef = canonicalRefFromRelationshipProviderRef(leafRef) ?? canonicalRefFromRelationshipProviderRef(providerRef);
+        return {
+            status: "canonical",
+            canonicalRef,
             legacySystemFieldId: null,
             legacyClassification: null,
             persistedSource: source,

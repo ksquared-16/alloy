@@ -14,9 +14,11 @@ import {
     systemFieldIdToCanonicalRef,
     type CanonicalRegistryRef,
 } from "@/lib/fields/fieldRegistryReferenceMatrix";
-import {
-    filterFormsDocumentsDataProviders,
-} from "@/lib/fields/canonicalDataProviderRegistry";
+import { filterFormsDocumentsDataProviders } from "@/lib/fields/canonicalDataProviderRegistry";
+import { buildFormsRelationshipProviderSeeds } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
+import { filterFormsDocumentsRelationshipPickerProviders } from "@/lib/fields/formsProviderEligibility";
+import { isLegacyAmbiguousContactSystemFieldId } from "@/lib/fields/formsLegacyContactRoleCompatibility";
+import { relationshipProviderToFormFieldSource } from "@/lib/fields/formsRelationshipFieldSourceBinding";
 import { canonicalProviderToFormFieldSource } from "@/lib/fields/formsFieldSourceBinding";
 import {
     OPERATIONAL_FORM_SYSTEM_FIELDS,
@@ -52,6 +54,35 @@ export const FORM_PICKER_NO_LEGACY_FALLBACK: readonly SystemFieldRegistryEntry[]
  */
 export function buildFormSystemFieldPickerPlatformBaseline(): SystemFieldRegistryEntry[] {
     return buildFormSystemFieldPicker([], FORM_PICKER_NO_LEGACY_FALLBACK);
+}
+
+/** Relationship leaf picker entries — separate capability filter from scalar fields. */
+export function buildFormRelationshipFieldPicker(
+    orgDefs: readonly FieldDefinitionPickerRow[] = [],
+): SystemFieldRegistryEntry[] {
+    void orgDefs;
+    const providers = filterFormsDocumentsRelationshipPickerProviders(buildFormsRelationshipProviderSeeds());
+    return providers.map(relationshipProviderToRegistryEntry).sort((a, b) => a.default_label.localeCompare(b.default_label));
+}
+
+export function buildFormRelationshipFieldPickerPlatformBaseline(): SystemFieldRegistryEntry[] {
+    return buildFormRelationshipFieldPicker([]);
+}
+
+function relationshipProviderToRegistryEntry(provider: CanonicalDataProvider): SystemFieldRegistryEntry {
+    const source = relationshipProviderToFormFieldSource(provider);
+    const leaf = provider.relationship?.leaf_key ?? "value";
+    const suggestedKind: SystemFieldValueKind =
+        leaf === "email" ? "email" : leaf === "phone" ? "phone" : "text";
+    return {
+        id: `rel:${provider.refKey}`,
+        entity_type: "guardian",
+        field_key: source.field_key,
+        default_label: provider.label,
+        default_required: false,
+        suggested_kind: suggestedKind,
+        public_intake_safe: true,
+    };
 }
 
 function fieldTypeToSuggestedKind(fieldType: string): SystemFieldValueKind {
@@ -166,6 +197,7 @@ export function buildFormSystemFieldPicker(
     }
 
     for (const legacy of fallback) {
+        if (isLegacyAmbiguousContactSystemFieldId(legacy.id)) continue;
         const ref = systemFieldIdToCanonicalRef(legacy.id);
         if (ref) {
             const key = canonicalRefKey(ref);
@@ -198,23 +230,50 @@ export function systemFieldByIdFromPicker(
 }
 
 export function registryEntryForFormField(
-    field: { id: string; field_source?: { entity_type?: string; field_key?: string } | null },
+    field: {
+        id: string;
+        field_source?: {
+            entity_type?: string;
+            field_key?: string;
+            relationship?: { provider_ref_key?: string };
+        } | null;
+    },
     picker: readonly SystemFieldRegistryEntry[],
+    relationshipPicker?: readonly SystemFieldRegistryEntry[],
 ): SystemFieldRegistryEntry | null {
     if (field.field_source?.entity_type === "custom") return null;
-    const byId = systemFieldByIdFromPicker(picker);
-    const byFieldKey = new Map(picker.map((e) => [e.field_key, e]));
-    return byFieldKey.get(field.id) ?? byId.get(field.id) ?? picker.find((e) => e.field_key === field.id) ?? null;
+    const relRef = field.field_source?.relationship?.provider_ref_key?.trim();
+    if (relRef && relationshipPicker?.length) {
+        const relHit = relationshipPicker.find((e) => e.id === `rel:${relRef}`);
+        if (relHit) return relHit;
+    }
+    const combined = relationshipPicker?.length ? [...picker, ...relationshipPicker] : picker;
+    const byId = systemFieldByIdFromPicker(combined);
+    const byFieldKey = new Map(combined.map((e) => [e.field_key, e]));
+    const srcKey = field.field_source?.field_key?.trim();
+    if (srcKey) {
+        const bySource = combined.find((e) => e.field_key === srcKey);
+        if (bySource) return bySource;
+    }
+    return byFieldKey.get(field.id) ?? byId.get(field.id) ?? combined.find((e) => e.field_key === field.id) ?? null;
 }
 
 export function pickerValueForFormField(
-    field: { id: string; field_source?: { entity_type?: string; field_key?: string } | null },
+    field: {
+        id: string;
+        field_source?: {
+            entity_type?: string;
+            field_key?: string;
+            relationship?: { provider_ref_key?: string };
+        } | null;
+    },
     picker: readonly SystemFieldRegistryEntry[],
+    relationshipPicker?: readonly SystemFieldRegistryEntry[],
 ): string {
     if (field.field_source?.entity_type === "custom" && field.field_source.field_key === "unmapped") {
         return "__custom";
     }
-    const entry = registryEntryForFormField(field, picker);
+    const entry = registryEntryForFormField(field, picker, relationshipPicker);
     return entry ? `sys:${entry.id}` : "__custom";
 }
 

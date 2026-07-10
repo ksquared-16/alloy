@@ -11,8 +11,11 @@ import {
     formFieldSourceToCanonicalProvider,
 } from "@/lib/fields/formsFieldSourceBinding";
 import { formsLegacyCompatibilityEntry } from "@/lib/fields/formsLegacyCompatibility";
-import { evaluateFormsProviderEligibility } from "@/lib/fields/formsProviderEligibility";
+import { evaluateFormsProviderEligibility, evaluateFormsRelationshipProviderEligibility } from "@/lib/fields/formsProviderEligibility";
 import { findFormsDocumentsDataProvider } from "@/lib/fields/canonicalDataProviderRegistry";
+import { validateFormsDocumentsP2Bindings } from "@/lib/forms/binding/validateFormsDocumentsP2Bindings";
+import { formFieldSourceHasRelationshipLineage } from "@/lib/fields/formsRelationshipFieldSourceBinding";
+import { findFormsRelationshipProvider } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 
 /** Leaf field types that promote a value and therefore must bind to the registry. */
 export const BINDING_REQUIRED_FIELD_TYPES = [
@@ -95,6 +98,31 @@ function validateResolvedBinding(
         };
     }
 
+    if (formFieldSourceHasRelationshipLineage(source)) {
+        const providerRef = source.relationship!.provider_ref_key.trim();
+        const provider = findFormsRelationshipProvider(providerRef) ?? findFormsDocumentsDataProvider(providerRef);
+        if (!provider) {
+            return {
+                field_id: field.id,
+                reason: "unknown_binding",
+                entity_type: entityType || undefined,
+                field_key: fieldKey || undefined,
+                message: `Field "${field.id}" relationship binding references unknown provider "${providerRef}".`,
+            };
+        }
+        const eligibility = evaluateFormsRelationshipProviderEligibility(provider.refKey);
+        if (!eligibility.publish) {
+            return {
+                field_id: field.id,
+                reason: "unsupported_provider_kind",
+                entity_type: entityType || undefined,
+                field_key: fieldKey || undefined,
+                message: `Field "${field.id}" relationship provider "${providerRef}" is not publishable.`,
+            };
+        }
+        return null;
+    }
+
     const registryHit = keyInSet(expandedKeys, entityType, fieldKey);
     if (
         !registryHit &&
@@ -112,7 +140,9 @@ function validateResolvedBinding(
     }
 
     if (resolution.canonicalRef) {
-        const providerRef = `${resolution.canonicalRef.entity_type}.${resolution.canonicalRef.field_key}`;
+        const providerRef =
+            source.relationship?.provider_ref_key?.trim()
+            ?? `${resolution.canonicalRef.entity_type}.${resolution.canonicalRef.field_key}`;
         const provider = findFormsDocumentsDataProvider(providerRef);
         if (provider) {
             const eligibility = evaluateFormsProviderEligibility(provider.refKey);
@@ -174,6 +204,7 @@ export function validatePosConnectedFieldBinding(
     };
 
     walk(schema.fields);
+    violations.push(...validateFormsDocumentsP2Bindings(schema));
     return { ok: violations.length === 0, violations };
 }
 

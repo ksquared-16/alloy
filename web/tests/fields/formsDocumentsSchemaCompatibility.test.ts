@@ -216,7 +216,7 @@ describe("form picker first-paint baseline", () => {
         resetCanonicalDataProviderCacheForTests();
         const baseline = buildFormSystemFieldPickerPlatformBaseline();
         expect(baseline.length).toBeGreaterThan(0);
-        expect(baseline.some((e) => e.field_key === "guardian_email")).toBe(true);
+        expect(baseline.some((e) => e.entity_type === "child")).toBe(true);
     });
 
     it("tenant merge replaces platform entry labels but preserves canonical identity", () => {

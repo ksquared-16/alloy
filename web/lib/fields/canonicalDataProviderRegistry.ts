@@ -23,6 +23,7 @@ import {
     buildFormsProviderSeeds,
     mergeFormsProviderCatalog,
 } from "@/lib/fields/canonicalFormsProviderDerivation";
+import { buildFormsRelationshipProviderSeeds } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 import type { FieldDefinitionPickerRow } from "@/lib/fields/formFieldRegistryPicker";
 import { filterFormsDocumentsPickerProviders } from "@/lib/fields/formsProviderEligibility";
 import {
@@ -95,7 +96,14 @@ function allSeedProviders(): CanonicalDataProvider[] {
 
 function allFormsSeedProviders(): CanonicalDataProvider[] {
     if (!cachedFormsSeeds) {
-        cachedFormsSeeds = buildFormsProviderSeeds();
+        const seen = new Map<string, CanonicalDataProvider>();
+        for (const provider of buildFormsProviderSeeds()) {
+            seen.set(provider.refKey, provider);
+        }
+        for (const provider of buildFormsRelationshipProviderSeeds()) {
+            if (!seen.has(provider.refKey)) seen.set(provider.refKey, provider);
+        }
+        cachedFormsSeeds = [...seen.values()];
     }
     return cachedFormsSeeds;
 }
