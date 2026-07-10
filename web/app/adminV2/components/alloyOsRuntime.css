@@ -4720,26 +4720,25 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-fp-composer__body { position: relative; }
 [data-fp-composer-depth-active="true"] .alloy-os-fp-composer__body {
   overflow: hidden;
+  /* Keep a definite canvas height when the elevated card leaves normal flow. */
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 [data-fp-composer-depth-active="true"] .alloy-os-fp-composer__body > .relative {
-  min-height: min(520px, 72vh);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  position: relative;
 }
 [data-fp-composer-depth-active="true"] .alloy-os-fp-composer__panel {
   position: relative;
 }
-/* Anchor the elevated drill-in (and its scrim) to the VISIBLE composer canvas — the
- * scrollable body — not the tall base grid. The base grid becomes `position: relative`
- * on depth (runtime centering), but in the composer that grid can be far taller than
- * the viewport and sit behind a frozen scroll offset, dropping the drill-in below the
- * fold. Neutralizing the grid + wrapper positioning re-parents the absolutely-centered
- * card to the body so it centers in view with no top/bottom cutoff. */
-[data-fp-composer-depth-active="true"] .alloy-os-fp-composer__body > .relative,
+/* Dim the visible composer canvas — scrim fills the body viewport, not the tall grid. */
 [data-fp-composer-depth-active="true"]
-  .alloy-os-focus-panel-grid[data-fp-depth="active"] {
-  position: static;
-}
-[data-fp-composer-depth-active="true"]
-  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-fp-composer__body
   .alloy-os-fp-depth-scrim {
   position: absolute;
   inset: 0;
@@ -4751,9 +4750,18 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   width: min(560px, calc(100% - 32px));
   max-width: 560px;
   top: 22px;
-  /* Bound to the visible canvas height first, then the viewport — never overflow the
-   * body (short panel) or the screen (tall panel). Internal card body still scrolls. */
-  max-height: min(calc(100% - 44px), calc(100dvh - 120px));
+  /* Viewport-bounded only — % of parent collapses to ~0 when the card is abspos. */
+  min-height: min(360px, calc(75vh - 48px));
+  max-height: min(75vh, calc(100dvh - 120px));
+}
+[data-fp-composer-edit-mode="true"][data-fp-composer-depth-active="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__body {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  overflow-y: auto;
 }
 .alloy-os-fp-composer__ghost {
   position: absolute; z-index: 20; pointer-events: none; border-radius: 12px;
