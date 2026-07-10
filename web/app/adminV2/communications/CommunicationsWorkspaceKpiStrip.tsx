@@ -7,7 +7,6 @@
  * canonical `WorkspaceOperationalHealth`. No layout or trend styling lives here.
  */
 
-import { useMemo } from "react";
 import WorkspaceOperationalHealth, {
     type WorkspaceOperationalHealthItem,
     type WorkspaceOperationalHealthTrend,
@@ -64,7 +63,7 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
 
     let items: WorkspaceOperationalHealthItem[] = [];
     let loading = false;
-    let eyebrow = SECTION_EYEBROW[activeTab];
+    const eyebrow = SECTION_EYEBROW[activeTab];
 
     if (activeTab === "inbox") {
         loading = inboxLoading;
@@ -166,18 +165,14 @@ export default function CommunicationsWorkspaceKpiStrip({ activeTab }: { activeT
 
     if (items.length === 0 || !eyebrow) return null;
 
-    const ariaLabel = `${eyebrow} operational health`;
-
     return (
-        <div data-comms-workspace-kpi-band="true" className="w-full min-w-0">
-            <WorkspaceOperationalHealth
-                eyebrow={eyebrow}
-                items={items}
-                loading={loading}
-                ariaLabel={ariaLabel}
-                className="w-full"
-                data-testid="comms-workspace-health-band"
-            />
-        </div>
+        <WorkspaceOperationalHealth
+            eyebrow={eyebrow}
+            items={items}
+            loading={loading}
+            ariaLabel={`${eyebrow} operational health`}
+            className="w-full"
+            data-testid="comms-workspace-health-band"
+        />
     );
 }

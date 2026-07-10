@@ -26,8 +26,8 @@ describe("command center live wiring", () => {
         expect(src).toMatch(/\/api\/admin\/communications\/conversations/);
     });
     it("renders metrics, filters, queues, and a timeline", () => {
-        expect(kpiStripSrc).toMatch(/data-comms-workspace-kpi-band/);
         expect(kpiStripSrc).toMatch(/WorkspaceOperationalHealth/);
+        expect(kpiStripSrc).not.toMatch(/WorkspaceMetricTiles|CompactKpiStrip/);
         expect(shellSrc).toMatch(/setInboxKpis/);
         expect(src).toMatch(/data-cc-filters/);
         expect(src).toMatch(/visibleCommandCenterQueues/);
