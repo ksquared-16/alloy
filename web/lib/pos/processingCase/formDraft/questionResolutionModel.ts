@@ -54,6 +54,8 @@ export type ReviewQuestionInput = {
     required?: boolean;
     confidence?: string;
     evidence?: string;
+    /** Region/question provenance for operator review. */
+    mappingOrigin?: "auto_detected" | "operator_created" | "operator_corrected";
     pdf_field_name?: string;
     page?: number;
     bbox?: [number, number, number, number];
@@ -408,6 +410,7 @@ export function seedReviewQuestionFromDraftField(field: {
             ? defaultNameRepresentation(intent, evidenceLabel)
             : undefined,
         destinationFieldId: suggestion?.fieldId,
+        mappingOrigin: field.evidence === "operator" || field.evidence === "manual_pdf_mapping" ? "operator_created" : "auto_detected",
         field_source: field.field_source ?? suggestion?.fieldSource ?? suggestFieldBinding(field.label, field.type)?.field_source,
     };
 }

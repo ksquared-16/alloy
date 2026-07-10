@@ -22,8 +22,18 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus, Download } from "lucide-react";
 import type { PosCaseState } from "./usePosCase";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
-import { computePageMaps, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
+import { computePageMaps, pdfBboxToSvgRect, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
 import PosPdfFieldMap from "./PosPdfFieldMap";
+import PendingManualFieldEditor from "./PendingManualFieldEditor";
+import {
+    applyEscapeToCanvas,
+    buildSavedManualQuestion,
+    enterDrawRegionMode,
+    exitDrawRegionMode,
+    initialCanvasState,
+    type PendingManualRegion,
+    type ProcessingCanvasState,
+} from "@/lib/pos/processingCase/formDraft/processingCanvasInteraction";
 import { ProcessingQuestionReviewList } from "./ProcessingQuestionReviewList";
 import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
@@ -104,7 +114,37 @@ export default function PosTemplateSetupColumn({
     const [fullText, setFullText] = useState<string | null>(null);
     const [textQuery, setTextQuery] = useState("");
     const [mappingQuestionId, setMappingQuestionId] = useState<string | null>(null);
+    const [canvasState, setCanvasState] = useState<ProcessingCanvasState>(initialCanvasState);
+    const [pendingManualRegion, setPendingManualRegion] = useState<PendingManualRegion | null>(null);
+    const [pendingSaveBusy, setPendingSaveBusy] = useState(false);
+    const pendingSaveLockRef = useRef(false);
     const [phase, setPhase] = useState<"review" | "generate">("review");
+
+    const clearSelection = () => {
+        setSelectedQuestionId(null);
+        setEditingQuestionId(null);
+    };
+
+    const exitDrawMode = () => {
+        setCanvasState(exitDrawRegionMode(canvasState));
+        setMappingQuestionId(null);
+    };
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            const result = applyEscapeToCanvas({
+                state: canvasState,
+                hasPendingManual: pendingManualRegion !== null,
+            });
+            setCanvasState(result.state);
+            if (result.state.mode === "select") setMappingQuestionId(null);
+            if (result.clearPendingManual) setPendingManualRegion(null);
+            if (result.clearSelection) clearSelection();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [canvasState, pendingManualRegion]);
 
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const docId = draft?.source_document_id ?? (primary?.kind === "document" ? (primary?.id ?? null) : null);
@@ -119,6 +159,9 @@ export default function PosTemplateSetupColumn({
         setErr(null);
         setSelectedQuestionId(null);
         setEditingQuestionId(null);
+        setPendingManualRegion(null);
+        setCanvasState(initialCanvasState());
+        setMappingQuestionId(null);
         setPhase("review");
     }, [detail?.id, detail?.formDraftPreview]);
 
@@ -173,6 +216,22 @@ export default function PosTemplateSetupColumn({
         }));
         return computePageMaps(fields, draft?.pdf_pages);
     }, [reviewQuestions, draft?.pdf_pages]);
+
+    const regionMeta = useMemo(
+        () =>
+            reviewQuestions
+                .filter((q) => typeof q.page === "number" && Array.isArray(q.bbox))
+                .map((q) => ({ id: q.id, mappingOrigin: q.mappingOrigin ?? ("auto_detected" as const) })),
+        [reviewQuestions]
+    );
+
+    const pendingRegionOverlay = useMemo(() => {
+        if (!pendingManualRegion) return null;
+        const pm = pageMaps.find((p) => p.page === pendingManualRegion.page);
+        if (!pm) return null;
+        const rect = pdfBboxToSvgRect(pendingManualRegion.bbox, pm);
+        return { page: pendingManualRegion.page, ...rect };
+    }, [pendingManualRegion, pageMaps]);
 
     if (!detail) return null;
 
@@ -276,7 +335,7 @@ export default function PosTemplateSetupColumn({
                     type: "text",
                     section,
                     evidence: "operator",
-                    confidence: "high",
+                    mappingOrigin: "operator_created" as const,
                     questionSubject: "processing_only" as const,
                 },
             ];
@@ -287,20 +346,94 @@ export default function PosTemplateSetupColumn({
         setEditingQuestionId(id);
     };
 
+    const startDrawNewField = () => {
+        setPendingManualRegion(null);
+        clearSelection();
+        setCanvasState(enterDrawRegionMode({ kind: "new_field" }));
+        setMappingQuestionId(null);
+        setLeftView("highlights");
+    };
+
+    const cancelDrawMode = () => exitDrawMode();
+
+    const cancelPendingManual = () => {
+        setPendingManualRegion(null);
+        clearSelection();
+    };
+
+    const savePendingManual = () => {
+        if (!pendingManualRegion || pendingSaveLockRef.current) return;
+        pendingSaveLockRef.current = true;
+        setPendingSaveBusy(true);
+        try {
+            const id = `manual_${Date.now().toString(36)}`;
+            const saved = buildSavedManualQuestion(pendingManualRegion, id);
+            const intent = inferQuestionIntent(saved.evidenceLabel || saved.displayLabel);
+            const subject = saved.questionSubject ?? defaultSubjectForIntent(intent);
+            const field_source = deriveFieldSources({
+                subject,
+                intent,
+                displayLabel: saved.displayLabel || saved.evidenceLabel,
+                type: saved.type,
+                destinationFieldId: saved.destinationFieldId,
+            });
+            setReviewQuestions((qs) => {
+                const next = [...qs, { ...saved, field_source }];
+                reviewQuestionsRef.current = next;
+                return next;
+            });
+            setPendingManualRegion(null);
+            setSelectedQuestionId(id);
+            setEditingQuestionId(null);
+        } finally {
+            pendingSaveLockRef.current = false;
+            setPendingSaveBusy(false);
+        }
+    };
+
     const startMapping = (id: string) => {
+        setPendingManualRegion(null);
         setMappingQuestionId(id);
         setSelectedQuestionId(id);
+        setCanvasState(enterDrawRegionMode({ kind: "map_question", questionId: id }));
         setLeftView("highlights");
     };
 
     const handleDrawRect = (page: number, rect: { x: number; y: number; w: number; h: number }) => {
-        if (!mappingQuestionId) return;
         const pm = pageMaps.find((p) => p.page === page);
         if (!pm) return;
         const bbox = svgRectToPdfBbox(rect, pm);
-        updateQuestion(mappingQuestionId, { page, bbox, evidence: "manual_pdf_mapping" });
-        setSelectedQuestionId(mappingQuestionId);
-        setMappingQuestionId(null);
+
+        if (canvasState.drawTarget?.kind === "new_field") {
+            const section = reviewQuestions[reviewQuestions.length - 1]?.section ?? "Form questions";
+            setPendingManualRegion({
+                page,
+                bbox,
+                evidenceLabel: "",
+                displayLabel: "",
+                type: "text",
+                section,
+                questionSubject: "processing_only",
+            });
+            clearSelection();
+            exitDrawMode();
+            return;
+        }
+
+        if (canvasState.drawTarget?.kind === "map_question") {
+            const questionId = canvasState.drawTarget.questionId;
+            const existing = reviewQuestions.find((q) => q.id === questionId);
+            updateQuestion(questionId, {
+                page,
+                bbox,
+                evidence: "manual_pdf_mapping",
+                ...(existing?.mappingOrigin === "operator_created"
+                    ? { mappingOrigin: "operator_created" as const }
+                    : {}),
+            });
+            setSelectedQuestionId(questionId);
+            exitDrawMode();
+        }
     };
 
     // ---- endpoints ----
@@ -509,6 +642,26 @@ export default function PosTemplateSetupColumn({
                                     <Download className="h-3.5 w-3.5" aria-hidden />
                                 </a>
                             ) : null}
+                            {leftView === "highlights" && !created ? (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        canvasState.mode === "draw_region" && canvasState.drawTarget?.kind === "new_field"
+                                            ? cancelDrawMode()
+                                            : startDrawNewField()
+                                    }
+                                    className={`rounded px-2 py-0.5 text-[9px] font-semibold ${
+                                        canvasState.mode === "draw_region" && canvasState.drawTarget?.kind === "new_field"
+                                            ? "bg-alloy-bend-pine text-white"
+                                            : "border border-alloy-stone/20 text-alloy-midnight/60 hover:bg-alloy-stone/[0.04]"
+                                    }`}
+                                    data-testid="map-field-toolbar-btn"
+                                >
+                                    {canvasState.mode === "draw_region" && canvasState.drawTarget?.kind === "new_field"
+                                        ? "Cancel"
+                                        : "Add field"}
+                                </button>
+                            ) : null}
                         </div>
                     }
                 >
@@ -517,10 +670,22 @@ export default function PosTemplateSetupColumn({
                         pdfMode={leftView === "pdf" && !!pdfUrl}
                         pageLayouts={pageMaps.map((p) => ({ width: p.width, height: p.height }))}
                         mappingBanner={
-                            leftView === "highlights" && mappingQuestionId ? (
-                                <div className="mx-1.5 mt-1.5 flex shrink-0 items-center justify-between rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] px-2 py-0.5 text-[10px] text-alloy-bend-pine">
-                                    <span>Drag a rectangle on the page to map this question.</span>
-                                    <button type="button" onClick={() => setMappingQuestionId(null)} className="font-medium text-alloy-midnight/45 hover:underline">
+                            canvasState.mode === "draw_region" ? (
+                                <div
+                                    className="mx-1.5 mt-1.5 flex shrink-0 items-center justify-between rounded border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.06] px-2 py-0.5 text-[10px] text-alloy-bend-pine"
+                                    data-testid="canvas-draw-mode-banner"
+                                >
+                                    <span>
+                                        {canvasState.drawTarget?.kind === "new_field"
+                                            ? "Draw a rectangle around the missed source field."
+                                            : "Draw a rectangle to map this question to the source document."}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={cancelDrawMode}
+                                        className="font-medium text-alloy-midnight/45 hover:underline"
+                                        data-testid="canvas-draw-cancel"
+                                    >
                                         Cancel
                                     </button>
                                 </div>
@@ -533,8 +698,11 @@ export default function PosTemplateSetupColumn({
                                     <PosPdfFieldMap
                                         pages={pageMaps}
                                         selectedId={selectedQuestionId}
+                                        regionMeta={regionMeta}
+                                        pendingRegion={pendingRegionOverlay}
+                                        canvasMode={canvasState.mode}
                                         onSelect={setSelectedQuestionId}
-                                        mapping={!!mappingQuestionId}
+                                        onDeselect={clearSelection}
                                         onDrawRect={handleDrawRect}
                                     />
                                     <div className="mt-2 flex items-center gap-3 pb-2 text-[9px] text-alloy-midnight/40">
@@ -594,6 +762,15 @@ export default function PosTemplateSetupColumn({
                     <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
                         {tab === "questions" ? (
                             <>
+                                {pendingManualRegion ? (
+                                    <PendingManualFieldEditor
+                                        pending={pendingManualRegion}
+                                        onChange={(patch) => setPendingManualRegion((prev) => (prev ? { ...prev, ...patch } : prev))}
+                                        onSave={savePendingManual}
+                                        onCancel={cancelPendingManual}
+                                        saving={pendingSaveBusy}
+                                    />
+                                ) : null}
                                 <ProcessingQuestionReviewList
                                     questions={reviewQuestions}
                                     selectedId={selectedQuestionId}

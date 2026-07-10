@@ -22,7 +22,7 @@ const REPRESENTATIVE_QUESTIONS = [
     { label: "Birthdate", type: "date", subject: "child" as const, expectedFieldId: "child_date_of_birth" },
     { label: "Desired start date", type: "date", subject: "enrollment" as const, expectedFieldId: "start_date" },
     { label: "Campus/location interest", type: "text", subject: "enrollment" as const, expectedFieldId: "child_site" },
-    { label: "Notes", type: "text", subject: "enrollment" as const, expectedFieldId: "allergy_notes" },
+    { label: "Notes", type: "text", subject: "enrollment" as const, expectedFieldId: null },
 ];
 
 describe("processingReviewFieldMapping representative fixture", () => {
@@ -54,7 +54,27 @@ describe("processingReviewFieldMapping representative fixture", () => {
         expect(seeded.questionSubject).toBe("child");
     });
 
-    it.each(REPRESENTATIVE_QUESTIONS)("suggests canonical field for $label", ({ label, type, subject, expectedFieldId }) => {
+    it("does not map generic Notes to allergy_notes", () => {
+        const suggestion = suggestReviewDestinationField({
+            evidenceLabel: "Notes",
+            displayLabel: "Notes",
+            type: "text",
+            subject: "enrollment",
+        });
+        expect(suggestion).toBeNull();
+
+        const allergySource = deriveFieldSources({
+            subject: "enrollment",
+            intent: inferQuestionIntent("Allergies"),
+            displayLabel: "Allergies",
+            type: "text",
+        });
+        expect(allergySource?.field_key).toBe("allergy_notes");
+    });
+
+    it.each(REPRESENTATIVE_QUESTIONS.filter((q) => q.expectedFieldId !== null))(
+        "suggests canonical field for $label",
+        ({ label, type, subject, expectedFieldId }) => {
         const eligible = eligibleCanonicalFieldsForSubject(subject);
         expect(eligible.length).toBeGreaterThan(0);
 
@@ -78,6 +98,26 @@ describe("processingReviewFieldMapping representative fixture", () => {
             destinationFieldId: suggestion?.fieldId,
         });
         expect(fieldSource).toBeTruthy();
+    }
+    );
+
+    it("leaves generic Notes unresolved without a field source", () => {
+        const notes = REPRESENTATIVE_QUESTIONS.find((q) => q.label === "Notes")!;
+        const suggestion = suggestReviewDestinationField({
+            evidenceLabel: notes.label,
+            displayLabel: notes.label,
+            type: notes.type,
+            subject: notes.subject,
+        });
+        expect(suggestion).toBeNull();
+        expect(
+            deriveFieldSources({
+                subject: notes.subject,
+                intent: inferQuestionIntent(notes.label),
+                displayLabel: notes.label,
+                type: notes.type,
+            })
+        ).toBeUndefined();
     });
 
     it("normalizes common date inputs toward canonical ISO dates", () => {

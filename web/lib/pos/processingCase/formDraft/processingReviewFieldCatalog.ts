@@ -158,9 +158,7 @@ export function suggestReviewDestinationField(input: {
                       ? eligible.find((f) => /last name/i.test(f.label))
                       : /\b(campus|location|site|school)\b/i.test(label)
                         ? eligible.find((f) => f.id === "child_site")
-                        : /\bnotes?\b/i.test(label)
-                          ? eligible.find((f) => f.id === "allergy_notes")
-                          : null;
+                        : null;
 
     if (typeFallback) {
         return {

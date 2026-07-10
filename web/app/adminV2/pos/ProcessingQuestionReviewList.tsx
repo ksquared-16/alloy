@@ -40,6 +40,9 @@ function resolvedFieldSource(question: ReviewQuestionInput) {
 }
 
 function fieldMatchConfidence(question: ReviewQuestionInput): { label: string; percent: number | null } {
+    if (question.mappingOrigin === "operator_created") {
+        return { label: "Operator mapped", percent: null };
+    }
     const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
     const suggestion = suggestReviewDestinationField({
@@ -167,6 +170,7 @@ export function ProcessingQuestionReviewList({
                                                 <span className="text-[9px] text-alloy-midnight/45">
                                                     {TYPE_LABEL[q.type] ?? q.type}
                                                     {mapped ? " · mapped" : " · not mapped"}
+                                                    {q.mappingOrigin === "operator_created" ? " · Operator mapped" : ""}
                                                     <span> · {detectionLabel}</span>
                                                 </span>
                                             </button>
