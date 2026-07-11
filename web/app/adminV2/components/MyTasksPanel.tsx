@@ -51,7 +51,7 @@ import {
     countTasksForSource,
     countTasksForView,
     DEFAULT_WORK_ITEM_QUEUE_SCOPE,
-    resolveServerFilterForView,
+    resolveWorkspaceTasksFetchFilter,
     WORK_ITEM_FOLDER_DEFS,
     WORK_ITEM_SOURCE_DEFS,
     WORK_ITEM_VIEW_DEFS,
@@ -133,8 +133,9 @@ export type MyTasksPanelProps = {
     onClose?: () => void;
     onFilterCountChange?: (count: number) => void;
     requestCreateNonce?: number;
-    navFilter?: OperationalTaskWorkspaceFilter;
+    navFilter?: OperationalTaskWorkspaceFilter | null;
     navSelectedTaskId?: string | null;
+    onNavFilterClear?: () => void;
 };
 
 export default function MyTasksPanel({
@@ -144,6 +145,7 @@ export default function MyTasksPanel({
     requestCreateNonce = 0,
     navFilter,
     navSelectedTaskId,
+    onNavFilterClear,
 }: MyTasksPanelProps) {
     const workEnabled = isOperationalWorkV1Enabled();
     const { userId } = useAdminAuth();
@@ -177,11 +179,11 @@ export default function MyTasksPanel({
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(navSelectedTaskId ?? null);
     const [tasks, setTasks] = useState<MyTasksTaskRow[]>(() => {
-        const serverFilter = resolveServerFilterForView(initialScope.view);
+        const serverFilter = resolveWorkspaceTasksFetchFilter(initialScope.view, navFilter);
         return getCachedWorkspaceOperationalTasks(serverFilter) ?? [];
     });
     const [loading, setLoading] = useState(() => {
-        const serverFilter = resolveServerFilterForView(initialScope.view);
+        const serverFilter = resolveWorkspaceTasksFetchFilter(initialScope.view, navFilter);
         return getCachedWorkspaceOperationalTasks(serverFilter) == null;
     });
     const [error, setError] = useState<string | null>(null);
@@ -221,7 +223,7 @@ export default function MyTasksPanel({
     }, [navSelectedTaskId]);
     const load = useCallback(async () => {
         if (!workEnabled) return;
-        const serverFilter = resolveServerFilterForView(scope.view);
+        const serverFilter = resolveWorkspaceTasksFetchFilter(scope.view, navFilter);
         const cached = getCachedWorkspaceOperationalTasks(serverFilter);
         if (cached) {
             setTasks(cached);
@@ -245,7 +247,7 @@ export default function MyTasksPanel({
         } finally {
             setLoading(false);
         }
-    }, [scope.view, workEnabled]);
+    }, [navFilter, scope.view, workEnabled]);
 
     useEffect(() => {
         void load();
@@ -335,10 +337,10 @@ export default function MyTasksPanel({
             Object.fromEntries(
                 WORK_ITEM_FOLDER_DEFS.map((def) => [
                     def.key,
-                    countTasksForFolder(siteScopedTasks, def.key, processGroups, userId?.trim() || null),
+                    countTasksForFolder(mergedTasks, def.key, processGroups, userId?.trim() || null),
                 ]),
             ),
-        [processGroups, siteScopedTasks, userId],
+        [mergedTasks, processGroups, userId],
     );
 
     const viewCounts = useMemo(
@@ -790,6 +792,7 @@ export default function MyTasksPanel({
                     scope={scope}
                     onScopeChange={(nextScope) => {
                         setScope(nextScope);
+                        onNavFilterClear?.();
                         setSelectedTaskId(null);
                         clearForms();
                     }}

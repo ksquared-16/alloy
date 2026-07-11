@@ -101,6 +101,17 @@ export const WORK_ITEM_SOURCE_DEFS: WorkItemSourceDef[] = [
     },
 ];
 
+
+/** Prefer explicit navigation filter (Overview deep-links) over view-derived server filter. */
+export function resolveWorkspaceTasksFetchFilter(
+    view: WorkItemViewKey,
+    navigationFilter?: OperationalTaskWorkspaceFilter | null,
+): OperationalTaskWorkspaceFilter {
+    const nav = navigationFilter?.trim();
+    if (nav) return nav as OperationalTaskWorkspaceFilter;
+    return resolveServerFilterForView(view);
+}
+
 export function resolveServerFilterForView(view: WorkItemViewKey): OperationalTaskWorkspaceFilter {
     switch (view) {
         case "mine":
