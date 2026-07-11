@@ -115,7 +115,7 @@ row hover → prefetchOpportunityDrawerOnRowIntent (bootstrap + drawer_primary) 
 ```
 edit → drawerOperatingSaveCoordinator: registers sections (isDirty/save/applyOptimistic/rollbackOptimistic)
 → Save-All: optimistic patch → parallel server confirms → rollback on failure   [GOOD: optimistic, event-driven]
-   BUT legacy paths: AdminEntityDrawerLegacy fires router.refresh() ×30 (mark_completed, archive, contact/schedule create, ...)  ← FULL REMOUNT
+   Historical note (pre-July 2026): legacy drawer fired router.refresh() ×30 (mark_completed, archive, contact/schedule create, ...)  ← FULL REMOUNT
    non-drawer saves: UsersRoles, dept update, ProfileMenu, WorkspaceRootActionsRail, JobDrawerV2 → router.refresh()
 ```
 
@@ -144,7 +144,7 @@ Roles: **Render** (paints it), **Fetch** (loads its data), **Cache** (stores it)
 | Queue frame | `QueueBlock` (C) | bootstrap summaries | session cache | reveal | route unmount | — |
 | Queue rows | `CompressedQueueRow` (C) | queue rows fetch | `queueRowClientCache` (LRU48/TTL) | row apply guards | route unmount | `LayoutRuntimeQueueRowView`/`CrmCompactQueuePreview` (crm-less only) |
 | Focus Panel frame | `EntityDrawerOperatingShell`≡`FocusPanelShell` (C) | bootstrap + drawer_primary | drawer VM warm caches | seed→VM swap | drawer close | legacy `Drawer` title block (flag-off) |
-| Focus Panel body | `OpportunityDrawerVmRuntime`/`PersonsDrawerVmRuntime` (C) | composed payload | VM cache | card hydrate | drawer close | `AdminEntityDrawerLegacy` (kill-switch / legacy entities) |
+| Focus Panel body | `OpportunityDrawerVmRuntime`/`PersonsDrawerVmRuntime` (C) | composed payload | VM cache | card hydrate | drawer close | **fail closed** (`AdminEntityDrawer` returns `null` for unsupported entities) |
 
 ---
 
@@ -165,7 +165,7 @@ Distinct `/api/admin/*` endpoints in the workspace tree: **10** (measured). Key 
 | `/api/admin/metrics/resolve` | OIP | OIP warm | resolved metrics | yes (prewarm) | — | yes, deferred |
 | `/api/admin/actions[/execute]` | command surface | platform | action envelope | — | — | yes |
 
-**Cross-cutting fetch facts:** `dedupeAdminFetch`/`dedupeAdminFetchWithTtl` exist but adoption is **uneven** — `AdminEntityDrawerLegacy` (172 `fetch(` sites) and `AgentConfigLabClient` issue raw `fetch`; layout-runtime endpoints have no shared cache. `/api/admin/departments` is fetched from **7** sites, `/work-units` from **6**.
+**Cross-cutting fetch facts:** `dedupeAdminFetch`/`dedupeAdminFetchWithTtl` exist but adoption is **uneven** — legacy drawer monolith (deleted July 2026; was 172 `fetch(` sites) and `AgentConfigLabClient` issue raw `fetch`; layout-runtime endpoints have no shared cache. `/api/admin/departments` is fetched from **7** sites, `/work-units` from **6**.
 
 ---
 

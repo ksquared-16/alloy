@@ -1,6 +1,6 @@
 # System overview
 
-**Status:** Canonical platform entry point (June 2026 rebaseline).
+**Status:** Canonical platform entry point (July 2026 stabilization).
 
 ---
 
@@ -31,7 +31,7 @@ Work units, departments, and internal routing constructs support this model but 
 | **Configuration** | `/admin` | Business processes, fields, layouts, actions, forms, workflows |
 | **Data** | Supabase + RLS | Org-scoped truth; service-role server mutations |
 
-Legacy admin remains at `/legacy-admin` for unmigrated modules.
+`/legacy-admin` is archived — landing redirects to `/workspace`. Settings and operator surfaces are canonical.
 
 ---
 
@@ -78,25 +78,30 @@ Legacy admin remains at `/legacy-admin` for unmigrated modules.
 
 ---
 
-## Platform maturity (June 2026)
+## Platform maturity (July 2026)
 
-Alloy has passed foundational architecture proof. Current theme: **operational completion + product hardening**. Focused pilots are appropriate; general customer readiness depends on open platform items in **`product-roadmap.md`** (action catalog, forms remainder, messaging hardening, drawer VM cutover).
+The architecture is **stable**. Foundational runtimes — Presentation, Surface Host, Focus Panel, VM, Business Process, Processing, Communications, Configuration, and Current Work — are **complete**. Legacy entity drawer runtime has been **removed**.
 
-See `platform-capabilities.md`, `product-roadmap.md`.
+Future work primarily improves **experience**, **performance**, **automation**, and **operator intelligence** — plus domain productization (Scheduling, Attendance, Billing, Payments, Commercial, AI, Partner APIs). It should **not** introduce additional foundational runtimes or restore legacy drawer paths.
+
+Milestone record: [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md). Capability inventory: `platform-capabilities.md`. Sequencing: `product-roadmap.md`.
 
 ---
 
 ## Load order (onboarding)
 
 1. This file
-2. `../governance/glossary.md`
-3. `architecture.md`
-4. `platform-capabilities.md`
-5. `../core/business-process-system.md`
-6. `../core/entity-model.md`
-7. `../core/record-system.md`
-8. `../operator/queue-system.md` + `../operator/drawer-system.md`
-9. Schema layer (`docs/schema/`) when touching DB/RLS
+2. [`platform-manifesto.md`](./platform-manifesto.md) — **required reading**
+3. [`platform-certification-july-2026.md`](./platform-certification-july-2026.md)
+4. `../governance/glossary.md`
+5. `architecture.md`
+6. `platform-capabilities.md`
+7. `../core/business-process-system.md`
+8. `../core/entity-model.md`
+9. `../core/record-system.md`
+10. `../milestones/platform-stabilization-july-2026.md`
+11. `../operator/queue-system.md` + `../operator/drawer-system.md`
+12. Schema layer (`docs/schema/`) when touching DB/RLS
 
 ---
 

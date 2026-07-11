@@ -1,6 +1,6 @@
 # Runtime ownership migration map
 
-**Status:** Canonical reference (July 2026 platform stability sprint).  
+**Status:** Canonical reference (July 2026 platform stabilization — frozen).  
 **Purpose:** Document major AdminV2 / Presentation Runtime ownership moves so tests, docs, and contributors target production owners — not deleted compat paths.
 
 **Cutover commit (PRV2 legacy tree deletion):** `2cdd4a398` — removed dept work-unit page, `QueueBlock`, `useWorkUnitQueueRuntime`, and related compat presentation tree.
@@ -25,13 +25,15 @@
 
 ---
 
-## Drawer and record presentation
+## Drawer and record presentation (July 2026 — legacy eliminated)
 
 | Historical owner | Current owner | Notes |
 | ---------------- | ------------- | ----- |
-| Monolithic `AdminEntityDrawer.tsx` (7k+ LOC runtime) | `AdminEntityDrawerLegacy.tsx` | Shell router keeps thin `AdminEntityDrawer.tsx` → dynamic legacy import |
-| Drawer header actions restore wiring tests | Same behavior; assert on `AdminEntityDrawerLegacy.tsx` | Cache: `opportunityDrawerHeaderActionsCache` |
-| Inline record surface on work-unit host (drawer-only) | Focus Panel (`FocusPanelSurface`) + Presentation Runtime V2 | Queue row open → focus panel, not always global drawer |
+| `AdminEntityDrawerLegacy.tsx` (~19k LOC monolith) | **Deleted** | PR #148 `e94811914` — no legacy fallback |
+| Monolithic `AdminEntityDrawer.tsx` runtime | Thin `AdminEntityDrawer.tsx` VM router | VM entities only; `return null` for unsupported |
+| Drawer header actions restore wiring tests | VM runtime + `opportunityDrawerHeaderActionsCache` | Assert on canonical VM owners |
+| Inline record surface on work-unit host | Focus Panel (`FocusPanelSurface`) + Presentation Runtime V2 | Queue row open → Focus Panel |
+| Location drawer opens | Settings Configuration Runtime | `/settings/locations` + `?locationId=` deep links |
 | Legacy reveal controller (page-owned coordinated reveal) | `workUnitPageRevealPolicy.ts` + PRV2 surface hold (`resolveWorkUnitSurfaceRenderMode`) | Warm path: `coordinated_reveal_completed` |
 
 ---

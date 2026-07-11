@@ -1,10 +1,10 @@
 # Navigation and workspace doctrine
 
-**Status:** Canonical (June 2026 freeze).
+**Status:** Canonical (July 2026 stabilization).
 
 Consolidates routing, navigation, and workspace landing rules. Implementation detail for work units lives in `business-process-system.md`.
 
-> **Runtime convergence note (June 2026).** The `Record (drawer :recordId segment)` leaf below is served by the **Focus Panel** runtime (one operational subject, no per-entity drawer products), and every route reveals through a **Surface ViewModel** (`reveal.canCommit`) over the existing loader/cache/bootstrap — no new fetch or skeleton layer. The default Work Unit state is **condensed queue → Focus Panel** (Operational Mode). Canonical: [`../operator/surface-view-model-composition.md`](../operator/surface-view-model-composition.md), [`../operator/focus-panel-runtime-cutover-report.md`](../operator/focus-panel-runtime-cutover-report.md). Routing/segments here are unchanged; legacy loading paths must not be expanded.
+> **Platform stabilization (July 2026).** Record selection (`:recordId` segment) is served by **Focus Panel + VM Runtime** — not legacy drawer products. Surface Host + Presentation Runtime own warm navigation between Workspace and Work Unit. **No legacy drawer fallback** exists for unsupported entities. Canonical: [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md).
 
 ---
 
@@ -109,9 +109,25 @@ Layout locked: `../../system/work-unit-layout-doctrine.md` (V3).
 
 ---
 
+
+
+## Navigation ownership (July 2026 — frozen)
+
+| Concern | Owner | Rule |
+|---------|-------|------|
+| **Canonical deep links** | Route + query param projection | Work View: `?work_view=`; Location: `?locationId=` on `/settings/locations` |
+| **Focus Panel ownership** | VM Runtime + `FocusPanelSurface` | Queue/search opens on work-unit routes append `:recordId` via client URL swap — no route remount |
+| **Settings ownership** | Configuration Runtime (`/settings/*`) | Locations, surfaces, fields, business processes — not drawer opens |
+| **Search ownership** | `GlobalSearchBox` + navigation helpers | Campus/location → Settings deep link; opportunity/person/child → VM Focus Panel path |
+| **Location operating surface** | `LocationsConfigurationPage` | Inline create panel; successful create selects new site; **no drawer** |
+| **Legacy drawer fallback** | **None** | `AdminEntityDrawerLegacy` deleted; unsupported entities fail closed |
+
+Authenticated verification: [`../../sprints/07_2026/platform-simplification-staging-qa-checklist.md`](../../sprints/07_2026/platform-simplification-staging-qa-checklist.md).
+
+
 ## Drawer navigation (summary)
 
-- Queue row → drawer frame immediate; VM warm on intent
+- Queue row → Focus Panel frame immediate; VM warm on intent
 - Linked navigation (person ↔ opportunity): hold prior body until next VM ready
 - Queue prev/next scoped to active lane
 
@@ -508,4 +524,4 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 - `../operator/canonical-interaction-model.md` — full interaction spine (Workspace → … → Field)
 - `../operator/interaction-grammar.md` — drawer preserves workspace/perspective/queue context
 - `../operator/queue-system.md`
-- `../../system/navigation-doctrine.md` (transitional — same content, prefer this file)
+- `../../system/navigation-doctrine.md` (expanded reference — prefer this file)
