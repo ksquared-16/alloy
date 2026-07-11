@@ -8,6 +8,7 @@ import {
     applyQueueFilters,
     visibleCommandCenterQueues,
     flattenVisibleConversationIds,
+    flattenLoadableConversationIds,
     resolveCommandCenterSelection,
     conversationDisplayTitle,
     conversationDisplayTopic,
@@ -18,6 +19,10 @@ import {
     conversationQueueStatusPill,
     queueStatusPillClass,
     countDistinctQueueFamilies,
+    isQueueRowLoadable,
+    resolveQueueWorkspaceError,
+    prepareCommandCenterQueue,
+    NEEDS_RESOLUTION_QUEUE_KEY,
     resolveCommandCenterHealthDisplay,
     type ConversationSummary,
     type CommandCenterFilters,
@@ -69,7 +74,8 @@ import {
 
 function initialConversations(): ConversationSummary[] {
     if (COMMS_FIXTURES_ENABLED) return FIXTURE_CONVERSATIONS;
-    return getCommandCenterCacheSnapshot()?.conversations ?? [];
+    const cached = getCommandCenterCacheSnapshot()?.conversations;
+    return cached ? prepareCommandCenterQueue(cached) : [];
 }
 
 function initialSelectedId(): string | null {
@@ -121,21 +127,23 @@ export default function CommandCenterShell() {
     const [triageBusy, setTriageBusy] = useState(false);
 
     const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
+    const selectedLoadable = useMemo(() => isQueueRowLoadable(selected), [selected]);
     const selectedCustomerId = useMemo(() => {
+        if (!selectedLoadable) return null;
         if (COMMS_FIXTURES_ENABLED && selectedId) return FIXTURE_FAMILY_DETAILS[selectedId]?.customerId ?? null;
         return selected?.customer_id ?? null;
-    }, [selected, selectedId]);
+    }, [selectedLoadable, selected, selectedId]);
     const selectedEntity = useMemo(() => {
-        if (selectedCustomerId) return undefined;
+        if (!selectedLoadable || selectedCustomerId) return undefined;
         const entityType = selected?.primary_entity_type?.trim();
         const entityId = selected?.primary_entity_id?.trim();
         if (!entityType || !entityId) return undefined;
         return { entityType, entityId };
-    }, [selectedCustomerId, selected?.primary_entity_type, selected?.primary_entity_id]);
+    }, [selectedLoadable, selectedCustomerId, selected?.primary_entity_type, selected?.primary_entity_id]);
     const runtime = useFamilyCommunicationRuntime({
-        customerId: LIVE_WORKSPACE ? selectedCustomerId ?? undefined : undefined,
-        entity: LIVE_WORKSPACE ? selectedEntity : undefined,
-        initialThreadId: selectedId,
+        customerId: LIVE_WORKSPACE && selectedLoadable ? selectedCustomerId ?? undefined : undefined,
+        entity: LIVE_WORKSPACE && selectedLoadable ? selectedEntity : undefined,
+        initialThreadId: selectedLoadable ? selectedId : null,
         surfaceVariant: "workspace_inbox",
     });
 
@@ -149,7 +157,7 @@ export default function CommandCenterShell() {
         }
         try {
             const snap = await prefetchCommandCenterConversations();
-            setConversations(snap.conversations);
+            setConversations(prepareCommandCenterQueue(snap.conversations));
             if (snap.error) setError(snap.error);
             else setError(null);
         } catch (e) {
@@ -163,7 +171,7 @@ export default function CommandCenterShell() {
         if (COMMS_FIXTURES_ENABLED) return;
         return subscribeCommandCenterCache(() => {
             const snap = getCommandCenterCacheSnapshot();
-            if (snap) setConversations(snap.conversations);
+            if (snap) setConversations(prepareCommandCenterQueue(snap.conversations));
             const pending = getCommandCenterPendingSelection();
             if (pending) {
                 setSelectedId(pending);
@@ -357,6 +365,7 @@ export default function CommandCenterShell() {
     const grouped = useMemo(() => groupConversationsByQueue(filtered), [filtered]);
     const queueSections = useMemo(() => visibleCommandCenterQueues(grouped), [grouped]);
     const visibleIds = useMemo(() => flattenVisibleConversationIds(queueSections), [queueSections]);
+    const loadableIds = useMemo(() => flattenLoadableConversationIds(queueSections), [queueSections]);
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
 
     useEffect(() => {
@@ -386,13 +395,18 @@ export default function CommandCenterShell() {
 
     useEffect(() => {
         if (loading) return;
-        const nextId = resolveCommandCenterSelection(selectedId, visibleIds);
+        const nextId = resolveCommandCenterSelection(selectedId, loadableIds.length > 0 ? loadableIds : visibleIds);
         if (nextId && nextId !== selectedId) {
             void openConversation(nextId);
         } else if (!nextId && selectedId) {
             setSelectedId(null);
         }
-    }, [loading, visibleIds, selectedId, openConversation]);
+    }, [loading, visibleIds, loadableIds, selectedId, openConversation]);
+
+    const workspaceError = useMemo(
+        () => resolveQueueWorkspaceError(selected, runtime.error),
+        [selected, runtime.error]
+    );
 
     const timelineMessageCount = useMemo(
         () => runtime.messages.filter((m) => !m.kind || m.kind === "message").length,
@@ -409,7 +423,9 @@ export default function CommandCenterShell() {
         filtered.length > 0 &&
         (loading || !selectedId) &&
         !selected;
-    const workspaceLoading = Boolean(selected && (runtime.loading || (!runtime.vm && !runtime.error)));
+    const workspaceLoading = Boolean(
+        selected && selectedLoadable && (runtime.loading || (!runtime.vm && !runtime.error))
+    );
     const distinctFamilyCount = useMemo(() => countDistinctQueueFamilies(filtered), [filtered]);
 
     return (
@@ -454,7 +470,10 @@ export default function CommandCenterShell() {
                             <CommsQueueListReserve />
                         :   queueSections.map((q) => {
                             const items = q.items;
-                            const acc = attnAccent(q.key);
+                            const isReviewQueue = q.key === NEEDS_RESOLUTION_QUEUE_KEY;
+                            const acc = isReviewQueue
+                                ? { dot: "bg-alloy-amber", rail: "border-l-alloy-amber", tint: "bg-alloy-amber/8" }
+                                : attnAccent(q.key);
                             return (
                                 <div key={q.key} data-cc-queue={q.key} className="mb-3.5">
                                     <div className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">
@@ -466,8 +485,10 @@ export default function CommandCenterShell() {
                                         {items.map((c) => {
                                             const d = FIXTURE_FAMILY_DETAILS[c.id];
                                             const isSel = selectedId === c.id;
-                                            const a = attnAccent(c.attention_state);
-                                            const familyName = d ? (c.family_label ?? "Family") : conversationDisplayTitle(c);
+                                            const rowAccent = isReviewQueue
+                                                ? { dot: "bg-alloy-amber", rail: "border-l-alloy-amber", tint: "bg-alloy-amber/8" }
+                                                : attnAccent(c.attention_state);
+                                            const familyName = d ? (c.family_label ?? "Household") : conversationDisplayTitle(c);
                                             const topicLabel = d ? (c.topic_label ?? d.program) : conversationDisplayTopic(c);
                                             const childrenLabel = d ? d.children : conversationDisplayChildren(c);
                                             const contactLabel = d ? null : conversationDisplayRecipient(c);
@@ -486,7 +507,7 @@ export default function CommandCenterShell() {
                                                         className={`w-full rounded-xl border border-l-[3px] px-2.5 py-2 text-left transition ${
                                                             isSel
                                                                 ? COMMS_LIST_ROW_SELECTED_CLASS
-                                                                : `border-alloy-stone/15 ${a.rail} ${a.tint} hover:border-alloy-stone/30 hover:shadow-sm`
+                                                                : `border-alloy-stone/15 ${rowAccent.rail} ${rowAccent.tint} hover:border-alloy-stone/30 hover:shadow-sm`
                                                         }`}
                                                     >
                                                         <div className="flex items-start justify-between gap-2">
@@ -503,7 +524,7 @@ export default function CommandCenterShell() {
                                                             <div className="mt-1 line-clamp-2 text-[10px] leading-snug text-alloy-midnight/50">{preview}</div>
                                                         ) : null}
                                                         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-alloy-midnight/45">
-                                                            <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${a.dot}`} />
+                                                            <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${rowAccent.dot}`} />
                                                             <span className="truncate">
                                                                 {[channelLabel, activityAt ? relTime(activityAt) : null, attentionLabel].filter(Boolean).join(" · ")}
                                                             </span>
@@ -594,12 +615,19 @@ export default function CommandCenterShell() {
                         />
                     ) : workspaceLoading ? (
                         <CommsWorkspacePanelReserve label="Loading conversation" />
-                    ) : selected && runtime.error ? (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
-                            <p className="text-sm font-medium text-alloy-ember">{runtime.error}</p>
-                            <p className="max-w-sm text-xs leading-relaxed text-alloy-midnight/45">
-                                This conversation could not be loaded. Try selecting another family or refresh the queue.
-                            </p>
+                    ) : workspaceError ? (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+                            <p className="text-sm font-medium text-alloy-ember">{workspaceError.title}</p>
+                            <p className="max-w-sm text-xs leading-relaxed text-alloy-midnight/45">{workspaceError.message}</p>
+                            {workspaceError.canRetry ? (
+                                <button
+                                    type="button"
+                                    onClick={() => void runtime.refreshCurrent()}
+                                    className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight/70 shadow-sm transition hover:border-alloy-stone/40"
+                                >
+                                    Retry
+                                </button>
+                            ) : null}
                         </div>
                     ) : workspaceHydrating ? (
                         <CommsWorkspacePanelReserve label="Loading first conversation" />

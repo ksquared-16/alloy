@@ -128,11 +128,25 @@ describe("command center live wiring", () => {
     });
     it("resolves workspace from customer_id or primary entity and never renders a blank selected state", () => {
         expect(shellSrc).toMatch(/selectedEntity/);
-        expect(shellSrc).toMatch(/entity:\s*LIVE_WORKSPACE \? selectedEntity/);
+        expect(shellSrc).toMatch(/selectedLoadable/);
+        expect(shellSrc).toMatch(/isQueueRowLoadable/);
+        expect(shellSrc).toMatch(/resolveQueueWorkspaceError/);
+        expect(shellSrc).toMatch(/flattenLoadableConversationIds/);
         expect(shellSrc).toMatch(/conversationDisplayTopic/);
         expect(shellSrc).toMatch(/workspaceLoading/);
-        expect(shellSrc).toMatch(/runtime\.error/);
+        expect(shellSrc).toMatch(/workspaceError/);
+        expect(shellSrc).not.toMatch(/This conversation could not be loaded/);
         expect(shellSrc).not.toMatch(/\)\s*:\s*null\}\s*<\/section>/);
+    });
+    it("applies canonical queue scope resolution and review partitioning in enrichment and API", () => {
+        const enrichment = readFileSync(
+            join(process.cwd(), "lib", "communications", "v2", "commandCenterConversationEnrichment.ts"),
+            "utf8"
+        );
+        const route = readFileSync(join(process.cwd(), "app", "api", "admin", "communications", "conversations", "route.ts"), "utf8");
+        expect(enrichment).toMatch(/resolveCommunicationQueueScope/);
+        expect(enrichment).not.toMatch(/"Family"/);
+        expect(route).toMatch(/prepareCommandCenterQueue/);
     });
     it("compose new uses canonical runtime composer instead of legacy quick message modal", () => {
         const inbox = readFileSync(join(process.cwd(), "app", "adminV2", "components", "InboxModal.tsx"), "utf8");
