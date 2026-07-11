@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     buildFocusPanelContextChips,
+    buildFocusPanelContextChipsFromQueuePreviewSeed,
     formatFocusPanelChipLabel,
     formatFocusPanelChipLabelDisplay,
     formatFocusPanelDisplayLabel,
@@ -11,6 +12,7 @@ import {
     resolveFocusPanelMissionDisplay,
     resolveFocusPanelProcessLabel,
     resolveFocusPanelStatusTone,
+    resolveQueuePreviewSeedIdentitySummaryLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import {
     FOCUS_PANEL_HEADER_BOS_LABEL,
@@ -78,6 +80,34 @@ describe("focusPanelDisplayLabels", () => {
         expect(chips[2]).toMatchObject({ label: "Downtown Campus", kind: "location" });
     });
 
+    it("builds seed-backed context chips for cold Focus Panel open", () => {
+        const chips = buildFocusPanelContextChipsFromQueuePreviewSeed({
+            title: "Jordan Lee",
+            statusLabel: "New Lead",
+            statusKey: "new_lead",
+            stageLabel: "New Leads",
+            locationLabel: "North Campus",
+        });
+        expect(chips).toHaveLength(3);
+        expect(chips.map((chip) => chip.label)).toEqual(["New Lead", "New Leads", "North Campus"]);
+    });
+
+    it("resolves queue preview seed identity summary from attention/work or contact", () => {
+        expect(
+            resolveQueuePreviewSeedIdentitySummaryLine({
+                title: "Jordan Lee",
+                operTrustHeadline: "Tour follow-up overdue",
+                subtitle: "Sam Parent",
+            }),
+        ).toBe("Tour follow-up overdue");
+        expect(
+            resolveQueuePreviewSeedIdentitySummaryLine({
+                title: "Jordan Lee",
+                subtitle: "Sam Parent",
+            }),
+        ).toBe("Sam Parent");
+    });
+
     it("maps status keys to System 5 chip tones", () => {
         expect(resolveFocusPanelStatusTone("ready")).toBe("ready");
         expect(resolveFocusPanelStatusTone("new_inquiry")).toBe("due");
@@ -120,6 +150,16 @@ describe("Focus Panel header composition guards", () => {
         expect(opportunity).toContain("resolveFocusPanelProcessLabel");
         expect(opportunity).toContain("processLabel");
         expect(opportunity).toContain("buildFocusPanelContextChips");
+    });
+
+    it("cold open seed header wires queue preview chips in inline and modal paths", () => {
+        const inline = readSrc("components/presentation/workUnit/InlineOpportunityFocusPanel.tsx");
+        expect(inline).toContain("buildFocusPanelContextChipsFromQueuePreviewSeed");
+        expect(inline).not.toContain("contextChips={[]}");
+
+        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(runtime).toContain("buildFocusPanelContextChipsFromQueuePreviewSeed");
+        expect(runtime).not.toContain("contextChips={[]}");
     });
 
     it("does not render Move to qualification or other stage-movement header CTAs", () => {

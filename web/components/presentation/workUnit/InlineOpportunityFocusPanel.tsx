@@ -57,6 +57,10 @@ import { useOpportunityDrawerActionPreflight } from "@/lib/admin/actions/useOppo
 import { useOpportunityDrawerRegistryActionFeedback } from "@/lib/admin/actions/useOpportunityDrawerRegistryActionFeedback";
 import { resolvePortalRecordManageAccess } from "@/lib/admin/adminPortalRolePick";
 import { resolveFocusPanelSubjectReveal } from "@/lib/admin/drawer/focusPanelSubjectReveal";
+import {
+    buildFocusPanelContextChipsFromQueuePreviewSeed,
+    resolveQueuePreviewSeedIdentitySummaryLine,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
 import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
@@ -285,6 +289,14 @@ export function InlineOpportunityFocusPanel() {
             : null;
 
     const seedTitle = drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
+    const seedContextChips = useMemo(
+        () => buildFocusPanelContextChipsFromQueuePreviewSeed(drawer.opportunityQueuePreviewSeed),
+        [drawer.opportunityQueuePreviewSeed],
+    );
+    const seedIdentitySummaryLine = useMemo(
+        () => resolveQueuePreviewSeedIdentitySummaryLine(drawer.opportunityQueuePreviewSeed),
+        [drawer.opportunityQueuePreviewSeed],
+    );
 
     // `swap` softening: key the body by the displayed subject so a record → record switch
     // remounts the body once (it is prop-driven, so no state is lost) and `settle`s the new
@@ -345,7 +357,8 @@ export function InlineOpportunityFocusPanel() {
                         />
                         : <FocusPanelCompactHeader
                             subjectTitle={seedTitle}
-                            contextChips={[]}
+                            contextChips={seedContextChips}
+                            identitySummaryLine={seedIdentitySummaryLine}
                             activeMode={focusPanelMode}
                             onModeChange={setFocusPanelMode}
                             onClose={closeDrawer}

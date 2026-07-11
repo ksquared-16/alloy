@@ -1,0 +1,67 @@
+{
+  "capturedAt": "2026-07-11T03:56:31.897Z",
+  "baseUrl": "http://127.0.0.1:3001",
+  "path": "/workspace/work-unit/new-leads",
+  "runs": [
+    {
+      "run": 1,
+      "seedTitleMs": 143,
+      "seedChipsMs": 143,
+      "seedToResolvedMs": 4258,
+      "switchHeaderMs": 188,
+      "seedTitle": "Kurzman Family",
+      "seedChips": 2,
+      "resolvedTitle": "Kurzman Family",
+      "resolvedChipCount": 2,
+      "switchImmediateTitle": "Digan Family",
+      "switchHeaderTitle": "Digan Family",
+      "blankFrames": 0,
+      "loadingFrames": 0,
+      "frameCount": 103
+    },
+    {
+      "run": 2,
+      "seedTitleMs": 265,
+      "seedChipsMs": 265,
+      "seedToResolvedMs": 2269,
+      "switchHeaderMs": 294,
+      "seedTitle": "Kurzman Family",
+      "seedChips": 2,
+      "resolvedTitle": "Kurzman Family",
+      "resolvedChipCount": 2,
+      "switchImmediateTitle": "Digan Family",
+      "switchHeaderTitle": "Digan Family",
+      "blankFrames": 0,
+      "loadingFrames": 0,
+      "frameCount": 74
+    },
+    {
+      "run": 3,
+      "seedTitleMs": 64,
+      "seedChipsMs": 64,
+      "seedToResolvedMs": 2188,
+      "switchHeaderMs": 180,
+      "seedTitle": "Kurzman Family",
+      "seedChips": 2,
+      "resolvedTitle": "Kurzman Family",
+      "resolvedChipCount": 2,
+      "switchImmediateTitle": "Digan Family",
+      "switchHeaderTitle": "Digan Family",
+      "blankFrames": 0,
+      "loadingFrames": 0,
+      "frameCount": 79
+    }
+  ],
+  "aggregate": {
+    "blankFrames": 0,
+    "loadingFrames": 0,
+    "seedTitleImmediate": true,
+    "medians": {
+      "clickToSeedTitleMs": 143,
+      "clickToSeedChipsMs": 143,
+      "seedToResolvedMs": 2269,
+      "rowToRowHeaderSwapMs": 188
+    }
+  },
+  "pass": true
+}

@@ -440,6 +440,42 @@ export function queueRowSubjectDisplayName(context: QueueRowContext): string {
     return context.row_subject.display_name;
 }
 
+function queueRowLocationLabel(context: QueueRowContext): string | null {
+    const placement = context.placement_context;
+    if (!placement) return null;
+    return (
+        placement.room_label?.trim() ||
+        placement.program_label?.trim() ||
+        placement.location_label?.trim() ||
+        null
+    );
+}
+
+function queueRowRelatedSubjectsLine(context: QueueRowContext): string | null {
+    const names = context.related_subjects_summary
+        ?.filter((subject) => subject.visibility !== "hidden")
+        .map((subject) => subject.display_name.trim())
+        .filter(Boolean);
+    if (!names?.length) return null;
+    return names.join(", ");
+}
+
+function queueRowAttentionLine(context: QueueRowContext): string | null {
+    const attention = context.attention_summary;
+    if (!attention?.needs_attention) return null;
+    return attention.primary_reason_label?.trim() || null;
+}
+
+function queueRowWorkLine(context: QueueRowContext): string | null {
+    const current = context.current_work_summary;
+    if (current?.label?.trim() && current.state !== "none") {
+        const label = current.label.trim();
+        const due = current.due_label?.trim();
+        return due ? `${label} · ${due}` : label;
+    }
+    return context.work_summary?.primary_open_label?.trim() || null;
+}
+
 /**
  * Ephemeral Focus Panel header seed from a queue row's frozen context — owns the
  * subject identity from the click until the record payload resolves (see
@@ -452,10 +488,20 @@ export function opportunityQueuePreviewSeedFromRowContext(
     if (!context) return null;
     const title = queueRowSubjectDisplayName(context).trim();
     if (!title) return null;
+
+    const primaryContact = context.primary_contact?.display_name?.trim() || null;
+    const relatedSubjects = queueRowRelatedSubjectsLine(context);
+    const attentionLine = queueRowAttentionLine(context);
+    const workLine = queueRowWorkLine(context);
+
     return {
         title,
         statusLabel: context.row_status_label?.trim() || null,
+        statusKey: context.row_status_key?.trim() || null,
         stageLabel: context.row_stage?.trim() || null,
+        locationLabel: queueRowLocationLabel(context),
+        subtitle: primaryContact || relatedSubjects || null,
+        operTrustHeadline: attentionLine || workLine || null,
     };
 }
 

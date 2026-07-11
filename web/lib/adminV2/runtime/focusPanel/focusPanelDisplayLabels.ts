@@ -3,6 +3,7 @@
  * Raw status keys must never render in operator UI.
  */
 
+import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import {
     OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL,
     opportunityDisplayLocationLabel,
@@ -182,6 +183,29 @@ export function resolveFocusPanelLocationChip(record: Record<string, unknown>): 
     const label = opportunityDisplayLocationLabel(record)?.trim();
     if (!label || label === OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL) return null;
     return label;
+}
+
+/** Seed-backed header chips for cold Focus Panel open (queue row → panel). */
+export function buildFocusPanelContextChipsFromQueuePreviewSeed(
+    seed: OpportunityDrawerQueuePreviewSeed | null | undefined,
+): FocusPanelContextChip[] {
+    if (!seed) return [];
+    return buildFocusPanelContextChips({
+        statusLabel: formatFocusPanelDisplayLabel(seed.statusLabel) ?? seed.statusLabel ?? null,
+        statusKey: seed.statusKey ?? null,
+        processLabel: formatFocusPanelDisplayLabel(seed.stageLabel) ?? seed.stageLabel ?? null,
+        locationLabel: seed.locationLabel ?? null,
+    });
+}
+
+/** Header identity summary from queue preview seed — contact, attention, or work context. */
+export function resolveQueuePreviewSeedIdentitySummaryLine(
+    seed: OpportunityDrawerQueuePreviewSeed | null | undefined,
+): string | null {
+    if (!seed) return null;
+    const headline = seed.operTrustHeadline?.trim();
+    if (headline) return headline;
+    return seed.subtitle?.trim() || null;
 }
 
 /** Build deduplicated context chips for the subject identity block. */

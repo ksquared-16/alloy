@@ -61,6 +61,29 @@ function queueRowContext(entityId: string): QueueRowContext {
     };
 }
 
+function queueRowContextRich(entityId: string): QueueRowContext {
+    return {
+        ...queueRowContext(entityId),
+        primary_contact: { display_name: "Sam Parent" },
+        placement_context: {
+            location_id: "loc-1",
+            location_label: "North Campus",
+            program_label: "Infant",
+        },
+        attention_summary: {
+            needs_attention: true,
+            primary_reason_label: "Tour follow-up overdue",
+        },
+        current_work_summary: {
+            label: "Schedule tour",
+            state: "open",
+            due_label: "Due today",
+            progress_hint: null,
+            blocker_hint: null,
+        },
+    };
+}
+
 function workView(overrides?: Partial<WorkViewConfigV1Stored>): WorkViewConfigV1Stored {
     return {
         id: "wv-1",
@@ -172,8 +195,43 @@ describe("queueRowSubjectDisplayName / opportunityQueuePreviewSeedFromRowContext
         expect(opportunityQueuePreviewSeedFromRowContext(context)).toEqual({
             title: "Jordan Lee",
             statusLabel: "New Lead",
+            statusKey: "new_lead",
             stageLabel: "New Leads",
+            locationLabel: null,
+            subtitle: "Jordan Lee",
+            operTrustHeadline: null,
         });
+    });
+
+    it("maps row context fields into the Focus Panel open seed without inventing data", () => {
+        const context = queueRowContextRich("opp-rich");
+
+        expect(opportunityQueuePreviewSeedFromRowContext(context)).toEqual({
+            title: "Jordan Lee",
+            statusLabel: "New Lead",
+            statusKey: "new_lead",
+            stageLabel: "New Leads",
+            locationLabel: "Infant",
+            subtitle: "Sam Parent",
+            operTrustHeadline: "Tour follow-up overdue",
+        });
+    });
+
+    it("prefers attention over work for the seed headline and falls back to work when calm", () => {
+        const calm = {
+            ...queueRowContext("opp-calm"),
+            attention_summary: null,
+            current_work_summary: {
+                label: "Send welcome packet",
+                state: "open" as const,
+                due_label: "Due Friday",
+                progress_hint: null,
+                blocker_hint: null,
+            },
+        };
+        expect(opportunityQueuePreviewSeedFromRowContext(calm)?.operTrustHeadline).toBe(
+            "Send welcome packet · Due Friday",
+        );
     });
 
     it("joins grouped subjects and falls back to the row count unit", () => {

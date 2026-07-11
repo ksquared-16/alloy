@@ -11,6 +11,8 @@ import type { FocusPanelContextChip } from "@/lib/adminV2/runtime/focusPanel/foc
 export type FocusPanelCompactHeaderProps = {
     subjectTitle: string;
     contextChips: FocusPanelContextChip[];
+    /** Optional identity summary line (queue seed contact / attention / work). */
+    identitySummaryLine?: string | null;
     secondaryActions?: ReactNode | null;
     activeMode: FocusPanelMode;
     onModeChange: (mode: FocusPanelMode) => void;
@@ -26,6 +28,7 @@ export type FocusPanelCompactHeaderProps = {
 export default function FocusPanelCompactHeader({
     subjectTitle,
     contextChips,
+    identitySummaryLine,
     secondaryActions,
     activeMode,
     onModeChange,
@@ -58,6 +61,7 @@ export default function FocusPanelCompactHeader({
                 <FocusPanelSubjectIdentityBlock
                     subjectTitle={subjectTitle}
                     contextChips={contextChips}
+                    identitySummaryLine={identitySummaryLine}
                 />
                 <div
                     className="alloy-os-fp-header-compact__rail shrink-0"
