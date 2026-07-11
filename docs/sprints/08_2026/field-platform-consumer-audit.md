@@ -1034,3 +1034,24 @@ P5B intentionally limits approved commit scope to native identity fields; platfo
 ### Future adapters
 
 Parent/Guardian commits, proposed-new Child creation (P5C), and relationship writes remain out of scope. Each future adapter should add entity-specific mutation capability — not Processing-local column maps.
+
+
+
+
+## Read Consumer Convergence — Phase 1 (2026-07-11)
+
+**Scope:** Shared provider assembly + Focus Panel Children collection policy only.
+
+### Delivered
+
+- `consumerCanonicalProviderAssembly.ts` — Forms/Queue/Focus Panel thin adapters
+- `focusPanelCollectionPresentation.ts` — canonical `children` ordering/active/dedupe policy
+- Forms + Queue tenant-field assembly proofs (registry path; Queue behavior unchanged)
+
+### Not in Phase 1
+
+Parents/Guardians migration, concept-ref migration, Current Work, Operational Context, Focus Panel custom-field runtime.
+
+### Next
+
+Phase 2: `feat/focus-panel-provider-convergence-phase-2`

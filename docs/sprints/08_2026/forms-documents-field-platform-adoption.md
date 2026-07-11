@@ -761,3 +761,14 @@ Optional `collection` metadata on group rows; org/household security validation;
 
 See `docs/sprints/08_2026/forms-documents-collection-authoring.md`.
 
+
+
+
+
+## Read Consumer Convergence Phase 1 (2026-07-11)
+
+Forms provider identity continues through `canonicalFormsProviderDerivation` → `canonicalDataProviderRegistry`.
+
+**Proven in Phase 1:** tenant `field_definitions` → `assembleFormsDocumentProviders()` (registry filter).
+
+**Not changed:** Forms authoring, schemas, packet behavior, or runtime resolution.

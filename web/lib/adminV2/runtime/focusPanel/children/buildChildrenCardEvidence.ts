@@ -12,7 +12,7 @@
  * @see docs/platform/operator/household-reference-card.md (Children vs Household)
  */
 
-import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
+import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { resolveChildPhotoUrlFromRaw } from "@/lib/adminV2/runtime/focusPanel/children/resolveChildPhotoUrl";
 import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
@@ -125,12 +125,7 @@ export function buildChildrenCardEvidence(
     context: OperationalContext,
     options: BuildChildrenCardEvidenceOptions = {},
 ): ChildrenCardEvidence {
-    const rows = mapRawInquiryChildrenToDrawerRows(
-        (context.truth._inquiry_children as unknown[]) ?? [],
-    );
-    const rawRows = ((context.truth._inquiry_children as unknown[]) ?? []).map((x) =>
-        x && typeof x === "object" ? (x as Record<string, unknown>) : {},
-    );
+    const { rows, rawRows } = normalizeFocusPanelChildrenRowsFromTruth(context.truth);
 
     const children: ChildrenEvidenceChild[] = rows.map((row, index) => {
         const name = childName(row);
