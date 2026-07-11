@@ -2,15 +2,87 @@
 
 **Sprint:** July 2026  
 **Status:** **READY FOR PRODUCT QA**  
-**Merged:** PR [#155](https://github.com/ksquared-16/alloy/pull/155) → `staging`  
-**Merge commit:** `96ff1fc0432191b8da56d32c9282f703cee73659`  
-**Staging HEAD:** `96ff1fc0432191b8da56d32c9282f703cee73659`
+**Latest promotion:** PR [#169](https://github.com/ksquared-16/alloy/pull/169) → `staging`  
+**Merge commit:** `4be866d1a07b6a54ee0d82310ac88ef09f2f4292`  
+**Staging HEAD:** `4be866d1a07b6a54ee0d82310ac88ef09f2f4292`
 
 ---
 
-## Ready for Product QA
+## Action intent resolution promotion (July 11, 2026)
 
-The Current Work hardening stream (Phases 2–4) is merged to staging and ready for manual Product QA. The broader product initiative is **not** complete until QA feedback is incorporated.
+Configuration-driven Current Work action intent resolution is merged to staging and ready for focused product QA.
+
+| Item | Value |
+|------|-------|
+| PR | [#169](https://github.com/ksquared-16/alloy/pull/169) |
+| Branch | `fix/current-work-action-intent-resolution` |
+| Commits | `e4a436246`, `8a2e97c7b`, `456309799` |
+| Prior identity stream | PR [#168](https://github.com/ksquared-16/alloy/pull/168) (`be45c4da4`) — separate; already on staging |
+
+### CI status (PR #169)
+
+| Check | Result |
+|-------|--------|
+| Production graph (Web typecheck) | **pass** |
+| Full graph (tests + scripts) | **pass** |
+| Vercel – firefly-early-learning | **pass** |
+| Vercel – workwithalloy | **pass** |
+| Supabase Preview | skipped |
+
+### Post-merge validation (staging @ `4be866d1a`)
+
+```bash
+cd web && NODE_OPTIONS=--max-old-space-size=8192 npm run typecheck   # exit 0
+cd web && npm run typecheck:tests                                   # exit 0
+cd web && NODE_OPTIONS=--max-old-space-size=8192 npm run build      # exit 0
+
+cd web && npm run test -- \
+  tests/lifecycle/resolveActionIntentExecution.test.ts \
+  tests/lifecycle/resolveCanonicalWorkTemplateActionOptions.test.ts \
+  tests/lifecycle/resolveWorkTemplateActionOptions.test.ts \
+  tests/lifecycle/lifecycleStageWorkTemplateActionsEditor.test.ts \
+  tests/adminV2/runtime/currentWorkActionIntentResolution.test.ts \
+  tests/adminV2/runtime/resolveCurrentWorkActionSurface.test.ts \
+  tests/adminV2/runtime/currentWorkActionSurfacePolicy.test.ts \
+  tests/adminV2/runtime/buildCurrentWorkActivityPreviewItems.test.ts \
+  tests/adminV2/runtime/workTemplateCurrentWorkRuntime.test.ts \
+  tests/adminV2/runtime/currentWorkOperationalSurface.test.ts \
+  tests/adminV2/runtime/currentWorkCard.test.tsx \
+  tests/lifecycle/stageTransitionReconciliation.test.ts
+# 78/78 passed
+```
+
+### Architecture invariants (verified on staging source)
+
+**Action intent**
+- Work Templates store operator intent refs (`normalizeActionRefToIntentKey`, canonical editor options)
+- Process configuration resolves subject grain (`resolveWorkTemplateSubjectGrain`)
+- Runtime resolves concrete execution key (`resolveActionIntentExecution` → `handlerKey`)
+- Duplicate waitlist variants do not appear as peer choices (`isNonCanonicalIntentAlias`, intent dedup in VM)
+- Generic status umbrellas remain hidden (`currentWorkActionSurfacePolicy`, `HIDDEN_EDITOR_ACTION_KEYS`)
+- Raw `mutation_command` cannot execute (`resolveCurrentWorkActionSurface` guard)
+
+**Configuration ownership**
+- Explicit Work Template config wins (`helpful_actions_explicit`, `alternate_paths_explicit`)
+- `undefined` allows compatibility fallback; `[]` means explicitly show none
+- Registry owns execution metadata; Work Template owns placement/order
+
+**Activity**
+- Current Work preview uses canonical Activity projection (`buildCurrentWorkActivityPreviewItems`)
+- Initial click stays in Work mode; View full activity changes mode only when clicked (card tests)
+
+**Multi-subject boundary (intentionally deferred)**
+- Singular subject executes directly (`requiresSubjectPicker: false` when one applicable subject)
+- Selection-required state does not silently execute (`evaluateRequiresSubjectPicker`; picker UI not shipped)
+- **Do not mark multi-subject execution complete** — `resolveApplicableSubjectsForIntent` remains a stub
+
+---
+
+---
+
+## Ready for Product QA (prior hardening stream)
+
+The Current Work hardening stream (Phases 2–4, PR #155) remains merged on staging. The **action intent resolution** stream (PR #169) is the current QA focus. The broader product initiative is **not** complete until QA feedback is incorporated.
 
 ### Promotion summary
 
