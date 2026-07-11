@@ -1,4 +1,4 @@
-import { Bot, CheckCircle2, FileSearch, ListTodo, Workflow } from "lucide-react";
+import { Bot, CheckCircle2, FileSearch, ListTodo, MessageSquare, Workflow } from "lucide-react";
 
 import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import {
@@ -16,6 +16,13 @@ import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import type { WorkspaceQueueRowUrgency } from "@/components/workspace/WorkspaceQueueRow";
 import { isBusinessProcessStageWorkTaskRow } from "@/lib/lifecycle/isBusinessProcessStageWorkTaskRow";
 import { isProcessingProjectedWorkItem } from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
+import { isCommunicationsProjectedWorkItem } from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
+import {
+    buildWorkItemCommunicationsProvenanceChain,
+    formatWorkItemCommunicationsProvenanceChain,
+    buildWorkItemCommunicationsSummary,
+} from "@/lib/workItems/workItemCommunicationsProvenance";
+import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import {
     buildWorkItemProcessingProvenanceChain,
     formatWorkItemProcessingProvenanceChain,
@@ -40,6 +47,15 @@ export type WorkspaceQueueRowModel = {
     completed: boolean;
 };
 
+
+
+function formatWorkItemCommunicationsActivityDisplay(task: MyTasksTaskRow): string {
+    const iso = task.communication_last_activity_at?.trim() || task.due_at?.trim();
+    if (!iso) return "Needs reply";
+    const rel = relTime(iso);
+    return rel ? `Last activity ${rel}` : "Needs reply";
+}
+
 function assigneeInitials(label: string | null | undefined): string | undefined {
     const text = (label ?? "").trim();
     if (!text) return undefined;
@@ -57,6 +73,9 @@ export function buildWorkItemBreadcrumb(
 ): string {
     if (isProcessingProjectedWorkItem(task)) {
         return formatWorkItemProcessingProvenanceChain(buildWorkItemProcessingProvenanceChain(task));
+    }
+    if (isCommunicationsProjectedWorkItem(task)) {
+        return formatWorkItemCommunicationsProvenanceChain(buildWorkItemCommunicationsProvenanceChain(task));
     }
     const context = buildMyTasksRecordContextLines(task, presentation, entityLabels);
     const recordLabel = myTasksTaskHasLinkedRecord(task) ? context.entityLabel : null;
@@ -80,6 +99,9 @@ export function buildWorkItemBosSummary(task: MyTasksTaskRow, labelOptions?: Wor
         const chain = formatWorkItemProcessingProvenanceChain(buildWorkItemProcessingProvenanceChain(task));
         const detail = task.description?.trim() || "Open in Processing to review.";
         return `${chain} · Due ${due} · ${detail}`;
+    }
+    if (isCommunicationsProjectedWorkItem(task)) {
+        return buildWorkItemCommunicationsSummary(task);
     }
     const due = formatOperationalTaskDueDisplay(task.due_at);
     const normalizedTitle = normalizeOperationalTaskTitleDisplay(task.title);
@@ -105,20 +127,21 @@ export function mapWorkItemQueueRow(
     const urgency = operationalTaskUrgencyBadge(task).urgency;
     const isCompleted = urgency === "completed" || urgency === "canceled";
     const isProcessing = isProcessingProjectedWorkItem(task);
-    const isBpWork = !isProcessing && isBusinessProcessStageWorkTaskRow(task);
+    const isCommunications = isCommunicationsProjectedWorkItem(task);
+    const isBpWork = !isProcessing && !isCommunications && isBusinessProcessStageWorkTaskRow(task);
     const source = task.source.trim().toLowerCase();
     const isWaiting = !isBpWork && task.status.trim().toLowerCase() === "open" && source === "task_assist";
 
     return {
         id: task.id,
-        leadingIcon: isProcessing ? FileSearch : isBpWork ? Workflow : source === "task_assist" ? Bot : source === "manual" ? ListTodo : CheckCircle2,
+        leadingIcon: isProcessing ? FileSearch : isCommunications ? MessageSquare : isBpWork ? Workflow : source === "task_assist" ? Bot : source === "manual" ? ListTodo : CheckCircle2,
         title: normalizeOperationalTaskTitleDisplay(task.title),
-        badge: isProcessing ? "Processing" : isBpWork ? "BP" : source === "task_assist" ? "BOS" : undefined,
+        badge: isProcessing ? "Processing" : isCommunications ? "Communications" : isBpWork ? "BP" : source === "task_assist" ? "BOS" : undefined,
         breadcrumb: buildWorkItemBreadcrumb(task, options.presentation, options.entityLabels, options.labelOptions),
         snippet: task.description?.trim() || undefined,
-        dueOrTime: `Due ${formatOperationalTaskDueDisplay(task.due_at)}`,
+        dueOrTime: isCommunications ? formatWorkItemCommunicationsActivityDisplay(task) : `Due ${formatOperationalTaskDueDisplay(task.due_at)}`,
         assigneeInitials: assigneeInitials(task.assignee_label),
-        trailingMeta: isProcessing ? "Needs review" : isBpWork ? "Business Process" : formatOperationalTaskSourceLabel(task.source),
+        trailingMeta: isProcessing ? "Needs review" : isCommunications ? "Needs reply" : isBpWork ? "Business Process" : formatOperationalTaskSourceLabel(task.source),
         urgency,
         isWaiting,
         completed: isCompleted,

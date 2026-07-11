@@ -12,12 +12,14 @@ import WorkItemActivityPanel from "@/components/workItems/WorkItemActivityPanel"
 import WorkItemBpContextPanel from "@/components/workItems/WorkItemBpContextPanel";
 import WorkItemConversationPanel from "@/components/workItems/WorkItemConversationPanel";
 import WorkItemProcessingContextPanel from "@/components/workItems/WorkItemProcessingContextPanel";
+import WorkItemCommunicationsContextPanel from "@/components/workItems/WorkItemCommunicationsContextPanel";
 import WorkItemCreateModal from "@/components/workItems/WorkItemCreateModal";
 import { buildWorkItemBosSummary, buildWorkItemBreadcrumb } from "@/lib/workItems/mapWorkItemQueueRow";
 import type { WorkItemCreationSession } from "@/lib/workItems/workItemCreationRuntime";
 import type { WorkItemDraftEntity } from "@/lib/workItems/workItemDraftV1";
 import type { WorkItemBpLabelOptions } from "@/lib/workItems/workItemBpProvenance";
 import { isProcessingProjectedWorkItem } from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
+import { isCommunicationsProjectedWorkItem } from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
 
 type DetailTabKey = "overview" | "activity" | "conversation" | "related";
 
@@ -43,6 +45,7 @@ export type WorkItemDetailPanelProps = {
     onOpenRecord?: () => void;
     onOpenCurrentWork?: () => void;
     onOpenProcessing?: () => void;
+    onOpenCommunications?: () => void;
 };
 
 function EmptyDetailState() {
@@ -72,6 +75,7 @@ export default function WorkItemDetailPanel({
     onOpenRecord,
     onOpenCurrentWork,
     onOpenProcessing,
+    onOpenCommunications,
 }: WorkItemDetailPanelProps) {
     const [activeTab, setActiveTab] = useState<DetailTabKey>("overview");
 
@@ -132,12 +136,17 @@ export default function WorkItemDetailPanel({
                         {task && isProcessingProjectedWorkItem(task) ?
                             <WorkItemProcessingContextPanel task={task} onOpenProcessing={onOpenProcessing} />
                         :   null}
-                        <WorkItemBpContextPanel
+                        {task && isCommunicationsProjectedWorkItem(task) ?
+                            <WorkItemCommunicationsContextPanel task={task} onOpenCommunications={onOpenCommunications} />
+                        :   null}
+                        {!isCommunicationsProjectedWorkItem(task) ?
+                            <WorkItemBpContextPanel
                             task={task}
                             labelOptions={bpLabelOptions}
                             onOpenRecord={onOpenRecord}
                             onOpenCurrentWork={onOpenCurrentWork}
                         />
+                        :   null}
                         <div className="rounded-lg border border-alloy-juniper/20 bg-alloy-juniper/[0.06] px-3 py-2" data-work-items-bos-summary="true">
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-juniper/80">BOS summary</p>
                             <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/72">{bosSummary}</p>
@@ -150,10 +159,12 @@ export default function WorkItemDetailPanel({
                                     <dt className="text-alloy-midnight/45">Breadcrumb</dt>
                                     <dd className="truncate text-right">{breadcrumb ?? "General work"}</dd>
                                 </div>
-                                <div className="flex items-center justify-between gap-3">
-                                    <dt className="text-alloy-midnight/45">Due</dt>
-                                    <dd>{formatOperationalTaskDueDisplay(task.due_at)}</dd>
-                                </div>
+                                {!isCommunicationsProjectedWorkItem(task) ?
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-alloy-midnight/45">Due</dt>
+                                        <dd>{formatOperationalTaskDueDisplay(task.due_at)}</dd>
+                                    </div>
+                                :   null}
                                 <div className="flex items-center justify-between gap-3">
                                     <dt className="text-alloy-midnight/45">Status</dt>
                                     <dd className="capitalize">{task.status}</dd>
@@ -165,7 +176,7 @@ export default function WorkItemDetailPanel({
                             </dl>
                         </div>
 
-                        {!isProcessingProjectedWorkItem(task) ?
+                        {!isProcessingProjectedWorkItem(task) && !isCommunicationsProjectedWorkItem(task) ?
                             <div data-work-items-detail-task-card="true">{taskCard}</div>
                         :   null}
                     </div>
@@ -180,13 +191,18 @@ export default function WorkItemDetailPanel({
                         {isProcessingProjectedWorkItem(task) ?
                             <WorkItemProcessingContextPanel task={task} onOpenProcessing={onOpenProcessing} />
                         :   null}
-                        <WorkItemBpContextPanel
+                        {isCommunicationsProjectedWorkItem(task) ?
+                            <WorkItemCommunicationsContextPanel task={task} onOpenCommunications={onOpenCommunications} />
+                        :   null}
+                        {!isCommunicationsProjectedWorkItem(task) ?
+                            <WorkItemBpContextPanel
                             task={task}
                             labelOptions={bpLabelOptions}
                             onOpenRecord={onOpenRecord}
                             onOpenCurrentWork={onOpenCurrentWork}
                         />
-                        {!isProcessingProjectedWorkItem(task) ?
+                        :   null}
+                        {!isProcessingProjectedWorkItem(task) && !isCommunicationsProjectedWorkItem(task) ?
                             <p className="text-[11px] text-alloy-midnight/55">
                                 This work item shares execution state with Current Work on the linked record.
                             </p>

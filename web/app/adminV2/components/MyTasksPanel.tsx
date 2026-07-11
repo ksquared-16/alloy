@@ -57,6 +57,7 @@ import {
     WORK_ITEM_SOURCE_DEFS,
     WORK_ITEM_VIEW_DEFS,
     type WorkItemQueueScope,
+    type WorkItemSourceKey,
     type WorkItemViewKey,
 } from "@/lib/workItems/workItemQueueScope";
 import { mapWorkItemQueueRow } from "@/lib/workItems/mapWorkItemQueueRow";
@@ -68,11 +69,22 @@ import {
     parseProcessingCaseIdFromWorkItemId,
 } from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
 import {
+    isCommunicationsProjectedWorkItem,
+    mapCommunicationsQueueToWorkItemRows,
+    parseCommunicationThreadIdFromWorkItemId,
+} from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
+import {
+    ADMIN_V2_COMMUNICATIONS_QUEUE_REFRESH,
     ADMIN_V2_PROCESSING_QUEUE_REFRESH,
     dispatchOperationalWorkRefresh,
 } from "@/lib/workItems/operationalWorkRefresh";
-import { dispatchOpenProcessingCase } from "@/lib/workItems/workItemsNavigation";
+import { dispatchOpenCommunicationsThread, dispatchOpenProcessingCase } from "@/lib/workItems/workItemsNavigation";
 import { getProcessingQueueWarmSnapshot, subscribeProcessingQueueWarm, warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import {
+    getCommandCenterCacheSnapshot,
+    prefetchCommandCenterConversations,
+    subscribeCommandCenterCache,
+} from "@/lib/communications/v2/commandCenterPrefetchCache";
 import { dispatchFocusCurrentWork } from "@/lib/workItems/workItemsNavigation";
 
 import { draftToOperationalTaskBody } from "@/lib/workItems/commitWorkItemDraft";
@@ -136,6 +148,8 @@ export type MyTasksPanelProps = {
     requestCreateNonce?: number;
     navFilter?: OperationalTaskWorkspaceFilter | null;
     navSelectedTaskId?: string | null;
+    navSource?: WorkItemSourceKey | null;
+    navView?: WorkItemViewKey | null;
     onNavFilterClear?: () => void;
 };
 
@@ -146,6 +160,8 @@ export default function MyTasksPanel({
     requestCreateNonce = 0,
     navFilter,
     navSelectedTaskId,
+    navSource,
+    navView,
     onNavFilterClear,
 }: MyTasksPanelProps) {
     const workEnabled = isOperationalWorkV1Enabled();
@@ -202,6 +218,7 @@ export default function MyTasksPanel({
     const [outcomeOptions, setOutcomeOptions] = useState<StageCompletionOutcomeV1[]>([]);
     const [catalogProcessLabels, setCatalogProcessLabels] = useState<Record<string, string>>({});
     const [processingWarmNonce, setProcessingWarmNonce] = useState(0);
+    const [commsWarmNonce, setCommsWarmNonce] = useState(0);
 
     const openCreateForm = useCallback(() => {
         setCreateOpen(true);
@@ -222,6 +239,15 @@ export default function MyTasksPanel({
     useEffect(() => {
         if (navSelectedTaskId) setSelectedTaskId(navSelectedTaskId);
     }, [navSelectedTaskId]);
+
+    useEffect(() => {
+        if (!navSource && !navView) return;
+        setScope((prev) => ({
+            ...prev,
+            ...(navSource ? { source: navSource } : {}),
+            ...(navView ? { view: navView } : {}),
+        }));
+    }, [navSource, navView]);
     const load = useCallback(async () => {
         if (!workEnabled) return;
         const serverFilter = resolveWorkspaceTasksFetchFilter(scope.view, navFilter);
@@ -257,11 +283,17 @@ export default function MyTasksPanel({
         if (!workEnabled) return;
         void fetchWorkItemBpLabelCatalog().then((catalog) => setCatalogProcessLabels(catalog.processLabels));
         void warmProcessingQueueCache();
+        void prefetchCommandCenterConversations();
     }, [workEnabled]);
 
     useEffect(() => {
         if (!workEnabled) return;
         return subscribeProcessingQueueWarm(() => setProcessingWarmNonce((n) => n + 1));
+    }, [workEnabled]);
+
+    useEffect(() => {
+        if (!workEnabled) return;
+        return subscribeCommandCenterCache(() => setCommsWarmNonce((n) => n + 1));
     }, [workEnabled]);
 
     useEffect(() => {
@@ -272,6 +304,15 @@ export default function MyTasksPanel({
         window.addEventListener(ADMIN_V2_PROCESSING_QUEUE_REFRESH, onProcessingRefresh);
         return () => window.removeEventListener(ADMIN_V2_PROCESSING_QUEUE_REFRESH, onProcessingRefresh);
     }, [load, workEnabled]);
+
+    useEffect(() => {
+        if (!workEnabled) return;
+        const onCommsRefresh = () => {
+            setCommsWarmNonce((n) => n + 1);
+        };
+        window.addEventListener(ADMIN_V2_COMMUNICATIONS_QUEUE_REFRESH, onCommsRefresh);
+        return () => window.removeEventListener(ADMIN_V2_COMMUNICATIONS_QUEUE_REFRESH, onCommsRefresh);
+    }, [workEnabled]);
 
 
 
@@ -314,14 +355,23 @@ export default function MyTasksPanel({
         return mapProcessingQueueToWorkItemRows(warm);
     }, [processingWarmNonce]);
 
+    const communicationsProjectedTasks = useMemo(() => {
+        void commsWarmNonce;
+        const warm = getCommandCenterCacheSnapshot()?.conversations ?? [];
+        return mapCommunicationsQueueToWorkItemRows(warm);
+    }, [commsWarmNonce]);
+
     const mergedTasks = useMemo(() => {
         const byId = new Map<string, MyTasksTaskRow>();
         for (const t of siteScopedTasks) byId.set(t.id, t);
         for (const t of processingProjectedTasks) {
             if (!byId.has(t.id)) byId.set(t.id, t);
         }
+        for (const t of communicationsProjectedTasks) {
+            if (!byId.has(t.id)) byId.set(t.id, t);
+        }
         return Array.from(byId.values());
-    }, [processingProjectedTasks, siteScopedTasks]);
+    }, [communicationsProjectedTasks, processingProjectedTasks, siteScopedTasks]);
 
     const scopedTasks = useMemo(() => {
         return applyWorkItemQueueScope(mergedTasks, scope, processGroups, userId?.trim() || null);
@@ -345,8 +395,10 @@ export default function MyTasksPanel({
     );
 
     const viewCounts = useMemo(
-        () => Object.fromEntries(WORK_ITEM_VIEW_DEFS.map((def) => [def.key, countTasksForView(mergedTasks, def.key)])),
-        [mergedTasks],
+        () => Object.fromEntries(
+            WORK_ITEM_VIEW_DEFS.map((def) => [def.key, countTasksForView(mergedTasks, def.key, userId?.trim() || null)]),
+        ),
+        [mergedTasks, userId],
     );
 
     const sourceCounts = useMemo(
@@ -374,7 +426,7 @@ export default function MyTasksPanel({
     }, [load]);
 
     const dispatchRefresh = useCallback(
-        (detail?: { opportunity_id?: string | null; processing_case_id?: string | null; task_id?: string | null; kind?: "mutation" | "complete" | "processing_review" }) => {
+        (detail?: { opportunity_id?: string | null; processing_case_id?: string | null; communication_thread_id?: string | null; task_id?: string | null; kind?: "mutation" | "complete" | "processing_review" | "communications_reply" }) => {
             dispatchOperationalWorkRefresh(detail ?? {});
         },
         [],
@@ -433,12 +485,24 @@ export default function MyTasksPanel({
         onClose?.();
     }, [onClose]);
 
+    const onOpenCommunications = useCallback((task: MyTasksTaskRow) => {
+        const threadId = task.communication_thread_id?.trim() || parseCommunicationThreadIdFromWorkItemId(task.id);
+        if (!threadId) return;
+        dispatchOpenCommunicationsThread(threadId);
+        onClose?.();
+    }, [onClose]);
+
     const onPatchStatus = useCallback(
         async (id: string, status: "completed" | "canceled") => {
             const processingCaseId = parseProcessingCaseIdFromWorkItemId(id);
             if (processingCaseId) {
                 dispatchRefresh({ processing_case_id: processingCaseId, kind: "processing_review" });
                 await load();
+                return;
+            }
+            const communicationThreadId = parseCommunicationThreadIdFromWorkItemId(id);
+            if (communicationThreadId) {
+                onOpenCommunications({ id, communication_thread_id: communicationThreadId } as MyTasksTaskRow);
                 return;
             }
             setActionId(id);
@@ -455,13 +519,17 @@ export default function MyTasksPanel({
                 setActionId(null);
             }
         },
-        [clearForms, dispatchRefresh, load],
+        [clearForms, dispatchRefresh, load, onOpenCommunications],
     );
 
     const onCompleteTask = useCallback(
         async (task: MyTasksTaskRow) => {
             if (isProcessingProjectedWorkItem(task)) {
                 onOpenProcessing(task);
+                return;
+            }
+            if (isCommunicationsProjectedWorkItem(task)) {
+                onOpenCommunications(task);
                 return;
             }
             setActionId(task.id);
@@ -488,7 +556,7 @@ export default function MyTasksPanel({
                 setActionId(null);
             }
         },
-        [onOpenProcessing, onPatchStatus],
+        [onOpenCommunications, onOpenProcessing, onPatchStatus],
     );
 
     const onSelectOutcome = useCallback(
@@ -615,7 +683,7 @@ export default function MyTasksPanel({
     const selectedTask = visibleTasks.find((t) => t.id === selectedTaskId) ?? null;
 
     const renderTaskCard = (t: MyTasksTaskRow) => {
-        if (isProcessingProjectedWorkItem(t)) return null;
+        if (isProcessingProjectedWorkItem(t) || isCommunicationsProjectedWorkItem(t)) return null;
         const mode =
             editingId === t.id ? "edit"
             : rescheduleId === t.id ? "reschedule"
@@ -861,6 +929,7 @@ export default function MyTasksPanel({
                         onOpenRecord={selectedTask ? () => onOpenRecord(selectedTask) : undefined}
                         onOpenCurrentWork={selectedTask ? () => onOpenCurrentWork(selectedTask) : undefined}
                         onOpenProcessing={selectedTask ? () => onOpenProcessing(selectedTask) : undefined}
+                        onOpenCommunications={selectedTask ? () => onOpenCommunications(selectedTask) : undefined}
                     />
                 </div>
             </WorkspaceZonePanel>

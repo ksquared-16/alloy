@@ -10,6 +10,7 @@ import {
 } from "@/lib/agent/taskAssist/myTasksProcessGroups";
 import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
+import { isCommunicationsProjectedWorkItem } from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
 import type { OperationalTaskWorkspaceFilter } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 
 export type WorkItemFolderKey =
@@ -96,8 +97,7 @@ export const WORK_ITEM_SOURCE_DEFS: WorkItemSourceDef[] = [
     {
         key: "communications",
         label: "Communications",
-        available: false,
-        deferredReason: "Communications-sourced work arrives in a later slice",
+        available: true,
     },
 ];
 
@@ -166,16 +166,29 @@ export function filterTasksByFolder(
     return filterTasksByProcessGroup(tasks, groupKey);
 }
 
-export function filterTasksByView(tasks: MyTasksTaskRow[], view: WorkItemViewKey): MyTasksTaskRow[] {
+export function filterTasksByView(
+    tasks: MyTasksTaskRow[],
+    view: WorkItemViewKey,
+    currentUserId?: string | null,
+): MyTasksTaskRow[] {
+    const uid = currentUserId?.trim() || "";
     switch (view) {
+        case "mine":
+            return uid ? tasks.filter((t) => t.assigned_to_user_id?.trim() === uid) : [];
+        case "unassigned":
+            return tasks.filter((t) => !t.assigned_to_user_id?.trim());
         case "due_soon":
             return tasks.filter(
                 (t) =>
+                    !isCommunicationsProjectedWorkItem(t) &&
                     isOpenTask(t) &&
                     operationalTaskDueUrgency({ status: t.status, dueAtIso: t.due_at }) === "due_soon"
             );
         case "waiting":
             return [];
+        case "due_today":
+        case "overdue":
+            return tasks.filter((t) => !isCommunicationsProjectedWorkItem(t));
         default:
             return tasks;
     }
@@ -191,6 +204,9 @@ export function taskMatchesSource(task: MyTasksTaskRow, source: WorkItemSourceKe
     }
     if (source === "processing") {
         return Boolean(task.processing_case_id?.trim()) || src === "processing";
+    }
+    if (source === "communications") {
+        return Boolean(task.communication_thread_id?.trim()) || src === "communications";
     }
     return false;
 }
@@ -222,7 +238,7 @@ export function applyWorkItemQueueScope(
     currentUserId: string | null
 ): MyTasksTaskRow[] {
     let rows = filterTasksByFolder(tasks, scope.folder, groups, currentUserId);
-    rows = filterTasksByView(rows, scope.view);
+    rows = filterTasksByView(rows, scope.view, currentUserId);
     rows = filterTasksBySource(rows, scope.source);
     return sortWorkItemTasks(rows, scope.sort);
 }
@@ -236,8 +252,12 @@ export function countTasksForFolder(
     return filterTasksByFolder(tasks, folder, groups, currentUserId).filter(isOpenTask).length;
 }
 
-export function countTasksForView(tasks: MyTasksTaskRow[], view: WorkItemViewKey): number {
-    const scoped = filterTasksByView(tasks, view);
+export function countTasksForView(
+    tasks: MyTasksTaskRow[],
+    view: WorkItemViewKey,
+    currentUserId?: string | null,
+): number {
+    const scoped = filterTasksByView(tasks, view, currentUserId);
     return scoped.filter((t) => (view === "completed" ? !isOpenTask(t) : isOpenTask(t))).length;
 }
 
@@ -290,6 +310,12 @@ export function resolveWorkItemQueueEmptyState(
             return {
                 message: "No Processing work is assigned to you.",
                 helper: "Processing projections stay unassigned until an operator claims them. Try Unassigned or clear the Mine view.",
+            };
+        }
+        if (source === "communications") {
+            return {
+                message: "No Communications work is assigned to you.",
+                helper: "Try Unassigned or clear the Mine view to see all Needs Reply threads.",
             };
         }
         if (source === "business_process") {

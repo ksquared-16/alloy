@@ -11,6 +11,8 @@ import MyTasksPanel from "@/app/adminV2/components/MyTasksPanel";
 import WorkItemsOverviewLanding from "@/app/adminV2/tasks/WorkItemsOverviewLanding";
 import WorkItemsShell, { type WorkItemsWorkView } from "@/app/adminV2/tasks/WorkItemsShell";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
+import { prefetchCommandCenterConversations } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import type { WorkItemSourceKey, WorkItemViewKey } from "@/lib/workItems/workItemQueueScope";
 import type { OperationalTaskWorkspaceFilter } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
     ADMIN_V2_OPEN_WORK_ITEMS_TASK,
@@ -27,17 +29,22 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
     const [newTaskNonce, setNewTaskNonce] = useState(0);
     const [navFilter, setNavFilter] = useState<OperationalTaskWorkspaceFilter | null>(null);
     const [navSelectedTaskId, setNavSelectedTaskId] = useState<string | null>(null);
+    const [navSource, setNavSource] = useState<WorkItemSourceKey | null>(null);
+    const [navView, setNavView] = useState<WorkItemViewKey | null>(null);
 
     useEffect(() => {
         if (open) {
             prefetchWorkspaceOperationalTasks("open");
             prefetchWorkspaceOperationalTasks("completed");
+            void prefetchCommandCenterConversations();
         }
     }, [open]);
     const handleClose = useCallback(() => {
         setWorkView("overview");
         setNavFilter(null);
         setNavSelectedTaskId(null);
+        setNavSource(null);
+        setNavView(null);
         setNewTaskNonce(0);
         onClose();
     }, [onClose]);
@@ -53,9 +60,16 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
         setWorkView(view);
     }, []);
 
-    const openTask = useCallback((taskId: string, filter: OperationalTaskWorkspaceFilter = "open") => {
+    const openTask = useCallback((
+        taskId: string,
+        filter: OperationalTaskWorkspaceFilter = "open",
+        source?: WorkItemSourceKey | null,
+        view?: WorkItemViewKey | null,
+    ) => {
         setNavSelectedTaskId(taskId);
         setNavFilter(filter);
+        setNavSource(source ?? null);
+        setNavView(view ?? null);
         setWorkView("queue");
     }, []);
 
@@ -65,7 +79,7 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
             const detail = (event as CustomEvent<OpenWorkItemsTaskDetail>).detail;
             const taskId = detail?.task_id?.trim();
             if (!taskId) return;
-            openTask(taskId, detail.filter ?? "open");
+            openTask(taskId, detail.filter ?? "open", detail.source ?? null, detail.view ?? null);
         };
         window.addEventListener(ADMIN_V2_OPEN_WORK_ITEMS_TASK, onOpenWorkItemsTask as EventListener);
         return () => window.removeEventListener(ADMIN_V2_OPEN_WORK_ITEMS_TASK, onOpenWorkItemsTask as EventListener);
@@ -111,6 +125,8 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
                             requestCreateNonce={newTaskNonce}
                             navFilter={navFilter}
                             navSelectedTaskId={navSelectedTaskId}
+                            navSource={navSource}
+                            navView={navView}
                             onNavFilterClear={() => setNavFilter(null)}
                         />
                     )}
