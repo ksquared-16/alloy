@@ -32,6 +32,10 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { resolveFocusPanelSubjectReveal } from "@/lib/admin/drawer/focusPanelSubjectReveal";
+import {
+    buildFocusPanelContextChipsFromQueuePreviewSeed,
+    resolveQueuePreviewSeedIdentitySummaryLine,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import { resolvePortalRecordManageAccess } from "@/lib/admin/adminPortalRolePick";
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
@@ -771,7 +775,8 @@ export default function OpportunityDrawerVmRuntime() {
         return (
             <FocusPanelCompactHeader
                 subjectTitle={subjectTitle}
-                contextChips={[]}
+                contextChips={buildFocusPanelContextChipsFromQueuePreviewSeed(seed)}
+                identitySummaryLine={resolveQueuePreviewSeedIdentitySummaryLine(seed)}
                 activeMode={focusPanelMode}
                 onModeChange={setFocusPanelMode}
                 onClose={closeDrawer}

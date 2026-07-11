@@ -6,6 +6,8 @@ export type OpportunityDrawerQueuePreviewSeed = {
     title: string;
     subtitle?: string | null;
     statusLabel?: string | null;
+    /** Authoritative status key echo for chip tone — display-only, from queue row context. */
+    statusKey?: string | null;
     stageLabel?: string | null;
     /** Site / room / program context from queue CRM compact slots. */
     locationLabel?: string | null;
