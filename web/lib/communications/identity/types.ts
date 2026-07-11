@@ -46,6 +46,7 @@ export type CommunicationIdentityRow = {
     is_default_for_scope: boolean;
     legacy_binding_id: string | null;
     metadata: Record<string, unknown>;
+    default_access_mode?: "open_until_restricted" | "explicit_grants_required";
 };
 
 export type LocationBindingRow = {

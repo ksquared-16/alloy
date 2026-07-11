@@ -310,3 +310,95 @@ describe("resolveInboundIdentity", () => {
         if (r.ok) expect(r.ambiguousLocation).toBe(true);
     });
 });
+
+describe("resolveSenderIdentity grant policy", () => {
+    it("denies explicit_grants_required identity without grant", () => {
+        const ctx = baseCtx();
+        const explicitId = "11111111-1111-1111-1111-111111111112";
+        ctx.identities.push({
+            id: explicitId,
+            org_id: ORG,
+            provider_account_id: ACCT_SMS,
+            channel: "sms",
+            identity_type: "phone_number",
+            canonical_address: "+15551112222",
+            normalized_address: "+15551112222",
+            display_name: "Explicit Only",
+            inbound_enabled: true,
+            outbound_enabled: true,
+            verification_state: "verified",
+            status: "active",
+            health_status: "healthy",
+            capabilities: {},
+            provider_resource_ref: null,
+            scope: "tenant",
+            is_default_for_scope: true,
+            legacy_binding_id: null,
+            metadata: {},
+            default_access_mode: "explicit_grants_required",
+        });
+        const r = resolveSenderIdentity(ctx, {
+            orgId: ORG,
+            channel: "sms",
+            operatorUserId: USER,
+            locationId: null,
+            requestedIdentityId: explicitId,
+            operatorHasCommunicationsSend: true,
+            allowLegacyCompatibilityFallback: false,
+        });
+        expect(r.ok).toBe(false);
+    });
+
+    it("allows explicit_grants_required identity with can_send grant", () => {
+        const ctx = baseCtx();
+        const explicitId = "11111111-1111-1111-1111-111111111112";
+        for (const ident of ctx.identities) {
+            if (ident.channel === "sms") ident.status = "disabled";
+        }
+        ctx.identities.push({
+            id: explicitId,
+            org_id: ORG,
+            provider_account_id: ACCT_SMS,
+            channel: "sms",
+            identity_type: "phone_number",
+            canonical_address: "+15551112222",
+            normalized_address: "+15551112222",
+            display_name: "Explicit Only",
+            inbound_enabled: true,
+            outbound_enabled: true,
+            verification_state: "verified",
+            status: "active",
+            health_status: "healthy",
+            capabilities: {},
+            provider_resource_ref: null,
+            scope: "tenant",
+            is_default_for_scope: true,
+            legacy_binding_id: null,
+            metadata: {},
+            default_access_mode: "explicit_grants_required",
+        });
+        ctx.grants.push({
+            id: "grant-1",
+            org_id: ORG,
+            identity_id: explicitId,
+            user_id: USER,
+            can_send: true,
+            can_receive: false,
+            can_configure: false,
+            can_manage: false,
+            can_override_default: false,
+            can_use_across_locations: false,
+            status: "active",
+        });
+        const r = resolveSenderIdentity(ctx, {
+            orgId: ORG,
+            channel: "sms",
+            operatorUserId: USER,
+            locationId: null,
+            operatorHasCommunicationsSend: true,
+            allowLegacyCompatibilityFallback: false,
+        });
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.communicationIdentity.id).toBe(explicitId);
+    });
+});

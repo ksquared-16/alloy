@@ -4,7 +4,7 @@
 
 Canonical Communications V1 — threads, messages, provider bindings, scheduled sends.
 
-**Identity platform (Phase 2):** [Communications Identity Platform](./communications-identity-platform.md) — provider accounts, communication identities, canonical sender resolution.
+**Identity platform (Phase 2–3):** [Communications Identity Platform](./communications-identity-platform.md) — provider accounts, communication identities, location setup, user grants, canonical sender resolution, runtime sender preview.
 
 **Runtime contract:** [communications-runtime-contract.md](./communications-runtime-contract.md)
 

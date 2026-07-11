@@ -29,6 +29,7 @@ import {
     threadChannelToWorkspaceMode,
 } from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import { useSenderIdentityPreview } from "@/lib/communications/identity/admin/useSenderIdentityPreview";
 
 export type FamilyRuntimeTimelineMessage = {
     id?: string | null;
@@ -205,12 +206,24 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     const [sendError, setSendError] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
     const [sendCompleteToken, setSendCompleteToken] = useState(0);
+    const [selectedSenderIdentityId, setSelectedSenderIdentityId] = useState<string | null>(null);
     const mountedRef = useRef(false);
     const activityEmbedBootstrappedRef = useRef(false);
     const hasUserThreadSelectionRef = useRef(false);
     const loadRequestSeqRef = useRef(0);
     const selectedThreadIdRef = useRef<string | null>(selectedThreadId);
     selectedThreadIdRef.current = selectedThreadId;
+    const senderChannel = liveChannel === "email" || liveChannel === "sms" ? liveChannel : null;
+    const senderPreview = useSenderIdentityPreview({
+        channel: senderChannel ?? "email",
+        selectedIdentityId: selectedSenderIdentityId,
+        enabled: Boolean(senderChannel),
+    });
+
+    useEffect(() => {
+        setSelectedSenderIdentityId(null);
+    }, [liveChannel]);
+
     const familyScopeKey = useMemo(
         () => `${input.customerId ?? ""}|${input.entity?.entityType ?? ""}|${input.entity?.entityId ?? ""}|${initialThreadId ?? ""}`,
         [input.customerId, input.entity?.entityType, input.entity?.entityId, initialThreadId],
@@ -423,7 +436,16 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                 const res = await fetch("/api/admin/communications/family-send", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ customer_id: cust, recipient_person_ids: selectedRecipientIds, channel: liveChannel, subject: subjectDraft, body: bodyDraft, reply_to_thread_id: selectedThreadId, confirm }),
+                    body: JSON.stringify({
+                        customer_id: cust,
+                        recipient_person_ids: selectedRecipientIds,
+                        channel: liveChannel,
+                        subject: subjectDraft,
+                        body: bodyDraft,
+                        reply_to_thread_id: selectedThreadId,
+                        confirm,
+                        identity_id: selectedSenderIdentityId,
+                    }),
                 });
                 const data = (await res.json()) as FamilySendResult & { error?: string };
                 if (!res.ok) { setSendError(data.error ?? "Send failed"); return; }
@@ -455,7 +477,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                 setSending(false);
             }
         },
-        [vm, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel, load, input.customerId, input.entity?.entityType, input.entity?.entityId]
+        [vm, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel, load, input.customerId, input.entity?.entityType, input.entity?.entityId, selectedSenderIdentityId]
     );
 
     const workspaceModeAvailability = useMemo(
@@ -532,5 +554,8 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         send,
         dismissSendResult: () => { setSendResult(null); setSendError(null); },
         toggleRecipient: (id: string) => setSelectedRecipientIds((prev) => toggleRecipientSelection(prev, id, true)),
+        senderPreview,
+        selectedSenderIdentityId,
+        setSelectedSenderIdentityId,
     };
 }

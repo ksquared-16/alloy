@@ -62,6 +62,10 @@ export async function POST(req: Request) {
     const confirm = body.confirm === true;
     const clientToken = typeof body.client_token === "string" ? body.client_token : null;
     const replyToThreadId = typeof body.reply_to_thread_id === "string" ? body.reply_to_thread_id : null;
+    const identityIdRaw = typeof body.identity_id === "string" ? body.identity_id.trim() : "";
+    const locationIdRaw = typeof body.location_id === "string" ? body.location_id.trim() : "";
+    const identityIdOpt = UUID_RE.test(identityIdRaw) ? identityIdRaw : undefined;
+    const locationIdOpt = UUID_RE.test(locationIdRaw) ? locationIdRaw : undefined;
 
     const supabase = createAdminClient();
     const orgCheck = await assertRowOrg(supabase, "customers", customerId, ctx.orgId);
@@ -93,9 +97,15 @@ export async function POST(req: Request) {
                         textRaw: text,
                         subjectRawEmail: ch === "email" ? (subj ?? undefined) : undefined,
                         bindingIdOpt: "",
+                        identityIdOpt,
                         recipientPersonIdRaw: personId,
                         toRawInput: "",
-                        sendMetadataAugment: { source: "family_send", client_token: clientToken, reply_to_thread_id: replyToThreadId },
+                        sendMetadataAugment: {
+                            source: "family_send",
+                            client_token: clientToken,
+                            reply_to_thread_id: replyToThreadId,
+                            context_location_id: locationIdOpt ?? null,
+                        },
                     });
                     return exec.ok
                         ? { ok: true, thread_id: exec.thread_id, communication_message_id: exec.communication_message_id }
