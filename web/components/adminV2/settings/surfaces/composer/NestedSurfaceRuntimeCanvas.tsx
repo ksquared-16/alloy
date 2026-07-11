@@ -23,7 +23,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
 import {
     childFocusViewFromConfig,
-} from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+} from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
 import {
     CHILDREN_SURFACE_ID,
     FINANCIAL_CONFIG_SURFACE_ID,
