@@ -1,6 +1,8 @@
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
+import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 
+import { resolveCurrentWorkTemplateAction } from "./resolveCurrentWorkTemplateAction";
 import {
     actionCompetesWithCurrentWorkCompletion,
     isGenericUmbrellaLifecycleAction,
@@ -146,24 +148,40 @@ export function actionsFromConfigRefs(
     lookup: ReadonlyMap<string, { key: string; label: string; description?: string | null }>,
     category: CurrentWorkActionCategory,
     placement: CurrentWorkActionPlacement,
+    intentContext?: {
+        processDefinition?: unknown;
+        stageDefinition?: unknown;
+        truth?: Record<string, unknown>;
+    },
 ): CurrentWorkActionVM[] {
     if (!refs?.length) return [];
     const out: CurrentWorkActionVM[] = [];
     const seen = new Set<string>();
     for (const row of refs) {
         const ref = row.action_ref.trim();
-        if (!ref || seen.has(ref)) continue;
-        seen.add(ref);
-        const resolved = lookup.get(ref) ?? { key: ref, label: ref };
-        const label = row.override_label?.trim() || resolved.label;
+        if (!ref) continue;
+        const intentKey = normalizeActionRefToIntentKey(ref);
+        if (seen.has(intentKey)) continue;
+        seen.add(intentKey);
+
+        const resolved = resolveCurrentWorkTemplateAction({
+            actionRef: ref,
+            overrideLabel: row.override_label ?? null,
+            lookup,
+            processDefinition: intentContext?.processDefinition,
+            stageDefinition: intentContext?.stageDefinition,
+            truth: intentContext?.truth,
+        });
+        if (!resolved) continue;
+
         out.push({
-            key: resolved.key,
-            label,
-            description: resolved.description ?? null,
+            key: resolved.handlerKey,
+            label: resolved.label,
+            description: resolved.description,
             category,
             placement,
-            handlerKey: resolved.key,
-            actionRef: ref,
+            handlerKey: resolved.handlerKey,
+            actionRef: resolved.actionRef,
             resolved: null,
         });
     }

@@ -9,8 +9,8 @@ export type CurrentWorkActionSurface =
     | "header_delegate"
     | "unsupported";
 
-function actionRegistryKey(action: Pick<CurrentWorkActionVM, "key" | "actionRef" | "resolved">): string {
-    return (action.actionRef ?? action.key).trim();
+function actionRegistryKey(action: Pick<CurrentWorkActionVM, "key" | "handlerKey" | "actionRef" | "resolved">): string {
+    return (action.handlerKey ?? action.actionRef ?? action.key).trim();
 }
 
 /**
@@ -21,7 +21,7 @@ export function resolveCurrentWorkActionSurface(
     action: Pick<CurrentWorkActionVM, "key" | "handlerKey" | "category" | "actionRef" | "resolved">,
 ): CurrentWorkActionSurface {
     const key = actionRegistryKey(action);
-    if (!key) return "unsupported";
+    if (!key || key === "mutation_command") return "unsupported";
 
     if (isScheduleTourRegistryAction({ key, payload: action.resolved?.payload ?? null })) {
         return "inline_form";

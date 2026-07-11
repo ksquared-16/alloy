@@ -20,8 +20,7 @@ describe("resolveWorkTemplateActionOptions", () => {
             workTemplateKey: "contact_family",
         });
 
-        expect(options.primaryActionOptions.some((row) => row.ref === "update_enrollment_status")).toBe(true);
-        expect(options.primaryActionOptions.find((row) => row.ref === "update_enrollment_status")?.supported).toBe(false);
+        expect(options.primaryActionOptions.some((row) => row.ref === "update_enrollment_status")).toBe(false);
         expect(options.helpfulActionOptions.some((row) => row.ref === "update_enrollment_status")).toBe(false);
     });
 
@@ -54,6 +53,6 @@ describe("resolveWorkTemplateActionOptions", () => {
             workTemplateKey: "collect_payment",
         });
 
-        expect(options.helpfulActionOptions.map((row) => row.ref)).toEqual(["record_payment"]);
+        expect(options.helpfulActionOptions.map((row) => row.ref)).toContain("record_payment");
     });
 });

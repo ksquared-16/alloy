@@ -5594,10 +5594,6 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .alloy-os-currentwork__activity-preview {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 8px);
-  z-index: 20;
   width: min(20rem, 88vw);
   border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
   border-radius: 10px;
@@ -5662,6 +5658,17 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   margin: 0;
   font-size: 0.76rem;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 58%, #64748b);
+}
+
+.alloy-os-currentwork__activity-preview-full-link {
+  margin-top: 10px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+  color: var(--alloy-os-bend-pine, #00a283);
 }
 
 .alloy-os-currentwork__path-items {

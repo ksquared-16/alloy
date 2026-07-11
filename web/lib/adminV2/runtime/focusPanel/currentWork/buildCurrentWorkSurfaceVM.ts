@@ -8,6 +8,7 @@ import type {
 import { workIntentProjectionForStageWorkItem } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import { completionOutcomesForPicker } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 
 import {
     actionsFromConfigRefs,
@@ -31,6 +32,7 @@ import type {
 } from "./currentWorkSurfaceTypes";
 import { resolveCurrentWorkChecklistTruthFromPublishedRules, type ChecklistTruthResult } from "./resolveCurrentWorkChecklistTruthFromPublishedRules";
 import { resolveCurrentWorkTemplateFromPublishedPlan } from "./resolveCurrentWorkTemplateFromPublishedPlan";
+import { resolveCurrentWorkTemplateAction } from "./resolveCurrentWorkTemplateAction";
 import { resolveStageWorkOutcomeCompletionState } from "./resolveStageWorkOutcomeCompletionState";
 import { isGenericUmbrellaLifecycleAction } from "./currentWorkActionSurfacePolicy";
 import type { CurrentWorkTemplateAlternatePathConfig } from "./currentWorkTemplateConfig";
@@ -44,6 +46,26 @@ export type BuildCurrentWorkSurfaceVMInput = {
     /** Explicit completed checklist keys (fixtures / readiness). */
     completedChecklistKeys?: ReadonlySet<string> | null;
 };
+
+type ActionIntentResolutionContext = {
+    processDefinition?: unknown;
+    stageDefinition?: unknown;
+    truth?: Record<string, unknown>;
+};
+
+function actionIntentContext(context: OperationalContext): ActionIntentResolutionContext {
+    const plan = context.publishedStageInputs?.operatingPlan;
+    return {
+        stageDefinition: plan ? { journey_segment: plan.journey_segment } : undefined,
+        processDefinition: context.publishedStageInputs?.processKey
+            ? { key: context.publishedStageInputs.processKey }
+            : undefined,
+        truth:
+            context.truth != null && typeof context.truth === "object"
+                ? (context.truth as Record<string, unknown>)
+                : undefined,
+    };
+}
 
 function statusLabelFor(status: CurrentWorkSurfaceStatus, hasOpenWork: boolean): string {
     switch (status) {
@@ -221,23 +243,27 @@ function buildWorkPrimaryAction(args: {
     templateConfig: CurrentWorkTemplateConfigOverlay | null | undefined;
     actionRegistry: CurrentWorkActionRefLookup | null | undefined;
     actionableWorkItem: StageWorkItemProjection | null;
+    intentContext: ActionIntentResolutionContext;
 }): CurrentWorkActionVM | null {
     if (args.templateConfig?.primary_action?.action_ref) {
         const ref = args.templateConfig.primary_action.action_ref;
-        const resolved = actionFromRef(
-            args.actionRegistry,
-            ref,
-            args.templateConfig.primary_action.override_label ?? null,
-        );
+        const resolved = resolveCurrentWorkTemplateAction({
+            actionRef: ref,
+            overrideLabel: args.templateConfig.primary_action.override_label ?? null,
+            lookup: args.actionRegistry,
+            processDefinition: args.intentContext.processDefinition,
+            stageDefinition: args.intentContext.stageDefinition,
+            truth: args.intentContext.truth,
+        });
         if (!resolved) return null;
         return {
-            key: resolved.key,
+            key: resolved.handlerKey,
             label: resolved.label,
             description: resolved.description ?? args.description,
             category: "primary",
             placement: "current_work_primary",
-            handlerKey: resolved.key,
-            actionRef: ref,
+            handlerKey: resolved.handlerKey,
+            actionRef: resolved.actionRef,
         };
     }
     if (!args.actionableWorkItem && !args.title) return null;
@@ -343,6 +369,7 @@ function filterOutcomesByTemplateRefs(
 function alternatePathsFromConfigRefs(
     refs: CurrentWorkTemplateAlternatePathConfig[] | null | undefined,
     lookup: CurrentWorkActionRefLookup,
+    intentContext: ActionIntentResolutionContext,
 ): CurrentWorkActionVM[] {
     if (!refs?.length) return [];
     const out: CurrentWorkActionVM[] = [];
@@ -367,18 +394,27 @@ function alternatePathsFromConfigRefs(
             continue;
         }
         const actionRef = "action_ref" in row ? row.action_ref?.trim() : "";
-        if (!actionRef || seen.has(actionRef)) continue;
-        seen.add(actionRef);
-        const resolved = actionFromRef(lookup, actionRef, row.override_label ?? null);
+        if (!actionRef) continue;
+        const intentKey = normalizeActionRefToIntentKey(actionRef);
+        if (seen.has(intentKey)) continue;
+        seen.add(intentKey);
+        const resolved = resolveCurrentWorkTemplateAction({
+            actionRef,
+            overrideLabel: row.override_label ?? null,
+            lookup,
+            processDefinition: intentContext.processDefinition,
+            stageDefinition: intentContext.stageDefinition,
+            truth: intentContext.truth,
+        });
         if (!resolved) continue;
         out.push({
-            key: resolved.key,
+            key: resolved.handlerKey,
             label: resolved.label,
             description: resolved.description ?? null,
             category: "alternate_path",
             placement: "current_work_alternate_paths",
-            handlerKey: resolved.key,
-            actionRef: actionRef,
+            handlerKey: resolved.handlerKey,
+            actionRef: resolved.actionRef,
             resolved: null,
         });
     }
@@ -508,6 +544,8 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         ?? runtime?.purpose?.trim()
         ?? null;
 
+    const intentCtx = actionIntentContext(context);
+
     const primaryAction =
         isEmpty
             ? null
@@ -518,6 +556,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   templateConfig,
                   actionRegistry,
                   actionableWorkItem,
+                  intentContext: intentCtx,
               });
 
     const recordOutcomeAction = buildRecordOutcomeAction({
@@ -534,6 +573,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   actionRegistry ?? new Map(),
                   "supporting",
                   "current_work_supporting",
+                  intentCtx,
               )
             : [];
     const supportingActions = resolveHelpfulActions({
@@ -546,7 +586,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
     const alternateExplicit = templateConfig?.alternate_paths_explicit === true;
     const alternateFromConfig =
         templateConfig?.alternate_paths !== undefined
-            ? alternatePathsFromConfigRefs(templateConfig.alternate_paths, actionRegistry ?? new Map())
+            ? alternatePathsFromConfigRefs(templateConfig.alternate_paths, actionRegistry ?? new Map(), intentCtx)
             : [];
     const alternatePaths = resolveAlternatePaths({
         explicitConfigured: alternateExplicit,
@@ -561,6 +601,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   actionRegistry ?? new Map(),
                   "communication",
                   "communications_inline",
+                  intentCtx,
               )
             : classified.communicationActions;
 

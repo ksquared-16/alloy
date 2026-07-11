@@ -1,5 +1,8 @@
 "use client";
 
+import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
+
+import AlloyConfigPicker, { type AlloyConfigPickerOption } from "@/components/adminV2/settings/shared/AlloyConfigPicker";
 import type { StageCompletionOutcomeV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     addWorkTemplateHelpfulAction,
@@ -22,6 +25,13 @@ import {
     resolveWorkTemplateActionOptions,
     type WorkTemplateActionOption,
 } from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
+import {
+    alternatePathsConfigSource,
+    availableResultsConfigSource,
+    helpfulActionsConfigSource,
+    primaryActionConfigSource,
+    workTemplateConfigSourceLabel,
+} from "@/lib/lifecycle/workTemplateConfigSource";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
 
@@ -32,6 +42,8 @@ type Props = {
     actionCatalog: StageActionCatalogV1 | null;
     configuredActions: LifecycleConfiguredActionRow[];
     processStages: Array<{ key: string; label: string }>;
+    stageDefinition?: { journey_segment?: string } | null;
+    processDefinition?: { primary_entity?: string } | null;
     onChange: (work: StageWorkTemplateV1) => void;
 };
 
@@ -39,49 +51,40 @@ function optionByRef(options: WorkTemplateActionOption[], ref: string): WorkTemp
     return options.find((row) => row.ref === ref) ?? null;
 }
 
-function SelectRow({
-    label,
-    value,
-    onChange,
-    options,
-    testId,
-    allowEmpty = true,
-}: {
-    label: string;
-    value: string;
-    onChange: (value: string) => void;
-    options: WorkTemplateActionOption[];
-    testId: string;
-    allowEmpty?: boolean;
-}) {
+function toPickerOptions(options: WorkTemplateActionOption[]): AlloyConfigPickerOption[] {
+    return options.map((row) => ({
+        value: row.ref,
+        label: row.label,
+        description: row.description,
+        group:
+            row.category === "transition" ? "Recommended"
+            : row.category === "communication" ? "Communications"
+            : row.category === "workflow" ? "Workflow"
+            : row.category === "relationship" ? "Relationships"
+            : row.category === "lifecycle" || row.category === "status_lifecycle" ? "Lifecycle"
+            : row.category === "bos" || row.category === "bos_native" ? "BOS"
+            : "Record actions",
+        disabled: !row.supported,
+        disabledReason: row.disabledReason,
+    }));
+}
+
+function ConfigSourceBadge({ source, fallbackHint }: { source: ReturnType<typeof helpfulActionsConfigSource>; fallbackHint?: string }) {
     return (
-        <label className="block space-y-1">
-            <span className="text-[10px] font-semibold text-alloy-midnight/70">{label}</span>
-            <select
-                className="w-full rounded border border-alloy-forge/15 bg-white px-2 py-1 text-xs"
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                data-testid={testId}
-            >
-                {allowEmpty ?
-                    <option value="">— None —</option>
-                :   null}
-                {options.map((row) => (
-                    <option key={row.ref} value={row.ref} disabled={!row.supported}>
-                        {row.label}
-                        {!row.supported && row.disabledReason ? ` (${row.disabledReason})` : ""}
-                        {row.supported ? ` · ${row.category}` : ""}
-                    </option>
-                ))}
-            </select>
-        </label>
+        <p className="text-[10px] text-alloy-midnight/50" data-work-template-config-source={source}>
+            {workTemplateConfigSourceLabel(source)}
+            {source === "fallback" && fallbackHint ?
+                <span className="block text-alloy-midnight/40">{fallbackHint}</span>
+            :   null}
+        </p>
     );
 }
 
-function OrderedRefList({
+function OrderedActionRows({
     title,
     refs,
     resolveLabel,
+    resolveDescription,
     resolveInvalid,
     onRemove,
     onMoveUp,
@@ -91,6 +94,7 @@ function OrderedRefList({
     title: string;
     refs: string[];
     resolveLabel: (ref: string) => string;
+    resolveDescription?: (ref: string) => string | null;
     resolveInvalid: (ref: string) => string | null;
     onRemove: (ref: string) => void;
     onMoveUp: (index: number) => void;
@@ -109,43 +113,50 @@ function OrderedRefList({
         <ul className="space-y-1" data-testid={`${testIdPrefix}-list`}>
             {refs.map((ref, index) => {
                 const invalid = resolveInvalid(ref);
+                const description = resolveDescription?.(ref);
                 return (
                     <li
                         key={`${ref}-${index}`}
-                        className="flex items-center gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1"
+                        className="flex items-center gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5"
                         data-testid={`${testIdPrefix}-${ref}`}
                     >
-                        <span className="min-w-0 flex-1 truncate text-xs text-alloy-midnight">
-                            {resolveLabel(ref)}
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-medium text-alloy-midnight">
+                                {resolveLabel(ref)}
+                            </span>
+                            {description ?
+                                <span className="block truncate text-[10px] text-alloy-midnight/50">{description}</span>
+                            :   null}
                             {invalid ?
-                                <span className="ml-1 text-[10px] text-amber-800">({invalid})</span>
+                                <span className="block text-[10px] text-amber-800">{invalid}</span>
                             :   null}
                         </span>
                         <div className="flex shrink-0 items-center gap-1">
                             <button
                                 type="button"
-                                className="text-[10px] text-alloy-midnight/50 disabled:opacity-30"
+                                className="rounded p-1 text-alloy-midnight/50 hover:bg-alloy-bend-pine/[0.06] disabled:opacity-30"
                                 disabled={index === 0}
                                 onClick={() => onMoveUp(index)}
                                 aria-label="Move up"
                             >
-                                ↑
+                                <ArrowUp className="h-3 w-3" aria-hidden />
                             </button>
                             <button
                                 type="button"
-                                className="text-[10px] text-alloy-midnight/50 disabled:opacity-30"
+                                className="rounded p-1 text-alloy-midnight/50 hover:bg-alloy-bend-pine/[0.06] disabled:opacity-30"
                                 disabled={index >= refs.length - 1}
                                 onClick={() => onMoveDown(index)}
                                 aria-label="Move down"
                             >
-                                ↓
+                                <ArrowDown className="h-3 w-3" aria-hidden />
                             </button>
                             <button
                                 type="button"
-                                className="text-[10px] text-red-700/80"
+                                className="rounded p-1 text-red-700/80 hover:bg-red-50"
                                 onClick={() => onRemove(ref)}
+                                aria-label="Remove"
                             >
-                                Remove
+                                <Trash2 className="h-3 w-3" aria-hidden />
                             </button>
                         </div>
                     </li>
@@ -162,6 +173,8 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     actionCatalog,
     configuredActions,
     processStages,
+    stageDefinition,
+    processDefinition,
     onChange,
 }: Props) {
     const options = resolveWorkTemplateActionOptions({
@@ -171,6 +184,8 @@ export default function LifecycleStageWorkTemplateActionsEditor({
         stageKey,
         stageOutcomes,
         workTemplateKey: work.template_key,
+        stageDefinition,
+        processDefinition,
     });
 
     const primaryRef = workTemplatePrimaryActionRef(work) ?? "";
@@ -178,74 +193,81 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     const alternateDraftRefs = workTemplateAlternatePathDraftRefs(work);
     const outcomeRefsList = workTemplateOutcomeRefs(work);
 
-    const helpfulAddOptions = options.helpfulActionOptions.filter(
-        (row) => row.supported && !helpfulRefs.includes(row.ref) && row.ref !== primaryRef,
+    const primaryOptions = toPickerOptions(options.primaryActionOptions.filter((row) => row.supported));
+    const helpfulAddOptions = toPickerOptions(
+        options.helpfulActionOptions.filter(
+            (row) => row.supported && !helpfulRefs.includes(row.ref) && row.ref !== primaryRef,
+        ),
     );
-
-    const alternateAddOptions = options.alternatePathOptions.filter(
-        (row) =>
-            row.supported
-            && !alternateDraftRefs.some((existing) => existing.ref === row.ref),
+    const alternateAddOptions = toPickerOptions(
+        options.alternatePathOptions.filter(
+            (row) => row.supported && !alternateDraftRefs.some((existing) => existing.ref === row.ref),
+        ),
     );
-
-    const outcomeAddOptions = options.outcomeOptions.filter(
-        (row) => !outcomeRefsList.includes(row.ref),
-    );
+    const outcomeAddOptions: AlloyConfigPickerOption[] = options.outcomeOptions
+        .filter((row) => !outcomeRefsList.includes(row.ref))
+        .map((row) => ({ value: row.ref, label: row.label, group: "Recommended" }));
 
     function updateAlternateRefs(next: StageWorkTemplateAlternatePathDraftRef[]) {
         onChange(setWorkTemplateAlternatePathDraftRefs(work, next));
     }
 
     return (
-        <div className="mt-3 space-y-3 border-t border-alloy-forge/10 pt-3" data-testid={`work-template-actions-${work.template_key}`}>
-            <SelectRow
-                label="Primary Action"
-                value={primaryRef}
-                onChange={(value) => onChange(setWorkTemplatePrimaryActionRef(work, value || null))}
-                options={options.primaryActionOptions}
-                testId={`work-template-primary-action-${work.template_key}`}
-            />
-            {primaryRef ?
-                <p className="text-[10px] text-alloy-midnight/50">
-                    {optionByRef(options.primaryActionOptions, primaryRef)?.description
-                        ?? "Primary execution affordance for this work item."}
-                </p>
-            :   null}
+        <div className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3" data-testid={`work-template-actions-${work.template_key}`}>
+            <section data-testid={`work-template-primary-action-${work.template_key}`}>
+                <div className="mb-1 space-y-0.5">
+                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Primary Action</h4>
+                    <p className="text-[10px] text-alloy-midnight/50">The main action used to perform this work.</p>
+                    <ConfigSourceBadge source={primaryActionConfigSource(work)} />
+                </div>
+                <AlloyConfigPicker
+                    label="Primary Action"
+                    value={primaryRef}
+                    options={primaryOptions}
+                    onChange={(value) => onChange(setWorkTemplatePrimaryActionRef(work, value || null))}
+                    testId={`work-template-primary-picker-${work.template_key}`}
+                />
+            </section>
 
-            <div data-testid={`work-template-helpful-actions-${work.template_key}`}>
-                <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold text-alloy-midnight/70">Helpful Actions</span>
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            className="text-[10px] text-alloy-midnight/50"
-                            onClick={() => onChange(markWorkTemplateHelpfulActionsEmpty(work))}
-                        >
-                            Clear all
-                        </button>
-                        <select
-                            className="rounded border border-alloy-forge/15 px-1 py-0.5 text-[10px]"
+            <section data-testid={`work-template-helpful-actions-${work.template_key}`}>
+                <div className="mb-1 space-y-0.5">
+                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Helpful Actions</h4>
+                    <p className="text-[10px] text-alloy-midnight/50">Supporting capabilities available while doing this work.</p>
+                    <ConfigSourceBadge
+                        source={helpfulActionsConfigSource(work)}
+                        fallbackHint="Configure this section to take explicit control."
+                    />
+                </div>
+                <div className="mb-2 flex items-center justify-end gap-2">
+                    <button
+                        type="button"
+                        className="text-[10px] text-alloy-midnight/50 hover:text-alloy-bend-pine"
+                        onClick={() => onChange(markWorkTemplateHelpfulActionsEmpty(work))}
+                    >
+                        Clear all
+                    </button>
+                    <div className="w-44">
+                        <AlloyConfigPicker
+                            label="Add helpful action"
                             value=""
-                            onChange={(e) => {
-                                const ref = e.target.value;
+                            options={helpfulAddOptions}
+                            onChange={(ref) => {
                                 if (!ref) return;
                                 onChange(addWorkTemplateHelpfulAction(work, ref));
                             }}
-                            data-testid={`work-template-helpful-add-${work.template_key}`}
-                        >
-                            <option value="">+ Add</option>
-                            {helpfulAddOptions.map((row) => (
-                                <option key={row.ref} value={row.ref}>
-                                    {row.label}
-                                </option>
-                            ))}
-                        </select>
+                            compact
+                            clearable={false}
+                            searchable={helpfulAddOptions.length > 6}
+                            testId={`work-template-helpful-add-${work.template_key}`}
+                            placeholder="+ Add"
+                        />
                     </div>
                 </div>
-                <OrderedRefList
+                <OrderedActionRows
                     title="Helpful Actions"
                     refs={helpfulRefs}
-                    resolveLabel={(ref) => optionByRef(options.helpfulActionOptions, ref)?.label ?? ref}
+                    resolveLabel={(ref) => optionByRef(options.helpfulActionOptions, ref)?.label ?? ref.replace(/_/g, " ")}
+                    resolveDescription={(ref) => optionByRef(options.helpfulActionOptions, ref)?.description ?? null}
                     resolveInvalid={(ref) => {
                         const row = optionByRef(options.helpfulActionOptions, ref);
                         if (!row) return "Unknown action";
@@ -267,24 +289,31 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     }}
                     testIdPrefix={`work-template-helpful-${work.template_key}`}
                 />
-            </div>
+            </section>
 
-            <div data-testid={`work-template-alternate-paths-${work.template_key}`}>
-                <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold text-alloy-midnight/70">Alternate Paths</span>
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            className="text-[10px] text-alloy-midnight/50"
-                            onClick={() => onChange(markWorkTemplateAlternatePathsEmpty(work))}
-                        >
-                            Clear all
-                        </button>
-                        <select
-                            className="rounded border border-alloy-forge/15 px-1 py-0.5 text-[10px]"
+            <section data-testid={`work-template-alternate-paths-${work.template_key}`}>
+                <div className="mb-1 space-y-0.5">
+                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Alternate Paths</h4>
+                    <p className="text-[10px] text-alloy-midnight/50">Intentional progression choices outside the normal result flow.</p>
+                    <ConfigSourceBadge
+                        source={alternatePathsConfigSource(work)}
+                        fallbackHint="Configure this section to take explicit control."
+                    />
+                </div>
+                <div className="mb-2 flex items-center justify-end gap-2">
+                    <button
+                        type="button"
+                        className="text-[10px] text-alloy-midnight/50 hover:text-alloy-bend-pine"
+                        onClick={() => onChange(markWorkTemplateAlternatePathsEmpty(work))}
+                    >
+                        Clear all
+                    </button>
+                    <div className="w-44">
+                        <AlloyConfigPicker
+                            label="Add alternate path"
                             value=""
-                            onChange={(e) => {
-                                const ref = e.target.value;
+                            options={alternateAddOptions}
+                            onChange={(ref) => {
                                 if (!ref) return;
                                 const isTransition = ref.startsWith("move_to_stage:");
                                 const next: StageWorkTemplateAlternatePathDraftRef = {
@@ -293,25 +322,23 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                                 };
                                 updateAlternateRefs([...alternateDraftRefs, next]);
                             }}
-                            data-testid={`work-template-alternate-add-${work.template_key}`}
-                        >
-                            <option value="">+ Add</option>
-                            {alternateAddOptions.map((row) => (
-                                <option key={row.ref} value={row.ref}>
-                                    {row.label}
-                                </option>
-                            ))}
-                        </select>
+                            compact
+                            clearable={false}
+                            searchable={alternateAddOptions.length > 6}
+                            testId={`work-template-alternate-add-${work.template_key}`}
+                            placeholder="+ Add"
+                        />
                     </div>
                 </div>
-                <OrderedRefList
+                <OrderedActionRows
                     title="Alternate Paths"
                     refs={alternateDraftRefs.map((row) => row.ref)}
                     resolveLabel={(ref) => {
                         const transition = options.transitionOptions.find((row) => row.ref === ref);
                         if (transition) return transition.label;
-                        return optionByRef(options.alternatePathOptions, ref)?.label ?? ref;
+                        return optionByRef(options.alternatePathOptions, ref)?.label ?? ref.replace(/_/g, " ");
                     }}
+                    resolveDescription={(ref) => optionByRef(options.alternatePathOptions, ref)?.description ?? null}
                     resolveInvalid={(ref) => {
                         if (ref.startsWith("move_to_stage:")) {
                             const row = options.transitionOptions.find((item) => item.ref === ref);
@@ -324,9 +351,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                         if (!row.supported) return row.disabledReason ?? "Unsupported";
                         return null;
                     }}
-                    onRemove={(ref) =>
-                        updateAlternateRefs(alternateDraftRefs.filter((row) => row.ref !== ref))
-                    }
+                    onRemove={(ref) => updateAlternateRefs(alternateDraftRefs.filter((row) => row.ref !== ref))}
                     onMoveUp={(index) => {
                         const next = [...alternateDraftRefs];
                         if (index <= 0) return;
@@ -341,47 +366,50 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     }}
                     testIdPrefix={`work-template-alternate-${work.template_key}`}
                 />
-            </div>
+            </section>
 
-            <div data-testid={`work-template-outcome-refs-${work.template_key}`}>
-                <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold text-alloy-midnight/70">Completion Outcomes</span>
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            className="text-[10px] text-alloy-midnight/50"
-                            onClick={() => onChange(markWorkTemplateOutcomeRefsEmpty(work))}
-                        >
-                            Clear all
-                        </button>
-                        <select
-                            className="rounded border border-alloy-forge/15 px-1 py-0.5 text-[10px]"
+            <section data-testid={`work-template-outcome-refs-${work.template_key}`}>
+                <div className="mb-1 space-y-0.5">
+                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Available Results</h4>
+                    <p className="text-[10px] text-alloy-midnight/50">
+                        Choose which stage-defined results operators can record for this work.
+                    </p>
+                    <ConfigSourceBadge
+                        source={availableResultsConfigSource(work)}
+                        fallbackHint="Configure this section to take explicit control."
+                    />
+                </div>
+                <div className="mb-2 flex items-center justify-end gap-2">
+                    <button
+                        type="button"
+                        className="text-[10px] text-alloy-midnight/50 hover:text-alloy-bend-pine"
+                        onClick={() => onChange(markWorkTemplateOutcomeRefsEmpty(work))}
+                    >
+                        Clear all
+                    </button>
+                    <div className="w-44">
+                        <AlloyConfigPicker
+                            label="Add available result"
                             value=""
-                            onChange={(e) => {
-                                const ref = e.target.value;
+                            options={outcomeAddOptions}
+                            onChange={(ref) => {
                                 if (!ref) return;
                                 onChange(setWorkTemplateOutcomeRefs(work, [...outcomeRefsList, ref]));
                             }}
-                            data-testid={`work-template-outcome-ref-add-${work.template_key}`}
-                        >
-                            <option value="">+ Add</option>
-                            {outcomeAddOptions.map((row) => (
-                                <option key={row.ref} value={row.ref}>
-                                    {row.label}
-                                </option>
-                            ))}
-                        </select>
+                            compact
+                            clearable={false}
+                            searchable={outcomeAddOptions.length > 6}
+                            testId={`work-template-outcome-ref-add-${work.template_key}`}
+                            placeholder="+ Add"
+                        />
                     </div>
                 </div>
-                <p className="mb-1 text-[10px] text-alloy-midnight/45">
-                    References canonical stage outcomes — definitions remain stage-owned.
-                </p>
-                <OrderedRefList
-                    title="Completion Outcomes"
+                <OrderedActionRows
+                    title="Available Results"
                     refs={outcomeRefsList}
-                    resolveLabel={(ref) => options.outcomeOptions.find((row) => row.ref === ref)?.label ?? ref}
+                    resolveLabel={(ref) => options.outcomeOptions.find((row) => row.ref === ref)?.label ?? ref.replace(/_/g, " ")}
                     resolveInvalid={(ref) =>
-                        options.outcomeOptions.some((row) => row.ref === ref) ? null : "Unknown outcome"
+                        options.outcomeOptions.some((row) => row.ref === ref) ? null : "Unknown result"
                     }
                     onRemove={(ref) =>
                         onChange(setWorkTemplateOutcomeRefs(work, outcomeRefsList.filter((row) => row !== ref)))
@@ -400,7 +428,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     }}
                     testIdPrefix={`work-template-outcome-ref-${work.template_key}`}
                 />
-            </div>
+            </section>
         </div>
     );
 }

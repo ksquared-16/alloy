@@ -339,6 +339,7 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                     actionCatalog={actionCatalog ?? null}
                                     configuredActions={configuredActions ?? []}
                                     processStages={processStages ?? []}
+                                    stageDefinition={{ journey_segment: draft.journey_segment }}
                                     onChange={(nextWork) =>
                                         setDraft((prev) => {
                                             const work_templates = [...prev.work_templates];
@@ -352,11 +353,14 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                     <details className="group" data-testid={`stage-operating-plan-outcomes-${work.template_key}`}>
                                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-1 [&::-webkit-details-marker]:hidden">
                                             <span className="text-[10px] font-semibold text-alloy-midnight/70">
-                                                Outcomes ({workOutcomes.length})
+                                                Result Definitions ({workOutcomes.length})
                                             </span>
                                             <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
                                         </summary>
                                         <div className="pt-2">
+                                            <p className="mb-2 text-[10px] text-alloy-midnight/45">
+                                                Define what recorded results mean and what they do.
+                                            </p>
                                     <div className="mb-1 flex items-center justify-end gap-2">
                                         <button
                                             type="button"

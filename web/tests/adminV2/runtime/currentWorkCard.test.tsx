@@ -161,7 +161,12 @@ describe("CurrentWorkCard", () => {
         expect(src).not.toContain("Communications is not on this panel");
         expect(src).toContain("CurrentWorkActivityPreview");
         expect(src).toContain('data-work-action="preview-activity"');
-        expect(src).not.toContain('openFocusPanelMode?.("activity")');
+        expect(src).toContain("handleViewFullActivity");
+        const previewSrc = readFileSync(
+            path.join(process.cwd(), "components/admin/focusPanel/cards/CurrentWorkActivityPreview.tsx"),
+            "utf8",
+        );
+        expect(previewSrc).toContain('data-work-action="view-full-activity"');
         expect(src).toContain("invokeHeaderAction");
         expect(src).toContain("resolveCurrentWorkActionSurface");
         expect(src).toContain("CurrentWorkActionPanel");
