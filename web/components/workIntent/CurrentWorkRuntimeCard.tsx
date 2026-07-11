@@ -12,6 +12,7 @@ import type {
 import { workIntentProjectionForStageWorkItem } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
+import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
 import { useWorkIntentOutcomeCompletion } from "@/components/workIntent/useWorkIntentOutcomeCompletion";
 
 const DUE_LABEL: Record<WorkIntentRuntimeProjection["due_urgency"], string> = {
@@ -138,6 +139,13 @@ function WorkItemBlock({
                 <p className="mt-1 text-[11px] text-alloy-midnight/45">
                     Due {formatTaskDueDate(item.due_at) || item.due_at}
                 </p>
+            :   null}
+
+            {item.work_id ?
+                <div className="mt-2 flex flex-wrap items-center gap-2" data-current-work-work-items-link="true">
+                    <span className="text-[10px] text-alloy-midnight/50">Also in Work Items</span>
+                    <ViewInWorkItemsLink taskId={item.work_id} opportunityId={opportunityId} />
+                </div>
             :   null}
 
             {error ?

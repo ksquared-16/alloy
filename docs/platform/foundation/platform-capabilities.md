@@ -70,6 +70,7 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | Needs Attention overlay | **Complete** | Resolver buckets + explainability | Not a stage |
 | Queue record layout v3 | **Complete** | Config-driven operational rows | Locked doctrine |
 | Server-side queue search | **Planned** | Scale replacement for client filters | |
+| **Work Items V3 execution platform** | **Complete** | Cross-record queue, folders/views/sources, creation runtime, BP/Processing/Communications convergence | Virtual projections; no schema change |
 
 ## Status & lifecycle
 

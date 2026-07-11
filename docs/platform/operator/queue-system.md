@@ -161,6 +161,31 @@ URL-synced `q`, `rf_*` on work-unit page — filters loaded preview page only; s
 Queue row API latency (~800ms–1s) is known backend debt — not a reveal regression if gates hold.
 
 ---
+---
+
+## Work Items queue (cross-record execution)
+
+**Work Items** is Alloy's cross-record operational execution platform — a three-pane queue workspace (folders, views, sources) for work that spans records and domains.
+
+| Source | Authority | Persistence |
+|--------|-----------|-------------|
+| **Manual** | `operational_tasks` | Persisted manual work |
+| **Business Process** | stage work / Current Work | Same underlying BP work — not duplicated |
+| **Processing** | Processing case state | Virtual projection only (`processing:{caseId}`) |
+| **Communications** | thread attention state | Virtual projection only (`communications:{threadId}`) |
+
+**Rules (frozen, Work Items V3):**
+
+- Queue rows describe **provenance and execution visibility** — not duplicate domain ownership.
+- Virtual projections **never** create `operational_tasks` rows.
+- Domain products remain **systems of record**; Work Items supplies execution visibility and navigation.
+- Unsupported sources stay **disabled** — Work Items does not fabricate rows.
+- Not every unread message, Processing case, or domain event becomes work — only configured actionable lanes.
+- Assignment / Mine semantics follow authoritative domain assignment — not sender/recipient inference.
+- Unified **operational refresh** coordinates domain cache invalidation after authoritative mutations.
+
+See `../core/navigation-and-workspace-doctrine.md` and `../../sprints/08_2026/work-items-v3-platform/`.
+
 
 ## Related
 

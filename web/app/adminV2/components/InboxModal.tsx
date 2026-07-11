@@ -13,7 +13,12 @@ import CommunicationsModalTabPanel, {
 import CommunicationsWorkspaceShell from "@/app/adminV2/communications/CommunicationsWorkspaceShell";
 import { CommunicationsWorkspaceKpiProvider } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import ComposeNewCommunicationModal from "@/app/adminV2/communications/ComposeNewCommunicationModal";
+import { getCommandCenterPendingSelection } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import {
+    ADMIN_V2_OPEN_COMMUNICATIONS_THREAD,
+    type OpenCommunicationsThreadDetail,
+} from "@/lib/workItems/workItemsNavigation";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 
 export type InboxModalProps = {
@@ -38,9 +43,25 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
     useEffect(() => {
         if (!open || !commandCenterEnabled) return;
         void warmCommunicationsWorkspaceModal();
-    }, [open, commandCenterEnabled]);
+    }, [commandCenterEnabled, open]);
 
-    const showComposeNew = commandCenterEnabled ? tab === "inbox" || tab === "overview" : !commandCenterEnabled;
+    useEffect(() => {
+        if (!commandCenterEnabled) return;
+        const onOpenThread = (event: Event) => {
+            const detail = (event as CustomEvent<OpenCommunicationsThreadDetail>).detail;
+            const id = detail?.thread_id?.trim() || getCommandCenterPendingSelection()?.trim();
+            if (!id) return;
+            setTab("inbox");
+        };
+        window.addEventListener(ADMIN_V2_OPEN_COMMUNICATIONS_THREAD, onOpenThread as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_COMMUNICATIONS_THREAD, onOpenThread as EventListener);
+    }, [commandCenterEnabled]);
+
+    const pendingInboxThreadId =
+        open && commandCenterEnabled ? getCommandCenterPendingSelection()?.trim() || null : null;
+    const activeTab: CommunicationsModalTab = pendingInboxThreadId ? "inbox" : tab;
+
+    const showComposeNew = commandCenterEnabled ? activeTab === "inbox" || activeTab === "overview" : !commandCenterEnabled;
 
     return (
         <AdminV2WorkspaceBosModalShell
@@ -54,7 +75,7 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                 <CommunicationsWorkspaceKpiProvider>
                     <CommunicationsWorkspaceShell
                         tabs={COMMUNICATIONS_MODAL_TABS}
-                        activeTab={tab}
+                        activeTab={activeTab}
                         onTabChange={setTab}
                         mode={COMMUNICATIONS_TAB_MODE[tab]}
                         onModeChange={(m) => setTab(defaultCommunicationsTabForMode(m))}
@@ -63,7 +84,7 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                         showComposeNew={showComposeNew}
                     >
                         <CommunicationsModalTabPanel
-                            tab={tab}
+                            tab={activeTab}
                             onNavigateTab={setTab}
                             onComposeNew={() => setComposeOpen(true)}
                         />

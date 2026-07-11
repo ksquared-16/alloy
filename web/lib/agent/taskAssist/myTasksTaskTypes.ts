@@ -28,4 +28,18 @@ export type MyTasksTaskRow = {
     lifecycle_stage_key?: string | null;
     work_definition_key?: string | null;
     lifecycle_provenance?: string | null;
+    /** Processing convergence — projected or linked processing case. */
+    processing_case_id?: string | null;
+    processing_lane?: string | null;
+    processing_source_label?: string | null;
+    is_processing_projection?: boolean;
+    /** Communications convergence — projected or linked communication thread. */
+    communication_thread_id?: string | null;
+    communication_lane?: string | null;
+    communication_channel?: string | null;
+    communication_family_label?: string | null;
+    communication_topic_label?: string | null;
+    communication_last_preview?: string | null;
+    communication_last_activity_at?: string | null;
+    is_communications_projection?: boolean;
 };

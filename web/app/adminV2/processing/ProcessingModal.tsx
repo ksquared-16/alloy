@@ -15,6 +15,7 @@ import ProcessingOverviewLanding from "@/app/adminV2/pos/ProcessingOverviewLandi
 import PosProcessingWorkspace from "@/app/adminV2/pos/PosProcessingWorkspace";
 import ProcessingFormsStudio from "@/app/adminV2/pos/ProcessingFormsStudio";
 import type { ProcessingStudioTab } from "@/app/adminV2/pos/ProcessingStudioShell";
+import { ADMIN_V2_OPEN_PROCESSING_CASE, type OpenProcessingCaseDetail } from "@/lib/workItems/workItemsNavigation";
 
 export default function ProcessingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -27,7 +28,6 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
     useEffect(() => {
         if (open) void warmProcessingQueueCache();
     }, [open]);
-
     const handleClose = useCallback(() => {
         setSelectedCaseId(null);
         setMode("work");
@@ -50,6 +50,19 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
         setMode("studio");
         setStudioTab("forms");
     }, []);
+
+    useEffect(() => {
+        if (!open) return;
+        const onOpenCase = (event: Event) => {
+            const detail = (event as CustomEvent<OpenProcessingCaseDetail>).detail;
+            const caseId = detail?.case_id?.trim();
+            if (!caseId) return;
+            openCase(caseId);
+        };
+        window.addEventListener(ADMIN_V2_OPEN_PROCESSING_CASE, onOpenCase as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_PROCESSING_CASE, onOpenCase as EventListener);
+    }, [open, openCase]);
+
 
     return (
         <AdminV2WorkspaceBosModalShell

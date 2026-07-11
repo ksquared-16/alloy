@@ -49,7 +49,7 @@ export default function WorkItemsShell({
                         onClick={onNewTask}
                     >
                         <Plus className="h-3.5 w-3.5" aria-hidden strokeWidth={2.25} />
-                        New task
+                        Create Work Item
                     </button>
                 ),
             }}

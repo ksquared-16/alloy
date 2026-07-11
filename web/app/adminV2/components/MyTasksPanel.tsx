@@ -4,13 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListTodo } from "lucide-react";
 
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { defaultOperationalWorkDueLocal } from "@/lib/admin/operationalWork/operationalWorkDateTimeLocal";
-import MyTasksCreateTaskCard, {
-    type MyTasksCreateLinkMode,
-    type MyTasksCreateLinkedRecord,
-} from "@/app/adminV2/components/MyTasksCreateTaskCard";
 import MyTasksTaskCard from "@/app/adminV2/components/MyTasksTaskCard";
+import WorkItemCreateModal from "@/components/workItems/WorkItemCreateModal";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
+import WorkspaceQueueRow from "@/components/workspace/WorkspaceQueueRow";
+import FoldersViewsSourcesRail from "@/components/workItems/FoldersViewsSourcesRail";
+import WorkItemDetailPanel from "@/components/workItems/WorkItemDetailPanel";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { useEntityLabelsOptional } from "@/contexts/EntityLabelsContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
@@ -20,21 +19,19 @@ import {
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
+import { operationalTaskDueToLocalInput } from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
 import {
-    formatOperationalTaskDueDisplay,
-    operationalTaskDueToLocalInput,
-} from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
-import { normalizeOperationalTaskTitleDisplay } from "@/lib/agent/taskAssist/normalizeOperationalTaskTitleDisplay";
-import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
+    completeStageWorkWithSelectedOutcome,
+    fetchStageWorkOutcomeResolution,
+    type StageWorkOutcomeResolution,
+} from "@/lib/lifecycle/stageWorkOutcomePickerClient";
+import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import {
-    deriveWorkItemsProcessGroups,
-    filterTasksByProcessGroup,
-    WORK_ITEMS_ALL_GROUP_KEY,
-    type WorkItemsProcessGroup,
-    type WorkItemsProcessGroupKey,
-} from "@/lib/agent/taskAssist/myTasksProcessGroups";
+    buildMyTasksPresentationLabels,
+    myTasksRowMatchesSearch,
+} from "@/lib/agent/taskAssist/myTasksPresentationLabels";
 import {
-    buildOperationalTaskBody,
     createOperationalTask,
     fetchWorkspaceOperationalTasks,
     patchOperationalTaskFields,
@@ -47,51 +44,71 @@ import {
     setCachedWorkspaceOperationalTasks,
 } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
+import { deriveWorkItemsProcessGroups } from "@/lib/agent/taskAssist/myTasksProcessGroups";
 import {
-    completeStageWorkWithSelectedOutcome,
-    fetchStageWorkOutcomeResolution,
-    type StageWorkOutcomeResolution,
-} from "@/lib/lifecycle/stageWorkOutcomePickerClient";
-import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
-import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
+    applyWorkItemQueueScope,
+    countTasksForFolder,
+    countTasksForSource,
+    countTasksForView,
+    DEFAULT_WORK_ITEM_QUEUE_SCOPE,
+    resolveWorkItemQueueEmptyState,
+    resolveWorkspaceTasksFetchFilter,
+    WORK_ITEM_FOLDER_DEFS,
+    WORK_ITEM_SOURCE_DEFS,
+    WORK_ITEM_VIEW_DEFS,
+    type WorkItemQueueScope,
+    type WorkItemSourceKey,
+    type WorkItemViewKey,
+} from "@/lib/workItems/workItemQueueScope";
+import { mapWorkItemQueueRow } from "@/lib/workItems/mapWorkItemQueueRow";
+import { buildWorkItemProcessLabelsFromTasks } from "@/lib/workItems/workItemBpProvenance";
+import { fetchWorkItemBpLabelCatalog } from "@/lib/workItems/workItemBpLabelCatalog";
 import {
-    applyEntityLabelToMyTasksCopy,
-    buildMyTasksPresentationLabels,
-    myTasksRowMatchesSearch,
-} from "@/lib/agent/taskAssist/myTasksPresentationLabels";
+    isProcessingProjectedWorkItem,
+    mapProcessingQueueToWorkItemRows,
+    parseProcessingCaseIdFromWorkItemId,
+} from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
+import {
+    isCommunicationsProjectedWorkItem,
+    mapCommunicationsQueueToWorkItemRows,
+    parseCommunicationThreadIdFromWorkItemId,
+} from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
+import {
+    ADMIN_V2_COMMUNICATIONS_QUEUE_REFRESH,
+    ADMIN_V2_PROCESSING_QUEUE_REFRESH,
+    dispatchOperationalWorkRefresh,
+} from "@/lib/workItems/operationalWorkRefresh";
+import { dispatchOpenCommunicationsThread, dispatchOpenProcessingCase } from "@/lib/workItems/workItemsNavigation";
+import { getProcessingQueueWarmSnapshot, subscribeProcessingQueueWarm, warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
+import {
+    getCommandCenterCacheSnapshot,
+    prefetchCommandCenterConversations,
+    subscribeCommandCenterCache,
+} from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { dispatchFocusCurrentWork } from "@/lib/workItems/workItemsNavigation";
+
+import { draftToOperationalTaskBody } from "@/lib/workItems/commitWorkItemDraft";
+import { markSessionCommitted, type WorkItemCreationSession } from "@/lib/workItems/workItemCreationRuntime";
+import type { WorkItemDraftEntity } from "@/lib/workItems/workItemDraftV1";
 
 export type { MyTasksTaskRow };
 
-const FILTERS: { key: OperationalTaskWorkspaceFilter; label: string }[] = [
-    { key: "open", label: "Open" },
-    { key: "assigned_to_me", label: "Mine" },
-    { key: "unassigned", label: "Unassigned" },
-    { key: "due_today", label: "Due today" },
-    { key: "overdue", label: "Overdue" },
-    { key: "completed", label: "Completed" },
-];
-
-// Filter rail = canonical operational section nav (matches Communications child tabs):
-// subtle group container, active reads as a selected view (juniper-on-white), not a CTA.
-const FILTER_RAIL_CLASS =
-    "inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-alloy-stone/[0.04] p-0.5 ring-1 ring-alloy-stone/12";
-const FILTER_TAB_ACTIVE =
-    "rounded-md bg-white text-alloy-juniper shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-alloy-juniper/22";
-const FILTER_TAB_IDLE =
-    "rounded-md text-alloy-midnight/55 hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight/80";
-
-/** Resolve the queue header label for the active process / stage rail selection. */
-function resolveActiveProcessLabel(
-    groups: WorkItemsProcessGroup[],
-    activeKey: WorkItemsProcessGroupKey,
-): string {
-    if (activeKey === WORK_ITEMS_ALL_GROUP_KEY) return "All work";
-    for (const group of groups) {
-        if (group.key === activeKey) return group.label;
-        const stage = group.stages.find((s) => s.key === activeKey);
-        if (stage) return `${group.label} · ${stage.label}`;
+function mapServerFilterToScopeView(filter: OperationalTaskWorkspaceFilter): WorkItemViewKey {
+    switch (filter) {
+        case "assigned_to_me":
+            return "mine";
+        case "unassigned":
+            return "unassigned";
+        case "due_today":
+            return "due_today";
+        case "overdue":
+            return "overdue";
+        case "completed":
+            return "completed";
+        case "open":
+        default:
+            return "mine";
     }
-    return "All work";
 }
 
 function MyTasksLoadingState() {
@@ -127,14 +144,13 @@ function MyTasksEmptyState({ message, helper }: { message: string; helper: strin
 export type MyTasksPanelProps = {
     compact?: boolean;
     onClose?: () => void;
-    /** Modal header summary — current filter result count. */
     onFilterCountChange?: (count: number) => void;
-    /** Bump to open the create form from an external trigger (modal header "New task"). */
     requestCreateNonce?: number;
-    /** Overview landing → queue navigation filter. */
-    navFilter?: OperationalTaskWorkspaceFilter;
-    /** Overview landing → queue navigation with task pre-selected. */
+    navFilter?: OperationalTaskWorkspaceFilter | null;
     navSelectedTaskId?: string | null;
+    navSource?: WorkItemSourceKey | null;
+    navView?: WorkItemViewKey | null;
+    onNavFilterClear?: () => void;
 };
 
 export default function MyTasksPanel({
@@ -144,6 +160,9 @@ export default function MyTasksPanel({
     requestCreateNonce = 0,
     navFilter,
     navSelectedTaskId,
+    navSource,
+    navView,
+    onNavFilterClear,
 }: MyTasksPanelProps) {
     const workEnabled = isOperationalWorkV1Enabled();
     const { userId } = useAdminAuth();
@@ -156,25 +175,34 @@ export default function MyTasksPanel({
             globalAssistant.currentContext.entity_id?.trim() || null
         :   null;
     const linkedRecordLabel = globalAssistant?.currentContext?.label?.trim() || null;
-    const contextPrefill = useMemo<MyTasksCreateLinkedRecord | null>(() => {
+    const contextPrefill = useMemo<WorkItemDraftEntity | null>(() => {
         if (!linkedOpportunityId) return null;
         return {
-            entity_type: "opportunities",
-            entity_id: linkedOpportunityId,
+            type: "opportunities",
+            id: linkedOpportunityId,
             label: linkedRecordLabel || "Open record",
         };
     }, [linkedOpportunityId, linkedRecordLabel]);
 
-    const [filter, setFilter] = useState<OperationalTaskWorkspaceFilter>(navFilter ?? "open");
+    const initialScope = useMemo<WorkItemQueueScope>(() => {
+        if (!navFilter) return DEFAULT_WORK_ITEM_QUEUE_SCOPE;
+        return {
+            ...DEFAULT_WORK_ITEM_QUEUE_SCOPE,
+            view: mapServerFilterToScopeView(navFilter),
+        };
+    }, [navFilter]);
+
+    const [scope, setScope] = useState<WorkItemQueueScope>(initialScope);
     const [searchQuery, setSearchQuery] = useState("");
-    // Two-pane (modal) workspace: which queue row is open in the right detail pane.
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(navSelectedTaskId ?? null);
-    // Business Process → Stage doctrine: selected process / stage rail key (modal only).
-    const [processGroup, setProcessGroup] = useState<WorkItemsProcessGroupKey>(WORK_ITEMS_ALL_GROUP_KEY);
-    const [tasks, setTasks] = useState<MyTasksTaskRow[]>(
-        () => getCachedWorkspaceOperationalTasks("open") ?? []
-    );
-    const [loading, setLoading] = useState(() => getCachedWorkspaceOperationalTasks("open") == null);
+    const [tasks, setTasks] = useState<MyTasksTaskRow[]>(() => {
+        const serverFilter = resolveWorkspaceTasksFetchFilter(initialScope.view, navFilter);
+        return getCachedWorkspaceOperationalTasks(serverFilter) ?? [];
+    });
+    const [loading, setLoading] = useState(() => {
+        const serverFilter = resolveWorkspaceTasksFetchFilter(initialScope.view, navFilter);
+        return getCachedWorkspaceOperationalTasks(serverFilter) == null;
+    });
     const [error, setError] = useState<string | null>(null);
     const [actionId, setActionId] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -183,34 +211,19 @@ export default function MyTasksPanel({
     const [editDue, setEditDue] = useState("");
     const [editNotes, setEditNotes] = useState("");
     const [createOpen, setCreateOpen] = useState(false);
-    const [createLinkMode, setCreateLinkMode] = useState<MyTasksCreateLinkMode>("general");
-    const [createLinkedRecord, setCreateLinkedRecord] = useState<MyTasksCreateLinkedRecord | null>(null);
-    const [newTitle, setNewTitle] = useState("");
-    const [newDue, setNewDue] = useState(defaultOperationalWorkDueLocal);
-    const [newNotes, setNewNotes] = useState("");
-    const [newAssignedToUserId, setNewAssignedToUserId] = useState<string | null>(null);
     const [editAssignedToUserId, setEditAssignedToUserId] = useState<string | null>(null);
     const [createBusy, setCreateBusy] = useState(false);
     const [outcomeTaskId, setOutcomeTaskId] = useState<string | null>(null);
     const [outcomeContext, setOutcomeContext] = useState<StageWorkOutcomeResolution | null>(null);
     const [outcomeOptions, setOutcomeOptions] = useState<StageCompletionOutcomeV1[]>([]);
-
-    const resetCreateForm = useCallback(() => {
-        setNewTitle("");
-        setNewDue(defaultOperationalWorkDueLocal());
-        setNewNotes("");
-        setNewAssignedToUserId(userId?.trim() || null);
-        setCreateLinkMode(contextPrefill ? "linked" : "general");
-        setCreateLinkedRecord(contextPrefill);
-    }, [contextPrefill, userId]);
+    const [catalogProcessLabels, setCatalogProcessLabels] = useState<Record<string, string>>({});
+    const [processingWarmNonce, setProcessingWarmNonce] = useState(0);
+    const [commsWarmNonce, setCommsWarmNonce] = useState(0);
 
     const openCreateForm = useCallback(() => {
-        resetCreateForm();
         setCreateOpen(true);
-    }, [resetCreateForm]);
+    }, []);
 
-    // External "New task" trigger (modal header). Ref avoids re-firing when the create
-    // callback identity changes; only a nonce bump opens the form.
     const openCreateFormRef = useRef(openCreateForm);
     openCreateFormRef.current = openCreateForm;
     useEffect(() => {
@@ -218,16 +231,27 @@ export default function MyTasksPanel({
     }, [requestCreateNonce]);
 
     useEffect(() => {
-        if (navFilter) setFilter(navFilter);
+        if (navFilter) {
+            setScope((prev) => ({ ...prev, view: mapServerFilterToScopeView(navFilter) }));
+        }
     }, [navFilter]);
 
     useEffect(() => {
         if (navSelectedTaskId) setSelectedTaskId(navSelectedTaskId);
     }, [navSelectedTaskId]);
 
+    useEffect(() => {
+        if (!navSource && !navView) return;
+        setScope((prev) => ({
+            ...prev,
+            ...(navSource ? { source: navSource } : {}),
+            ...(navView ? { view: navView } : {}),
+        }));
+    }, [navSource, navView]);
     const load = useCallback(async () => {
         if (!workEnabled) return;
-        const cached = getCachedWorkspaceOperationalTasks(filter);
+        const serverFilter = resolveWorkspaceTasksFetchFilter(scope.view, navFilter);
+        const cached = getCachedWorkspaceOperationalTasks(serverFilter);
         if (cached) {
             setTasks(cached);
             setLoading(false);
@@ -236,25 +260,64 @@ export default function MyTasksPanel({
         }
         setError(null);
         try {
-            const res = await fetchWorkspaceOperationalTasks(filter);
+            const res = await fetchWorkspaceOperationalTasks(serverFilter);
             const json = await readJson<{ ok?: boolean; tasks?: MyTasksTaskRow[]; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
             const rows = Array.isArray(json.tasks) ? json.tasks : [];
             setTasks(rows);
-            setCachedWorkspaceOperationalTasks(filter, rows);
+            setCachedWorkspaceOperationalTasks(serverFilter, rows);
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
             if (!cached) setTasks([]);
         } finally {
             setLoading(false);
         }
-    }, [filter, workEnabled]);
+    }, [navFilter, scope.view, workEnabled]);
 
     useEffect(() => {
         void load();
     }, [load]);
+    useEffect(() => {
+        if (!workEnabled) return;
+        void fetchWorkItemBpLabelCatalog().then((catalog) => setCatalogProcessLabels(catalog.processLabels));
+        void warmProcessingQueueCache();
+        void prefetchCommandCenterConversations();
+    }, [workEnabled]);
+
+    useEffect(() => {
+        if (!workEnabled) return;
+        return subscribeProcessingQueueWarm(() => setProcessingWarmNonce((n) => n + 1));
+    }, [workEnabled]);
+
+    useEffect(() => {
+        if (!workEnabled) return;
+        return subscribeCommandCenterCache(() => setCommsWarmNonce((n) => n + 1));
+    }, [workEnabled]);
+
+    useEffect(() => {
+        if (!workEnabled) return;
+        const onProcessingRefresh = () => {
+            setProcessingWarmNonce((n) => n + 1);
+        };
+        window.addEventListener(ADMIN_V2_PROCESSING_QUEUE_REFRESH, onProcessingRefresh);
+        return () => window.removeEventListener(ADMIN_V2_PROCESSING_QUEUE_REFRESH, onProcessingRefresh);
+    }, [load, workEnabled]);
+
+    useEffect(() => {
+        if (!workEnabled) return;
+        const onCommsRefresh = () => {
+            void prefetchCommandCenterConversations({ force: true }).finally(() => {
+                setCommsWarmNonce((n) => n + 1);
+            });
+        };
+        window.addEventListener(ADMIN_V2_COMMUNICATIONS_QUEUE_REFRESH, onCommsRefresh);
+        return () => window.removeEventListener(ADMIN_V2_COMMUNICATIONS_QUEUE_REFRESH, onCommsRefresh);
+    }, [workEnabled]);
+
+
+
 
     const presentation = useMemo(() => {
         const guardianFromTasks = tasks.find((t) => t.contact_field_label?.trim())?.contact_field_label ?? null;
@@ -271,11 +334,86 @@ export default function MyTasksPanel({
         });
     }, [selectedSiteId, tasks]);
 
+    const bpLabelOptions = useMemo(() => {
+        const derived = buildWorkItemProcessLabelsFromTasks(siteScopedTasks, "Enrollment");
+        return {
+            processLabels: { ...derived, ...catalogProcessLabels },
+            fallbackProcessLabel: "Enrollment",
+        };
+    }, [catalogProcessLabels, siteScopedTasks]);
+
+    const processGroups = useMemo(
+        () =>
+            deriveWorkItemsProcessGroups(siteScopedTasks, {
+                fallbackProcessLabel: "Enrollment",
+                processLabels: bpLabelOptions.processLabels,
+            }),
+        [bpLabelOptions.processLabels, siteScopedTasks],
+    );
+
+    const processingProjectedTasks = useMemo(() => {
+        void processingWarmNonce;
+        const warm = getProcessingQueueWarmSnapshot().data?.rows ?? [];
+        return mapProcessingQueueToWorkItemRows(warm);
+    }, [processingWarmNonce]);
+
+    const communicationsProjectedTasks = useMemo(() => {
+        void commsWarmNonce;
+        const warm = getCommandCenterCacheSnapshot()?.conversations ?? [];
+        return mapCommunicationsQueueToWorkItemRows(warm);
+    }, [commsWarmNonce]);
+
+    const mergedTasks = useMemo(() => {
+        const byId = new Map<string, MyTasksTaskRow>();
+        for (const t of siteScopedTasks) byId.set(t.id, t);
+        for (const t of processingProjectedTasks) {
+            if (!byId.has(t.id)) byId.set(t.id, t);
+        }
+        for (const t of communicationsProjectedTasks) {
+            if (!byId.has(t.id)) byId.set(t.id, t);
+        }
+        return Array.from(byId.values());
+    }, [communicationsProjectedTasks, processingProjectedTasks, siteScopedTasks]);
+
+    const scopedTasks = useMemo(() => {
+        return applyWorkItemQueueScope(mergedTasks, scope, processGroups, userId?.trim() || null);
+    }, [mergedTasks, processGroups, scope, userId]);
+
     const visibleTasks = useMemo(() => {
         const q = searchQuery.trim();
-        if (!q) return siteScopedTasks;
-        return siteScopedTasks.filter((t) => myTasksRowMatchesSearch(t, q, entityLabels));
-    }, [entityLabels, searchQuery, siteScopedTasks]);
+        if (!q) return scopedTasks;
+        return scopedTasks.filter((t) => myTasksRowMatchesSearch(t, q, entityLabels));
+    }, [entityLabels, scopedTasks, searchQuery]);
+
+    const folderCounts = useMemo(
+        () =>
+            Object.fromEntries(
+                WORK_ITEM_FOLDER_DEFS.map((def) => [
+                    def.key,
+                    countTasksForFolder(mergedTasks, def.key, processGroups, userId?.trim() || null),
+                ]),
+            ),
+        [mergedTasks, processGroups, userId],
+    );
+
+    const viewCounts = useMemo(
+        () => Object.fromEntries(
+            WORK_ITEM_VIEW_DEFS.map((def) => [def.key, countTasksForView(mergedTasks, def.key, userId?.trim() || null)]),
+        ),
+        [mergedTasks, userId],
+    );
+
+    const sourceCounts = useMemo(
+        () => Object.fromEntries(WORK_ITEM_SOURCE_DEFS.map((def) => [def.key, countTasksForSource(mergedTasks, def.key)])),
+        [mergedTasks],
+    );
+
+
+    useEffect(() => {
+        if (!selectedTaskId) return;
+        const stillExists = mergedTasks.some((t) => t.id === selectedTaskId);
+        if (!stillExists) setSelectedTaskId(null);
+    }, [mergedTasks, selectedTaskId]);
 
     const opportunityEntitySingular = presentation.opportunityEntitySingular;
 
@@ -289,13 +427,12 @@ export default function MyTasksPanel({
         return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
     }, [load]);
 
-    const dispatchRefresh = useCallback(() => {
-        if (typeof window !== "undefined") {
-            window.dispatchEvent(
-                new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, { detail: { opportunity_id: "" } })
-            );
-        }
-    }, []);
+    const dispatchRefresh = useCallback(
+        (detail?: { opportunity_id?: string | null; processing_case_id?: string | null; communication_thread_id?: string | null; task_id?: string | null; kind?: "mutation" | "complete" | "processing_review" | "communications_reply" }) => {
+            dispatchOperationalWorkRefresh(detail ?? {});
+        },
+        [],
+    );
 
     const clearForms = useCallback(() => {
         setEditingId(null);
@@ -321,16 +458,55 @@ export default function MyTasksPanel({
                 window.dispatchEvent(
                     new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
                         detail: { opportunity_id: task.entity_id, task_id: task.id },
-                    })
+                    }),
                 );
             }
             onClose?.();
         },
-        [adminDrawer, onClose]
+        [adminDrawer, onClose],
     );
+
+    const onOpenCurrentWork = useCallback(
+        (task: MyTasksTaskRow) => {
+            if (task.entity_type !== "opportunities" || !task.entity_id?.trim() || !adminDrawer) return;
+            adminDrawer.openDrawer({
+                type: "opportunities",
+                id: task.entity_id,
+                opportunityWorkspaceContext: null,
+            });
+            dispatchFocusCurrentWork({ opportunity_id: task.entity_id, task_id: task.id });
+            onClose?.();
+        },
+        [adminDrawer, onClose],
+    );
+
+    const onOpenProcessing = useCallback((task: MyTasksTaskRow) => {
+        const caseId = task.processing_case_id?.trim() || parseProcessingCaseIdFromWorkItemId(task.id);
+        if (!caseId) return;
+        dispatchOpenProcessingCase(caseId);
+        onClose?.();
+    }, [onClose]);
+
+    const onOpenCommunications = useCallback((task: MyTasksTaskRow) => {
+        const threadId = task.communication_thread_id?.trim() || parseCommunicationThreadIdFromWorkItemId(task.id);
+        if (!threadId) return;
+        dispatchOpenCommunicationsThread(threadId);
+        onClose?.();
+    }, [onClose]);
 
     const onPatchStatus = useCallback(
         async (id: string, status: "completed" | "canceled") => {
+            const processingCaseId = parseProcessingCaseIdFromWorkItemId(id);
+            if (processingCaseId) {
+                dispatchRefresh({ processing_case_id: processingCaseId, kind: "processing_review" });
+                await load();
+                return;
+            }
+            const communicationThreadId = parseCommunicationThreadIdFromWorkItemId(id);
+            if (communicationThreadId) {
+                onOpenCommunications({ id, communication_thread_id: communicationThreadId } as MyTasksTaskRow);
+                return;
+            }
             setActionId(id);
             try {
                 const res = await patchOperationalTaskStatus(id, status);
@@ -345,11 +521,19 @@ export default function MyTasksPanel({
                 setActionId(null);
             }
         },
-        [clearForms, dispatchRefresh, load]
+        [clearForms, dispatchRefresh, load, onOpenCommunications],
     );
 
     const onCompleteTask = useCallback(
         async (task: MyTasksTaskRow) => {
+            if (isProcessingProjectedWorkItem(task)) {
+                onOpenProcessing(task);
+                return;
+            }
+            if (isCommunicationsProjectedWorkItem(task)) {
+                onOpenCommunications(task);
+                return;
+            }
             setActionId(task.id);
             setError(null);
             try {
@@ -374,7 +558,7 @@ export default function MyTasksPanel({
                 setActionId(null);
             }
         },
-        [onPatchStatus],
+        [onOpenCommunications, onOpenProcessing, onPatchStatus],
     );
 
     const onSelectOutcome = useCallback(
@@ -393,7 +577,7 @@ export default function MyTasksPanel({
                     outcomeKey,
                     subject: outcomeContext.subject,
                 });
-                if (!result.ok) throw new Error(result.error ?? "Failed to complete work");
+                if (!result.ok) throw new Error(result.error ?? "Failed to complete work item");
                 clearForms();
                 await load();
                 dispatchRefresh();
@@ -406,17 +590,14 @@ export default function MyTasksPanel({
         [clearForms, dispatchRefresh, load, outcomeContext],
     );
 
-    const startEdit = useCallback(
-        (task: MyTasksTaskRow) => {
-            setRescheduleId(null);
-            setEditingId(task.id);
-            setEditTitle(task.title);
-            setEditDue(operationalTaskDueToLocalInput(task.due_at));
-            setEditNotes(task.description ?? "");
-            setEditAssignedToUserId(task.assigned_to_user_id ?? null);
-        },
-        []
-    );
+    const startEdit = useCallback((task: MyTasksTaskRow) => {
+        setRescheduleId(null);
+        setEditingId(task.id);
+        setEditTitle(task.title);
+        setEditDue(operationalTaskDueToLocalInput(task.due_at));
+        setEditNotes(task.description ?? "");
+        setEditAssignedToUserId(task.assigned_to_user_id ?? null);
+    }, []);
 
     const startReschedule = useCallback((task: MyTasksTaskRow) => {
         setEditingId(null);
@@ -467,26 +648,16 @@ export default function MyTasksPanel({
         }
     }, [clearForms, dispatchRefresh, editDue, load, rescheduleId]);
 
-    const onCreateTask = useCallback(async () => {
-        if (!newTitle.trim() || !newDue.trim()) return;
-        if (createLinkMode === "linked" && !createLinkedRecord?.entity_id) return;
+    const onCommitCreate = useCallback(async (session: WorkItemCreationSession) => {
         setCreateBusy(true);
         setError(null);
         try {
-            const body = buildOperationalTaskBody({
-                entityId: createLinkMode === "linked" ? createLinkedRecord?.entity_id ?? null : null,
-                title: newTitle,
-                dueAtIso: new Date(newDue).toISOString(),
-                description: newNotes,
-                source: "manual",
-                proposalId: null,
-                assignedToUserId: newAssignedToUserId,
-            });
+            const body = draftToOperationalTaskBody(session.draft);
             const res = await createOperationalTask(body);
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
+            markSessionCommitted(session);
             setCreateOpen(false);
-            resetCreateForm();
             await load();
             dispatchRefresh();
         } catch (e: unknown) {
@@ -494,45 +665,27 @@ export default function MyTasksPanel({
         } finally {
             setCreateBusy(false);
         }
-    }, [createLinkMode, createLinkedRecord, dispatchRefresh, load, newAssignedToUserId, newDue, newNotes, newTitle, resetCreateForm]);
+    }, [dispatchRefresh, load]);
 
-    const emptyLabel = useMemo(() => {
-        switch (filter) {
-            case "due_today":
-                return "No tasks due today";
-            case "overdue":
-                return "No overdue tasks";
-            case "assigned_to_me":
-                return "Nothing assigned to you";
-            case "unassigned":
-                return "No unassigned tasks";
-            case "completed":
-                return "No completed or dismissed tasks";
-            default:
-                return "No open tasks";
-        }
-    }, [filter]);
+    const queueEmptyState = useMemo(
+        () =>
+            resolveWorkItemQueueEmptyState(scope, {
+                hasSearch: Boolean(searchQuery.trim()),
+                hasSiteFilter: siteScopedTasks.length === 0 && tasks.length > 0,
+                opportunityEntitySingular,
+            }),
+        [scope, searchQuery, siteScopedTasks.length, tasks.length, opportunityEntitySingular],
+    );
 
     if (!workEnabled) {
         return <p className="text-sm text-alloy-midnight/70">Operational work is not enabled.</p>;
     }
 
-    const activeFilterLabel = FILTERS.find((f) => f.key === filter)?.label ?? "Open";
-    // Process rail (modal): Business Process → Stage groups derived from real task metadata
-    // (department_id / lifecycle_stage_key). Tasks without Business Process metadata fall
-    // into General / Cross-process. See myTasksProcessGroups.ts for the doctrine + label gap.
-    const processGroups = deriveWorkItemsProcessGroups(visibleTasks);
-    const isValidProcessSelection =
-        processGroup === WORK_ITEMS_ALL_GROUP_KEY ||
-        processGroups.some((g) => g.key === processGroup || g.stages.some((s) => s.key === processGroup));
-    const activeProcessGroup = isValidProcessSelection ? processGroup : WORK_ITEMS_ALL_GROUP_KEY;
-    const processTasks = filterTasksByProcessGroup(visibleTasks, activeProcessGroup);
-    const activeProcessLabel = resolveActiveProcessLabel(processGroups, activeProcessGroup);
-    // Selection is scoped to the visible (server-filtered) set; detail clears when the
-    // selected item leaves the current process/filter.
+    const activeViewLabel = WORK_ITEM_VIEW_DEFS.find((f) => f.key === scope.view)?.label ?? "Mine";
     const selectedTask = visibleTasks.find((t) => t.id === selectedTaskId) ?? null;
 
     const renderTaskCard = (t: MyTasksTaskRow) => {
+        if (isProcessingProjectedWorkItem(t) || isCommunicationsProjectedWorkItem(t)) return null;
         const mode =
             editingId === t.id ? "edit"
             : rescheduleId === t.id ? "reschedule"
@@ -544,11 +697,7 @@ export default function MyTasksPanel({
                 task={t}
                 mode={mode}
                 busy={actionId === t.id}
-                canOpenRecord={
-                    t.entity_type === "opportunities" &&
-                    Boolean(t.entity_id?.trim()) &&
-                    adminDrawer != null
-                }
+                canOpenRecord={t.entity_type === "opportunities" && Boolean(t.entity_id?.trim()) && adminDrawer != null}
                 presentation={presentation}
                 entityLabels={entityLabels}
                 editTitle={editTitle}
@@ -574,65 +723,6 @@ export default function MyTasksPanel({
         );
     };
 
-    const filterRail = (
-        <div className={FILTER_RAIL_CLASS} role="tablist" aria-label="Task filters">
-            {FILTERS.map((f) => (
-                <button
-                    key={f.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={filter === f.key}
-                    onClick={() => {
-                        setFilter(f.key);
-                        setSelectedTaskId(null);
-                        clearForms();
-                    }}
-                    className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                        filter === f.key ? FILTER_TAB_ACTIVE : FILTER_TAB_IDLE
-                    }`}
-                >
-                    {f.label}
-                </button>
-            ))}
-        </div>
-    );
-
-    const searchInput = (
-        <div className="shrink-0" data-adminv2-tasks-search="true">
-            <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search tasks, records, households, children…"
-                className="w-full rounded-lg border border-alloy-stone/22 bg-white px-3 py-2 text-[12px] text-alloy-midnight/85 shadow-sm placeholder:text-alloy-midnight/40"
-                aria-label="Search tasks"
-            />
-        </div>
-    );
-
-    const createCard = (
-        <MyTasksCreateTaskCard
-            open={createOpen}
-            presentation={presentation}
-            linkMode={createLinkMode}
-            linkedRecord={createLinkedRecord}
-            contextPrefill={contextPrefill}
-            workspaceSiteId={selectedSiteId}
-            title={newTitle}
-            due={newDue}
-            notes={newNotes}
-            assignedToUserId={newAssignedToUserId}
-            busy={createBusy}
-            onLinkModeChange={setCreateLinkMode}
-            onLinkedRecordChange={setCreateLinkedRecord}
-            onTitleChange={setNewTitle}
-            onDueChange={setNewDue}
-            onNotesChange={setNewNotes}
-            onAssignedToUserIdChange={setNewAssignedToUserId}
-            onCreate={() => void onCreateTask()}
-            onCancel={() => setCreateOpen(false)}
-        />
-    );
 
     const errorBanner = error ? (
         <div
@@ -645,36 +735,14 @@ export default function MyTasksPanel({
     ) : null;
 
     const emptyState = (
-        <MyTasksEmptyState
-            message={
-                searchQuery.trim() ? "No tasks match your search."
-                : siteScopedTasks.length === 0 && tasks.length > 0 ?
-                    "No tasks for this site."
-                :   emptyLabel
-            }
-            helper={
-                searchQuery.trim() ?
-                    "Try a different name, household, or child."
-                :   `Create a general task or link one to a ${opportunityEntitySingular.toLowerCase()}.`
-            }
-        />
+        <MyTasksEmptyState message={queueEmptyState.message} helper={queueEmptyState.helper} />
     );
 
-    const queueHeader = (
-        <div className="flex items-baseline justify-between px-0.5 pb-1.5" data-adminv2-tasks-queue-header="true">
-            <h3 className="text-[13px] font-semibold text-alloy-midnight">{activeFilterLabel}</h3>
-            <span className="text-[11px] tabular-nums text-alloy-midnight/45">
-                {visibleTasks.length} item{visibleTasks.length === 1 ? "" : "s"}
-            </span>
-        </div>
-    );
-
-    // Standalone page (/adminV2/tasks): single-column list with inline cards.
     if (!compact) {
         return (
             <div className="flex flex-col gap-4" data-adminv2-tasks-panel="true">
                 <header>
-                    <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">My tasks</h1>
+                    <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">My work items</h1>
                     <p className="mt-0.5 text-[12px] text-alloy-midnight/55">
                         Follow-ups and reminders linked to {opportunityEntitySingular.toLowerCase()}s in your org.
                     </p>
@@ -684,19 +752,57 @@ export default function MyTasksPanel({
                     className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-alloy-stone/15 bg-white p-2.5 shadow-sm"
                     data-adminv2-tasks-toolbar="true"
                 >
-                    {filterRail}
+                    <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-alloy-stone/[0.04] p-0.5 ring-1 ring-alloy-stone/12">
+                        {WORK_ITEM_VIEW_DEFS.map((def) => (
+                            <button
+                                key={def.key}
+                                type="button"
+                                onClick={() => {
+                                    setScope((prev) => ({ ...prev, view: def.key }));
+                                    setSelectedTaskId(null);
+                                    clearForms();
+                                }}
+                                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                    scope.view === def.key ?
+                                        "bg-white text-alloy-juniper shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-alloy-juniper/22"
+                                    :   "text-alloy-midnight/55 hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight/80"
+                                }`}
+                            >
+                                {def.label}
+                            </button>
+                        ))}
+                    </div>
                     <button
                         type="button"
                         data-adminv2-new-task="true"
                         className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-1 text-[11px] font-semibold text-alloy-juniper shadow-sm hover:bg-alloy-juniper/[0.05]"
                         onClick={() => (createOpen ? setCreateOpen(false) : openCreateForm())}
                     >
-                        New task
+                        New work item
                     </button>
                 </div>
 
-                {searchInput}
-                {createCard}
+                <div className="shrink-0" data-adminv2-tasks-search="true">
+                    <input
+                        type="search"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search work items, records, households, children…"
+                        className="w-full rounded-lg border border-alloy-stone/22 bg-white px-3 py-2 text-[12px] text-alloy-midnight/85 shadow-sm placeholder:text-alloy-midnight/40"
+                        aria-label="Search work items"
+                    />
+                </div>
+                {createOpen ? (
+                    <WorkItemCreateModal
+                        open={createOpen}
+                        busy={createBusy}
+                        presentation={presentation}
+                        workspaceSiteId={selectedSiteId}
+                        contextPrefill={contextPrefill}
+                        onCommit={onCommitCreate}
+                        onCancel={() => setCreateOpen(false)}
+                    />
+                ) : null}
                 {errorBanner}
 
                 <div>
@@ -704,7 +810,12 @@ export default function MyTasksPanel({
                     {!loading && visibleTasks.length === 0 ? emptyState : null}
                     {visibleTasks.length > 0 ? (
                         <>
-                            {queueHeader}
+                            <div className="flex items-baseline justify-between px-0.5 pb-1.5" data-adminv2-tasks-queue-header="true">
+                                <h3 className="text-[13px] font-semibold text-alloy-midnight">{activeViewLabel}</h3>
+                                <span className="text-[11px] tabular-nums text-alloy-midnight/45">
+                                    {visibleTasks.length} item{visibleTasks.length === 1 ? "" : "s"}
+                                </span>
+                            </div>
                             <ul className="space-y-2">{visibleTasks.map((t) => renderTaskCard(t))}</ul>
                         </>
                     ) : null}
@@ -713,153 +824,84 @@ export default function MyTasksPanel({
         );
     }
 
-    // Modal (compact): Process rail → Queue → Task detail — Digital Mailroom Work layout.
+    const queueRows = visibleTasks.map((task) => ({
+        task,
+        row: mapWorkItemQueueRow(task, { presentation, entityLabels, labelOptions: bpLabelOptions }),
+    }));
+
     return (
         <div className="flex min-h-0 flex-1 overflow-hidden bg-white" data-adminv2-tasks-panel="true" data-adminv2-tasks-workspace="true">
             <WorkspaceZonePanel
-                title="Process"
-                className="w-[22%] min-w-[11rem] max-w-[15rem] shrink-0 self-stretch border-0 border-r border-stone-200"
-                data-testid="work-items-process-rail"
+                title="Folders, views, sources"
+                className="w-[24%] min-w-[12rem] max-w-[16rem] shrink-0 self-stretch border-0 border-r border-stone-200"
+                data-testid="work-items-fvs-rail"
             >
-                <div className="min-h-0 flex-1 overflow-y-auto p-2" data-adminv2-tasks-process-rail="true">
-                    <nav className="space-y-0.5" role="tablist" aria-label="Work by process">
-                        {processGroups.map((g) => {
-                            const stageActive = g.stages.some((s) => s.key === activeProcessGroup);
-                            const on = g.key === activeProcessGroup || stageActive;
-                            return (
-                                <div key={g.key}>
-                                    <button
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={g.key === activeProcessGroup}
-                                        data-adminv2-process-group={g.key}
-                                        onClick={() => {
-                                            setProcessGroup(g.key);
-                                            setSelectedTaskId(null);
-                                            clearForms();
-                                        }}
-                                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] font-semibold transition-colors ${
-                                            on ?
-                                                "bg-alloy-juniper/[0.08] text-alloy-juniper ring-1 ring-alloy-juniper/20"
-                                            :   "text-alloy-midnight/65 hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight/85"
-                                        }`}
-                                    >
-                                        <span className="truncate">{g.label}</span>
-                                        <span className={`shrink-0 tabular-nums text-[10px] ${on ? "text-alloy-juniper/80" : "text-alloy-midnight/40"}`}>
-                                            {g.count}
-                                        </span>
-                                    </button>
-                                    {on && g.stages.length > 0 ? (
-                                        <div
-                                            className="mt-0.5 space-y-0.5 border-l border-alloy-stone/15 pl-2"
-                                            role="group"
-                                            aria-label={`${g.label} stages`}
-                                        >
-                                            {g.stages.map((s) => {
-                                                const stageOn = s.key === activeProcessGroup;
-                                                return (
-                                                    <button
-                                                        key={s.key}
-                                                        type="button"
-                                                        role="tab"
-                                                        aria-selected={stageOn}
-                                                        data-adminv2-process-stage={s.key}
-                                                        onClick={() => {
-                                                            setProcessGroup(s.key);
-                                                            setSelectedTaskId(null);
-                                                            clearForms();
-                                                        }}
-                                                        className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-[11px] font-medium transition-colors ${
-                                                            stageOn ?
-                                                                "bg-alloy-juniper/[0.06] text-alloy-juniper"
-                                                            :   "text-alloy-midnight/55 hover:bg-alloy-stone/[0.05] hover:text-alloy-midnight/80"
-                                                        }`}
-                                                    >
-                                                        <span className="truncate">{s.label}</span>
-                                                        <span className="shrink-0 tabular-nums text-[10px] text-alloy-midnight/40">
-                                                            {s.count}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : null}
-                                </div>
-                            );
-                        })}
-                    </nav>
-                    <div className="mt-2 rounded-lg border border-dashed border-alloy-stone/20 px-2 py-1.5" data-adminv2-tasks-work-views="true">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Work views</p>
-                        <p className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/40">
-                            Appear here once a process publishes work views.
-                        </p>
-                    </div>
-                </div>
+                <FoldersViewsSourcesRail
+                    scope={scope}
+                    onScopeChange={(nextScope) => {
+                        setScope(nextScope);
+                        onNavFilterClear?.();
+                        setSelectedTaskId(null);
+                        clearForms();
+                    }}
+                    folderCounts={folderCounts}
+                    viewCounts={viewCounts}
+                    sourceCounts={sourceCounts}
+                    processGroups={processGroups}
+                />
             </WorkspaceZonePanel>
 
             <WorkspaceZonePanel
                 title="Queue"
-                className="w-[28%] min-w-[14rem] max-w-[18rem] shrink-0 self-stretch border-0 border-r border-stone-200"
+                className="w-[31%] min-w-[15rem] max-w-[20rem] shrink-0 self-stretch border-0 border-r border-stone-200"
                 data-testid="work-items-queue"
             >
                 <div className="flex min-h-0 flex-1 flex-col gap-2 p-2" data-adminv2-tasks-queue="true">
-                    {searchInput}
-                    {filterRail}
+                    <input
+                        type="search"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search work items"
+                        className="w-full rounded-lg border border-alloy-stone/22 bg-white px-3 py-2 text-[12px] text-alloy-midnight/85 shadow-sm placeholder:text-alloy-midnight/40"
+                        aria-label="Search work items"
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-alloy-midnight/55">Sort</span>
+                        <select
+                            value={scope.sort}
+                            onChange={(e) => setScope((prev) => ({ ...prev, sort: e.target.value as WorkItemQueueScope["sort"] }))}
+                            className="w-40 rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-midnight/75"
+                            aria-label="Sort work items"
+                        >
+                            <option value="due_date">Due date</option>
+                            <option value="title">Title</option>
+                            <option value="recently_updated">Recently updated</option>
+                        </select>
+                    </div>
                     {errorBanner}
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         {loading && visibleTasks.length === 0 && tasks.length === 0 ? <MyTasksLoadingState /> : null}
-                        {!loading && processTasks.length === 0 ? emptyState : null}
-                        {processTasks.length > 0 ? (
+                        {!loading && queueRows.length === 0 ? emptyState : null}
+                        {queueRows.length > 0 ? (
                             <>
-                                <div
-                                    className="flex items-baseline justify-between px-0.5 pb-1.5"
-                                    data-adminv2-tasks-queue-header="true"
-                                >
-                                    <h3 className="text-[13px] font-semibold text-alloy-midnight">{activeProcessLabel}</h3>
-                                    <span className="text-[11px] tabular-nums text-alloy-midnight/45">
-                                        {activeFilterLabel} · {processTasks.length}
-                                    </span>
+                                <div className="flex items-baseline justify-between px-0.5 pb-1.5" data-adminv2-tasks-queue-header="true">
+                                    <h3 className="text-[13px] font-semibold text-alloy-midnight">{activeViewLabel}</h3>
+                                    <span className="text-[11px] tabular-nums text-alloy-midnight/45">{queueRows.length}</span>
                                 </div>
                                 <ul className="space-y-1.5">
-                                    {processTasks.map((t) => {
-                                        const badge = operationalTaskUrgencyBadge(t);
-                                        const isSelected = t.id === selectedTaskId;
-                                        return (
-                                            <li key={t.id}>
-                                                <button
-                                                    type="button"
-                                                    data-adminv2-task-queue-row={t.id}
-                                                    aria-pressed={isSelected}
-                                                    onClick={() => {
-                                                        clearForms();
-                                                        setSelectedTaskId(t.id);
-                                                        if (createOpen) setCreateOpen(false);
-                                                    }}
-                                                    className={`w-full rounded-lg border px-2.5 py-2 text-left shadow-sm transition-colors ${
-                                                        isSelected ?
-                                                            "border-alloy-juniper/45 border-l-2 border-l-alloy-juniper bg-alloy-juniper/[0.06] ring-1 ring-alloy-juniper/15"
-                                                        : badge.urgency === "overdue" ?
-                                                            "border-alloy-stone/18 border-l-2 border-l-red-400/80 bg-white hover:bg-alloy-stone/[0.04]"
-                                                        :   "border-alloy-stone/18 bg-white hover:bg-alloy-stone/[0.04]"
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <span className="truncate text-[12.5px] font-semibold text-alloy-midnight/90">
-                                                            {normalizeOperationalTaskTitleDisplay(t.title)}
-                                                        </span>
-                                                        <span
-                                                            className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${badge.className}`}
-                                                        >
-                                                            {badge.label}
-                                                        </span>
-                                                    </div>
-                                                    <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/55">
-                                                        Due {formatOperationalTaskDueDisplay(t.due_at)}
-                                                    </p>
-                                                </button>
-                                            </li>
-                                        );
-                                    })}
+                                    {queueRows.map(({ task, row }) => (
+                                        <li key={task.id}>
+                                            <WorkspaceQueueRow
+                                                {...row}
+                                                selected={task.id === selectedTaskId}
+                                                onSelect={(id) => {
+                                                    clearForms();
+                                                    setSelectedTaskId(id);
+                                                    if (createOpen) setCreateOpen(false);
+                                                }}
+                                            />
+                                        </li>
+                                    ))}
                                 </ul>
                             </>
                         ) : null}
@@ -868,28 +910,29 @@ export default function MyTasksPanel({
             </WorkspaceZonePanel>
 
             <WorkspaceZonePanel
-                title="Task detail"
+                title="Work item detail"
                 className="min-w-[20rem] flex-1 self-stretch border-0"
                 data-testid="work-items-task-detail"
             >
                 <div className="min-h-0 flex-1 overflow-y-auto p-3" data-adminv2-tasks-detail="true">
-                    {createOpen ? (
-                        createCard
-                    ) : selectedTask ? (
-                        <ul className="list-none">{renderTaskCard(selectedTask)}</ul>
-                    ) : (
-                        <div
-                            className="flex h-full flex-col items-center justify-center px-6 py-10 text-center"
-                            data-adminv2-tasks-detail-empty="true"
-                        >
-                            <ListTodo className="mb-2 h-9 w-9 text-alloy-midnight/20" aria-hidden strokeWidth={1.5} />
-                            <p className="text-[13px] font-medium text-alloy-midnight/70">Select a work item</p>
-                            <p className="mt-1 max-w-xs text-[11px] leading-snug text-alloy-midnight/45">
-                                Choose a work item from the queue to view its details, record context, and actions — or
-                                start a new one.
-                            </p>
-                        </div>
-                    )}
+                    <WorkItemDetailPanel
+                        key={`${selectedTask?.id ?? "none"}:${createOpen ? "create" : "view"}`}
+                        task={selectedTask}
+                        taskCard={selectedTask ? <ul className="list-none">{renderTaskCard(selectedTask)}</ul> : null}
+                        createOpen={createOpen}
+                        createBusy={createBusy}
+                        contextPrefill={contextPrefill}
+                        workspaceSiteId={selectedSiteId}
+                        onCommitCreate={onCommitCreate}
+                        onCancelCreate={() => setCreateOpen(false)}
+                        presentation={presentation}
+                        entityLabels={entityLabels}
+                        bpLabelOptions={bpLabelOptions}
+                        onOpenRecord={selectedTask ? () => onOpenRecord(selectedTask) : undefined}
+                        onOpenCurrentWork={selectedTask ? () => onOpenCurrentWork(selectedTask) : undefined}
+                        onOpenProcessing={selectedTask ? () => onOpenProcessing(selectedTask) : undefined}
+                        onOpenCommunications={selectedTask ? () => onOpenCommunications(selectedTask) : undefined}
+                    />
                 </div>
             </WorkspaceZonePanel>
         </div>

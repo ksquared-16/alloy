@@ -11,7 +11,13 @@ import MyTasksPanel from "@/app/adminV2/components/MyTasksPanel";
 import WorkItemsOverviewLanding from "@/app/adminV2/tasks/WorkItemsOverviewLanding";
 import WorkItemsShell, { type WorkItemsWorkView } from "@/app/adminV2/tasks/WorkItemsShell";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
+import { prefetchCommandCenterConversations } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import type { WorkItemSourceKey, WorkItemViewKey } from "@/lib/workItems/workItemQueueScope";
 import type { OperationalTaskWorkspaceFilter } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import {
+    ADMIN_V2_OPEN_WORK_ITEMS_TASK,
+    type OpenWorkItemsTaskDetail,
+} from "@/lib/workItems/workItemsNavigation";
 
 export type MyTasksModalProps = {
     open: boolean;
@@ -21,33 +27,63 @@ export type MyTasksModalProps = {
 export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
     const [workView, setWorkView] = useState<WorkItemsWorkView>("overview");
     const [newTaskNonce, setNewTaskNonce] = useState(0);
-    const [navFilter, setNavFilter] = useState<OperationalTaskWorkspaceFilter>("open");
+    const [navFilter, setNavFilter] = useState<OperationalTaskWorkspaceFilter | null>(null);
     const [navSelectedTaskId, setNavSelectedTaskId] = useState<string | null>(null);
+    const [navSource, setNavSource] = useState<WorkItemSourceKey | null>(null);
+    const [navView, setNavView] = useState<WorkItemViewKey | null>(null);
 
     useEffect(() => {
         if (open) {
             prefetchWorkspaceOperationalTasks("open");
             prefetchWorkspaceOperationalTasks("completed");
+            void prefetchCommandCenterConversations();
         }
     }, [open]);
-
     const handleClose = useCallback(() => {
         setWorkView("overview");
-        setNavFilter("open");
+        setNavFilter(null);
         setNavSelectedTaskId(null);
+        setNavSource(null);
+        setNavView(null);
         setNewTaskNonce(0);
         onClose();
     }, [onClose]);
 
     const openQueue = useCallback(() => {
+        setNavFilter("open");
+        setNavSelectedTaskId(null);
         setWorkView("queue");
     }, []);
 
-    const openTask = useCallback((taskId: string, filter: OperationalTaskWorkspaceFilter = "open") => {
+    const handleWorkViewChange = useCallback((view: WorkItemsWorkView) => {
+        if (view === "queue") setNavFilter("open");
+        setWorkView(view);
+    }, []);
+
+    const openTask = useCallback((
+        taskId: string,
+        filter: OperationalTaskWorkspaceFilter = "open",
+        source?: WorkItemSourceKey | null,
+        view?: WorkItemViewKey | null,
+    ) => {
         setNavSelectedTaskId(taskId);
         setNavFilter(filter);
+        setNavSource(source ?? null);
+        setNavView(view ?? null);
         setWorkView("queue");
     }, []);
+
+
+    useEffect(() => {
+        const onOpenWorkItemsTask = (event: Event) => {
+            const detail = (event as CustomEvent<OpenWorkItemsTaskDetail>).detail;
+            const taskId = detail?.task_id?.trim();
+            if (!taskId) return;
+            openTask(taskId, detail.filter ?? "open", detail.source ?? null, detail.view ?? null);
+        };
+        window.addEventListener(ADMIN_V2_OPEN_WORK_ITEMS_TASK, onOpenWorkItemsTask as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_WORK_ITEMS_TASK, onOpenWorkItemsTask as EventListener);
+    }, [openTask]);
 
     const navigateFilter = useCallback((filter: OperationalTaskWorkspaceFilter) => {
         setNavFilter(filter);
@@ -71,7 +107,7 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <WorkItemsShell
                     workView={workView}
-                    onWorkViewChange={setWorkView}
+                    onWorkViewChange={handleWorkViewChange}
                     onClose={handleClose}
                     onNewTask={requestNewTask}
                 >
@@ -89,6 +125,9 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
                             requestCreateNonce={newTaskNonce}
                             navFilter={navFilter}
                             navSelectedTaskId={navSelectedTaskId}
+                            navSource={navSource}
+                            navView={navView}
+                            onNavFilterClear={() => setNavFilter(null)}
                         />
                     )}
                 </WorkItemsShell>
