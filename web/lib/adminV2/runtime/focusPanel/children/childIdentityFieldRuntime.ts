@@ -15,15 +15,14 @@ import {
 import { fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
     adaptChildSurfaceToChildrenSurface,
-    CHILD_SURFACE_COMPAT_ID,
     resolveIdentityFieldPolicy,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 
-export const CHILD_SURFACE_ID = CHILD_SURFACE_COMPAT_ID;
+export const CHILD_SURFACE_ID = "child_surface" as const;
 
 function canonicalChildrenSurfaceConfig(config: NestedSurfaceConfig | null): NestedSurfaceConfig | null {
     if (!config) return null;
-    if (config.surfaceId === CHILD_SURFACE_COMPAT_ID) {
+    if (config.surfaceId === CHILD_SURFACE_ID) {
         return adaptChildSurfaceToChildrenSurface(config, defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID));
     }
     return config;

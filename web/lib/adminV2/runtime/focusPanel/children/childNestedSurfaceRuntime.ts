@@ -7,22 +7,6 @@
  */
 
 import type { NestedSurfaceFieldMode } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
-import {
-    CHILD_FOCUS_FIELD_DEFS,
-    type ChildFocusFieldKey,
-} from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
-
-export {
-    CHILD_FOCUS_FIELD_DEFS,
-    CHILD_UNSUPPORTED_SAVE_FIELD_KEYS,
-    childFocusViewFromConfig,
-    isChildFocusFieldSaveSupported,
-    orderedChildEditFieldKeys,
-    type ChildFocusFieldDef,
-    type ChildFocusFieldKey,
-    type ChildFocusFieldRow,
-    type ChildFocusView,
-} from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
 
 export const CHILD_SURFACE_ID = "child_surface" as const;
 
@@ -35,10 +19,21 @@ export const CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS = [
 
 export type ChildDomainLockedSectionKey = (typeof CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS)[number]["key"];
 
+const DEFAULT_CHILD_FIELD_MODE_KEYS = [
+    "child.display_name",
+    "child.date_of_birth",
+    "child.age",
+    "inquiry_child.program",
+    "child.room",
+    "inquiry_child.schedule_type",
+    "child.start_date",
+    "child.readiness_summary",
+] as const;
+
 /** Default field modes for child_surface authoring seed. */
 export function defaultChildFieldModes(): Record<string, NestedSurfaceFieldMode> {
     const modes: Record<string, NestedSurfaceFieldMode> = {};
-    for (const key of Object.keys(CHILD_FOCUS_FIELD_DEFS)) {
+    for (const key of DEFAULT_CHILD_FIELD_MODE_KEYS) {
         modes[key] = { displayed: true, editable: false };
     }
     modes["inquiry_child.program"] = { displayed: true, editable: false };
