@@ -113,6 +113,7 @@ function buildInstanceEvidence(
     const meta = inst.source_lineage.source_metadata ?? {};
     const values = valuesFromFieldProposals(inst);
     return {
+        proposal_id: inst.proposal_id,
         collection_provider_ref: inst.collection_provider_ref,
         collection_label: collectionLabel,
         iteration_entity_type: inst.item_entity_type,

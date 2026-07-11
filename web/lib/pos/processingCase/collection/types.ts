@@ -46,6 +46,7 @@ export type ProcessingCollectionInstanceLineage = {
 };
 
 export type ProcessingCollectionInstanceProposal = {
+    proposal_id: string;
     collection_provider_ref: string;
     collection_label: string;
     iteration_entity_type: string;

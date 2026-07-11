@@ -40,6 +40,8 @@ export type ProposalSourceLineage = {
 export type RelatedRecordFieldProposal = {
     provider_ref: string;
     submitted_value: unknown;
+    /** Optional value observed when the proposal was formed; enables stale-data checks. */
+    observed_value?: unknown;
     source_fact_ref?: string;
     label?: string;
 };

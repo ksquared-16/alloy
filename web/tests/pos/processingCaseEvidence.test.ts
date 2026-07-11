@@ -122,6 +122,7 @@ const sampleCollection: ProcessingCollectionSourceEvidence = {
             diagnostics: [],
             instances: [
                 {
+                    proposal_id: "rrp:test:existing",
                     collection_provider_ref: "children",
                     collection_label: "Children",
                     iteration_entity_type: "customer_member",

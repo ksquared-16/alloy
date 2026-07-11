@@ -136,8 +136,8 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
 
             {collectionGroups.length > 0 || collectionDiagnostics.length > 0 ? (
                 <PosPanel eyebrow="Related records proposed">
-                    <ProcessingCollectionEvidencePanel groups={collectionGroups} diagnostics={collectionDiagnostics} />
-                    <p className="mt-2 text-[11px] text-stone-500">Read-only collection evidence — commit is not available in this release.</p>
+                    <ProcessingCollectionEvidencePanel groups={collectionGroups} diagnostics={collectionDiagnostics} caseId={detail.id} onCommitted={reload} />
+                    <p className="mt-2 text-[11px] text-stone-500">Existing Child updates can be approved field-by-field. New children and Parents/Guardians remain read-only.</p>
                 </PosPanel>
             ) : null}
 
