@@ -8,7 +8,21 @@
 
 ## 2026 H1 — Platform maturation
 
-### July 2026 — Runtime Simplification & Platform Stabilization
+### July 2026 — Platform Stabilization Complete
+
+**Initiative closed.** Foundational platform architecture is certified stable. Formal declaration: [`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md). Constitutional doctrine: [`platform-manifesto.md`](./platform-manifesto.md).
+
+- **Architecture completed** — Presentation, Surface Host, Focus Panel, VM, Business Process, Processing, Communications, Configuration, Current Work runtimes canonical
+- **Legacy eliminated** — `AdminEntityDrawerLegacy` deleted; unsupported entities fail closed; Settings locations replace legacy drawer create
+- **Performance improvements** — TypeScript split graphs; workspace orchestration; perceived performance (boot shell, Queue/Surface Hold, Work View + Focus Panel continuity)
+- **Canonical runtime ownership** — single owner per responsibility; no dual-runtime code paths
+- **Platform freeze** — no additional foundational runtime work under Platform Stabilization
+
+**Final promotion merges:** #151 `bb720f495`, #156 `29fbcfb93`, #160 `e52e5fa2c`, #162 `51641dc44` (on staging base including #148 `e94811914`, #157 `c6e1adec8`, #159 `faa129ac9`).
+
+---
+
+### July 2026 — Runtime Simplification & Platform Stabilization (detail)
 
 **Major platform milestone.** Foundational runtimes are complete; duplicate legacy paths removed. See [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md).
 

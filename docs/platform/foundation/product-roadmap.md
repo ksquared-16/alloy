@@ -73,16 +73,28 @@ Near-term after in-progress core:
 
 ---
 
-## Future
+## Future — product evolution (post-freeze)
 
-Explicitly not current execution lanes unless product re-opens:
+Platform construction is complete ([`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md)). New execution lanes extend domain capability atop existing runtimes:
+
+1. **Scheduling**
+2. **Attendance**
+3. **Billing**
+4. **Payments**
+5. **Commercial**
+6. **Automation**
+7. **AI**
+8. **Operational Intelligence**
+9. **Parent Experience**
+10. **Teacher Experience**
+11. **Partner APIs**
+
+Additional product lanes (not foundational runtime):
 
 - Autonomous agent catalog (enrollment agent, subsidy ops, director assistant)
 - Config/Layout Assist broad NL apply
 - Workflow Assist template expansion beyond maintenance
-- Billing/payments maturity (general availability)
 - Subsidy workflows, document extraction AI
-- Attendance, labor modules
 - Dept-first operator navigation
 
 ---
@@ -107,17 +119,13 @@ Track in audits and close before declaring customer-ready:
 
 ## Doctrine freeze requirement
 
-Do not document new canonical behavior until decisions are frozen for:
-
-- Navigation spine changes
-- Business process ↔ work unit binding
-- BOS expansion scope
-- Status ownership across grains
+Foundational platform architecture is **frozen** (July 2026). See [`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md). New canonical **runtime** behavior requires an RFC. Product documentation for Scheduling, Attendance, Billing, and related modules may evolve without reopening Platform Stabilization.
 
 ---
 
 ## Related
 
+- [`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md)
 - `platform-capabilities.md`
 - `release-history.md`
 - `docs/sprints/active/` — current execution
