@@ -1,7 +1,7 @@
 "use client";
 
 import { MessageSquare, Link2, ListTodo, Clock3 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
@@ -75,14 +75,10 @@ export default function WorkItemDetailPanel({
 }: WorkItemDetailPanelProps) {
     const [activeTab, setActiveTab] = useState<DetailTabKey>("overview");
 
-    useEffect(() => {
-        setActiveTab("overview");
-    }, [createOpen, task?.id]);
-
     const breadcrumb = useMemo(() => {
         if (!task) return null;
         return buildWorkItemBreadcrumb(task, presentation, entityLabels, bpLabelOptions);
-    }, [entityLabels, presentation, task]);
+    }, [bpLabelOptions, entityLabels, presentation, task]);
 
     const bosSummary = useMemo(() => {
         if (!task) return null;
@@ -181,15 +177,20 @@ export default function WorkItemDetailPanel({
 
                 {activeTab === "related" ? (
                     <div className="space-y-3">
+                        {isProcessingProjectedWorkItem(task) ?
+                            <WorkItemProcessingContextPanel task={task} onOpenProcessing={onOpenProcessing} />
+                        :   null}
                         <WorkItemBpContextPanel
                             task={task}
                             labelOptions={bpLabelOptions}
                             onOpenRecord={onOpenRecord}
                             onOpenCurrentWork={onOpenCurrentWork}
                         />
-                        <p className="text-[11px] text-alloy-midnight/55">
-                            This work item shares execution state with Current Work on the linked record.
-                        </p>
+                        {!isProcessingProjectedWorkItem(task) ?
+                            <p className="text-[11px] text-alloy-midnight/55">
+                                This work item shares execution state with Current Work on the linked record.
+                            </p>
+                        :   null}
                     </div>
                 ) : null}
             </div>

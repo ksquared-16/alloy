@@ -28,7 +28,6 @@ import {
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import {
-    applyEntityLabelToMyTasksCopy,
     buildMyTasksPresentationLabels,
     myTasksRowMatchesSearch,
 } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
@@ -266,7 +265,6 @@ export default function MyTasksPanel({
         if (!workEnabled) return;
         const onProcessingRefresh = () => {
             setProcessingWarmNonce((n) => n + 1);
-            void load();
         };
         window.addEventListener(ADMIN_V2_PROCESSING_QUEUE_REFRESH, onProcessingRefresh);
         return () => window.removeEventListener(ADMIN_V2_PROCESSING_QUEUE_REFRESH, onProcessingRefresh);
@@ -344,14 +342,21 @@ export default function MyTasksPanel({
     );
 
     const viewCounts = useMemo(
-        () => Object.fromEntries(WORK_ITEM_VIEW_DEFS.map((def) => [def.key, countTasksForView(siteScopedTasks, def.key)])),
-        [siteScopedTasks],
+        () => Object.fromEntries(WORK_ITEM_VIEW_DEFS.map((def) => [def.key, countTasksForView(mergedTasks, def.key)])),
+        [mergedTasks],
     );
 
     const sourceCounts = useMemo(
         () => Object.fromEntries(WORK_ITEM_SOURCE_DEFS.map((def) => [def.key, countTasksForSource(mergedTasks, def.key)])),
         [mergedTasks],
     );
+
+
+    useEffect(() => {
+        if (!selectedTaskId) return;
+        const stillExists = mergedTasks.some((t) => t.id === selectedTaskId);
+        if (!stillExists) setSelectedTaskId(null);
+    }, [mergedTasks, selectedTaskId]);
 
     const opportunityEntitySingular = presentation.opportunityEntitySingular;
 
@@ -860,6 +865,7 @@ export default function MyTasksPanel({
             >
                 <div className="min-h-0 flex-1 overflow-y-auto p-3" data-adminv2-tasks-detail="true">
                     <WorkItemDetailPanel
+                        key={`${selectedTask?.id ?? "none"}:${createOpen ? "create" : "view"}`}
                         task={selectedTask}
                         taskCard={selectedTask ? <ul className="list-none">{renderTaskCard(selectedTask)}</ul> : null}
                         createOpen={createOpen}
@@ -873,6 +879,7 @@ export default function MyTasksPanel({
                         bpLabelOptions={bpLabelOptions}
                         onOpenRecord={selectedTask ? () => onOpenRecord(selectedTask) : undefined}
                         onOpenCurrentWork={selectedTask ? () => onOpenCurrentWork(selectedTask) : undefined}
+                        onOpenProcessing={selectedTask ? () => onOpenProcessing(selectedTask) : undefined}
                     />
                 </div>
             </WorkspaceZonePanel>

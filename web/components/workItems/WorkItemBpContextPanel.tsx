@@ -54,7 +54,7 @@ export default function WorkItemBpContextPanel({
                 </div>
                 <div className="flex justify-between gap-3">
                     <dt className="text-alloy-midnight/45">Stage position</dt>
-                    <dd>{stageLabel ? `In ${stageLabel}` : "Unavailable until stage runtime is linked"}</dd>
+                    <dd>{stageLabel ? `In ${stageLabel}` : "Not projected yet — stage runtime adapter deferred"}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                     <dt className="text-alloy-midnight/45">Operating plan</dt>
@@ -62,15 +62,15 @@ export default function WorkItemBpContextPanel({
                 </div>
                 <div className="flex justify-between gap-3">
                     <dt className="text-alloy-midnight/45">Previous outcome</dt>
-                    <dd>See Current Work on the record</dd>
+                    <dd className="text-alloy-midnight/45">Not projected yet — open Current Work on the record</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                     <dt className="text-alloy-midnight/45">Next expected outcome</dt>
-                    <dd>Configured in stage operating plan</dd>
+                    <dd className="text-alloy-midnight/45">Not projected yet — stage operating plan adapter deferred</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                     <dt className="text-alloy-midnight/45">Current Work state</dt>
-                    <dd>Same execution on the linked record</dd>
+                    <dd className="text-alloy-midnight/45">Not projected yet — use Current Work on the record</dd>
                 </div>
             </dl>
             <div className="flex flex-wrap gap-1.5 pt-0.5">
