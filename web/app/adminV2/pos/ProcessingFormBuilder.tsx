@@ -20,13 +20,17 @@ import {
     setFieldLayoutWidth,
     fieldLayoutFlexClass,
 } from "@/lib/forms/formRowComposition";
-import type { ProcessingBuilderCanonicalField } from "@/lib/forms/processingFormBuilderLibrary";
-import { resolveProcessingBuilderRegistryEntry } from "@/lib/forms/processingFormBuilderLibrary";
+import {
+    resolveProcessingBuilderRegistryEntry,
+    type ProcessingBuilderCanonicalField,
+} from "@/lib/forms/processingFormBuilderLibrary";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import ProcessingFormBuilderLibraryPanel from "./ProcessingFormBuilderLibraryPanel";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
 import ProcessingFormCanvas, { type CanvasDropTarget } from "./ProcessingFormCanvas";
 import ProcessingFormDistributionPanel from "./ProcessingFormDistributionPanel";
+import ProcessingFormPublishedBar from "./ProcessingFormPublishedBar";
+import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
 import ProcessingInspectorCard from "./ProcessingInspectorCard";
 import ProcessingCollapsibleInspectorSection from "./ProcessingCollapsibleInspectorSection";
 import ProcessingSectionNameDialog from "./ProcessingSectionNameDialog";
