@@ -159,6 +159,8 @@ See `../governance/deployment-and-environments.md`.
 - `../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
 - `../../api/api-platform-completion.md` (internal API Platform foundation complete; future API work is expansion)
 - `../platform-capabilities.md` (capability model — new operational modules are designed API-first)
+- `platform-manifesto.md` (constitutional doctrine)
+- `platform-certification-july-2026.md` (July 2026 certification)
 - `../milestones/platform-stabilization-july-2026.md` (July 2026 stabilization milestone)
 - `../../system/repository-state-2026-06.md` (point-in-time snapshot)
 - `docs/schema/` (generated schema reference)

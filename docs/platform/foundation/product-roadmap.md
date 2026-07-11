@@ -32,6 +32,7 @@ Foundations operators and implementers can rely on today:
 - BOS assist foundation (Orchestrator, Task Assist, Workflow Assist — human-in-the-loop)
 - Roles, permissions, CRM dept/site scope
 - Queue/record authority boundary
+- Platform manifesto + July 2026 certification published
 - Presentation Runtime V2 + Surface Host (frozen July 2026)
 - Focus Panel + VM Runtime hard cutover (Opportunity, Person, Child)
 - Current Work Focus Panel surface (PR #95)
@@ -112,7 +113,6 @@ Do not document new canonical behavior until decisions are frozen for:
 - Business process ↔ work unit binding
 - BOS expansion scope
 - Status ownership across grains
-- Record architecture cutover
 
 ---
 
