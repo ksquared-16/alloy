@@ -4,7 +4,7 @@
 
 import { openWorkspaceModal } from "@/lib/adminV2/workspaceModalCoordinator";
 import { dispatchAdminV2OpenInboxModal, dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
-import { setCommandCenterPendingSelection } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { prefetchCommandCenterConversations, setCommandCenterPendingSelection } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import type { OperationalTaskWorkspaceFilter } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import type { WorkItemSourceKey, WorkItemViewKey } from "@/lib/workItems/workItemQueueScope";
 
@@ -53,6 +53,7 @@ export function dispatchOpenCommunicationsThread(threadId: string): void {
     if (typeof window === "undefined") return;
     const id = threadId.trim();
     if (!id) return;
+    void prefetchCommandCenterConversations({ force: true });
     dispatchAdminV2OpenInboxModal();
     setCommandCenterPendingSelection(id);
     window.dispatchEvent(new CustomEvent(ADMIN_V2_OPEN_COMMUNICATIONS_THREAD, { detail: { thread_id: id } }));

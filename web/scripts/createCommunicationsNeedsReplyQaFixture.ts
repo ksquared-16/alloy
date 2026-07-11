@@ -7,20 +7,20 @@
  */
 import dotenv from "dotenv";
 import path from "node:path";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
 const ORG_ID = process.env.DEV_QUEUE_ORG_ID?.trim() || "93667019-bd28-49b5-a688-acc9bb1e0a19";
 const MARKER = "wi3-slice6-comms-needs-reply-fixture";
 
-async function adminClient() {
+async function adminClient(): Promise<SupabaseClient> {
     return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
         auth: { autoRefreshToken: false, persistSession: false },
     });
 }
 
-async function pickThreadId(admin: ReturnType<typeof createClient>) {
+async function pickThreadId(admin: SupabaseClient) {
     const explicit = process.env.WI3_COMMS_QA_THREAD_ID?.trim();
     if (explicit) return explicit;
     const { data, error } = await admin
@@ -30,7 +30,9 @@ async function pickThreadId(admin: ReturnType<typeof createClient>) {
         .order("last_message_at", { ascending: false })
         .limit(10);
     if (error) throw error;
-    const row = (data ?? []).find((t) => (t.attention_state ?? null) !== "resolved") ?? data?.[0];
+    type ThreadPick = { id: string; attention_state: string | null; metadata: unknown };
+    const rows = (data ?? []) as ThreadPick[];
+    const row = rows.find((t) => (t.attention_state ?? null) !== "resolved") ?? rows[0];
     if (!row?.id) throw new Error("No communication thread available for QA fixture");
     return row.id as string;
 }

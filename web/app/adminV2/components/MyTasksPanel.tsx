@@ -308,7 +308,9 @@ export default function MyTasksPanel({
     useEffect(() => {
         if (!workEnabled) return;
         const onCommsRefresh = () => {
-            setCommsWarmNonce((n) => n + 1);
+            void prefetchCommandCenterConversations({ force: true }).finally(() => {
+                setCommsWarmNonce((n) => n + 1);
+            });
         };
         window.addEventListener(ADMIN_V2_COMMUNICATIONS_QUEUE_REFRESH, onCommsRefresh);
         return () => window.removeEventListener(ADMIN_V2_COMMUNICATIONS_QUEUE_REFRESH, onCommsRefresh);

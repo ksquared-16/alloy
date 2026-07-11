@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
 import InboxPanel from "@/app/adminV2/messages/InboxPanel";
@@ -13,7 +13,12 @@ import CommunicationsModalTabPanel, {
 import CommunicationsWorkspaceShell from "@/app/adminV2/communications/CommunicationsWorkspaceShell";
 import { CommunicationsWorkspaceKpiProvider } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import ComposeNewCommunicationModal from "@/app/adminV2/communications/ComposeNewCommunicationModal";
+import { getCommandCenterPendingSelection } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import {
+    ADMIN_V2_OPEN_COMMUNICATIONS_THREAD,
+    type OpenCommunicationsThreadDetail,
+} from "@/lib/workItems/workItemsNavigation";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 
 export type InboxModalProps = {
@@ -35,10 +40,27 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
         return () => window.clearTimeout(resetId);
     }, [open]);
 
+    const focusInboxForThread = useCallback((threadId?: string | null) => {
+        const id = threadId?.trim() || getCommandCenterPendingSelection()?.trim();
+        if (!id) return;
+        setTab("inbox");
+    }, []);
+
     useEffect(() => {
         if (!open || !commandCenterEnabled) return;
         void warmCommunicationsWorkspaceModal();
-    }, [open, commandCenterEnabled]);
+        focusInboxForThread(getCommandCenterPendingSelection());
+    }, [commandCenterEnabled, focusInboxForThread, open]);
+
+    useEffect(() => {
+        if (!commandCenterEnabled) return;
+        const onOpenThread = (event: Event) => {
+            const detail = (event as CustomEvent<OpenCommunicationsThreadDetail>).detail;
+            focusInboxForThread(detail?.thread_id ?? null);
+        };
+        window.addEventListener(ADMIN_V2_OPEN_COMMUNICATIONS_THREAD, onOpenThread as EventListener);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_COMMUNICATIONS_THREAD, onOpenThread as EventListener);
+    }, [commandCenterEnabled, focusInboxForThread]);
 
     const showComposeNew = commandCenterEnabled ? tab === "inbox" || tab === "overview" : !commandCenterEnabled;
 

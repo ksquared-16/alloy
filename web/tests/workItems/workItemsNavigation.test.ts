@@ -22,11 +22,12 @@ vi.mock("@/lib/adminV2/workspaceModalEvents", () => ({
 
 vi.mock("@/lib/communications/v2/commandCenterPrefetchCache", () => ({
     setCommandCenterPendingSelection: vi.fn(),
+    prefetchCommandCenterConversations: vi.fn().mockResolvedValue({ conversations: [], fetchedAt: Date.now(), error: null }),
 }));
 
 import { openWorkspaceModal } from "@/lib/adminV2/workspaceModalCoordinator";
 import { dispatchAdminV2OpenInboxModal, dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
-import { setCommandCenterPendingSelection } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { prefetchCommandCenterConversations, setCommandCenterPendingSelection } from "@/lib/communications/v2/commandCenterPrefetchCache";
 
 describe("workItemsNavigation", () => {
     beforeEach(() => {
@@ -69,6 +70,7 @@ describe("workItemsNavigation", () => {
         dispatchOpenCommunicationsThread("thread-42");
 
         expect(dispatchAdminV2OpenInboxModal).toHaveBeenCalled();
+        expect(prefetchCommandCenterConversations).toHaveBeenCalledWith({ force: true });
         expect(setCommandCenterPendingSelection).toHaveBeenCalledWith("thread-42");
         expect(events[0]?.detail).toEqual({ thread_id: "thread-42" });
 
