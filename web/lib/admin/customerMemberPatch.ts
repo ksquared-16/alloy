@@ -133,3 +133,68 @@ export async function upsertCustomerMemberConfigFieldValues(
         CUSTOMER_MEMBER_FIELD_VALUES_EXCLUDED_KEYS
     );
 }
+
+export function buildCustomerMemberPatchBodyFromFieldKeys(
+    entries: ReadonlyArray<{ field_key: string; value: unknown }>,
+): Record<string, unknown> {
+    const body: Record<string, unknown> = {};
+    for (const entry of entries) {
+        body[entry.field_key] = entry.value;
+    }
+    return body;
+}
+
+export function customerMemberNativeSnapshotSelectColumns(): string {
+    return ["id", "org_id", "customer_id", ...CUSTOMER_MEMBER_NATIVE_PATCH_KEYS].join(", ");
+}
+
+export function nativeProfileValuesFromRecord(record: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const key of CUSTOMER_MEMBER_NATIVE_PATCH_KEYS) {
+        if (key in record) out[key] = record[key];
+    }
+    return out;
+}
+
+/** Shared server mutation path for customer_member PATCH and Processing commit adapters. */
+export async function applyCustomerMemberMutationPatch(args: {
+    supabase: SupabaseClient;
+    orgId: string;
+    memberId: string;
+    body: Record<string, unknown>;
+}): Promise<{ ok: true } | { ok: false; error: string; status?: number }> {
+    const validated = validateCustomerMemberPatchBody(args.body);
+    if (!validated.ok) return { ok: false, error: validated.error, status: 400 };
+
+    const nativeUpdates = buildNativeCustomerMemberUpdates(validated.native);
+    const hasNative = Object.keys(nativeUpdates).length > 0;
+    const hasConfig = Object.keys(validated.config).length > 0;
+    if (!hasNative && !hasConfig) return { ok: false, error: "No allowed fields to update", status: 400 };
+
+    const { data: existing, error: fetchErr } = await args.supabase
+        .from("customer_members")
+        .select("id")
+        .eq("id", args.memberId)
+        .eq("org_id", args.orgId)
+        .maybeSingle();
+    if (fetchErr) return { ok: false, error: fetchErr.message, status: 500 };
+    if (!existing) return { ok: false, error: "Member not found", status: 404 };
+
+    if (hasConfig) {
+        const defErr = await assertCustomerMemberConfigFieldDefinitionsExist(args.supabase, args.orgId, validated.config);
+        if (defErr) return { ok: false, error: defErr, status: 400 };
+        await upsertCustomerMemberConfigFieldValues(args.supabase, args.orgId, args.memberId, validated.config);
+    }
+
+    if (hasNative) {
+        const { error } = await args.supabase
+            .from("customer_members")
+            .update(nativeUpdates)
+            .eq("id", args.memberId)
+            .eq("org_id", args.orgId);
+        if (error) return { ok: false, error: error.message, status: 500 };
+    }
+
+    return { ok: true };
+}
+

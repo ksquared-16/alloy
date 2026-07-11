@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { safeParseFormSchema } from "@/lib/forms/schema";
 import type { ProposedValue, SourceEvidenceLoader, SourceEvidenceRaw, SourceEvidenceRegistry } from "./resolveSourceEvidence";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
-import { adaptSourceToRelatedRecordProposals } from "@/lib/pos/processingCase/sources/adaptSourceToRelatedRecordProposals";
+import { adaptSourceToRelatedRecordProposals } from "@/lib/intake/sources/adaptSourceToRelatedRecordProposals";
 import { projectRelatedRecordProposalsToEvidence } from "@/lib/pos/processingCase/collection/projectRelatedRecordProposalsToEvidence";
 import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
 import type { ProcessingCollectionGroupEvidence } from "@/lib/pos/processingCase/collection/types";

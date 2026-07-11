@@ -69,7 +69,7 @@ async function resolveChildrenCollection(
 
     const { data: rows, error } = await supabase
         .from("customer_members")
-        .select("id, customer_id, person_id, first_name, last_name, full_name, display_name, date_of_birth, preferred_language, is_active, created_at")
+        .select("id, customer_id, person_id, first_name, last_name, full_name, display_name, dob, is_active, created_at")
         .eq("org_id", context.orgId)
         .eq("customer_id", customerId)
         .order("created_at", { ascending: true });
@@ -214,7 +214,7 @@ export async function resolveCanonicalCollection(
         }
         const { data: rows, error } = await supabase
             .from("customer_members")
-            .select("id, customer_id, person_id, first_name, last_name, full_name, display_name, date_of_birth, is_active, created_at")
+            .select("id, customer_id, person_id, first_name, last_name, full_name, display_name, dob, is_active, created_at")
             .eq("org_id", context.orgId)
             .eq("customer_id", customerId)
             .order("created_at", { ascending: true });

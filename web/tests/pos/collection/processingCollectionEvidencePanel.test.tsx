@@ -12,6 +12,7 @@ const childrenGroup: ProcessingCollectionGroupEvidence = {
     diagnostics: [],
     instances: [
         {
+            proposal_id: "rrp:test:existing",
             collection_provider_ref: "children",
             collection_label: "Children",
             iteration_entity_type: "customer_member",
@@ -43,6 +44,7 @@ const childrenGroup: ProcessingCollectionGroupEvidence = {
             },
         },
         {
+            proposal_id: "rrp:test:new",
             collection_provider_ref: "children",
             collection_label: "Children",
             iteration_entity_type: "customer_member",
@@ -87,5 +89,13 @@ describe("ProcessingCollectionEvidencePanel", () => {
         expect(html).not.toContain("person.contact_role");
         expect(html).not.toContain("Approve");
         expect(html).not.toContain("Commit");
+    });
+
+    it("shows existing Child commit controls only when case context is present", () => {
+        const html = renderToStaticMarkup(<ProcessingCollectionEvidencePanel groups={[childrenGroup]} caseId="case-1" />);
+        expect(html).toContain("Approve all valid fields");
+        expect(html).toContain("Commit approved child updates");
+        expect(html).toContain("Current:");
+        expect(html).toContain("New child proposed");
     });
 });
