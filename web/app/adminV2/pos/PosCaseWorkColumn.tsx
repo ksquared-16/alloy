@@ -16,6 +16,7 @@ import type { PosCaseState } from "./usePosCase";
 import { POS_SOURCE_KIND_LABELS } from "./posSections";
 import PosPanel from "./PosPanel";
 import ClassificationPanel from "./ClassificationPanel";
+import { ProcessingCollectionEvidencePanel } from "@/components/pos/ProcessingCollectionEvidencePanel";
 
 const RECORD_TYPE_LABELS: Record<string, string> = {
     person: "CRM · Person",
@@ -65,6 +66,8 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
 
     const primary = detail.sources.find((s) => s.role === "primary") ?? detail.sources[0] ?? null;
     const submitted = evidence.flatMap((e) => e.proposedValues);
+    const collectionGroups = evidence.flatMap((e) => e.collectionEvidence?.groups ?? []);
+    const collectionDiagnostics = evidence.flatMap((e) => e.collectionEvidence?.diagnostics ?? []);
     const candidates = rec?.supported && rec.recommendation ? rec.recommendation.candidates : [];
     const hasRecordContext = destinations.length > 0 || candidates.length > 0;
 
@@ -130,6 +133,13 @@ export default function PosCaseWorkColumn({ state }: { state: PosCaseState }) {
                     </ul>
                 </div>
             </PosPanel>
+
+            {collectionGroups.length > 0 || collectionDiagnostics.length > 0 ? (
+                <PosPanel eyebrow="Related records proposed">
+                    <ProcessingCollectionEvidencePanel groups={collectionGroups} diagnostics={collectionDiagnostics} />
+                    <p className="mt-2 text-[11px] text-stone-500">Read-only collection evidence — commit is not available in this release.</p>
+                </PosPanel>
+            ) : null}
 
             {/* 2 — Classification (first-class, before any proposal) */}
             <ClassificationPanel

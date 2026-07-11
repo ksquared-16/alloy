@@ -13,6 +13,7 @@
  */
 
 import type { ProcessingCaseDetail, ProcessingCaseSourceKind, ProcessingCaseSourceRole } from "./types";
+import type { ProcessingCollectionSourceEvidence } from "@/lib/pos/processingCase/collection/types";
 
 /**
  * A single read-only proposed value from a source.
@@ -30,6 +31,7 @@ export interface ProposedValue {
 export interface SourceEvidenceRaw {
     proposedValues: ProposedValue[];
     documentId: string | null;
+    collectionEvidence?: ProcessingCollectionSourceEvidence;
 }
 
 /** Batched loader for one source kind: ids -> id -> raw evidence (one call per kind). */
@@ -44,6 +46,7 @@ export interface SourceEvidence {
     role: ProcessingCaseSourceRole;
     proposedValues: ProposedValue[];
     documentId: string | null;
+    collectionEvidence?: ProcessingCollectionSourceEvidence;
 }
 
 export interface ProcessingCaseDetailEvidence {
@@ -53,7 +56,7 @@ export interface ProcessingCaseDetailEvidence {
     affectedRecordTypes: string[];
 }
 
-const EMPTY_RAW: SourceEvidenceRaw = { proposedValues: [], documentId: null };
+const EMPTY_RAW: SourceEvidenceRaw = { proposedValues: [], documentId: null, collectionEvidence: undefined };
 
 function evidenceKey(kind: ProcessingCaseSourceKind, id: string): string {
     return `${kind}::${id}`;
@@ -90,6 +93,7 @@ export async function resolveSourceEvidence(
             role: source.role,
             proposedValues: raw.proposedValues,
             documentId: raw.documentId,
+            collectionEvidence: raw.collectionEvidence,
         };
     });
 
@@ -97,6 +101,14 @@ export async function resolveSourceEvidence(
     for (const e of evidence) {
         for (const v of e.proposedValues) {
             if (v.entityType) affected.add(v.entityType);
+        }
+        for (const g of e.collectionEvidence?.groups ?? []) {
+            for (const inst of g.instances) {
+                if (inst.iteration_entity_type) affected.add(inst.iteration_entity_type);
+                for (const b of inst.field_bindings) {
+                    if (b.entity_type) affected.add(b.entity_type);
+                }
+            }
         }
     }
 

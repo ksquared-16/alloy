@@ -1,8 +1,8 @@
 # P5 — Processing Collection Proposal and Commit Bridge
 
-**Status:** Audit complete — implementation not started  
+**Status:** P5A architecture convergence complete — uncommitted (review gate)  
 **Branch:** `feat/processing-collection-execution-bridge`  
-**Baseline:** staging `fd99aab0a` (P4 #158 merged 2026-07-11)  
+**Baseline:** staging `9cd4bd5ae` (merge-base `c6e1adec8`)  
 **Worktree:** `/Users/Kelly/.cursor/worktrees/Alloy/processing-collection-execution-bridge`
 
 ## Mission
@@ -186,3 +186,141 @@ Implement shared P5A infrastructure once. Split commit adapters: Children (P5B/C
 ## P4 boundary (complete on staging)
 
 Collection metadata on form_submissions.payload; Processing opens by reference; no automatic mutation on submit. P5 begins at evidence adapter.
+
+
+---
+
+## P5A — Architecture convergence (implemented, uncommitted)
+
+**Status:** Refactored to canonical proposal boundary — review gate (do not commit product code until reviewed)
+
+### Core dependency direction
+
+```text
+Source payload
+  → Source-specific adapter
+  → Canonical related-record proposal envelope  (web/lib/intake/proposals/)
+  → Processing evidence projection             (web/lib/pos/processingCase/collection/)
+  → Processing UI                              (ProcessingCollectionEvidencePanel)
+```
+
+Forms path:
+
+```text
+form_submissions.payload
+  → extractFormCollectionEnvelope              (web/lib/forms/processing/)
+  → adaptFormSubmissionToRelatedRecordProposals
+  → adaptSourceToRelatedRecordProposals        (dispatch — Forms only for P5A)
+  → projectRelatedRecordProposalsToEvidence
+  → processingCaseEvidenceDb → resolveSourceEvidence → PosCaseWorkColumn
+```
+
+### Collection Provider vs Related-Record Proposal
+
+| Concern | Ownership | P5A scope |
+| --- | --- | --- |
+| Collection provider runtime (Children, Parents, Documents…) | `web/lib/fields/collection/` | Unchanged — not proposal model |
+| Related-record proposals (existing update / proposed new) | `web/lib/intake/proposals/` | **New canonical contract** |
+| Forms envelope parsing | `web/lib/forms/processing/` | Forms-owned adapter |
+| Processing review projection | `web/lib/pos/processingCase/collection/` | Evidence VM only |
+| Commit execution | P5B+ | **Not started** |
+
+### Canonical proposal contract
+
+Module: `web/lib/intake/proposals/types.ts`
+
+- `RelatedRecordInstanceProposal` — `proposal_id`, `collection_provider_ref`, `item_entity_type`, `origin: existing_record | proposed_new_record`, `field_proposals[]`, `source_lineage`, `diagnostics`, `status`
+- `RelatedRecordFieldProposal` — `provider_ref`, `submitted_value`, optional `source_fact_ref`, optional `label`
+- `ProposalSourceLineage` — `source_kind`, `source_record_id`, optional `source_path`, optional typed `source_metadata`
+- No FormSchema, form group IDs as semantic identity, or packet structures in canonical types
+
+### Evidence is a review projection
+
+Processing evidence adds presentation: labels, identity hints, display values, valid/incomplete/unsupported state, operator copy. Future commit execution must operate from **approved canonical proposals**, not evidence VMs.
+
+### Scalar compatibility (unchanged)
+
+- `labelSubmissionValues` — top-level scalar only
+- Collection nested fields never flattened into `proposedValues`
+- Malformed collection instances do not suppress scalar evidence
+
+### Grouped evidence UI (preserved)
+
+`ProcessingCollectionEvidencePanel` — collection grouped, instance grouped, existing vs proposed-new, diagnostics visible, no approve/commit controls.
+
+### Alternate-source readiness
+
+Architecture tests prove OCR/import/API fixtures project through `projectRelatedRecordProposalsToEvidence` without Forms types. No real alternate-source adapter implemented in P5A.
+
+### P5A boundary
+
+No approve, commit, record create/update/link/delete. Evidence and diagnostics only.
+
+### P5B dependency
+
+Children existing-item field commit adapter consumes **canonical proposals** after operator approval UI — not raw Forms payload or evidence VMs.
+
+### Remaining placement debt
+
+- `web/lib/fields/collection/*` still imports Forms types (P4 debt — not relocated in this pass)
+- Processing instance lineage VM retains Forms field names for display traceability only
+
+
+---
+
+## Canonical Collection Platform Convergence (2026-07-10)
+
+### Platform stack (dependency direction)
+
+```text
+Canonical Provider Platform
+  -> Canonical Relationship Platform
+  -> Canonical Collection Platform (web/lib/fields/collection/, relationship/canonicalCollection*)
+  -> Canonical Context / Availability Platform
+  -> Canonical Related-Record Proposal Platform (web/lib/intake/proposals/)
+  -> Consumer Adapters (Forms, Processing, Queue Rows, Focus Panel)
+```
+
+### Collection provider ownership
+
+Neutral registry: `web/lib/fields/collection/canonicalCollectionProviderRegistry.ts`
+
+Forms derivation (`canonicalFormsRelationshipProviderDerivation.ts`) remains a **consumer adapter** that projects registry entries into `CanonicalDataProvider` seeds for authoring.
+
+### Context requirement ownership
+
+Platform: `providerContextRequirementsFromCanonicalRef` (entity ownership derived).
+
+Forms adapter: `web/lib/forms/collection/formsProviderContextRequirements.ts`.
+
+### Processing evidence ownership
+
+Evidence is a review projection only. Canonical proposals -> `projectRelatedRecordProposalsToEvidence` -> UI.
+
+### Reference governance (deferred index)
+
+Shared contract: `web/lib/fields/providerConsumerReference.ts`. Full cross-consumer index deferred.
+
+### Remaining consumer migrations (not this pass)
+
+- Focus Panel card composition
+- Queue Row projection unification
+- Full provider reference index
+
+## P5A verified architecture status (2026-07-10)
+
+### Resolved contradictions (working-tree verified)
+
+- `web/lib/fields/collection/*` **does not** import Forms after platform split.
+- Neutral registry **exists**: `canonicalCollectionProviderRegistry.ts`.
+- Canonical focused P5A tests: **43 tests** in 9 files.
+- `verify:module-imports` must pass after staging (not while untracked).
+
+### Temporary source dispatch
+
+`adaptSourceToRelatedRecordProposals.ts` — Processing case ingestion orchestration seam. Calls Forms adapter; no envelope parsing.
+
+### P5A boundary
+
+Read-only grouped evidence. No approve/commit/record mutation. P5B begins after merge.
+

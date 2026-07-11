@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildCollectionIterationContext } from "@/lib/fields/collection/collectionIterationContext";
-import { evaluateFormFieldAvailabilityForIteration } from "@/lib/fields/collection/evaluateProviderAvailabilityForIteration";
+import { evaluateFormFieldAvailabilityForIteration } from "@/lib/forms/collection/formsProviderAvailability";
 import { validateFormsDocumentsP2Bindings } from "@/lib/forms/binding/validateFormsDocumentsP2Bindings";
 import { validateFormSchema } from "@/lib/forms/schema";
 

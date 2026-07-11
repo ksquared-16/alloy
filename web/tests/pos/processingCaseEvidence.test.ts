@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { resolveSourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import type { SourceEvidenceRaw, SourceEvidenceRegistry } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
+import type { ProcessingCollectionSourceEvidence } from "@/lib/pos/processingCase/collection/types";
 import type { ProcessingCaseDetail, ProcessingCaseSourceKind } from "@/lib/pos/processingCase/readModel/types";
 
 function detailWith(sources: { kind: ProcessingCaseSourceKind; id: string; role: "primary" | "related" }[]): ProcessingCaseDetail {
@@ -107,5 +108,101 @@ describe("resolveSourceEvidence", () => {
         });
         await resolveSourceEvidence(detail, reg);
         expect(calls.form_submission).toBe(1);
+    });
+});
+
+
+const sampleCollection: ProcessingCollectionSourceEvidence = {
+    groups: [
+        {
+            group_id: "kids",
+            collection_provider_ref: "children",
+            collection_label: "Children",
+            status: "valid",
+            diagnostics: [],
+            instances: [
+                {
+                    collection_provider_ref: "children",
+                    collection_label: "Children",
+                    iteration_entity_type: "customer_member",
+                    instance_key: "k1",
+                    origin: "existing",
+                    existing_item_id: "cm-1",
+                    identity_label: "Sam",
+                    status: "valid",
+                    diagnostics: [],
+                    field_bindings: [
+                        {
+                            field_id: "child_first_name",
+                            provider_ref: "child.child_first_name",
+                            entity_type: "child",
+                            field_key: "child_first_name",
+                            label: "First Name",
+                            submitted_value: "Sam",
+                            display_value: "Sam",
+                        },
+                    ],
+                    lineage: {
+                        processing_case_id: null,
+                        form_submission_id: "s1",
+                        form_definition_version_id: null,
+                        schema_group_id: "kids",
+                        collection_provider_ref: "children",
+                        instance_key: "k1",
+                        payload_path: "groups.kids[k1]",
+                    },
+                },
+            ],
+        },
+    ],
+    diagnostics: [],
+};
+
+describe("resolveSourceEvidence collection integration", () => {
+    it("keeps scalar evidence unchanged when collection evidence is present", async () => {
+        const detail = detailWith([{ kind: "form_submission", id: "s1", role: "primary" }]);
+        const { reg } = makeRegistry({
+            form_submission: {
+                s1: {
+                    proposedValues: [{ label: "Household note", value: "hello", entityType: "customer" }],
+                    documentId: null,
+                    collectionEvidence: sampleCollection,
+                },
+            },
+        });
+        const result = await resolveSourceEvidence(detail, reg);
+        expect(result.evidence[0]?.proposedValues).toEqual([
+            { label: "Household note", value: "hello", entityType: "customer" },
+        ]);
+        expect(result.evidence[0]?.collectionEvidence?.groups).toHaveLength(1);
+    });
+
+    it("does not flatten collection nested fields into scalar proposedValues", async () => {
+        const detail = detailWith([{ kind: "form_submission", id: "s1", role: "primary" }]);
+        const { reg } = makeRegistry({
+            form_submission: {
+                s1: { proposedValues: [], documentId: null, collectionEvidence: sampleCollection },
+            },
+        });
+        const result = await resolveSourceEvidence(detail, reg);
+        expect(result.evidence[0]?.proposedValues).toEqual([]);
+        expect(result.evidence[0]?.collectionEvidence?.groups[0]?.instances[0]?.field_bindings[0]?.label).toBe(
+            "First Name",
+        );
+    });
+
+    it("includes collection entity types in affectedRecordTypes without duplicating scalar", async () => {
+        const detail = detailWith([{ kind: "form_submission", id: "s1", role: "primary" }]);
+        const { reg } = makeRegistry({
+            form_submission: {
+                s1: {
+                    proposedValues: [{ label: "X", value: "1", entityType: "person" }],
+                    documentId: null,
+                    collectionEvidence: sampleCollection,
+                },
+            },
+        });
+        const result = await resolveSourceEvidence(detail, reg);
+        expect(result.affectedRecordTypes.sort()).toEqual(["child", "customer_member", "person"]);
     });
 });
