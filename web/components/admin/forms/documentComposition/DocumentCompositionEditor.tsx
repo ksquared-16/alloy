@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { useMemo } from "react";
 import { FormFieldAuthoringCard } from "@/components/admin/forms/FormFieldAuthoringCard";
+import { FormGroupAuthoringCard } from "@/components/admin/forms/FormGroupAuthoringCard";
 import { DocumentCompositionBlockCard } from "@/components/admin/forms/documentComposition/DocumentCompositionBlockCard";
 import type { DocumentBlock, DocumentComposition } from "@/lib/forms/documentComposition";
 import { sortDocumentBlocks } from "@/lib/forms/documentComposition";
@@ -21,9 +22,13 @@ import {
     updateCompositionBlock,
 } from "@/lib/forms/documentCompositionAuthoring";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
+import { COLLECTION_AUTHORING_COPY } from "@/lib/forms/formFieldAuthoringPresentation";
+import { FormSchemaRuntimePreview } from "@/components/admin/forms/FormSchemaRuntimePreview";
 import { useFormSchemaFieldAuthoring } from "@/lib/forms/useFormSchemaFieldAuthoring";
 import { useFormSystemFieldPicker } from "@/lib/fields/useFormSystemFieldPicker";
 import { customUnmappedTextField, formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
+import { buildFormsAuthorableCollectionBindingSeeds } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
+import { collectionBindingFromProvider } from "@/lib/fields/formsCollectionRepeatBinding";
 import {
     opGroupedSurface,
     opMetadata,
@@ -139,6 +144,34 @@ export function DocumentCompositionEditor({
         onSelectField?.(f.id);
     };
 
+    const addRepeatableSectionToRegion = (regionId: string) => {
+        const provider = buildFormsAuthorableCollectionBindingSeeds()[0];
+        if (!provider) return;
+        const id = `group_${provider.refKey.replace(/[^a-z0-9]+/gi, "_")}_${Math.random().toString(36).slice(2, 7)}`;
+        const groupField = {
+            id,
+            type: "group" as const,
+            label: provider.label,
+            required: false,
+            repeat: { min: 0, max: 10 },
+            collection_binding: collectionBindingFromProvider(provider),
+            fields: [] as FormSchemaV1["fields"],
+        };
+        const sec0 = schema.sections[0] ?? { id: "main", title: "Questions", field_ids: [] as string[] };
+        const nextComp = addFieldIdToRegion(composition, regionId, id);
+        onChange(
+            patchSchemaComposition(
+                {
+                    ...schema,
+                    fields: [...schema.fields, groupField],
+                    sections: [{ ...sec0, field_ids: [...sec0.field_ids, id] }, ...schema.sections.slice(1)],
+                },
+                nextComp,
+            ),
+        );
+        onSelectField?.(id);
+    };
+
     const removeField = (fieldId: string) => {
         const nextComp = removeFieldIdFromComposition(composition, fieldId);
         const nextFields = schema.fields.filter((f) => f.id !== fieldId);
@@ -203,6 +236,20 @@ export function DocumentCompositionEditor({
                                             {block.field_ids.map((fid, fi) => {
                                                 const field = fieldById(schema, fid);
                                                 if (!field) return null;
+                                                if (field.type === "group") {
+                                                    return (
+                                                        <FormGroupAuthoringCard
+                                                            key={field.id}
+                                                            field={field}
+                                                            systemFields={systemFields}
+                                                            disabled={disabled}
+                                                            highlighted={selectedFieldId === field.id}
+                                                            onFieldChange={(next) => fieldAuthoring.updateGroupField(field.id, next)}
+                                                            onRemove={() => removeField(fid)}
+                                                            onFocus={() => onSelectField?.(field.id)}
+                                                        />
+                                                    );
+                                                }
                                                 const idx = fieldAuthoring.fieldIndexById(fid);
                                                 if (idx < 0) return null;
                                                 const entry = fieldAuthoring.registryEntryForField(field);
@@ -252,6 +299,15 @@ export function DocumentCompositionEditor({
                                         data-testid={`document-add-question-${block.id}`}
                                     >
                                         {COMPOSITION_BLOCK_COPY.addQuestionToSection}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="rounded-md border border-alloy-midnight/10 bg-white px-2 py-1 text-xs font-medium text-alloy-midnight shadow-sm hover:bg-alloy-stone/20 disabled:opacity-40"
+                                        disabled={disabled}
+                                        onClick={() => addRepeatableSectionToRegion(block.id)}
+                                        data-testid={`document-add-repeatable-section-${block.id}`}
+                                    >
+                                        {COLLECTION_AUTHORING_COPY.addRepeatableSection}
                                     </button>
                                     {otherRegions.length > 0 ?
                                         <label className="flex items-center gap-1 text-xs text-alloy-midnight/70">
@@ -371,6 +427,8 @@ export function DocumentCompositionEditor({
                     </p>
                 :   null}
             </details>
+
+            <FormSchemaRuntimePreview schema={schema} />
         </div>
     );
 }

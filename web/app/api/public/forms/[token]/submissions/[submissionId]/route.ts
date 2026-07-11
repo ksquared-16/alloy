@@ -14,6 +14,11 @@ import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta"
 import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
 import { emitOpportunityEnrollmentPacketOpenedSafe } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
+import {
+    extractCollectionSubmissionEnvelope,
+    validateCollectionPayloadContract,
+    validateCollectionPayloadOrgSecurity,
+} from "@/lib/forms/collection/formsCollectionSubmissionValidation";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -170,6 +175,26 @@ export async function PATCH(
         };
     }
 
+    const collectionContractErrors = validateCollectionPayloadContract(schema, payloadForValidate as FormPayload, "draft");
+    if (collectionContractErrors.length > 0) {
+        return publicErr("Invalid collection payload", 400, { validation_errors: collectionContractErrors });
+    }
+
+    const existingSub = existing as {
+        payload: FormPayload;
+        customer_id: string | null;
+    };
+    const collectionSecurityErrors = await validateCollectionPayloadOrgSecurity(
+        supabase,
+        ctx.orgId,
+        schema,
+        payloadForValidate as FormPayload,
+        { customer_id: existingSub.customer_id },
+    );
+    if (collectionSecurityErrors.length > 0) {
+        return publicErr("Invalid collection item reference", 403, { validation_errors: collectionSecurityErrors });
+    }
+
     const validated = validateFormPayload({
         schemaJson,
         payload: payloadForValidate,
@@ -180,13 +205,20 @@ export async function PATCH(
         return publicErr("Invalid submission payload", 400, { validation_errors: validated.errors });
     }
 
-    const existingPayload = (existing as { payload: FormPayload }).payload;
-    const guardedPayload = applyReadOnlyBaselineToPayload(validated.schema, validated.payload, existingPayload);
+    const guardedPayload = applyReadOnlyBaselineToPayload(validated.schema, validated.payload, existingSub.payload);
 
     const ipHash = hashClientIp(request);
+    const metaStamp: Record<string, unknown> = {
+        ...mergePublicSubmissionMeta(guardedPayload.meta as Record<string, unknown> | undefined, ipHash),
+    };
+    const collectionEnvelope = extractCollectionSubmissionEnvelope(guardedPayload);
+    if (Object.keys(collectionEnvelope).length > 0) {
+        metaStamp.collection_submission_envelope = collectionEnvelope;
+    }
+
     const mergedPayload = {
         ...guardedPayload,
-        meta: mergePublicSubmissionMeta(guardedPayload.meta as Record<string, unknown> | undefined, ipHash),
+        meta: metaStamp,
     };
 
     const { data: updated, error: upErr } = await supabase

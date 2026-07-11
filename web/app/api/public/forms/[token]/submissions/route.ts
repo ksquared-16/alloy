@@ -6,7 +6,13 @@ import { ZodError } from "zod";
 import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import { mergePrefillIntoDraftValues } from "@/lib/forms/prefill/mergePrefillDraftValues";
 import { parsePrefillFieldMapFromMetadata } from "@/lib/forms/prefill/prefillFieldMap";
-import { resolveFormPrefillValues, shouldApplyServerPrefill } from "@/lib/forms/prefill/resolveFormPrefillValues";
+import { resolveFormPrefillPayload } from "@/lib/forms/prefill/resolveFormPrefillPayload";
+import { shouldApplyServerPrefill } from "@/lib/forms/prefill/resolveFormPrefillValues";
+import {
+    extractCollectionSubmissionEnvelope,
+    validateCollectionPayloadContract,
+    validateCollectionPayloadOrgSecurity,
+} from "@/lib/forms/collection/formsCollectionSubmissionValidation";
 import { resolvePublicFormEmbedContext } from "@/lib/public/forms/resolvePublicFormEmbedContext";
 import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
@@ -16,6 +22,7 @@ import { stampFormContextFromLinkMetadata } from "@/lib/forms/formContextMode";
 import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
 import { mergeLaunchFksPreferringSessionCrmSnapshot } from "@/lib/forms/packets/formPacketService";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
+import type { FormPayload } from "@/lib/forms/validateSubmission";
 
 function plaintextToken(raw: string): string {
     try {
@@ -159,6 +166,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     let serverPrefill: Record<string, string | number | boolean> = {};
+    let mergedPayloadForValidation: FormPayload = {
+        values: clientVals,
+        groups: payload.groups as FormPayload["groups"],
+        signatures: payload.signatures as FormPayload["signatures"],
+        meta: payload.meta as FormPayload["meta"],
+    };
     if (shouldApplyServerPrefill(ctx.linkMetadata)) {
         try {
             let fdRecord: Record<string, unknown> | null = null;
@@ -177,14 +190,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         ? (fdMeta as Record<string, unknown>)
                         : null;
             }
-            serverPrefill = await resolveFormPrefillValues(
+            const prefillResult = await resolveFormPrefillPayload({
                 supabase,
-                ctx.orgId,
-                ctx.linkMetadata,
-                fdRecord,
+                orgId: ctx.orgId,
+                linkMetadata: ctx.linkMetadata,
+                formDefinitionMetadata: fdRecord,
                 schema,
-                launchFks
-            );
+                launchFks,
+                savedPayload: {
+                    values: clientVals,
+                    groups: (payload.groups as FormPayload["groups"]) ?? undefined,
+                },
+            });
+            serverPrefill = prefillResult.scalarPrefill;
+            mergedPayloadForValidation = {
+                values: prefillResult.payload.values ?? {},
+                groups: prefillResult.payload.groups,
+                signatures: payload.signatures as FormPayload["signatures"],
+                meta: payload.meta as FormPayload["meta"],
+            };
         } catch (e) {
             return publicErr(e instanceof Error ? e.message : "Prefill resolve failed", 400);
         }
@@ -195,9 +219,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         mergedValues = filterPayloadValuesToSchemaFields(schema, mergedValues);
     }
 
+    const draftPayload = {
+        ...mergedPayloadForValidation,
+        values: mergedValues,
+    };
+
+    const collectionContractErrors = validateCollectionPayloadContract(schema, draftPayload, "draft");
+    if (collectionContractErrors.length > 0) {
+        return publicErr("Invalid collection payload", 400, { validation_errors: collectionContractErrors });
+    }
+
+    const collectionSecurityErrors = await validateCollectionPayloadOrgSecurity(
+        supabase,
+        ctx.orgId,
+        schema,
+        draftPayload,
+        launchFks,
+    );
+    if (collectionSecurityErrors.length > 0) {
+        return publicErr("Invalid collection item reference", 403, { validation_errors: collectionSecurityErrors });
+    }
+
     const validated = validateFormPayload({
         schemaJson: ctx.schemaJson,
-        payload: { ...payload, values: mergedValues },
+        payload: draftPayload,
         mode: "draft",
         optionValuesByFieldId,
     });
@@ -216,6 +261,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (Object.keys(serverPrefill).length > 0) {
         metaStamp.prefill_snapshot = serverPrefill;
         metaStamp.prefill_applied = true;
+    }
+    const collectionEnvelope = extractCollectionSubmissionEnvelope(validated.payload);
+    if (Object.keys(collectionEnvelope).length > 0) {
+        metaStamp.collection_submission_envelope = collectionEnvelope;
     }
 
     const mergedPayload = {

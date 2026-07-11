@@ -245,10 +245,9 @@ export function FormEmbedClient({
             setSubmissionId(cr.data.id);
             window.sessionStorage.setItem(storageKey(token), cr.data.id);
             // For packets, the server merges known-record prefill into the created draft
-            // and returns it. Use that so the parent sees known info to CONFIRM on first
-            // open (single forms keep the empty initial payload — no behavior change).
+            // and returns it. Use server payload (scalars + collection groups) when present.
             let firstPayload: FormPayload = initialPayload;
-            if (json.data.packet && cr.data.payload && typeof cr.data.payload === "object") {
+            if (cr.data.payload && typeof cr.data.payload === "object") {
                 const serverPayload = cr.data.payload;
                 firstPayload = {
                     ...serverPayload,
@@ -256,6 +255,7 @@ export function FormEmbedClient({
                         parsedSchema,
                         (serverPayload.values ?? {}) as Record<string, unknown>
                     ),
+                    groups: serverPayload.groups ?? initialPayload.groups,
                 };
             }
             setPayload(firstPayload);

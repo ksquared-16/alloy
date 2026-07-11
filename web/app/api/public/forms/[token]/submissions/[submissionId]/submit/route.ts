@@ -37,6 +37,10 @@ import {
     emitOpportunityEnrollmentPacketStepCompletedSafe,
 } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
+import {
+    extractCollectionSubmissionEnvelope,
+    validateCollectionPayloadOrgSecurity,
+} from "@/lib/forms/collection/formsCollectionSubmissionValidation";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -166,6 +170,17 @@ export async function POST(
         return publicErr("Invalid submission payload", 400, { validation_errors: validated.errors });
     }
 
+    const collectionSecurityErrors = await validateCollectionPayloadOrgSecurity(
+        supabase,
+        ctx.orgId,
+        validated.schema,
+        validated.payload,
+        { customer_id: sub.customer_id },
+    );
+    if (collectionSecurityErrors.length > 0) {
+        return publicErr("Invalid collection item reference", 403, { validation_errors: collectionSecurityErrors });
+    }
+
     const guardedValues = applyReadOnlyBaselineToPayload(validated.schema, validated.payload, sub.payload as FormPayload);
 
     const ipHash = hashClientIp(request);
@@ -173,6 +188,17 @@ export async function POST(
         ...guardedValues,
         meta: mergePublicSubmissionMeta(guardedValues.meta as Record<string, unknown> | undefined, ipHash),
     };
+
+    const collectionEnvelope = extractCollectionSubmissionEnvelope(finalPayload);
+    if (Object.keys(collectionEnvelope).length > 0) {
+        finalPayload = {
+            ...finalPayload,
+            meta: {
+                ...((finalPayload.meta ?? {}) as Record<string, unknown>),
+                collection_submission_envelope: collectionEnvelope,
+            },
+        };
+    }
 
     let personId = sub.person_id;
     let customerId = sub.customer_id;

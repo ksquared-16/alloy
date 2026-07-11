@@ -15,8 +15,9 @@ import {
     relationshipProviderToFormFieldSource,
 } from "@/lib/fields/formsRelationshipFieldSourceBinding";
 import {
-    collectionBindingFromProvider,
     collectionBindingAuthoringEnabled,
+    collectionBindingAuthoringEnabledForRef,
+    collectionBindingFromProvider,
     validateNestedFieldForIterationEntity,
 } from "@/lib/fields/formsCollectionRepeatBinding";
 import {
@@ -213,9 +214,12 @@ describe("Forms P2 operational role scope", () => {
     });
 });
 
-describe("Forms P2 collection foundation-only", () => {
-    it("collection_binding authoring is disabled in P2", () => {
-        expect(collectionBindingAuthoringEnabled()).toBe(false);
+describe("Forms P4 collection authoring", () => {
+    it("enables collection authoring per supported provider ref", () => {
+        expect(collectionBindingAuthoringEnabled()).toBe(true);
+        expect(collectionBindingAuthoringEnabledForRef("children")).toBe(true);
+        expect(collectionBindingAuthoringEnabledForRef("person.contact_role.parents")).toBe(true);
+        expect(collectionBindingAuthoringEnabledForRef("household.members")).toBe(false);
     });
 
     it("collection binding uses single canonical provider ref", () => {
@@ -226,7 +230,7 @@ describe("Forms P2 collection foundation-only", () => {
         expect(binding.iteration_entity_type).toBe("customer_member");
     });
 
-    it("rejects collection-bound groups at publish while foundation-only", () => {
+    it("accepts valid children collection-bound group at publish when enabled", () => {
         const schema = validateFormSchema({
             schema_version: 1,
             title: "T",
@@ -256,7 +260,40 @@ describe("Forms P2 collection foundation-only", () => {
             ],
         });
         const violations = validateFormsDocumentsP2Bindings(schema);
-        expect(violations.some((v) => v.message.includes("foundation-only"))).toBe(true);
+        expect(violations.some((v) => v.message.includes("foundation-only"))).toBe(false);
+        expect(violations.some((v) => v.message.includes("not enabled"))).toBe(false);
+    });
+
+    it("rejects disabled household.members collection at publish", () => {
+        const schema = validateFormSchema({
+            schema_version: 1,
+            title: "T",
+            sections: [{ id: "s", field_ids: ["members"] }],
+            fields: [
+                {
+                    id: "members",
+                    type: "group",
+                    label: "Members",
+                    required: false,
+                    repeat: { min: 0, max: 5 },
+                    collection_binding: {
+                        collection_provider_ref: "household.members",
+                        iteration_entity_type: "customer_member",
+                    },
+                    fields: [
+                        {
+                            id: "member_label",
+                            type: "text",
+                            label: "Label",
+                            required: false,
+                            field_source: { entity_type: "child", field_key: "child_first_name" },
+                        },
+                    ],
+                },
+            ],
+        });
+        const violations = validateFormsDocumentsP2Bindings(schema);
+        expect(violations.some((v) => v.message.includes("not enabled"))).toBe(true);
     });
 
     it("accepts customer_member identity fields for iteration entity", () => {

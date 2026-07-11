@@ -18,7 +18,8 @@ import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
 import { chunkFieldsForHalfRowLayout } from "@/lib/forms/fieldLayoutChunks";
 import { isCustomUnmappedField } from "@/lib/forms/formFieldAuthoringPresentation";
 import { CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION } from "@/lib/forms/systemFieldToFormField";
-import { emptyPayload, ensureGroupRows, setSignature, setTopLevelValue } from "./formEnginePayload";
+import { emptyPayload, ensureGroupRows, newRespondentAddedCollectionRow, setSignature, setTopLevelValue } from "./formEnginePayload";
+import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
 
 export type FormEngineOptionChoice = { value: string; label: string };
 
@@ -689,12 +690,14 @@ export function FormEngineRenderer({
                             onClick={() =>
                                 updateRows([
                                     ...rows,
-                                    {
-                                        instance_key: randomInstanceKey(),
-                                        values: {},
-                                        groups: {},
-                                        signatures: {},
-                                    },
+                                    groupFieldHasCollectionBinding(field) && field.collection_binding
+                                        ? newRespondentAddedCollectionRow(field.collection_binding)
+                                        : {
+                                              instance_key: randomInstanceKey(),
+                                              values: {},
+                                              groups: {},
+                                              signatures: {},
+                                          },
                                 ])
                             }
                         >

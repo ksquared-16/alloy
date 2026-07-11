@@ -9,10 +9,10 @@ import {
 } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
 import {
     FORMS_MAX_COLLECTION_NESTING_DEPTH,
-    collectionBindingAuthoringEnabled,
+    collectionBindingAuthoringEnabledForRef,
+    collectionContextIsValid,
     groupFieldHasCollectionBinding,
-    nestedFieldRequiresEnrollmentContext,
-    validateNestedFieldForIterationEntity,
+    nestedFieldAvailabilityForBinding,
 } from "@/lib/fields/formsCollectionRepeatBinding";
 import { evaluateFormsRelationshipProviderEligibility } from "@/lib/fields/formsProviderEligibility";
 import {
@@ -128,12 +128,14 @@ function validateRelationshipLeaf(field: FormField, violations: FieldBindingViol
 function validateCollectionGroup(field: FormField & { type: "group" }, violations: FieldBindingViolation[], depth: number): void {
     if (!groupFieldHasCollectionBinding(field)) return;
 
-    if (!collectionBindingAuthoringEnabled()) {
+    const binding = field.collection_binding!;
+
+    if (!collectionBindingAuthoringEnabledForRef(binding.collection_provider_ref)) {
         pushViolation(
             violations,
             field.id,
             "unsupported_provider_kind",
-            `Repeatable section "${field.id}" uses collection_binding, which is foundation-only in P2 and cannot publish yet.`,
+            `Repeatable section "${field.id}" uses collection provider "${binding.collection_provider_ref}" which is not enabled for authoring.`,
         );
         return;
     }
@@ -148,7 +150,6 @@ function validateCollectionGroup(field: FormField & { type: "group" }, violation
         return;
     }
 
-    const binding = field.collection_binding!;
     const provider = findFormsCollectionBindingProvider(binding.collection_provider_ref);
     if (!provider || provider.outputShape !== "collection") {
         pushViolation(
@@ -179,19 +180,16 @@ function validateCollectionGroup(field: FormField & { type: "group" }, violation
             );
         }
         if (child.type !== "group" && child.field_source) {
-            if (nestedFieldRequiresEnrollmentContext(child)) {
+            const availability = nestedFieldAvailabilityForBinding(child, binding);
+            if (!availability.available) {
                 pushViolation(
                     violations,
                     child.id,
-                    "unsupported_provider_kind",
-                    `Field "${child.id}" requires enrollment/opportunity context and cannot be nested in a household child repeater without explicit subject binding.`,
-                );
-            } else if (!validateNestedFieldForIterationEntity(child, binding.iteration_entity_type)) {
-                pushViolation(
-                    violations,
-                    child.id,
-                    "unsupported_provider_kind",
-                    `Field "${child.id}" is not valid for collection iteration entity "${binding.iteration_entity_type}".`,
+                    availability.reason === "missing_required_context"
+                        ? "unsupported_provider_kind"
+                        : "unsupported_provider_kind",
+                    availability.message
+                        ?? `Field "${child.id}" is not available in collection iteration context "${binding.iteration_entity_type}".`,
                 );
             }
         }

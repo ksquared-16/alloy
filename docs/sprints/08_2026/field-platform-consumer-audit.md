@@ -962,3 +962,18 @@ This sprint **audited only**. No consumer code was changed. Data Model remains *
 ```
 docs(sprint): Field Platform consumer audit for eight configuration surfaces
 ```
+
+---
+
+## P4 addendum — Forms / Documents collection authoring (2026-07)
+
+**Branch:** `feat/forms-documents-collection-authoring` (uncommitted)
+
+Forms/Documents now implements bounded collection-bound repeatable sections:
+
+- Enabled: `children`, `person.contact_role.parents` (per-provider gate)
+- Bootstrap: `resolveFormPrefillPayload` + merge precedence by stable item identity
+- Authoring: iteration-filtered nested picker; publish + submission security validation
+- Processing: envelope preserved in submission meta — execution deferred to P5
+
+See `docs/sprints/08_2026/forms-documents-collection-authoring.md`.

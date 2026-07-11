@@ -731,35 +731,33 @@ Relationship leaves are **read-only prefill in P2** — submission may include i
 | Option flicker | Stable sort by label; tenant merge updates labels in-place by canonical ref key |
 | Legacy gap fill | Operational catalog used only for hydration gaps **after** successful tenant merge |
 
-## 22. P3A — Canonical relationship runtime resolution (in progress)
+## 22. P3A — Canonical relationship runtime resolution (merged)
 
-**Status:** Architecture-hardened — **not committed** (review gate)  
-**Branch:** `feat/relationship-runtime-resolution`  
-**Baseline:** staging `958341e25`
+**Status:** **Merged** — PR #146 → staging `35e1a2669`  
+**Branch:** `feat/relationship-runtime-resolution`
 
-### Canonical Primary Contact authority
+See `docs/sprints/08_2026/forms-documents-relationship-runtime-resolution.md`.
 
-Repository evidence establishes **household write authority** on `customer_persons` (`role_type=primary_contact`, `is_primary=true`) and **opportunity projection** on `opportunities.primary_person_id`. Legacy `customers.primary_contact_id` is reconciliation evidence only — not updated by make-primary.
+## 23. P4 — Collection-bound repeatable authoring (in progress)
 
-Resolution policy: canonical pointer wins; legacy disagreement → `relationship_data_conflict` diagnostic (not ambiguous).
+**Status:** Implementation complete — **review gate (uncommitted)**  
+**Branch:** `feat/forms-documents-collection-authoring`
 
-### Focus Panel as active consumer
+### Enabled collections
 
-Household card primary id now resolves via `resolvePrimaryContactAuthority` instead of `resolveLeadSummaryPrimaryPersonId`. Legacy drawer modules retained for compatibility; first-match paths documented for P3B convergence.
+Children (`customer_member` iteration) and Parents/Guardians (`person` iteration) via per-provider authoring gate.
 
-### Non-primary role semantics
+### Bootstrap
 
-| Role | Semantic shape | Picker |
-| --- | --- | --- |
-| Primary | optional_singular | Enabled read-only |
-| Secondary, Parents, Emergency, Billing | collection / contextual_collection | Deferred |
+`resolveFormPrefillPayload` orchestrates scalar + relationship + collection prefill with deterministic merge precedence. Wired to public submission bootstrap.
 
-### Validation (local, post-P3A hardening)
+### Authoring
 
-- Focused P3A + P2 tests: **54/54 pass**
-- `NODE_OPTIONS=--max-old-space-size=8192 npm run typecheck` — **pass**
+`FormGroupAuthoringCard` — collection selector, nested field picker filtered by iteration entity, provider switch with incompatible-field confirmation.
 
-### Recommendation
+### Submission
 
-**Safe for review, not yet safe to commit** — await sign-off on Primary authority policy and collection-shaped role classification.
+Optional `collection` metadata on group rows; org/household security validation; Processing envelope preserved in `meta.collection_submission_envelope`.
+
+See `docs/sprints/08_2026/forms-documents-collection-authoring.md`.
 

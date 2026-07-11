@@ -19,6 +19,11 @@ import {
     type SystemFieldRegistryEntry,
 } from "@/lib/forms/systemFieldRegistry";
 import { customUnmappedTextField, formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
+import {
+    buildFormsAuthorableCollectionBindingSeeds,
+    findFormsCollectionBindingProvider,
+} from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
+import { collectionBindingFromProvider } from "@/lib/fields/formsCollectionRepeatBinding";
 
 const EMAIL_PATTERN = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
 const PHONE_PATTERN = "^[+0-9()\\-\\s]{7,}$";
@@ -168,6 +173,42 @@ export function useFormSchemaFieldAuthoring(
         });
     }, [patchSchema, schema.fields, schema.sections, systemFields, topFields]);
 
+    const addCollectionBoundGroup = useCallback(
+        (providerRef?: string) => {
+            const providers = buildFormsAuthorableCollectionBindingSeeds();
+            const provider =
+                (providerRef ? findFormsCollectionBindingProvider(providerRef) : null)
+                ?? providers[0];
+            if (!provider) return null;
+            const id = `group_${provider.refKey.replace(/[^a-z0-9]+/gi, "_")}_${Math.random().toString(36).slice(2, 7)}`;
+            const groupField: FormField = {
+                id,
+                type: "group",
+                label: provider.label,
+                required: false,
+                repeat: { min: 0, max: 10 },
+                collection_binding: collectionBindingFromProvider(provider),
+                fields: [],
+            };
+            const sec0 = schema.sections[0] ?? { id: "main", title: "Questions", field_ids: [] as string[] };
+            patchSchema({
+                fields: [...schema.fields, groupField],
+                sections: [{ ...sec0, field_ids: [...sec0.field_ids, groupField.id] }, ...schema.sections.slice(1)],
+            });
+            return groupField.id;
+        },
+        [patchSchema, schema.fields, schema.sections],
+    );
+
+    const updateGroupField = useCallback(
+        (fieldId: string, next: FormField & { type: "group" }) => {
+            patchSchema({
+                fields: schema.fields.map((f) => (f.id === fieldId ? next : f)),
+            });
+        },
+        [patchSchema, schema.fields],
+    );
+
     const removeFieldAt = useCallback(
         (index: number) => {
             const ids = [...(mainSection?.field_ids ?? [])];
@@ -279,6 +320,8 @@ export function useFormSchemaFieldAuthoring(
         patchSchema,
         setFieldAt,
         addField,
+        addCollectionBoundGroup,
+        updateGroupField,
         removeFieldAt,
         removeFieldById,
         move,

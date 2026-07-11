@@ -239,3 +239,42 @@ export function collectRolePersonCandidates(
 
     return [];
 }
+
+/** Parent/guardian role keys per Person — one row per Person in P4; roles aggregated on the item. */
+export function collectParentRoleRefsByPersonId(args: {
+    customerId: string | null;
+    data: RelationshipResolutionDataBag;
+    excludePrimaryPersonId: string | null;
+}): Map<string, string[]> {
+    const map = new Map<string, string[]>();
+    const exclude = new Set<string>();
+    if (args.excludePrimaryPersonId) exclude.add(args.excludePrimaryPersonId);
+
+    const addRole = (personId: string, roleKey: string) => {
+        const roles = map.get(personId) ?? [];
+        if (!roles.includes(roleKey)) roles.push(roleKey);
+        map.set(personId, roles);
+    };
+
+    const parentRoleFilter = (key: string) =>
+        PARENT_ROLE_KEYS.has(key) || key.includes("parent") || key.includes("guardian");
+
+    for (const row of args.data.customerPersonRows ?? []) {
+        if (args.customerId && trim(row.customer_id) !== args.customerId) continue;
+        const personId = personIdFromCustomerPersonRow(row);
+        if (!personId || exclude.has(personId)) continue;
+        const roleKey = normRole(row.role_type);
+        if (!roleKey || isPrimaryRole(roleKey) || !parentRoleFilter(roleKey)) continue;
+        addRole(personId, roleKey);
+    }
+
+    for (const row of args.data.opportunityPersonRows ?? []) {
+        const personId = personIdFromCustomerPersonRow(row);
+        if (!personId || exclude.has(personId)) continue;
+        const roleKey = normRole(row.role_type);
+        if (!roleKey || isPrimaryRole(roleKey) || !parentRoleFilter(roleKey)) continue;
+        addRole(personId, roleKey);
+    }
+
+    return map;
+}

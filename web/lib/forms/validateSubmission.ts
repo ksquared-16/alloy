@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FormField, FormSchemaV1 } from "./schema";
 import { formSchemaV1Schema } from "./schema";
+import { validateCollectionPayloadContract } from "@/lib/forms/collection/formsCollectionSubmissionValidation";
 
 export type FormPayloadMode = "draft" | "submit";
 
@@ -20,12 +21,21 @@ export type FormPayload = {
     meta?: Record<string, unknown>;
 };
 
+export type FormPayloadGroupRowCollectionMeta = {
+    provider_ref: string;
+    item_id?: string;
+    origin: "existing" | "respondent_added";
+    iteration_entity_type: string;
+};
+
 export type FormPayloadGroupRow = {
     instance_key: string;
     values: Record<string, unknown>;
     groups?: Record<string, FormPayloadGroupRow[]>;
     /** Signatures for `signature` fields defined inside this group (required for repeatable / nested signatures). */
     signatures?: Record<string, FormPayloadSignature>;
+    /** Optional runtime metadata for collection-bound repeaters — preserved in submission envelope for Processing (P5). */
+    collection?: FormPayloadGroupRowCollectionMeta;
 };
 
 export type FormPayloadSignature = z.infer<typeof signatureEntrySchema>;
@@ -40,6 +50,15 @@ export type ValidateFormPayloadResult =
     | { ok: true; schema: FormSchemaV1; payload: FormPayload }
     | { ok: false; errors: NormalizedValidationError[] };
 
+const formPayloadGroupRowCollectionMetaSchema = z
+    .object({
+        provider_ref: z.string().min(1),
+        item_id: z.string().optional(),
+        origin: z.enum(["existing", "respondent_added"]),
+        iteration_entity_type: z.string().min(1),
+    })
+    .strict();
+
 const formPayloadGroupRowSchema: z.ZodType<FormPayloadGroupRow> = z.lazy(() =>
     z
         .object({
@@ -47,6 +66,7 @@ const formPayloadGroupRowSchema: z.ZodType<FormPayloadGroupRow> = z.lazy(() =>
             values: z.record(z.string(), z.unknown()).default({}),
             groups: z.record(z.string(), z.array(formPayloadGroupRowSchema)).optional(),
             signatures: z.record(z.string(), signatureEntrySchema).optional(),
+            collection: formPayloadGroupRowCollectionMetaSchema.optional(),
         })
         .strict()
 );
@@ -668,6 +688,8 @@ export function validateFormPayload(input: {
             errors.push(...validateScalarValue(field, raw, mode, optionValuesByFieldId, ["values", field.id]));
         }
     }
+
+    errors.push(...validateCollectionPayloadContract(schema, payload, mode));
 
     if (errors.length > 0) {
         return { ok: false, errors };
