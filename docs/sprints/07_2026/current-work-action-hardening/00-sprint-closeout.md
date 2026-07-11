@@ -2,135 +2,130 @@
 
 **Sprint:** July 2026  
 **Status:** **READY FOR PRODUCT QA**  
-**Merged:** PR [#111](https://github.com/ksquared-16/alloy/pull/111) + PR [#117](https://github.com/ksquared-16/alloy/pull/117) → `staging`  
-**Merge commit (QA pass):** `c2671ea7b` — Merge PR #117  
-**Staging HEAD:** `c2671ea7b`
+**Merged:** PR [#155](https://github.com/ksquared-16/alloy/pull/155) → `staging`  
+**Merge commit:** `96ff1fc0432191b8da56d32c9282f703cee73659`  
+**Staging HEAD:** `96ff1fc0432191b8da56d32c9282f703cee73659`
 
 ---
 
 ## Ready for Product QA
 
-The Current Work hardening stream is on staging and ready for manual Product QA.
+The Current Work hardening stream (Phases 2–4) is merged to staging and ready for manual Product QA. The broader product initiative is **not** complete until QA feedback is incorporated.
 
 ### Promotion summary
 
-| Phase | PR | Commit | Scope |
-|-------|-----|--------|-------|
-| Phase 1 — Published plan + checklist truth + action panel | [#111](https://github.com/ksquared-16/alloy/pull/111) | `da8a82c30` | Operating-plan wiring, checklist truth, Schedule Tour slide-in panel |
-| Phase 2 — QA hardening pass | [#117](https://github.com/ksquared-16/alloy/pull/117) | `c2671ea7b` | Builder parity, field labels, activity preview, alternate-path merge, visual polish |
+| Phase | Commits | Scope |
+|-------|---------|-------|
+| Phase 2 — Requirement timing | `112dbeb47`, `f3cd5f1e5` | `record_creation` vs stage-exit enforcement; Create Lead intake; transition preflight; legacy compatibility |
+| Phase 3 — Work Template actions | `13b9062d6`, `962b9def9` | Explicit `primary_action`, `helpful_actions`, `alternate_paths`, `outcome_refs`; editor controls; runtime resolver with explicit-empty semantics |
+| Phase 4 — Identity composition | `54bce7cd0`, `41b0d0af2`, `4709ad4bb`, `8136d8dc0`, `a7ff5b5c1`, `a2c0b1ff0` | Shared identity VM/renderer; Household + Children migration; Composer/runtime reconciliation; edit + save→refresh parity |
 
-### CI status (PR #117, pre-merge)
+Prior Phase 1 work (PR #111, #117) remains on staging from earlier promotion.
+
+### CI status (PR #155, post-push @ `a2c0b1ff0`)
 
 | Check | Result |
 |-------|--------|
-| Web typecheck | pass |
-| Vercel – workwithalloy | pass |
-| Vercel – firefly-early-learning | pass |
-| Vercel Preview Comments | pass |
+| Production graph (Web typecheck) | **pass** |
+| Full graph (tests + scripts / typecheck:tests) | **pass** |
+| Vercel – firefly-early-learning | **pass** |
+| Vercel Preview Comments | **pass** |
+| Vercel – workwithalloy | **fail** (preview deploy only; GitHub Actions green) |
+| Supabase Preview | skipped |
 
-### Post-merge validation (staging @ `c2671ea7b`)
+### Post-merge validation (staging @ `96ff1fc04`)
 
 ```bash
-cd web && NODE_OPTIONS="--max-old-space-size=8192" npx tsc --noEmit   # exit 0
+cd web && NODE_OPTIONS=--max-old-space-size=8192 npm run typecheck
+# exit 0
 
 cd web && npm run test -- \
-  tests/adminV2/runtime/currentWorkCard.test.tsx \
+  tests/lifecycle/requirementTimingEvaluation.test.ts \
+  tests/lifecycle/stageTransitionReconciliation.test.ts \
+  tests/lifecycle/resolveWorkTemplateActionOptions.test.ts \
+  tests/lifecycle/workTemplateActionRefs.test.ts \
+  tests/adminV2/runtime/workTemplateCurrentWorkRuntime.test.ts \
   tests/adminV2/runtime/currentWorkOperationalSurface.test.ts \
-  tests/adminV2/runtime/resolveCurrentWorkActionSurface.test.ts \
   tests/adminV2/runtime/currentWorkActionSurfacePolicy.test.ts \
-  tests/adminV2/runtime/projectCurrentWork.test.ts \
-  tests/adminV2/runtime/currentWorkCardEvidence.test.ts \
-  tests/adminV2/runtime/currentWorkPolish.test.tsx \
-  tests/adminV2/runtime/filterRightRailActionsForCurrentWork.test.ts \
   tests/adminV2/runtime/deriveCurrentWorkSupportingActions.test.ts \
-  tests/adminV2/runtime/resolveCurrentWorkFieldRuleDisplayLabel.test.ts \
-  tests/adminV2/runtime/focusPanelSummarySurfaceEditor.test.tsx \
-  tests/adminV2/runtime/focusPanelRuntimeParity.test.ts \
-  tests/adminV2/runtime/focusPanelMode.test.ts
-# 88/88 passed
+  tests/adminV2/runtime/identitySurfaceComposition.test.ts \
+  tests/adminV2/runtime/identitySurfaceSaveRefresh.test.ts \
+  tests/adminV2/nestedSurfaceEditorModel.test.ts \
+  tests/adminV2/runtime/householdCardEvidence.test.ts \
+  tests/adminV2/runtime/childrenCardEvidence.test.ts \
+  tests/adminV2/focusPanelDrillInRuntimeParity.test.ts \
+  tests/adminV2/runtime/focusPanelDrillInComposition.test.ts \
+  tests/adminV2/focusPanelNestedSurface.test.ts \
+  tests/adminV2/runtime/nestedSurfaceFieldLayout.test.ts \
+  tests/admin/focusPanel/householdContactEditRuntime.test.tsx
+# 256/256 passed
 ```
 
 ---
 
-## Sprint goals (status)
+## Completed phases (on staging)
 
-| # | Goal | Status |
-|---|------|--------|
-| 1 | Harden Current Work (Summary, Focus, completion, handoffs, queue, empty states) | **READY FOR PRODUCT QA** |
-| 2 | Audit Action System entry points | **Complete** — see [action-system.md](../../../platform/operator/action-system.md) |
-| 3 | Action Registry alignment | **Partial** — category-backed CW policy; inline panel resolver started |
-| 4 | Cross-domain readiness | **Partial** — published-plan + checklist truth; billing fixture covered in tests |
-| 5 | Documentation | **Complete** — canonical action-system doc + current-work-surface updates |
-| 6 | Refactoring | **Partial** — centralized CW action policy + surface VM layer |
+| Phase | Status |
+|-------|--------|
+| Phase 2 — Requirement timing + transition preflight | **Complete** |
+| Phase 3 — Work Template-owned action placement | **Complete** |
+| Phase 4 — Shared identity surface composition + convergence | **Complete** |
 
 ---
 
-## What shipped
+## Architecture smoke audit (staging source)
 
-### PR #111 — Published operating plan + action panel
+### Requirement timing
 
-- `resolvePublishedStageInputsForCurrentWork` — reads lifecycle builder metadata
-- `resolveCurrentWorkTemplateFromPublishedPlan` — adapts to Current Work overlay
-- `resolveCurrentWorkChecklistTruthFromPublishedRules` — field-rule completion from record/readiness truth
-- `buildCurrentWorkSurfaceVM` — config-first VM with stage-runtime fallback
-- `resolveCurrentWorkActionSurface` — `inline_form` | `communications_composer` | `header_delegate` | `unsupported`
-- `CurrentWorkActionPanel` — focused-view shell inside Current Work
-- Schedule Tour proof — embedded `OpportunityTourScheduleActionModal` (`variant="embedded"`)
+- `requirementTimingEvaluation.ts` — explicit `record_creation` vs stage-exit timing
+- `evaluateTransitionRequirementPreflight.ts` — transition preflight without parallel engine
+- Legacy rules preserved via compatibility paths; no Qualification-stage assumption required
 
-### PR #117 — QA hardening pass
+### Work Template actions
 
-- **Surface Builder parity** — `focusPanelCurrentWorkPreviewSeed` enriches demo VM; builder uses production pipeline
-- **Field label resolution** — `resolveCurrentWorkFieldRuleDisplayLabel`; canonical keys never shown to operators
-- **Activity preview** — `CurrentWorkActivityPreview` inline flyout; operator stays in Work mode
-- **Alternate paths merge** — catalog + record-header paths merged via `mergeActionVms`
-- **Visual polish** — Bend Pine record outcome, integrated status chip, spacing hierarchy
+- `resolveCurrentWorkTemplateFromPublishedPlan.ts` — template-owned `primary_action`, `helpful_actions`, `alternate_paths`
+- Explicit empty arrays disable fallback (`helpful_actions_explicit`)
+- `currentWorkActionSurfacePolicy.ts` — generic umbrella lifecycle actions excluded from CW completion/rail
+- Action Registry owns execution metadata; raw `mutation_command` not exposed through Current Work
 
----
+### Identity composition
 
-## Known follow-up (post-QA — do not start until feedback)
-
-- Email inline action panel
-- SMS inline action panel
-- Send Packet inline action panel
-- Relative activity timestamps
-- Focused activity preview polish
-- Action icon polish
+- `household_surface` and `children_surface` canonical
+- `child_surface` and `household_contact_surface` compatibility-only via `identitySurfaceCompat.ts`
+- Composer and runtime share `reconcileIdentityNestedConfig` / `reconcileIdentityNestedConfigFromDocMetadata`
+- Household + Children use shared composition semantics (`buildIdentityCardVM`, `IdentityFieldGrid`)
+- Edit completion = save + authoritative truth refresh → VM recompose
 
 ---
 
-## Architecture audit summary (confirmed on staging)
+## Intentional remaining domain adapters
 
-```
-Current Work  →  operational progression (stage-work runtime + published plan overlay)
-Actions       →  execution layer (registry + placements + inline panel resolver)
-Manage        →  administrative catalog slice (overflow slot)
-Right rail    →  assistive inventory (demoted when CW owns completion)
-BOS           →  assist only (no outcome bypass)
-```
+These are domain-semantic by design — not open convergence gaps:
 
-**Smoke checks (staging @ c2671ea7b):**
-
-- Config-driven surface VM (`buildCurrentWorkSurfaceVM`)
-- Published operating plan adapter (`resolveCurrentWorkTemplateFromPublishedPlan`)
-- Checklist truth resolver (`resolveCurrentWorkChecklistTruthFromPublishedRules`)
-- Supporting + alternate path merge (`mergeActionVms`)
-- Activity preview (`CurrentWorkActivityPreview`)
-- Schedule Tour panel (`CurrentWorkActionPanel` + embedded modal)
-- Builder/runtime parity (`focusPanelCurrentWorkPreviewSeed` + demo VM enrich)
+| Adapter | Role |
+|---------|------|
+| `ChildFocusEdit` | Dedicated child edit form |
+| `saveInquiryChild` | Canonical child save command path |
+| `ChildScheduleBlock` | Structured schedule chips in focus tier |
+| `NestedSurfaceFieldLayoutSurface` | Composer builder drag layout (builder-only) |
+| `InlineRuntimeFieldList` | Composer contact-edit preview chrome |
+| `EvidenceGroup` | Child evidence archive section wrapper |
+| `CONTACT_EDIT_FIELD_MAP` | `contact.*` → `PersonContactValues` save bridge |
 
 ---
 
-## Suggested QA entry points
+## Manual QA entry points
 
-1. Open an enrollment opportunity on a stage with published operating plan (e.g. Lead).
-2. Focus Panel → Work mode → Current Work card.
-3. Summary: verify progress, checklist labels (no canonical keys), helpful actions, recent activity preview.
-4. Details → Focus: verify primary action, record outcome (Bend Pine), other paths, outcome picker.
-5. Schedule Tour helpful action → inline panel → save → verify refresh without page reload.
-6. `/settings/surfaces` → verify Current Work card shows Contact Family (not empty placeholder).
+1. **Create Lead** — create without child info; verify stage-exit requirements appear after creation, not at intake.
+2. **Current Work** — primary action from Work Template; helpful actions order; empty groups stay empty; no generic enrollment status umbrella.
+3. **Household card** — primary/secondary contacts, children section, field order, two-column layout, View details, editable save + refresh.
+4. **Children card** — configured fields, edit policies, expanded evidence, save refresh.
+5. **Surface Builder** — legacy layout load, Composer preview matches runtime, Add Field survives publish/reload.
+
+See QA checklist in promotion report for full checkbox list.
 
 ---
 
 ## Sprint completion
 
-**Not complete.** Marked **READY FOR PRODUCT QA** pending manual staging verification and product feedback.
+**Not complete.** Marked **READY FOR PRODUCT QA** pending manual staging verification and product feedback. Do not start the next platform phase until QA findings are provided.
