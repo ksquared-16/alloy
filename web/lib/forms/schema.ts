@@ -100,7 +100,7 @@ export const formIterationContextSchema = z
 
 export type FormIterationContext = z.infer<typeof formIterationContextSchema>;
 
-export type FormFieldLayoutWidth = "full" | "half";
+export type FormFieldLayoutWidth = "full" | "half" | "third" | "quarter";
 
 type FormFieldBase = {
     id: string;
@@ -110,7 +110,7 @@ type FormFieldBase = {
     description?: string;
     /** Input placeholder where applicable (text-like controls). */
     placeholder?: string;
-    /** Row width on desktop; half fields pair with the next half in reading order. Default full. */
+    /** Row width on desktop; fractional widths share a 12-unit row grid. Default full. */
     layout_width?: FormFieldLayoutWidth;
     /** Provenance for operational mapping (CRM, shared_values, etc.); optional for legacy/demo schemas. */
     field_source?: FormFieldSource;
@@ -172,7 +172,7 @@ const fieldCoreSchema = z
         pdf_slot: z.string().min(1).optional(),
         read_only: z.boolean().optional().default(false),
         field_source: formFieldSourceSchema.optional(),
-        layout_width: z.enum(["full", "half"]).optional(),
+        layout_width: z.enum(["full", "half", "third", "quarter"]).optional(),
     })
     .strict();
 

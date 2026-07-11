@@ -1,60 +1,110 @@
 /**
- * Row composition for Processing Form Builder — bridge to Surface Builder placement grammar.
+ * Row composition for Processing Form Builder — 12-unit row grid.
  *
- * Uses existing `layout_width` on FormField:
- * - `half` → Same line (side-by-side with previous when consecutive halves share a row)
- * - `full` → New line below (default)
+ * Each field's `layout_width` consumes row units:
+ *   full = 12, half = 6, third = 4, quarter = 3
+ * Rows break when the next field would exceed 12 units or when a full-width field starts.
  */
 
-import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import type { FormField, FormFieldLayoutWidth, FormSchemaV1 } from "@/lib/forms/schema";
 import { moveFieldWithinSection } from "@/lib/forms/formBuilderSchema";
 
 export type FormRowPlacement = "same-line" | "new-line-below";
 
-export const MAX_FIELDS_PER_ROW = 3;
+export const LAYOUT_WIDTH_UNITS: Record<FormFieldLayoutWidth, number> = {
+    full: 12,
+    half: 6,
+    third: 4,
+    quarter: 3,
+};
 
-export function placementFromField(field: FormField): FormRowPlacement {
-    return field.layout_width === "half" ? "same-line" : "new-line-below";
+export const MAX_FIELDS_PER_ROW = 4;
+
+export function layoutWidthFromField(field: FormField): FormFieldLayoutWidth {
+    const w = field.layout_width;
+    if (w === "half" || w === "third" || w === "quarter") return w;
+    return "full";
 }
 
-function withLayoutWidth(schema: FormSchemaV1, fieldId: string, width: "half" | "full"): FormSchemaV1 {
+export function placementFromField(field: FormField): FormRowPlacement {
+    return layoutWidthFromField(field) === "full" ? "new-line-below" : "same-line";
+}
+
+function withLayoutWidth(schema: FormSchemaV1, fieldId: string, width: FormFieldLayoutWidth): FormSchemaV1 {
     return {
         ...schema,
         fields: schema.fields.map((f) => (f.id === fieldId ? { ...f, layout_width: width } : f)),
     };
 }
 
-/** Set placement; same-line also marks the previous field in-section as half when possible. */
-export function setFieldPlacement(schema: FormSchemaV1, fieldId: string, placement: FormRowPlacement): FormSchemaV1 {
-    if (placement === "new-line-below") {
-        return withLayoutWidth(schema, fieldId, "full");
-    }
-    let next = withLayoutWidth(schema, fieldId, "half");
+/** Set row width for a field; same-line also coerces previous in-section field to compatible width when possible. */
+export function setFieldLayoutWidth(schema: FormSchemaV1, fieldId: string, width: FormFieldLayoutWidth): FormSchemaV1 {
+    let next = withLayoutWidth(schema, fieldId, width);
+    if (width === "full") return next;
+
     const section = next.sections.find((s) => s.field_ids.includes(fieldId));
     if (!section) return next;
     const idx = section.field_ids.indexOf(fieldId);
     if (idx > 0) {
         const prevId = section.field_ids[idx - 1]!;
-        next = withLayoutWidth(next, prevId, "half");
+        const prev = next.fields.find((f) => f.id === prevId);
+        if (prev && layoutWidthFromField(prev) === "full") {
+            next = withLayoutWidth(next, prevId, width);
+        }
     }
     return next;
 }
 
-/** Group section field ids into visual rows for canvas rendering. */
+/** @deprecated Prefer setFieldLayoutWidth — maps legacy same-line/new-line to half/full. */
+export function setFieldPlacement(schema: FormSchemaV1, fieldId: string, placement: FormRowPlacement): FormSchemaV1 {
+    return setFieldLayoutWidth(schema, fieldId, placement === "same-line" ? "half" : "full");
+}
+
+/** Group section field ids into visual rows using the 12-unit grid. */
 export function groupFieldsIntoRows(fieldIds: string[], fieldById: Map<string, FormField>): string[][] {
     const rows: string[][] = [];
+    let current: string[] = [];
+    let usedUnits = 0;
+
     for (const fid of fieldIds) {
         const field = fieldById.get(fid);
         if (!field) continue;
-        const sameLine = field.layout_width === "half";
-        const lastRow = rows[rows.length - 1];
-        if (sameLine && lastRow && lastRow.length > 0 && lastRow.length < MAX_FIELDS_PER_ROW) {
-            lastRow.push(fid);
-        } else {
-            rows.push([fid]);
+        const width = layoutWidthFromField(field);
+        const units = LAYOUT_WIDTH_UNITS[width];
+
+        if (width === "full" || (current.length > 0 && usedUnits + units > 12)) {
+            if (current.length > 0) rows.push(current);
+            current = [fid];
+            usedUnits = units;
+            if (width === "full") {
+                rows.push(current);
+                current = [];
+                usedUnits = 0;
+            }
+            continue;
+        }
+
+        current.push(fid);
+        usedUnits += units;
+        if (usedUnits >= 12) {
+            rows.push(current);
+            current = [];
+            usedUnits = 0;
         }
     }
+
+    if (current.length > 0) rows.push(current);
     return rows;
+}
+
+export function rowCapacityRemaining(rowFieldIds: string[], fieldById: Map<string, FormField>): number {
+    let used = 0;
+    for (const fid of rowFieldIds) {
+        const field = fieldById.get(fid);
+        if (!field) continue;
+        used += LAYOUT_WIDTH_UNITS[layoutWidthFromField(field)];
+    }
+    return Math.max(0, 12 - used);
 }
 
 export function moveFieldBetweenSections(
@@ -76,10 +126,6 @@ export function moveFieldBetweenSections(
     return { ...schema, sections };
 }
 
-/**
- * Move a field within or across sections to a precise index.
- * `insertBeforeFieldId` null appends to the end of the target section.
- */
 export function reorderField(
     schema: FormSchemaV1,
     fieldId: string,
@@ -105,7 +151,6 @@ export function reorderField(
     };
 }
 
-/** Reorder after an anchor field (append when anchor is last). */
 export function reorderFieldAfter(
     schema: FormSchemaV1,
     fieldId: string,
@@ -122,4 +167,18 @@ export function reorderFieldAfter(
     return reorderField(schema, fieldId, targetSectionId, insertBefore);
 }
 
-export { moveFieldWithinSection };
+export { moveFieldWithinSection } from "@/lib/forms/formBuilderSchema";
+
+/** Tailwind flex classes for a field's row width on the 12-unit grid. */
+export function fieldLayoutFlexClass(width: FormFieldLayoutWidth): string {
+    switch (width) {
+        case "quarter":
+            return "min-w-[calc(25%-0.5625rem)] flex-[1_1_calc(25%-0.5625rem)]";
+        case "third":
+            return "min-w-[calc(33.333%-0.4375rem)] flex-[1_1_calc(33.333%-0.4375rem)]";
+        case "half":
+            return "min-w-[calc(50%-0.3125rem)] flex-[1_1_calc(50%-0.3125rem)]";
+        default:
+            return "w-full flex-[1_1_100%]";
+    }
+}
