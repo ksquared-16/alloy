@@ -10,6 +10,7 @@ import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRe
 import { GENERIC_UMBRELLA_LIFECYCLE_ACTION_KEYS } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActionSurfacePolicy";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import {
+    isNonCanonicalIntentAlias,
     resolveIntentExecutionRef,
     resolveWorkTemplateSubjectGrain,
     workTemplateActionIntentForKey,
@@ -160,25 +161,21 @@ function isUnsupportedActionKey(actionKey: string): string | null {
     return null;
 }
 
-function targetMetadata(actionKey: string, subjectGrain: PlatformActionGrain | "process_subject") {
-    const platform = getPlatformAction(actionKey);
-    const grain = platform?.grain ?? (subjectGrain === "process_subject" ? undefined : subjectGrain);
+function targetMetadata(executionKey: string) {
+    const platform = getPlatformAction(executionKey);
     return {
         source: "process_subject",
-        ...(grain ? { configuredGrain: grain } : {}),
         selectionMode: platform?.supportsMultiSubject ? "one_or_more" : "configured",
     };
 }
 
-function targetDescriptionSuffix(target: CanonicalWorkTemplateActionOption["target"]): string {
-    if (target.configuredGrain === "opportunity") return "Uses configured process subject";
-    if (target.configuredGrain === "opportunity_customer_member") return "Uses configured related subject";
-    return "Uses configured process subject";
+function targetDescriptionSuffix(): string {
+    return "Resolves from process configuration";
 }
 
 export function formatCanonicalActionOptionDescription(option: CanonicalWorkTemplateActionOption): string {
     const categoryLabel = CATEGORY_TO_GROUP[option.category] ?? option.category;
-    const parts = [categoryLabel, targetDescriptionSuffix(option.target)];
+    const parts = [categoryLabel, targetDescriptionSuffix()];
     if (option.executionSurface === "ui_intent") parts.push("Opens inline form");
     if (option.description) parts.push(option.description);
     return parts.filter(Boolean).join(" · ");
@@ -207,7 +204,7 @@ function collectCandidateActionKeys(args: {
         if (row.settingsConfigurable) keys.add(row.key);
     }
 
-    return [...keys].filter((key) => !isHiddenFromEditor(key));
+    return [...keys].filter((key) => !isHiddenFromEditor(key) && !isNonCanonicalIntentAlias(key));
 }
 
 function buildRawOption(
@@ -220,24 +217,25 @@ function buildRawOption(
     if (!ref || isHiddenFromEditor(ref)) return null;
 
     const intent = workTemplateActionIntentForKey(ref);
-    const resolvedRef = intent ? resolveIntentExecutionRef(intent, subjectGrain) : ref;
-    const disabledReason = isUnsupportedActionKey(resolvedRef);
-    const category = intent?.category ?? mapCategory(rawCategory(resolvedRef));
+    const executionKey = intent ? resolveIntentExecutionRef(intent, subjectGrain) : ref;
+    const disabledReason = isUnsupportedActionKey(executionKey);
+    const category = intent?.category ?? mapCategory(rawCategory(executionKey));
     const group =
         recommendation === "recommended" ? "Recommended" : (CATEGORY_TO_GROUP[category] ?? "Record actions");
+    const canonicalRef = intent?.intentKey ?? ref;
 
     return {
-        ref: resolvedRef,
-        intentKey: intent?.intentKey ?? resolvedRef,
-        label: intent?.label ?? actionLabel(resolvedRef, overrideLabel),
-        description: actionDescription(resolvedRef),
+        ref: canonicalRef,
+        intentKey: canonicalRef,
+        label: intent?.label ?? actionLabel(ref, overrideLabel),
+        description: intent?.description ?? actionDescription(executionKey),
         category,
         group,
         supported: disabledReason == null,
         ...(disabledReason ? { disabledReason } : {}),
-        target: targetMetadata(resolvedRef, subjectGrain),
+        target: targetMetadata(executionKey),
         ...(intent ? { aliases: [...intent.aliases] } : {}),
-        executionSurface: executionSurfaceForAction(resolvedRef),
+        executionSurface: executionSurfaceForAction(executionKey),
     };
 }
 

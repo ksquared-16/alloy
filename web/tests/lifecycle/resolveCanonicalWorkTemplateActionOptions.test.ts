@@ -26,7 +26,7 @@ describe("resolveCanonicalWorkTemplateActionOptions", () => {
         expect(waitlist[0]?.aliases).toEqual(expect.arrayContaining(["waitlist_child", "move_to_waitlist"]));
     });
 
-    it("resolves child-grain waitlist ref from stage journey segment", () => {
+    it("persists intent ref regardless of stage journey segment", () => {
         const options = resolveCanonicalWorkTemplateActionOptions({
             actionRegistry: [],
             stageActionCatalog: {
@@ -40,8 +40,9 @@ describe("resolveCanonicalWorkTemplateActionOptions", () => {
         });
 
         const waitlist = options.find((row) => row.intentKey === "move_to_waitlist");
-        expect(waitlist?.ref).toBe("waitlist_child");
-        expect(waitlist?.target.configuredGrain).toBe("opportunity_customer_member");
+        expect(waitlist?.ref).toBe("move_to_waitlist");
+        expect(waitlist?.label).toBe("Move to Waitlist");
+        expect(options.some((row) => row.ref === "waitlist_child")).toBe(false);
     });
 
     it("hides generic status umbrella and mutation commands from editor options", () => {

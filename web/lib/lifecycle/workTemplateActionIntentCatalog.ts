@@ -80,6 +80,30 @@ export function workTemplateActionIntentForKey(actionKey: string): WorkTemplateA
     return ALIAS_TO_INTENT.get(actionKey.trim()) ?? null;
 }
 
+/** Canonical intent ref stored on Work Templates — aliases normalize to intentKey. */
+export function normalizeActionRefToIntentKey(actionRef: string): string {
+    const ref = actionRef.trim();
+    if (!ref) return ref;
+    return workTemplateActionIntentForKey(ref)?.intentKey ?? ref;
+}
+
+/** True when key is a grain-specific alias, not the canonical intent ref. */
+export function isNonCanonicalIntentAlias(actionKey: string): boolean {
+    const key = actionKey.trim();
+    const intent = workTemplateActionIntentForKey(key);
+    if (!intent) return false;
+    return key !== intent.intentKey;
+}
+
+/** Operator-facing label for an action ref or alias. */
+export function intentOperatorLabel(actionRef: string, overrideLabel?: string | null): string | null {
+    const override = overrideLabel?.trim();
+    if (override) return override;
+    const intent = workTemplateActionIntentForKey(actionRef);
+    if (intent) return intent.label;
+    return null;
+}
+
 /** Map configured stage/process subject metadata to platform action grain. */
 export function resolveWorkTemplateSubjectGrain(input: {
     processDefinition?: unknown;

@@ -30,6 +30,11 @@ import {
     type LifecycleStageFieldRules,
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import { transitionRefLabel } from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
+import {
+    intentOperatorLabel,
+    normalizeActionRefToIntentKey,
+    workTemplateActionIntentForKey,
+} from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 import { resolveCurrentWorkFieldRuleDisplayLabel } from "./resolveCurrentWorkFieldRuleDisplayLabel";
 import { getPlatformAction } from "@/lib/platform/actions/platformActionCatalog";
 
@@ -185,12 +190,23 @@ function buildActionRegistry(args: {
 
     const register = (key: string, label: string, description?: string | null) => {
         const trimmed = key.trim();
-        if (!trimmed || registry.has(trimmed)) return;
-        registry.set(trimmed, { key: trimmed, label, description: description ?? null });
+        if (!trimmed) return;
+        const intentKey = normalizeActionRefToIntentKey(trimmed);
+        if (!registry.has(intentKey)) {
+            registry.set(intentKey, { key: intentKey, label, description: description ?? null });
+        }
+        if (trimmed !== intentKey && !registry.has(trimmed)) {
+            registry.set(trimmed, { key: trimmed, label, description: description ?? null });
+        }
     };
 
     for (const candidate of args.actionCatalog?.candidate_actions ?? []) {
-        register(candidate.action_key, actionLabel(candidate.action_key, candidate.override_label));
+        const key = candidate.action_key.trim();
+        if (!key) continue;
+        if (workTemplateActionIntentForKey(key) && key !== normalizeActionRefToIntentKey(key)) {
+            continue;
+        }
+        register(key, actionLabel(key, candidate.override_label));
     }
 
     const template = args.activeTemplate;

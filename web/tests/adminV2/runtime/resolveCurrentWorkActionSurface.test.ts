@@ -86,6 +86,21 @@ describe("resolveCurrentWorkActionSurface", () => {
         ).toBe("unsupported");
     });
 
+
+    it("uses handlerKey for registry lookup when intent ref differs from execution key", () => {
+        expect(
+            resolveCurrentWorkActionSurface(
+                action({
+                    key: "move_to_waitlist",
+                    label: "Move to Waitlist",
+                    actionRef: "move_to_waitlist",
+                    handlerKey: "waitlist_child",
+                    resolved: resolvedAction("waitlist_child"),
+                }),
+            ),
+        ).toBe("header_delegate");
+    });
+
     it("falls back to header_delegate when resolved registry action exists without inline surface", () => {
         expect(
             resolveCurrentWorkActionSurface(

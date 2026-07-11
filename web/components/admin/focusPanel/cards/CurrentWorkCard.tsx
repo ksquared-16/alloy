@@ -145,7 +145,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
         }
         if (coordination?.invokeHeaderAction) {
             coordination.invokeHeaderAction({
-                key: action.key,
+                key: action.handlerKey ?? action.key,
                 label: action.label,
                 description: action.description ?? null,
                 action_type: "registry",
