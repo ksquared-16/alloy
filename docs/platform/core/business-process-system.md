@@ -300,6 +300,15 @@ Stage work surfaced in **Current Work** is the authoritative Business Process ex
 - Work Items → Current Work: focus event on the record-scoped work surface.
 - Outcome completion remains on the authoritative BP / Current Work path.
 
+### Work Template action configuration (July 2026)
+
+- **Process configuration declares subject grain** — family, child, person, or other supported record grain via stage/process metadata; the UI must not infer grain from vertical-specific assumptions.
+- **Actions express operator intent** — Work Templates own placement and ordering; the Action Registry owns execution capability.
+- **Target resolution** comes from process/work/runtime configuration, not duplicate grain-specific action keys in the editor.
+- **Result Definitions** (stage-owned) vs **Available Results** (Work Template refs) — templates reference canonical stage outcomes; they do not duplicate definitions.
+- **Explicit vs fallback** — `undefined` on a Work Template bucket allows legacy runtime fallback; `[]` means explicitly configured empty.
+- **Current Work Recent Activity** reuses the same canonical activity projection as the Focus Panel Timeline card, with a small preview adapter for prioritization and limits.
+
 
 ## Related docs
 
