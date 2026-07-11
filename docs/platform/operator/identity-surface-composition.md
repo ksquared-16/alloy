@@ -56,6 +56,7 @@ Builder may use representative preview data; runtime uses `OperationalContext.tr
 ## Deprecations
 
 - `child_surface` — compatibility-only; prefer `children_surface`
+- `household_contact_surface` — compatibility-only; prefer `household_surface.contact_edit`
 - `fieldModes` — legacy; reconciled to `fieldPolicies` on load
 - `selectedFieldKeys` without placements — stable default placements generated at reconcile
 

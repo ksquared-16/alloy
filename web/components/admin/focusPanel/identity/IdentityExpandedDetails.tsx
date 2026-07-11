@@ -15,11 +15,21 @@ export default function IdentityExpandedDetails({ rows, className, onEditField }
     const [open, setOpen] = useState(false);
     const panelId = useId();
     const rootRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const wasOpenRef = useRef(false);
 
     useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            if (wasOpenRef.current) triggerRef.current?.focus();
+            wasOpenRef.current = false;
+            return;
+        }
+        wasOpenRef.current = true;
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setOpen(false);
+            if (event.key === "Escape") {
+                event.preventDefault();
+                setOpen(false);
+            }
         };
         const onPointerDown = (event: MouseEvent) => {
             if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
@@ -37,6 +47,7 @@ export default function IdentityExpandedDetails({ rows, className, onEditField }
     return (
         <div ref={rootRef} className={clsx("identity-expanded-details", className)} data-identity-expanded-root="true">
             <button
+                ref={triggerRef}
                 type="button"
                 className="identity-expanded-details__toggle"
                 aria-expanded={open}

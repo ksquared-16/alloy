@@ -11,6 +11,7 @@ type Props = {
     className?: string;
     onEditContact?: (recordId: string) => void;
     onEditField?: (fieldRef: string) => void;
+    onActivate?: (recordId: string) => void;
     dataAttr?: string;
 };
 
@@ -19,8 +20,12 @@ export default function IdentityRecordSummary({
     className,
     onEditContact,
     onEditField,
+    onActivate,
     dataAttr,
 }: Props) {
+    const hasEditableField = [...record.summaryRows, ...record.expandedRows].some((row) =>
+        row.cells.some((cell) => cell.editable),
+    );
     return (
         <div
             className={clsx("identity-record-summary", className)}
@@ -34,7 +39,17 @@ export default function IdentityRecordSummary({
                 />
                 <div className="identity-record-summary__title-block min-w-0">
                     <span className="identity-record-summary__title">
-                        {record.title}
+                        {onActivate ? (
+                            <button
+                                type="button"
+                                className="identity-record-summary__activate"
+                                onClick={() => onActivate(record.id)}
+                            >
+                                {record.title}
+                            </button>
+                        ) : (
+                            record.title
+                        )}
                         {record.badge ? (
                             <span className="alloy-os-card-pill alloy-os-card-pill--neutral identity-record-summary__badge">
                                 {record.badge}
@@ -43,7 +58,7 @@ export default function IdentityRecordSummary({
                     </span>
                     <IdentityFieldGrid rows={record.summaryRows} onEditField={onEditField} />
                 </div>
-                {onEditContact ? (
+                {onEditContact && hasEditableField ? (
                     <button
                         type="button"
                         className="identity-record-summary__edit"

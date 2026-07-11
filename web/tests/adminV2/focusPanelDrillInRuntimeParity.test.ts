@@ -18,14 +18,14 @@ import {
     resolveChildFocusEditPolicy,
 } from "@/lib/adminV2/runtime/focusPanel/children/childFocusFieldPolicy";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
-import {
-    CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS,
-    CHILD_SURFACE_ID,
-    childFocusViewFromConfig,
-    readChildNestedConfigFromDoc,
-} from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+import { CHILD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
+import { childFocusViewFromConfig } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
+import { CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS } from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
 import { defaultNestedSurfaceConfig, CHILDREN_SURFACE_ID, setFieldVisibilityInNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { childrenFocusRowsFromNestedConfig } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
+import {
+    childrenFocusRowsFromNestedConfig,
+    readChildrenNestedConfigFromDoc,
+} from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 import { HOUSEHOLD_CONTACT_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 import { getSurface } from "@/lib/platform/surfaceComposition/surfaceRegistry";
@@ -33,25 +33,20 @@ import type { LayoutDoc } from "@/lib/layout/layoutV2";
 
 describe("household contact edit field policy", () => {
     it("hides non-displayed fields and marks non-editable rows read-only", () => {
-        const config = defaultNestedSurfaceConfig(HOUSEHOLD_CONTACT_SURFACE_ID);
         const patched = {
-            ...config,
-            groups: config.groups.map((g) =>
-                g.key === "contact_fields"
-                    ? {
-                          ...g,
-                          fieldModes: {
-                              ...g.fieldModes,
-                              "person.email": { displayed: false, editable: true },
-                              "person.phone": { displayed: true, editable: false },
-                          },
-                      }
-                    : g,
-            ),
+            surfaceId: HOUSEHOLD_CONTACT_SURFACE_ID,
+            groups: [{
+                key: "contact_fields",
+                selectedFieldKeys: ["person.email", "person.phone"],
+                fieldModes: {
+                    "person.email": { displayed: false, editable: true },
+                    "person.phone": { displayed: true, editable: false },
+                },
+            }],
         };
         const policy = resolveContactEditFieldPolicy(patched);
-        expect(policy.some((r) => r.configKey === "person.email" && r.displayed)).toBe(false);
-        const phone = policy.find((r) => r.configKey === "person.phone")!;
+        expect(policy.some((r) => r.configKey === "contact.email" && r.displayed)).toBe(false);
+        const phone = policy.find((r) => r.configKey === "contact.phone")!;
         expect(phone.displayed).toBe(true);
         expect(phone.editable).toBe(false);
     });
@@ -127,7 +122,7 @@ describe("child_surface registration + runtime resolver", () => {
         const doc = {
             metadata: { nestedSurfaces: { [CHILD_SURFACE_ID]: config } },
         } as unknown as LayoutDoc;
-        expect(readChildNestedConfigFromDoc(doc)?.surfaceId).toBe(CHILD_SURFACE_ID);
+        expect(readChildrenNestedConfigFromDoc(doc)?.surfaceId).toBe(CHILDREN_SURFACE_ID);
     });
 });
 
@@ -238,7 +233,7 @@ describe("child focus edit field policy + save payload", () => {
     });
 
     it("marks unsupported child fields explicit in edit policy", () => {
-        const config = defaultNestedSurfaceConfig(CHILD_SURFACE_ID);
+        const config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         const patched = {
             ...config,
             groups: config.groups.map((g) =>
@@ -291,25 +286,25 @@ describe("domain-locked child expanded sections", () => {
         expect(keys).toEqual(["medical", "documents", "pickup_instructions"]);
     });
 
-    it("ChildrenCard marks domain-locked expanded groups in JSX", () => {
+    it("ChildrenCard renders configured evidence sections behind expanded archive", () => {
         const src = readFileSync(
             fileURLToPath(new URL("../../components/admin/focusPanel/cards/ChildrenCard.tsx", import.meta.url)),
             "utf8",
         );
-        expect(src).toContain("CHILD_DOMAIN_LOCKED_EVIDENCE_SECTIONS");
-        expect(src).toContain("data-domain-locked");
-        expect(src).toContain("readChildNestedConfigFromDoc");
-        expect(src).toContain("childFocusViewFromConfig");
+        expect(src).toContain("ChildExpandedEvidence");
+        expect(src).toContain("childrenEvidenceSectionsFromNestedConfig");
+        expect(src).toContain("readChildrenNestedConfigFromDoc");
+        expect(src).not.toContain("readChildNestedConfigFromDoc");
     });
 
-    it("HouseholdContactEdit consumes published field policy", () => {
+    it("HouseholdContactEdit consumes published contact_edit field policy", () => {
         const src = readFileSync(
             fileURLToPath(new URL("../../components/admin/focusPanel/cards/HouseholdContactEdit.tsx", import.meta.url)),
             "utf8",
         );
-        expect(src).toContain("resolveContactEditFieldPolicy");
-        expect(src).toContain("editableContactValueKeys");
-        expect(src).toContain("householdContactDirtyForPolicy");
+        expect(src).toContain("householdContactEditFieldPolicy");
+        expect(src).toContain("householdGroupFieldKeys");
+        expect(src).toContain("householdContactPatch");
     });
 });
 

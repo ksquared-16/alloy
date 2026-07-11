@@ -131,9 +131,9 @@ describe("runtime reads the published nested config off the doc", () => {
             ],
         };
         expect(childrenDetailFieldKeysFromNestedConfig(config)).toEqual([
+            "child.name",
             "child.room",
             "inquiry_child.program",
-            "child.name",
         ]);
     });
 });
@@ -149,7 +149,7 @@ describe("children evidence builder consumes the published field order", () => {
                         desired_program_label: "Preschool",
                         program_room_cohort_label: "North Room",
                         desired_schedule_label: "M–F",
-                        start_date: "Aug 2026",
+                        start_date: "2026-08-20",
                         outcome_status_key: "in_progress",
                     },
                 ],
@@ -159,7 +159,7 @@ describe("children evidence builder consumes the published field order", () => {
 
     it("default (no config) → program · room · schedule · starts order", () => {
         const ev = buildChildrenCardEvidence(contextWithOneChild());
-        expect(ev.children[0]!.detailLine).toBe("Preschool · North Room · M–F · starts Aug 2026");
+        expect(ev.children[0]!.detailLine).toBe("Preschool · North Room · M–F · starts Aug 20, 2026");
     });
 
     it("published config drives which detail facts appear and their order", () => {
@@ -232,10 +232,10 @@ describe("builder + runtime seams", () => {
         expect(builder).toContain("onOpenNestedSurface");
     });
 
-    it("Surfaces page wires canvas drill-in to nested stack state", () => {
+    it("Surfaces page wires canvas drill-in to nested surface editor state", () => {
         const page = src("components/adminV2/settings/surfaces/SurfacesConfigurationPage.tsx");
-        expect(page).toContain("setNestedStack");
-        expect(page).toContain("FocusPanelSurfaceEditor");
+        expect(page).toContain("setNestedSurfaceId");
+        expect(page).toContain("NestedSurfaceEditor");
     });
 
     it("runtime ChildrenCard consumes the published nested config (no parallel persistence)", () => {

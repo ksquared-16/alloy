@@ -16,6 +16,7 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     adaptChildSurfaceToChildrenSurface,
+    adaptHouseholdContactSurfaceToHouseholdSurface,
     generateDefaultPlacementsForGroup,
     reconcileFieldModesToPolicies,
     reconcileIdentityNestedConfig,
@@ -29,7 +30,7 @@ import {
     buildHouseholdIdentityCardVM,
 } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
 import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
-import { isChildFocusFieldSaveSupported } from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+import { isChildFocusFieldSaveSupported } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { getSurface } from "@/lib/platform/surfaceComposition/surfaceRegistry";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
@@ -299,5 +300,104 @@ describe("shared model proof", () => {
         };
         const reconciled = reconcileFieldModesToPolicies(group);
         expect(reconciled.fieldPolicies?.["person.email"]).toBe("editable");
+    });
+
+    it("legacy household_contact_surface adapts to household_surface.contact_edit", () => {
+        const legacy = {
+            surfaceId: "household_contact_surface",
+            groups: [{
+                key: "contact_fields",
+                selectedFieldKeys: ["person.email", "person.phone"],
+                fieldModes: {
+                    "person.email": { displayed: false, editable: true },
+                    "person.phone": { displayed: true, editable: false },
+                },
+            }],
+        } satisfies NestedSurfaceConfig;
+        const adapted = adaptHouseholdContactSurfaceToHouseholdSurface(legacy, null);
+        const contactEdit = adapted.groups.find((g) => g.key === "contact_edit")!;
+        expect(contactEdit.selectedFieldKeys).toEqual(["contact.email", "contact.phone"]);
+        expect(contactEdit.fieldPolicies?.["contact.email"]).toBe("hidden");
+        expect(contactEdit.fieldPolicies?.["contact.phone"]).toBe("read-only");
+    });
+});
+
+describe("identity editability matrix", () => {
+    it("editable + permitted → editable in VM", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = setFieldVisibilityInNestedGroup(config, "primary_contact", "person.email", "editable");
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "contact.email", "editable");
+        const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
+        const vm = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: true });
+        const primary = vm.sections.find((s) => s.key === "primary_contact")?.items[0];
+        const email = primary?.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.email");
+        expect(email?.editable).toBe(true);
+    });
+
+    it("editable + not permitted → read-only in VM", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "contact.email", "editable");
+        const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
+        const vm = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
+        const primary = vm.sections.find((s) => s.key === "primary_contact")?.items[0];
+        const email = primary?.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.email");
+        expect(email?.editable).toBe(false);
+    });
+
+    it("read-only policy stays read-only", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = setFieldVisibilityInNestedGroup(config, "primary_contact", "person.phone", "read-only");
+        const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
+        const vm = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: true });
+        const primary = vm.sections.find((s) => s.key === "primary_contact")?.items[0];
+        const phone = primary?.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.phone");
+        expect(phone?.editable).toBe(false);
+    });
+
+    it("hidden policy is not rendered", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = setFieldVisibilityInNestedGroup(config, "primary_contact", "person.email", "hidden");
+        const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
+        const vm = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: true });
+        const primary = vm.sections.find((s) => s.key === "primary_contact")?.items[0];
+        const email = primary?.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.email");
+        expect(email).toBeUndefined();
+    });
+
+    it("unsupported child save target stays non-editable", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "readiness", "child.readiness_summary");
+        config = setFieldVisibilityInNestedGroup(config, "child_edit", "child.readiness_summary", "editable");
+        const vm = buildChildIdentityRecordVM({
+            config,
+            child: {
+                id: "c1",
+                name: "Emma",
+                program: null,
+                room: null,
+                schedule: null,
+                startDate: null,
+                dobAge: null,
+                needsAttention: true,
+                missingLine: "Needs program",
+            },
+            groupKey: "readiness",
+            canMutate: true,
+            isFieldSaveSupported: isChildFocusFieldSaveSupported,
+        });
+        const readiness = vm.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "child.readiness_summary");
+        expect(readiness?.editable).toBe(false);
+    });
+
+    it("expanded tier honors the same policy as summary", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line", { tier: "expanded" });
+        config = setFieldVisibilityInNestedGroup(config, "primary_contact", "person.address_line", "editable");
+        const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
+        const vm = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: true });
+        const primary = vm.sections.find((s) => s.key === "primary_contact")?.items[0];
+        const address = primary?.expandedRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.address_line");
+        expect(address?.editable).toBe(true);
+        expect(primary?.canExpand).toBe(true);
     });
 });
