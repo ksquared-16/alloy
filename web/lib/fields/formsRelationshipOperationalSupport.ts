@@ -52,5 +52,23 @@ export function isFormsRelationshipPublishableInP2(provider: CanonicalDataProvid
     return isFormsRelationshipAuthorableInP2(provider);
 }
 
-/** Collection-bound repeatable sections: schema + validation only until UI follow-up. */
-export const FORMS_COLLECTION_BINDING_AUTHORING_ENABLED = false;
+/**
+ * Per-provider collection authoring enablement (P4).
+ * Global flag retained for backward-compatible tests; prefer per-provider checks.
+ */
+export const FORMS_COLLECTION_BINDING_AUTHORING_ENABLED_REFS = new Set<string>([
+    "children",
+    "person.contact_role.parents",
+]);
+
+/** @deprecated Prefer collectionBindingAuthoringEnabledForProvider(refKey). */
+export const FORMS_COLLECTION_BINDING_AUTHORING_ENABLED =
+    FORMS_COLLECTION_BINDING_AUTHORING_ENABLED_REFS.size > 0;
+
+export function collectionBindingAuthoringEnabledForProvider(refKey: string): boolean {
+    return FORMS_COLLECTION_BINDING_AUTHORING_ENABLED_REFS.has(refKey.trim());
+}
+
+export function isFormsCollectionProviderAuthorable(refKey: string): boolean {
+    return collectionBindingAuthoringEnabledForProvider(refKey);
+}

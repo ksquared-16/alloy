@@ -8,33 +8,69 @@ import {
     findFormsCollectionBindingProvider,
     type FormsRepeatableCollectionRef,
 } from "@/lib/fields/canonicalFormsRelationshipProviderDerivation";
-import { fieldDefinitionEntityTypeFromFormsEntity, systemFieldIdToCanonicalRef } from "@/lib/fields/fieldRegistryReferenceMatrix";
-import { FORMS_COLLECTION_BINDING_AUTHORING_ENABLED } from "@/lib/fields/formsRelationshipOperationalSupport";
-import { OPERATIONAL_FORM_SYSTEM_FIELDS } from "@/lib/forms/systemFieldRegistry";
+import {
+    collectionBindingAuthoringEnabledForProvider,
+    FORMS_COLLECTION_BINDING_AUTHORING_ENABLED,
+} from "@/lib/fields/formsRelationshipOperationalSupport";
+import {
+    buildCollectionIterationContext,
+    iterationContextFromCollectionBinding,
+    type CollectionIterationContext,
+} from "@/lib/fields/collection/collectionIterationContext";
+import {
+    evaluateFormFieldAvailabilityForIteration,
+    isFormFieldAvailableForIteration,
+} from "@/lib/fields/collection/evaluateProviderAvailabilityForIteration";
+
+export type { CollectionIterationContext };
+export { iterationContextFromCollectionBinding, buildCollectionIterationContext };
 
 export const FORMS_MAX_COLLECTION_NESTING_DEPTH = 1;
 
 /** Map collection provider ref → iteration entity for nested scalar validation. */
-export const FORMS_COLLECTION_ITERATION_ENTITY: Readonly<Record<FormsRepeatableCollectionRef, string>> = {
+export const FORMS_COLLECTION_ITERATION_ENTITY: Readonly<Record<string, string>> = {
     children: "customer_member",
     household_members: "customer_member",
+    parents_guardians: "person",
 };
 
-/** Inquiry/enrollment fields require explicit packet or form subject context — not implied by household child iteration. */
-export const FORMS_INQUIRY_CHILD_FIELD_KEYS = new Set([
-    "program_category_id",
-    "schedule_type",
-    "start_date",
-    "program_room_cohort_key",
-    "location_id",
-    "status_key",
-]);
+/** Required launch/source context keys per collection provider ref. */
+export const FORMS_COLLECTION_REQUIRED_CONTEXT: Readonly<Record<string, readonly string[]>> = {
+    children: ["customer_id"],
+    "household.members": ["customer_id"],
+    "person.contact_role.parents": ["customer_id"],
+};
 
-export function collectionRefFromProvider(provider: CanonicalDataProvider): FormsRepeatableCollectionRef | null {
+/** @deprecated Use evaluateFormFieldAvailabilityForIteration — retained for transitional imports. */
+export function nestedFieldRequiresEnrollmentContext(_field: FormField): boolean {
+    return false;
+}
+
+/** Evaluate nested field availability using canonical context requirements. */
+export function validateNestedFieldForIterationEntity(field: FormField, iterationEntityType: string): boolean {
+    const ctx = buildCollectionIterationContext({
+        collectionProviderRef: "collection",
+        itemEntityType: iterationEntityType,
+    });
+    return isFormFieldAvailableForIteration(field, ctx);
+}
+
+/** Structured availability for nested fields inside a collection-bound group. */
+export function nestedFieldAvailabilityForBinding(
+    field: FormField,
+    binding: FormGroupCollectionBinding,
+) {
+    return evaluateFormFieldAvailabilityForIteration(field, iterationContextFromCollectionBinding(binding));
+}
+
+export function collectionRefFromProvider(provider: CanonicalDataProvider): FormsRepeatableCollectionRef | string | null {
     const fromProjection = provider.collectionProjection?.collection_ref?.trim();
-    if (fromProjection === "children" || fromProjection === "household_members") return fromProjection;
+    if (fromProjection === "children" || fromProjection === "household_members" || fromProjection === "parents_guardians") {
+        return fromProjection;
+    }
     if (provider.refKey === "children") return "children";
     if (provider.refKey === "household.members") return "household_members";
+    if (provider.refKey === "person.contact_role.parents") return "parents_guardians";
     return null;
 }
 
@@ -51,7 +87,11 @@ export function collectionBindingFromProvider(provider: CanonicalDataProvider): 
     return {
         collection_provider_ref: provider.refKey,
         iteration_entity_type: iterationEntity,
-        iteration_alias: collectionRef === "children" ? "child" : collectionRef === "household_members" ? "member" : undefined,
+        iteration_alias:
+            collectionRef === "children" ? "child"
+            : collectionRef === "household_members" ? "member"
+            : collectionRef === "parents_guardians" ? "guardian"
+            : undefined,
     };
 }
 
@@ -70,38 +110,18 @@ export function groupFieldHasCollectionBinding(
     return field.type === "group" && Boolean(field.collection_binding?.collection_provider_ref?.trim());
 }
 
-export function nestedFieldRequiresEnrollmentContext(field: FormField): boolean {
-    if (field.type === "group") return false;
-    const fieldKey = field.field_source?.field_key?.trim().toLowerCase() ?? "";
-    if (FORMS_INQUIRY_CHILD_FIELD_KEYS.has(fieldKey)) return true;
-    const entity = field.field_source?.entity_type?.trim().toLowerCase() ?? "";
-    return entity === "enrollment" || entity === "opportunity";
+export function collectionRequiredContextForProvider(refKey: string): readonly string[] {
+    return FORMS_COLLECTION_REQUIRED_CONTEXT[refKey.trim()] ?? ["customer_id"];
 }
 
-export function validateNestedFieldForIterationEntity(field: FormField, iterationEntityType: string): boolean {
-    if (field.type === "group") return false;
-    const source = field.field_source;
-    if (!source || source.entity_type === "custom") return true;
-
-    if (nestedFieldRequiresEnrollmentContext(field)) return false;
-
-    const entity = source.entity_type?.trim().toLowerCase() ?? "";
-    const fieldKey = source.field_key?.trim() ?? "";
-
-    const legacyEntry = OPERATIONAL_FORM_SYSTEM_FIELDS.find(
-        (e) => e.entity_type === source.entity_type && e.field_key === source.field_key,
-    );
-    const legacyCanonical = legacyEntry ? systemFieldIdToCanonicalRef(legacyEntry.id) : null;
-
-    const defEntity =
-        legacyCanonical?.entity_type
-        ?? fieldDefinitionEntityTypeFromFormsEntity(entity);
-    if (!defEntity) return false;
-
-    if (iterationEntityType === "customer_member") {
-        return defEntity === "customer_member";
-    }
-    return defEntity === iterationEntityType;
+export function collectionContextIsValid(
+    refKey: string,
+    launchFks: { customer_id?: string | null; customer_member_id?: string | null },
+): boolean {
+    const required = collectionRequiredContextForProvider(refKey);
+    if (required.includes("customer_id") && !launchFks.customer_id?.trim()) return false;
+    if (required.includes("customer_member_id") && !launchFks.customer_member_id?.trim()) return false;
+    return true;
 }
 
 export function resolveCollectionBindingProvider(refKey: string): CanonicalDataProvider | undefined {
@@ -110,4 +130,8 @@ export function resolveCollectionBindingProvider(refKey: string): CanonicalDataP
 
 export function collectionBindingAuthoringEnabled(): boolean {
     return FORMS_COLLECTION_BINDING_AUTHORING_ENABLED;
+}
+
+export function collectionBindingAuthoringEnabledForRef(refKey: string): boolean {
+    return collectionBindingAuthoringEnabledForProvider(refKey);
 }

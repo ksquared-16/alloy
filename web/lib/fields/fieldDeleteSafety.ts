@@ -6,6 +6,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FieldDeleteSafetySummary } from "@/lib/fields/fieldLifecycleModel";
+import {
+    discoverFormsDocumentsSchemaReferences,
+    schemaReferencesFieldKey,
+} from "@/lib/forms/collection/formsDocumentsSchemaReferences";
 
 export const FIELD_DELETE_UNCOVERED_CHECKS = [
     "focus_panel_configs",
@@ -23,6 +27,18 @@ export type FieldDeleteSafetyInput = {
 };
 
 function jsonReferencesFieldKey(payload: unknown, entityType: string, fieldKey: string): boolean {
+    if (payload && typeof payload === "object" && "fields" in (payload as object)) {
+        try {
+            if (schemaReferencesFieldKey(payload as { fields: never[] }, entityType, fieldKey)) {
+                return true;
+            }
+            const refs = discoverFormsDocumentsSchemaReferences(payload as { fields: never[] });
+            const needle = `${entityType.trim().toLowerCase()}.${fieldKey.trim().toLowerCase()}`;
+            if (refs.some((r) => r.ref === needle)) return true;
+        } catch {
+            // fall through to generic walk
+        }
+    }
     const needle = fieldKey.trim().toLowerCase();
     const entity = entityType.trim().toLowerCase();
     if (!needle) return false;

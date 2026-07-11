@@ -10,6 +10,7 @@ import { resolveDocumentComposition, patchSchemaComposition } from "@/lib/forms/
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import type { FormAuthoringPreviewLaunchContext } from "@/lib/forms/preview/formPreviewOrchestration";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 
 type VersionRow = {
@@ -28,11 +29,13 @@ export default function FormSchemaWorkspace({
     formName,
     versions,
     onVersionsUpdated,
+    previewLaunchContext = null,
 }: {
     formId: string;
     formName: string;
     versions: VersionRow[];
     onVersionsUpdated: () => void;
+    previewLaunchContext?: FormAuthoringPreviewLaunchContext | null;
 }) {
     const { canMutate } = useAdminAuth();
     const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
@@ -255,6 +258,8 @@ export default function FormSchemaWorkspace({
                         formName={formName}
                         onChange={setSchema}
                         disabled={!canMutate || busy}
+                        formDefinitionId={formId}
+                        previewLaunchContext={previewLaunchContext}
                     />
                     <div className="flex flex-wrap gap-2">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={!canMutate || busy} onClick={() => void saveDraft()}>

@@ -21,11 +21,12 @@ import {
 import { QUEUE_ROW_CHILDREN_COLLECTION_FIELD_KEY } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
 import { platformFieldByRefKey } from "@/lib/fields/platformFieldCatalog";
 import { FORMS_RELATIONSHIP_PROVIDER_ROLE_BY_REF } from "@/lib/fields/formsLegacyContactRoleCompatibility";
+import { collectionBindingAuthoringEnabledForProvider } from "@/lib/fields/formsRelationshipOperationalSupport";
 
 const BOTH: CanonicalDataProvider["availability"] = { pipeline: true, waitlist: true };
 
 /** Supported whole-collection bindings for repeatable Form groups. */
-export const FORMS_REPEATABLE_COLLECTION_REFS = ["children", "household_members"] as const;
+export const FORMS_REPEATABLE_COLLECTION_REFS = ["children", "household_members", "parents_guardians"] as const;
 
 export type FormsRepeatableCollectionRef = (typeof FORMS_REPEATABLE_COLLECTION_REFS)[number];
 
@@ -139,7 +140,18 @@ export function buildFormsCollectionBindingSeeds(): CanonicalDataProvider[] {
             "Household Members",
             "customer_member",
         ),
+        wholeCollectionProvider(
+            "person.contact_role.parents",
+            "parents_guardians",
+            "Parents / Guardians",
+            "person",
+        ),
     ];
+}
+
+/** Collection providers eligible for repeatable-section authoring (dedicated selector — not scalar picker). */
+export function buildFormsAuthorableCollectionBindingSeeds(): CanonicalDataProvider[] {
+    return buildFormsCollectionBindingSeeds().filter((p) => collectionBindingAuthoringEnabledForProvider(p.refKey));
 }
 
 export function findFormsCollectionBindingProvider(refKey: string): CanonicalDataProvider | undefined {

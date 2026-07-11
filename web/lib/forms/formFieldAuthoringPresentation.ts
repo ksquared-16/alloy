@@ -45,6 +45,22 @@ export const FIELD_AUTHORING_COPY = {
     customNote: "Custom — not auto-linked to CRM.",
 } as const;
 
+export const COLLECTION_AUTHORING_COPY = {
+    repeatableSection: "Repeatable section (collection-bound)",
+    sectionLabel: "Section label",
+    collectionProvider: "Collection",
+    itemEntity: "Item entity",
+    requiredContext: "Required context",
+    minRows: "Min rows",
+    maxRows: "Max rows",
+    nestedFieldsHint: "Nested questions configured inside this section",
+    nestedFieldsLabel: "Nested questions",
+    nestedFieldsEmpty: "No nested questions yet — add fields valid for this collection item.",
+    proposedEditHint: "Existing household records prefill as proposed values — edits do not write back automatically.",
+    addRepeatableSection: "Add repeatable section",
+    removeSection: "Remove section",
+} as const;
+
 /** Operator-facing groups for relationship role leaves. */
 export const RELATIONSHIP_FIELD_PICKER_GROUP_ORDER = [
     "primary",

@@ -1,5 +1,5 @@
 /**
- * Collection-bound repeatable section prefill — step-local in P2.
+ * Collection-bound repeatable section prefill — step-local in packets.
  *
  * Repeatable collection values do not participate in packet shared_values dedupe.
  */
@@ -7,7 +7,7 @@
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
 
-/** P2: collection repeaters hydrate empty instance rows; item prefill is step-local only. */
+/** P4: collection repeaters hydrate from canonical resolver; values remain step-local in packets. */
 export function collectionRepeaterPrefillIsStepLocal(_schema: FormSchemaV1, groupField: FormField): boolean {
     return groupFieldHasCollectionBinding(groupField);
 }
@@ -27,4 +27,19 @@ export function fieldIsInsideCollectionBoundGroup(schema: FormSchemaV1, fieldId:
     };
     walk(schema.fields, false);
     return inside;
+}
+
+/** Walk group fields that bind to a canonical collection provider. */
+export function collectCollectionBoundGroupFields(schema: FormSchemaV1): FormField[] {
+    const out: FormField[] = [];
+    const walk = (fields: FormField[]) => {
+        for (const f of fields) {
+            if (f.type === "group") {
+                if (groupFieldHasCollectionBinding(f)) out.push(f);
+                walk(f.fields);
+            }
+        }
+    };
+    walk(schema.fields);
+    return out;
 }
