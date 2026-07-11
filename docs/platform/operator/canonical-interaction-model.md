@@ -224,7 +224,7 @@ This doc is the **intended model**. Current implementation is partially aligned.
 | Workspace → Stage → Record spine | Canonical | **Shipped** — `/workspace` → work-unit queues → drawer | None at spine level |
 | Perspective | First-class named lens | **Partial** — perspectives expressed as queue lanes / attention buckets / client filters | Promote "perspective" to an explicit named concept |
 | Queue / Row preview boundary | Locked | **Shipped & enforced** | None |
-| Universal drawer shell | One shell, many entry intents | **Partial** — Opportunity drawer canonical (VM); Person/Child drawer VM transitional (flag OFF) | Complete VM cutover; converge on one shell |
+| Universal drawer shell | One shell, many entry intents | **Complete** — VM hard cutover; legacy drawer deleted; Focus Panel canonical | Card editing substrate; no legacy restoration |
 | Context Frame | Explicit entry-intent concept | **Implicit** — drawers open from rows but entry intent is not a modeled concept | Model Context Frame so the same record leads differently per perspective |
 | Mode (Summary / Work / Activity) | Three primary lenses; domains are cards in Work | **Tab-style** composition today (Placement, Schedule, Billing tabs) | Reframe progressive tabs into Modes + Cards |
 | Card as reusable business primitive | Compose everywhere from record truth | **Partial** — Experience Builder composes sections/related-lists/widgets; some surfaces still field-grid | Build the card primitive; reuse across drawer/queue/analytics/BOS |

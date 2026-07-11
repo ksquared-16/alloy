@@ -1,6 +1,6 @@
 # Drawer Sunset & Focus Panel Convergence Roadmap
 
-**Status:** Canonical doctrine (June 2026). Documentation-only lock — no runtime code changes.
+**Status:** Canonical doctrine (July 2026 stabilization). Records post-elimination product position.
 **Source material:** Card System Discovery Audit + Drawer Sunset & Focus Panel Convergence Audit.
 **Companion code plan:** [`../../sprints/06_2026/platform_simplification_phase3_drawer_deletion_audit.md`](../../sprints/06_2026/platform_simplification_phase3_drawer_deletion_audit.md) (legacy monolith deletion — a **separate track** from card convergence).
 
@@ -13,7 +13,7 @@ This doc locks the product position: **the Focus Panel is the operator surface; 
 | Position | Statement |
 |---|---|
 | 1 | **Focus Panel is the canonical operator surface.** Operators work in the Focus Panel, never "in a drawer." |
-| 2 | **The drawer shell remains temporarily** as reveal / open-state infrastructure (one `AdminDrawerContext.openDrawer()` primitive; one shell). |
+| 2 | **The drawer shell remains** as reveal / open-state infrastructure (one `AdminDrawerContext` open-state primitive; one shell). |
 | 3 | **Drawer / tab overview is legacy compatibility** — the non-Focus-Panel body path (tabs + `OpportunityDrawerOverviewBody`). |
 | 4 | **LayoutDoc drawer authoring is transitional** and must not receive new product investment. |
 | 5 | **Universal Cards absorb drawer sections over time** — sections become cards, not the reverse. |
@@ -31,15 +31,15 @@ These positions are consistent with [`focus-panel-architecture-vocabulary.md`](.
 
 | Area | Current role | Future role | Status |
 |---|---|---|---|
-| Drawer shell | Reveal / open-state infrastructure | Keep temporarily | **Infrastructure** |
+| Drawer shell | Reveal / open-state infrastructure | Permanent infrastructure | **Infrastructure** |
 | Opportunity Focus Panel | Canonical operator surface | Keep / invest | **Canonical** |
 | Opportunity tab overview | Legacy fallback | Retire after card editing parity | **Transitional** |
 | LayoutDoc drawer sections | Operational edit stack | Migrate behavior into cards | **Transitional** |
 | Lead summary blueprint | Duplicate top-of-record config | Archive after parity | **Legacy** |
-| Person drawer | Legacy UX | Replace with Person/Child Focus Panel | **Transitional** |
-| Child drawer | Legacy UX | Replace with Child-focused card state | **Transitional** |
-| Location drawer | Legacy only | Needs future operating surface | **Unresolved** |
-| AdminEntityDrawerLegacy | Legacy monolith | Delete after parity / coverage | **Legacy** |
+| Person Focus Panel | Canonical operator surface | Invest (card editing substrate) | **Canonical** |
+| Child Focus Panel | Canonical operator surface | Invest (card editing substrate) | **Canonical** |
+| Location operating surface | Settings Configuration Mode | `/settings/locations` canonical | **Canonical** |
+| AdminEntityDrawerLegacy | Legacy monolith | **Deleted** July 2026 | **Removed** |
 | Focus Panel Universal Cards | Future card runtime | Invest | **Canonical** |
 
 ---

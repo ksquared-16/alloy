@@ -1,6 +1,6 @@
 # Release history
 
-**Status:** Canonical platform milestones (June 2026 rebaseline). **Not** a commit or sprint task log.
+**Status:** Canonical platform milestones (July 2026 stabilization rebaseline). **Not** a commit or sprint task log.
 
 > **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** This history predates the operational truth-flow backend. Recorded here for completeness: the **L1–L4 operational spine** (config rules; effective-dated agreements/placements/schedule assignments; immutable attendance facts; expected/actual occupancy & staffing read models) and the **L4→L5 Operational Consumption runtime** (Consumption Events → Resolved Obligations → draft Charges, Slices 1–4) shipped as flag-gated/simulator backend across June–July 2026. The frozen architecture governing their productization is [`../operational-expansion-phase1-architecture-rfc.md`](../operational-expansion-phase1-architecture-rfc.md); its first delivery step is defined in [`../operational-expansion-wave1-implementation-spec.md`](../operational-expansion-wave1-implementation-spec.md).
 
@@ -8,9 +8,43 @@
 
 ## 2026 H1 — Platform maturation
 
-### July 2026
+### July 2026 — Runtime Simplification & Platform Stabilization
 
-- **Current Work (Focus Panel)** — config-driven operational surface on the Focus Panel: Summary → Focus → outcome completion inside Focus; primary CTA **`Record what happened`**; checklist handoffs (Communications, Household, Children, Documents); queue row current-work hints; action-registry supporting actions; right-rail demotion when Current Work owns completion. Merged to staging via PR #95.
+**Major platform milestone.** Foundational runtimes are complete; duplicate legacy paths removed. See [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md).
+
+#### Architecture
+
+- **Presentation Runtime** finalized — one tree: Workspace, Work Unit, Queue Region, Focus Panel, Right Rail (`c99e381f3`, PR #71 `12761a7f0`)
+- **Surface Host** finalized — client-held surfaces exchange focus without route teardown (`3764e039a`, `e66c3de51`)
+- **VM Runtime** canonical — Opportunity, Person, Child; permanent hard cutover; no kill-switch rollback
+- **Focus Panel** canonical operator record surface (PR #95 `06202d599` — Current Work)
+- **Business Processes** canonical — landing → stage queues → record focus
+- **Processing** canonical — Digital Mailroom operational workspace (PR #123 `0e7845a3e`)
+- **Communications** canonical — Command Center + identity platform (PR #132 `6e1f8e44d`, PR #147 `05441969a`)
+
+#### Simplification
+
+- **Legacy drawer removed** — `AdminEntityDrawerLegacy` deleted (PR #148 `e94811914`)
+- **Legacy runtime removed** — VM-only `AdminEntityDrawer`; unsupported entities fail closed
+- **Canonical operating surfaces** — Settings locations inline create (PR #144 `4c5821cce`); search → `/settings/locations?locationId=` (PR #145 `305e95c4b`)
+- **Legacy admin retired** — `/legacy-admin` landing → `/workspace`
+- **Duplicate runtime ownership removed** — `QueueBlock`, dept compat work-unit page, shadow PRV2 paths
+
+#### Performance
+
+- **TypeScript OOM eliminated** — 8 GB heap + split graphs (PR #90 `a5b8f66d8`, `ca965606c`)
+- **Canonical typecheck** — `npm run typecheck` (build) + `typecheck:tests` (full); CI both jobs
+- **Workspace orchestration** — repo dev entry coordination (PR #143 `00cee4183`)
+- **Development operating model** — `docs/governance/typescript-performance.md` canonical
+
+#### Operator experience
+
+- **Branded boot shell** — perceived performance sprint (PR #91 `1fea282de`)
+- **Perceived performance** — Queue Hold, Surface Hold, progressive reveal; no blank between-hold surfaces
+- **Work View continuity** — `?work_view=` deep links on work-unit routes
+- **Canonical location experience** — Settings Configuration Mode; no legacy location drawer
+
+**Staging certification base:** `6daf032ce5d4d9b3f64fef0ad2a49e6443a8af3d` (includes floor `e94811914`).
 
 ### June 2026
 
@@ -67,6 +101,6 @@
 
 ## How to read this document
 
-Each milestone represents **shipped platform capability**, not individual PRs. For implementation detail, follow sprint closeouts in `docs/sprints/completed/` (transitional paths under month folders until migration completes).
+Each milestone represents **shipped platform capability**, not individual PRs. For implementation detail, follow sprint closeouts in `docs/sprints/**` — treat month folders as historical execution records; canonical platform state lives in `docs/platform/**`.
 
 **Update rule:** Add a milestone when a capability moves to **Complete** in `platform-capabilities.md` with operator-visible or platform-significant impact.

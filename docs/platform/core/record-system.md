@@ -30,7 +30,7 @@ Queue rows are **preview/selection only**. Never use queue JSON for business log
 
 Opportunity surfaces: `drawer_visible`, `drawer_initial`, `full` — progressive loading with composed payload readiness gates.
 
-Person/Child: transitional VM runtime; layout runtime v1 shipped.
+Person/Child: canonical VM runtime with Focus Panel body (July 2026 hard cutover).
 
 ---
 
