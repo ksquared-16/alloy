@@ -5,7 +5,7 @@ import { providerReferencesFromFormsDocumentsSchema } from "@/lib/forms/collecti
 
 describe("provider consumer reference foundation", () => {
     it("indexes Forms draft and published references", () => {
-        const schema = { fields: [{ id: "kids", type: "group", label: "Kids", required: false, collection_binding: { collection_provider_ref: "children", iteration_entity_type: "customer_member" }, fields: [{ id: "first", type: "text", label: "First", required: false, field_source: { entity_type: "child", field_key: "child_first_name" } }] }] } as const;
+        const schema = { fields: [{ id: "kids", type: "group" as const, label: "Kids", required: false, collection_binding: { collection_provider_ref: "children", iteration_entity_type: "customer_member" as const }, fields: [{ id: "first", type: "text" as const, label: "First", required: false, field_source: { entity_type: "child" as const, field_key: "child_first_name" } }] }] };
         const refs = [
             ...providerReferencesFromFormsDocumentsSchema({ schema, artifactId: "form-1", artifactVersionId: "v-draft", lifecycleStatus: "draft" }),
             ...providerReferencesFromFormsDocumentsSchema({ schema, artifactId: "form-1", artifactVersionId: "v-published", lifecycleStatus: "published" }),

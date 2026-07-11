@@ -15,7 +15,7 @@ const baseProposal: RelatedRecordInstanceProposal = {
     status: "valid",
 };
 
-const record = { id: "cm-1", org_id: "org-1", customer_id: "cust-1", first_name: "A", last_name: "B", dob: null };
+const record = { id: "cm-1", org_id: "org-1", customer_id: "cust-1", profile: { first_name: "A", last_name: "B", dob: null } };
 
 describe("verifyExistingChildCommitAuthorization", () => {
     it("rejects cross-org and cross-household child records", () => {
