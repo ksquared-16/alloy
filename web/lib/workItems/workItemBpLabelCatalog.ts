@@ -44,8 +44,9 @@ export async function fetchWorkItemBpLabelCatalog(): Promise<WorkItemBpLabelCata
         try {
             const res = await fetch("/api/admin/lifecycle-catalog", { credentials: "include" });
             if (!res.ok) throw new Error("Failed to load lifecycle catalog");
-            const json = (await res.json()) as { entries?: LifecycleCatalogEntry[] };
-            cachedCatalog = buildWorkItemBpLabelCatalogFromEntries(Array.isArray(json.entries) ? json.entries : []);
+            const json = (await res.json()) as { items?: LifecycleCatalogEntry[]; entries?: LifecycleCatalogEntry[] };
+            const entries = Array.isArray(json.items) ? json.items : Array.isArray(json.entries) ? json.entries : [];
+            cachedCatalog = buildWorkItemBpLabelCatalogFromEntries(entries);
             return cachedCatalog;
         } catch {
             cachedCatalog = { processLabels: {}, stageLabels: {} };

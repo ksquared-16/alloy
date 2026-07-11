@@ -66,3 +66,39 @@ describe("workItemQueueScope", () => {
         expect(countTasksForSource(tasks, "recurring")).toBe(0);
     });
 });
+
+describe("resolveWorkItemQueueEmptyState", () => {
+    it("explains Processing + Mine intersection emptiness", async () => {
+        const { resolveWorkItemQueueEmptyState } = await import("@/lib/workItems/workItemQueueScope");
+        const state = resolveWorkItemQueueEmptyState({
+            folder: "all_work",
+            view: "mine",
+            source: "processing",
+            sort: "due_date",
+        });
+        expect(state.message).toBe("No Processing work is assigned to you.");
+        expect(state.helper).toContain("Unassigned");
+    });
+
+    it("explains source-only emptiness without blaming Mine", async () => {
+        const { resolveWorkItemQueueEmptyState } = await import("@/lib/workItems/workItemQueueScope");
+        const state = resolveWorkItemQueueEmptyState({
+            folder: "all_work",
+            view: "unassigned",
+            source: "processing",
+            sort: "due_date",
+        });
+        expect(state.message).toBe("No open work from Processing.");
+    });
+
+    it("keeps Mine-only empty copy when no source filter is active", async () => {
+        const { resolveWorkItemQueueEmptyState } = await import("@/lib/workItems/workItemQueueScope");
+        const state = resolveWorkItemQueueEmptyState({
+            folder: "all_work",
+            view: "mine",
+            source: "all",
+            sort: "due_date",
+        });
+        expect(state.message).toBe("No work items assigned to you");
+    });
+});

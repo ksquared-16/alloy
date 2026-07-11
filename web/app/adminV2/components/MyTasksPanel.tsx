@@ -51,6 +51,7 @@ import {
     countTasksForSource,
     countTasksForView,
     DEFAULT_WORK_ITEM_QUEUE_SCOPE,
+    resolveWorkItemQueueEmptyState,
     resolveWorkspaceTasksFetchFilter,
     WORK_ITEM_FOLDER_DEFS,
     WORK_ITEM_SOURCE_DEFS,
@@ -596,26 +597,15 @@ export default function MyTasksPanel({
         }
     }, [dispatchRefresh, load]);
 
-    const emptyLabel = useMemo(() => {
-        switch (scope.view) {
-            case "due_today":
-                return "No work items due today";
-            case "overdue":
-                return "No overdue work items";
-            case "mine":
-                return "No work items assigned to you";
-            case "unassigned":
-                return "No unassigned work items";
-            case "completed":
-                return "No completed or dismissed work items";
-            case "waiting":
-                return "No waiting work items";
-            case "due_soon":
-                return "No work items due soon";
-            default:
-                return "No open work items";
-        }
-    }, [scope.view]);
+    const queueEmptyState = useMemo(
+        () =>
+            resolveWorkItemQueueEmptyState(scope, {
+                hasSearch: Boolean(searchQuery.trim()),
+                hasSiteFilter: siteScopedTasks.length === 0 && tasks.length > 0,
+                opportunityEntitySingular,
+            }),
+        [scope, searchQuery, siteScopedTasks.length, tasks.length, opportunityEntitySingular],
+    );
 
     if (!workEnabled) {
         return <p className="text-sm text-alloy-midnight/70">Operational work is not enabled.</p>;
@@ -675,19 +665,7 @@ export default function MyTasksPanel({
     ) : null;
 
     const emptyState = (
-        <MyTasksEmptyState
-            message={
-                searchQuery.trim() ? "No work items match your search."
-                : siteScopedTasks.length === 0 && tasks.length > 0 ?
-                    "No work items for this site."
-                :   emptyLabel
-            }
-            helper={
-                searchQuery.trim() ?
-                    "Try a different name, household, or child."
-                :   `Create a general work item or link one to a ${opportunityEntitySingular.toLowerCase()}.`
-            }
-        />
+        <MyTasksEmptyState message={queueEmptyState.message} helper={queueEmptyState.helper} />
     );
 
     if (!compact) {

@@ -245,3 +245,89 @@ export function countTasksForSource(tasks: MyTasksTaskRow[], source: WorkItemSou
     if (!WORK_ITEM_SOURCE_DEFS.find((d) => d.key === source)?.available) return 0;
     return filterTasksBySource(tasks, source).filter(isOpenTask).length;
 }
+
+export type WorkItemQueueEmptyState = {
+    message: string;
+    helper: string;
+};
+
+function sourceLabel(source: WorkItemSourceKey): string {
+    return WORK_ITEM_SOURCE_DEFS.find((d) => d.key === source)?.label ?? "Selected source";
+}
+
+/** Truthful empty copy for the active folder + view + source intersection. */
+export function resolveWorkItemQueueEmptyState(
+    scope: WorkItemQueueScope,
+    options?: {
+        hasSearch?: boolean;
+        hasSiteFilter?: boolean;
+        opportunityEntitySingular?: string;
+    },
+): WorkItemQueueEmptyState {
+    if (options?.hasSearch) {
+        return {
+            message: "No work items match your search.",
+            helper: "Try a different name, household, or child.",
+        };
+    }
+    if (options?.hasSiteFilter) {
+        return {
+            message: "No work items for this site.",
+            helper: "Choose another site or clear the site filter.",
+        };
+    }
+
+    const recordSingular = (options?.opportunityEntitySingular ?? "record").toLowerCase();
+    const createHelper = `Create a general work item or link one to a ${recordSingular}.`;
+
+    const source = scope.source;
+    const view = scope.view;
+    const sourceActive = source !== "all";
+    const sourceName = sourceLabel(source);
+
+    if (sourceActive && view === "mine") {
+        if (source === "processing") {
+            return {
+                message: "No Processing work is assigned to you.",
+                helper: "Processing projections stay unassigned until an operator claims them. Try Unassigned or clear the Mine view.",
+            };
+        }
+        if (source === "business_process") {
+            return {
+                message: "No Business Process work matches Mine.",
+                helper: "Try Unassigned or clear the view filter to see all Business Process work.",
+            };
+        }
+        return {
+            message: `No ${sourceName} work matches Mine.`,
+            helper: "Try another view or clear the active filters.",
+        };
+    }
+
+    if (sourceActive) {
+        return {
+            message: `No open work from ${sourceName}.`,
+            helper: "Try another source or clear the source filter.",
+        };
+    }
+
+    switch (view) {
+        case "due_today":
+            return { message: "No work items due today", helper: createHelper, };
+        case "overdue":
+            return { message: "No overdue work items", helper: createHelper, };
+        case "mine":
+            return { message: "No work items assigned to you", helper: createHelper, };
+        case "unassigned":
+            return { message: "No unassigned work items", helper: createHelper, };
+        case "completed":
+            return { message: "No completed or dismissed work items", helper: "Completed work will appear here after you finish it." };
+        case "waiting":
+            return { message: "No waiting work items", helper: "Waiting work will appear when that semantics ship." };
+        case "due_soon":
+            return { message: "No work items due soon", helper: createHelper, };
+        default:
+            return { message: "No open work items", helper: createHelper, };
+    }
+}
+

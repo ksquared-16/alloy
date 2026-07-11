@@ -5,6 +5,10 @@
 import { isBusinessProcessStageWorkTaskRow } from "@/lib/lifecycle/isBusinessProcessStageWorkTaskRow";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import { normalizeOperationalTaskTitleDisplay } from "@/lib/agent/taskAssist/normalizeOperationalTaskTitleDisplay";
+import {
+    resolveWorkItemBpDisplayLabel,
+    WORK_ITEM_BP_FALLBACK_PROCESS_LABEL,
+} from "@/lib/workItems/workItemBpDisplayLabel";
 
 export type WorkItemBpLabelOptions = {
     processLabels?: Record<string, string>;
@@ -22,9 +26,11 @@ export function resolveWorkItemProcessLabel(
     task: Pick<MyTasksTaskRow, "department_id">,
     options?: WorkItemBpLabelOptions,
 ): string {
-    const dept = task.department_id?.trim();
-    if (!dept) return "General work";
-    return options?.processLabels?.[dept] ?? humanizeKey(dept);
+    return resolveWorkItemBpDisplayLabel(
+        task.department_id,
+        options?.processLabels,
+        options?.fallbackProcessLabel ?? WORK_ITEM_BP_FALLBACK_PROCESS_LABEL,
+    );
 }
 
 export function resolveWorkItemStageLabel(
@@ -75,13 +81,13 @@ export function buildWorkItemBpBreadcrumb(
 
 export function buildWorkItemProcessLabelsFromTasks(
     tasks: Pick<MyTasksTaskRow, "department_id">[],
-    fallbackProcessLabel = "Business process",
+    fallbackProcessLabel = WORK_ITEM_BP_FALLBACK_PROCESS_LABEL,
 ): Record<string, string> {
     const labels: Record<string, string> = {};
     for (const task of tasks) {
         const dept = task.department_id?.trim();
         if (!dept || labels[dept]) continue;
-        labels[dept] = humanizeKey(dept) || fallbackProcessLabel;
+        labels[dept] = resolveWorkItemBpDisplayLabel(dept, labels, fallbackProcessLabel);
     }
     return labels;
 }
