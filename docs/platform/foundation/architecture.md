@@ -1,8 +1,8 @@
 # Architecture
 
-**Status:** Canonical (June 2026 rebaseline). Describes **current** platform architecture — not sprint history.
+**Status:** Canonical (July 2026 stabilization). Describes **current** platform architecture — not sprint history.
 
-> **Runtime convergence note (June 2026).** The operator runtime has converged on a **View Model–first** ownership model: each route composes one above-fold **Surface ViewModel** that owns reveal (`reveal.canCommit`), and the operator works a **condensed queue → Focus Panel** surface. The "drawer VM / composed drawer payload" stack referenced below is the **protected reveal/payload infrastructure that sits *behind* the Focus Panel** — not a competing product surface, and not a path to expand. Canonical source: [`../operator/surface-view-model-composition.md`](../operator/surface-view-model-composition.md), [`../operator/alloy-runtime-specification.md`](../operator/alloy-runtime-specification.md) (Part 16), [`../operator/focus-panel-runtime-cutover-report.md`](../operator/focus-panel-runtime-cutover-report.md), and the locked [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md). **Legacy loading paths must not be expanded.**
+> **Platform stabilization (July 2026).** Alloy's operator plane consists of **nine foundational runtimes** — Presentation Runtime, Surface Host, Focus Panel Runtime, VM Runtime, Business Process Runtime, Processing Runtime, Communications Runtime, Configuration Runtime, and Current Work Runtime. There is **no legacy entity drawer runtime**. The composed drawer payload stack is **reveal/payload infrastructure behind the Focus Panel** — not a competing product surface. Canonical: [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md), [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md), [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md).
 
 ---
 
@@ -26,6 +26,24 @@
 │ org-scoped tables        │   │ SMS/email · Stripe · etc.   │
 └──────────────────────────┘   └────────────────────────────┘
 ```
+
+---
+
+## Foundational runtimes (July 2026)
+
+| Runtime | Responsibility | Canonical reference |
+|---------|----------------|---------------------|
+| **Presentation Runtime** | One presentation tree for Workspace, Work Unit, Queue, Focus Panel, Right Rail | [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md) |
+| **Surface Host** | Client-held surfaces; focus exchange without route teardown | [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md) |
+| **Focus Panel Runtime** | Canonical record execution surface (cards, Current Work, embeds) | [`../operator/focus-panel-architecture-vocabulary.md`](../operator/focus-panel-architecture-vocabulary.md) |
+| **VM Runtime** | Entity compose, cache, reveal for Opportunity / Person / Child | [`../operator/drawer-system.md`](../operator/drawer-system.md) |
+| **Business Process Runtime** | Landing catalog → stage queues → record focus | [`../core/business-process-system.md`](../core/business-process-system.md) |
+| **Processing Runtime** | Digital Mailroom operational workspace | [`../modules/documents-and-forms.md`](../modules/documents-and-forms.md) |
+| **Communications Runtime** | Command Center + Activity embed | [`../modules/communications-platform.md`](../modules/communications-platform.md) |
+| **Configuration Runtime** | Settings control plane (`/settings/*`) | [`../modules/configuration-platform.md`](../modules/configuration-platform.md) |
+| **Current Work Runtime** | Stage work completion inside Focus Panel | [`../../sprints/07_2026/alloy-operator-workspace/implementation-closeout.md`](../../sprints/07_2026/alloy-operator-workspace/implementation-closeout.md) |
+
+Unsupported historical entities **fail closed** — `AdminEntityDrawer` returns `null`. Rollback is deployment/Git-based only.
 
 ---
 
@@ -75,7 +93,7 @@ Queue row (preview)
     → drawer VM render  →  buildOperationalContext() → Focus Panel cards
 ```
 
-Opportunity VM is canonical; Person/Child VM cutover in progress. The composed payload + drawer VM is **reveal/payload infrastructure**; the operator-facing surface is the **Focus Panel** (one runtime, one operational subject) composed via `buildOperationalContext()`. See [`../operator/focus-panel-runtime-cutover-report.md`](../operator/focus-panel-runtime-cutover-report.md) and [`../operator/operational-context-boundary.md`](../operator/operational-context-boundary.md). Do not add new drawer-product surfaces or new queue-row renderers outside the condensed path.
+Opportunity, Person, and Child VM runtimes are **canonical**. The composed payload + drawer VM is **reveal/payload infrastructure**; the operator-facing surface is the **Focus Panel** (one runtime, one operational subject) composed via `buildOperationalContext()`. Locations operate through **Settings** (`/settings/locations`), not a drawer. See [`../operator/operational-context-boundary.md`](../operator/operational-context-boundary.md). Do not add new drawer-product surfaces or new queue-row renderers outside the condensed path.
 
 ---
 
@@ -108,17 +126,18 @@ Selected record
 
 ---
 
-## Legacy & transitional
+## Compatibility infrastructure (not product runtime)
 
 | Item | Status |
 |------|--------|
-| `/legacy-admin` | Unmigrated modules |
-| Dept UUID routes | Compat/tests only |
-| `AdminEntityDrawerLegacy` | Shrinking per entity |
-| `contacts` table | Compatibility reads/writes |
-| `messages` / `messages_outbox` | Legacy parallel to `communication_*` |
+| `/legacy-admin` route tree | **Archived** — landing redirects to `/workspace`; shared client modules remain as import-path debt |
+| Dept UUID routes | Compat/tests only — not operator product path |
+| `contacts` table | Compatibility reads/writes — `persons` + `customer_persons` canonical |
+| `messages` / `messages_outbox` | Legacy parallel to `communication_*` — retirement documented |
 
-Inventory: `../../system/legacy-architecture-inventory.md`
+**Deleted (July 2026):** `AdminEntityDrawerLegacy` — no supported legacy entity drawer runtime.
+
+Inventory: `../../system/legacy-architecture-inventory.md` (historical reference)
 
 ---
 
@@ -140,5 +159,6 @@ See `../governance/deployment-and-environments.md`.
 - `../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
 - `../../api/api-platform-completion.md` (internal API Platform foundation complete; future API work is expansion)
 - `../platform-capabilities.md` (capability model — new operational modules are designed API-first)
+- `../milestones/platform-stabilization-july-2026.md` (July 2026 stabilization milestone)
 - `../../system/repository-state-2026-06.md` (point-in-time snapshot)
 - `docs/schema/` (generated schema reference)

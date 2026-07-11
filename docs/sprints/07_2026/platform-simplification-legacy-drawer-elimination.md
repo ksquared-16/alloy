@@ -6,9 +6,9 @@
 |-------|--------|-----|--------|
 | 1 — Inline location create | `refactor/platform-simplification-p1-location-create` | [#144](https://github.com/ksquared-16/alloy/pull/144) | `e555c8d52` |
 | 2 — Search → location surface | `refactor/platform-simplification-p2-location-search` | [#145](https://github.com/ksquared-16/alloy/pull/145) | `8e2e5db70` |
-| 3/4 — Legacy drawer deletion | `refactor/platform-simplification-p3-legacy-drawer-elimination` | (pending) | (pending) |
+| 3/4 — Legacy drawer deletion | `refactor/platform-simplification-p3-legacy-drawer-elimination` | [#148](https://github.com/ksquared-16/alloy/pull/148) | `e94811914` |
 
-**Staging base:** `ca965606c8724c972991ceddaa4aed7c752deb5e`
+**Staging certification:** `6daf032ce5d4d9b3f64fef0ad2a49e6443a8af3d` (floor `e94811914`)
 
 ## Doctrine (final)
 

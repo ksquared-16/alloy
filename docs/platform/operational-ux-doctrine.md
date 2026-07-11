@@ -1,14 +1,31 @@
 # Operational UX Architecture doctrine
 
-**Status:** Canonical platform doctrine (June 2026). Defines Alloy's operating model across all operational domains — Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance, and future workflows.
+**Status:** Canonical platform doctrine (July 2026 stabilization). Defines Alloy's operating model across all operational domains — Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance, and future workflows.
 
 This document is **doctrine, not implementation detail**. It explains *why* Alloy does not need a per-domain UX redesign: every operational domain plugs into the same five-plane model, the same Operations/Records split, and the same progressive-drawer rules. Enrollment is the proof case, not a special case.
 
-> **Runtime convergence note (June 2026).** Where this doctrine says "drawer," the **runtime product surface is the Focus Panel** on a single operational subject — one runtime, no per-entity drawer products. The Records-plane surface is reached via the default **condensed queue → Focus Panel** Operational Mode, and every route's reveal is owned by a **Surface ViewModel** (`reveal.canCommit`). The "drawer" payload/VM layer is the protected reveal/open-state infrastructure behind the Focus Panel. Canonical: [`./operator/surface-view-model-composition.md`](./operator/surface-view-model-composition.md), [`./operator/focus-panel-runtime-cutover-report.md`](./operator/focus-panel-runtime-cutover-report.md), [`./operator/queue-system.md`](./operator/queue-system.md). This doctrine's *planes/domains* framing is unchanged; only the surface vocabulary converges.
+> **Platform stabilization (July 2026).** Where this doctrine says "drawer," the **runtime product surface is the Focus Panel** on a single operational subject. There is **no legacy entity drawer runtime**. Records-plane execution uses **condensed queue → Focus Panel** Operational Mode with Presentation Runtime + Surface Host continuity. Canonical: [`./milestones/platform-stabilization-july-2026.md`](./milestones/platform-stabilization-july-2026.md), [`./operator/queue-system.md`](./operator/queue-system.md). This doctrine's *planes/domains* framing is unchanged.
 
 > **Orthogonal axis:** This doc defines the **surface axis** — *where* an operator stands when they act (the five planes). The complementary **truth-flow axis** — *what is true and what it derives from* (Configuration -> Intent -> Expectations -> Facts -> Consequences) — is defined in [`./operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md). The two axes compose; neither replaces the other. The Planning plane and "Expectations" are detailed there (Expectations are derived/non-authoritative).
 
 > **Companion doctrine:** This doc covers the **planes and domains** (why one architecture serves all domains). The **canonical interaction spine** an operator traverses — Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field, and the one universal drawer (Record of Truth / Record of Attention / Context Frame) — is defined in [`./operator/canonical-interaction-model.md`](./operator/canonical-interaction-model.md), with laws in [`./operator/interaction-grammar.md`](./operator/interaction-grammar.md) and the lived flow in [`./operator/operator-story.md`](./operator/operator-story.md). The progressive **tabs vs. actions** rules below are the current expression of what the interaction model frames as **Modes** (Summary / Work / Activity) and **Cards** (per-domain surfaces within Work); the Hidden / Startable / Active states carry forward unchanged.
+
+
+## Perceived performance & shell continuity (July 2026 — frozen)
+
+Alloy's operator experience prioritizes **continuity over page transitions**. These patterns are foundational — not per-domain options.
+
+| Pattern | Behavior |
+|---------|----------|
+| **Branded boot shell** | First-load continuity before AdminV2 hydrates (PR #91) |
+| **Stable shells** | `AdminV2Shell`, module `WorkspaceShell` — chrome persists across surface focus changes |
+| **Queue Hold** | Prior queue rows remain visible during refetch; lane never shows false empty during cold load |
+| **Surface Hold** | Outgoing work-unit/workspace surface yields; incoming establishes before outgoing unmounts (Surface Host) |
+| **Progressive reveal** | Coordinated above-fold commit (`reveal.canCommit`) — no partial section skeletons above fold |
+| **Operator continuity** | Work View deep links, drawer client-URL swap (`replaceState`), warm VM cache on row intent |
+| **No blank loading surfaces** | Between holds, operators see prior content or branded shell — not empty white frames |
+
+Doctrine: [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md), [`../experience/loading-and-reveal-contract.md`](../experience/loading-and-reveal-contract.md), [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md).
 
 ---
 

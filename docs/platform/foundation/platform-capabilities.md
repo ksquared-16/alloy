@@ -1,8 +1,27 @@
 # Platform capabilities
 
-**Status:** Canonical inventory (June 2026 rebaseline). Answers: *What has Alloy actually built?*
+**Status:** Canonical inventory (July 2026 stabilization). Answers: *What has Alloy actually built?*
 
 Statuses: **Complete** · **In Progress** · **Planned** · **Future**
+
+---
+
+## Foundational runtimes (July 2026 — stable)
+
+| Capability | Status | Description | Notes |
+|------------|--------|-------------|-------|
+| Presentation Runtime V2 | **Complete** | One presentation tree — WS, WU, Queue, Focus Panel, Right Rail | Frozen July 2026 |
+| Surface Host | **Complete** | Client-held surfaces; focus exchange without route teardown | NAV-1 (A) shipped |
+| Focus Panel Runtime | **Complete** | Canonical record execution surface | VM-backed cards + embeds |
+| VM Runtime (Opportunity/Person/Child) | **Complete** | Hard cutover; no kill-switch rollback | Legacy drawer deleted |
+| Business Process Runtime | **Complete** | Landing → stage queues → record focus | Operator model frozen |
+| Processing Runtime | **Complete** | Digital Mailroom operational workspace | Reference module shell |
+| Communications Runtime | **Complete** | Command Center + Activity embed + identity platform | PR #132, #147 |
+| Configuration Runtime | **Complete** | `/settings/*` control plane + Surfaces builder | Locations inline create |
+| Current Work Runtime | **Complete** | Config-driven stage work in Focus Panel | PR #95 |
+| TypeScript canonical typecheck | **Complete** | Split build/full graphs; 8 GB heap; CI both jobs | `typescript-performance.md` |
+| Workspace orchestration | **Complete** | Repo dev entry coordination | PR #143 |
+| Platform simplification (legacy drawer) | **Complete** | Legacy drawer deleted; canonical surfaces | PR #144–#148 |
 
 ---
 
@@ -14,7 +33,7 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | Stage queue execution | **Complete** | Work-unit slug routes, multi-lane queues | Internal: work units |
 | Site filter context | **Complete** | Sticky site scope on workspace fetches | Session + URL param |
 | Atomic reveal (Pass 3) | **Complete** | Coordinated above-fold reveal | Locked doctrine |
-| Global search | **Complete** | Header search → drawer swap | V1 shipped May 2026 |
+| Global search | **Complete** | Header search → canonical surfaces (VM Focus Panel or Settings deep links) | Campus → `/settings/locations?locationId=` |
 | **Current Work surface** | **Complete** | Config-driven Focus Panel work owner; outcome completion + handoffs | Canonical July 2026 — PR #95 |
 | Focus Panel card library (Core Four + extensions) | **Complete** | Household, Children, Current Work, Readiness + Billing/Tour/Comms/Timeline | See focus-panel-card-library.md |
 | Dept-first navigation | **Future** | — | Explicitly not canonical |
@@ -33,9 +52,11 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|
-| Opportunity drawer VM | **Complete** | Composed payload, warm navigation | Canonical |
-| Person drawer VM | **In Progress** | Layout runtime v1 shipped; VM flag OFF default | Cutover sprint |
-| Child drawer VM | **In Progress** | Transitional | Same cutover |
+| Opportunity VM Runtime | **Complete** | Composed payload, warm navigation, Focus Panel | Canonical |
+| Person VM Runtime | **Complete** | Focus Panel body; permanent hard cutover | July 2026 |
+| Child VM Runtime | **Complete** | Focus Panel body; permanent hard cutover | July 2026 |
+| Legacy entity drawer | **Complete** (removed) | `AdminEntityDrawerLegacy` deleted | Fail closed for unsupported |
+| Location operating surface | **Complete** | `/settings/locations` Configuration Mode | Inline create; search deep links |
 | Record resolver (RRS) | **Complete** | Jobs and selected entities | |
 | Linked record inline edit | **Complete** | PATCH from drawer | |
 | Queue → record authority boundary | **Complete** | Documented + enforced pattern | |
