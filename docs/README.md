@@ -2,6 +2,8 @@
 
 **Purpose:** Authoritative navigation for engineers, implementers, and AI agents. Prefer these files over chat memory or archived sprint material.
 
+**July 2026 platform freeze:** Foundational architecture is **complete and stable**. Start here for "what platform exists today": **`platform/foundation/platform-freeze-july-2026.md`**, **`platform/foundation/platform-manifesto.md`**, **`platform/foundation/system-overview.md`**.
+
 **June 2026 rebaseline:** Canonical platform docs live under **`docs/platform/`**. Schema reference under **`docs/schema/`** (generated). Business Process → Stage → Record is the operator mental model; work units are documented as runtime constructs.
 
 For behavior-changing work, include **`docs/platform/governance/design-and-operational-doctrine.md`** in context.
