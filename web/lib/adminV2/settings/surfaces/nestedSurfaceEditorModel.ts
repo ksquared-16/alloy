@@ -51,6 +51,11 @@ import {
     isNestedSurfaceFieldHalfWidth,
     nestedSurfaceFieldMustFullRow,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
+import {
+    generateDefaultIdentityFieldPlacements,
+    type IdentityFieldPlacement,
+    type IdentityFieldTier,
+} from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 
 export const HOUSEHOLD_SURFACE_ID = "household_surface";
 export const CHILDREN_SURFACE_ID = "children_surface";
@@ -103,6 +108,8 @@ export type NestedSurfaceGroupDef = {
 export type NestedSurfaceGroupConfig = {
     key: string;
     selectedFieldKeys: string[];
+    /** Expanded-tier fields (collapsed behind View details). */
+    expandedFieldKeys?: string[];
     /** Optional sections (e.g. emergency_contacts) — false hides until operator adds the section. */
     enabled?: boolean;
     /** Legacy runtime field modes (displayed/editable) — kept for drill-in runtime parity. */
@@ -114,6 +121,10 @@ export type NestedSurfaceGroupConfig = {
     fieldLabels?: Record<string, string>;
     /** Per-field row width — `half` pairs with the next consecutive half field on one row. */
     fieldLayoutWidths?: Record<string, NestedSurfaceFieldLayoutWidth>;
+    /** Shared identity placements — summary + expanded tiers with row/column metadata. */
+    fieldPlacements?: IdentityFieldPlacement[];
+    /** Explicit per-field icon override (catalog icon used when absent). */
+    fieldIcons?: Record<string, string>;
     /**
      * Stable semantic identity for an operator-added section (from the platform section
      * catalog). Preserved so future BOS/AI understand what the section MEANS even after
@@ -262,8 +273,74 @@ function patchGroup(
     };
 }
 
-export function addFieldToNestedGroup(config: NestedSurfaceConfig, groupKey: string, fieldKey: string): NestedSurfaceConfig {
-    return patchGroup(config, groupKey, (keys) => (keys.includes(fieldKey) ? keys : [...keys, fieldKey]));
+function seedFieldPlacementForAdd(
+    surfaceId: string,
+    group: NestedSurfaceGroupConfig,
+    fieldKey: string,
+    tier: IdentityFieldTier = "summary",
+): IdentityFieldPlacement[] {
+    const placements = [...(group.fieldPlacements ?? generateDefaultIdentityFieldPlacements(group))];
+    if (placements.some((placement) => placement.fieldRef === fieldKey && placement.tier === tier)) {
+        return placements;
+    }
+    const tierPlacements = placements.filter((placement) => placement.tier === tier);
+    const nextRow =
+        tierPlacements.length > 0 ? Math.max(...tierPlacements.map((placement) => placement.row)) + 1 : 1;
+    placements.push({
+        fieldRef: fieldKey,
+        tier,
+        row: nextRow,
+        column: 1,
+        width: "full",
+        policy: group.fieldPolicies?.[fieldKey] ?? defaultFieldVisibility(surfaceId, group.key),
+    });
+    return placements;
+}
+
+function patchGroupWithField(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    tier: IdentityFieldTier = "summary",
+): NestedSurfaceConfig {
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return config;
+    const keys =
+        tier === "expanded"
+            ? [...(group.expandedFieldKeys ?? [])]
+            : [...group.selectedFieldKeys];
+    if (!keys.includes(fieldKey)) keys.push(fieldKey);
+
+    const nextGroup: NestedSurfaceGroupConfig = {
+        ...group,
+        selectedFieldKeys: tier === "summary" ? keys : group.selectedFieldKeys,
+        expandedFieldKeys: tier === "expanded" ? keys : group.expandedFieldKeys,
+        fieldLayoutWidths: {
+            ...(group.fieldLayoutWidths ?? {}),
+            [fieldKey]: group.fieldLayoutWidths?.[fieldKey] ?? "full",
+        },
+        fieldPolicies: {
+            ...(group.fieldPolicies ?? {}),
+            [fieldKey]:
+                group.fieldPolicies?.[fieldKey]
+                ?? defaultFieldVisibility(config.surfaceId, groupKey),
+        },
+        fieldPlacements: seedFieldPlacementForAdd(config.surfaceId, group, fieldKey, tier),
+    };
+
+    return {
+        ...config,
+        groups: config.groups.map((g) => (g.key === groupKey ? nextGroup : g)),
+    };
+}
+
+export function addFieldToNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    fieldKey: string,
+    options?: { tier?: IdentityFieldTier },
+): NestedSurfaceConfig {
+    return patchGroupWithField(config, groupKey, fieldKey, options?.tier ?? "summary");
 }
 
 export function removeFieldFromNestedGroup(config: NestedSurfaceConfig, groupKey: string, fieldKey: string): NestedSurfaceConfig {
@@ -602,17 +679,24 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
                   Object.entries(found.fieldPolicies).map(([k, v]) => [k, normalizeFieldVisibility(v)]),
               )
             : undefined;
-        return {
+        const merged: NestedSurfaceGroupConfig = {
             key: g.key,
             selectedFieldKeys: [...found.selectedFieldKeys],
+            expandedFieldKeys: found.expandedFieldKeys ? [...found.expandedFieldKeys] : undefined,
             enabled: found.enabled ?? defaultGroupEnabled(surfaceId, g.key),
             displayOptions: found.displayOptions ?? g.displayOptions,
             fieldModes: found.fieldModes ?? g.fieldModes,
             fieldPolicies,
             fieldLabels: found.fieldLabels ? { ...found.fieldLabels } : undefined,
             fieldLayoutWidths: found.fieldLayoutWidths ? { ...found.fieldLayoutWidths } : undefined,
+            fieldPlacements: found.fieldPlacements ? [...found.fieldPlacements] : undefined,
+            fieldIcons: found.fieldIcons ? { ...found.fieldIcons } : undefined,
             sectionSemantic: found.sectionSemantic,
             sectionLabel: found.sectionLabel,
+        };
+        return {
+            ...merged,
+            fieldPlacements: generateDefaultIdentityFieldPlacements(merged),
         };
     });
 

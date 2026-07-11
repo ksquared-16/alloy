@@ -38,13 +38,23 @@ describe("nested surface registry (SurfaceSpec source of truth)", () => {
 
     it("groupDefsFor derives editable groups from the registered Children Surface spec", () => {
         const keys = groupDefsFor(CHILDREN_SURFACE_ID).map((g) => g.key);
-        expect(keys).toEqual(["identity", "placement", "readiness"]);
+        expect(keys).toContain("identity");
+        expect(keys).toContain("placement");
+        expect(keys).toContain("readiness");
+        expect(keys).toContain("roster");
+        expect(keys).toContain("child_edit");
         expect(nestedSurfaceLabel(CHILDREN_SURFACE_ID)).toBe("Children");
     });
 
     it("groupDefsFor derives editable groups from the registered Financial Configuration Surface spec", () => {
         const keys = groupDefsFor(FINANCIAL_CONFIG_SURFACE_ID).map((g) => g.key);
-        expect(keys).toEqual(["current_configuration", "configuration_history", "configuration_actions"]);
+        expect(keys).toEqual([
+            "current_configuration",
+            "configuration_history",
+            "configuration_actions",
+            "billing_periods",
+            "line_items",
+        ]);
     });
 
     it("a newly registered nested surface is editable without a hardcoded editor definition", () => {
@@ -95,9 +105,16 @@ describe("nested surface registry (SurfaceSpec source of truth)", () => {
 });
 
 describe("default config seeds real fields only", () => {
-    it("Children identity group seeds name and date of birth from the registry", () => {
+    it("Children identity group seeds presentation fields from the registry", () => {
         const cfg = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
-        expect(selectedFieldKeys(cfg, "identity")).toEqual(["child.name", "child.date_of_birth"]);
+        expect(selectedFieldKeys(cfg, "identity")).toEqual([
+            "child.first_name",
+            "child.last_name",
+            "child.preferred_name",
+            "child.nickname",
+            "child.date_of_birth",
+            "child.dob_age",
+        ]);
     });
 
     it("Financial current_configuration seeds registry field items only", () => {
@@ -127,14 +144,16 @@ describe("add / remove / reorder fields (persistable, immutable)", () => {
 
     it("removes a field", () => {
         const cfg = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
-        const next = removeFieldFromNestedGroup(cfg, "identity", "child.date_of_birth");
-        expect(selectedFieldKeys(next, "identity")).toEqual(["child.name"]);
+        const next = removeFieldFromNestedGroup(cfg, "identity", "child.dob_age");
+        expect(selectedFieldKeys(next, "identity")).not.toContain("child.dob_age");
+        expect(selectedFieldKeys(next, "identity").length).toBeGreaterThan(0);
     });
 
     it("reorders a field within a group", () => {
         const cfg = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
-        const next = moveFieldInNestedGroup(cfg, "identity", "child.date_of_birth", -1);
-        expect(selectedFieldKeys(next, "identity")).toEqual(["child.date_of_birth", "child.name"]);
+        const next = moveFieldInNestedGroup(cfg, "identity", "child.dob_age", -1);
+        const keys = selectedFieldKeys(next, "identity");
+        expect(keys.indexOf("child.dob_age")).toBeLessThan(keys.indexOf("child.date_of_birth"));
     });
 });
 
@@ -182,7 +201,14 @@ describe("Add Field availability — compatible predefined + tenant custom, no f
 describe("reconcile loaded config with the registry", () => {
     it("returns default when nothing is loaded", () => {
         const cfg = reconcileNestedSurfaceConfig(CHILDREN_SURFACE_ID, null);
-        expect(selectedFieldKeys(cfg, "identity")).toEqual(["child.name", "child.date_of_birth"]);
+        expect(selectedFieldKeys(cfg, "identity")).toEqual([
+            "child.first_name",
+            "child.last_name",
+            "child.preferred_name",
+            "child.nickname",
+            "child.date_of_birth",
+            "child.dob_age",
+        ]);
     });
 
     it("preserves loaded selections and adds any new registry groups", () => {

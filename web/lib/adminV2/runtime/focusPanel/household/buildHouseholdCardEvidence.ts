@@ -38,6 +38,7 @@ import {
 } from "@/lib/admin/person/personDrawerHouseholdRoles";
 import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import { resolveLeadDrawerHeaderContext } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
+import { resolveOpportunitySecondaryContactPerson } from "@/lib/layout/runtime/resolveOpportunityRoleContactPerson";
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -252,6 +253,32 @@ function buildPrimaryContact(
     };
 }
 
+/** When family relationship rows omit a secondary parent, observe scalar + resolver truth. */
+function appendSecondaryParentFromRecord(
+    record: Record<string, unknown>,
+    primaryPersonId: string | null,
+    primaryContact: HouseholdEvidenceContact | null,
+    otherParentGuardianRows: HouseholdEvidenceContact[],
+): void {
+    if (otherParentGuardianRows.length > 0) return;
+
+    const secondary = resolveOpportunitySecondaryContactPerson(record);
+    if (!secondary.hasPersonBinding || !secondary.displayName) return;
+    if (primaryPersonId && secondary.personId === primaryPersonId) return;
+    if (primaryContact?.name && secondary.displayName === primaryContact.name) return;
+
+    const personId = secondary.personId ?? `secondary:${secondary.displayName}`;
+    otherParentGuardianRows.push({
+        personId,
+        name: secondary.displayName,
+        roleLabel: "Parent",
+        isPrimary: false,
+        phone: formatPhoneForDisplay(secondary.phone),
+        email: trimOrNull(secondary.email),
+        initials: personDrawerHouseholdInitials(secondary.displayName),
+    });
+}
+
 /**
  * Options for household evidence assembly. When `nestedConfig` is published, fixed
  * drill-in groups honor enabled flags and field selections from the Household Surface.
@@ -326,6 +353,8 @@ export function buildHouseholdCardEvidence(
                 break;
         }
     }
+
+    appendSecondaryParentFromRecord(record, primaryPersonId, primaryContact, otherParentGuardianRows);
 
     const nestedConfig = options.nestedConfig
         ? reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, options.nestedConfig)

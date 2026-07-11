@@ -23,6 +23,9 @@ import { STAGE_JOURNEY_SEGMENT_LABELS } from "@/lib/lifecycle/stageOperatingPlan
 import LifecycleStageAttentionRulesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionRulesEditor";
 import LifecycleStageWorkCompletionPolicyEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkCompletionPolicyEditor";
 import LifecycleStageOutcomeAutomationEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeAutomationEditor";
+import LifecycleStageWorkTemplateActionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor";
+import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
+import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
 
 
 export type LifecycleStageOperatingPlanEditorHandle = {
@@ -35,6 +38,9 @@ type Props = {
     stageLabel?: string;
     savedPlan: StageOperatingPlanV1 | null;
     onDirtyChange?: (dirty: boolean) => void;
+    actionCatalog?: StageActionCatalogV1 | null;
+    configuredActions?: LifecycleConfiguredActionRow[];
+    processStages?: Array<{ key: string; label: string }>;
 };
 
 function dueDaysFromPolicy(work: StageOperatingPlanEditorDraft["work_templates"][number]): number {
@@ -44,7 +50,10 @@ function dueDaysFromPolicy(work: StageOperatingPlanEditorDraft["work_templates"]
 const LifecycleStageOperatingPlanEditor = forwardRef<
     LifecycleStageOperatingPlanEditorHandle,
     Props
->(function LifecycleStageOperatingPlanEditor({ stageKey, stageLabel, savedPlan, onDirtyChange }, ref) {
+>(function LifecycleStageOperatingPlanEditor(
+    { stageKey, stageLabel, savedPlan, onDirtyChange, actionCatalog, configuredActions, processStages },
+    ref,
+) {
     const [draft, setDraft] = useState<StageOperatingPlanEditorDraft>(() =>
         stageOperatingPlanDraftFromSaved(savedPlan, stageKey),
     );
@@ -318,6 +327,22 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                             const next = { ...work, completion_policy };
                                             if (!completion_policy) delete next.completion_policy;
                                             work_templates[index] = next;
+                                            return { ...prev, work_templates };
+                                        })
+                                    }
+                                />
+
+                                <LifecycleStageWorkTemplateActionsEditor
+                                    work={work}
+                                    stageKey={stageKey}
+                                    stageOutcomes={draft.outcomes}
+                                    actionCatalog={actionCatalog ?? null}
+                                    configuredActions={configuredActions ?? []}
+                                    processStages={processStages ?? []}
+                                    onChange={(nextWork) =>
+                                        setDraft((prev) => {
+                                            const work_templates = [...prev.work_templates];
+                                            work_templates[index] = nextWork;
                                             return { ...prev, work_templates };
                                         })
                                     }

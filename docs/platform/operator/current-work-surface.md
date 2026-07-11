@@ -38,12 +38,19 @@ Operators open a record to **complete work**. Current Work answers:
 | **Checklist completion** | Published field rules via `evaluateFieldRulesForStage` + readiness gaps; work templates via stage-work runtime | Stage-runtime template states when no published overlay |
 
 **Checklist truth:** `resolveCurrentWorkChecklistTruthFromPublishedRules` maps published field-rule keys to record/readiness evaluation. Labels and order remain config-owned; `complete | missing | blocked` status comes from truth (blocked only when readiness gap is blocking).
+
+Requirement timing affects checklist truth as follows:
+
+- Legacy rules without timing continue to appear as stage-progress readiness.
+- `stage_progress` rules appear while the record is being worked.
+- `stage_exit` rules may appear as progression gaps, with copy such as “Needed before the configured next step,” but they do not make the record invalid.
+- Transition blocking happens in the stage/status preflight path only when explicit `stage_exit` metadata applies to the selected transition.
 | **Checklist handoff** | `inferWorkItemOwner()` + scope from field-rule entity | blocked operator copy — never silent no-op |
-| **Primary CTA (Summary)** | Work-primary card (`expand_work`) from template title | `"No current work configured"` |
+| **Primary CTA (Summary)** | Work-primary card (`expand_work`) from template title; optional `primary_action` when configured | `"No current work configured"` |
 | **Record outcome CTA** | `"Record outcome"` when `showOutcomeCompletion` | disabled + `outcomeCompletionBlockReason` |
-| **Outcomes list** | `item.outcomes` from `projectStageWorkRuntime` via `completionOutcomesForPicker` | honest gap copy — **never invent lists** |
-| **Helpful actions** | Published `action_catalog_v1` (`recommended` / `ready`) | `record_header` registry classification |
-| **Alternate paths** | Published `action_catalog_v1` (`context_dependent`) + status-lifecycle category | `record_header` registry classification |
+| **Outcomes list** | Active work template `outcome_refs` filter canonical stage outcomes; legacy uses `item.outcomes` from runtime | honest gap copy — **never invent lists** |
+| **Helpful actions** | Active work template `helpful_actions` (explicit order) | stage `action_catalog_v1` fallback → `record_header` registry |
+| **Alternate paths** | Active work template `alternate_paths` (transition or action refs) | catalog `context_dependent` fallback → registry |
 | **Communication actions** | Published catalog + registry communication category | registry classification |
 | **Blockers** | `signals.attention` primary reason | empty |
 | **Queue row line** | `projectCurrentWorkFromStageRuntime` → `buildQueueCurrentWorkSummary` | task-preview / work-intent fallbacks |
@@ -53,6 +60,26 @@ Operators open a record to **complete work**. Current Work answers:
 **Projection entry:** `buildCurrentWorkSurfaceVM({ context })` → `projectCurrentWork(context).surface` for UI.
 
 **Action tiers on surface VM:** primary · supporting · communication · alternate paths · administrative (Manage) · BOS recommendations.
+
+### Work Template action resolution hierarchy
+
+`/processes` owns operational behavior. Each work template in `stage_operating_plan_v1` may configure:
+
+- `primary_action` — optional execution affordance (distinct from work-card expand and Record Outcome)
+- `helpful_actions` — ordered supporting actions on the summary card
+- `alternate_paths` — transition refs (`move_to_stage:{stage_key}`) or action refs
+- `outcome_refs` — ordered references to canonical stage outcomes (definitions remain stage-owned)
+
+Resolution order at runtime:
+
+1. Explicit active Work Template configuration
+2. Stage `action_catalog_v1` compatibility fallback
+3. `record_header` registry classification fallback
+4. Nothing
+
+Explicit empty arrays disable fallback for that bucket (`undefined` = legacy fallback allowed; `[]` = explicitly none).
+
+Generic umbrella status actions (`update_enrollment_status`, `update_lead_status`, etc.) are never surfaced. Runtime-internal mutation commands are not operator-selectable.
 
 **Summary card:** checklist + progress + primary + helpful actions visible without opening Details. Expanded view is inline — no navigation detour.
 

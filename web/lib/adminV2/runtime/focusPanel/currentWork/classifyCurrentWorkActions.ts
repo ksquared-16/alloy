@@ -3,6 +3,7 @@ import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRe
 
 import {
     actionCompetesWithCurrentWorkCompletion,
+    isGenericUmbrellaLifecycleAction,
     isManageOnlyRecordHeaderAction,
 } from "./currentWorkActionSurfacePolicy";
 import type {
@@ -37,6 +38,9 @@ function categoryForHeaderAction(
     const key = action.key.trim();
     if (slot === "overflow" || isManageOnlyRecordHeaderAction(key)) {
         return "administrative";
+    }
+    if (isGenericUmbrellaLifecycleAction(key)) {
+        return "alternate_path";
     }
 
     const canonicalCategory = canonicalActionDefinition(key)?.category;
@@ -107,6 +111,7 @@ export function classifyRecordHeaderActionsForCurrentWork(args: {
     for (const { slot, action } of entries) {
         const key = action.key.trim();
         if (!key || seen.has(key)) continue;
+        if (isGenericUmbrellaLifecycleAction(key)) continue;
 
         const labelNorm = action.label.trim().toLowerCase();
         if (primaryNorm && (labelNorm === primaryNorm || labelNorm === `${primaryNorm} →`)) continue;
@@ -137,7 +142,7 @@ export function classifyRecordHeaderActionsForCurrentWork(args: {
 }
 
 export function actionsFromConfigRefs(
-    refs: Array<{ action_ref: string }> | null | undefined,
+    refs: Array<{ action_ref: string; override_label?: string }> | null | undefined,
     lookup: ReadonlyMap<string, { key: string; label: string; description?: string | null }>,
     category: CurrentWorkActionCategory,
     placement: CurrentWorkActionPlacement,
@@ -150,9 +155,10 @@ export function actionsFromConfigRefs(
         if (!ref || seen.has(ref)) continue;
         seen.add(ref);
         const resolved = lookup.get(ref) ?? { key: ref, label: ref };
+        const label = row.override_label?.trim() || resolved.label;
         out.push({
             key: resolved.key,
-            label: resolved.label,
+            label,
             description: resolved.description ?? null,
             category,
             placement,

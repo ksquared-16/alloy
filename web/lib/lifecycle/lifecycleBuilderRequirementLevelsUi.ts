@@ -9,9 +9,22 @@ import {
     type LifecycleStageFieldRulesStored,
     type PersistedRequirementLevel,
     type RuleLevelsV1,
+    type RuleMetaV1,
 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
+import type { RequirementRuleMetaV1, RequirementTiming } from "@/lib/lifecycle/requirementTimingTypes";
+import { buildRuleMetaV1 } from "@/lib/lifecycle/requirementTimingMeta";
 
 export type BuilderRequirementUiLevel = "off" | "recommended" | "required" | "enforced";
+
+export type BuilderRequirementTimingUi = RequirementTiming | "legacy_stage_progress";
+
+export const BUILDER_REQUIREMENT_TIMING_COPY: Record<BuilderRequirementTimingUi, string> = {
+    legacy_stage_progress: "During this stage",
+    record_creation: "Creating the record",
+    stage_progress: "During this stage",
+    stage_exit: "Leaving this stage",
+    process_completion: "Completing the process",
+};
 
 export type BuilderFieldPaletteEntry = {
     rule_id: string;
@@ -80,7 +93,8 @@ export function builderUiLevelsFromStored(
 
 export function builderStoredFieldRulesFromUiLevels(
     palette: readonly BuilderFieldPaletteEntry[],
-    levels: Record<string, BuilderRequirementUiLevel>
+    levels: Record<string, BuilderRequirementUiLevel>,
+    ruleMetaByRuleId?: Record<string, RequirementRuleMetaV1>,
 ): LifecycleStageFieldRulesStored {
     const by_rule_id: Record<string, PersistedRequirementLevel> = {};
     const required_rule_ids: string[] = [];
@@ -109,8 +123,49 @@ export function builderStoredFieldRulesFromUiLevels(
         required_rule_ids,
         recommended_rule_ids,
         explicit_rule_levels_v1,
+        explicit_rule_meta_v1: buildRuleMetaV1(ruleMetaByRuleId ?? {}),
         isEnforceable: (ruleId) => enforceableForRule(ruleId, palette),
     });
+}
+
+export function builderRuleMetaFromUi(
+    palette: readonly BuilderFieldPaletteEntry[],
+    levels: Record<string, BuilderRequirementUiLevel>,
+    timingByRuleId: Record<string, BuilderRequirementTimingUi>,
+    transitionMetaByRuleId?: Record<
+        string,
+        Pick<RequirementRuleMetaV1, "applies_to_transition_keys" | "excluded_transition_keys">
+    >,
+): Record<string, RequirementRuleMetaV1> {
+    const out: Record<string, RequirementRuleMetaV1> = {};
+    for (const field of palette) {
+        if ((levels[field.rule_id] ?? "off") === "off") continue;
+        const timingUi = timingByRuleId[field.rule_id] ?? "legacy_stage_progress";
+        const timing: RequirementTiming | undefined =
+            timingUi === "legacy_stage_progress" ? undefined : timingUi;
+        const transitionMeta = transitionMetaByRuleId?.[field.rule_id];
+        out[field.rule_id] = {
+            ...(timing ? { timing } : {}),
+            ...(transitionMeta?.applies_to_transition_keys?.length
+                ? { applies_to_transition_keys: transitionMeta.applies_to_transition_keys }
+                : {}),
+            ...(transitionMeta?.excluded_transition_keys?.length
+                ? { excluded_transition_keys: transitionMeta.excluded_transition_keys }
+                : {}),
+        };
+    }
+    return out;
+}
+
+export function builderTimingUiFromStored(
+    stored: LifecycleStageFieldRulesStored,
+    ruleId: string,
+): BuilderRequirementTimingUi {
+    const meta = stored.rule_meta_v1?.by_rule_id[ruleId];
+    const timing = meta?.timing;
+    if (!timing) return "legacy_stage_progress";
+    const first = Array.isArray(timing) ? timing[0] : timing;
+    return first ?? "legacy_stage_progress";
 }
 
 export function builderFieldRulesDirty(
@@ -125,6 +180,9 @@ export function builderFieldRulesDirty(
         const b = draftLevels[field.rule_id] ?? "off";
         if (a !== b) return true;
     }
+    const savedMeta = JSON.stringify(saved.rule_meta_v1 ?? null);
+    const draftMeta = JSON.stringify(draft.rule_meta_v1 ?? null);
+    if (savedMeta !== draftMeta) return true;
     return false;
 }
 

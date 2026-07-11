@@ -1,20 +1,29 @@
 /**
- * Child focus edit field policy — maps published `child_surface` config to runtime
+ * Child focus edit field policy — maps published `children_surface` config to runtime
  * edit rows (displayed / editable / saveable).
  */
 
-import type { NestedSurfaceFieldMode } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
+    fieldIsSaveable,
+    fieldShouldRender,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import { resolveIdentityFieldPolicy } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import {
     CHILD_FOCUS_FIELD_DEFS,
+    CHILD_SURFACE_ID,
     CHILD_UNSUPPORTED_SAVE_FIELD_KEYS,
     type ChildFocusFieldKey,
     childFocusViewFromConfig,
-    defaultChildFieldModes,
     isChildFocusFieldSaveSupported,
     orderedChildEditFieldKeys,
     type ChildFocusView,
-} from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+} from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
+import {
+    adaptChildSurfaceToChildrenSurface,
+    CHILDREN_SURFACE_CANONICAL_ID,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { defaultNestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 
 export { CHILD_UNSUPPORTED_SAVE_FIELD_KEYS };
 
@@ -48,29 +57,41 @@ export type ChildFocusEditFieldRow = {
     unsupported?: boolean;
 };
 
-function fieldModesFromConfig(config: NestedSurfaceConfig | null): Record<string, NestedSurfaceFieldMode> {
-    const modes: Record<string, NestedSurfaceFieldMode> = { ...defaultChildFieldModes() };
-    for (const group of config?.groups ?? []) {
-        for (const key of group.selectedFieldKeys) {
-            const mode = group.fieldModes?.[key];
-            if (mode) {
-                modes[key] = { ...modes[key], ...mode };
-            }
-        }
+function groupKeyForField(config: NestedSurfaceConfig, fieldKey: ChildFocusFieldKey): string | null {
+    const childEdit = config.groups.find((g) => g.key === "child_edit");
+    if (childEdit?.selectedFieldKeys.includes(fieldKey)) return "child_edit";
+    for (const group of config.groups) {
+        if (group.key === "identity") continue;
+        if (group.selectedFieldKeys.includes(fieldKey)) return group.key;
     }
-    return modes;
+    return null;
 }
 
-/** Resolve child edit rows from published child_surface config. */
+function canonicalChildConfig(config: NestedSurfaceConfig | null): NestedSurfaceConfig | null {
+    if (!config) return null;
+    if (config.surfaceId === CHILD_SURFACE_ID) {
+        return adaptChildSurfaceToChildrenSurface(config, defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID));
+    }
+    return config;
+}
+
+/** Resolve child edit rows from published children_surface config (fieldPolicies parity). */
 export function resolveChildFocusEditPolicy(config: NestedSurfaceConfig | null): ChildFocusEditFieldRow[] {
-    const modes = fieldModesFromConfig(config);
+    config = canonicalChildConfig(config);
+    if (!config) return [];
     return orderedChildEditFieldKeys(config).flatMap((fieldKey) => {
         const def = CHILD_FOCUS_FIELD_DEFS[fieldKey];
         const valueKey = SAVE_FIELD_MAP[fieldKey];
         const saveSupported = isChildFocusFieldSaveSupported(fieldKey);
-        const mode = modes[fieldKey] ?? defaultChildFieldModes()[fieldKey];
-        const displayed = mode?.displayed !== false;
-        const editable = displayed && saveSupported && mode?.editable === true;
+        const groupKey = groupKeyForField(config, fieldKey);
+        const visibility = resolveIdentityFieldPolicy({
+            config,
+            groupKey: groupKey ?? "child_edit",
+            fieldRef: fieldKey,
+            editGroupKey: "child_edit",
+        });
+        const displayed = fieldShouldRender(visibility);
+        const editable = displayed && saveSupported && fieldIsSaveable(visibility);
         const unsupported = displayed && !saveSupported;
         return [
             {

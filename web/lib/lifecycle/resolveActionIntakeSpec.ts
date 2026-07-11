@@ -1,5 +1,7 @@
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { effectiveFieldRulesForBuilderStage } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
+import { effectiveFieldRulesStoredForBuilderStage } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
+import { selectRulesForRecordCreation } from "@/lib/lifecycle/requirementTimingEvaluation";
 import type { OrgFieldDefinitionRow } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import type {
     ActionIntakeConstraint,
@@ -139,21 +141,39 @@ function buildFieldSpec(
     };
 }
 
-/** create_lead: child rules configured as required do not block capture (added after create or optional). */
-function applyCreateLeadIntakePolicy(fields: {
-    requiredIds: string[];
-    recommendedIds: string[];
-}): { requiredIds: string[]; recommendedIds: string[] } {
+/** create_lead: only explicit record_creation rules block capture; legacy child downgrade preserved. */
+function applyCreateLeadIntakePolicy(
+    fields: {
+        requiredIds: string[];
+        recommendedIds: string[];
+    },
+    stored: import("@/lib/lifecycle/lifecycleStageRequirementLevels").LifecycleStageFieldRulesStored,
+): { requiredIds: string[]; recommendedIds: string[] } {
     const requiredIds: string[] = [];
     const recommendedIds = [...fields.recommendedIds];
+    const ruleMeta = stored.rule_meta_v1 ?? null;
 
     for (const id of fields.requiredIds) {
+        const meta = ruleMeta?.by_rule_id[id];
+        const timings = meta?.timing
+            ? Array.isArray(meta.timing)
+                ? meta.timing
+                : [meta.timing]
+            : null;
+        const isExplicitCreation = timings?.includes("record_creation") ?? false;
+
+        if (isExplicitCreation) {
+            if (!requiredIds.includes(id)) requiredIds.push(id);
+            continue;
+        }
+
         const binding = lifecycleFieldRuleBinding(id);
-        if (binding?.entity === "child") {
+        if (binding?.entity === "child" || !timings) {
             if (!recommendedIds.includes(id)) recommendedIds.push(id);
             continue;
         }
-        if (!requiredIds.includes(id)) requiredIds.push(id);
+
+        if (!recommendedIds.includes(id)) recommendedIds.push(id);
     }
 
     for (const id of CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS) {
@@ -224,6 +244,11 @@ export function resolveCreateLeadActionIntakeSpec(input: {
     primary_record_label?: string;
 }): ActionIntakeSpec {
     const builderStageKey = input.builder_stage_key?.trim() || input.operator_stage;
+    const stored = effectiveFieldRulesStoredForBuilderStage(
+        builderStageKey,
+        input.department_metadata ?? null,
+        input.operator_stage,
+    );
     const { rules, source: rulesSource } = effectiveFieldRulesForBuilderStage(
         builderStageKey,
         input.department_metadata ?? null,
@@ -237,10 +262,20 @@ export function resolveCreateLeadActionIntakeSpec(input: {
     );
     const byRule = paletteByRuleId(palette);
 
-    const policy = applyCreateLeadIntakePolicy({
-        requiredIds: rules.required_rule_ids,
-        recommendedIds: rules.recommended_rule_ids,
-    });
+    const policy = applyCreateLeadIntakePolicy(
+        {
+            requiredIds: rules.required_rule_ids,
+            recommendedIds: rules.recommended_rule_ids,
+        },
+        stored,
+    );
+
+    // Merge explicit record_creation rules that may only exist in rule_meta.
+    for (const row of selectRulesForRecordCreation(stored, stored.rule_meta_v1 ?? null)) {
+        if (!policy.requiredIds.includes(row.ruleId)) {
+            policy.requiredIds.push(row.ruleId);
+        }
+    }
 
     const required: ActionIntakeFieldSpec[] = [];
     const recommended: ActionIntakeFieldSpec[] = [];

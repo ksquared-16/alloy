@@ -40,6 +40,9 @@ import FocusPanelDrillInInspector from "@/components/admin/focusPanel/drillIn/Fo
 import { FocusPanelComposerProvider, useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { focusPanelNestedSurfaceByCardKey } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 import {
+    reconcileIdentityNestedConfigsFromMetadata,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import {
     reconcileNestedSurfaceConfig,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -60,13 +63,19 @@ type Props = {
 function readNestedSurfacesFromDoc(doc: { metadata?: Record<string, unknown> } | null): Record<string, NestedSurfaceConfig> {
     const raw = doc?.metadata?.nestedSurfaces;
     if (!raw || typeof raw !== "object") return {};
+    const identityNormalized = reconcileIdentityNestedConfigsFromMetadata({
+        nestedSurfaces: raw as Record<string, NestedSurfaceConfig | undefined>,
+    });
     const stored = raw as Record<string, NestedSurfaceConfig>;
-    return Object.fromEntries(
-        Object.entries(stored).map(([surfaceId, config]) => [
-            surfaceId,
-            reconcileNestedSurfaceConfig(surfaceId, config ?? null),
-        ]),
+    const passthrough = Object.fromEntries(
+        Object.entries(stored)
+            .filter(([surfaceId]) => !(surfaceId in identityNormalized))
+            .map(([surfaceId, config]) => [
+                surfaceId,
+                reconcileNestedSurfaceConfig(surfaceId, config ?? null),
+            ]),
     );
+    return { ...passthrough, ...identityNormalized };
 }
 
 function reconcileNestedConfigsForPublish(

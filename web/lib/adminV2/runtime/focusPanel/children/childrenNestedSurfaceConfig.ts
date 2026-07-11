@@ -10,23 +10,23 @@ import {
     enabledEvidenceSections,
     fieldLayoutWidthForNestedGroup,
     fieldPresentationLabel,
-    fieldVisibilityForNestedGroup,
     groupDefsFor,
     nestedGroupLabel,
     selectedFieldKeys,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
-import { fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import { fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import { resolveIdentityFieldPolicy } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import {
     CHILD_FOCUS_FIELD_DEFS,
     isChildFocusFieldSaveSupported,
     type ChildFocusFieldKey,
-} from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+} from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
 import {
-    nestedSurfaceFieldKeysFromConfig,
-    readNestedSurfaceConfigFromDoc,
-} from "@/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader";
+    reconcileIdentityNestedConfigFromDocMetadata,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { nestedSurfaceFieldKeysFromConfig } from "@/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader";
 
 /** Configurable groups that render on the operational child Focus surface (not archive). */
 export const CHILDREN_FOCUS_GROUP_KEYS = ["identity", "placement", "readiness"] as const;
@@ -48,7 +48,10 @@ export type ChildrenEvidenceSectionView = {
 
 /** Read + reconcile the published Children Surface config from a Focus Panel summary doc. */
 export function readChildrenNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
-    return readNestedSurfaceConfigFromDoc(doc, CHILDREN_SURFACE_ID);
+    if (!doc) return null;
+    return reconcileIdentityNestedConfigFromDocMetadata(CHILDREN_SURFACE_ID, doc.metadata as {
+        nestedSurfaces?: Record<string, NestedSurfaceConfig | undefined>;
+    });
 }
 
 function catalogLabelForGroupField(
@@ -76,14 +79,30 @@ export function childrenFocusRowsFromNestedConfig(config: NestedSurfaceConfig | 
         const group = config.groups.find((g) => g.key === groupKey);
         for (const fieldKey of selectedFieldKeys(config, groupKey)) {
             if (seen.has(fieldKey)) continue;
-            if (!fieldShouldRender(fieldVisibilityForNestedGroup(config, groupKey, fieldKey))) continue;
+            if (
+                !fieldShouldRender(
+                    resolveIdentityFieldPolicy({
+                        config,
+                        groupKey,
+                        fieldRef: fieldKey,
+                        editGroupKey: "child_edit",
+                    }),
+                )
+            ) {
+                continue;
+            }
             seen.add(fieldKey);
-            const mode = group?.fieldModes?.[fieldKey];
-            const displayed = mode?.displayed !== false;
+            const visibility = resolveIdentityFieldPolicy({
+                config,
+                groupKey,
+                fieldRef: fieldKey,
+                editGroupKey: "child_edit",
+            });
+            const displayed = fieldShouldRender(visibility);
             const editable =
                 displayed
                 && isChildFocusFieldSaveSupported(fieldKey as ChildFocusFieldKey)
-                && mode?.editable === true;
+                && fieldIsSaveable(visibility);
             rows.push({
                 fieldKey,
                 label: catalogLabelForGroupField(config, groupKey, fieldKey),
@@ -110,7 +129,14 @@ export function childrenEvidenceSectionsFromNestedConfig(
             ?? groupDefsFor(CHILDREN_SURFACE_ID).find((g) => g.key === group.key)?.label
             ?? group.key,
         fieldKeys: group.selectedFieldKeys.filter((fieldKey) =>
-            fieldShouldRender(fieldVisibilityForNestedGroup(config, group.key, fieldKey)),
+            fieldShouldRender(
+                resolveIdentityFieldPolicy({
+                    config,
+                    groupKey: group.key,
+                    fieldRef: fieldKey,
+                    editGroupKey: "child_edit",
+                }),
+            ),
         ),
     }));
 }
@@ -133,7 +159,14 @@ export function childrenRosterCollapsedFieldKeysFromNestedConfig(config: NestedS
     return selectedFieldKeys(config, "roster").filter(
         (fieldKey) =>
             !ROSTER_PRIMARY_ROW_FIELD_KEYS.has(fieldKey)
-            && fieldShouldRender(fieldVisibilityForNestedGroup(config, "roster", fieldKey)),
+            && fieldShouldRender(
+                resolveIdentityFieldPolicy({
+                    config,
+                    groupKey: "roster",
+                    fieldRef: fieldKey,
+                    editGroupKey: "child_edit",
+                }),
+            ),
     );
 }
 

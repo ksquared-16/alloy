@@ -1,0 +1,259 @@
+/**
+ * End-to-end identity save → truth refresh → VM recompose proofs (Phase 4 convergence).
+ */
+import { describe, expect, it } from "vitest";
+
+import {
+    buildChildIdentityRecordVM,
+    buildHouseholdContactEditFieldRows,
+    buildHouseholdIdentityCardVM,
+} from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
+import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
+import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import {
+    mergeInquiryChildIntoFocusPanelTruth,
+    mergePersonContactIntoFocusPanelTruth,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import {
+    isChildFocusFieldSaveSupported,
+    type ChildFocusFieldKey,
+} from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
+import {
+    addFieldToNestedGroup,
+    defaultNestedSurfaceConfig,
+    HOUSEHOLD_SURFACE_ID,
+    CHILDREN_SURFACE_ID,
+    setFieldVisibilityInNestedGroup,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+
+function childFieldSaveSupported(fieldRef: string): boolean {
+    return isChildFocusFieldSaveSupported(fieldRef as ChildFocusFieldKey);
+}
+
+function householdCtx(truth: Record<string, unknown>): OperationalContext {
+    return {
+        grain: "case",
+        subject: { type: "opportunity", id: String(truth.id ?? "opp-1"), label: "Household" },
+        businessProcess: { key: null, label: null, stageKey: null },
+        perspective: null,
+        truth,
+        signals: {
+            work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
+            attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
+            tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+            communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
+            billing: { billingConfigured: false, billingContactName: null, billingContactEmail: null, tuitionRateLabel: null, feeBalanceCents: null },
+        },
+        capabilities: { canMutate: true, maskedChannels: false },
+        status: "ready",
+    };
+}
+
+const HOUSEHOLD_TRUTH = {
+    id: "opp-1",
+    "person.primary_contact_name": "Sarah Johnson",
+    "person.primary_email": "sarah@example.com",
+    "person.primary_phone": "555-123-4567",
+    "opportunity.primary_person_id": "p-sarah",
+    _opportunity_persons: [
+        {
+            person_id: "p-sarah",
+            role_type: "primary_contact",
+            name: "Sarah Johnson",
+            phone: "555-123-4567",
+            email: "sarah@example.com",
+        },
+    ],
+};
+
+const CHILD_TRUTH = {
+    id: "opp-1",
+    _inquiry_children: [
+        {
+            id: "child-1",
+            display_name: "Emma Johnson",
+            desired_program_label: "Preschool",
+            program_room_cohort_label: "North Room",
+            desired_schedule_label: "M–F",
+            start_date: "2026-08-01",
+            program_category_id: "prog-a",
+            schedule_type: "full_time",
+        },
+    ],
+};
+
+describe("household contact save refresh", () => {
+    it("rebuilt identity VM contains saved email after truth merge", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "contact.email", "editable");
+        const ctx = householdCtx(HOUSEHOLD_TRUTH);
+        const before = buildHouseholdIdentityCardVM({
+            config,
+            groups: buildHouseholdCardEvidence(ctx, { nestedConfig: config }).groups,
+            canMutate: true,
+        });
+        const beforeEmail = before.sections
+            .find((s) => s.key === "primary_contact")
+            ?.items[0]
+            ?.summaryRows.flatMap((r) => r.cells)
+            .find((c) => c.fieldRef === "person.email")?.value;
+        expect(beforeEmail).toBe("sarah@example.com");
+
+        const merged = mergePersonContactIntoFocusPanelTruth(HOUSEHOLD_TRUTH, "p-sarah", {
+            first_name: "Sarah",
+            last_name: "Johnson",
+            full_name: "Sarah Johnson",
+            email: "sarah.updated@example.com",
+            phone: "555-123-4567",
+        });
+        const afterCtx = householdCtx(merged);
+        const after = buildHouseholdIdentityCardVM({
+            config,
+            groups: buildHouseholdCardEvidence(afterCtx, { nestedConfig: config }).groups,
+            canMutate: true,
+        });
+        const afterEmail = after.sections
+            .find((s) => s.key === "primary_contact")
+            ?.items[0]
+            ?.summaryRows.flatMap((r) => r.cells)
+            .find((c) => c.fieldRef === "person.email")?.value;
+        expect(afterEmail).toBe("sarah.updated@example.com");
+        expect(HOUSEHOLD_TRUTH["person.primary_email"]).toBe("sarah@example.com");
+    });
+
+    it("contact edit rows honor configured order and editable policy", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "contact_edit", "contact.phone");
+        config = addFieldToNestedGroup(config, "contact_edit", "contact.email");
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "contact.phone", "read-only");
+        const rows = buildHouseholdContactEditFieldRows({
+            config,
+            values: {
+                first_name: "Sarah",
+                last_name: "Johnson",
+                email: "sarah@example.com",
+                phone: "555-123-4567",
+            },
+            canMutate: true,
+        });
+        const cells = rows.flatMap((row) => row.cells);
+        expect(cells.map((c) => c.fieldRef)).toEqual(
+            expect.arrayContaining(["contact.phone", "contact.email"]),
+        );
+        const phone = cells.find((c) => c.fieldRef === "contact.phone")!;
+        const email = cells.find((c) => c.fieldRef === "contact.email")!;
+        expect(phone.editable).toBe(false);
+        expect(email.editable).toBe(true);
+    });
+});
+
+describe("child save refresh", () => {
+    it("rebuilt child identity VM contains saved start date after truth merge", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "placement", "child.start_date");
+        config = setFieldVisibilityInNestedGroup(config, "child_edit", "child.start_date", "editable");
+        const ctx = householdCtx(CHILD_TRUTH);
+        const child = buildChildrenCardEvidence(ctx).children[0]!;
+        const before = buildChildIdentityRecordVM({
+            config,
+            child,
+            groupKey: "placement",
+            canMutate: true,
+            isFieldSaveSupported: childFieldSaveSupported,
+        });
+        const beforeStart = before.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "child.start_date")?.value;
+        expect(beforeStart).toContain("2026");
+
+        const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-1",
+            row: { person_id: null },
+            patch: {
+                ocmPatch: { start_date: "2026-09-15" },
+                identityPatch: {},
+            },
+            savedPerson: null,
+        });
+        const afterChild = buildChildrenCardEvidence(householdCtx(merged)).children[0]!;
+        const after = buildChildIdentityRecordVM({
+            config,
+            child: afterChild,
+            groupKey: "placement",
+            canMutate: true,
+            isFieldSaveSupported: childFieldSaveSupported,
+        });
+        const afterStart = after.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "child.start_date")?.value;
+        expect(afterStart).toContain("Sep");
+        expect(afterStart).toContain("2026");
+    });
+
+    it("unsupported expanded field does not expose edit affordance", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "readiness", "child.readiness_summary");
+        const child = buildChildrenCardEvidence(householdCtx(CHILD_TRUTH)).children[0]!;
+        const record = buildChildIdentityRecordVM({
+            config,
+            child,
+            groupKey: "readiness",
+            canMutate: true,
+            isFieldSaveSupported: childFieldSaveSupported,
+        });
+        const readiness = record.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "child.readiness_summary");
+        expect(readiness?.editable).toBe(false);
+    });
+});
+
+describe("expanded field save refresh", () => {
+    it("expanded tier VM reflects saved contact value after merge", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.email", { tier: "expanded" });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "contact.email", "editable");
+        const merged = mergePersonContactIntoFocusPanelTruth(HOUSEHOLD_TRUTH, "p-sarah", {
+            first_name: "Sarah",
+            last_name: "Johnson",
+            full_name: "Sarah Johnson",
+            email: "expanded.saved@example.com",
+            phone: "555-123-4567",
+        });
+        const vm = buildHouseholdIdentityCardVM({
+            config,
+            groups: buildHouseholdCardEvidence(householdCtx(merged), { nestedConfig: config }).groups,
+            canMutate: true,
+        });
+        const expandedEmail = vm.sections
+            .find((s) => s.key === "primary_contact")
+            ?.items[0]
+            ?.expandedRows.flatMap((r) => r.cells)
+            .find((c) => c.fieldRef === "person.email");
+        expect(expandedEmail?.value).toBe("expanded.saved@example.com");
+        expect(expandedEmail?.editable).toBe(false);
+    });
+});
+
+describe("save failure semantics", () => {
+    it("failed save does not mutate authoritative truth used for VM recompose", () => {
+        const baseline = { ...HOUSEHOLD_TRUTH };
+        const optimisticDraft = mergePersonContactIntoFocusPanelTruth(baseline, "p-sarah", {
+            first_name: "Sarah",
+            last_name: "Johnson",
+            full_name: "Sarah Johnson",
+            email: "should-not-persist@example.com",
+            phone: "555-123-4567",
+        });
+        // Simulate failed save: authoritative truth unchanged; draft is not applied.
+        const authoritative = baseline;
+        expect(authoritative["person.primary_email"]).toBe("sarah@example.com");
+        expect(optimisticDraft["person.primary_email"]).toBe("should-not-persist@example.com");
+        const vm = buildHouseholdIdentityCardVM({
+            config: defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID),
+            groups: buildHouseholdCardEvidence(householdCtx(authoritative)).groups,
+        });
+        const email = vm.sections
+            .find((s) => s.key === "primary_contact")
+            ?.items[0]
+            ?.summaryRows.flatMap((r) => r.cells)
+            .find((c) => c.fieldRef === "person.email")?.value;
+        expect(email).toBe("sarah@example.com");
+    });
+});

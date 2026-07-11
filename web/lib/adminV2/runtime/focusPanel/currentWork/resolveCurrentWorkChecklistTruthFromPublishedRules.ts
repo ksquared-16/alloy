@@ -16,6 +16,10 @@ import {
 import { evaluateFieldRulesForStage } from "@/lib/lifecycle/lifecycleFieldRuleEvaluator";
 import { lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import {
+    selectRulesForStageProgressReadiness,
+} from "@/lib/lifecycle/requirementTimingEvaluation";
+import { ruleMetaForRule } from "@/lib/lifecycle/requirementTimingMeta";
 
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { CurrentWorkTemplateConfigOverlay } from "./currentWorkTemplateConfig";
@@ -112,6 +116,7 @@ function truthFromViolations(
     violations: RequirementViolation[],
     scope?: string,
     readinessGap?: ReadinessResult["gaps"][number],
+    ruleMeta?: ReturnType<typeof ruleMetaForRule>,
 ): ChecklistTruthResult {
     if (violations.length === 0) {
         return { key, status: "complete", completed: true };
@@ -121,10 +126,20 @@ function truthFromViolations(
     const targetLabel = entityTargetLabel(binding?.entity) ?? scopeTargetLabel(scope) ?? undefined;
     const perEntity = violations.filter((v) => v.entity_id && v.entity_id !== "unknown");
     const missingCount = perEntity.length > 0 ? perEntity.length : violations.length;
+    const timings = ruleMeta?.timing
+        ? Array.isArray(ruleMeta.timing)
+            ? ruleMeta.timing
+            : [ruleMeta.timing]
+        : null;
+    const progressionHint =
+        timings?.includes("stage_exit")
+            ? "Needed before the configured next step"
+            : undefined;
     const detail =
-        missingCount > 1
+        progressionHint ??
+        (missingCount > 1
             ? `Missing for ${missingCount} ${binding?.entity === "child" ? "children" : "records"}`
-            : violations[0]?.missing_reason ?? readinessGap?.missing_reason ?? undefined;
+            : violations[0]?.missing_reason ?? readinessGap?.missing_reason ?? undefined);
 
     return {
         key,
@@ -149,6 +164,19 @@ function truthFromReadinessGap(key: string, gap: ReadinessResult["gaps"][number]
                   : scopeTargetLabel(scope) ?? undefined,
         detail: gap.missing_reason,
     };
+}
+
+function storedRuleMetaForChecklist(
+    departmentMetadata: Record<string, unknown>,
+    stageKey: string,
+    ruleId: string,
+) {
+    const stored = effectiveFieldRulesStoredForBuilderStage(
+        stageKey,
+        departmentMetadata,
+        asOperatorStageKey(stageKey),
+    );
+    return ruleMetaForRule(stored.rule_meta_v1 ?? null, ruleId);
 }
 
 function evaluatePublishedFieldRuleViolations(input: {
@@ -182,7 +210,22 @@ function evaluatePublishedFieldRuleViolations(input: {
     const stageForEval: LifecycleOperatorStage =
         operatorStage ?? asOperatorStageKey(publishedStageInputs.stageKey) ?? "lead";
 
-    const violations = evaluateFieldRulesForStage(completionCtx, stageForEval, stored);
+    const selected = selectRulesForStageProgressReadiness(
+        stored,
+        stored.rule_meta_v1 ?? null,
+        publishedStageInputs.stageKey,
+    );
+    if (!selected.length) return new Map();
+
+    const filteredIds = new Set(selected.map((row) => row.ruleId));
+    const filteredStored: typeof stored = {
+        required_rule_ids: stored.required_rule_ids.filter((id) => filteredIds.has(id)),
+        recommended_rule_ids: stored.recommended_rule_ids.filter((id) => filteredIds.has(id)),
+        ...(stored.rule_levels_v1 ? { rule_levels_v1: stored.rule_levels_v1 } : {}),
+        ...(stored.rule_meta_v1 ? { rule_meta_v1: stored.rule_meta_v1 } : {}),
+    };
+
+    const violations = evaluateFieldRulesForStage(completionCtx, stageForEval, filteredStored);
     return violationsByRuleId(violations);
 }
 
@@ -253,7 +296,11 @@ export function resolveCurrentWorkChecklistTruthFromPublishedRules(
             }
 
             const violations = violationsByKey.get(key) ?? [];
-            results.set(key, truthFromViolations(key, violations, row.scope, readinessGap));
+            const meta =
+                metadata && publishedStageInputs
+                    ? storedRuleMetaForChecklist(metadata, publishedStageInputs.stageKey, key)
+                    : undefined;
+            results.set(key, truthFromViolations(key, violations, row.scope, readinessGap, meta));
             continue;
         }
 

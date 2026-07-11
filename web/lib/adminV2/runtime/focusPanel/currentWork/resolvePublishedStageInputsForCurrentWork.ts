@@ -25,6 +25,7 @@ export type PublishedStageInputsForCurrentWork = {
     processKey: string | null;
     stageKey: string;
     departmentMetadata: Record<string, unknown>;
+    processStages: Array<{ key: string; label: string }>;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -65,6 +66,11 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
     const operatorStage = asOperatorStageKey(stageKey);
     const fieldRules = effectiveFieldRulesForBuilderStage(stageKey, departmentMetadata, operatorStage);
 
+    const processStages =
+        process?.stages
+            ?.filter((s) => s.is_active !== false)
+            .map((s) => ({ key: s.key, label: s.label.trim() || s.key })) ?? [];
+
     return {
         operatingPlan: plan,
         actionCatalog,
@@ -72,5 +78,6 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
         processKey: processKey ?? process?.key ?? null,
         stageKey,
         departmentMetadata,
+        processStages,
     };
 }

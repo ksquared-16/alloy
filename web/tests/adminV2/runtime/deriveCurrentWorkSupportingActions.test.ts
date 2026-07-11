@@ -16,6 +16,20 @@ function slots(partial: Partial<ResolvedActionsBySlot>): ResolvedActionsBySlot {
 }
 
 describe("deriveCurrentWorkSupportingActions", () => {
+    it("excludes generic umbrella lifecycle actions from helpful actions", () => {
+        const actions = deriveCurrentWorkSupportingActions({
+            recordHeaderSlots: slots({
+                secondary: [
+                    { key: "update_enrollment_status", label: "Change Enrollment Status", description: null, action_type: "registry", icon: null, style: null, display_style: "outline", payload: {}, workflow_id: null },
+                    { key: "schedule_tour", label: "Schedule Tour", description: null, action_type: "registry", icon: null, style: null, display_style: "outline", payload: {}, workflow_id: null },
+                ],
+            }),
+            showOutcomeCompletion: false,
+            primaryActionLabel: null,
+        });
+        expect(actions.map((a) => a.key)).toEqual(["schedule_tour"]);
+    });
+
     it("includes registry secondary actions and excludes Manage overflow", () => {
         const actions = deriveCurrentWorkSupportingActions({
             recordHeaderSlots: slots({

@@ -56,8 +56,9 @@ describe("defaultStageOperatingPlanForEnrollmentStage", () => {
     it("seeds lead stage with Review Lead + Contact Family and completion policy", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("lead");
         expect(plan?.journey_segment).toBe("family");
-        expect(plan?.work_templates.length).toBe(2);
-        expect(plan?.work_templates[1]?.completion_policy?.min_attempts).toBe(3);
+        expect(plan?.work_templates.length).toBe(3);
+        const contactFamily = plan?.work_templates.find((t) => t.template_key === "contact_family");
+        expect(contactFamily?.completion_policy?.min_attempts).toBe(3);
         expect(outcomeRulesForKey(plan!, "qualified").length).toBeGreaterThan(0);
         expect(successfulOutcomeKeys(plan!).has("qualified")).toBe(true);
         expect(outcomeRulesForKey(plan!, "left_message").length).toBeGreaterThan(0);

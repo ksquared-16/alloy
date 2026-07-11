@@ -866,13 +866,21 @@ export default function StageEditorV2({
                                 stageLabel={stageLabel}
                                 savedPlan={bootstrap?.stage_operating_plan ?? null}
                                 onDirtyChange={setOperatingPlanDirty}
+                                actionCatalog={stageRecord?.action_catalog_v1 ?? null}
+                                configuredActions={bootstrap?.actions ?? []}
+                                processStages={
+                                    _allStages?.map((stage) => ({
+                                        key: stage.key,
+                                        label: stage.label,
+                                    })) ?? []
+                                }
                             />
 
                             <Subsection label="Recommended actions">
                                 <div className="rounded-lg border border-dashed border-alloy-forge/15 px-4 py-4">
-                                    <p className="text-[12px] font-medium text-alloy-midnight/55">Recommended actions come from Process Actions.</p>
+                                    <p className="text-[12px] font-medium text-alloy-midnight/55">Process Actions supply the action catalog.</p>
                                     <p className="mt-1 text-[11px] text-alloy-midnight/35">
-                                        Configure which actions are available to operators in Process → Actions. Stage-level prioritization will let you emphasize specific actions per stage — coming soon.
+                                        Configure primary, helpful, and alternate-path actions per work template in the Operating Plan editor above.
                                     </p>
                                 </div>
                             </Subsection>

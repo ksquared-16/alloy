@@ -327,6 +327,101 @@ export const childrenSurface: SurfaceSpec = {
     },
 };
 
+// ── 1b. Child Surface (compatibility drill-in — canonical config is children_surface) ─
+
+export const CHILD_SURFACE_ID = "child_surface";
+
+export const childSurface: SurfaceSpec = {
+    id: CHILD_SURFACE_ID,
+    label: "Child Drill-in",
+    category: "focus_panel",
+    grain: "child",
+    version: 1,
+    canvas: {
+        rows: [
+            {
+                id: "row-child-compat",
+                components: [
+                    {
+                        id: "child_compat_component",
+                        label: "Child",
+                        componentType: "card",
+                        width: "full",
+                        evidenceGroups: [
+                            {
+                                key: "identity",
+                                label: "Identity",
+                                purpose: "Compatibility identity group — prefer children_surface.",
+                                owner: "child_compat_component",
+                                items: [
+                                    { key: "child.first_name", label: "First Name", kind: "field", namespace: "child" },
+                                    { key: "child.last_name", label: "Last Name", kind: "field", namespace: "child" },
+                                    { key: "child.preferred_name", label: "Preferred Name", kind: "field", namespace: "child" },
+                                    { key: "child.dob_age", label: "Age", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "placement",
+                                label: "Placement",
+                                purpose: "Compatibility placement group.",
+                                owner: "child_compat_component",
+                                items: [
+                                    { key: "inquiry_child.program", label: "Program", kind: "field", namespace: "inquiry_child" },
+                                    { key: "child.room", label: "Room", kind: "field", namespace: "child" },
+                                    { key: "inquiry_child.schedule_type", label: "Schedule", kind: "field", namespace: "inquiry_child" },
+                                    { key: "child.start_date", label: "Start Date", kind: "field", namespace: "child" },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
+
+// ── 1c. Employee identity proof surface (shared-model non-enrollment proof) ─────
+
+export const EMPLOYEE_SURFACE_ID = "employee_surface";
+
+export const employeeSurface: SurfaceSpec = {
+    id: EMPLOYEE_SURFACE_ID,
+    label: "Employee",
+    category: "focus_panel",
+    grain: "case",
+    version: 1,
+    canvas: {
+        rows: [
+            {
+                id: "row-employee",
+                components: [
+                    {
+                        id: "employee_component",
+                        label: "Employee",
+                        componentType: "card",
+                        width: "full",
+                        evidenceGroups: [
+                            {
+                                key: "identity",
+                                label: "Identity",
+                                purpose: "Shared identity composition proof for non-enrollment cards.",
+                                owner: "employee_component",
+                                items: [
+                                    { key: "employee.name", label: "Name", kind: "field", namespace: "person" },
+                                    { key: "employee.title", label: "Title", kind: "field", namespace: "person" },
+                                    { key: "employee.department", label: "Department", kind: "field", namespace: "person" },
+                                    { key: "employee.email", label: "Email", kind: "field", namespace: "person" },
+                                    { key: "employee.phone", label: "Phone", kind: "field", namespace: "person" },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
+
 // ── 2. Financial Configuration Surface (Operational → Operational) ─────────────
 
 export const financialConfigurationSurface: SurfaceSpec = {
@@ -479,5 +574,7 @@ export const V3_PROOF_SURFACES: readonly SurfaceSpec[] = [
     focusPanelSurface,
     householdSurface,
     childrenSurface,
+    childSurface,
+    employeeSurface,
     financialConfigurationSurface,
 ];

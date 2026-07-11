@@ -74,6 +74,12 @@ dev/test (`assertConfiguredActionKeys`) and render disabled in production
 enrollment as first consumer) and `create_lead` (capture-first record creation).
 See `docs/sprints/06_2026/actions_runtime_audit.md` for the full audit and rollout plan.
 
+### Create Lead and requirement timing
+
+`create_lead` remains capture-first. It always enforces the code-owned minimum identity/contact requirements, then adds only explicitly configured `record_creation` lifecycle field rules. Stage-progress and stage-exit rules do not block record creation; they surface after the record exists through Current Work/readiness and transition preflight.
+
+For compatibility, legacy child rules without timing are still downgraded to recommended intake fields until a tenant explicitly marks them `record_creation`.
+
 ---
 
 ## Canonical action doctrine

@@ -56,6 +56,27 @@ A business process defines:
 
 **Implementation tables:** `lifecycles`, `business_process_layout_assignments`, lifecycle builder metadata (JSON in org/dept metadata), stage keys in builder config.
 
+### Requirement timing (July 2026)
+
+Required information is a **requirement**, not a fake stage or fake work item. A field rule may now declare when it applies through `rule_meta_v1` stored beside `rule_levels_v1` in existing lifecycle field-rule metadata:
+
+```ts
+rule_meta_v1: {
+  version: 1,
+  by_rule_id: {
+    "child:program_interest": {
+      timing: "stage_exit",
+      applies_to_transition_keys: ["tour_scheduled"],
+      excluded_transition_keys: ["closed_lost"]
+    }
+  }
+}
+```
+
+Supported timing values are `record_creation`, `stage_progress`, `stage_exit`, and `process_completion`.
+
+Compatibility rule: rules without timing remain visible during stage progress / Current Work readiness, but they do **not** become universal blockers for every outgoing transition. Create Lead blocking is explicit: only `record_creation` rules and the code-owned minimum identity/contact requirements block record creation. Stage-exit blocking is explicit and transition-aware.
+
 **Code entry points:**
 
 - `web/lib/lifecycle/businessProcessUiLabels.ts` — operator-facing labels

@@ -389,7 +389,7 @@ describe("Focus Panel in-canvas drill-in composer wiring", () => {
 
     it("uses inline runtime field editing and metadata-only drill-in inspector", () => {
         expect(householdCard).toContain("NestedSurfaceAddField");
-        expect(householdCard).toContain("ComposableFieldShell");
+        expect(householdCard).toContain("IdentityRecordSummary");
         expect(drillInspector).toContain("metadataOnly");
         expect(drillInspector).not.toContain("data-inspector-field-list");
         expect(cardInspector).toContain("metadataOnly");
@@ -444,7 +444,7 @@ describe("Surface Composer V3.5 — runtime polish (child detail + activity)", (
         expect(childrenCard).toContain("data-children-edit-trigger");
         expect(childrenCard).toContain("deeperEditLabel");
         expect(childrenCard).toContain("ChildFocusEdit");
-        expect(childrenCard).not.toContain("onEditField");
+        expect(childrenCard).toContain("IdentityRecordSummary");
     });
 
     it("routes history through Related Views (not inline field chrome)", () => {
@@ -591,9 +591,9 @@ describe("Final Focus Panel Composer ship fixes", () => {
         ]);
     });
 
-    it("keeps staging ChildrenCard roster meta (does not reinvent summary layout)", () => {
-        // Staging ChildrenCard — scannable summary meta via childRosterMeta; ChildFocusEdit owns edit.
-        expect(childrenCard).toContain("childRosterMeta");
+    it("keeps Children roster on shared identity renderer (does not reinvent summary layout)", () => {
+        expect(childrenCard).toContain("IdentityRecordSummary");
+        expect(childrenCard).toContain("buildChildIdentityRecordVM");
         expect(childrenCard).toContain("ChildSummaryRow");
         expect(childrenCard).toContain("ChildFocusEdit");
         expect(childrenCard).not.toContain("ChildEnrollmentEdit");
@@ -645,8 +645,10 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(runtimeCss).toContain(".fp-composer-tier-label");
     });
 
-    it("uses visual drag layout surface for child focus fields (no row dropdown)", () => {
-        expect(childrenCard).toContain("NestedSurfaceFieldLayoutSurface");
+    it("uses shared identity field grid for runtime child focus fields", () => {
+        const identityFieldGrid = readSrc("components/admin/focusPanel/identity/IdentityFieldGrid.tsx");
+        expect(childrenCard).toContain("IdentityFieldGrid");
+        expect(childrenCard).toContain("IdentityExpandedDetails");
         expect(childrenCard).not.toContain("function RegionEditLayer");
         expect(layoutSurface).toContain("applyNestedSurfaceFieldDrop");
         expect(layoutSurface).toContain("data-drop-zone=\"beside\"");
@@ -654,8 +656,7 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(layoutSurface).not.toContain("Half row");
         expect(layoutSurface).not.toContain("fp-inline-field-row__layout");
         expect(inlineFieldList).not.toContain("fp-inline-field-row__layout");
-        expect(childrenCard).toContain("chunkNestedSurfaceFieldsForHalfRowLayout");
-        expect(childrenCard).toContain("alloy-os-child-truth__inline-row--pair");
+        expect(identityFieldGrid).toContain("identity-field-grid__row--pair");
     });
 
     it("exposes child profile avatar composer on identity header", () => {
@@ -684,8 +685,8 @@ describe("Final Focus Panel Composer ship fixes", () => {
 
     it("household summary supports secondary parent on collapsed card", () => {
         expect(householdCard).toContain('groupKey="other_parent_guardian"');
-        expect(householdCard).toContain("data-household-secondary-parent");
-        expect(householdCard).toContain("secondaryParents");
+        expect(householdCard).toContain("buildHouseholdIdentityCardVM");
+        expect(householdCard).toContain("secondaryRecords");
     });
 
     it("composer leak fixes — clean evidence picker, floating add field, drag hints", () => {
@@ -693,7 +694,7 @@ describe("Final Focus Panel Composer ship fixes", () => {
         const addField = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceAddField.tsx");
         const floatingPopover = readSrc("components/admin/focusPanel/drillIn/ComposerFloatingPopover.tsx");
         const sectionCatalog = readSrc("lib/adminV2/settings/surfaces/sectionCatalog.ts");
-        const fieldAdapter = readSrc("lib/adminV2/settings/surfaces/compositionFieldAdapter.ts");
+        const surfaceProofs = readSrc("lib/platform/surfaceComposition/definitions/recursiveSurfaceProofs.ts");
         expect(addSectionMenu).toContain("ComposerFloatingPopover");
         expect(addSectionMenu).toContain("fp-add-section-menu__label");
         expect(addSectionMenu).toContain("fp-add-section-menu__desc");
@@ -707,16 +708,17 @@ describe("Final Focus Panel Composer ship fixes", () => {
         expect(runtimeCss).toContain(".fp-add-section-menu__label");
         expect(runtimeCss).toContain(".fp-layout-drop-hint");
         expect(runtimeCss).toContain("overflow: visible");
-        expect(fieldAdapter).toContain("child.medical_summary");
-        expect(fieldAdapter).toContain("child.first_name");
+        expect(surfaceProofs).toContain("child.medical_summary");
+        expect(surfaceProofs).toContain("child.first_name");
     });
 
     it("evidence sections offer supporting child fields in add-field library", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = setNestedGroupEnabled(config, "medical", true, { sectionSemantic: "medical" });
+        const medicalGroup = config.groups.find((g) => g.key === "medical");
+        expect(medicalGroup?.selectedFieldKeys).toContain("child.medical_summary");
         const available = availableFieldsForNestedGroup(CHILDREN_SURFACE_ID, "medical", config, []);
-        expect(available.some((f) => f.key === "child.nickname")).toBe(true);
-        expect(available.some((f) => f.key === "child.documents_summary")).toBe(true);
+        expect(available.some((f) => f.key === "child.medical_summary")).toBe(false);
         expect(available.some((f) => f.key === "inquiry_child.program")).toBe(true);
     });
 

@@ -16,11 +16,15 @@ import { BUSINESS_PROCESS_STAGE_REQUIREMENTS_FIELD_SOURCE_NOTE, BUSINESS_PROCESS
 import {
     BUILDER_REQUIREMENT_LEVEL_COPY,
     builderFieldRulesDirty,
+    builderRuleMetaFromUi,
     builderStoredFieldRulesFromUiLevels,
+    builderTimingUiFromStored,
     builderUiLevelButtonLabel,
     builderUiLevelFromStored,
     builderUiLevelOptionsForField,
     builderUiLevelsFromStored,
+    BUILDER_REQUIREMENT_TIMING_COPY,
+    type BuilderRequirementTimingUi,
     type BuilderRequirementUiLevel,
 } from "@/lib/lifecycle/lifecycleBuilderRequirementLevelsUi";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
@@ -68,6 +72,7 @@ function normalizeStoredRules(
         ...("rule_levels_v1" in rules && rules.rule_levels_v1
             ? { rule_levels_v1: rules.rule_levels_v1 }
             : {}),
+        ...("rule_meta_v1" in rules && rules.rule_meta_v1 ? { rule_meta_v1: rules.rule_meta_v1 } : {}),
     };
 }
 
@@ -119,6 +124,8 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
     const savingRef = useRef(false);
     const [activeEntity, setActiveEntity] = useState<LifecycleRequirementEntityKey>("person");
     const [fieldLevels, setFieldLevels] = useState<Record<string, BuilderRequirementUiLevel>>({});
+    const [fieldTiming, setFieldTiming] = useState<Record<string, BuilderRequirementTimingUi>>({});
+    const [fieldExcludedTransitions, setFieldExcludedTransitions] = useState<Record<string, string>>({});
     const [savedRules, setSavedRules] = useState<LifecycleStageFieldRulesStored>({
         required_rule_ids: [],
         recommended_rule_ids: [],
@@ -136,10 +143,27 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
         return LIFECYCLE_REQUIREMENT_ENTITIES.filter((e) => keys.has(e.key));
     }, [palette]);
 
-    const draftRules = useMemo(
-        () => builderStoredFieldRulesFromUiLevels(palette, fieldLevels),
-        [palette, fieldLevels]
-    );
+    const draftRules = useMemo(() => {
+        const ruleMeta = builderRuleMetaFromUi(
+            palette,
+            fieldLevels,
+            fieldTiming,
+            Object.fromEntries(
+                Object.entries(fieldExcludedTransitions)
+                    .filter(([, raw]) => raw.trim())
+                    .map(([ruleId, raw]) => [
+                        ruleId,
+                        {
+                            excluded_transition_keys: raw
+                                .split(",")
+                                .map((s) => s.trim())
+                                .filter(Boolean),
+                        },
+                    ]),
+            ),
+        );
+        return builderStoredFieldRulesFromUiLevels(palette, fieldLevels, ruleMeta);
+    }, [palette, fieldLevels, fieldTiming, fieldExcludedTransitions]);
 
     const dirty = useMemo(
         () => builderFieldRulesDirty(savedRules, draftRules, palette),
@@ -176,6 +200,17 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
             const stored = normalizeStoredRules(rules);
             setSavedRules(stored);
             setFieldLevels(builderUiLevelsFromStored(palette, stored));
+            const timing: Record<string, BuilderRequirementTimingUi> = {};
+            const excluded: Record<string, string> = {};
+            for (const field of palette) {
+                timing[field.rule_id] = builderTimingUiFromStored(stored, field.rule_id);
+                const excludedKeys = stored.rule_meta_v1?.by_rule_id[field.rule_id]?.excluded_transition_keys;
+                if (excludedKeys?.length) {
+                    excluded[field.rule_id] = excludedKeys.join(", ");
+                }
+            }
+            setFieldTiming(timing);
+            setFieldExcludedTransitions(excluded);
         },
         [palette]
     );
@@ -245,6 +280,17 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
         const stored = normalizeStoredRules(stageData.effective.field_rules);
         setSavedRules(stored);
         setFieldLevels(builderUiLevelsFromStored(palette, stored));
+        const timing: Record<string, BuilderRequirementTimingUi> = {};
+        const excluded: Record<string, string> = {};
+        for (const field of palette) {
+            timing[field.rule_id] = builderTimingUiFromStored(stored, field.rule_id);
+            const excludedKeys = stored.rule_meta_v1?.by_rule_id[field.rule_id]?.excluded_transition_keys;
+            if (excludedKeys?.length) {
+                excluded[field.rule_id] = excludedKeys.join(", ");
+            }
+        }
+        setFieldTiming(timing);
+        setFieldExcludedTransitions(excluded);
     }, [stageData, palette]);
 
     const setFieldLevel = useCallback((ruleId: string, level: BuilderRequirementUiLevel) => {
@@ -596,6 +642,58 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                                             >
                                                 {levelCopy.helper}
                                             </p>
+                                        ) : null}
+                                        {level !== "off" ? (
+                                            <div className="mt-1 flex flex-col gap-1">
+                                                <label className="flex items-center gap-2 text-[10px] text-alloy-midnight/60">
+                                                    <span className="shrink-0">Required when</span>
+                                                    <select
+                                                        className="min-w-0 flex-1 rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
+                                                        value={fieldTiming[field.rule_id] ?? "legacy_stage_progress"}
+                                                        onChange={(e) =>
+                                                            setFieldTiming((prev) => ({
+                                                                ...prev,
+                                                                [field.rule_id]: e.target
+                                                                    .value as BuilderRequirementTimingUi,
+                                                            }))
+                                                        }
+                                                        data-testid={`lifecycle-field-timing-${slug}`}
+                                                    >
+                                                        {(
+                                                            [
+                                                                "legacy_stage_progress",
+                                                                "record_creation",
+                                                                "stage_progress",
+                                                                "stage_exit",
+                                                                "process_completion",
+                                                            ] as BuilderRequirementTimingUi[]
+                                                        ).map((option) => (
+                                                            <option key={option} value={option}>
+                                                                {BUILDER_REQUIREMENT_TIMING_COPY[option]}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                                {(fieldTiming[field.rule_id] ?? "legacy_stage_progress") ===
+                                                "stage_exit" ? (
+                                                    <label className="flex items-center gap-2 text-[10px] text-alloy-midnight/60">
+                                                        <span className="shrink-0">Exclude transitions</span>
+                                                        <input
+                                                            type="text"
+                                                            className="min-w-0 flex-1 rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
+                                                            placeholder="closed_lost, archived"
+                                                            value={fieldExcludedTransitions[field.rule_id] ?? ""}
+                                                            onChange={(e) =>
+                                                                setFieldExcludedTransitions((prev) => ({
+                                                                    ...prev,
+                                                                    [field.rule_id]: e.target.value,
+                                                                }))
+                                                            }
+                                                            data-testid={`lifecycle-field-excluded-transitions-${slug}`}
+                                                        />
+                                                    </label>
+                                                ) : null}
+                                            </div>
                                         ) : null}
                                     </li>
                                 );
