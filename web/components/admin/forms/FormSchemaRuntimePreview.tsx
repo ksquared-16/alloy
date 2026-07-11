@@ -52,7 +52,7 @@ export function FormSchemaRuntimePreview({
                 schema_json: schema,
                 launch_fks: previewLaunchContext,
                 link_metadata: {
-                    form_context_mode: previewLaunchContext.form_context_mode ?? "existing_record",
+                    form_context_mode: previewLaunchContext?.form_context_mode ?? "existing_record",
                     customer_id: customerId,
                 },
             }),

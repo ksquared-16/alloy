@@ -1,8 +1,8 @@
 # Forms / Documents P4 — Collection-Bound Relationship and Repeatable Authoring
 
-**Status:** Implementation complete — **review gate (uncommitted)**  
+**Status:** Complete — rebased on `origin/staging`, PR open for review  
 **Branch:** `feat/forms-documents-collection-authoring`  
-**Baseline:** staging `35e1a2669` (P3A #146) — **14 commits behind** `origin/staging` `61aefff37` (rebase deferred: uncommitted P4 work)
+**Baseline:** `origin/staging` `05326e2b5` (rebased 2026-07-10)
 
 ## Mission
 
@@ -119,13 +119,42 @@ Key modules:
 
 Collection nested fields step-local (`fieldIsInsideCollectionBoundGroup`). Scalar shared_values dedupe unchanged.
 
+## Operator / document preview modes
+
+Three explicit preview modes share underlying orchestration where applicable:
+
+| Mode | Entry | Behavior |
+| --- | --- | --- |
+| **Design placeholder** | `buildDesignPlaceholderPreviewPayload` / `FormSchemaRuntimePreview` without `customer_id` | Representative repeat structure; visibly placeholder; no canonical records |
+| **Context-backed operator** | `POST /api/admin/forms/preview-payload` + `FormSchemaRuntimePreview` with launch context | Canonical prefill via `resolveFormPrefillPayload`; operator diagnostics; unavailable/invalid-context states |
+| **Respondent runtime** | Public bootstrap / embed | Same prefill orchestration; no internal diagnostics; permitted controls only |
+
+Document Composition embeds `FormSchemaRuntimePreview` in the editor preview panel.
+
 ## Processing boundary (P5)
 
 Metadata preserved in submission envelope. No automatic commit. `extractCollectionSubmissionEnvelope` for P5 adapter.
 
 ## Reference / delete safety
 
-`discoverFormsDocumentsSchemaReferences` — collection provider + nested field refs discoverable.
+**Enforcement level:** references **discoverable** + JSON walk in `fieldDeleteSafety.ts`; full cross-consumer blocking **deferred**.
+
+- `discoverFormsDocumentsSchemaReferences` — collection provider, nested field, scalar field refs
+- `indexFormsDocumentsSchemaReferences` / `formsDocumentsReferencesForFieldKey` — queryable index
+- `formsDocumentsReferencesCollectionProvider` — published/draft form identity where available
+- Platform field deletion workflows can query references; no silent deletion of referenced nested fields
+
+## Deferred context providers (not P4)
+
+Do not implement on this branch. Availability remains context-driven — no field-key deny lists.
+
+| Future provider | Inputs | Yields |
+| --- | --- | --- |
+| Packet/subject inquiry | `customer_member` + packet inquiry subject | `inquiry_child` |
+| Explicit enrollment selection | `customer_member` + selected enrollment | `enrollment:active` |
+| Enrollment collection iteration | `Enrollments[]` | per-item enrollment context |
+
+Tests prove providers become available when synthetic valid context is supplied via `withSupplementalIterationContexts`.
 
 ## Key files
 
@@ -134,11 +163,16 @@ Metadata preserved in submission envelope. No automatic commit. `extractCollecti
 - `web/lib/forms/collection/formsCollectionSubmissionValidation.ts`
 - `web/lib/forms/collection/formsCollectionNestedFieldEligibility.ts`
 - `web/lib/fields/relationship/canonicalCollectionResolver.ts`
-- `web/components/admin/forms/FormGroupAuthoringCard.tsx`
+- `web/lib/forms/preview/formPreviewOrchestration.ts`
+- `web/components/admin/forms/FormSchemaRuntimePreview.tsx`
 
-## Remaining work
+## P5 scope boundary
 
-- Rebase to current `origin/staging` (`61aefff37`) after commit
-- Enrollment-context nested fields when packet subject binding exists
-- P5 Processing execution bridge
-- Full cross-consumer delete-safety matrix integration (bounded discovery exists)
+P4 preserves `meta.collection_submission_envelope` through submit and Processing case opening. **P5 begins** Processing review, commit semantics, and automatic related-record writes — not on this branch.
+
+## Validation summary
+
+- P4-focused tests: 106 passing
+- `tests/pos/packet`: 25 passing
+- Typecheck: clean
+- `verify:module-imports`: clean (7267 files)

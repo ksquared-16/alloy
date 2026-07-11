@@ -9,14 +9,14 @@ import type { LaunchFkStamp } from "@/lib/forms/formLaunchFkDerivation";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { resolveFormPrefillValues, shouldApplyServerPrefill } from "@/lib/forms/prefill/resolveFormPrefillValues";
-import { resolveFormsCollectionPrefillGroups } from "@/lib/forms/prefill/formsCollectionPrefillResolver";
+import { resolveFormsCollectionPrefillGroups, type FormsCollectionGroupPrefillState } from "@/lib/forms/prefill/formsCollectionPrefillResolver";
 import { mergeFormPrefillPayload } from "@/lib/forms/prefill/mergeFormPrefillPayload";
 import { payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 
 export type FormPrefillPayloadResult = {
     payload: FormPayload;
     scalarPrefill: Record<string, string | number | boolean>;
-    collectionStates: Record<string, unknown>;
+    collectionStates: Record<string, FormsCollectionGroupPrefillState>;
     prefillApplied: boolean;
 };
 
