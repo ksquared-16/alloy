@@ -24,13 +24,9 @@ import {
     type ChildFocusFieldKey,
 } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
 import {
-    nestedSurfaceFieldKeysFromConfig,
-    readNestedSurfaceConfigFromDoc,
-} from "@/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader";
-import {
-    adaptChildSurfaceToChildrenSurface,
-    CHILD_SURFACE_COMPAT_ID,
+    reconcileIdentityNestedConfigFromDocMetadata,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { nestedSurfaceFieldKeysFromConfig } from "@/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader";
 
 /** Configurable groups that render on the operational child Focus surface (not archive). */
 export const CHILDREN_FOCUS_GROUP_KEYS = ["identity", "placement", "readiness"] as const;
@@ -53,13 +49,9 @@ export type ChildrenEvidenceSectionView = {
 /** Read + reconcile the published Children Surface config from a Focus Panel summary doc. */
 export function readChildrenNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
     if (!doc) return null;
-    const canonical = readNestedSurfaceConfigFromDoc(doc, CHILDREN_SURFACE_ID);
-    const metadata = (doc.metadata ?? {}) as {
+    return reconcileIdentityNestedConfigFromDocMetadata(CHILDREN_SURFACE_ID, doc.metadata as {
         nestedSurfaces?: Record<string, NestedSurfaceConfig | undefined>;
-    };
-    const legacy = metadata.nestedSurfaces?.[CHILD_SURFACE_COMPAT_ID] ?? null;
-    if (!canonical && !legacy) return null;
-    return adaptChildSurfaceToChildrenSurface(legacy, canonical);
+    });
 }
 
 function catalogLabelForGroupField(

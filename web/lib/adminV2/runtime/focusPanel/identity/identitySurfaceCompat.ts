@@ -234,14 +234,19 @@ export function identitySurfaceFromNestedConfig(
     };
 }
 
-/** Normalize loaded nested config through identity compatibility adapters. */
-export function reconcileIdentityNestedConfig(
-    surfaceId: string,
-    loaded: NestedSurfaceConfig | null,
-    legacyChildSurface?: NestedSurfaceConfig | null,
-): NestedSurfaceConfig {
-    let config = reconcileNestedSurfaceConfig(surfaceId, loaded);
-    config = {
+export type IdentityNestedLegacyConfigs = {
+    childSurface?: NestedSurfaceConfig | null;
+    householdContactSurface?: NestedSurfaceConfig | null;
+};
+
+export type ReconcileIdentityNestedConfigInput = {
+    surfaceKey: string;
+    currentConfig?: NestedSurfaceConfig | null;
+    legacyConfigs?: IdentityNestedLegacyConfigs;
+};
+
+function applyIdentityGroupReconcile(config: NestedSurfaceConfig): NestedSurfaceConfig {
+    return {
         ...config,
         groups: config.groups.map((group) => {
             const reconciled = reconcileFieldModesToPolicies(group);
@@ -249,10 +254,122 @@ export function reconcileIdentityNestedConfig(
             return placements.length > 0 ? { ...reconciled, fieldPlacements: placements } : reconciled;
         }),
     };
-    if (surfaceId === CHILDREN_SURFACE_CANONICAL_ID && legacyChildSurface) {
-        config = adaptChildSurfaceToChildrenSurface(legacyChildSurface, config);
+}
+
+function reconcileIdentityNestedConfigImpl(input: ReconcileIdentityNestedConfigInput): NestedSurfaceConfig {
+    const { surfaceKey, currentConfig = null, legacyConfigs = {} } = input;
+    let config: NestedSurfaceConfig;
+
+    if (surfaceKey === HOUSEHOLD_SURFACE_CANONICAL_ID) {
+        config = adaptHouseholdContactSurfaceToHouseholdSurface(
+            legacyConfigs.householdContactSurface ?? null,
+            currentConfig,
+        );
+    } else if (surfaceKey === CHILDREN_SURFACE_CANONICAL_ID) {
+        config = adaptChildSurfaceToChildrenSurface(
+            legacyConfigs.childSurface ?? null,
+            reconcileNestedSurfaceConfig(
+                CHILDREN_SURFACE_CANONICAL_ID,
+                currentConfig ?? defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
+            ),
+        );
+    } else if (surfaceKey === CHILD_SURFACE_COMPAT_ID) {
+        config = adaptChildSurfaceToChildrenSurface(
+            currentConfig,
+            defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
+        );
+    } else if (surfaceKey === HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID) {
+        config = adaptHouseholdContactSurfaceToHouseholdSurface(
+            currentConfig,
+            defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_CANONICAL_ID),
+        );
+    } else {
+        config = reconcileNestedSurfaceConfig(surfaceKey, currentConfig);
     }
-    return config;
+
+    return applyIdentityGroupReconcile(config);
+}
+
+/** Normalize nested config through the canonical identity compatibility adapters. */
+export function reconcileIdentityNestedConfig(
+    input: ReconcileIdentityNestedConfigInput,
+): NestedSurfaceConfig;
+export function reconcileIdentityNestedConfig(
+    surfaceId: string,
+    loaded: NestedSurfaceConfig | null,
+    legacyChildSurface?: NestedSurfaceConfig | null,
+): NestedSurfaceConfig;
+export function reconcileIdentityNestedConfig(
+    inputOrSurfaceId: ReconcileIdentityNestedConfigInput | string,
+    loaded?: NestedSurfaceConfig | null,
+    legacyChildSurface?: NestedSurfaceConfig | null,
+): NestedSurfaceConfig {
+    if (typeof inputOrSurfaceId === "string") {
+        return reconcileIdentityNestedConfigImpl({
+            surfaceKey: inputOrSurfaceId,
+            currentConfig: loaded ?? null,
+            legacyConfigs: { childSurface: legacyChildSurface ?? null },
+        });
+    }
+    return reconcileIdentityNestedConfigImpl(inputOrSurfaceId);
+}
+
+/** Extract legacy identity surfaces from published metadata. */
+export function legacyIdentityConfigsFromMetadata(
+    metadata: { nestedSurfaces?: Record<string, NestedSurfaceConfig | undefined> } | null | undefined,
+): IdentityNestedLegacyConfigs {
+    const nested = metadata?.nestedSurfaces ?? {};
+    return {
+        childSurface: nested[CHILD_SURFACE_COMPAT_ID] ?? null,
+        householdContactSurface: nested[HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID] ?? null,
+    };
+}
+
+/** Reconcile one identity surface from doc metadata the same way runtime and Composer do. */
+export function reconcileIdentityNestedConfigFromDocMetadata(
+    surfaceKey: string,
+    metadata: { nestedSurfaces?: Record<string, NestedSurfaceConfig | undefined> } | null | undefined,
+): NestedSurfaceConfig | null {
+    const nested = metadata?.nestedSurfaces ?? {};
+    const currentConfig = nested[surfaceKey] ?? null;
+    const legacy = legacyIdentityConfigsFromMetadata(metadata);
+    if (surfaceKey === HOUSEHOLD_SURFACE_CANONICAL_ID) {
+        if (!currentConfig && !legacy.householdContactSurface) return null;
+    } else if (surfaceKey === CHILDREN_SURFACE_CANONICAL_ID) {
+        if (!currentConfig && !legacy.childSurface) return null;
+    } else if (!currentConfig) {
+        return null;
+    }
+    return reconcileIdentityNestedConfig({
+        surfaceKey,
+        currentConfig,
+        legacyConfigs: legacy,
+    });
+}
+
+/** Seed Composer/runtime nested configs with identity-normalized household + children surfaces. */
+export function reconcileIdentityNestedConfigsFromMetadata(
+    metadata: { nestedSurfaces?: Record<string, NestedSurfaceConfig | undefined> } | null | undefined,
+): Record<string, NestedSurfaceConfig> {
+    const nested = metadata?.nestedSurfaces ?? {};
+    const out: Record<string, NestedSurfaceConfig> = {};
+    for (const [surfaceId, config] of Object.entries(nested)) {
+        if (!config) continue;
+        if (
+            surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID
+            || surfaceId === CHILDREN_SURFACE_CANONICAL_ID
+            || surfaceId === CHILD_SURFACE_COMPAT_ID
+            || surfaceId === HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID
+        ) {
+            continue;
+        }
+        out[surfaceId] = reconcileNestedSurfaceConfig(surfaceId, config);
+    }
+    const household = reconcileIdentityNestedConfigFromDocMetadata(HOUSEHOLD_SURFACE_CANONICAL_ID, metadata);
+    if (household) out[HOUSEHOLD_SURFACE_CANONICAL_ID] = household;
+    const children = reconcileIdentityNestedConfigFromDocMetadata(CHILDREN_SURFACE_CANONICAL_ID, metadata);
+    if (children) out[CHILDREN_SURFACE_CANONICAL_ID] = children;
+    return out;
 }
 
 /** Resolve effective field policy with edit-surface inheritance (`child_edit` / `contact_edit`). */

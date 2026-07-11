@@ -16,7 +16,6 @@ import IdentityRecordSummary from "@/components/admin/focusPanel/identity/Identi
 import {
     readHouseholdNestedConfigFromDoc,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
-import { reconcileIdentityNestedConfig } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import {
     applyHouseholdDisplayView,
     type HouseholdNestedDisplayView,
@@ -92,8 +91,7 @@ export default function HouseholdCard({
     const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
     const nestedConfig = useMemo(() => {
         if (composer?.enabled) return composer.configFor(HOUSEHOLD_SURFACE_ID);
-        const loaded = readHouseholdNestedConfigFromDoc(publishedDoc);
-        return loaded ? reconcileIdentityNestedConfig(HOUSEHOLD_SURFACE_ID, loaded) : null;
+        return readHouseholdNestedConfigFromDoc(publishedDoc);
     }, [composer, publishedDoc]);
     const composingHouseholdSurface = composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false;
     const evidence = useMemo(() => {

@@ -17,6 +17,15 @@ import {
     reconcileNestedSurfaceConfig,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    CHILD_SURFACE_COMPAT_ID,
+    CHILDREN_SURFACE_CANONICAL_ID,
+    HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID,
+    HOUSEHOLD_SURFACE_CANONICAL_ID,
+    legacyIdentityConfigsFromMetadata,
+    reconcileIdentityNestedConfig,
+    reconcileIdentityNestedConfigsFromMetadata,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import type { SurfaceFieldVisibility } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 
 /** Card key → nested surface id for in-canvas drill-in composition. */
@@ -94,8 +103,21 @@ export function FocusPanelComposerProvider({
     const [childAvatarPreviewUrls, setChildAvatarPreviewUrls] = useState<Record<string, string>>({});
 
     const configFor = useCallback(
-        (surfaceId: string) =>
-            reconcileNestedSurfaceConfig(surfaceId, nestedConfigs[surfaceId] ?? null),
+        (surfaceId: string) => {
+            if (
+                surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID
+                || surfaceId === CHILDREN_SURFACE_CANONICAL_ID
+            ) {
+                return reconcileIdentityNestedConfig({
+                    surfaceKey: surfaceId,
+                    currentConfig: nestedConfigs[surfaceId] ?? null,
+                    legacyConfigs: legacyIdentityConfigsFromMetadata({
+                        nestedSurfaces: nestedConfigs,
+                    }),
+                });
+            }
+            return reconcileNestedSurfaceConfig(surfaceId, nestedConfigs[surfaceId] ?? null);
+        },
         [nestedConfigs],
     );
 
