@@ -3,14 +3,17 @@
 import { ExternalLink } from "lucide-react";
 
 import { dispatchOpenWorkItemsTask } from "@/lib/workItems/workItemsNavigation";
+import type { WorkItemSourceKey, WorkItemViewKey } from "@/lib/workItems/workItemQueueScope";
 
 export type ViewInWorkItemsLinkProps = {
     taskId: string;
     opportunityId?: string | null;
     className?: string;
+    source?: WorkItemSourceKey;
+    view?: WorkItemViewKey;
 };
 
-export default function ViewInWorkItemsLink({ taskId, opportunityId, className }: ViewInWorkItemsLinkProps) {
+export default function ViewInWorkItemsLink({ taskId, opportunityId, className, source, view }: ViewInWorkItemsLinkProps) {
     const trimmedTaskId = taskId.trim();
     if (!trimmedTaskId) return null;
 
@@ -27,6 +30,8 @@ export default function ViewInWorkItemsLink({ taskId, opportunityId, className }
                     task_id: trimmedTaskId,
                     opportunity_id: opportunityId?.trim() || null,
                     filter: "open",
+                    source,
+                    view,
                 })
             }
         >

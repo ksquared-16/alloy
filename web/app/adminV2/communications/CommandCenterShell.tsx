@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
     groupConversationsByQueue,
@@ -50,6 +50,13 @@ import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 import { useFamilyCommunicationRuntime } from "@/lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime";
 import { conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
+import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
+import {
+    communicationWorkItemId,
+    conversationRequiresReplyForWorkItemProjection,
+} from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
+import { dispatchOperationalWorkRefresh } from "@/lib/workItems/operationalWorkRefresh";
+import type { WorkItemViewKey } from "@/lib/workItems/workItemQueueScope";
 import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
 import {
     buildOperationalTaskBody,
@@ -100,7 +107,14 @@ const attnAccent = (a: string | null | undefined): { rail: string; tint: string;
 };
 
 
-
+function resolveCommunicationsWorkItemsView(
+    conversation: ConversationSummary,
+    viewerUserId: string | null | undefined,
+): WorkItemViewKey {
+    const assigned = conversation.assignment_state === "assigned" ? conversation.assigned_user_id?.trim() : null;
+    if (assigned && viewerUserId?.trim() && assigned === viewerUserId.trim()) return "mine";
+    return "unassigned";
+}
 
 
 const LIVE_WORKSPACE = isCommsV2FlagEnabled("comms_v2_live_workspace");
@@ -146,6 +160,13 @@ export default function CommandCenterShell() {
         initialThreadId: selectedLoadable ? selectedId : null,
         surfaceVariant: "workspace_inbox",
     });
+
+    const refreshOperationalCommunicationsWork = useCallback((threadId: string | null | undefined) => {
+        dispatchOperationalWorkRefresh({
+            communication_thread_id: threadId ?? null,
+            kind: "communications_reply",
+        });
+    }, []);
 
     const loadConversations = useCallback(async (opts?: { background?: boolean }) => {
         if (COMMS_FIXTURES_ENABLED) return;
@@ -199,12 +220,13 @@ export default function CommandCenterShell() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "claim" }),
                 });
-                await loadConversations();
+                await loadConversations({ background: true });
+                refreshOperationalCommunicationsWork(id);
             } finally {
                 setAssignBusy(false);
             }
         },
-        [loadConversations]
+        [loadConversations, refreshOperationalCommunicationsWork]
     );
 
     const recordLinks = useMemo((): CommandCenterRecordLink[] => {
@@ -335,11 +357,12 @@ export default function CommandCenterShell() {
                         :   c
                     )
                 );
+                refreshOperationalCommunicationsWork(selectedId);
             } finally {
                 setTriageBusy(false);
             }
         },
-        [selectedId, loadConversations]
+        [selectedId, loadConversations, refreshOperationalCommunicationsWork]
     );
 
     const runPreferenceChange = useCallback(
@@ -402,6 +425,14 @@ export default function CommandCenterShell() {
             setSelectedId(null);
         }
     }, [loading, visibleIds, loadableIds, selectedId, openConversation]);
+
+    const lastSendCompleteToken = useRef(0);
+    useEffect(() => {
+        const token = runtime.sendCompleteToken;
+        if (!token || token === lastSendCompleteToken.current) return;
+        lastSendCompleteToken.current = token;
+        refreshOperationalCommunicationsWork(selectedId);
+    }, [refreshOperationalCommunicationsWork, runtime.sendCompleteToken, selectedId]);
 
     const workspaceError = useMemo(
         () => resolveQueueWorkspaceError(selected, runtime.error),
@@ -550,6 +581,17 @@ export default function CommandCenterShell() {
 
                 {/* WORKSPACE — Conversation (context) | Composer (action) */}
                 <section data-cc-column="workspace" data-cc-workspace="family-communication" aria-label="Family communication workspace" className={`flex min-h-0 flex-col overflow-hidden ${COMMS_PANEL_SHELL_CLASS}`}>
+                    {selected && conversationRequiresReplyForWorkItemProjection(selected) ?
+                        <div className="flex shrink-0 justify-end border-b border-alloy-stone/12 px-3 py-1.5">
+                            <ViewInWorkItemsLink
+                                taskId={communicationWorkItemId(selected.id)}
+                                opportunityId={selected.opportunity_id ?? null}
+                                source="communications"
+                                view={resolveCommunicationsWorkItemsView(selected, adminAuth?.userId ?? null)}
+                                className="inline-flex items-center gap-1 rounded-md border border-alloy-stone/22 bg-white px-2 py-1 text-[10px] font-semibold text-alloy-juniper hover:bg-alloy-juniper/[0.05]"
+                            />
+                        </div>
+                    :   null}
                     {selected && runtime.vm ? (
                         <FamilyCommunicationWorkspaceView
                             surfaceVariant="workspace_inbox"

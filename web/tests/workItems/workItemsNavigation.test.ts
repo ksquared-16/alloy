@@ -3,8 +3,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import {
+    ADMIN_V2_OPEN_COMMUNICATIONS_THREAD,
     ADMIN_V2_OPEN_PROCESSING_CASE,
     ADMIN_V2_OPEN_WORK_ITEMS_TASK,
+    dispatchOpenCommunicationsThread,
     dispatchOpenProcessingCase,
     dispatchOpenWorkItemsTask,
 } from "@/lib/workItems/workItemsNavigation";
@@ -15,10 +17,16 @@ vi.mock("@/lib/adminV2/workspaceModalCoordinator", () => ({
 
 vi.mock("@/lib/adminV2/workspaceModalEvents", () => ({
     dispatchAdminV2OpenProcessingModal: vi.fn(),
+    dispatchAdminV2OpenInboxModal: vi.fn(),
+}));
+
+vi.mock("@/lib/communications/v2/commandCenterPrefetchCache", () => ({
+    setCommandCenterPendingSelection: vi.fn(),
 }));
 
 import { openWorkspaceModal } from "@/lib/adminV2/workspaceModalCoordinator";
-import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
+import { dispatchAdminV2OpenInboxModal, dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
+import { setCommandCenterPendingSelection } from "@/lib/communications/v2/commandCenterPrefetchCache";
 
 describe("workItemsNavigation", () => {
     beforeEach(() => {
@@ -51,3 +59,18 @@ describe("workItemsNavigation", () => {
         window.removeEventListener(ADMIN_V2_OPEN_PROCESSING_CASE, handler);
     });
 });
+
+
+    it("opens Communications inbox and selects the exact thread", () => {
+        const events: CustomEvent[] = [];
+        const handler = (e: Event) => events.push(e as CustomEvent);
+        window.addEventListener(ADMIN_V2_OPEN_COMMUNICATIONS_THREAD, handler);
+
+        dispatchOpenCommunicationsThread("thread-42");
+
+        expect(dispatchAdminV2OpenInboxModal).toHaveBeenCalled();
+        expect(setCommandCenterPendingSelection).toHaveBeenCalledWith("thread-42");
+        expect(events[0]?.detail).toEqual({ thread_id: "thread-42" });
+
+        window.removeEventListener(ADMIN_V2_OPEN_COMMUNICATIONS_THREAD, handler);
+    });

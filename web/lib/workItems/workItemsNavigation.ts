@@ -3,12 +3,20 @@
  */
 
 import { openWorkspaceModal } from "@/lib/adminV2/workspaceModalCoordinator";
-import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
+import { dispatchAdminV2OpenInboxModal, dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
+import { setCommandCenterPendingSelection } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import type { OperationalTaskWorkspaceFilter } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import type { WorkItemSourceKey, WorkItemViewKey } from "@/lib/workItems/workItemQueueScope";
 
 export const ADMIN_V2_OPEN_WORK_ITEMS_TASK = "adminv2:open-work-items-task" as const;
 
 export const ADMIN_V2_OPEN_PROCESSING_CASE = "adminv2:open-processing-case" as const;
+
+export const ADMIN_V2_OPEN_COMMUNICATIONS_THREAD = "adminv2:open-communications-thread" as const;
+
+export type OpenCommunicationsThreadDetail = {
+    thread_id: string;
+};
 
 export type OpenProcessingCaseDetail = {
     case_id: string;
@@ -20,6 +28,8 @@ export type OpenWorkItemsTaskDetail = {
     task_id: string;
     opportunity_id?: string | null;
     filter?: OperationalTaskWorkspaceFilter;
+    source?: WorkItemSourceKey;
+    view?: WorkItemViewKey;
 };
 
 export type OpportunityFocusCurrentWorkDetail = {
@@ -38,6 +48,15 @@ export function dispatchFocusCurrentWork(detail: OpportunityFocusCurrentWorkDeta
     window.dispatchEvent(new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, { detail }));
 }
 
+
+export function dispatchOpenCommunicationsThread(threadId: string): void {
+    if (typeof window === "undefined") return;
+    const id = threadId.trim();
+    if (!id) return;
+    dispatchAdminV2OpenInboxModal();
+    setCommandCenterPendingSelection(id);
+    window.dispatchEvent(new CustomEvent(ADMIN_V2_OPEN_COMMUNICATIONS_THREAD, { detail: { thread_id: id } }));
+}
 
 export function dispatchOpenProcessingCase(caseId: string): void {
     if (typeof window === "undefined") return;
