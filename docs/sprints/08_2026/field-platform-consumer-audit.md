@@ -977,3 +977,28 @@ Forms/Documents now implements bounded collection-bound repeatable sections:
 - Processing: envelope preserved in submission meta — execution deferred to P5
 
 See `docs/sprints/08_2026/forms-documents-collection-authoring.md`.
+
+
+## Processing collection evidence (P5A)
+
+Processing read model consumes P4 `collection_submission_envelope` via `web/lib/pos/processingCase/collection/` — grouped evidence only, no commit.
+
+
+---
+
+## Related-record proposal ownership (P5A convergence)
+
+**Decision:** Related-record proposals live in `web/lib/intake/proposals/` — not `web/lib/fields/collection/`.
+
+Collection provider runtime (retrieval, iteration context, nested availability) remains in the Field Platform collection modules. Proposal models represent *proposed changes* to collection items and must be source-agnostic so OCR, import, API, and Communications adapters can emit the same contract.
+
+**Minimal P5A extraction only** — broader P4 placement debt (Forms imports in `web/lib/fields/collection/*`) documented but not relocated in this pass.
+
+
+### Collection provider registry (P5A convergence)
+
+`web/lib/fields/collection/canonicalCollectionProviderRegistry.ts` now owns neutral provider identity (refKey, item entity, required context, resolver owner). Forms and Queue Row derivation modules are consumer adapters — not canonical identity owners.
+
+## P5A verified (2026-07-10)
+
+Platform `web/lib/fields/collection/*` is Forms-free. Forms adapters: `web/lib/forms/collection/*`, `web/lib/forms/processing/*`.

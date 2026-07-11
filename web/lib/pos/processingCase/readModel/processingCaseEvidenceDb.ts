@@ -9,6 +9,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { safeParseFormSchema } from "@/lib/forms/schema";
 import type { ProposedValue, SourceEvidenceLoader, SourceEvidenceRaw, SourceEvidenceRegistry } from "./resolveSourceEvidence";
+import type { FormPayload } from "@/lib/forms/validateSubmission";
+import { adaptSourceToRelatedRecordProposals } from "@/lib/pos/processingCase/sources/adaptSourceToRelatedRecordProposals";
+import { projectRelatedRecordProposalsToEvidence } from "@/lib/pos/processingCase/collection/projectRelatedRecordProposalsToEvidence";
+import { loadAccessibleExistingCollectionItemIds } from "@/lib/forms/processing/verifyFormCollectionItemAccess";
+import type { ProcessingCollectionGroupEvidence } from "@/lib/pos/processingCase/collection/types";
 
 function stringifyValue(v: unknown): string | null {
     if (v === null || v === undefined) return null;
@@ -21,7 +26,7 @@ function stringifyValue(v: unknown): string | null {
     return null;
 }
 
-/** Label a submission's top-level answers from its versioned schema. Nested group values are out of FP4 scope. */
+/** Label a submission's top-level answers from its versioned schema. Collection nested values are resolved separately (P5A). */
 function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unknown> | null): ProposedValue[] {
     const parsed = safeParseFormSchema(schemaJson);
     if (!parsed.success) return [];
@@ -75,10 +80,31 @@ function makeFormSubmissionEvidenceLoader(supabase: SupabaseClient, orgId: strin
         }
 
         for (const s of subRows) {
-            const schema = s.form_definition_version_id ? schemaByVersion.get(s.form_definition_version_id) : undefined;
+            const schemaParsed = s.form_definition_version_id ? safeParseFormSchema(schemaByVersion.get(s.form_definition_version_id)) : null;
+            const schema = schemaParsed?.success ? schemaParsed.data : null;
+            const payload = (s.payload ?? null) as FormPayload | null;
+            const accessibleIds = await loadAccessibleExistingCollectionItemIds(supabase, orgId, payload);
+            const proposalBundle = schema
+                ? adaptSourceToRelatedRecordProposals(
+                      {
+                          sourceKind: "form_submission",
+                          sourceRecordId: s.id,
+                          formSchema: schema,
+                          formPayload: payload,
+                      },
+                      {
+                          formDefinitionVersionId: s.form_definition_version_id,
+                          accessibleExistingItemIds: accessibleIds,
+                      },
+                  )
+                : null;
+            const collectionEvidence = proposalBundle
+                ? projectRelatedRecordProposalsToEvidence(proposalBundle, { processingCaseId: null })
+                : undefined;
             out.set(s.id, {
                 proposedValues: schema ? labelSubmissionValues(schema, s.payload) : [],
                 documentId: null,
+                collectionEvidence,
             });
         }
         return out;
@@ -109,9 +135,21 @@ function makePacketEvidenceLoader(supabase: SupabaseClient, orgId: string): Sour
             const ev = submissionEvidence.get(item.form_submission_id);
             if (!ev) continue;
             const current = out.get(item.packet_session_id) ?? { proposedValues: [], documentId: null };
+            const mergedGroups: ProcessingCollectionGroupEvidence[] = [
+                ...(current.collectionEvidence?.groups ?? []),
+                ...(ev.collectionEvidence?.groups ?? []),
+            ];
+            const mergedDiagnostics = [
+                ...(current.collectionEvidence?.diagnostics ?? []),
+                ...(ev.collectionEvidence?.diagnostics ?? []),
+            ];
             out.set(item.packet_session_id, {
                 proposedValues: [...current.proposedValues, ...ev.proposedValues],
                 documentId: null,
+                collectionEvidence:
+                    mergedGroups.length > 0 || mergedDiagnostics.length > 0
+                        ? { groups: mergedGroups, diagnostics: mergedDiagnostics }
+                        : undefined,
             });
         }
         return out;

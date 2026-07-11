@@ -166,6 +166,10 @@ Tests prove providers become available when synthetic valid context is supplied 
 - `web/lib/forms/preview/formPreviewOrchestration.ts`
 - `web/components/admin/forms/FormSchemaRuntimePreview.tsx`
 
+## P5A grouped evidence (staging follow-on)
+
+P5A on `feat/processing-collection-execution-bridge` reads `collection_submission_envelope` into grouped Processing evidence (read-only). Commit execution remains P5B+.
+
 ## P5 scope boundary
 
 P4 preserves `meta.collection_submission_envelope` through submit and Processing case opening. **P5 begins** Processing review, commit semantics, and automatic related-record writes — not on this branch.
@@ -176,3 +180,25 @@ P4 preserves `meta.collection_submission_envelope` through submit and Processing
 - `tests/pos/packet`: 25 passing
 - Typecheck: clean
 - `verify:module-imports`: clean (7267 files)
+
+
+---
+
+## P5A canonical proposal boundary (2026-07-10)
+
+P4 collection authoring and submission preservation remain Forms-owned. P5A adds a **Forms processing adapter** (`web/lib/forms/processing/`) that emits source-independent related-record proposals (`web/lib/intake/proposals/`). Processing evidence is a downstream projection — Forms must not own the canonical proposal contract.
+
+
+### Forms collection adapters (platform split)
+
+Forms-specific collection iteration, context resolution, and availability live under `web/lib/forms/collection/`:
+
+- `formsCollectionIterationContext.ts`
+- `formsProviderContextRequirements.ts`
+- `formsProviderAvailability.ts`
+
+Platform modules under `web/lib/fields/collection/` no longer import Forms schema types.
+
+## P5A verified platform split (2026-07-10)
+
+Forms adapters under `web/lib/forms/collection/` and `web/lib/forms/processing/`. Platform collection modules are Forms-free.

@@ -7,15 +7,15 @@
 import type { FormField, FormGroupCollectionBinding } from "@/lib/forms/schema";
 import type { SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
 import {
-    iterationContextFromCollectionBinding,
     type CollectionIterationContext,
 } from "@/lib/fields/collection/collectionIterationContext";
+import { iterationContextFromCollectionBinding } from "@/lib/forms/collection/formsCollectionIterationContext";
 import {
     evaluateFormFieldAvailabilityForIteration,
     type ProviderAvailabilityResult,
-} from "@/lib/fields/collection/evaluateProviderAvailabilityForIteration";
+} from "@/lib/forms/collection/formsProviderAvailability";
 import { evaluateFormsProviderEligibility } from "@/lib/fields/formsProviderEligibility";
-import { canonicalRefFromFormField } from "@/lib/fields/collection/providerContextRequirements";
+import { canonicalRefFromFormField } from "@/lib/forms/collection/formsProviderContextRequirements";
 import { canonicalRefKey } from "@/lib/fields/fieldRegistryReferenceMatrix";
 import { formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
 

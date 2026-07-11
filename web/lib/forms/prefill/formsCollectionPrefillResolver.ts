@@ -11,7 +11,7 @@ import {
 } from "@/lib/fields/formsCollectionRepeatBinding";
 import {
     evaluateFormFieldAvailabilityForIteration,
-} from "@/lib/fields/collection/evaluateProviderAvailabilityForIteration";
+} from "@/lib/forms/collection/formsProviderAvailability";
 import {
     resolveCanonicalCollection,
     verifyCollectionOrgBoundary,

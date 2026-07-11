@@ -3,14 +3,10 @@ import {
     buildCollectionIterationContext,
     withSupplementalIterationContexts,
 } from "@/lib/fields/collection/collectionIterationContext";
-import {
-    evaluateFormFieldAvailabilityForIteration,
-    evaluateProviderAvailabilityForIteration,
-} from "@/lib/fields/collection/evaluateProviderAvailabilityForIteration";
-import {
-    providerContextRequirementsFromCanonicalRef,
-    providerContextRequirementsForFormField,
-} from "@/lib/fields/collection/providerContextRequirements";
+import { evaluateProviderAvailabilityForIteration } from "@/lib/fields/collection/evaluateProviderAvailabilityForIteration";
+import { providerContextRequirementsFromCanonicalRef } from "@/lib/fields/collection/providerContextRequirements";
+import { providerContextRequirementsForFormField } from "@/lib/forms/collection/formsProviderContextRequirements";
+import { evaluateFormFieldAvailabilityForIteration } from "@/lib/forms/collection/formsProviderAvailability";
 import { validateFormsDocumentsP2Bindings } from "@/lib/forms/binding/validateFormsDocumentsP2Bindings";
 import { validateFormSchema } from "@/lib/forms/schema";
 

@@ -14,13 +14,18 @@ import {
 } from "@/lib/fields/formsRelationshipOperationalSupport";
 import {
     buildCollectionIterationContext,
-    iterationContextFromCollectionBinding,
     type CollectionIterationContext,
 } from "@/lib/fields/collection/collectionIterationContext";
+import { iterationContextFromCollectionBinding } from "@/lib/forms/collection/formsCollectionIterationContext";
 import {
     evaluateFormFieldAvailabilityForIteration,
     isFormFieldAvailableForIteration,
-} from "@/lib/fields/collection/evaluateProviderAvailabilityForIteration";
+} from "@/lib/forms/collection/formsProviderAvailability";
+import {
+    collectionItemEntityTypeForProvider,
+    collectionRequiredContextForProvider,
+    findCanonicalCollectionProvider,
+} from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
 
 export type { CollectionIterationContext };
 export { iterationContextFromCollectionBinding, buildCollectionIterationContext };
@@ -68,10 +73,8 @@ export function collectionRefFromProvider(provider: CanonicalDataProvider): Form
     if (fromProjection === "children" || fromProjection === "household_members" || fromProjection === "parents_guardians") {
         return fromProjection;
     }
-    if (provider.refKey === "children") return "children";
-    if (provider.refKey === "household.members") return "household_members";
-    if (provider.refKey === "person.contact_role.parents") return "parents_guardians";
-    return null;
+    const canonical = findCanonicalCollectionProvider(provider.refKey);
+    return canonical?.collectionRef ?? null;
 }
 
 export function isWholeCollectionProvider(provider: CanonicalDataProvider): boolean {
@@ -81,7 +84,8 @@ export function isWholeCollectionProvider(provider: CanonicalDataProvider): bool
 export function collectionBindingFromProvider(provider: CanonicalDataProvider): FormGroupCollectionBinding {
     const collectionRef = collectionRefFromProvider(provider);
     const iterationEntity =
-        (collectionRef ? FORMS_COLLECTION_ITERATION_ENTITY[collectionRef] : null)
+        collectionItemEntityTypeForProvider(provider.refKey)
+        ?? (collectionRef ? FORMS_COLLECTION_ITERATION_ENTITY[collectionRef] : null)
         ?? provider.settingsEntity
         ?? "customer_member";
     return {
@@ -110,9 +114,7 @@ export function groupFieldHasCollectionBinding(
     return field.type === "group" && Boolean(field.collection_binding?.collection_provider_ref?.trim());
 }
 
-export function collectionRequiredContextForProvider(refKey: string): readonly string[] {
-    return FORMS_COLLECTION_REQUIRED_CONTEXT[refKey.trim()] ?? ["customer_id"];
-}
+export { collectionRequiredContextForProvider };
 
 export function collectionContextIsValid(
     refKey: string,
