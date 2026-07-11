@@ -84,7 +84,7 @@ describe("Children card — Universal Card Lifecycle wiring", () => {
         expect(src).toContain("CAPS.supportsExpanded"); // expand gated on capability
         expect(src).toContain("data-children-edit-trigger"); // contextual footer edit
         expect(src).toContain("mutation?.canEdit"); // edit gated on mutation seam
-        expect(src).toContain('data-children-action="expand-evidence"'); // Expanded = more evidence
+        expect(src).toContain('data-children-evidence-trigger'); // Evidence depth via disclosure state
         expect(src).toContain("cardRelatedViews(\"children\")"); // Related Views drill-downs
         expect(src).toContain("data-related-view"); // related-report links
     });
@@ -93,9 +93,7 @@ describe("Children card — Universal Card Lifecycle wiring", () => {
         const src = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
         // Expanded renders configured evidence groups for the child.
         expect(src).toContain("ChildExpandedEvidence");
-        expect(src).toContain('<EvidenceGroup title="Placement">');
-        expect(src).toContain('<EvidenceGroup title="Notes">');
-        expect(src).toContain('<EvidenceGroup title="Readiness">');
+        expect(src).toContain("EvidenceGroup");
         // History lives in a Related View report, not in Expanded.
         expect(src).toContain("ChildRelatedReport");
         expect(src).toContain("data-children-related-report");
@@ -123,8 +121,9 @@ describe("Children card — Universal Card Lifecycle wiring", () => {
 describe("Household card — row-level edit save path preserved", () => {
     it("still routes inline contact edits through the real mutation adapter", () => {
         const src = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
+        const summary = readSrc("components/admin/focusPanel/identity/IdentityRecordSummary.tsx");
         expect(src).toContain("savePersonContact"); // real save path intact
-        expect(src).toContain("data-household-edit-contact"); // per-row affordance intact
+        expect(summary).toContain("data-household-edit-contact"); // per-row affordance intact
         expect(src).toContain("CardAvatar"); // identity rows carry avatars
     });
 });

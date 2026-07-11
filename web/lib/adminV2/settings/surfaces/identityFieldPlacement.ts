@@ -1,20 +1,22 @@
 /**
  * Shared identity placement metadata stored on a nested-surface group.
- *
- * This file sits in the settings model so authoring and runtime can depend on
- * it without introducing a settings -> runtime -> settings import cycle.
  */
 
 import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import type { SurfaceFieldVisibility } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import {
+    normalizeIdentityStorageTier,
+    type IdentityStorageTier,
+} from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
-export type IdentityFieldTier = "summary" | "expanded";
+/** @deprecated Prefer storage tier helpers; legacy tier aliases accepted on read. */
+export type IdentityFieldTier = IdentityStorageTier;
 
 export type IdentityFieldLabelMode = "visible" | "hidden" | "eyebrow";
 
 export type IdentityFieldPlacement = {
     fieldRef: string;
-    tier: IdentityFieldTier;
+    tier: IdentityStorageTier;
     row: number;
     column: 1 | 2;
     width: NestedSurfaceFieldLayoutWidth;
@@ -26,6 +28,7 @@ export type IdentityFieldPlacement = {
 
 export type IdentityPlacementGroupLike = {
     selectedFieldKeys: string[];
+    contextFieldKeys?: string[];
     expandedFieldKeys?: string[];
     fieldLayoutWidths?: Record<string, NestedSurfaceFieldLayoutWidth>;
     fieldPolicies?: Record<string, SurfaceFieldVisibility>;
@@ -34,16 +37,17 @@ export type IdentityPlacementGroupLike = {
 
 function seedPlacement(args: {
     fieldRef: string;
-    tier: IdentityFieldTier;
+    tier: IdentityStorageTier;
     row: number;
     column: 1 | 2;
     width: NestedSurfaceFieldLayoutWidth;
     policy?: SurfaceFieldVisibility;
     existing?: IdentityFieldPlacement;
 }): IdentityFieldPlacement {
+    const normalizedTier = normalizeIdentityStorageTier(args.tier);
     return {
         fieldRef: args.fieldRef,
-        tier: args.tier,
+        tier: normalizedTier,
         row: args.existing?.row ?? args.row,
         column: args.existing?.column ?? args.column,
         width: args.width,
@@ -54,27 +58,32 @@ function seedPlacement(args: {
     };
 }
 
-/**
- * Generate stable placements from legacy selectedFieldKeys + layout widths.
- * Explicit empty arrays remain empty.
- */
+/** Generate stable placements from summary, context facts, and detail field keys. */
 export function generateDefaultIdentityFieldPlacements(
     group: IdentityPlacementGroupLike,
     options?: {
         summaryKeys?: readonly string[];
+        contextFactKeys?: readonly string[];
         expandedKeys?: readonly string[];
         defaultPolicy?: SurfaceFieldVisibility;
     },
 ): IdentityFieldPlacement[] {
-    const existing = group.fieldPlacements ?? [];
+    const existing = (group.fieldPlacements ?? []).map((placement) => ({
+        ...placement,
+        tier: normalizeIdentityStorageTier(placement.tier),
+    }));
     const existingByTierAndRef = new Map(
-        existing.map((placement) => [`${placement.tier}:${placement.fieldRef}`, placement]),
+        existing.map((placement) => [`${normalizeIdentityStorageTier(placement.tier)}:${placement.fieldRef}`, placement]),
     );
     const summaryKeys = options?.summaryKeys ?? group.selectedFieldKeys;
+    const summarySet = new Set(summaryKeys);
+    const contextFactKeys = (options?.contextFactKeys ?? group.contextFieldKeys ?? []).filter(
+        (fieldRef) => !summarySet.has(fieldRef),
+    );
     const expandedKeys = options?.expandedKeys ?? group.expandedFieldKeys ?? [];
     const placements: IdentityFieldPlacement[] = [];
 
-    const appendTier = (tier: IdentityFieldTier, fieldRefs: readonly string[]) => {
+    const appendTier = (tier: "summary" | "context_fact" | "details", fieldRefs: readonly string[]) => {
         let row = 1;
         let column: 1 | 2 = 1;
         for (const fieldRef of fieldRefs) {
@@ -101,6 +110,7 @@ export function generateDefaultIdentityFieldPlacements(
     };
 
     appendTier("summary", summaryKeys);
-    appendTier("expanded", expandedKeys);
+    appendTier("context_fact", contextFactKeys);
+    appendTier("details", expandedKeys);
     return placements;
 }

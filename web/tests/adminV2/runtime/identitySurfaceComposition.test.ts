@@ -145,7 +145,7 @@ describe("identity config persistence", () => {
         const reloaded = reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, config);
         const group = reloaded.groups.find((g) => g.key === "primary_contact")!;
         expect(group.expandedFieldKeys).toContain("person.address_line");
-        expect(group.fieldPlacements?.some((p) => p.fieldRef === "person.address_line" && p.tier === "expanded")).toBe(true);
+        expect(group.fieldPlacements?.some((p) => p.fieldRef === "person.address_line" && p.tier === "details")).toBe(true);
     });
 
     it("width row/column and icon persist", () => {
@@ -281,7 +281,7 @@ describe("children identity VM", () => {
             canMutate: true,
             isFieldSaveSupported: childFieldSaveSupported,
         });
-        const editable = vm.summaryRows.flatMap((row) => row.cells).some((cell) => cell.fieldRef === "inquiry_child.program" && cell.editable);
+        const editable = vm.detailsRows.flatMap((row) => row.cells).some((cell) => cell.fieldRef === "inquiry_child.program" && cell.editable);
         expect(editable).toBe(true);
     });
 

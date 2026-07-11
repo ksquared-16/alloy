@@ -21,6 +21,13 @@ import {
 import {
     generateDefaultIdentityFieldPlacements,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import {
+    identityLayerFieldKeysFromGroup,
+    normalizeIdentityFieldPlacements,
+    normalizeIdentityStorageTier,
+    storageTierMatchesPurpose,
+} from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { sanitizeContextFactKeys } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import type {
     IdentitySectionConfig,
     IdentitySurfaceConfig,
@@ -132,6 +139,34 @@ export function adaptHouseholdContactSurfaceToHouseholdSurface(
 /** @deprecated Import from identityFieldPlacement.ts in new code. */
 export const generateDefaultPlacementsForGroup = generateDefaultIdentityFieldPlacements;
 
+/**
+ * Migrate legacy config into configuration buckets + normalized placements.
+ *
+ * - selectedFieldKeys → Summary Fields
+ * - contextFieldKeys → Context Facts (summary duplicates stripped)
+ * - expandedFieldKeys → Detail Fields
+ */
+export function migrateIdentityDisclosureGroup(group: NestedSurfaceGroupConfig): NestedSurfaceGroupConfig {
+    const reconciled = reconcileFieldModesToPolicies(group);
+    const layers = identityLayerFieldKeysFromGroup(reconciled);
+    const contextFactKeys = sanitizeContextFactKeys(layers.summary, reconciled.contextFieldKeys ?? layers.contextFacts);
+    const placements = normalizeIdentityFieldPlacements(
+        generateDefaultIdentityFieldPlacements({
+            ...reconciled,
+            selectedFieldKeys: layers.summary,
+            contextFieldKeys: contextFactKeys,
+            expandedFieldKeys: layers.details,
+        }),
+    );
+    return {
+        ...reconciled,
+        selectedFieldKeys: layers.summary,
+        contextFieldKeys: contextFactKeys,
+        expandedFieldKeys: layers.details.length > 0 ? layers.details : reconciled.expandedFieldKeys,
+        fieldPlacements: placements,
+    };
+}
+
 /** Adapt legacy `child_surface` config onto canonical `children_surface` shape. */
 export function adaptChildSurfaceToChildrenSurface(
     childSurface: NestedSurfaceConfig | null,
@@ -163,7 +198,7 @@ export function adaptChildSurfaceToChildrenSurface(
         });
         return {
             ...merged,
-            fieldPlacements: generateDefaultPlacementsForGroup(merged),
+            fieldPlacements: generateDefaultPlacementsForGroup(migrateIdentityDisclosureGroup(merged)),
         };
     });
 
@@ -195,20 +230,27 @@ export function identitySectionFromNestedGroup(
     group: NestedSurfaceGroupConfig,
     label: string,
 ): IdentitySectionConfig {
-    const reconciled = reconcileFieldModesToPolicies(group);
-    const placements = generateDefaultPlacementsForGroup(reconciled);
-    const summaryFields = placements.filter((placement) => placement.tier === "summary");
-    const expandedFields = placements.filter((placement) => placement.tier === "expanded");
+    const migrated = migrateIdentityDisclosureGroup(group);
+    const placements = generateDefaultPlacementsForGroup(migrated);
+    const summaryFields = placements.filter((placement) => storageTierMatchesPurpose(placement.tier, "summary"));
+    const contextFacts = placements.filter((placement) => storageTierMatchesPurpose(placement.tier, "context_facts"));
+    const detailsFields = placements.filter((placement) => storageTierMatchesPurpose(placement.tier, "details"));
 
     return {
         key: group.key,
         label: group.sectionLabel?.trim() || label,
         source: HOUSEHOLD_SECTION_SOURCES[group.key] ?? { type: "record" },
         allowMultiple: group.key !== "primary_contact",
-        avatar: avatarFromDisplayOptions(reconciled),
-        badge: badgeFromDisplayOptions(reconciled),
+        avatar: avatarFromDisplayOptions(migrated),
+        badge: badgeFromDisplayOptions(migrated),
+        summary: { fields: summaryFields },
+        context: { facts: contextFacts },
+        details: { fields: detailsFields },
+        evidence: { collections: migrated.evidenceCollections ?? [] },
         summaryFields,
-        expandedFields,
+        contextFields: contextFacts,
+        detailsFields,
+        expandedFields: detailsFields,
         emptyState: group.enabled === false ? { label: `No ${label.toLowerCase()} configured` } : undefined,
     };
 }
@@ -248,11 +290,7 @@ export type ReconcileIdentityNestedConfigInput = {
 function applyIdentityGroupReconcile(config: NestedSurfaceConfig): NestedSurfaceConfig {
     return {
         ...config,
-        groups: config.groups.map((group) => {
-            const reconciled = reconcileFieldModesToPolicies(group);
-            const placements = generateDefaultPlacementsForGroup(reconciled);
-            return placements.length > 0 ? { ...reconciled, fieldPlacements: placements } : reconciled;
-        }),
+        groups: config.groups.map((group) => migrateIdentityDisclosureGroup(group)),
     };
 }
 
@@ -386,8 +424,14 @@ export function resolveIdentityFieldPolicy(args: {
 
     if (editGroupKey) {
         const editGroup = config.groups.find((g) => g.key === editGroupKey);
-        if (editGroup?.selectedFieldKeys.includes(fieldRef)) {
-            const editPolicy = editGroup.fieldPolicies?.[fieldRef];
+        const editLayers = editGroup ? identityLayerFieldKeysFromGroup(editGroup) : null;
+        const editContainsField = editLayers
+            ? editLayers.summary.includes(fieldRef)
+                || editLayers.contextFacts.includes(fieldRef)
+                || editLayers.details.includes(fieldRef)
+            : false;
+        if (editContainsField) {
+            const editPolicy = editGroup?.fieldPolicies?.[fieldRef];
             if (editPolicy) return normalizeFieldVisibility(editPolicy);
             if (config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID && editGroupKey === "contact_edit") {
                 return "editable";

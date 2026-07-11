@@ -18,15 +18,20 @@ import {
     addFieldToNestedGroup,
     defaultNestedSurfaceConfig,
     groupDefsFor,
+    HOUSEHOLD_SURFACE_ID,
+    CHILDREN_SURFACE_ID,
     moveFieldInNestedGroup,
     nestedSurfaceLabel,
     removeFieldFromNestedGroup,
     type NestedSurfaceConfig,
     type NestedSurfaceGroupConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import IdentityBuilderDrillIn from "@/components/adminV2/settings/surfaces/composer/IdentityBuilderDrillIn";
+import IdentityContextFactsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityContextFactsPanel";
+import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
 import {
     HOUSEHOLD_CONTACT_SURFACE_ID,
-    HOUSEHOLD_SURFACE_ID,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import {
     loadNestedSurfaceConfig,
@@ -78,6 +83,9 @@ export default function NestedSurfaceEditor({
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [libraryOpen, setLibraryOpen] = useState(false);
     const [libraryGroupKey, setLibraryGroupKey] = useState<string | null>(null);
+    const [activeConfigPurpose, setActiveConfigPurpose] = useState<IdentityConfigurationPurpose>("summary");
+
+    const isIdentitySurface = surfaceId === HOUSEHOLD_SURFACE_ID || surfaceId === CHILDREN_SURFACE_ID;
 
     const [contactConfigState, setContactConfigState] = useState<NestedSurfaceConfig | null>(null);
 
@@ -133,14 +141,18 @@ export default function NestedSurfaceEditor({
 
     const placedByGroup = useMemo(() => {
         const map = new Map<string, ReturnType<typeof listNestedPlacedFields>>();
+        const purpose =
+            isIdentitySurface && selectedGroupKey && activeConfigPurpose !== "evidence"
+                ? (activeConfigPurpose as Exclude<IdentityConfigurationPurpose, "evidence">)
+                : undefined;
         for (const def of groupDefs) {
             map.set(
                 def.key,
-                listNestedPlacedFields(surfaceId, def.key, config, tenantFieldDefinitions),
+                listNestedPlacedFields(surfaceId, def.key, config, tenantFieldDefinitions, purpose),
             );
         }
         return map;
-    }, [config, groupDefs, surfaceId, tenantFieldDefinitions]);
+    }, [activeConfigPurpose, config, groupDefs, isIdentitySurface, selectedGroupKey, surfaceId, tenantFieldDefinitions]);
 
     const selectedPlacedField = useMemo(() => {
         if (!selectedFieldId) return null;
@@ -188,13 +200,19 @@ export default function NestedSurfaceEditor({
     const handleLibraryPick = useCallback(
         (item: NestedSurfaceLibraryItem) => {
             if (item.kind !== "field") return;
-            mutate(addFieldToNestedGroup(config, item.groupKey, item.fieldKey));
+            const tier =
+                isIdentitySurface && activeConfigPurpose !== "evidence"
+                    ? activeConfigPurpose === "context_facts"
+                        ? "context_fact"
+                        : activeConfigPurpose
+                    : "summary";
+            mutate(addFieldToNestedGroup(config, item.groupKey, item.fieldKey, { tier }));
             setSelectedGroupKey(item.groupKey);
             setSelectedFieldId(`${item.groupKey}:${item.fieldKey}`);
             setLibraryOpen(false);
             setLibraryGroupKey(null);
         },
-        [config, mutate],
+        [activeConfigPurpose, config, isIdentitySurface, mutate],
     );
 
     async function handlePublish() {
@@ -287,6 +305,7 @@ export default function NestedSurfaceEditor({
                             onSelectGroup={(key) => {
                                 setSelectedGroupKey(key);
                                 setSelectedFieldId(null);
+                                setActiveConfigPurpose("summary");
                             }}
                             onDrillInSurface={onDrillInSurface}
                         />
@@ -341,13 +360,56 @@ export default function NestedSurfaceEditor({
                                 />
                             </div>
                         : selectedGroupKey && selectedGroupConfig ?
-                            <NestedSurfaceGroupInspector
-                                surfaceId={surfaceId}
-                                groupDef={groupDefs.find((g) => g.key === selectedGroupKey)!}
-                                groupConfig={selectedGroupConfig}
-                                onChange={(next) => patchGroupConfig(selectedGroupKey, next)}
-                                onOpenLibrary={() => openLibrary(selectedGroupKey)}
-                            />
+                            <div className="space-y-3">
+                                {isIdentitySurface ?
+                                    <IdentityBuilderDrillIn
+                                        activePurpose={activeConfigPurpose}
+                                        onSelectPurpose={setActiveConfigPurpose}
+                                        onBack={
+                                            activeConfigPurpose !== "summary"
+                                                ? () => {
+                                                      const order: IdentityConfigurationPurpose[] = [
+                                                          "summary",
+                                                          "context_facts",
+                                                          "details",
+                                                          "evidence",
+                                                      ];
+                                                      const idx = order.indexOf(activeConfigPurpose);
+                                                      if (idx > 0) setActiveConfigPurpose(order[idx - 1]!);
+                                                  }
+                                                : undefined
+                                        }
+                                        groupLabel={
+                                            groupDefs.find((g) => g.key === selectedGroupKey)?.label ?? selectedGroupKey
+                                        }
+                                    />
+                                :   null}
+                                {isIdentitySurface && activeConfigPurpose === "context_facts" ?
+                                    <IdentityContextFactsPanel
+                                        surfaceId={surfaceId}
+                                        groupKey={selectedGroupKey}
+                                        config={config}
+                                        onOpenLibrary={() => openLibrary(selectedGroupKey)}
+                                    />
+                                :   null}
+                                {isIdentitySurface && activeConfigPurpose === "evidence" ?
+                                    <IdentityEvidenceCollectionsPanel
+                                        surfaceId={surfaceId}
+                                        groupKey={selectedGroupKey}
+                                        config={config}
+                                        onChange={mutate}
+                                    />
+                                :   null}
+                                {!(isIdentitySurface && (activeConfigPurpose === "context_facts" || activeConfigPurpose === "evidence")) ?
+                                    <NestedSurfaceGroupInspector
+                                        surfaceId={surfaceId}
+                                        groupDef={groupDefs.find((g) => g.key === selectedGroupKey)!}
+                                        groupConfig={selectedGroupConfig}
+                                        onChange={(next) => patchGroupConfig(selectedGroupKey, next)}
+                                        onOpenLibrary={() => openLibrary(selectedGroupKey)}
+                                    />
+                                :   null}
+                            </div>
                         :   <div className="process-config-setup-card flex h-full items-center justify-center p-6 text-center" data-surface-inspector-empty="true">
                                 <p className="config-typo-sublabel">{SURFACE_COMPOSER_EMPTY_HINT}</p>
                             </div>

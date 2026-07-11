@@ -31,7 +31,12 @@ import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/admi
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { CONTACT_EDIT_FIELD_MAP } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
-import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { composeSummaryAndContextFacts } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
+import {
+    enabledEvidenceSections,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM, IdentityEvidenceCollectionVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 
 function initialsFor(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -48,11 +53,37 @@ function catalogLabel(surfaceId: string, groupKey: string, fieldRef: string): st
     return item.replace(/^[a-z_]+\./, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function resolveEvidenceCollectionsForGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+): IdentityEvidenceCollectionVM[] {
+    const group = config.groups.find((entry) => entry.key === groupKey);
+    const configured = (group?.evidenceCollections ?? []).map((collection) => ({
+        key: collection.key,
+        label: collection.label,
+        enabled: collection.enabled !== false,
+    }));
+    if (configured.length > 0) return configured;
+
+    if (config.surfaceId === "children_surface" && (groupKey === "roster" || groupKey === "identity")) {
+        return enabledEvidenceSections(config).map((section) => ({
+            key: section.key,
+            label:
+                nestedGroupLabel(config, section.key)
+                ?? groupDefsFor(config.surfaceId).find((def) => def.key === section.key)?.label
+                ?? section.key,
+            enabled: true,
+        }));
+    }
+
+    return [];
+}
+
 function buildRecordRows(args: {
     config: NestedSurfaceConfig;
     groupKey: string;
     subject: IdentityComposeSubject;
-    tier: "summary" | "expanded";
+    purpose: "summary" | "context_facts" | "details";
     canMutate: boolean;
     isFieldSaveSupported?: (fieldRef: string) => boolean;
     editGroupKey?: string;
@@ -61,7 +92,7 @@ function buildRecordRows(args: {
     const group = args.config.groups.find((g) => g.key === args.groupKey);
     if (!group) return [];
     const placements = (group.fieldPlacements ?? generateDefaultPlacementsForGroup(group)).filter(
-        (placement) => placement.tier === args.tier,
+        (placement) => storageTierMatchesPurpose(placement.tier, args.purpose),
     );
     const inputs: IdentityFieldRowInput[] = [];
     for (const placement of placements) {
@@ -106,6 +137,34 @@ function childSubject(child: HouseholdEvidenceChild | ChildrenEvidenceChild): Id
     return { kind: "child", value: child };
 }
 
+function finalizeIdentityRecordVM(args: {
+    id: string;
+    title: string;
+    avatar?: IdentityRecordVM["avatar"];
+    badge?: string | null;
+    summaryRows: IdentityFieldRowVM[];
+    contextFactRows: IdentityFieldRowVM[];
+    detailRows: IdentityFieldRowVM[];
+    evidenceCollections?: IdentityRecordVM["evidenceCollections"];
+}): IdentityRecordVM {
+    const contextRows = composeSummaryAndContextFacts(args.summaryRows, args.contextFactRows);
+    return {
+        id: args.id,
+        title: args.title,
+        avatar: args.avatar,
+        badge: args.badge,
+        summaryRows: args.summaryRows,
+        contextFactRows: args.contextFactRows,
+        contextRows,
+        detailRows: args.detailRows,
+        detailsRows: args.detailRows,
+        expandedRows: args.detailRows,
+        canShowDetails: args.detailRows.length > 0,
+        canExpand: args.detailRows.length > 0,
+        evidenceCollections: args.evidenceCollections,
+    };
+}
+
 function buildContactRecordVM(args: {
     config: NestedSurfaceConfig;
     groupKey: string;
@@ -119,21 +178,30 @@ function buildContactRecordVM(args: {
         config: args.config,
         groupKey: args.groupKey,
         subject,
-        tier: "summary",
+        purpose: "summary",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
         maskedChannels: args.maskedChannels,
     });
-    const expandedRows = buildRecordRows({
+    const contextFactRows = buildRecordRows({
         config: args.config,
         groupKey: args.groupKey,
         subject,
-        tier: "expanded",
+        purpose: "context_facts",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
         maskedChannels: args.maskedChannels,
     });
-    return {
+    const detailRows = buildRecordRows({
+        config: args.config,
+        groupKey: args.groupKey,
+        subject,
+        purpose: "details",
+        canMutate: args.canMutate,
+        editGroupKey: "contact_edit",
+        maskedChannels: args.maskedChannels,
+    });
+    return finalizeIdentityRecordVM({
         id: args.contact.personId,
         title: composedIdentityDisplayName(subject, args.config, args.groupKey, args.contact.name),
         avatar: {
@@ -143,9 +211,10 @@ function buildContactRecordVM(args: {
         },
         badge: args.contact.roleLabel,
         summaryRows,
-        expandedRows,
-        canExpand: expandedRows.length > 0,
-    };
+        contextFactRows,
+        detailRows,
+        evidenceCollections: resolveEvidenceCollectionsForGroup(args.config, args.groupKey),
+    });
 }
 
 function buildChildRecordVM(args: {
@@ -161,22 +230,31 @@ function buildChildRecordVM(args: {
         config: args.config,
         groupKey: args.groupKey,
         subject,
-        tier: "summary",
+        purpose: "summary",
         canMutate: args.canMutate,
         isFieldSaveSupported: args.isFieldSaveSupported,
         editGroupKey: "child_edit",
     });
-    const expandedRows = buildRecordRows({
+    const contextFactRows = buildRecordRows({
         config: args.config,
         groupKey: args.groupKey,
         subject,
-        tier: "expanded",
+        purpose: "context_facts",
+        canMutate: args.canMutate,
+        isFieldSaveSupported: args.isFieldSaveSupported,
+        editGroupKey: "child_edit",
+    });
+    const detailRows = buildRecordRows({
+        config: args.config,
+        groupKey: args.groupKey,
+        subject,
+        purpose: "details",
         canMutate: args.canMutate,
         isFieldSaveSupported: args.isFieldSaveSupported,
         editGroupKey: "child_edit",
     });
     const name = "name" in args.child ? args.child.name : "Child";
-    return {
+    return finalizeIdentityRecordVM({
         id: args.child.id,
         title: composedIdentityDisplayName(subject, args.config, args.groupKey, name),
         avatar: {
@@ -186,9 +264,10 @@ function buildChildRecordVM(args: {
         },
         badge: args.groupKey === "children" ? "Child" : null,
         summaryRows,
-        expandedRows,
-        canExpand: expandedRows.length > 0,
-    };
+        contextFactRows,
+        detailRows,
+        evidenceCollections: resolveEvidenceCollectionsForGroup(args.config, args.groupKey),
+    });
 }
 
 /** Build household identity VM from evidence groups + published config. */
@@ -250,21 +329,21 @@ export function buildHouseholdContactEditFieldRows(args: {
         config,
         groupKey: "contact_edit",
         subject,
-        tier: "summary",
+        purpose: "summary",
         canMutate: args.canMutate ?? true,
         editGroupKey: "contact_edit",
         isFieldSaveSupported: (fieldRef) => fieldRef in CONTACT_EDIT_FIELD_MAP,
     });
-    const expandedRows = buildRecordRows({
+    const detailRows = buildRecordRows({
         config,
         groupKey: "contact_edit",
         subject,
-        tier: "expanded",
+        purpose: "details",
         canMutate: args.canMutate ?? true,
         editGroupKey: "contact_edit",
         isFieldSaveSupported: (fieldRef) => fieldRef in CONTACT_EDIT_FIELD_MAP,
     });
-    return [...summaryRows, ...expandedRows];
+    return [...summaryRows, ...detailRows];
 }
 
 /** Build children identity VM for one child record. */
@@ -308,17 +387,24 @@ export function buildEmployeeIdentityRecordVM(args: {
         config,
         groupKey,
         subject,
-        tier: "summary",
+        purpose: "summary",
         canMutate: args.canMutate ?? false,
     });
-    const expandedRows = buildRecordRows({
+    const contextFactRows = buildRecordRows({
         config,
         groupKey,
         subject,
-        tier: "expanded",
+        purpose: "context_facts",
         canMutate: args.canMutate ?? false,
     });
-    return {
+    const detailRows = buildRecordRows({
+        config,
+        groupKey,
+        subject,
+        purpose: "details",
+        canMutate: args.canMutate ?? false,
+    });
+    return finalizeIdentityRecordVM({
         id: args.employee.id,
         title: args.employee.name,
         avatar: {
@@ -328,7 +414,7 @@ export function buildEmployeeIdentityRecordVM(args: {
         },
         badge: args.employee.badge ?? args.employee.title ?? "Employee",
         summaryRows,
-        expandedRows,
-        canExpand: expandedRows.length > 0,
-    };
+        contextFactRows,
+        detailRows,
+    });
 }
