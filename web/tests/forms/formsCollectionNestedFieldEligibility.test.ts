@@ -46,7 +46,9 @@ describe("collection nested field picker filtering", () => {
             childrenContext,
         );
         expect(compat.status).not.toBe("compatible");
-        expect(compat.reason).toMatch(/inquiry|enrollment/i);
+        if (compat.status !== "compatible") {
+            expect(compat.reason).toMatch(/inquiry|enrollment/i);
+        }
     });
 
     it("partitions fields on provider switch", () => {

@@ -29,6 +29,33 @@ export type FormPreviewOrchestrationResult = {
     };
 };
 
+export type FormAuthoringPreviewLaunchContext = {
+    customer_id?: string | null;
+    person_id?: string | null;
+    customer_member_id?: string | null;
+    opportunity_id?: string | null;
+    form_context_mode?: string;
+};
+
+/** Derive operator preview launch context from link or form metadata — no fabrication. */
+export function previewLaunchContextFromMetadata(
+    metadata: Record<string, unknown> | null | undefined,
+): FormAuthoringPreviewLaunchContext | null {
+    if (!metadata || typeof metadata !== "object") return null;
+    const customerId = typeof metadata.customer_id === "string" ? metadata.customer_id.trim() : "";
+    if (!customerId) return null;
+    return {
+        customer_id: customerId,
+        person_id: typeof metadata.person_id === "string" ? metadata.person_id : null,
+        customer_member_id: typeof metadata.customer_member_id === "string" ? metadata.customer_member_id : null,
+        opportunity_id: typeof metadata.opportunity_id === "string" ? metadata.opportunity_id : null,
+        form_context_mode:
+            typeof metadata.form_context_mode === "string" && metadata.form_context_mode.trim()
+                ? metadata.form_context_mode.trim()
+                : "existing_record",
+    };
+}
+
 const PLACEHOLDER_META = {
     preview_mode: "design_placeholder",
     preview_notice: "Design preview — placeholder data only. Not resolved from canonical records.",

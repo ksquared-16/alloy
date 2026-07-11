@@ -56,6 +56,7 @@ describe("mergeFormPrefillPayload precedence", () => {
             ],
         };
         const saved = {
+            values: {},
             groups: {
                 kids: [
                     {
@@ -98,6 +99,7 @@ describe("mergeFormPrefillPayload precedence", () => {
                 ],
             },
             saved: {
+                values: {},
                 groups: {
                     kids: [
                         {

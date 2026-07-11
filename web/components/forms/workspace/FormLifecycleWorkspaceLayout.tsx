@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import Link from "next/link";
+import { useMemo } from "react";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import {
@@ -27,6 +28,7 @@ import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import type { FormLifecycleStepView } from "@/lib/forms/formLifecyclePresentation";
 import { FORM_LIFECYCLE_ANCHORS } from "@/lib/forms/formLifecyclePresentation";
+import { previewLaunchContextFromMetadata } from "@/lib/forms/preview/formPreviewOrchestration";
 import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
@@ -154,6 +156,10 @@ export function FormLifecycleWorkspaceLayout({
     const showPacketPanel = storedIntent === "packet_step";
     const showExistingRecordSend = storedIntent === "existing_family";
     const coverageRefreshKey = detail.versions.map((v) => `${v.id}:${v.updated_at ?? v.created_at}`).join("|");
+    const previewLaunchContext = useMemo(() => {
+        const selected = links.find((l) => l.id === selectedRuntimeLinkId);
+        return previewLaunchContextFromMetadata(selected?.metadata ?? null);
+    }, [links, selectedRuntimeLinkId]);
 
     return (
         <>
@@ -195,6 +201,7 @@ export function FormLifecycleWorkspaceLayout({
                         formName={detail.name}
                         versions={detail.versions}
                         onVersionsUpdated={onVersionsUpdated}
+                        previewLaunchContext={previewLaunchContext}
                     />
                 </section>
 

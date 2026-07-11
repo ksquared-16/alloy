@@ -6,18 +6,13 @@ import { FormEngineRenderer } from "@/components/forms/engine/FormEngineRenderer
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { buildDesignPlaceholderPreviewPayload } from "@/lib/forms/preview/formPreviewOrchestration";
+import type { FormAuthoringPreviewLaunchContext } from "@/lib/forms/preview/formPreviewOrchestration";
 import { opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
 
 export type FormSchemaRuntimePreviewProps = {
     schema: FormSchemaV1;
     /** When set, fetches context-backed preview payload from admin API. */
-    previewLaunchContext?: {
-        customer_id?: string | null;
-        person_id?: string | null;
-        customer_member_id?: string | null;
-        opportunity_id?: string | null;
-        form_context_mode?: string;
-    } | null;
+    previewLaunchContext?: FormAuthoringPreviewLaunchContext | null;
     formDefinitionId?: string;
 };
 

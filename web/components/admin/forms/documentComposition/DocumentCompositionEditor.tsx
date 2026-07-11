@@ -24,6 +24,7 @@ import {
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { COLLECTION_AUTHORING_COPY } from "@/lib/forms/formFieldAuthoringPresentation";
 import { FormSchemaRuntimePreview } from "@/components/admin/forms/FormSchemaRuntimePreview";
+import type { FormAuthoringPreviewLaunchContext } from "@/lib/forms/preview/formPreviewOrchestration";
 import { useFormSchemaFieldAuthoring } from "@/lib/forms/useFormSchemaFieldAuthoring";
 import { useFormSystemFieldPicker } from "@/lib/fields/useFormSystemFieldPicker";
 import { customUnmappedTextField, formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
@@ -48,6 +49,9 @@ type Props = {
     onSelectField?: (fieldId: string) => void;
     onMoveFieldInRegion?: (regionId: string, fieldId: string, dir: -1 | 1) => void;
     onMoveFieldToRegion?: (fieldId: string, toRegionId: string) => void;
+    /** When set, enables context-backed runtime preview when launch context is available. */
+    formDefinitionId?: string;
+    previewLaunchContext?: FormAuthoringPreviewLaunchContext | null;
 };
 
 /** Document composition workspace — fields + blocks (FD-8 / FD-13). */
@@ -59,6 +63,8 @@ export function DocumentCompositionEditor({
     onSelectField,
     onMoveFieldInRegion,
     onMoveFieldToRegion,
+    formDefinitionId,
+    previewLaunchContext,
 }: Props) {
     const composition = resolveDocumentComposition(schema);
     const sortedBlocks = sortDocumentBlocks(composition.blocks);
@@ -428,7 +434,11 @@ export function DocumentCompositionEditor({
                 :   null}
             </details>
 
-            <FormSchemaRuntimePreview schema={schema} />
+            <FormSchemaRuntimePreview
+                schema={schema}
+                formDefinitionId={formDefinitionId}
+                previewLaunchContext={previewLaunchContext}
+            />
         </div>
     );
 }

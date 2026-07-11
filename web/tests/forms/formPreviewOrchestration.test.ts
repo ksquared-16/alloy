@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     buildDesignPlaceholderPreviewPayload,
+    previewLaunchContextFromMetadata,
 } from "@/lib/forms/preview/formPreviewOrchestration";
 import { validateFormSchema } from "@/lib/forms/schema";
 
@@ -45,5 +46,20 @@ describe("form preview orchestration", () => {
     it("design placeholder may show min repeat structure only", () => {
         const rows = buildDesignPlaceholderPreviewPayload(schema).payload.groups?.kids ?? [];
         expect(rows.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("previewLaunchContextFromMetadata returns null without customer_id", () => {
+        expect(previewLaunchContextFromMetadata({ form_context_mode: "existing_record" })).toBeNull();
+        expect(previewLaunchContextFromMetadata(null)).toBeNull();
+    });
+
+    it("previewLaunchContextFromMetadata derives explicit launch context", () => {
+        const ctx = previewLaunchContextFromMetadata({
+            customer_id: "cust-1",
+            opportunity_id: "opp-1",
+            form_context_mode: "existing_record",
+        });
+        expect(ctx?.customer_id).toBe("cust-1");
+        expect(ctx?.opportunity_id).toBe("opp-1");
     });
 });

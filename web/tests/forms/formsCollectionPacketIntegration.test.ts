@@ -105,6 +105,7 @@ describe("collection packet integration", () => {
                 ],
             },
             saved: {
+                values: {},
                 groups: {
                     kids: [
                         {
