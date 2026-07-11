@@ -2,7 +2,7 @@
 
 **Status:** Canonical constitutional doctrine (July 2026). **Required reading** for every engineer, agent, and contributor working on Alloy.
 
-This document states what Alloy **is** today and how we build from here. It is not a history of how we got here — see [`platform-certification-july-2026.md`](./platform-certification-july-2026.md) and [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md) for the certification record.
+This document states what Alloy **is** today and how we build from here. It is **philosophy** — not certification. For the formal architectural freeze declaration, see [`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md). For merge evidence and statistics, see [`platform-certification-july-2026.md`](./platform-certification-july-2026.md) and [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md).
 
 ---
 
