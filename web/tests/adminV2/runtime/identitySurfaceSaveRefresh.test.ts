@@ -16,6 +16,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import {
     isChildFocusFieldSaveSupported,
+    type ChildFocusFieldKey,
 } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
 import {
     addFieldToNestedGroup,
@@ -26,6 +27,10 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+
+function childFieldSaveSupported(fieldRef: string): boolean {
+    return isChildFocusFieldSaveSupported(fieldRef as ChildFocusFieldKey);
+}
 
 function householdCtx(truth: Record<string, unknown>): OperationalContext {
     return {
@@ -97,7 +102,6 @@ describe("household contact save refresh", () => {
         expect(beforeEmail).toBe("sarah@example.com");
 
         const merged = mergePersonContactIntoFocusPanelTruth(HOUSEHOLD_TRUTH, "p-sarah", {
-            id: "p-sarah",
             first_name: "Sarah",
             last_name: "Johnson",
             full_name: "Sarah Johnson",
@@ -157,7 +161,7 @@ describe("child save refresh", () => {
             child,
             groupKey: "placement",
             canMutate: true,
-            isFieldSaveSupported: isChildFocusFieldSaveSupported,
+            isFieldSaveSupported: childFieldSaveSupported,
         });
         const beforeStart = before.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "child.start_date")?.value;
         expect(beforeStart).toContain("2026");
@@ -177,7 +181,7 @@ describe("child save refresh", () => {
             child: afterChild,
             groupKey: "placement",
             canMutate: true,
-            isFieldSaveSupported: isChildFocusFieldSaveSupported,
+            isFieldSaveSupported: childFieldSaveSupported,
         });
         const afterStart = after.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "child.start_date")?.value;
         expect(afterStart).toContain("Sep");
@@ -193,7 +197,7 @@ describe("child save refresh", () => {
             child,
             groupKey: "readiness",
             canMutate: true,
-            isFieldSaveSupported: isChildFocusFieldSaveSupported,
+            isFieldSaveSupported: childFieldSaveSupported,
         });
         const readiness = record.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "child.readiness_summary");
         expect(readiness?.editable).toBe(false);
@@ -206,7 +210,6 @@ describe("expanded field save refresh", () => {
         config = addFieldToNestedGroup(config, "primary_contact", "person.email", { tier: "expanded" });
         config = setFieldVisibilityInNestedGroup(config, "contact_edit", "contact.email", "editable");
         const merged = mergePersonContactIntoFocusPanelTruth(HOUSEHOLD_TRUTH, "p-sarah", {
-            id: "p-sarah",
             first_name: "Sarah",
             last_name: "Johnson",
             full_name: "Sarah Johnson",
@@ -232,7 +235,6 @@ describe("save failure semantics", () => {
     it("failed save does not mutate authoritative truth used for VM recompose", () => {
         const baseline = { ...HOUSEHOLD_TRUTH };
         const optimisticDraft = mergePersonContactIntoFocusPanelTruth(baseline, "p-sarah", {
-            id: "p-sarah",
             first_name: "Sarah",
             last_name: "Johnson",
             full_name: "Sarah Johnson",

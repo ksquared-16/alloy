@@ -40,10 +40,44 @@ import {
     buildHouseholdIdentityCardVM,
 } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
 import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
-import { isChildFocusFieldSaveSupported } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
+import type { ChildrenEvidenceChild } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import {
+    isChildFocusFieldSaveSupported,
+    type ChildFocusFieldKey,
+} from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { getSurface } from "@/lib/platform/surfaceComposition/surfaceRegistry";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
+
+function sampleChild(overrides: Partial<ChildrenEvidenceChild> = {}): ChildrenEvidenceChild {
+    return {
+        id: "c1",
+        name: "Emma Johnson",
+        initial: "E",
+        imageUrl: null,
+        dobAge: "Age 4",
+        program: "Preschool",
+        room: null,
+        schedule: null,
+        teacher: null,
+        startDate: null,
+        status: null,
+        statusTone: "neutral",
+        needsAttention: false,
+        detailLine: null,
+        missingLine: null,
+        flags: [],
+        ...overrides,
+    };
+}
+
+function childFieldSaveSupported(fieldRef: string): boolean {
+    return isChildFocusFieldSaveSupported(fieldRef as ChildFocusFieldKey);
+}
+
+function docWithNestedSurfaces(metadata: Record<string, unknown>): LayoutDoc {
+    return { metadata } as unknown as LayoutDoc;
+}
 
 function ctx(truth: Record<string, unknown>): OperationalContext {
     return {
@@ -238,20 +272,14 @@ describe("children identity VM", () => {
         config = setFieldVisibilityInNestedGroup(config, "child_edit", "inquiry_child.program", "editable");
         const vm = buildChildIdentityRecordVM({
             config,
-            child: {
-                id: "c1",
+            child: sampleChild({
                 name: "Emma",
                 program: "Preschool",
-                room: null,
-                schedule: null,
-                startDate: null,
                 dobAge: "Age 4",
-                needsAttention: false,
-                missingLine: null,
-            },
+            }),
             groupKey: "placement",
             canMutate: true,
-            isFieldSaveSupported: isChildFocusFieldSaveSupported,
+            isFieldSaveSupported: childFieldSaveSupported,
         });
         const editable = vm.summaryRows.flatMap((row) => row.cells).some((cell) => cell.fieldRef === "inquiry_child.program" && cell.editable);
         expect(editable).toBe(true);
@@ -373,7 +401,7 @@ describe("composer/runtime reconciliation parity", () => {
         const runtime = reconcileIdentityNestedConfigFromDocMetadata(CHILDREN_SURFACE_ID, metadata);
         const composer = reconcileIdentityNestedConfigsFromMetadata(metadata)[CHILDREN_SURFACE_ID];
         expect(stableIdentityConfigSnapshot(composer)).toEqual(stableIdentityConfigSnapshot(runtime));
-        expect(readChildrenNestedConfigFromDoc({ metadata } as LayoutDoc)).toEqual(runtime);
+        expect(readChildrenNestedConfigFromDoc(docWithNestedSurfaces(metadata))).toEqual(runtime);
     });
 
     it("composer and runtime reconcile legacy household contact config identically", () => {
@@ -397,7 +425,7 @@ describe("composer/runtime reconciliation parity", () => {
         const runtime = reconcileIdentityNestedConfigFromDocMetadata(HOUSEHOLD_SURFACE_ID, metadata);
         const composer = reconcileIdentityNestedConfigsFromMetadata(metadata)[HOUSEHOLD_SURFACE_ID];
         expect(stableIdentityConfigSnapshot(composer)).toEqual(stableIdentityConfigSnapshot(runtime));
-        expect(readHouseholdNestedConfigFromDoc({ metadata } as LayoutDoc)).toEqual(runtime);
+        expect(readHouseholdNestedConfigFromDoc(docWithNestedSurfaces(metadata))).toEqual(runtime);
     });
 
     it("legacy configs are extracted only through legacyIdentityConfigsFromMetadata", () => {
@@ -451,20 +479,13 @@ describe("child expanded evidence composition", () => {
         config = addFieldToNestedGroup(config, "medical", "child.notes_summary", { tier: "expanded" });
         const vm = buildChildIdentityRecordVM({
             config,
-            child: {
-                id: "c1",
-                name: "Emma Johnson",
+            child: sampleChild({
                 program: null,
-                room: null,
-                schedule: null,
-                startDate: null,
-                dobAge: "Age 4",
                 needsAttention: false,
-                missingLine: null,
-            },
+            }),
             groupKey: "medical",
             canMutate: false,
-            isFieldSaveSupported: isChildFocusFieldSaveSupported,
+            isFieldSaveSupported: childFieldSaveSupported,
         });
         const summaryRefs = vm.summaryRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
         const expandedRefs = vm.expandedRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
@@ -522,20 +543,16 @@ describe("identity editability matrix", () => {
         config = setFieldVisibilityInNestedGroup(config, "child_edit", "child.readiness_summary", "editable");
         const vm = buildChildIdentityRecordVM({
             config,
-            child: {
-                id: "c1",
+            child: sampleChild({
                 name: "Emma",
                 program: null,
-                room: null,
-                schedule: null,
-                startDate: null,
                 dobAge: null,
                 needsAttention: true,
                 missingLine: "Needs program",
-            },
+            }),
             groupKey: "readiness",
             canMutate: true,
-            isFieldSaveSupported: isChildFocusFieldSaveSupported,
+            isFieldSaveSupported: childFieldSaveSupported,
         });
         const readiness = vm.summaryRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "child.readiness_summary");
         expect(readiness?.editable).toBe(false);
