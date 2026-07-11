@@ -1,0 +1,134 @@
+import { describe, expect, it } from "vitest";
+
+import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
+import { buildWorkItemBpLabelCatalogFromEntries } from "@/lib/workItems/workItemBpLabelCatalog";
+import {
+    mapProcessingCaseToWorkItemRow,
+    mapProcessingQueueToWorkItemRows,
+    processingWorkItemId,
+} from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
+import { projectWorkItemActivity } from "@/lib/workItems/workItemActivityProjection";
+import { projectWorkItemConversation } from "@/lib/workItems/workItemConversationProjection";
+import { taskMatchesSource } from "@/lib/workItems/workItemQueueScope";
+import { buildWorkItemProcessingProvenanceChain } from "@/lib/workItems/workItemProcessingProvenance";
+import { buildWorkItemBreadcrumb } from "@/lib/workItems/mapWorkItemQueueRow";
+import { buildMyTasksPresentationLabels } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
+
+describe("Work Items platform convergence", () => {
+    it("builds authoritative BP labels from lifecycle catalog entries", () => {
+        const catalog = buildWorkItemBpLabelCatalogFromEntries([
+            {
+                id: "dept:enrollment:proc",
+                config_source: "builder_owned",
+                department_id: "dept-enrollment",
+                department_key: "enrollment",
+                department_name: "Enrollment Department",
+                process_id: "proc-1",
+                process_key: "enrollment",
+                lifecycle_name: "Enrollment",
+                source: "builder_owned",
+                stage_count: 3,
+                track_count: 1,
+                work_unit_count: 1,
+                workspace: { tile_name: "Enrollment" },
+                validation: { status: "ok", detail: null },
+            } as never,
+        ]);
+        expect(catalog.processLabels["dept-enrollment"]).toBe("Enrollment");
+    });
+
+    it("projects Processing needs_review cases to Work Item rows", () => {
+        const row = mapProcessingCaseToWorkItemRow({
+            id: "case-1",
+            status: "needs_review",
+            caseType: "document",
+            createdAt: "2026-07-10T12:00:00.000Z",
+            statusChangedAt: "2026-07-10T12:00:00.000Z",
+            primarySource: { kind: "form_submission", id: "src-1", role: "primary", linkedAt: "2026-07-10T12:00:00.000Z" },
+            relatedSourceCount: 0,
+            sourceDisplay: {
+                kind: "form_submission",
+                id: "src-1",
+                label: "Enrollment Packet",
+                receivedAt: "2026-07-10T12:00:00.000Z",
+                channel: null,
+                resolved: true,
+            },
+        });
+        expect(row?.id).toBe(processingWorkItemId("case-1"));
+        expect(row?.source).toBe("processing");
+        expect(row?.processing_lane).toBe("needs_review");
+    });
+
+    it("filters processing source truthfully", () => {
+        const task: MyTasksTaskRow = {
+            id: processingWorkItemId("case-1"),
+            title: "Review",
+            description: null,
+            due_at: "2026-07-11T12:00:00.000Z",
+            status: "open",
+            source: "processing",
+            entity_id: null,
+            entity_type: null,
+            created_at: "2026-07-10T12:00:00.000Z",
+            processing_case_id: "case-1",
+        };
+        expect(taskMatchesSource(task, "processing")).toBe(true);
+        expect(taskMatchesSource(task, "manual")).toBe(false);
+    });
+
+    it("projects activity and conversation from existing task fields", () => {
+        const task: MyTasksTaskRow = {
+            id: "t1",
+            title: "Follow up",
+            description: "Called family",
+            due_at: "2026-07-11T12:00:00.000Z",
+            status: "open",
+            source: "manual",
+            entity_id: null,
+            entity_type: null,
+            created_at: "2026-07-10T12:00:00.000Z",
+            assigned_to_user_id: "u1",
+        };
+        expect(projectWorkItemActivity(task).some((e) => e.kind === "note")).toBe(true);
+        expect(projectWorkItemConversation(task).entries[0]?.text).toContain("Called family");
+    });
+
+    it("renders Processing provenance chain in breadcrumbs", () => {
+        const task: MyTasksTaskRow = {
+            id: processingWorkItemId("case-9"),
+            title: "Review: Packet",
+            description: null,
+            due_at: "2026-07-11T12:00:00.000Z",
+            status: "open",
+            source: "processing",
+            entity_id: null,
+            entity_type: null,
+            created_at: "2026-07-10T12:00:00.000Z",
+            processing_case_id: "case-9",
+            processing_lane: "needs_review",
+            processing_source_label: "Enrollment Packet",
+            is_processing_projection: true,
+        };
+        const chain = buildWorkItemProcessingProvenanceChain(task);
+        expect(chain[0]).toBe("Generated by Processing");
+        const breadcrumb = buildWorkItemBreadcrumb(task, buildMyTasksPresentationLabels({}), {}, {});
+        expect(breadcrumb).toContain("Generated by Processing");
+    });
+
+    it("ignores non-needs-review processing lanes", () => {
+        const rows = mapProcessingQueueToWorkItemRows([
+            {
+                id: "case-ready",
+                status: "ready",
+                caseType: null,
+                createdAt: "2026-07-10T12:00:00.000Z",
+                statusChangedAt: "2026-07-10T12:00:00.000Z",
+                primarySource: null,
+                relatedSourceCount: 0,
+                sourceDisplay: null,
+            },
+        ]);
+        expect(rows).toHaveLength(0);
+    });
+});

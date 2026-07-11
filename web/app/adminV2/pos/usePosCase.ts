@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { dispatchOperationalWorkRefresh } from "@/lib/workItems/operationalWorkRefresh";
 import type { ProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/types";
 import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
@@ -108,6 +109,10 @@ export function usePosCase(caseId: string | null): PosCaseState {
             if (!res.ok) throw new Error(`Request failed (${res.status})`);
             const body = (await res.json()) as { data?: { operationalResult?: HandoffResult | null } };
             setApproveResult(body.data?.operationalResult ?? null);
+            dispatchOperationalWorkRefresh({
+                processing_case_id: caseId,
+                kind: "complete",
+            });
             await reload();
         } catch (e) {
             setApproveErr(e instanceof Error ? e.message : "Approve failed");

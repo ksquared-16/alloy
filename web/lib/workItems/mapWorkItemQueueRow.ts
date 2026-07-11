@@ -1,4 +1,4 @@
-import { Bot, CheckCircle2, ListTodo, Workflow } from "lucide-react";
+import { Bot, CheckCircle2, FileSearch, ListTodo, Workflow } from "lucide-react";
 
 import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import {
@@ -15,6 +15,11 @@ import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOp
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import type { WorkspaceQueueRowUrgency } from "@/components/workspace/WorkspaceQueueRow";
 import { isBusinessProcessStageWorkTaskRow } from "@/lib/lifecycle/isBusinessProcessStageWorkTaskRow";
+import { isProcessingProjectedWorkItem } from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
+import {
+    buildWorkItemProcessingProvenanceChain,
+    formatWorkItemProcessingProvenanceChain,
+} from "@/lib/workItems/workItemProcessingProvenance";
 import {
     buildWorkItemBpBreadcrumb,
     type WorkItemBpLabelOptions,
@@ -50,6 +55,9 @@ export function buildWorkItemBreadcrumb(
     entityLabels: EntityLabelsMap,
     labelOptions?: WorkItemBpLabelOptions,
 ): string {
+    if (isProcessingProjectedWorkItem(task)) {
+        return formatWorkItemProcessingProvenanceChain(buildWorkItemProcessingProvenanceChain(task));
+    }
     const context = buildMyTasksRecordContextLines(task, presentation, entityLabels);
     const recordLabel = myTasksTaskHasLinkedRecord(task) ? context.entityLabel : null;
     const bpBreadcrumb = buildWorkItemBpBreadcrumb(task, {
@@ -67,6 +75,12 @@ export function buildWorkItemBreadcrumb(
 }
 
 export function buildWorkItemBosSummary(task: MyTasksTaskRow, labelOptions?: WorkItemBpLabelOptions): string {
+    if (isProcessingProjectedWorkItem(task)) {
+        const due = formatOperationalTaskDueDisplay(task.due_at);
+        const chain = formatWorkItemProcessingProvenanceChain(buildWorkItemProcessingProvenanceChain(task));
+        const detail = task.description?.trim() || "Open in Processing to review.";
+        return `${chain} · Due ${due} · ${detail}`;
+    }
     const due = formatOperationalTaskDueDisplay(task.due_at);
     const normalizedTitle = normalizeOperationalTaskTitleDisplay(task.title);
     const detail = task.description?.trim() || "No additional BOS notes yet.";
@@ -90,20 +104,21 @@ export function mapWorkItemQueueRow(
 ): WorkspaceQueueRowModel {
     const urgency = operationalTaskUrgencyBadge(task).urgency;
     const isCompleted = urgency === "completed" || urgency === "canceled";
-    const isBpWork = isBusinessProcessStageWorkTaskRow(task);
+    const isProcessing = isProcessingProjectedWorkItem(task);
+    const isBpWork = !isProcessing && isBusinessProcessStageWorkTaskRow(task);
     const source = task.source.trim().toLowerCase();
     const isWaiting = !isBpWork && task.status.trim().toLowerCase() === "open" && source === "task_assist";
 
     return {
         id: task.id,
-        leadingIcon: isBpWork ? Workflow : source === "task_assist" ? Bot : source === "manual" ? ListTodo : CheckCircle2,
+        leadingIcon: isProcessing ? FileSearch : isBpWork ? Workflow : source === "task_assist" ? Bot : source === "manual" ? ListTodo : CheckCircle2,
         title: normalizeOperationalTaskTitleDisplay(task.title),
-        badge: isBpWork ? "BP" : source === "task_assist" ? "BOS" : undefined,
+        badge: isProcessing ? "Processing" : isBpWork ? "BP" : source === "task_assist" ? "BOS" : undefined,
         breadcrumb: buildWorkItemBreadcrumb(task, options.presentation, options.entityLabels, options.labelOptions),
         snippet: task.description?.trim() || undefined,
         dueOrTime: `Due ${formatOperationalTaskDueDisplay(task.due_at)}`,
         assigneeInitials: assigneeInitials(task.assignee_label),
-        trailingMeta: isBpWork ? "Business Process" : formatOperationalTaskSourceLabel(task.source),
+        trailingMeta: isProcessing ? "Needs review" : isBpWork ? "Business Process" : formatOperationalTaskSourceLabel(task.source),
         urgency,
         isWaiting,
         completed: isCompleted,

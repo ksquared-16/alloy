@@ -61,7 +61,20 @@ import {
 } from "@/lib/workItems/workItemQueueScope";
 import { mapWorkItemQueueRow } from "@/lib/workItems/mapWorkItemQueueRow";
 import { buildWorkItemProcessLabelsFromTasks } from "@/lib/workItems/workItemBpProvenance";
+import { fetchWorkItemBpLabelCatalog } from "@/lib/workItems/workItemBpLabelCatalog";
+import {
+    isProcessingProjectedWorkItem,
+    mapProcessingQueueToWorkItemRows,
+    parseProcessingCaseIdFromWorkItemId,
+} from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
+import {
+    ADMIN_V2_PROCESSING_QUEUE_REFRESH,
+    dispatchOperationalWorkRefresh,
+} from "@/lib/workItems/operationalWorkRefresh";
+import { dispatchOpenProcessingCase } from "@/lib/workItems/workItemsNavigation";
+import { getProcessingQueueWarmSnapshot, subscribeProcessingQueueWarm, warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import { dispatchFocusCurrentWork } from "@/lib/workItems/workItemsNavigation";
+
 import { draftToOperationalTaskBody } from "@/lib/workItems/commitWorkItemDraft";
 import { markSessionCommitted, type WorkItemCreationSession } from "@/lib/workItems/workItemCreationRuntime";
 import type { WorkItemDraftEntity } from "@/lib/workItems/workItemDraftV1";
@@ -185,6 +198,8 @@ export default function MyTasksPanel({
     const [outcomeTaskId, setOutcomeTaskId] = useState<string | null>(null);
     const [outcomeContext, setOutcomeContext] = useState<StageWorkOutcomeResolution | null>(null);
     const [outcomeOptions, setOutcomeOptions] = useState<StageCompletionOutcomeV1[]>([]);
+    const [catalogProcessLabels, setCatalogProcessLabels] = useState<Record<string, string>>({});
+    const [processingWarmNonce, setProcessingWarmNonce] = useState(0);
 
     const openCreateForm = useCallback(() => {
         setCreateOpen(true);
@@ -205,7 +220,6 @@ export default function MyTasksPanel({
     useEffect(() => {
         if (navSelectedTaskId) setSelectedTaskId(navSelectedTaskId);
     }, [navSelectedTaskId]);
-
     const load = useCallback(async () => {
         if (!workEnabled) return;
         const serverFilter = resolveServerFilterForView(scope.view);
@@ -237,6 +251,29 @@ export default function MyTasksPanel({
     useEffect(() => {
         void load();
     }, [load]);
+    useEffect(() => {
+        if (!workEnabled) return;
+        void fetchWorkItemBpLabelCatalog().then((catalog) => setCatalogProcessLabels(catalog.processLabels));
+        void warmProcessingQueueCache();
+    }, [workEnabled]);
+
+    useEffect(() => {
+        if (!workEnabled) return;
+        return subscribeProcessingQueueWarm(() => setProcessingWarmNonce((n) => n + 1));
+    }, [workEnabled]);
+
+    useEffect(() => {
+        if (!workEnabled) return;
+        const onProcessingRefresh = () => {
+            setProcessingWarmNonce((n) => n + 1);
+            void load();
+        };
+        window.addEventListener(ADMIN_V2_PROCESSING_QUEUE_REFRESH, onProcessingRefresh);
+        return () => window.removeEventListener(ADMIN_V2_PROCESSING_QUEUE_REFRESH, onProcessingRefresh);
+    }, [load, workEnabled]);
+
+
+
 
     const presentation = useMemo(() => {
         const guardianFromTasks = tasks.find((t) => t.contact_field_label?.trim())?.contact_field_label ?? null;
@@ -253,13 +290,13 @@ export default function MyTasksPanel({
         });
     }, [selectedSiteId, tasks]);
 
-    const bpLabelOptions = useMemo(
-        () => ({
-            processLabels: buildWorkItemProcessLabelsFromTasks(siteScopedTasks, "Enrollment"),
+    const bpLabelOptions = useMemo(() => {
+        const derived = buildWorkItemProcessLabelsFromTasks(siteScopedTasks, "Enrollment");
+        return {
+            processLabels: { ...derived, ...catalogProcessLabels },
             fallbackProcessLabel: "Enrollment",
-        }),
-        [siteScopedTasks],
-    );
+        };
+    }, [catalogProcessLabels, siteScopedTasks]);
 
     const processGroups = useMemo(
         () =>
@@ -270,9 +307,24 @@ export default function MyTasksPanel({
         [bpLabelOptions.processLabels, siteScopedTasks],
     );
 
+    const processingProjectedTasks = useMemo(() => {
+        void processingWarmNonce;
+        const warm = getProcessingQueueWarmSnapshot().data?.rows ?? [];
+        return mapProcessingQueueToWorkItemRows(warm);
+    }, [processingWarmNonce]);
+
+    const mergedTasks = useMemo(() => {
+        const byId = new Map<string, MyTasksTaskRow>();
+        for (const t of siteScopedTasks) byId.set(t.id, t);
+        for (const t of processingProjectedTasks) {
+            if (!byId.has(t.id)) byId.set(t.id, t);
+        }
+        return Array.from(byId.values());
+    }, [processingProjectedTasks, siteScopedTasks]);
+
     const scopedTasks = useMemo(() => {
-        return applyWorkItemQueueScope(siteScopedTasks, scope, processGroups, userId?.trim() || null);
-    }, [processGroups, scope, siteScopedTasks, userId]);
+        return applyWorkItemQueueScope(mergedTasks, scope, processGroups, userId?.trim() || null);
+    }, [mergedTasks, processGroups, scope, userId]);
 
     const visibleTasks = useMemo(() => {
         const q = searchQuery.trim();
@@ -297,8 +349,8 @@ export default function MyTasksPanel({
     );
 
     const sourceCounts = useMemo(
-        () => Object.fromEntries(WORK_ITEM_SOURCE_DEFS.map((def) => [def.key, countTasksForSource(siteScopedTasks, def.key)])),
-        [siteScopedTasks],
+        () => Object.fromEntries(WORK_ITEM_SOURCE_DEFS.map((def) => [def.key, countTasksForSource(mergedTasks, def.key)])),
+        [mergedTasks],
     );
 
     const opportunityEntitySingular = presentation.opportunityEntitySingular;
@@ -313,13 +365,12 @@ export default function MyTasksPanel({
         return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
     }, [load]);
 
-    const dispatchRefresh = useCallback(() => {
-        if (typeof window !== "undefined") {
-            window.dispatchEvent(
-                new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, { detail: { opportunity_id: "" } }),
-            );
-        }
-    }, []);
+    const dispatchRefresh = useCallback(
+        (detail?: { opportunity_id?: string | null; processing_case_id?: string | null; task_id?: string | null; kind?: "mutation" | "complete" | "processing_review" }) => {
+            dispatchOperationalWorkRefresh(detail ?? {});
+        },
+        [],
+    );
 
     const clearForms = useCallback(() => {
         setEditingId(null);
@@ -367,8 +418,21 @@ export default function MyTasksPanel({
         [adminDrawer, onClose],
     );
 
+    const onOpenProcessing = useCallback((task: MyTasksTaskRow) => {
+        const caseId = task.processing_case_id?.trim() || parseProcessingCaseIdFromWorkItemId(task.id);
+        if (!caseId) return;
+        dispatchOpenProcessingCase(caseId);
+        onClose?.();
+    }, [onClose]);
+
     const onPatchStatus = useCallback(
         async (id: string, status: "completed" | "canceled") => {
+            const processingCaseId = parseProcessingCaseIdFromWorkItemId(id);
+            if (processingCaseId) {
+                dispatchRefresh({ processing_case_id: processingCaseId, kind: "processing_review" });
+                await load();
+                return;
+            }
             setActionId(id);
             try {
                 const res = await patchOperationalTaskStatus(id, status);
@@ -388,6 +452,10 @@ export default function MyTasksPanel({
 
     const onCompleteTask = useCallback(
         async (task: MyTasksTaskRow) => {
+            if (isProcessingProjectedWorkItem(task)) {
+                onOpenProcessing(task);
+                return;
+            }
             setActionId(task.id);
             setError(null);
             try {
@@ -412,7 +480,7 @@ export default function MyTasksPanel({
                 setActionId(null);
             }
         },
-        [onPatchStatus],
+        [onOpenProcessing, onPatchStatus],
     );
 
     const onSelectOutcome = useCallback(
@@ -550,6 +618,7 @@ export default function MyTasksPanel({
     const selectedTask = visibleTasks.find((t) => t.id === selectedTaskId) ?? null;
 
     const renderTaskCard = (t: MyTasksTaskRow) => {
+        if (isProcessingProjectedWorkItem(t)) return null;
         const mode =
             editingId === t.id ? "edit"
             : rescheduleId === t.id ? "reschedule"

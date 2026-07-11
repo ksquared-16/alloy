@@ -53,7 +53,23 @@ export default function WorkItemBpContextPanel({
                     <dd className="truncate text-right">{task.title}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                    <dt className="text-alloy-midnight/45">Current Work</dt>
+                    <dt className="text-alloy-midnight/45">Stage position</dt>
+                    <dd>{stageLabel ? `In ${stageLabel}` : "Unavailable until stage runtime is linked"}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                    <dt className="text-alloy-midnight/45">Operating plan</dt>
+                    <dd>{task.work_definition_key?.replace(/[_-]+/g, " ") ?? task.title}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                    <dt className="text-alloy-midnight/45">Previous outcome</dt>
+                    <dd>See Current Work on the record</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                    <dt className="text-alloy-midnight/45">Next expected outcome</dt>
+                    <dd>Configured in stage operating plan</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                    <dt className="text-alloy-midnight/45">Current Work state</dt>
                     <dd>Same execution on the linked record</dd>
                 </div>
             </dl>

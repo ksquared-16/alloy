@@ -28,4 +28,9 @@ export type MyTasksTaskRow = {
     lifecycle_stage_key?: string | null;
     work_definition_key?: string | null;
     lifecycle_provenance?: string | null;
+    /** Processing convergence — projected or linked processing case. */
+    processing_case_id?: string | null;
+    processing_lane?: string | null;
+    processing_source_label?: string | null;
+    is_processing_projection?: boolean;
 };

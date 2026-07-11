@@ -91,8 +91,7 @@ export const WORK_ITEM_SOURCE_DEFS: WorkItemSourceDef[] = [
     {
         key: "processing",
         label: "Processing",
-        available: false,
-        deferredReason: "Processing-sourced work arrives in a later slice",
+        available: true,
     },
     {
         key: "communications",
@@ -174,10 +173,13 @@ export function filterTasksByView(tasks: MyTasksTaskRow[], view: WorkItemViewKey
 export function taskMatchesSource(task: MyTasksTaskRow, source: WorkItemSourceKey): boolean {
     if (source === "all") return true;
     const src = (task.source ?? "").trim().toLowerCase();
-    if (source === "manual") return src === "manual";
+    if (source === "manual") return src === "manual" && !task.processing_case_id?.trim();
     if (source === "bos") return src === "task_assist" || src === "bos_work_item";
     if (source === "business_process") {
         return Boolean(task.department_id?.trim() || task.lifecycle_provenance?.trim());
+    }
+    if (source === "processing") {
+        return Boolean(task.processing_case_id?.trim()) || src === "processing";
     }
     return false;
 }

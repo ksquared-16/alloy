@@ -8,12 +8,16 @@ import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import type { MyTasksPresentationLabels } from "@/lib/agent/taskAssist/myTasksPresentationLabels";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import { formatOperationalTaskDueDisplay } from "@/lib/agent/taskAssist/formatOperationalTaskSourceLabel";
+import WorkItemActivityPanel from "@/components/workItems/WorkItemActivityPanel";
 import WorkItemBpContextPanel from "@/components/workItems/WorkItemBpContextPanel";
+import WorkItemConversationPanel from "@/components/workItems/WorkItemConversationPanel";
+import WorkItemProcessingContextPanel from "@/components/workItems/WorkItemProcessingContextPanel";
 import WorkItemCreateModal from "@/components/workItems/WorkItemCreateModal";
 import { buildWorkItemBosSummary, buildWorkItemBreadcrumb } from "@/lib/workItems/mapWorkItemQueueRow";
 import type { WorkItemCreationSession } from "@/lib/workItems/workItemCreationRuntime";
 import type { WorkItemDraftEntity } from "@/lib/workItems/workItemDraftV1";
 import type { WorkItemBpLabelOptions } from "@/lib/workItems/workItemBpProvenance";
+import { isProcessingProjectedWorkItem } from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
 
 type DetailTabKey = "overview" | "activity" | "conversation" | "related";
 
@@ -38,6 +42,7 @@ export type WorkItemDetailPanelProps = {
     bpLabelOptions?: WorkItemBpLabelOptions;
     onOpenRecord?: () => void;
     onOpenCurrentWork?: () => void;
+    onOpenProcessing?: () => void;
 };
 
 function EmptyDetailState() {
@@ -66,6 +71,7 @@ export default function WorkItemDetailPanel({
     bpLabelOptions,
     onOpenRecord,
     onOpenCurrentWork,
+    onOpenProcessing,
 }: WorkItemDetailPanelProps) {
     const [activeTab, setActiveTab] = useState<DetailTabKey>("overview");
 
@@ -127,6 +133,9 @@ export default function WorkItemDetailPanel({
             <div className="min-h-0 flex-1 overflow-y-auto pt-3">
                 {activeTab === "overview" ? (
                     <div className="space-y-3">
+                        {task && isProcessingProjectedWorkItem(task) ?
+                            <WorkItemProcessingContextPanel task={task} onOpenProcessing={onOpenProcessing} />
+                        :   null}
                         <WorkItemBpContextPanel
                             task={task}
                             labelOptions={bpLabelOptions}
@@ -160,21 +169,15 @@ export default function WorkItemDetailPanel({
                             </dl>
                         </div>
 
-                        <div data-work-items-detail-task-card="true">{taskCard}</div>
+                        {!isProcessingProjectedWorkItem(task) ?
+                            <div data-work-items-detail-task-card="true">{taskCard}</div>
+                        :   null}
                     </div>
                 ) : null}
 
-                {activeTab === "activity" ? (
-                    <div className="rounded-lg border border-dashed border-alloy-stone/20 px-3 py-8 text-center text-[12px] text-alloy-midnight/48">
-                        Activity timeline lands in the next slice.
-                    </div>
-                ) : null}
+                {activeTab === "activity" ? <WorkItemActivityPanel task={task} /> : null}
 
-                {activeTab === "conversation" ? (
-                    <div className="rounded-lg border border-dashed border-alloy-stone/20 px-3 py-8 text-center text-[12px] text-alloy-midnight/48">
-                        Conversation context lands in the next slice.
-                    </div>
-                ) : null}
+                {activeTab === "conversation" ? <WorkItemConversationPanel task={task} /> : null}
 
                 {activeTab === "related" ? (
                     <div className="space-y-3">
