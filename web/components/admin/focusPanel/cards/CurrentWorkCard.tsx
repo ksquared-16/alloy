@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import clsx from "clsx";
 
 import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
 import StageWorkOutcomeConfirm from "@/components/workIntent/StageWorkOutcomeConfirm";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
-import CurrentWorkActivityPreview from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
+import CurrentWorkActivityPreview, {
+    type CurrentWorkActivityPreviewItem,
+} from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 import { useWorkIntentOutcomeCompletion } from "@/components/workIntent/useWorkIntentOutcomeCompletion";
-import { buildCurrentWorkActivityPreviewItems } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
+import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
 import { buildCurrentWorkCardEvidence } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
 import { buildOutcomeCompletionSummary } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildOutcomeCompletionSummary";
 import type { CurrentWorkChecklistItem } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
@@ -63,12 +65,24 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     const [activityPreviewOpen, setActivityPreviewOpen] = useState(false);
 
     const activityPreviewItems = useMemo(
-        () => buildCurrentWorkActivityPreviewItems(context),
-        [context],
+        () => buildCurrentWorkActivityPreviewItemsFromContext(context, {
+            currentWorkId: vm.primaryWorkItem?.work_id ?? undefined,
+            workTemplateKey: vm.primaryWorkItem?.template_key ?? undefined,
+        }),
+        [context, vm.primaryWorkItem?.template_key, vm.primaryWorkItem?.work_id],
     );
 
     const closeActionPanel = useCallback(() => {
         setActivePanelAction(null);
+    }, []);
+
+    const handleViewFullActivity = useCallback(() => {
+        setActivityPreviewOpen(false);
+        coordination?.openFocusPanelMode?.("activity");
+    }, [coordination]);
+
+    const handleCloseActivityPreview = useCallback(() => {
+        setActivityPreviewOpen(false);
     }, []);
 
     const handleActionPanelComplete = useCallback(() => {
@@ -335,7 +349,8 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 summary={completionSummary}
                 activityPreviewOpen={activityPreviewOpen}
                 onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
-                onCloseActivityPreview={() => setActivityPreviewOpen(false)}
+                onCloseActivityPreview={handleCloseActivityPreview}
+                onViewFullActivity={handleViewFullActivity}
                 activityPreviewItems={activityPreviewItems}
                 onContinue={() => {
                     resetCompletion();
@@ -388,7 +403,8 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 onAction={invokeAction}
                 activityPreviewOpen={activityPreviewOpen}
                 onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
-                onCloseActivityPreview={() => setActivityPreviewOpen(false)}
+                onCloseActivityPreview={handleCloseActivityPreview}
+                onViewFullActivity={handleViewFullActivity}
                 activityPreviewItems={activityPreviewItems}
             />;
 
@@ -552,14 +568,18 @@ function ActivityFooter({
     activityPreviewOpen,
     onToggleActivityPreview,
     onCloseActivityPreview,
+    onViewFullActivity,
     activityPreviewItems,
 }: {
     surface: CurrentWorkSurfaceVM;
     activityPreviewOpen: boolean;
     onToggleActivityPreview: () => void;
     onCloseActivityPreview: () => void;
-    activityPreviewItems: ReturnType<typeof buildCurrentWorkActivityPreviewItems>;
+    onViewFullActivity?: () => void;
+    activityPreviewItems: CurrentWorkActivityPreviewItem[];
 }) {
+    const triggerRef = useRef<HTMLButtonElement>(null);
+
     return (
         <div className="alloy-os-currentwork__activity-footer" data-work-activity-footer="true">
             {surface.lastActivity ?
@@ -574,6 +594,7 @@ function ActivityFooter({
             :   null}
             <div className="alloy-os-currentwork__activity-link-wrap">
                 <button
+                    ref={triggerRef}
                     type="button"
                     className="alloy-os-currentwork__activity-link"
                     onClick={onToggleActivityPreview}
@@ -586,6 +607,8 @@ function ActivityFooter({
                     open={activityPreviewOpen}
                     items={activityPreviewItems}
                     onClose={onCloseActivityPreview}
+                    onViewFullActivity={onViewFullActivity}
+                    triggerRef={triggerRef}
                 />
             </div>
         </div>
@@ -601,6 +624,7 @@ function SummaryBody({
     activityPreviewOpen,
     onToggleActivityPreview,
     onCloseActivityPreview,
+    onViewFullActivity,
     activityPreviewItems,
 }: {
     surface: CurrentWorkSurfaceVM;
@@ -611,7 +635,8 @@ function SummaryBody({
     activityPreviewOpen: boolean;
     onToggleActivityPreview: () => void;
     onCloseActivityPreview: () => void;
-    activityPreviewItems: ReturnType<typeof buildCurrentWorkActivityPreviewItems>;
+    onViewFullActivity?: () => void;
+    activityPreviewItems: CurrentWorkActivityPreviewItem[];
 }) {
     const helpfulActions = [...surface.supportingActions, ...surface.communicationActions];
     return (
@@ -633,6 +658,7 @@ function SummaryBody({
                 activityPreviewOpen={activityPreviewOpen}
                 onToggleActivityPreview={onToggleActivityPreview}
                 onCloseActivityPreview={onCloseActivityPreview}
+                onViewFullActivity={onViewFullActivity}
                 activityPreviewItems={activityPreviewItems}
             />
         </div>
@@ -799,6 +825,7 @@ function OutcomeCompleteBody({
     activityPreviewOpen,
     onToggleActivityPreview,
     onCloseActivityPreview,
+    onViewFullActivity,
     activityPreviewItems,
     onContinue,
 }: {
@@ -807,9 +834,12 @@ function OutcomeCompleteBody({
     activityPreviewOpen: boolean;
     onToggleActivityPreview: () => void;
     onCloseActivityPreview: () => void;
-    activityPreviewItems: ReturnType<typeof buildCurrentWorkActivityPreviewItems>;
+    onViewFullActivity?: () => void;
+    activityPreviewItems: CurrentWorkActivityPreviewItem[];
     onContinue: () => void;
 }) {
+    const triggerRef = useRef<HTMLButtonElement>(null);
+
     return (
         <div className="alloy-os-currentwork__complete" data-work-completion="complete">
             <p className="alloy-os-currentwork__complete-eyebrow">Current Work</p>
@@ -836,6 +866,7 @@ function OutcomeCompleteBody({
             <div className="alloy-os-card-nav" data-work-complete-actions="true">
                 <div className="alloy-os-currentwork__activity-link-wrap">
                     <button
+                        ref={triggerRef}
                         type="button"
                         className="alloy-os-ucard__action alloy-os-ucard__action--system5"
                         onClick={onToggleActivityPreview}
@@ -848,6 +879,8 @@ function OutcomeCompleteBody({
                         open={activityPreviewOpen}
                         items={activityPreviewItems}
                         onClose={onCloseActivityPreview}
+                        onViewFullActivity={onViewFullActivity}
+                        triggerRef={triggerRef}
                     />
                 </div>
                 <button
