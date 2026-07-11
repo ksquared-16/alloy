@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { enrichCommandCenterConversations } from "@/lib/communications/v2/commandCenterConversationEnrichment";
+import { prepareCommandCenterQueue } from "@/lib/communications/v2/commandCenterViewModel";
 
 /**
  * GET /api/admin/communications/conversations — org-scoped conversation summaries for the
@@ -71,7 +72,9 @@ export async function GET() {
         }
     }
 
-    const conversations = await enrichCommandCenterConversations(supabase, ctx.orgId, rows, unreadByThread);
+    const conversations = prepareCommandCenterQueue(
+        await enrichCommandCenterConversations(supabase, ctx.orgId, rows, unreadByThread)
+    );
 
     return NextResponse.json({ conversations });
 }
