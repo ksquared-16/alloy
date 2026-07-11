@@ -29,7 +29,9 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
 import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
-import type { IdentityCardVM, IdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { CONTACT_EDIT_FIELD_MAP } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
+import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 
 function initialsFor(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -231,6 +233,38 @@ export function buildHouseholdIdentityCardVM(args: {
         return [{ key: section.key, label, items, emptyState: items.length === 0 ? section.emptyState : undefined }];
     });
     return { surfaceKey, sections };
+}
+
+/** Build shared identity field rows for household contact edit from canonical config. */
+export function buildHouseholdContactEditFieldRows(args: {
+    config: NestedSurfaceConfig | null;
+    values: PersonContactValues;
+    canMutate?: boolean;
+}): IdentityFieldRowVM[] {
+    const config = reconcileIdentityNestedConfig({
+        surfaceKey: "household_surface",
+        currentConfig: args.config,
+    });
+    const subject: IdentityComposeSubject = { kind: "contact_edit", value: args.values };
+    const summaryRows = buildRecordRows({
+        config,
+        groupKey: "contact_edit",
+        subject,
+        tier: "summary",
+        canMutate: args.canMutate ?? true,
+        editGroupKey: "contact_edit",
+        isFieldSaveSupported: (fieldRef) => fieldRef in CONTACT_EDIT_FIELD_MAP,
+    });
+    const expandedRows = buildRecordRows({
+        config,
+        groupKey: "contact_edit",
+        subject,
+        tier: "expanded",
+        canMutate: args.canMutate ?? true,
+        editGroupKey: "contact_edit",
+        isFieldSaveSupported: (fieldRef) => fieldRef in CONTACT_EDIT_FIELD_MAP,
+    });
+    return [...summaryRows, ...expandedRows];
 }
 
 /** Build children identity VM for one child record. */

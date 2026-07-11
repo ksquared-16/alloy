@@ -44,14 +44,53 @@ Fields must appear immediately in Builder, survive publish/reload, and render at
 
 ### Builder / runtime parity
 
-Builder and runtime consume the same published config shape and the same adapters:
+Builder and runtime normalize identity configuration through **one canonical adapter**:
 
-- `reconcileIdentityNestedConfig`
+- `reconcileIdentityNestedConfig` — object form with `surfaceKey`, `currentConfig`, `legacyConfigs`
+- `reconcileIdentityNestedConfigFromDocMetadata` — runtime doc read boundary
+- `reconcileIdentityNestedConfigsFromMetadata` — Composer draft initialization and published-doc reload
+- `legacyIdentityConfigsFromMetadata` — extracts `child_surface` and `household_contact_surface` from metadata
+
+All household/children reads route through this path:
+
+- Runtime: `readHouseholdNestedConfigFromDoc`, `readChildrenNestedConfigFromDoc`
+- Composer: `FocusPanelComposerProvider.configFor`, `FocusPanelSummarySurfaceEditor.readNestedSurfacesFromDoc`
+
+VM projection and rendering share:
+
 - `identitySurfaceFromNestedConfig`
-- `buildIdentityCardVM` family
+- `buildIdentityCardVM` family (`buildHouseholdContactEditFieldRows`, `buildChildIdentityRecordVM`, …)
 - shared renderer components under `web/components/admin/focusPanel/identity/`
 
-Builder may use representative preview data; runtime uses `OperationalContext.truth`.
+Builder may use representative preview data; runtime uses `OperationalContext.truth`. **Layout, field order, widths, icons, labels, and policies must match** after reconciliation.
+
+### Contact edit and expanded evidence
+
+- **Household contact edit** (`HouseholdContactEdit`) derives field rows from `buildHouseholdContactEditFieldRows` — same placement resolver, metadata, and policies as runtime summary/details. Form inputs are edit-depth controls only; save continues through `householdContactPatch` + `savePersonContact`.
+- **Child expanded evidence** (`ChildExpandedEvidence`) routes configured archive fields through `buildChildIdentityRecordVM` + `IdentityFieldGrid`. Domain section chrome (`EvidenceGroup`) remains; field grammar is shared.
+
+### Edit completion semantics
+
+Edit completion is defined as **save success plus authoritative truth refresh → VM recompose**, not callback dispatch alone. Failed saves must not retain optimistic values in the VM.
+
+Tests: `identitySurfaceSaveRefresh.test.ts` (household contact, child focus, expanded tier, failure semantics).
+
+## Intentional domain adapters
+
+These remain domain-specific by design — not accidental drift:
+
+| Adapter | Role |
+| --- | --- |
+| `ChildFocusEdit` | Dedicated child edit form + `saveInquiryChild` command path |
+| `ChildScheduleBlock` | Structured schedule chips in focus tier |
+| `NestedSurfaceFieldLayoutSurface` | Composer builder drag layout (builder-only) |
+| `InlineRuntimeFieldList` | Composer contact-edit preview chrome |
+| `EvidenceGroup` | Domain section wrapper around shared `IdentityFieldGrid` in child evidence archive |
+| `CONTACT_EDIT_FIELD_MAP` | Maps canonical `contact.*` field refs to `PersonContactValues` keys for save |
+| `childNestedSurfaceRuntime.ts` | Compatibility authoring seed for `child_surface` (not runtime presentation) |
+| `householdNestedSurfaceRuntime.ts` | Legacy `fieldModes` authoring seed helpers (reconciled at read) |
+
+Direct `child_surface`, `household_contact_surface`, and `fieldModes` reads outside `identitySurfaceCompat.ts` and settings model seeds are not permitted for presentation.
 
 ## Deprecations
 
@@ -70,4 +109,4 @@ Builder may use representative preview data; runtime uses `OperationalContext.tr
 | Field compose | `web/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose.ts` |
 | VM projection | `web/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM.ts` |
 | Renderer | `web/components/admin/focusPanel/identity/*` |
-| Tests | `web/tests/adminV2/runtime/identitySurfaceComposition.test.ts` |
+| Tests | `web/tests/adminV2/runtime/identitySurfaceComposition.test.ts`, `identitySurfaceSaveRefresh.test.ts` |

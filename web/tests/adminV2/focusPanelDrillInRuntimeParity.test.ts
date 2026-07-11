@@ -292,6 +292,8 @@ describe("domain-locked child expanded sections", () => {
             "utf8",
         );
         expect(src).toContain("ChildExpandedEvidence");
+        expect(src).toContain("buildChildIdentityRecordVM");
+        expect(src).toContain("IdentityFieldGrid");
         expect(src).toContain("childrenEvidenceSectionsFromNestedConfig");
         expect(src).toContain("readChildrenNestedConfigFromDoc");
         expect(src).not.toContain("readChildNestedConfigFromDoc");
@@ -302,8 +304,8 @@ describe("domain-locked child expanded sections", () => {
             fileURLToPath(new URL("../../components/admin/focusPanel/cards/HouseholdContactEdit.tsx", import.meta.url)),
             "utf8",
         );
-        expect(src).toContain("householdContactEditFieldPolicy");
-        expect(src).toContain("householdGroupFieldKeys");
+        expect(src).toContain("buildHouseholdContactEditFieldRows");
+        expect(src).toContain("IdentityFieldGrid");
         expect(src).toContain("householdContactPatch");
     });
 });

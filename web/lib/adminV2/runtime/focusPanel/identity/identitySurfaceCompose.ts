@@ -11,9 +11,12 @@ import type { HouseholdEvidenceChildExtended } from "@/lib/adminV2/runtime/focus
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { fieldPresentationLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 
+import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+
 export type IdentityComposeSubject =
     | { kind: "child"; value: ChildrenEvidenceChild | HouseholdEvidenceChildExtended }
     | { kind: "person"; value: HouseholdEvidenceContact }
+    | { kind: "contact_edit"; value: PersonContactValues }
     | { kind: "employee"; value: { id: string; name: string; title?: string | null; department?: string | null; email?: string | null; phone?: string | null; badge?: string | null; imageUrl?: string | null } };
 
 export type ComposedIdentityLine = {
@@ -75,6 +78,22 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
                 ? subject.value.missingLine
                 : "Ready"
             : null,
+    "child.medical_summary": () => null,
+    "child.documents_summary": () => null,
+    "child.pickup_summary": () => null,
+    "child.communications_summary": () => null,
+    "child.notes_summary": () => null,
+};
+
+const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {
+    "contact.first_name": (subject) =>
+        subject.kind === "contact_edit" ? subject.value.first_name?.trim() || null : null,
+    "contact.last_name": (subject) =>
+        subject.kind === "contact_edit" ? subject.value.last_name?.trim() || null : null,
+    "contact.email": (subject) =>
+        subject.kind === "contact_edit" ? subject.value.email?.trim() || null : null,
+    "contact.phone": (subject) =>
+        subject.kind === "contact_edit" ? subject.value.phone?.trim() || null : null,
 };
 
 const PERSON_RESOLVERS: Record<string, Resolver> = {
@@ -97,6 +116,7 @@ const EMPLOYEE_RESOLVERS: Record<string, Resolver> = {
 const RESOLVERS: Record<string, Resolver> = {
     ...CHILD_RESOLVERS,
     ...PERSON_RESOLVERS,
+    ...CONTACT_EDIT_RESOLVERS,
     ...EMPLOYEE_RESOLVERS,
 };
 
@@ -130,7 +150,12 @@ export function composedIdentityDisplayName(
         return subject.value.name || fallbackName;
     }
     if (subject.kind === "person") return subject.value.name || fallbackName;
-    return subject.value.name || fallbackName;
+    if (subject.kind === "employee") return subject.value.name || fallbackName;
+    if (subject.kind === "contact_edit") {
+        const full = [subject.value.first_name, subject.value.last_name].filter(Boolean).join(" ").trim();
+        return full || fallbackName;
+    }
+    return fallbackName;
 }
 
 export function composedIdentityLines(args: {

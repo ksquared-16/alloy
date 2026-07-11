@@ -12,16 +12,26 @@ import {
     setFieldLayoutWidthInNestedGroup,
     setFieldPresentationLabel,
     setFieldVisibilityInNestedGroup,
+    setNestedGroupEnabled,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     adaptChildSurfaceToChildrenSurface,
     adaptHouseholdContactSurfaceToHouseholdSurface,
     generateDefaultPlacementsForGroup,
+    legacyIdentityConfigsFromMetadata,
     reconcileFieldModesToPolicies,
     reconcileIdentityNestedConfig,
+    reconcileIdentityNestedConfigFromDocMetadata,
+    reconcileIdentityNestedConfigsFromMetadata,
     resolveIdentityFieldPolicy,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { readChildrenNestedConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
+import { readHouseholdNestedConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
+import {
+    buildHouseholdContactEditFieldRows,
+} from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
+import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { resolveIdentityFieldRows } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
 import {
@@ -319,6 +329,148 @@ describe("shared model proof", () => {
         expect(contactEdit.selectedFieldKeys).toEqual(["contact.email", "contact.phone"]);
         expect(contactEdit.fieldPolicies?.["contact.email"]).toBe("hidden");
         expect(contactEdit.fieldPolicies?.["contact.phone"]).toBe("read-only");
+    });
+});
+
+function stableIdentityConfigSnapshot(config: NestedSurfaceConfig | null) {
+    if (!config) return null;
+    return {
+        surfaceId: config.surfaceId,
+        groups: config.groups.map((group) => ({
+            key: group.key,
+            selectedFieldKeys: group.selectedFieldKeys,
+            expandedFieldKeys: group.expandedFieldKeys,
+            fieldPolicies: group.fieldPolicies,
+            fieldLayoutWidths: group.fieldLayoutWidths,
+            fieldPlacements: group.fieldPlacements?.map((placement) => ({
+                fieldRef: placement.fieldRef,
+                tier: placement.tier,
+                row: placement.row,
+                column: placement.column,
+                width: placement.width,
+                policy: placement.policy,
+            })),
+        })),
+    };
+}
+
+describe("composer/runtime reconciliation parity", () => {
+    it("composer and runtime reconcile legacy child_surface identically", () => {
+        const metadata = {
+            nestedSurfaces: {
+                child_surface: {
+                    surfaceId: "child_surface",
+                    groups: [
+                        {
+                            key: "placement",
+                            selectedFieldKeys: ["inquiry_child.program", "child.start_date"],
+                            fieldModes: { "child.start_date": { displayed: true, editable: true } },
+                        },
+                    ],
+                },
+            },
+        };
+        const runtime = reconcileIdentityNestedConfigFromDocMetadata(CHILDREN_SURFACE_ID, metadata);
+        const composer = reconcileIdentityNestedConfigsFromMetadata(metadata)[CHILDREN_SURFACE_ID];
+        expect(stableIdentityConfigSnapshot(composer)).toEqual(stableIdentityConfigSnapshot(runtime));
+        expect(readChildrenNestedConfigFromDoc({ metadata } as LayoutDoc)).toEqual(runtime);
+    });
+
+    it("composer and runtime reconcile legacy household contact config identically", () => {
+        const metadata = {
+            nestedSurfaces: {
+                household_contact_surface: {
+                    surfaceId: "household_contact_surface",
+                    groups: [
+                        {
+                            key: "contact_fields",
+                            selectedFieldKeys: ["person.email", "person.phone"],
+                            fieldModes: {
+                                "person.email": { displayed: false, editable: true },
+                                "person.phone": { displayed: true, editable: false },
+                            },
+                        },
+                    ],
+                },
+            },
+        };
+        const runtime = reconcileIdentityNestedConfigFromDocMetadata(HOUSEHOLD_SURFACE_ID, metadata);
+        const composer = reconcileIdentityNestedConfigsFromMetadata(metadata)[HOUSEHOLD_SURFACE_ID];
+        expect(stableIdentityConfigSnapshot(composer)).toEqual(stableIdentityConfigSnapshot(runtime));
+        expect(readHouseholdNestedConfigFromDoc({ metadata } as LayoutDoc)).toEqual(runtime);
+    });
+
+    it("legacy configs are extracted only through legacyIdentityConfigsFromMetadata", () => {
+        const metadata = {
+            nestedSurfaces: {
+                child_surface: { surfaceId: "child_surface", groups: [] },
+                household_contact_surface: { surfaceId: "household_contact_surface", groups: [] },
+                children_surface: defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID),
+            },
+        };
+        expect(legacyIdentityConfigsFromMetadata(metadata)).toEqual({
+            childSurface: metadata.nestedSurfaces.child_surface,
+            householdContactSurface: metadata.nestedSurfaces.household_contact_surface,
+        });
+    });
+});
+
+describe("household contact edit composition", () => {
+    it("uses configured field order and layout widths", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "contact_edit", "contact.phone");
+        config = addFieldToNestedGroup(config, "contact_edit", "contact.email");
+        config = setFieldLayoutWidthInNestedGroup(config, "contact_edit", "contact.phone", "full");
+        config = setFieldLayoutWidthInNestedGroup(config, "contact_edit", "contact.email", "half");
+        const rows = buildHouseholdContactEditFieldRows({
+            config,
+            values: {
+                first_name: "Sarah",
+                last_name: "Johnson",
+                email: "sarah@example.com",
+                phone: "555-123-4567",
+            },
+            canMutate: true,
+        });
+        const cells = rows.flatMap((row) => row.cells);
+        expect(cells.map((cell) => cell.fieldRef)).toEqual(
+            expect.arrayContaining(["contact.phone", "contact.email"]),
+        );
+        const phone = cells.find((cell) => cell.fieldRef === "contact.phone")!;
+        const email = cells.find((cell) => cell.fieldRef === "contact.email")!;
+        expect(phone.width).toBe("full");
+        expect(email.width).toBe("half");
+    });
+});
+
+describe("child expanded evidence composition", () => {
+    it("uses configured expanded placements in evidence archive sections", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = setNestedGroupEnabled(config, "medical", true);
+        config = addFieldToNestedGroup(config, "medical", "child.medical_summary");
+        config = addFieldToNestedGroup(config, "medical", "child.notes_summary", { tier: "expanded" });
+        const vm = buildChildIdentityRecordVM({
+            config,
+            child: {
+                id: "c1",
+                name: "Emma Johnson",
+                program: null,
+                room: null,
+                schedule: null,
+                startDate: null,
+                dobAge: "Age 4",
+                needsAttention: false,
+                missingLine: null,
+            },
+            groupKey: "medical",
+            canMutate: false,
+            isFieldSaveSupported: isChildFocusFieldSaveSupported,
+        });
+        const summaryRefs = vm.summaryRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
+        const expandedRefs = vm.expandedRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
+        expect(summaryRefs).toContain("child.medical_summary");
+        expect(expandedRefs).toContain("child.notes_summary");
+        expect(summaryRefs).not.toContain("child.notes_summary");
     });
 });
 

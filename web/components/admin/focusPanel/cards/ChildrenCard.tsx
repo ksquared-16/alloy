@@ -684,9 +684,13 @@ function EmptyEvidence({ text }: { text: string }) {
 function ChildExpandedEvidence({
     child,
     sections,
+    childrenSurfaceConfig,
+    onRequestEdit,
 }: {
     child: ChildrenEvidenceChild;
     sections: ChildrenEvidenceSectionView[];
+    childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
+    onRequestEdit?: () => void;
 }) {
     if (sections.length === 0) {
         return (
@@ -700,27 +704,33 @@ function ChildExpandedEvidence({
 
     return (
         <div className="alloy-os-child-expanded" data-children-expanded={child.id}>
-            {sections.map((section) => (
-                <EvidenceGroup key={section.key} title={section.label}>
-                    {section.fieldKeys.length === 0 ? (
-                        <EmptyEvidence text={`No ${section.label.toLowerCase()} on file`} />
-                    ) : (
-                        section.fieldKeys.map((fieldKey) => {
-                            const meta = CHILDREN_FIELD_TRUTH_META[fieldKey];
-                            if (!meta) return null;
-                            const value = meta.get(child);
-                            return (
-                                <TruthRow
-                                    key={fieldKey}
-                                    icon={meta.icon}
-                                    label={fieldKey.replace(/^[a-z_]+\./, "").replace(/_/g, " ")}
-                                    value={value}
-                                />
-                            );
-                        })
-                    )}
-                </EvidenceGroup>
-            ))}
+            {sections.map((section) => {
+                const record = buildChildIdentityRecordVM({
+                    config: childrenSurfaceConfig,
+                    child,
+                    groupKey: section.key,
+                    canMutate: Boolean(onRequestEdit),
+                    isFieldSaveSupported: (fieldRef) =>
+                        isChildFocusFieldSaveSupported(fieldRef as ChildFocusFieldKey),
+                });
+                const rows = [...record.summaryRows, ...record.expandedRows];
+                return (
+                    <EvidenceGroup key={section.key} title={section.label}>
+                        {rows.length === 0 ? (
+                            <EmptyEvidence text={`No ${section.label.toLowerCase()} on file`} />
+                        ) : (
+                            <IdentityFieldGrid
+                                rows={rows}
+                                onEditField={
+                                    onRequestEdit
+                                        ? () => onRequestEdit()
+                                        : undefined
+                                }
+                            />
+                        )}
+                    </EvidenceGroup>
+                );
+            })}
         </div>
     );
 }
@@ -865,7 +875,12 @@ function FocusedChild({
             {relatedViewId ? (
                 <ChildRelatedReport child={child} viewId={relatedViewId} />
             ) : expandedOpen ? (
-                <ChildExpandedEvidence child={child} sections={evidenceSections} />
+                <ChildExpandedEvidence
+                    child={child}
+                    sections={evidenceSections}
+                    childrenSurfaceConfig={childrenSurfaceConfig}
+                    onRequestEdit={onRequestEdit}
+                />
             ) : editing && editSeed ? (
                 <ChildFocusEdit
                     seed={editSeed}
