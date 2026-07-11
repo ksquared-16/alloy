@@ -52,4 +52,8 @@ describe("useWorkUnitSurfaceRuntime — pill switching runtime guards", () => {
         expect(surfaceSrc).toMatch(/key=\{shownModel\.workUnitId/);
         expect(surfaceSrc).not.toMatch(/key=\{.*workViewId/);
     });
+
+    it("fetch error does not clear queueResult (queue-lane hold on failure)", () => {
+        expect(src).not.toContain("setQueueResult(null)");
+    });
 });

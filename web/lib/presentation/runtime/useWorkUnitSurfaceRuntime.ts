@@ -346,7 +346,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             })
             .catch((e) => {
                 if (seq === queueRequestSeq.current) {
-                    setQueueResult(null);
+                    // Queue-lane hold: retain prior rows on fetch failure — never masquerade as empty.
                     setQueueError(e instanceof Error ? e.message : "Failed to load queue items");
                 }
             })

@@ -27,8 +27,12 @@ describe("queueRegionRenderState — queue-lane hold on refetch", () => {
         expect(queueRegionRenderState({ rows: [], loading: false, error: null })).toBe("empty");
     });
 
-    it("a real error surfaces even over stale rows (never hidden)", () => {
-        expect(queueRegionRenderState({ rows, loading: false, error: "boom" })).toBe("error");
-        expect(queueRegionRenderState({ rows, loading: true, error: "boom" })).toBe("error");
+    it("a real error surfaces when no rows are held", () => {
+        expect(queueRegionRenderState({ rows: [], loading: false, error: "boom" })).toBe("error");
+    });
+
+    it("error with held rows keeps rows render state (error shown inline)", () => {
+        expect(queueRegionRenderState({ rows, loading: false, error: "boom" })).toBe("rows");
+        expect(queueRegionRenderState({ rows, loading: true, error: "boom" })).toBe("rows");
     });
 });
