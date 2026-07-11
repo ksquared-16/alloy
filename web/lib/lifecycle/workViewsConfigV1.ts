@@ -69,6 +69,32 @@ export function isWorkViewCatchAll(
     return !view?.filters_v1?.length;
 }
 
+/**
+ * Include-all Work Views (empty `filters_v1`) must resolve on the department aggregate host
+ * and all-records lane — not a stage-specific `compat_queue_key`. Strip erroneous bindings at
+ * load time so runtime counts/rows and pill routing agree with predicate-only semantics.
+ */
+export function normalizeCatchAllWorkViewCompatBinding(
+    view: WorkViewConfigV1Stored,
+): WorkViewConfigV1Stored {
+    if (!isWorkViewCatchAll(view) || !view.compat_queue_key?.trim()) return view;
+    const { compat_queue_key: _removed, ...rest } = view;
+    return rest;
+}
+
+/** Repair every catch-all view in a process work_views_v1 list. Returns changed rows + whether any changed. */
+export function repairWorkViewsCatchAllCompatBindings(
+    rows: readonly WorkViewConfigV1Stored[],
+): { workViews: WorkViewConfigV1Stored[]; changed: boolean } {
+    let changed = false;
+    const workViews = rows.map((row) => {
+        const repaired = normalizeCatchAllWorkViewCompatBinding(row);
+        if (repaired !== row) changed = true;
+        return repaired;
+    });
+    return { workViews: normalizeWorkViewsDisplayOrder(workViews), changed };
+}
+
 const FILTER_OPERATORS = new Set<WorkViewFilterOperatorV1>([
     "equals",
     "not_equals",
@@ -146,7 +172,7 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (typeof raw.compat_queue_key === "string" && raw.compat_queue_key.trim()) {
         stored.compat_queue_key = raw.compat_queue_key.trim();
     }
-    return stored;
+    return normalizeCatchAllWorkViewCompatBinding(stored);
 }
 
 export function parseWorkViewsV1(raw: unknown): WorkViewConfigV1Stored[] | null {

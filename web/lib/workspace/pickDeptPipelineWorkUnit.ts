@@ -2,6 +2,7 @@ import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefiniti
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import { sortLifecycleDeptWorkUnits } from "@/lib/lifecycle/sortLifecycleDeptWorkUnits";
 
 export type DeptPipelineWorkUnitPick = {
     id: string;
@@ -79,5 +80,17 @@ export function pickDeptWorkViewHostWorkUnit<
         const pipelineRow = forDept.find((row) => row.id === pipeline.id) ?? null;
         if (pipelineRow) return pipelineRow;
     }
-    return forDept.find((row) => isLifecycleStageWorkUnitKey(String(row.key ?? ""))) ?? null;
+    const lifecycleHosts = sortLifecycleDeptWorkUnits(
+        forDept
+            .filter((row) => isLifecycleStageWorkUnitKey(String(row.key ?? "")))
+            .map((row) => ({
+                id: row.id,
+                name: (row as { name?: string | null }).name ?? null,
+                key: row.key ?? null,
+                sort_order: (row as { sort_order?: number | null }).sort_order ?? null,
+            })),
+    );
+    if (!lifecycleHosts.length) return null;
+    const hostId = lifecycleHosts[0]!.id;
+    return forDept.find((row) => row.id === hostId) ?? null;
 }

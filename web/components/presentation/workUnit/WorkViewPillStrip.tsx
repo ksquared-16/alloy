@@ -66,17 +66,14 @@ function WorkViewPill({
             }${ack.className ? ` ${ack.className}` : ""}`}
         >
             <span>{view.label}</span>
-            {view.count != null ? (
-                <span
-                    // Keyed by value so a changed count replays the `settle` opacity ramp.
-                    key={view.count}
-                    className={`${MOTION_SETTLE.className} rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${
-                        view.isActive ? "bg-white/20 text-white" : "bg-alloy-stone/15 text-alloy-midnight/70"
-                    }`}
-                >
-                    {view.count}
-                </span>
-            ) : null}
+            <span
+                aria-hidden={view.count == null}
+                className={`${MOTION_SETTLE.className} inline-flex min-w-[1.375rem] shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${
+                    view.isActive ? "bg-white/20 text-white" : "bg-alloy-stone/15 text-alloy-midnight/70"
+                } ${view.count == null ? "invisible" : ""}`}
+            >
+                {view.count ?? 0}
+            </span>
         </button>
     );
 }

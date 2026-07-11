@@ -407,7 +407,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     }, []);
 
     // THE count model: the `total` of the same rows response that renders the queue.
-    const totalCount = useMemo(() => queueTotalCountFromQueueItemsResult(queueResult), [queueResult]);
+    const rawQueueTotalCount = useMemo(
+        () => queueTotalCountFromQueueItemsResult(queueResult),
+        [queueResult],
+    );
 
     // Compact-row slot config from the published Queue Row surface (visibility + labels).
     // Presentation-only: does NOT touch row order/membership/count. Generic-context fallback
@@ -455,6 +458,32 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         enabled: configSettled,
         refreshToken: queueRefreshNonce,
     });
+    const totalCount = useMemo(() => {
+        const activeViewId = runtimeCtx.workViewId?.trim() || null;
+        const location = activeViewId ? canonicalLocationByViewId.get(activeViewId) : null;
+        const retained =
+            location && activeViewId
+                ? canonicalTotals.get(workViewTotalKey(location.workUnitId, activeViewId))
+                : null;
+
+        if (!queueLoading && !queueError && rawQueueTotalCount != null) {
+            return rawQueueTotalCount;
+        }
+
+        // While the destination queue is in flight, never show a stale rows-response total
+        // from the prior active view — retain the last settled canonical count instead.
+        if ((queueLoading || queueError) && retained != null) return retained;
+
+        return rawQueueTotalCount;
+    }, [
+        rawQueueTotalCount,
+        queueLoading,
+        queueError,
+        runtimeCtx.workViewId,
+        canonicalLocationByViewId,
+        canonicalTotals,
+    ]);
+
 
     // ── Work View pills: same configured views the Workspace tile lists ─────────────────
     // Invariant: the ACTIVE view's count IS `queue.totalCount` (same rows response as the

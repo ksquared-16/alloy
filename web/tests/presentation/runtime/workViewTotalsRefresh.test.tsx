@@ -1,12 +1,5 @@
 /** @vitest-environment jsdom */
 
-/**
- * PRV2 Final Integration — count refresh. `useWorkViewTotals` must re-resolve its counts when
- * `refreshToken` changes (the nonce the Workspace / Work Unit runtimes bump on a Create Lead
- * broadcast), and must NOT refetch when the token is unchanged. This is the mechanism that makes
- * process-card + pill counts update immediately after a mutation instead of on TTL/reload.
- */
-
 import { createRoot } from "react-dom/client";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -22,7 +15,7 @@ vi.mock("@/lib/workspace/workspaceDataFetch", () => ({
     workspaceDataFetchInit: () => ({}),
 }));
 
-import { useWorkViewTotals } from "@/lib/presentation/runtime/useWorkViewTotals";
+import { useWorkViewTotalsState } from "@/lib/presentation/runtime/useWorkViewTotals";
 
 function jsonResponse(total: number): Response {
     return new Response(JSON.stringify({ total, items: [] }), {
@@ -31,13 +24,16 @@ function jsonResponse(total: number): Response {
     });
 }
 
+let latestTotals: Map<string, number | null> = new Map();
+
 function Probe({ refreshToken }: { refreshToken: number }) {
-    useWorkViewTotals({
+    const { totals } = useWorkViewTotalsState({
         targets: [{ viewId: "v1", workUnitId: "wu1", baseQueueKey: "all-records" }],
         selectedSiteId: null,
         enabled: true,
         refreshToken,
     });
+    latestTotals = totals;
     return null;
 }
 
@@ -62,6 +58,7 @@ afterEach(() => {
     root = null;
     if (container) container.remove();
     container = null;
+    latestTotals = new Map();
 });
 
 describe("useWorkViewTotals — refreshToken", () => {
@@ -69,12 +66,45 @@ describe("useWorkViewTotals — refreshToken", () => {
         fetchMock.mockImplementation(() => Promise.resolve(jsonResponse(3)));
 
         await render(<Probe refreshToken={0} />);
-        expect(fetchMock).toHaveBeenCalledTimes(1); // initial resolve for the one target
-
-        await rerender(<Probe refreshToken={0} />); // same token → same scope → no refetch
+        await act(async () => {
+            await Promise.resolve();
+        });
         expect(fetchMock).toHaveBeenCalledTimes(1);
 
-        await rerender(<Probe refreshToken={1} />); // bumped → fresh refetch
+        await rerender(<Probe refreshToken={0} />);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        await rerender(<Probe refreshToken={1} />);
+        await act(async () => {
+            await Promise.resolve();
+        });
         expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("retains the last settled count during same-population refresh", async () => {
+        let resolveSecond: (value: Response) => void = () => {};
+        fetchMock
+            .mockImplementationOnce(() => Promise.resolve(jsonResponse(2)))
+            .mockImplementationOnce(
+                () =>
+                    new Promise<Response>((resolve) => {
+                        resolveSecond = resolve;
+                    }),
+            );
+
+        await render(<Probe refreshToken={0} />);
+        await act(async () => {
+            await Promise.resolve();
+        });
+        expect(latestTotals.get("wu1::v1")).toBe(2);
+
+        await rerender(<Probe refreshToken={1} />);
+        expect(latestTotals.get("wu1::v1")).toBe(2);
+
+        await act(async () => {
+            resolveSecond(jsonResponse(3));
+            await Promise.resolve();
+        });
+        expect(latestTotals.get("wu1::v1")).toBe(3);
     });
 });

@@ -1,0 +1,630 @@
+{
+  "capturedAt": "2026-07-11T00:29:39.345Z",
+  "baseUrl": "http://127.0.0.1:3001",
+  "path": "/workspace/work-unit/new-leads",
+  "runs": [
+    {
+      "run": 1,
+      "settledInitial": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "afterAllLeads": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "afterOther": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "final": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "afterRefresh": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "analysis": {
+        "switchToAll": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 90
+        },
+        "switchToOther": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 80
+        },
+        "switchBack": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 87
+        },
+        "refresh": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 7
+        }
+      },
+      "totals": {
+        "settledDisappearanceFrames": 0,
+        "incorrectZeroFrames": 0,
+        "widthShiftFrames": 0,
+        "pillStripRemounts": 0,
+        "pillReorder": 0
+      },
+      "networkLogCount": 31
+    },
+    {
+      "run": 2,
+      "settledInitial": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "afterAllLeads": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "afterOther": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "final": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "afterRefresh": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "analysis": {
+        "switchToAll": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 83
+        },
+        "switchToOther": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 36
+        },
+        "switchBack": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 78
+        },
+        "refresh": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 48
+        }
+      },
+      "totals": {
+        "settledDisappearanceFrames": 0,
+        "incorrectZeroFrames": 0,
+        "widthShiftFrames": 0,
+        "pillStripRemounts": 0,
+        "pillReorder": 0
+      },
+      "networkLogCount": 27
+    },
+    {
+      "run": 3,
+      "settledInitial": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "afterAllLeads": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "afterOther": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "final": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "afterRefresh": [
+        {
+          "id": "new_leads",
+          "label": "New Leads",
+          "count": "2"
+        },
+        {
+          "id": "new_work_view_2",
+          "label": "Active Pipeline",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_3",
+          "label": "Registration",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_4",
+          "label": "Waitlist",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_5",
+          "label": "Tours",
+          "count": "0"
+        },
+        {
+          "id": "new_work_view_6",
+          "label": "All Leads",
+          "count": "2"
+        }
+      ],
+      "analysis": {
+        "switchToAll": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 73
+        },
+        "switchToOther": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 29
+        },
+        "switchBack": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 82
+        },
+        "refresh": {
+          "settledDisappearanceFrames": 0,
+          "incorrectZeroFrames": 0,
+          "widthShiftFrames": 0,
+          "pillStripRemounts": 0,
+          "pillReorder": 0,
+          "frameCount": 19
+        }
+      },
+      "totals": {
+        "settledDisappearanceFrames": 0,
+        "incorrectZeroFrames": 0,
+        "widthShiftFrames": 0,
+        "pillStripRemounts": 0,
+        "pillReorder": 0
+      },
+      "networkLogCount": 26
+    }
+  ],
+  "aggregate": {
+    "settledDisappearanceFrames": 0,
+    "incorrectZeroFrames": 0,
+    "widthShiftFrames": 0,
+    "pillStripRemounts": 0,
+    "pillReorder": 0
+  },
+  "pass": true
+}

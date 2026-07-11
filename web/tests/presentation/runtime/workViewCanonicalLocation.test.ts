@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { buildLifecycleStageQueueDefinitionForPresentation, buildLifecycleWaitlistStageQueueDefinition } from "@/lib/lifecycle/lifecycleStageQueuePresentation";
+import { filterQueueRowsByWorkViewFilters } from "@/lib/lifecycle/evaluateWorkViewFiltersV1";
+import { parseWorkViewsV1 } from "@/lib/lifecycle/workViewsConfigV1";
 import { resolveWorkUnitByRouteSlug } from "@/lib/admin/resolveWorkUnitByRouteSlug";
 import { workUnitKeyToRouteSlug } from "@/lib/admin/workUnitRouteSlug";
 import { RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
@@ -10,6 +13,7 @@ import {
     queueRowsRouteForView,
     workViewTotalKey,
 } from "@/lib/presentation/runtime/useWorkViewTotals";
+import { queueTotalCountFromQueueItemsResult } from "@/lib/presentation/runtime/types";
 
 /**
  * CANONICAL-LOCATION CONTRACT (product rule): a Work View's count/rows are defined ONCE,
@@ -174,5 +178,116 @@ describe("useWorkViewTotals count source (rows API, exact)", () => {
     it("totals keys are host-scoped so same view ids across departments cannot collide", () => {
         expect(workViewTotalKey("wu-a", "all_leads")).not.toBe(workViewTotalKey("wu-b", "all_leads"));
         expect(workViewTotalKey("wu-a", "all_leads")).toBe(workViewTotalKey("wu-a", "all_leads"));
+    });
+});
+
+const LIFECYCLE_DEPT_ID = "dept-lifecycle";
+
+const LIFECYCLE_LEAD_WU = {
+    id: "wu-lead",
+    department_id: LIFECYCLE_DEPT_ID,
+    key: "lifecycle_wu_lead",
+    name: "New Leads",
+    sort_order: 1,
+    queue_definition: buildLifecycleStageQueueDefinitionForPresentation({
+        stageKey: "lead",
+        label: "New Leads",
+        statusKeys: ["open"],
+    }),
+};
+
+const LIFECYCLE_WAITLIST_WU = {
+    id: "wu-waitlist",
+    department_id: LIFECYCLE_DEPT_ID,
+    key: "lifecycle_wu_waitlist",
+    name: "Waitlist",
+    sort_order: 5,
+    queue_definition: buildLifecycleWaitlistStageQueueDefinition({
+        stageKey: "waitlist",
+        label: "Waitlist",
+        statusKeys: ["waitlisted"],
+    }),
+};
+
+const LIFECYCLE_DEPT_UNITS = [LIFECYCLE_WAITLIST_WU, LIFECYCLE_LEAD_WU];
+
+describe("enrollment lifecycle aggregate Work View canonical location", () => {
+    it("include-all All Leads is not canonically located on the Waitlist lane", () => {
+        const parsed = parseWorkViewsV1([
+            {
+                id: "new_work_view_6",
+                label: "All Leads",
+                filters_v1: [],
+                compat_queue_key: "waitlist",
+            },
+        ]);
+        const allLeads = parsed![0]!;
+        expect(allLeads.compat_queue_key).toBeUndefined();
+
+        const location = resolveWorkViewCanonicalLocation(allLeads, LIFECYCLE_DEPT_UNITS, LIFECYCLE_DEPT_ID);
+        expect(location?.workUnitId).toBe("wu-lead");
+        expect(location?.baseQueueKey).toBe("lifecycle_lead");
+        expect(location?.baseQueueKey).not.toBe("lifecycle_waitlist");
+    });
+
+    it("All Leads and Waitlist resolve to different canonical locations when populations differ", () => {
+        const allLeads = { id: "new_work_view_6", label: "All Leads" };
+        const waitlist = {
+            id: "new_work_view_4",
+            label: "Waitlist",
+            compat_queue_key: "waitlist",
+        };
+        const allLoc = resolveWorkViewCanonicalLocation(allLeads, LIFECYCLE_DEPT_UNITS, LIFECYCLE_DEPT_ID);
+        const waitLoc = resolveWorkViewCanonicalLocation(waitlist, LIFECYCLE_DEPT_UNITS, LIFECYCLE_DEPT_ID);
+        expect(allLoc).not.toEqual(waitLoc);
+        expect(waitLoc?.workUnitId).toBe("wu-waitlist");
+        expect(waitLoc?.baseQueueKey).toBe("lifecycle_waitlist");
+    });
+
+    it("catch-all All Leads includes New Leads rows when predicates are empty", () => {
+        const baseRows = [
+            { id: "a", status_key: "open", opportunity_stage: "lead" },
+            { id: "b", status_key: "open", opportunity_stage: "lead" },
+        ];
+        const included = filterQueueRowsByWorkViewFilters(baseRows, [], "all");
+        expect(included).toHaveLength(2);
+    });
+
+    it("inactive count route and selected queue route share host + base lane", () => {
+        const allLeads = { id: "new_work_view_6", label: "All Leads" };
+        const location = resolveWorkViewCanonicalLocation(allLeads, LIFECYCLE_DEPT_UNITS, LIFECYCLE_DEPT_ID)!;
+        const countRoute = queueRowsRouteForView({
+            workUnitId: location.workUnitId,
+            baseQueueKey: location.baseQueueKey,
+            workViewId: allLeads.id,
+            limit: 1,
+            selectedSiteId: null,
+        });
+        const rowsRoute = queueRowsRouteForView({
+            workUnitId: location.workUnitId,
+            baseQueueKey: location.baseQueueKey,
+            workViewId: allLeads.id,
+            limit: 20,
+            selectedSiteId: null,
+        });
+        expect(countRoute).toContain(`/api/admin/queues/${location.workUnitId}/${location.baseQueueKey}`);
+        expect(rowsRoute).toContain(`/api/admin/queues/${location.workUnitId}/${location.baseQueueKey}`);
+        expect(countRoute).toContain(`work_view_id=${allLeads.id}`);
+        expect(rowsRoute).toContain(`work_view_id=${allLeads.id}`);
+    });
+
+    it("settled zero remains zero when canonical aggregate truly has no records", () => {
+        expect(queueTotalCountFromQueueItemsResult({ total: 0, total_omitted: false })).toBe(0);
+    });
+
+    it("unresolved totals stay null rather than coercing to zero", () => {
+        expect(queueTotalCountFromQueueItemsResult(null)).toBeNull();
+        expect(queueTotalCountFromQueueItemsResult({ total: 0, total_omitted: true })).toBeNull();
+        expect(queueTotalCountFromQueueItemsResult({ total: undefined as unknown as number, total_omitted: false })).toBeNull();
+    });
+
+    it("null canonical location means no count target (unresolved, not zero)", () => {
+        const view = { id: "orphan", label: "Orphan View" };
+        expect(resolveWorkViewCanonicalLocation(view, [], LIFECYCLE_DEPT_ID)).toBeNull();
     });
 });
