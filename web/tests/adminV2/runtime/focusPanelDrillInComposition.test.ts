@@ -743,7 +743,7 @@ describe("Final Focus Panel Composer ship fixes", () => {
         const householdCard = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
         const childrenCard = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
         expect(householdCard).toContain("composingHouseholdSurface");
-        expect(householdCard).toContain("setExpanded(true)");
+        expect(householdCard).toContain("enterContext()");
         expect(childrenCard).toContain("composingChildrenSurface");
         expect(childrenCard).toContain("setDrillDepth({ kind: \"child-focus\"");
     });

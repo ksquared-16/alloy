@@ -702,16 +702,21 @@ export function setNestedGroupEnabled(
     }
     return {
         ...config,
-        groups: config.groups.map((g) =>
-            g.key === groupKey
-                ? {
-                      ...g,
-                      enabled,
-                      sectionSemantic: options?.sectionSemantic ?? g.sectionSemantic,
-                      sectionLabel: options?.sectionLabel ?? g.sectionLabel,
-                  }
-                : g,
-        ),
+        groups: config.groups.map((g) => {
+            if (g.key !== groupKey) return g;
+            const def = groupDefsFor(config.surfaceId).find((entry) => entry.key === groupKey);
+            const selectedFieldKeys =
+                enabled && g.selectedFieldKeys.length === 0 && def
+                    ? [...def.defaultFieldKeys]
+                    : g.selectedFieldKeys;
+            return {
+                ...g,
+                enabled,
+                selectedFieldKeys,
+                sectionSemantic: options?.sectionSemantic ?? g.sectionSemantic,
+                sectionLabel: options?.sectionLabel ?? g.sectionLabel,
+            };
+        }),
     };
 }
 
@@ -807,4 +812,89 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
         groups: groupsOut,
         navigation: loaded.navigation ? { ...loaded.navigation } : undefined,
     };
+}
+
+function patchNestedGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    patch: (group: NestedSurfaceGroupConfig) => NestedSurfaceGroupConfig,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((group) => (group.key === groupKey ? patch(group) : group)),
+    };
+}
+
+/** Catalog of evidence collections an operator can attach to one identity group. */
+export function catalogEvidenceCollectionsForGroup(surfaceId: string, groupKey: string): IdentityEvidenceCollectionConfig[] {
+    const optionalKeys = OPTIONAL_NESTED_GROUP_KEYS[surfaceId] ?? [];
+    return groupDefsFor(surfaceId)
+        .filter((def) => optionalKeys.includes(def.key) || def.key === groupKey)
+        .map((def) => ({
+            key: def.key,
+            label: def.label,
+            sectionSemantic: def.purpose,
+            enabled: true,
+        }));
+}
+
+export function addEvidenceCollectionToGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    collectionKey: string,
+): NestedSurfaceConfig {
+    const catalog = catalogEvidenceCollectionsForGroup(config.surfaceId, groupKey);
+    const collection = catalog.find((entry) => entry.key === collectionKey);
+    if (!collection) return config;
+    return patchNestedGroup(config, groupKey, (group) => {
+        const existing = group.evidenceCollections ?? [];
+        if (existing.some((entry) => entry.key === collectionKey)) return group;
+        return {
+            ...group,
+            evidenceCollections: [...existing, { ...collection }],
+        };
+    });
+}
+
+export function removeEvidenceCollectionFromGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    collectionKey: string,
+): NestedSurfaceConfig {
+    return patchNestedGroup(config, groupKey, (group) => ({
+        ...group,
+        evidenceCollections: (group.evidenceCollections ?? []).filter((entry) => entry.key !== collectionKey),
+    }));
+}
+
+export function moveEvidenceCollectionInGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    collectionKey: string,
+    direction: -1 | 1,
+): NestedSurfaceConfig {
+    return patchNestedGroup(config, groupKey, (group) => {
+        const collections = [...(group.evidenceCollections ?? [])];
+        const index = collections.findIndex((entry) => entry.key === collectionKey);
+        if (index < 0) return group;
+        const nextIndex = index + direction;
+        if (nextIndex < 0 || nextIndex >= collections.length) return group;
+        const [entry] = collections.splice(index, 1);
+        collections.splice(nextIndex, 0, entry!);
+        return { ...group, evidenceCollections: collections };
+    });
+}
+
+export function setEvidenceCollectionEnabled(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    collectionKey: string,
+    enabled: boolean,
+): NestedSurfaceConfig {
+    return patchNestedGroup(config, groupKey, (group) => ({
+        ...group,
+        evidenceCollections: (group.evidenceCollections ?? []).map((entry) =>
+            entry.key === collectionKey ? { ...entry, enabled } : entry,
+        ),
+    }));
 }

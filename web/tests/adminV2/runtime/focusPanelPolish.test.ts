@@ -276,7 +276,8 @@ describe("Surface Builder composer chrome", () => {
 describe("Targeted contact editing + depth history (QA)", () => {
     it("Household has per-row edit affordances, not a global Edit contact link", () => {
         const card = readSrc("components/admin/focusPanel/cards/HouseholdCard.tsx");
-        expect(card).toContain("data-household-edit-contact"); // per-row affordance
+        const summary = readSrc("components/admin/focusPanel/identity/IdentityRecordSummary.tsx");
+        expect(summary).toContain("data-household-edit-contact"); // per-row affordance
         expect(card).toContain("setEditingPersonId"); // targeted edit state
         expect(card).not.toContain('data-household-action="edit"'); // global link removed
         expect(card).toContain('requestFocus("children", childId, source)'); // handoff records source

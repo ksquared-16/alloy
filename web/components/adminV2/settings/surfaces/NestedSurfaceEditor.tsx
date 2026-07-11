@@ -29,6 +29,7 @@ import {
 import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import IdentityBuilderDrillIn from "@/components/adminV2/settings/surfaces/composer/IdentityBuilderDrillIn";
 import IdentityContextFactsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityContextFactsPanel";
+import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
 import {
     HOUSEHOLD_CONTACT_SURFACE_ID,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
@@ -391,13 +392,23 @@ export default function NestedSurfaceEditor({
                                         onOpenLibrary={() => openLibrary(selectedGroupKey)}
                                     />
                                 :   null}
-                                <NestedSurfaceGroupInspector
-                                    surfaceId={surfaceId}
-                                    groupDef={groupDefs.find((g) => g.key === selectedGroupKey)!}
-                                    groupConfig={selectedGroupConfig}
-                                    onChange={(next) => patchGroupConfig(selectedGroupKey, next)}
-                                    onOpenLibrary={() => openLibrary(selectedGroupKey)}
-                                />
+                                {isIdentitySurface && activeConfigPurpose === "evidence" ?
+                                    <IdentityEvidenceCollectionsPanel
+                                        surfaceId={surfaceId}
+                                        groupKey={selectedGroupKey}
+                                        config={config}
+                                        onChange={mutate}
+                                    />
+                                :   null}
+                                {!(isIdentitySurface && (activeConfigPurpose === "context_facts" || activeConfigPurpose === "evidence")) ?
+                                    <NestedSurfaceGroupInspector
+                                        surfaceId={surfaceId}
+                                        groupDef={groupDefs.find((g) => g.key === selectedGroupKey)!}
+                                        groupConfig={selectedGroupConfig}
+                                        onChange={(next) => patchGroupConfig(selectedGroupKey, next)}
+                                        onOpenLibrary={() => openLibrary(selectedGroupKey)}
+                                    />
+                                :   null}
                             </div>
                         :   <div className="process-config-setup-card flex h-full items-center justify-center p-6 text-center" data-surface-inspector-empty="true">
                                 <p className="config-typo-sublabel">{SURFACE_COMPOSER_EMPTY_HINT}</p>
