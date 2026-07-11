@@ -11,15 +11,27 @@
  * row count agree by construction. Lane summaries are NEVER a displayed count (they
  * evaluate lanes, not view predicates).
  *
+ * Same-population refresh retains the last settled count while a replacement fetch is
+ * in flight; population identity changes clear retention for removed/changed targets.
+ *
  * Grain: opportunity/case (queue row). Process participant metrics may use a different grain.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { QueueItemsResult } from "@/lib/queues/types";
 import { queueTotalCountFromQueueItemsResult } from "./types";
+import {
+    applyWorkViewTotalsFetchResult,
+    buildWorkViewPopulationKey,
+    buildWorkViewTotalsScopeKey,
+    mergeWorkViewTotalsForDisplay,
+    parseWorkViewTotalTargetsFromKey,
+    pruneWorkViewSettledTotalsStore,
+    type WorkViewSettledTotalsStore,
+} from "./workViewTotalsRetention";
 
 /** One Work View count target — the view evaluated at its canonical location. */
 export type WorkViewTotalTarget = {
@@ -56,13 +68,6 @@ export function queueRowsRouteForView(args: {
     );
 }
 
-/**
- * Resolve exact totals for a set of Work View targets. Returns a map keyed by
- * `workViewTotalKey(workUnitId, viewId)` → total; a missing/`null` entry means
- * unresolved (loading or failed) and renders as NO badge — never a wrong badge.
- */
-const EMPTY_TOTALS: Map<string, number | null> = new Map();
-
 export type WorkViewTotalsState = {
     totals: Map<string, number | null>;
     /** True when this scope has no targets, is disabled, or the exact-total fetch has settled. */
@@ -76,16 +81,13 @@ export function useWorkViewTotalsState(args: {
     enabled?: boolean;
     /**
      * Bump to force a fresh refetch (e.g. after Create Lead adds a New Leads row). Folds into
-     * the scope key so the totals re-resolve from the rows API — the counts are never cached
-     * across this token, so a mutation's new count lands immediately.
+     * the fetch scope key but NOT population identity — last settled counts remain visible
+     * during the refresh when the canonical population is unchanged.
      */
     refreshToken?: string | number;
 }): WorkViewTotalsState {
     const { targets, selectedSiteId, enabled = true, refreshToken } = args;
 
-    // Content-derived scope key: refetch on real target changes, not array identity churn.
-    // The effect reconstructs the targets FROM this key, so the key is its only target
-    // dependency (ids and queue keys never contain the separators).
     const targetsKey = useMemo(
         () =>
             targets
@@ -94,24 +96,44 @@ export function useWorkViewTotalsState(args: {
                 .join("\n"),
         [targets],
     );
-    const scopeKey = `${enabled ? "1" : "0"}\n${selectedSiteId ?? ""}\n${refreshToken ?? ""}\n${targetsKey}`;
 
-    // Resolved totals are KEYED to the scope they were fetched for: on any scope change the
-    // stored map derives away to empty (no badge) with no clear-effect — stale counts can
-    // never linger and nothing setStates synchronously during render or effect.
+    const populationKey = useMemo(
+        () => buildWorkViewPopulationKey({ enabled, selectedSiteId, targetsKey }),
+        [enabled, selectedSiteId, targetsKey],
+    );
+
+    const scopeKey = useMemo(
+        () => buildWorkViewTotalsScopeKey({ populationKey, refreshToken }),
+        [populationKey, refreshToken],
+    );
+
+    const parsedTargets = useMemo(
+        () => parseWorkViewTotalTargetsFromKey(targetsKey),
+        [targetsKey],
+    );
+
+    const settledStoreRef = useRef<WorkViewSettledTotalsStore>(new Map());
+
     const [resolved, setResolved] = useState<{
         scopeKey: string;
         totals: Map<string, number | null>;
     } | null>(null);
 
+    // Population identity change: prune retention for removed/changed canonical locations.
+    useEffect(() => {
+        settledStoreRef.current = pruneWorkViewSettledTotalsStore({
+            targets: parsedTargets,
+            selectedSiteId,
+            settledStore: settledStoreRef.current,
+        });
+    }, [populationKey, parsedTargets, selectedSiteId]);
+
     useEffect(() => {
         if (!enabled || !targetsKey) return;
 
         const byKey = new Map<string, WorkViewTotalTarget>();
-        for (const line of targetsKey.split("\n")) {
-            const [workUnitId, viewId, baseQueueKey] = line.split("|");
-            if (!workUnitId || !viewId || !baseQueueKey) continue;
-            byKey.set(workViewTotalKey(workUnitId, viewId), { viewId, workUnitId, baseQueueKey });
+        for (const target of parsedTargets) {
+            byKey.set(workViewTotalKey(target.workUnitId, target.viewId), target);
         }
         if (!byKey.size) return;
 
@@ -140,21 +162,40 @@ export function useWorkViewTotalsState(args: {
         void Promise.all(
             [...byKey.entries()].map(([key, target]) => fetchTotal(key, target)),
         ).then((entries) => {
-            // Stale-response guard: a superseded scope's cleanup ran — drop its payload.
             if (cancelled) return;
-            setResolved({ scopeKey, totals: new Map(entries) });
+            const freshTotals = new Map(entries);
+            settledStoreRef.current = applyWorkViewTotalsFetchResult({
+                targets: parsedTargets,
+                selectedSiteId,
+                freshTotals,
+                settledStore: settledStoreRef.current,
+            });
+            setResolved({ scopeKey, totals: freshTotals });
         });
         return () => {
             cancelled = true;
         };
-        // scopeKey is derived from enabled/selectedSiteId/targetsKey — the one effective dep.
+        // scopeKey is derived from enabled/selectedSiteId/targetsKey/refreshToken.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [scopeKey]);
 
-    const current = resolved && resolved.scopeKey === scopeKey ? resolved.totals : EMPTY_TOTALS;
+    const fetchSettled = !enabled || !targetsKey || resolved?.scopeKey === scopeKey;
+
+    const totals = useMemo(
+        () =>
+            mergeWorkViewTotalsForDisplay({
+                targets: parsedTargets,
+                selectedSiteId,
+                freshTotals: resolved?.scopeKey === scopeKey ? resolved.totals : null,
+                settledStore: settledStoreRef.current,
+                fetchSettled,
+            }),
+        [parsedTargets, selectedSiteId, resolved, scopeKey, fetchSettled],
+    );
+
     return {
-        totals: current,
-        settled: !enabled || !targetsKey || (resolved?.scopeKey === scopeKey),
+        totals,
+        settled: fetchSettled,
     };
 }
 
