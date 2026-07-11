@@ -1002,3 +1002,35 @@ Collection provider runtime (retrieval, iteration context, nested availability) 
 ## P5A verified (2026-07-10)
 
 Platform `web/lib/fields/collection/*` is Forms-free. Forms adapters: `web/lib/forms/collection/*`, `web/lib/forms/processing/*`.
+## P5B bounded closeout
+
+Provider reference foundation added; Focus Panel and Queue/Forms derivation audited but not migrated.
+
+P5B provider reference index remains foundation-only (Forms + proposal emitters); delete enforcement deferred.
+
+
+## Platform Mutation Convergence (2026-07-11)
+
+### Field Platform as semantic truth
+
+Runtime mutation identity flows through `fieldRegistryReferenceMatrix` and `customerMemberFieldRegistry`. Settings and layout catalogs are configuration UI — not runtime mutation owners.
+
+### Removed Processing duplicate registries
+
+| Removed | Replaced by |
+|---------|-------------|
+| `childrenCommitCapability.ts` | `resolveMutationCapability()` |
+| `writableProviders.ts` | `providerRefToCanonicalRef()` + patch partition |
+
+### Native vs config mutation paths
+
+| Class | Resolution | Storage |
+|-------|------------|---------|
+| Native (`first_name`, `last_name`, `dob`) | `storage_class: native` | `customer_members` columns |
+| Config (`gender`, `allergies`, …) | `storage_class: config` | `field_values` upsert |
+
+P5B intentionally limits approved commit scope to native identity fields; platform already supports config fields through the same shared service.
+
+### Future adapters
+
+Parent/Guardian commits, proposed-new Child creation (P5C), and relationship writes remain out of scope. Each future adapter should add entity-specific mutation capability — not Processing-local column maps.

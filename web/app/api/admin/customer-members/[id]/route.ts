@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
-import {
-    assertCustomerMemberConfigFieldDefinitionsExist,
-    buildNativeCustomerMemberUpdates,
-    upsertCustomerMemberConfigFieldValues,
-    validateCustomerMemberPatchBody,
-} from "@/lib/admin/customerMemberPatch";
+import { applyCustomerMemberMutationPatch } from "@/lib/admin/customerMemberPatch";
 import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
 
 const CUSTOMER_MEMBER_SELECT =
@@ -95,55 +90,15 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    const validated = validateCustomerMemberPatchBody(body);
-    if (!validated.ok) {
-        return NextResponse.json({ error: validated.error }, { status: 400 });
-    }
-
-    const { native, config } = validated;
-    const nativeUpdates = buildNativeCustomerMemberUpdates(native);
-    const hasNative = Object.keys(nativeUpdates).length > 0;
-    const hasConfig = Object.keys(config).length > 0;
-
     const supabase = createAdminClient();
-
-    const { data: existing, error: fetchErr } = await supabase
-        .from("customer_members")
-        .select("id")
-        .eq("id", id)
-        .eq("org_id", ctx.orgId)
-        .maybeSingle();
-
-    if (fetchErr) {
-        return NextResponse.json({ error: fetchErr.message }, { status: 500 });
-    }
-    if (!existing) {
-        return NextResponse.json({ error: "Member not found" }, { status: 404 });
-    }
-
-    if (hasConfig) {
-        const defErr = await assertCustomerMemberConfigFieldDefinitionsExist(supabase, ctx.orgId, config);
-        if (defErr) {
-            return NextResponse.json({ error: defErr }, { status: 400 });
-        }
-        await upsertCustomerMemberConfigFieldValues(supabase, ctx.orgId, id, config);
-    }
-
-    if (hasNative) {
-        const { data, error } = await supabase
-            .from("customer_members")
-            .update(nativeUpdates)
-            .eq("id", id)
-            .eq("org_id", ctx.orgId)
-            .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, created_at")
-            .single();
-
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-        if (!data) {
-            return NextResponse.json({ error: "Member not found" }, { status: 404 });
-        }
+    const applied = await applyCustomerMemberMutationPatch({
+        supabase,
+        orgId: ctx.orgId,
+        memberId: id,
+        body,
+    });
+    if (!applied.ok) {
+        return NextResponse.json({ error: applied.error }, { status: applied.status ?? 500 });
     }
 
     const profileByMember = await loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id]);

@@ -205,6 +205,39 @@ export function layoutRefKeyToCanonicalRef(refKey: string): CanonicalRegistryRef
     return { entity_type: entityType, field_key: parsed.fieldKey };
 }
 
+
+
+/**
+ * Resolve any consumer provider ref (Forms emission, layout refKey, legacy id) to canonical registry ref.
+ * Processing and other commit adapters must use this — not local alias maps.
+ */
+export function providerRefToCanonicalRef(providerRef: string): CanonicalRegistryRef | null {
+    const trimmed = providerRef.trim();
+    if (!trimmed) return null;
+
+    if (trimmed.startsWith("customer_member.")) {
+        const fieldKey = trimmed.slice("customer_member.".length).trim();
+        const profileKey = customerMemberFieldKeyFromLayoutChildField(fieldKey) ?? fieldKey;
+        if (isCustomerMemberProfileFieldKey(profileKey)) {
+            return { entity_type: "customer_member", field_key: profileKey };
+        }
+        return null;
+    }
+
+    const parsed = parseLayoutRefKey(normalizeRefKeyOnRead(trimmed));
+    if (parsed?.entityKey === "child") {
+        const profileKey = customerMemberFieldKeyFromLayoutChildField(parsed.fieldKey);
+        if (profileKey) return { entity_type: "customer_member", field_key: profileKey };
+        const fromFormsId = systemFieldIdToCanonicalRef(parsed.fieldKey);
+        if (fromFormsId) return fromFormsId;
+    }
+
+    const fromLayout = layoutRefKeyToCanonicalRef(trimmed);
+    if (fromLayout) return fromLayout;
+
+    return systemFieldIdToCanonicalRef(trimmed);
+}
+
 /** Stable picker / persistence rule_id for a registry row in Business Processes. */
 export function resolveRuleIdForCanonicalRef(ref: CanonicalRegistryRef): string {
     const catalogRule = canonicalRefToRuleId(ref);

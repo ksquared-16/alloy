@@ -323,4 +323,20 @@ Shared contract: `web/lib/fields/providerConsumerReference.ts`. Full cross-consu
 ### P5A boundary
 
 Read-only grouped evidence. No approve/commit/record mutation. P5B begins after merge.
+## P5B note
 
+P5B moves source dispatch to `web/lib/intake/sources/` and adds existing-child commit on approved canonical proposals only.
+
+P5B adds existing-child approval/commit on top of P5A canonical proposals; see `processing-existing-child-proposal-commit.md`.
+
+
+## Platform Mutation Convergence (2026-07-11)
+
+P5B execution bridge now consumes the canonical mutation platform instead of a Processing-local field registry.
+
+- Alias bridge: `providerRefToCanonicalRef`
+- Capability: `resolveMutationCapability`
+- Execution: `applyCustomerMemberMutationPatch` (shared with Customer Member PATCH API)
+- DOB storage drift corrected to `customer_members.dob`
+
+Future Person/inquiry/enrollment mutation adapters should follow the same pattern: canonical ref → entity mutation service → database. Processing must not reintroduce parallel registries.

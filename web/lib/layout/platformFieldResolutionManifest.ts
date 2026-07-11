@@ -156,7 +156,7 @@ const CHILD_MANIFEST: PlatformFieldManifestEntry[] = [
     entry("child.last_name", "Last name", "text", "native_entity", "customer_members.last_name", "fc5", ["repeater"], ["child"], false),
     entry("child.full_name", "Full name", "text", "computed", "customer_members.first_name + last_name", "fc5", ["repeater"], ["child"]),
     entry("child.name", "Child name", "text", "computed", "customer_member.display_name", "fc5", ["repeater"], ["child"]),
-    entry("child.date_of_birth", "Date of birth", "date", "native_entity", "customer_members.date_of_birth", "fc5", ["repeater"], ["child"], false),
+    entry("child.date_of_birth", "Date of birth", "date", "native_entity", "customer_members.dob", "fc5", ["repeater"], ["child"], false),
     entry("child.age", "Age", "text", "computed", "customer_members.dob", "fc5", ["repeater"], ["child"], false),
     entry("child.age_band", "Age band", "text", "computed", "customer_member.age_band", "fc5", ["repeater"], ["child"], false),
     entry("child.gender", "Gender", "select", "metadata", "customer_members.field_values.gender", "now", ["repeater"], ["child"]),
