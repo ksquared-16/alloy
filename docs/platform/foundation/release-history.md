@@ -44,7 +44,7 @@
 - **Work View continuity** — `?work_view=` deep links on work-unit routes
 - **Canonical location experience** — Settings Configuration Mode; no legacy location drawer
 
-**Staging certification base:** `6daf032ce5d4d9b3f64fef0ad2a49e6443a8af3d` (includes floor `e94811914`).
+**Staging certification base:** `61aefff37` (includes floor `e94811914`). Final certification: [`platform-certification-july-2026.md`](./platform-certification-july-2026.md).
 
 ### June 2026
 

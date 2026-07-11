@@ -139,7 +139,7 @@ Authenticated staging verification checklist: [`../../sprints/07_2026/platform-s
 | Platform simplification P2 (search → settings) | #145 | `305e95c4b` |
 | Legacy drawer elimination | #148 | `e94811914` |
 
-**Staging head at certification:** `6daf032ce5d4d9b3f64fef0ad2a49e6443a8af3d`
+**Staging head at certification:** `61aefff37a0569e31f3142502cd8d69188b6ef82`
 
 ---
 
@@ -184,4 +184,6 @@ These are **product expansion** lanes — not runtime stabilization:
 | Navigation | [`../core/navigation-and-workspace-doctrine.md`](../core/navigation-and-workspace-doctrine.md) |
 | Operational UX | [`../operational-ux-doctrine.md`](../operational-ux-doctrine.md) |
 | Release history | [`../foundation/release-history.md`](../foundation/release-history.md) |
+| Platform manifesto | [`../foundation/platform-manifesto.md`](../foundation/platform-manifesto.md) |
+| Platform certification | [`../foundation/platform-certification-july-2026.md`](../foundation/platform-certification-july-2026.md) |
 | TypeScript operating model | [`../../governance/typescript-performance.md`](../../governance/typescript-performance.md) |

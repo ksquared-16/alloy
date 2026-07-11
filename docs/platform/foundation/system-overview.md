@@ -91,15 +91,17 @@ Milestone record: [`../milestones/platform-stabilization-july-2026.md`](../miles
 ## Load order (onboarding)
 
 1. This file
-2. `../governance/glossary.md`
-3. `architecture.md`
-4. `platform-capabilities.md`
-5. `../core/business-process-system.md`
-6. `../core/entity-model.md`
-7. `../core/record-system.md`
-8. `../milestones/platform-stabilization-july-2026.md`
-9. `../operator/queue-system.md` + `../operator/drawer-system.md`
-10. Schema layer (`docs/schema/`) when touching DB/RLS
+2. [`platform-manifesto.md`](./platform-manifesto.md) — **required reading**
+3. [`platform-certification-july-2026.md`](./platform-certification-july-2026.md)
+4. `../governance/glossary.md`
+5. `architecture.md`
+6. `platform-capabilities.md`
+7. `../core/business-process-system.md`
+8. `../core/entity-model.md`
+9. `../core/record-system.md`
+10. `../milestones/platform-stabilization-july-2026.md`
+11. `../operator/queue-system.md` + `../operator/drawer-system.md`
+12. Schema layer (`docs/schema/`) when touching DB/RLS
 
 ---
 
