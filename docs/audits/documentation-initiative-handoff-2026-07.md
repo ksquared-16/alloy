@@ -2,7 +2,20 @@
 
 **Status:** Handoff record. Read this first, then the blueprint.
 **Owner of next phase:** whoever executes the migration.
-**Prepared:** 2026-07-11 against `origin/staging` @ `29fbcfb93`.
+**Prepared:** 2026-07-11 against `origin/staging` @ `29fbcfb93` (planning baseline).
+
+> **Reconciliation note (handoff promotion, 2026-07-11).** Between opening the handoff PR and
+> merging it, `origin/staging` advanced `29fbcfb93 → f6081c46b` via **PR #163
+> ("certify and freeze July 2026 platform architecture")**. That change added
+> `docs/platform/foundation/platform-freeze-july-2026.md` and touched `README.md`,
+> `platform-manifesto.md`, `product-roadmap.md`, and `release-history.md`. It did **not** touch
+> `docs/audits/`, so it does not conflict with these handoff files, and the audit/blueprint were
+> **not** rewritten. Two consequences for the implementer:
+> 1. **Latest `origin/staging` is authoritative** — the planning baseline (`29fbcfb93`) is a
+>    historical marker, not current truth. Reconcile against the newest staging before executing.
+> 2. The freeze doc that the blueprint (§3.2) described as an *unmerged branch* has now **merged**
+>    to `docs/platform/foundation/platform-freeze-july-2026.md`. The blueprint's guidance stands
+>    (on migration, relocate it to `platform/milestones/freeze-july-2026.md`).
 
 ---
 
@@ -77,9 +90,10 @@ These require judgment (they change content, not just location). Each gets its o
 - **Out-of-tree authorities** — `web/docs/TIMEZONE_SEMANTICS.md` (real TZ contract) and
   `web/components/workspace/doctrine.ts` (visual tokens as code). Decide canonical direction
   before mirroring.
-- **`platform-freeze-july-2026` branch** — unmerged branch `docs/platform-freeze-july-2026` adds a
-  milestone doc to `foundation/`. Coordinate with its owner; if it merges first, Phase 3's
-  `milestones/` consolidation rebases onto it.
+- **`platform-freeze-july-2026`** — **now merged** to `docs/platform/foundation/platform-freeze-july-2026.md`
+  (PR #163, staging `f6081c46b`). Phase 3's `milestones/` consolidation must relocate it to
+  `platform/milestones/freeze-july-2026.md` and account for the accompanying README/manifesto/
+  roadmap/release-history edits that landed with it.
 
 ## Owner decisions needed before execution (blueprint §12)
 
@@ -107,7 +121,9 @@ These require judgment (they change content, not just location). Each gets its o
 
 ## Provenance
 
-- Audit baseline: `bb720f495`; blueprint + handoff baseline: `29fbcfb93` (re-synced).
+- Audit baseline: `bb720f495`; blueprint + handoff planning baseline: `29fbcfb93`. Handoff
+  promoted to staging after it advanced to `f6081c46b` (see the Reconciliation note above);
+  always defer to the newest `origin/staging`.
 - These three docs live in `docs/audits/` (consistent with the repo's prior documentation-audit
   precedent). Under the blueprint's own target, `audits/` holds point-in-time investigations;
   once the migration executes, these move to `audits/active/` → then `audits/archive/`.
