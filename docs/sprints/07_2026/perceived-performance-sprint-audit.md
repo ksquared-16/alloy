@@ -1,9 +1,9 @@
 # Alloy OS — Perceived Performance Sprint
 
 **Worktree:** `/Users/Kelly/Alloy/.worktrees/perceived-performance-sprint`
-**Branch:** `feat/perceived-performance-sprint`
-**Base:** `origin/staging` @ `392c84437` (rebased 2026-07-07)
-**Status:** Phase 1 merged into staging. Phase 1.5 first-load boot shell complete on rebased branch.
+**Branch:** `feat/perceived-performance-closeout`
+**Final staging:** `origin/staging` @ `e52e5fa2c` (2026-07-11)
+**Status:** **Sprint complete.** See `perceived-performance-sprint-closeout.md` for certification, deployment incident, stash audit, and deferred ranking.
 
 > **Worktree isolation:** All sprint work lives in the dedicated worktree above so other sessions on `/Users/Kelly/Alloy` cannot disturb this branch.
 
@@ -80,9 +80,13 @@ Browser validation artifact: `docs/sprints/07_2026/perceived-performance-browser
 
 ---
 
-## Phase 2 candidates (deferred)
+## Work View + Focus Panel continuity (complete @ `e52e5fa2c`)
 
-C3 same-host pill queue prefetch, E1 seed placeholders, A3 warm-cache Surface Hold, C2 pill focus continuity, H1 back navigation hold. **Do not start until Phase 1.5 merges.**
+Steps B/C/D (#157, #159) and E1-a/b (#160) merged. Full measured outcomes, deployment incident note, stash audit, and deferred ranking: **`perceived-performance-sprint-closeout.md`**.
+
+## Phase 2 candidates (deferred — choose intentionally)
+
+E1-c body placeholders, Surface Host Phase 2, deeper back/forward retained context, motion polish, further predictive preparation. **Not required to certify the completed slice.**
 
 ---
 
