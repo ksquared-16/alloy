@@ -97,7 +97,13 @@ describe("Queue determinism", () => {
         const src = readSrc("lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts");
         expect(src).toMatch(/const seq = \+\+queueRequestSeq\.current/);
         expect(src).toMatch(/seq === queueRequestSeq\.current[\s\S]{0,120}setQueueResult/);
-        expect(src).toMatch(/seq === queueRequestSeq\.current[\s\S]{0,120}setQueueError/);
+        expect(src).toMatch(/seq === queueRequestSeq\.current[\s\S]{0,220}setQueueError/);
+    });
+
+    it("fetch error retains prior queueResult (does not clear rows on failure)", () => {
+        const src = readSrc("lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts");
+        expect(src).not.toContain("setQueueResult(null)");
+        expect(src).toContain("Queue-lane hold: retain prior rows on fetch failure");
     });
 
     /**

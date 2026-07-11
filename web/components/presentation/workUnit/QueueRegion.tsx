@@ -32,6 +32,7 @@ import { markPerceived } from "@/lib/perf/perceivedPerf";
 import { CondensedQueueRow } from "./CondensedQueueRow";
 import { QueueFilterControls } from "./QueueFilterControls";
 import { useFocusPanelOpen } from "./FocusPanelSurface";
+import { queueRowsForListDuringHold } from "@/lib/presentation/runtime/queueRowsRetention";
 
 const QUEUE_SKELETON_ROW_COUNT = 3;
 
@@ -82,8 +83,10 @@ export function queueRegionRenderState(queue: {
     loading: boolean;
     error: string | null;
 }): QueueRegionRenderState {
-    if (queue.error) return "error";
     const hasRows = queue.rows.length > 0;
+    // Hard error with nothing to hold — full error surface. When rows exist, hold them and
+    // surface the error inline (never drop to empty/skeleton).
+    if (queue.error && !hasRows) return "error";
     if (queue.loading && !hasRows) return "cold-loading";
     if (!hasRows) return "empty";
     return "rows";
@@ -148,8 +151,20 @@ export function QueueRegion({
         setFilters(queueRowFilterFromDrillParams(new URLSearchParams(drillQueryString)));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drillFilterKey]);
+    // Work View switch resets client filters so held rows are not hidden during destination fetch.
+    useEffect(() => {
+        setFilters(queueRowFilterFromDrillParams(new URLSearchParams(drillQueryString)));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workViewId]);
     const facets = useMemo(() => deriveQueueRowFilterFacets(queue.rows), [queue.rows]);
     const visibleRows = useMemo(() => applyQueueRowFilters(queue.rows, filters), [queue.rows, filters]);
+    const holdActive = queue.loading && queue.rows.length > 0;
+    const rowsForList = queueRowsForListDuringHold({
+        queueRows: queue.rows,
+        visibleRows,
+        loading: queue.loading,
+        filterActive: queueRowFilterIsActive(filters),
+    });
     const filterActive = queueRowFilterIsActive(filters);
     // Canonical queue controls appear whenever the view has resolved (rows OR a settled empty
     // view) — never disappearing on an empty queue or a specific Work View. Hidden only during
@@ -223,7 +238,7 @@ export function QueueRegion({
                             No records in this view
                         </p>
                     </div>
-                ) : filterActive && visibleRows.length === 0 ? (
+                ) : filterActive && visibleRows.length === 0 && !holdActive ? (
                     // Rows exist but the operator's filter matched none — hold the board, offer a reset.
                     <div data-queue-no-matches="true" className="py-6 text-center">
                         <p className="text-sm text-alloy-midnight/55">No records match your filters</p>
@@ -238,8 +253,17 @@ export function QueueRegion({
                 ) : (
                     // Queue-lane hold: prior rows stay in place during a refetch (aria-busy),
                     // swapping when the new rows arrive — no skeleton flash on a view switch.
-                    <ul role="list" aria-busy={queue.loading || undefined} className="flex flex-col gap-1.5">
-                        {visibleRows.map((row, index) => (
+                    <>
+                        {queue.error ? (
+                            <p
+                                role="alert"
+                                className="mb-2 rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember"
+                            >
+                                {queue.error}
+                            </p>
+                        ) : null}
+                        <ul role="list" aria-busy={queue.loading || undefined} className="flex flex-col gap-1.5">
+                        {rowsForList.map((row, index) => (
                             <li key={`${row.entityType}:${row.entityId}`}>
                                 <CondensedQueueRow
                                     row={row}
@@ -252,7 +276,8 @@ export function QueueRegion({
                                 />
                             </li>
                         ))}
-                    </ul>
+                        </ul>
+                    </>
                 )}
             </div>
         </section>
