@@ -11,9 +11,11 @@ import {
 } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import {
     groupDefsFor,
+    identityConfigurationFieldKeys,
     selectedFieldKeys,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import type { SurfaceComposerPlacedItemRef } from "@/lib/adminV2/settings/surfaces/surfaceComposer";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
@@ -49,8 +51,12 @@ export function listNestedPlacedFields(
     groupKey: string,
     config: NestedSurfaceConfig,
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+    purpose?: Exclude<IdentityConfigurationPurpose, "evidence">,
 ): NestedPlacedFieldRef[] {
-    return selectedFieldKeys(config, groupKey).map((fieldKey) => ({
+    const keys = purpose
+        ? identityConfigurationFieldKeys(config, groupKey, purpose)
+        : selectedFieldKeys(config, groupKey);
+    return keys.map((fieldKey) => ({
         id: nestedPlacedFieldId(groupKey, fieldKey),
         groupKey,
         fieldKey,

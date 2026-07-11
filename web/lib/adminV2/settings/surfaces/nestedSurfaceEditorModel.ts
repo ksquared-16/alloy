@@ -56,6 +56,14 @@ import {
     type IdentityFieldPlacement,
     type IdentityFieldTier,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import {
+    configurationPurposeFromTierArg,
+    fieldKeysForConfigurationPurpose,
+    normalizeIdentityStorageTier,
+    type IdentityConfigurationPurpose,
+    type IdentityEvidenceCollectionConfig,
+} from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { splitDefaultFieldsForIdentityGroup } from "@/lib/adminV2/settings/surfaces/identityDisclosureDefaults";
 
 export const HOUSEHOLD_SURFACE_ID = "household_surface";
 export const CHILDREN_SURFACE_ID = "children_surface";
@@ -107,9 +115,14 @@ export type NestedSurfaceGroupDef = {
 
 export type NestedSurfaceGroupConfig = {
     key: string;
+    /** Summary layer — recognition fields (who is this?). */
     selectedFieldKeys: string[];
-    /** Expanded-tier fields (collapsed behind View details). */
+    /** Context Facts — incremental operational facts (persisted as contextFieldKeys). */
+    contextFieldKeys?: string[];
+    /** Details layer — inspect one identity after selection (legacy name: expandedFieldKeys). */
     expandedFieldKeys?: string[];
+    /** Evidence layer — collection-oriented proof regions (documents, forms, …). */
+    evidenceCollections?: IdentityEvidenceCollectionConfig[];
     /** Optional sections (e.g. emergency_contacts) — false hides until operator adds the section. */
     enabled?: boolean;
     /** Legacy runtime field modes (displayed/editable) — kept for drill-in runtime parity. */
@@ -121,7 +134,7 @@ export type NestedSurfaceGroupConfig = {
     fieldLabels?: Record<string, string>;
     /** Per-field row width — `half` pairs with the next consecutive half field on one row. */
     fieldLayoutWidths?: Record<string, NestedSurfaceFieldLayoutWidth>;
-    /** Shared identity placements — summary + expanded tiers with row/column metadata. */
+    /** Shared identity placements — summary, context, and details tiers with row/column metadata. */
     fieldPlacements?: IdentityFieldPlacement[];
     /** Explicit per-field icon override (catalog icon used when absent). */
     fieldIcons?: Record<string, string>;
@@ -186,16 +199,47 @@ function defaultGroupEnabled(surfaceId: string, groupKey: string): boolean {
     return true;
 }
 
+function defaultIdentityLayerKeysForGroup(
+    surfaceId: string,
+    groupKey: string,
+    defaultFieldKeys: readonly string[],
+): { selectedFieldKeys: string[]; contextFieldKeys?: string[]; expandedFieldKeys?: string[] } {
+    if (groupKey === "roster" && surfaceId === CHILDREN_SURFACE_ID) {
+        return { selectedFieldKeys: [] };
+    }
+    if (
+        surfaceId === HOUSEHOLD_SURFACE_ID
+        || surfaceId === CHILDREN_SURFACE_ID
+        || surfaceId === "child_surface"
+        || surfaceId === "employee_surface"
+    ) {
+        const layers = splitDefaultFieldsForIdentityGroup(surfaceId, groupKey, defaultFieldKeys);
+        return {
+            selectedFieldKeys: [...layers.summary],
+            contextFieldKeys: layers.contextFacts.length > 0 ? [...layers.contextFacts] : undefined,
+            expandedFieldKeys: layers.details.length > 0 ? [...layers.details] : undefined,
+        };
+    }
+    return { selectedFieldKeys: [...defaultFieldKeys] };
+}
+
 /** Seed a default config (each group selects its default real fields). */
 export function defaultNestedSurfaceConfig(surfaceId: string): NestedSurfaceConfig {
-    let groups = groupDefsFor(surfaceId).map((g) => ({
-        key: g.key,
-        selectedFieldKeys:
-            g.key === "roster" && surfaceId === CHILDREN_SURFACE_ID ? [] : [...g.defaultFieldKeys],
-        enabled: defaultGroupEnabled(surfaceId, g.key),
-        displayOptions: defaultGroupDisplayOptionsForSurface(surfaceId, g.key),
-        fieldModes: defaultFieldModesForSurfaceGroup(surfaceId, g.key, g.defaultFieldKeys),
-    }));
+    let groups = groupDefsFor(surfaceId).map((g) => {
+        const layerKeys = defaultIdentityLayerKeysForGroup(surfaceId, g.key, g.defaultFieldKeys);
+        return {
+            key: g.key,
+            ...layerKeys,
+            enabled: defaultGroupEnabled(surfaceId, g.key),
+            displayOptions: defaultGroupDisplayOptionsForSurface(surfaceId, g.key),
+            fieldModes: defaultFieldModesForSurfaceGroup(surfaceId, g.key, g.defaultFieldKeys),
+            fieldPlacements: generateDefaultIdentityFieldPlacements({
+                selectedFieldKeys: layerKeys.selectedFieldKeys,
+                contextFieldKeys: layerKeys.contextFieldKeys,
+                expandedFieldKeys: layerKeys.expandedFieldKeys,
+            }),
+        };
+    });
     if (surfaceId === HOUSEHOLD_SURFACE_ID) {
         groups = orderNestedGroupsByCanonicalKeys(groups, HOUSEHOLD_DEFAULT_SECTION_ORDER);
     }
@@ -279,16 +323,27 @@ function seedFieldPlacementForAdd(
     fieldKey: string,
     tier: IdentityFieldTier = "summary",
 ): IdentityFieldPlacement[] {
-    const placements = [...(group.fieldPlacements ?? generateDefaultIdentityFieldPlacements(group))];
-    if (placements.some((placement) => placement.fieldRef === fieldKey && placement.tier === tier)) {
+    const normalizedTier = normalizeIdentityStorageTier(tier);
+    const placements = [...(group.fieldPlacements ?? generateDefaultIdentityFieldPlacements(group))].map(
+        (placement) => ({ ...placement, tier: normalizeIdentityStorageTier(placement.tier) }),
+    );
+    if (
+        placements.some(
+            (placement) =>
+                placement.fieldRef === fieldKey
+                && normalizeIdentityStorageTier(placement.tier) === normalizedTier,
+        )
+    ) {
         return placements;
     }
-    const tierPlacements = placements.filter((placement) => placement.tier === tier);
+    const tierPlacements = placements.filter(
+        (placement) => normalizeIdentityStorageTier(placement.tier) === normalizedTier,
+    );
     const nextRow =
         tierPlacements.length > 0 ? Math.max(...tierPlacements.map((placement) => placement.row)) + 1 : 1;
     placements.push({
         fieldRef: fieldKey,
-        tier,
+        tier: normalizedTier,
         row: nextRow,
         column: 1,
         width: "full",
@@ -305,16 +360,16 @@ function patchGroupWithField(
 ): NestedSurfaceConfig {
     const group = config.groups.find((g) => g.key === groupKey);
     if (!group) return config;
-    const keys =
-        tier === "expanded"
-            ? [...(group.expandedFieldKeys ?? [])]
-            : [...group.selectedFieldKeys];
+    const purpose = configurationPurposeFromTierArg(tier);
+    const keys = [...fieldKeysForConfigurationPurpose(group, purpose)];
     if (!keys.includes(fieldKey)) keys.push(fieldKey);
+    const storageTier = normalizeIdentityStorageTier(tier);
 
     const nextGroup: NestedSurfaceGroupConfig = {
         ...group,
-        selectedFieldKeys: tier === "summary" ? keys : group.selectedFieldKeys,
-        expandedFieldKeys: tier === "expanded" ? keys : group.expandedFieldKeys,
+        selectedFieldKeys: purpose === "summary" ? keys : group.selectedFieldKeys,
+        contextFieldKeys: purpose === "context_facts" ? keys : group.contextFieldKeys,
+        expandedFieldKeys: purpose === "details" ? keys : group.expandedFieldKeys,
         fieldLayoutWidths: {
             ...(group.fieldLayoutWidths ?? {}),
             [fieldKey]: group.fieldLayoutWidths?.[fieldKey] ?? "full",
@@ -325,7 +380,7 @@ function patchGroupWithField(
                 group.fieldPolicies?.[fieldKey]
                 ?? defaultFieldVisibility(config.surfaceId, groupKey),
         },
-        fieldPlacements: seedFieldPlacementForAdd(config.surfaceId, group, fieldKey, tier),
+        fieldPlacements: seedFieldPlacementForAdd(config.surfaceId, group, fieldKey, storageTier),
     };
 
     return {
@@ -341,6 +396,27 @@ export function addFieldToNestedGroup(
     options?: { tier?: IdentityFieldTier },
 ): NestedSurfaceConfig {
     return patchGroupWithField(config, groupKey, fieldKey, options?.tier ?? "summary");
+}
+
+/** Field keys for one identity configuration purpose on a group. */
+export function identityConfigurationFieldKeys(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    purpose: Exclude<IdentityConfigurationPurpose, "evidence">,
+): string[] {
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return [];
+    return fieldKeysForConfigurationPurpose(group, purpose);
+}
+
+/** @deprecated Use identityConfigurationFieldKeys. */
+export function identityLayerFieldKeys(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    layer: "summary" | "context" | "details",
+): string[] {
+    const purpose = layer === "context" ? "context_facts" : layer;
+    return identityConfigurationFieldKeys(config, groupKey, purpose);
 }
 
 export function removeFieldFromNestedGroup(config: NestedSurfaceConfig, groupKey: string, fieldKey: string): NestedSurfaceConfig {
@@ -682,7 +758,9 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
         const merged: NestedSurfaceGroupConfig = {
             key: g.key,
             selectedFieldKeys: [...found.selectedFieldKeys],
+            contextFieldKeys: found.contextFieldKeys ? [...found.contextFieldKeys] : undefined,
             expandedFieldKeys: found.expandedFieldKeys ? [...found.expandedFieldKeys] : undefined,
+            evidenceCollections: found.evidenceCollections ? [...found.evidenceCollections] : undefined,
             enabled: found.enabled ?? defaultGroupEnabled(surfaceId, g.key),
             displayOptions: found.displayOptions ?? g.displayOptions,
             fieldModes: found.fieldModes ?? g.fieldModes,

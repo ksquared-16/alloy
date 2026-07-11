@@ -3,6 +3,8 @@
 **Status:** Active — July 2026  
 **Scope:** Focus Panel nested identity cards (Household, Children, Person, Employee, contacts)
 
+> **Canonical disclosure model:** [Identity Surface Doctrine V2](./identity-surface-composition-v2.md) — four-layer progressive disclosure (Summary → Context → Details → Evidence). Builder and runtime share one interaction grammar. V1 sections below remain the technical baseline for persistence, parity, and compatibility.
+
 ## Summary
 
 Identity cards on the Focus Panel share **one composition grammar** implemented on top of the existing nested-surface model (`NestedSurfaceConfig` / `NestedSurfaceGroupConfig`). `/surfaces` owns identity presentation; entity and relationship truth owns the records displayed.
@@ -22,10 +24,12 @@ There is **no parallel persistence format**. Work Template action configuration 
 
 ## Shared composition model
 
-Each identity section (nested evidence group) supports:
+Each identity section configures **three field purposes** plus evidence collections:
 
-- **Summary fields** — always visible in collapsed card scan
-- **Expanded fields** — behind `View details` (keyboard accessible; closes on Escape and outside click)
+- **Summary Fields** — recognition (`selectedFieldKeys`)
+- **Context Facts** — incremental operational facts (`contextFieldKeys`); **Context runtime = Summary + Context Facts**
+- **Detail Fields** — inspect one identity after selection (`expandedFieldKeys`; tier `details`)
+- **Evidence Collections** — proof-oriented regions (`evidenceCollections`)
 - **Row layout** — `full` or paired `half` columns via one shared `resolveIdentityFieldRows` resolver
 - **Avatar** — configured per section (`displayOptions.showAvatar`); photo → initials fallback
 - **Badge** — relationship label, role, or configured field

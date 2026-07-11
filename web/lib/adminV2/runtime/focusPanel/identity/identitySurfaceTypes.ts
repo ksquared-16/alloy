@@ -1,9 +1,10 @@
 /**
  * Shared identity surface composition types.
  *
- * Evolves `NestedSurfaceGroupConfig` without a parallel persistence format.
- * Identity sections map 1:1 to nested surface evidence groups; field placements
- * extend per-field layout/policy metadata already stored on the group.
+ * Runtime disclosure: Summary → Context → Details → Evidence
+ * Configuration: Summary Fields → Context Facts → Detail Fields → Evidence Collections
+ *
+ * Context runtime rows are projected from Summary + Context Facts — not configured twice.
  */
 
 import type { SurfaceFieldVisibility } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
@@ -12,12 +13,22 @@ import type {
     IdentityFieldLabelMode,
     IdentityFieldPlacement,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import type {
+    IdentityDisclosureLayer,
+    IdentityEvidenceCollectionConfig,
+} from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
 export type {
     IdentityFieldLabelMode,
     IdentityFieldPlacement,
     IdentityFieldTier,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+
+export type {
+    IdentityDisclosureLayer,
+    IdentityEvidenceCollectionConfig,
+    IdentityConfigurationPurpose,
+} from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
 export type IdentitySectionSource =
     | { type: "record" }
@@ -39,7 +50,26 @@ export type IdentitySectionConfig = {
         fieldRef?: string;
         fallbackLabel?: string;
     };
+    summary: {
+        fields: IdentityFieldPlacement[];
+    };
+    context: {
+        /** Incremental facts only — Summary inherits automatically at runtime. */
+        facts: IdentityFieldPlacement[];
+    };
+    details: {
+        fields: IdentityFieldPlacement[];
+    };
+    evidence: {
+        collections: IdentityEvidenceCollectionConfig[];
+    };
+    /** @deprecated Use `summary.fields`. */
     summaryFields: IdentityFieldPlacement[];
+    /** @deprecated Use `context.facts`. */
+    contextFields: IdentityFieldPlacement[];
+    /** @deprecated Use `details.fields`. */
+    detailsFields: IdentityFieldPlacement[];
+    /** @deprecated Use `details.fields`. */
     expandedFields: IdentityFieldPlacement[];
     emptyState?: {
         label: string;
@@ -69,6 +99,16 @@ export type IdentityFieldRowVM = {
     cells: IdentityFieldCellVM[];
 };
 
+/** Runtime disclosure depth for one identity record. */
+export type IdentityDisclosureDepth = "summary" | "context" | "details" | "evidence";
+
+export type IdentityEvidenceCollectionVM = {
+    key: string;
+    label: string;
+    enabled: boolean;
+    itemCount?: number;
+};
+
 export type IdentityRecordVM = {
     id: string;
     title: string;
@@ -78,9 +118,22 @@ export type IdentityRecordVM = {
         visible: boolean;
     };
     badge?: string | null;
+    /** Summary Fields — recognition. */
     summaryRows: IdentityFieldRowVM[];
+    /** Context Facts — incremental configuration only. */
+    contextFactRows: IdentityFieldRowVM[];
+    /** Context runtime projection = Summary + Context Facts (shared VM owns merge). */
+    contextRows: IdentityFieldRowVM[];
+    /** Detail Fields — inspect one identity after selection. */
+    detailRows: IdentityFieldRowVM[];
+    /** @deprecated Use `detailRows`. */
+    detailsRows: IdentityFieldRowVM[];
+    /** @deprecated Use `detailRows`. */
     expandedRows: IdentityFieldRowVM[];
+    canShowDetails: boolean;
+    /** @deprecated Use `canShowDetails`. */
     canExpand: boolean;
+    evidenceCollections?: IdentityEvidenceCollectionVM[];
 };
 
 export type IdentitySectionVM = {
@@ -95,4 +148,11 @@ export type IdentitySectionVM = {
 export type IdentityCardVM = {
     surfaceKey: string;
     sections: IdentitySectionVM[];
+};
+
+export type IdentityDisclosureVM = {
+    surfaceKey: string;
+    depth: IdentityDisclosureDepth;
+    sections: IdentitySectionVM[];
+    focusedRecordId?: string | null;
 };
