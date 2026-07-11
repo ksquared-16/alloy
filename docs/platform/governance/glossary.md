@@ -101,6 +101,20 @@ Additional terms (packet rollup, queue selection, etc.): `../../core/glossary.md
 
 ---
 
+---
+
+## Work Items (July 2026)
+
+| Term | Meaning |
+|------|---------|
+| **Work Item** | Operator-facing unit of cross-record operational execution in the Work Items workspace. |
+| **Work Items** | Cross-record execution platform — Overview + Queue + detail; not a replacement for Current Work or domain products. |
+| **Current Work** | Record-scoped active stage progression inside a Business Process — authoritative for BP stage work. |
+| **Virtual projection** | Work Items queue row derived from authoritative domain state without an `operational_tasks` row (e.g. `processing:{caseId}`, `communications:{threadId}`). |
+| **Source filter** | Queue provenance lens (Manual, Business Process, Processing, Communications) — describes origin, not duplicate ownership. |
+| **Operational refresh** | Unified client contract to recompute merged Work Items projections after domain mutations. |
+
+
 ## When to update
 
 New platform terms or canonical renames.

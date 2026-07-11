@@ -67,6 +67,18 @@ Implementation: `CommunicationsWorkspaceShell`, `CommunicationsModalTabPanel`, `
 
 Templates and Announcements inside the modal do not require separate feature flags beyond command center. See `../../sprints/06_2026/communications-v2/operator-surface-consolidation.md`.
 
+
+### Work Items convergence (Needs Reply — July 2026)
+
+Communications **Needs Reply** threads (`attention_state` ∈ `needs_response`, `awaiting_parent_reply`) may project into Work Items as virtual rows (`communications:{threadId}`) when loadable and not resolved.
+
+- **No** `operational_tasks` row is created.
+- Unread alone does not project.
+- **View in Work Items** / **Open in Communications** use shared navigation events and command-center pending selection.
+- Authoritative resolution or reply through Communications removes the projection after operational refresh.
+
+QA: `../../sprints/08_2026/work-items-v3-platform/qa/slice-6/`.
+
 ### Canonical communications runtime (Phase 2, July 2026)
 
 Communications has **one canonical runtime** with multiple presentation surfaces. Activity (`activity_embed`) is the compact presentation; Workspace Inbox (`workspace_inbox`) is the operational presentation. Both consume the same runtime contract for Preview VM hydration, thread selection, composer state, recipient state, send preflight/confirm, stale request protection, post-send refresh, reply collapse, and cache ownership.

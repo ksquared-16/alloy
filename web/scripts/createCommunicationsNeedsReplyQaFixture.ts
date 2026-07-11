@@ -37,6 +37,11 @@ async function pickThreadId(admin: SupabaseClient) {
     return row.id as string;
 }
 
+if (process.env.NODE_ENV === "production") {
+    console.error("Dev QA fixture scripts cannot run in production.");
+    process.exit(1);
+}
+
 async function main() {
     const cleanup = process.argv.includes("--cleanup");
     const admin = await adminClient();

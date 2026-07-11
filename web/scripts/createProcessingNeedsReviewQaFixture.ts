@@ -46,6 +46,11 @@ async function mintSessionCookie(): Promise<string> {
     return `${cookieName}=${value}`;
 }
 
+if (process.env.NODE_ENV === "production") {
+    console.error("Dev QA fixture scripts cannot run in production.");
+    process.exit(1);
+}
+
 async function main() {
     if (!fs.existsSync(FIXTURE)) throw new Error(`Missing fixture: ${FIXTURE}`);
     const base = process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "") || "http://127.0.0.1:3000";

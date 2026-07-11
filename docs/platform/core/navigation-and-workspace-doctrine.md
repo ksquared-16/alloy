@@ -517,6 +517,24 @@ Import from `@/components/workspace/doctrine`. Code: `web/components/workspace/d
 
 ---
 
+---
+
+## Work Items cross-navigation (July 2026)
+
+Work Items opens as an operational module modal (`adminv2-tasks-modal`) from the workspace command center.
+
+| Event | Purpose |
+|-------|---------|
+| `adminv2:open-work-items-task` | Open Work Items with exact row selected (source/view/filter in detail) |
+| `adminv2:open-communications-thread` | Open Communications inbox on exact thread |
+| `adminv2:open-processing-case` | Open Processing on exact case |
+| `adminv2:opportunity-focus-current-work` | Focus Current Work on record from Work Items |
+
+InboxModal switches to **Inbox** tab when pending command-center selection or `ADMIN_V2_OPEN_COMMUNICATIONS_THREAD` is present — prevents Overview landing on cross-nav from Work Items.
+
+Operational refresh: `dispatchOperationalWorkRefresh` — see `web/lib/workItems/operationalWorkRefresh.ts`.
+
+
 ## Related
 
 - `business-process-system.md`

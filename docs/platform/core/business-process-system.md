@@ -292,6 +292,15 @@ On enrollment departments, the needs-attention queue usually lives **inside** `e
 
 ---
 
+### Work Items convergence (July 2026)
+
+Stage work surfaced in **Current Work** is the authoritative Business Process execution path. The same work may appear in **Work Items** under the Business Process source for cross-record queue visibility — it is not duplicated as separate operational truth.
+
+- Current Work → Work Items: deep link with same underlying task/work identity.
+- Work Items → Current Work: focus event on the record-scoped work surface.
+- Outcome completion remains on the authoritative BP / Current Work path.
+
+
 ## Related docs
 
 | Topic | Doc |

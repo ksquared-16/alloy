@@ -82,3 +82,18 @@ Document **decisions**, not debates. Frozen areas:
 - **Alloy Operational Workspace Doctrine V2** (operational module modal presentation — frozen July 2026)
 
 Open areas stay in roadmap until frozen — then merge into platform docs.
+
+---
+
+## Work Items projection authority (July 2026)
+
+Work Items is the cross-record **execution visibility** layer — not a second workflow engine and not a replacement for domain systems of record.
+
+| Rule | Detail |
+|------|--------|
+| Domain authority | Processing, Communications, and Business Process runtimes own actionable state. |
+| Virtual projections | May appear in Work Items without creating `operational_tasks`. |
+| Manual creation | One canonical WorkItemDraftV1 runtime; explicit operator commit; BOS proposes, operator commits. |
+| Refresh | `dispatchOperationalWorkRefresh` coordinates recomputation after authoritative domain mutations. |
+| Deferred | Work Item conversation persistence, full activity history, additional domain lanes — see product roadmap. |
+

@@ -20,6 +20,8 @@
 
 **Final promotion merges:** #151 `bb720f495`, #156 `29fbcfb93`, #160 `e52e5fa2c`, #162 `51641dc44` (on staging base including #148 `e94811914`, #157 `c6e1adec8`, #159 `faa129ac9`).
 
+- **Work Items V3 operational execution platform** — cross-record queue, creation runtime, BP/Processing/Communications virtual projections; no migrations
+
 ---
 
 ### July 2026 — Runtime Simplification & Platform Stabilization (detail)
