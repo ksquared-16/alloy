@@ -27,6 +27,46 @@ QA thread used: `d2ef6890-656f-45df-8434-62a1a54e91c4` (Kurzman Family, email, `
 
 Synthetic work item id: `communications:d2ef6890-656f-45df-8434-62a1a54e91c4`.
 
+
+## Authoritative predicate
+
+Projection requires all of:
+
+- `scope_status === "resolved"` (canonical loadable thread)
+- `attention_state ∈ { needs_response, awaiting_parent_reply }`
+- thread not resolved/archived for Needs Reply lane
+- **no** `operational_tasks` row (virtual `communications:{threadId}` only)
+
+Unread alone does not project. Due views exclude Communications projections; last activity is shown as activity, not due date.
+
+## Resolution behavior
+
+Resolution used authoritative triage (`POST /api/admin/communications/conversations/{id}/triage` with `resolved`).
+
+After mutation:
+
+- `dispatchOperationalWorkRefresh` + forced comms prefetch refresh merged projections
+- projected row count dropped to 0
+- source count updated
+- no duplicate thread or Work Item created
+
+## Assignment behavior
+
+Fixture thread was **unassigned** (`assigned_user_id` null).
+
+- **Unassigned + Communications:** projected row visible
+- **Mine + Communications:** empty state (correct — not inferred from sender/recipient)
+- Live claim/unclaim transition not exercised (deferred; filter semantics verified)
+
+## Known deferred lanes
+
+Per convergence matrix — not in Slice 6 scope:
+
+- unread-only projection
+- failed-delivery projection
+- scheduled-send exceptions
+- additional Communications lanes beyond Needs Reply
+
 ## Automated capture
 
 ```bash
