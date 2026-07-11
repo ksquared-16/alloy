@@ -33,7 +33,10 @@ import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focus
 import { CONTACT_EDIT_FIELD_MAP } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { composeSummaryAndContextFacts } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
-import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import {
+    enabledEvidenceSections,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM, IdentityEvidenceCollectionVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 
 function initialsFor(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -48,6 +51,32 @@ function catalogLabel(surfaceId: string, groupKey: string, fieldRef: string): st
         ? fieldRef
         : fieldRef;
     return item.replace(/^[a-z_]+\./, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function resolveEvidenceCollectionsForGroup(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+): IdentityEvidenceCollectionVM[] {
+    const group = config.groups.find((entry) => entry.key === groupKey);
+    const configured = (group?.evidenceCollections ?? []).map((collection) => ({
+        key: collection.key,
+        label: collection.label,
+        enabled: collection.enabled !== false,
+    }));
+    if (configured.length > 0) return configured;
+
+    if (config.surfaceId === "children_surface" && (groupKey === "roster" || groupKey === "identity")) {
+        return enabledEvidenceSections(config).map((section) => ({
+            key: section.key,
+            label:
+                nestedGroupLabel(config, section.key)
+                ?? groupDefsFor(config.surfaceId).find((def) => def.key === section.key)?.label
+                ?? section.key,
+            enabled: true,
+        }));
+    }
+
+    return [];
 }
 
 function buildRecordRows(args: {
@@ -184,6 +213,7 @@ function buildContactRecordVM(args: {
         summaryRows,
         contextFactRows,
         detailRows,
+        evidenceCollections: resolveEvidenceCollectionsForGroup(args.config, args.groupKey),
     });
 }
 
@@ -236,6 +266,7 @@ function buildChildRecordVM(args: {
         summaryRows,
         contextFactRows,
         detailRows,
+        evidenceCollections: resolveEvidenceCollectionsForGroup(args.config, args.groupKey),
     });
 }
 

@@ -69,6 +69,7 @@ export default function IdentityRecordSummary({
                     <button
                         type="button"
                         className="identity-record-summary__edit"
+                        data-household-edit-contact={record.id}
                         onClick={() => onEditContact(record.id)}
                     >
                         Edit
