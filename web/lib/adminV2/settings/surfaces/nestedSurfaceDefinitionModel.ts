@@ -76,8 +76,9 @@ export const NESTED_SURFACE_DEFINITIONS: Record<string, NestedSurfaceDefinition>
             "children",
             "address",
             "billing_contact",
+            "contact_edit",
         ],
-        drillInSurfaceIds: [HOUSEHOLD_CONTACT_SURFACE_ID, "children_surface"],
+        drillInSurfaceIds: ["children_surface"],
     },
     [HOUSEHOLD_CONTACT_SURFACE_ID]: {
         surfaceId: HOUSEHOLD_CONTACT_SURFACE_ID,
@@ -93,8 +94,8 @@ export const NESTED_SURFACE_DEFINITIONS: Record<string, NestedSurfaceDefinition>
         role: "detail_surface",
         parentCardKey: "children",
         fixedRegions: ["roster_structure", "back_affordance"],
-        configurableGroups: ["identity", "placement", "readiness"],
-        drillInSurfaceIds: [CHILD_SURFACE_ID],
+        configurableGroups: ["identity", "roster", "placement", "readiness", "child_edit"],
+        drillInSurfaceIds: [],
     },
     [CHILD_SURFACE_ID]: {
         surfaceId: CHILD_SURFACE_ID,

@@ -14,12 +14,10 @@ type Props = {
 };
 
 const PREVIEW_VALUES: Record<string, string> = {
-    "person.first_name": "Jordan",
-    "person.last_name": "Johnson",
-    "person.phone": "(541) 555-0100",
-    "person.email": "jordan@example.com",
-    "person.date_of_birth": "Mar 15, 1988",
-    "person.address": "123 Oak St, Portland OR",
+    "contact.first_name": "Jordan",
+    "contact.last_name": "Johnson",
+    "contact.phone": "(541) 555-0100",
+    "contact.email": "jordan@example.com",
 };
 
 export default function HouseholdContactEditPreview({ config, selectedGroupKey, onSelectGroup }: Props) {
@@ -29,7 +27,7 @@ export default function HouseholdContactEditPreview({ config, selectedGroupKey, 
         <div
             className="process-config-setup-card space-y-3 p-4"
             data-household-contact-edit-preview="true"
-            onClick={() => onSelectGroup?.("contact_fields")}
+            onClick={() => onSelectGroup?.("contact_edit")}
         >
             <div className="border-b border-alloy-stone/10 pb-2">
                 <h3 className="text-sm font-semibold text-alloy-midnight">Edit Contact</h3>
@@ -37,8 +35,8 @@ export default function HouseholdContactEditPreview({ config, selectedGroupKey, 
             </div>
             <div
                 className="space-y-3"
-                data-nested-group="contact_fields"
-                data-nested-group-selected={selectedGroupKey === "contact_fields" ? "true" : undefined}
+                data-nested-group="contact_edit"
+                data-nested-group-selected={selectedGroupKey === "contact_edit" ? "true" : undefined}
             >
                 {rows.map((row) => {
                     if (!row.displayed) return null;

@@ -1,12 +1,15 @@
 /**
- * Household contact edit field policy — maps published `household_contact_surface`
- * config to runtime edit rows (displayed / editable / saveable).
+ * Household contact edit field policy. `household_surface.contact_edit` is
+ * canonical; `household_contact_surface` is accepted only through the adapter.
  */
 
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
-import type { NestedSurfaceFieldMode } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { defaultContactFieldModes } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
+import {
+    adaptHouseholdContactSurfaceToHouseholdSurface,
+    HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID,
+    resolveIdentityFieldPolicy,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 
 export type ContactEditFieldRow = {
     configKey: string;
@@ -24,33 +27,35 @@ const FIELD_DEFS: {
     label: string;
     inputType: ContactEditFieldRow["inputType"];
 }[] = [
-    { configKey: "person.first_name", valueKey: "first_name", label: "First name", inputType: "text" },
-    { configKey: "person.last_name", valueKey: "last_name", label: "Last name", inputType: "text" },
-    { configKey: "person.email", valueKey: "email", label: "Email", inputType: "email" },
-    { configKey: "person.phone", valueKey: "phone", label: "Phone", inputType: "tel" },
-    { configKey: "person.date_of_birth", label: "Date of birth", inputType: "text" },
-    { configKey: "person.address", label: "Address", inputType: "text" },
+    { configKey: "contact.first_name", valueKey: "first_name", label: "First name", inputType: "text" },
+    { configKey: "contact.last_name", valueKey: "last_name", label: "Last name", inputType: "text" },
+    { configKey: "contact.email", valueKey: "email", label: "Email", inputType: "email" },
+    { configKey: "contact.phone", valueKey: "phone", label: "Phone", inputType: "tel" },
 ];
 
 const DEFAULT_CONFIG_KEYS = FIELD_DEFS.map((d) => d.configKey);
 
-function fieldModesFromConfig(
-    contactConfig: NestedSurfaceConfig | null,
-): { keys: string[]; modes: Record<string, NestedSurfaceFieldMode> } {
-    const group = contactConfig?.groups.find((g) => g.key === "contact_fields");
-    const keys = group?.selectedFieldKeys.length ? group.selectedFieldKeys : DEFAULT_CONFIG_KEYS;
-    const modes = { ...defaultContactFieldModes(), ...(group?.fieldModes ?? {}) };
-    return { keys, modes };
+function canonicalConfig(contactConfig: NestedSurfaceConfig | null): NestedSurfaceConfig {
+    if (contactConfig?.surfaceId === HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID) {
+        return adaptHouseholdContactSurfaceToHouseholdSurface(contactConfig, null);
+    }
+    return adaptHouseholdContactSurfaceToHouseholdSurface(null, contactConfig);
 }
 
 /** Resolve which contact edit rows render and whether each is editable. */
 export function resolveContactEditFieldPolicy(contactConfig: NestedSurfaceConfig | null): ContactEditFieldRow[] {
-    const { keys, modes } = fieldModesFromConfig(contactConfig);
+    const config = canonicalConfig(contactConfig);
+    const group = config.groups.find((row) => row.key === "contact_edit");
+    const keys = group?.selectedFieldKeys.length ? group.selectedFieldKeys : DEFAULT_CONFIG_KEYS;
     const keySet = new Set(keys);
     return FIELD_DEFS.filter((def) => keySet.has(def.configKey)).map((def) => {
-        const mode = modes[def.configKey];
-        const displayed = mode?.displayed !== false;
-        const editable = displayed && def.valueKey != null && mode?.editable !== false;
+        const policy = resolveIdentityFieldPolicy({
+            config,
+            groupKey: "contact_edit",
+            fieldRef: def.configKey,
+        });
+        const displayed = policy !== "hidden";
+        const editable = displayed && def.valueKey != null && policy === "editable";
         return {
             configKey: def.configKey,
             valueKey: def.valueKey,

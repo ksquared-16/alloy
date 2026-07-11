@@ -11,6 +11,10 @@ import {
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { readNestedSurfaceConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader";
+import {
+    adaptHouseholdContactSurfaceToHouseholdSurface,
+    HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import type { SurfaceFieldVisibility } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
@@ -19,7 +23,14 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceSectionOrder";
 
 export function readHouseholdNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
-    return readNestedSurfaceConfigFromDoc(doc, HOUSEHOLD_SURFACE_ID);
+    if (!doc) return null;
+    const canonical = readNestedSurfaceConfigFromDoc(doc, HOUSEHOLD_SURFACE_ID);
+    const metadata = (doc.metadata ?? {}) as {
+        nestedSurfaces?: Record<string, NestedSurfaceConfig | undefined>;
+    };
+    const legacy = metadata.nestedSurfaces?.[HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID] ?? null;
+    if (!canonical && !legacy) return null;
+    return adaptHouseholdContactSurfaceToHouseholdSurface(legacy, canonical);
 }
 
 export function householdGroupFieldKeys(

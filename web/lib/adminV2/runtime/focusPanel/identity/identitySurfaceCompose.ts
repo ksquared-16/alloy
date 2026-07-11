@@ -57,12 +57,24 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
     "child.name": (subject) => (subject.kind === "child" ? subject.value.name : null),
     "inquiry_child.program": (subject) =>
         subject.kind === "child" && "program" in subject.value ? subject.value.program ?? null : null,
+    "child.room": (subject) =>
+        subject.kind === "child" && "room" in subject.value ? subject.value.room ?? null : null,
     "inquiry_child.schedule_type": (subject) =>
+        subject.kind === "child" && "schedule" in subject.value ? subject.value.schedule ?? null : null,
+    "inquiry_child.desired_schedule_type": (subject) =>
         subject.kind === "child" && "schedule" in subject.value ? subject.value.schedule ?? null : null,
     "child.start_date": (subject) =>
         subject.kind === "child" && "startDate" in subject.value ? subject.value.startDate ?? null : null,
+    "child.desired_start_date": (subject) =>
+        subject.kind === "child" && "startDate" in subject.value ? subject.value.startDate ?? null : null,
     "child.status": (subject) =>
         subject.kind === "child" && "status" in subject.value ? subject.value.status ?? null : null,
+    "child.readiness_summary": (subject) =>
+        subject.kind === "child" && "needsAttention" in subject.value
+            ? subject.value.needsAttention
+                ? subject.value.missingLine
+                : "Ready"
+            : null,
 };
 
 const PERSON_RESOLVERS: Record<string, Resolver> = {

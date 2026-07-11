@@ -4,20 +4,26 @@
  */
 
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { fieldVisibilityForNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     fieldIsSaveable,
     fieldShouldRender,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import { resolveIdentityFieldPolicy } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import {
     CHILD_FOCUS_FIELD_DEFS,
+    CHILD_SURFACE_ID,
     CHILD_UNSUPPORTED_SAVE_FIELD_KEYS,
     type ChildFocusFieldKey,
     childFocusViewFromConfig,
     isChildFocusFieldSaveSupported,
     orderedChildEditFieldKeys,
     type ChildFocusView,
-} from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+} from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
+import {
+    adaptChildSurfaceToChildrenSurface,
+    CHILDREN_SURFACE_CANONICAL_ID,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { defaultNestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 
 export { CHILD_UNSUPPORTED_SAVE_FIELD_KEYS };
 
@@ -61,16 +67,29 @@ function groupKeyForField(config: NestedSurfaceConfig, fieldKey: ChildFocusField
     return null;
 }
 
+function canonicalChildConfig(config: NestedSurfaceConfig | null): NestedSurfaceConfig | null {
+    if (!config) return null;
+    if (config.surfaceId === CHILD_SURFACE_ID) {
+        return adaptChildSurfaceToChildrenSurface(config, defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID));
+    }
+    return config;
+}
+
 /** Resolve child edit rows from published children_surface config (fieldPolicies parity). */
 export function resolveChildFocusEditPolicy(config: NestedSurfaceConfig | null): ChildFocusEditFieldRow[] {
+    config = canonicalChildConfig(config);
     if (!config) return [];
     return orderedChildEditFieldKeys(config).flatMap((fieldKey) => {
         const def = CHILD_FOCUS_FIELD_DEFS[fieldKey];
         const valueKey = SAVE_FIELD_MAP[fieldKey];
         const saveSupported = isChildFocusFieldSaveSupported(fieldKey);
         const groupKey = groupKeyForField(config, fieldKey);
-        const visibility =
-            groupKey ? fieldVisibilityForNestedGroup(config, groupKey, fieldKey) : "read-only";
+        const visibility = resolveIdentityFieldPolicy({
+            config,
+            groupKey: groupKey ?? "child_edit",
+            fieldRef: fieldKey,
+            editGroupKey: "child_edit",
+        });
         const displayed = fieldShouldRender(visibility);
         const editable = displayed && saveSupported && fieldIsSaveable(visibility);
         const unsupported = displayed && !saveSupported;

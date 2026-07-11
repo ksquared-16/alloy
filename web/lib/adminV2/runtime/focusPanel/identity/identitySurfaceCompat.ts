@@ -29,6 +29,14 @@ import type {
 export const CHILD_SURFACE_COMPAT_ID = "child_surface" as const;
 export const CHILDREN_SURFACE_CANONICAL_ID = "children_surface" as const;
 export const HOUSEHOLD_SURFACE_CANONICAL_ID = "household_surface" as const;
+export const HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID = "household_contact_surface" as const;
+
+const LEGACY_CONTACT_TO_CANONICAL_FIELD: Record<string, string> = {
+    "person.first_name": "contact.first_name",
+    "person.last_name": "contact.last_name",
+    "person.email": "contact.email",
+    "person.phone": "contact.phone",
+};
 
 const HOUSEHOLD_SECTION_SOURCES: Record<string, IdentitySectionConfig["source"]> = {
     primary_contact: { type: "relationship_role", roleKeys: ["primary_contact", "primary"] },
@@ -58,6 +66,67 @@ export function reconcileFieldModesToPolicies(group: NestedSurfaceGroupConfig): 
         if (mapped) policies[fieldRef] = mapped;
     }
     return Object.keys(policies).length > 0 ? { ...group, fieldPolicies: policies } : group;
+}
+
+/**
+ * Adapt legacy `household_contact_surface.contact_fields` into the canonical
+ * `household_surface.contact_edit` group. Canonical values always win when both
+ * paths are published.
+ */
+export function adaptHouseholdContactSurfaceToHouseholdSurface(
+    legacyContactSurface: NestedSurfaceConfig | null,
+    householdSurface: NestedSurfaceConfig | null,
+): NestedSurfaceConfig {
+    const canonical = reconcileNestedSurfaceConfig(
+        HOUSEHOLD_SURFACE_CANONICAL_ID,
+        householdSurface ?? defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_CANONICAL_ID),
+    );
+    const legacyGroup = legacyContactSurface?.groups.find((group) => group.key === "contact_fields");
+    if (!legacyGroup) return canonical;
+
+    const canonicalGroup = canonical.groups.find((group) => group.key === "contact_edit");
+    if (!canonicalGroup) return canonical;
+    const canonicalWasPublished = householdSurface?.groups.some((group) => group.key === "contact_edit") ?? false;
+
+    const selectedFieldKeys = legacyGroup.selectedFieldKeys
+        .map((fieldRef) => LEGACY_CONTACT_TO_CANONICAL_FIELD[fieldRef])
+        .filter((fieldRef): fieldRef is string => Boolean(fieldRef));
+    const legacyPolicies: Record<string, SurfaceFieldVisibility> = {};
+    const legacyLabels: Record<string, string> = {};
+    const legacyWidths: NestedSurfaceGroupConfig["fieldLayoutWidths"] = {};
+    for (const [legacyRef, canonicalRef] of Object.entries(LEGACY_CONTACT_TO_CANONICAL_FIELD)) {
+        const policy = fieldModeToPolicy(legacyGroup.fieldModes?.[legacyRef])
+            ?? legacyGroup.fieldPolicies?.[legacyRef];
+        if (policy) legacyPolicies[canonicalRef] = policy;
+        const label = legacyGroup.fieldLabels?.[legacyRef];
+        if (label) legacyLabels[canonicalRef] = label;
+        const width = legacyGroup.fieldLayoutWidths?.[legacyRef];
+        if (width) legacyWidths[canonicalRef] = width;
+    }
+
+    const merged: NestedSurfaceGroupConfig = {
+        ...canonicalGroup,
+        selectedFieldKeys:
+            canonicalWasPublished
+                ? canonicalGroup.selectedFieldKeys
+                : selectedFieldKeys.length > 0
+                    ? selectedFieldKeys
+                    : canonicalGroup.selectedFieldKeys,
+        fieldPolicies: { ...legacyPolicies, ...(canonicalGroup.fieldPolicies ?? {}) },
+        fieldLabels: { ...legacyLabels, ...(canonicalGroup.fieldLabels ?? {}) },
+        fieldLayoutWidths: { ...legacyWidths, ...(canonicalGroup.fieldLayoutWidths ?? {}) },
+    };
+    return {
+        ...canonical,
+        groups: canonical.groups.map((group) =>
+            group.key === "contact_edit"
+                ? {
+                      ...merged,
+                      fieldPlacements: generateDefaultIdentityFieldPlacements(merged),
+                  }
+                : group,
+        ),
+    };
 }
 
 /** @deprecated Import from identityFieldPlacement.ts in new code. */

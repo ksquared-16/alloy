@@ -54,6 +54,7 @@ function buildRecordRows(args: {
     canMutate: boolean;
     isFieldSaveSupported?: (fieldRef: string) => boolean;
     editGroupKey?: string;
+    maskedChannels?: boolean;
 }): ReturnType<typeof resolveIdentityFieldRows> {
     const group = args.config.groups.find((g) => g.key === args.groupKey);
     if (!group) return [];
@@ -69,7 +70,13 @@ function buildRecordRows(args: {
             editGroupKey: args.editGroupKey,
         });
         if (!fieldShouldRender(policy)) continue;
-        const value = resolveIdentityFieldValue(args.subject, placement.fieldRef);
+        const isMaskedChannel =
+            args.maskedChannels
+            && args.subject.kind === "person"
+            && (placement.fieldRef === "person.phone" || placement.fieldRef === "person.email");
+        const value = isMaskedChannel
+            ? "Contact details restricted"
+            : resolveIdentityFieldValue(args.subject, placement.fieldRef);
         const saveSupported = args.isFieldSaveSupported?.(placement.fieldRef) ?? Boolean(args.editGroupKey);
         const editable = args.canMutate && fieldIsSaveable(policy) && saveSupported;
         inputs.push({
@@ -102,6 +109,7 @@ function buildContactRecordVM(args: {
     groupKey: string;
     contact: HouseholdEvidenceContact;
     canMutate: boolean;
+    maskedChannels?: boolean;
 }): IdentityRecordVM {
     const subject = contactSubject(args.contact);
     const showAvatar = groupShowAvatarForNestedGroup(args.config, args.groupKey);
@@ -112,6 +120,7 @@ function buildContactRecordVM(args: {
         tier: "summary",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
+        maskedChannels: args.maskedChannels,
     });
     const expandedRows = buildRecordRows({
         config: args.config,
@@ -120,6 +129,7 @@ function buildContactRecordVM(args: {
         tier: "expanded",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
+        maskedChannels: args.maskedChannels,
     });
     return {
         id: args.contact.personId,
@@ -184,14 +194,10 @@ export function buildHouseholdIdentityCardVM(args: {
     config: NestedSurfaceConfig | null;
     groups: HouseholdEvidenceGroup[];
     canMutate?: boolean;
+    maskedChannels?: boolean;
 }): IdentityCardVM {
-    const config = args.config
-        ? reconcileIdentityNestedConfig("household_surface", args.config)
-        : null;
+    const config = reconcileIdentityNestedConfig("household_surface", args.config);
     const surfaceKey = "household_surface";
-    if (!config) {
-        return { surfaceKey, sections: [] };
-    }
     const identityConfig = identitySurfaceFromNestedConfig(config);
     const sections = identityConfig.sections.flatMap((section) => {
         const built = args.groups.find((group) => group.key === section.key);
@@ -208,6 +214,7 @@ export function buildHouseholdIdentityCardVM(args: {
                     groupKey: section.key,
                     contact,
                     canMutate: args.canMutate ?? false,
+                    maskedChannels: args.maskedChannels,
                 }),
             );
         }
@@ -234,18 +241,7 @@ export function buildChildIdentityRecordVM(args: {
     canMutate?: boolean;
     isFieldSaveSupported?: (fieldRef: string) => boolean;
 }): IdentityRecordVM {
-    const config = args.config
-        ? reconcileIdentityNestedConfig("children_surface", args.config)
-        : null;
-    if (!config) {
-        return {
-            id: args.child.id,
-            title: args.child.name,
-            summaryRows: [],
-            expandedRows: [],
-            canExpand: false,
-        };
-    }
+    const config = reconcileIdentityNestedConfig("children_surface", args.config);
     return buildChildRecordVM({
         config,
         groupKey: args.groupKey ?? "identity",
