@@ -1,6 +1,6 @@
 # Lifecycle Required Info, Queue Save, Scroll Polish
 
-**Path:** `docs/sprints/06_2026/lifecycle_required_info_queue_scroll_polish.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_required_info_queue_scroll_polish.md`  
 **Date:** 2026-05-31  
 **Status:** Implemented
 
@@ -18,7 +18,7 @@
 
 ### 3. Child field audit
 
-- `docs/sprints/06_2026/lifecycle_required_info_child_fields_audit.md`
+- `docs/sprints/archive/06_2026/lifecycle_required_info_child_fields_audit.md`
 - Code comment in `lifecycleFieldPaletteMerge.ts`
 
 ### 4. Work Unit Queue — one save

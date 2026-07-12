@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Column count:** 2568
+**Generated:** 2026-07-12 · **Column count:** 2568
 
 Columns for `public` schema tables, grouped alphabetically by table.
 

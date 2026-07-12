@@ -1,6 +1,6 @@
 # Readiness Engine — Architecture & Runtime Contract
 
-**Path:** `docs/sprints/06_2026/readiness_engine_architecture_and_runtime_contract.md`  
+**Path:** `docs/sprints/archive/06_2026/readiness_engine_architecture_and_runtime_contract.md`  
 **Date:** 2026-06-02  
 **Status:** **Architecture frozen** — operating model for Phase 1 implementation planning  
 **Scope:** Runtime contracts, evaluation architecture, storage, events, consumers, performance, Phase 1 blueprint. **No implementation.**

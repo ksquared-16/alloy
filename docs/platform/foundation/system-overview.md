@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # System overview
 
 **Status:** Canonical platform entry point (July 2026 stabilization).
@@ -84,22 +91,22 @@ The architecture is **stable**. Foundational runtimes — Presentation, Surface 
 
 Future work primarily improves **experience**, **performance**, **automation**, and **operator intelligence** — plus domain productization (Scheduling, Attendance, Billing, Payments, Commercial, AI, Partner APIs). It should **not** introduce additional foundational runtimes or restore legacy drawer paths.
 
-Milestone record: [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md). Capability inventory: `platform-capabilities.md`. Sequencing: `product-roadmap.md`.
+Milestone record: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md). Capability inventory: `platform-capabilities.md`. Sequencing: `product-roadmap.md`.
 
 ---
 
 ## Load order (onboarding)
 
 1. This file
-2. [`platform-manifesto.md`](./platform-manifesto.md) — **required reading**
-3. [`platform-certification-july-2026.md`](./platform-certification-july-2026.md)
+2. [`platform-manifesto.md`](../foundation/platform-manifesto.md) — **required reading**
+3. [`milestones/certification-july-2026.md`](../milestones/certification-july-2026.md)
 4. `../governance/glossary.md`
 5. `architecture.md`
 6. `platform-capabilities.md`
 7. `../core/business-process-system.md`
 8. `../core/entity-model.md`
 9. `../core/record-system.md`
-10. `../milestones/platform-stabilization-july-2026.md`
+10. `../milestones/stabilization-july-2026.md`
 11. `../operator/queue-system.md` + `../operator/drawer-system.md`
 12. Schema layer (`docs/schema/`) when touching DB/RLS
 

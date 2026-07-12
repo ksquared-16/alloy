@@ -1,6 +1,6 @@
 # AdminV2 Drawer Runtime — Phase D Speed Pass
 
-**Path:** `docs/sprints/06_2026/adminv2_drawer_runtime_phase_d_speed_pass.md`  
+**Path:** `docs/sprints/archive/06_2026/adminv2_drawer_runtime_phase_d_speed_pass.md`  
 **Status:** Active (June 2026)  
 **Scope:** Shell-pinned VM model swap + post-first-paint critical path audit  
 **Supplements:** `docs/system/adminv2-runtime-performance-doctrine.md`

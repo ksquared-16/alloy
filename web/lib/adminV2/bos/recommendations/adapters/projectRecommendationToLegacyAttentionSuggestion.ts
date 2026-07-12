@@ -7,7 +7,7 @@
  * - This adapter enables future migration; visible UI replacement happens in a later UX card.
  * - Do not generate recommendation copy outside the canonical builder + catalog path.
  *
- * @see docs/sprints/05_2026/bos_operational_recommendation_phase1_execution.md §9
+ * @see docs/sprints/archive/05_2026/bos_operational_recommendation_phase1_execution.md §9
  */
 
 import { deterministicSuggestionId } from "@/lib/agent/needsAttentionSuggestion/buildNeedsAttentionSuggestion";

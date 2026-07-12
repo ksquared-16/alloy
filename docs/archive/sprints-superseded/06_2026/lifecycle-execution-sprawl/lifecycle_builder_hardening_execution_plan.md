@@ -1,6 +1,6 @@
 # Lifecycle Builder Hardening — Execution Plan
 
-**Path:** `docs/sprints/06_2026/lifecycle_builder_hardening_execution_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_builder_hardening_execution_plan.md`  
 **Status:** Implementation planning — **do not implement** from this document until sprint kickoff  
 **Date:** 2026-06-02  
 **Scope:** Lifecycle Builder configuration plane only — **not** Lifecycle V2 features (Needs Attention, Tasks, Orchestration, workflows, runtime visibility, status ownership)

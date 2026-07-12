@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # AI platform
 
 **Status:** Canonical platform module doc.
@@ -63,7 +70,7 @@ BOS (resolved):                                             execute
 
 BOS never skips eligibility, confirmation policy, audit, or refresh — it only pre-resolves
 subject and inputs conversationally. See
-`docs/sprints/06_2026/operational_command_runtime_v3.md`.
+`docs/sprints/archive/06_2026/operational_command_runtime_v3.md`.
 
 **Create Lead (first visible flow, V4).** BOS Create Lead is not a separate flow — it builds
 on the existing parse/proposal behavior and feeds the parsed values into the shared command
@@ -71,7 +78,7 @@ view-model (`deriveCreateLeadCommandFromBosProposal`). Complete parsed values ar
 preview/confirm; missing values surface in operator language ("I still need a last name and a
 phone or email"). BOS confirms and executes through the **same** registered `create_lead`
 action and execute route as manual entry. See
-`docs/sprints/06_2026/create_lead_command_flow_audit.md`.
+`docs/sprints/archive/06_2026/create_lead_command_flow_audit.md`.
 
 **BOS uses the platform Command Surface, not a separate UI runtime (V5).** A BOS proposal is
 just a command snapshot fed to the same platform-owned Command Surface
@@ -91,7 +98,7 @@ workspace (launched via the `adminv2:open-create-lead` listener) now hosted by t
 client adapter `executeCreateLeadCommand` → registered `create_lead` as manual/Work Unit, with
 standardized success. The command model still derives BOS preview (complete parse) vs missing
 required inputs (incomplete parse) in operator language. BOS remains an entry point, not its own
-mutation path. See `docs/sprints/06_2026/command_surface_v3.md`,
+mutation path. See `docs/sprints/archive/06_2026/command_surface_v3.md`,
 `command_surface_v2.md`, `command_surface_v1.md`.
 
 **BOS intake field parity (Create Lead reliability thread).** BOS intake is parse-and-fill over

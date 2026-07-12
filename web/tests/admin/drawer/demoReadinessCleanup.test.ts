@@ -46,7 +46,7 @@ describe("demo readiness cleanup", () => {
 
     it("documents person ↔ opportunity contact write path", () => {
         const doc = readFileSync(
-            resolve(webRoot, "../docs/sprints/05_2026/person_location_ux_reset.md"),
+            resolve(webRoot, "../docs/sprints/archive/05_2026/person_location_ux_reset.md"),
             "utf8"
         );
         expect(doc).toMatch(/PATCH \/api\/admin\/persons/i);

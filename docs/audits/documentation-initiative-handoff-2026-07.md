@@ -1,20 +1,27 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-07-11
+concept: documentation-initiative-handoff
+---
+
 # Documentation Architecture Initiative — Engineer Handoff (July 2026)
 
-**Status:** Handoff record. Read this first, then the blueprint.
+**Status:** Handoff record. **Not doctrine.** Read this first, then the blueprint.
 **Owner of next phase:** whoever executes the migration.
 **Prepared:** 2026-07-11 against `origin/staging` @ `29fbcfb93` (planning baseline).
 
 > **Reconciliation note (handoff promotion, 2026-07-11).** Between opening the handoff PR and
 > merging it, `origin/staging` advanced `29fbcfb93 → f6081c46b` via **PR #163
 > ("certify and freeze July 2026 platform architecture")**. That change added
-> `docs/platform/foundation/platform-freeze-july-2026.md` and touched `README.md`,
+> `docs/platform/milestones/freeze-july-2026.md` and touched `README.md`,
 > `platform-manifesto.md`, `product-roadmap.md`, and `release-history.md`. It did **not** touch
 > `docs/audits/`, so it does not conflict with these handoff files, and the audit/blueprint were
 > **not** rewritten. Two consequences for the implementer:
 > 1. **Latest `origin/staging` is authoritative** — the planning baseline (`29fbcfb93`) is a
 >    historical marker, not current truth. Reconcile against the newest staging before executing.
 > 2. The freeze doc that the blueprint (§3.2) described as an *unmerged branch* has now **merged**
->    to `docs/platform/foundation/platform-freeze-july-2026.md`. The blueprint's guidance stands
+>    to `docs/platform/milestones/freeze-july-2026.md`. The blueprint's guidance stands
 >    (on migration, relocate it to `platform/milestones/freeze-july-2026.md`).
 
 ---
@@ -56,7 +63,7 @@ Follow the blueprint's §10 (phases) and §11 (commits). The spine:
 | 1 | C2 | **Banner the 2 live contradictions + 7 self-superseded docs; fix root README framing** (zero link risk) |
 | 2 | C3 | Promote the `canonical-*` cluster → `platform/core/data/`; create Data-System + Field-System owners |
 | 3 | C4 | Evict sprint artifacts from `platform/`; consolidate `milestones/`; merge `card-archetypes` |
-| 4 | C5 | Reclassify `system/` as authoritative; fold `docs/governance/` → `platform/governance/`; delete stubs |
+| 4 | C5 | Reclassify `system/` as authoritative; fold `docs/platform/governance/` → `platform/governance/`; delete stubs |
 | 5 | C6 | Move `product/pos/`; delete `export/` (extract ~18 unique first); collapse archive trees; split `audits/` |
 | 6 | C7 | Normalize `sprints/` to `active/completed/archive`; evict 111 MB assets (**separate PR**) |
 | 7 | C8 | Untrack `web/test-results/`; move binaries; generate `.cursor` load order from README |
@@ -90,7 +97,7 @@ These require judgment (they change content, not just location). Each gets its o
 - **Out-of-tree authorities** — `web/docs/TIMEZONE_SEMANTICS.md` (real TZ contract) and
   `web/components/workspace/doctrine.ts` (visual tokens as code). Decide canonical direction
   before mirroring.
-- **`platform-freeze-july-2026`** — **now merged** to `docs/platform/foundation/platform-freeze-july-2026.md`
+- **`platform-freeze-july-2026`** — **now merged** to `docs/platform/milestones/freeze-july-2026.md`
   (PR #163, staging `f6081c46b`). Phase 3's `milestones/` consolidation must relocate it to
   `platform/milestones/freeze-july-2026.md` and account for the accompanying README/manifesto/
   roadmap/release-history edits that landed with it.

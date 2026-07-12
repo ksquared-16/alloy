@@ -44,7 +44,7 @@
 ### Card 0.3 — Performance budgets & baseline record
 - **Exact goal:** Record current baselines and set target budgets used as Phase 6 acceptance gates.
 - **User-visible outcome:** None directly; defines "production-grade."
-- **Likely files:** New `docs/sprints/06_2026/perf_baselines.md`.
+- **Likely files:** New `docs/sprints/archive/06_2026/perf_baselines.md`.
 - **Risk:** 🟢 Low.
 - **Tests/checks:** Baselines reproducible via the 0.1/0.2 recipe on a known seed dataset.
 - **Definition of done:** Baseline + target table committed. Proposed initial budgets (tune against real data):
@@ -253,7 +253,7 @@
 ### Card 6.1 — Re-measure against baselines
 - **Exact goal:** Re-run the 0.1/0.2 recipe on the same seed dataset and produce a before/after delta table for every budgeted metric.
 - **User-visible outcome:** Documented, defensible proof of improvement.
-- **Likely files:** `docs/sprints/06_2026/perf_baselines.md` (update with after-numbers + deltas).
+- **Likely files:** `docs/sprints/archive/06_2026/perf_baselines.md` (update with after-numbers + deltas).
 - **Risk:** 🟢 Low.
 - **Tests/checks:** Each Phase 0 budget met or exceeded; any miss has a tracked follow-up card.
 - **Definition of done:** Delta table committed; all budgets green or explicitly waived with rationale.
@@ -261,7 +261,7 @@
 ### Card 6.2 — Closure re-audit + regression guardrails
 - **Exact goal:** Re-audit each finding C1–C3/H1–H9/M1–M10/L1–L3 as resolved/partial/deferred; add lightweight guardrails (e.g. a test asserting Jobs list query count is row-independent; a profiler/assert check that provider values are memoized).
 - **User-visible outcome:** Sustained premium feel; protection against silent re-introduction.
-- **Likely files:** `docs/sprints/06_2026/adminv2_runtime_navigation_performance_audit_v1.md` (V2 closure section), targeted tests under `tests/`.
+- **Likely files:** `docs/sprints/archive/06_2026/adminv2_runtime_navigation_performance_audit_v1.md` (V2 closure section), targeted tests under `tests/`.
 - **Risk:** 🟢 Low.
 - **Tests/checks:** Each finding has a status + evidence link; guardrail tests pass in CI.
 - **Definition of done:** Every finding dispositioned; regression guardrails merged; mission declared production-grade or remaining gaps re-scoped.

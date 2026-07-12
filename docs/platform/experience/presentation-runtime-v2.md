@@ -1,10 +1,17 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-11
+supersedes: [../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md]
+---
+
 # Presentation Runtime V2
 
 **Status:** Canonical (July 2026). Supersedes all prior Workspace / Work Unit presentation cleanup.
 
-**Completion (July 2026):** All surfaces render through one Presentation Runtime — Workspace, Work Unit, Focus Panel, Left Nav, and the **Right Rail** (the last slice: `RightRailSurface` now consumes the resolved `right_rail_actions` lane and executes through the existing action runtime — see [`docs/handoffs/work-unit-right-rail-presentation-v2-handoff.md`](../../handoffs/work-unit-right-rail-presentation-v2-handoff.md)). Motion, warm-loading, and transition continuity are unified on the operational motion tokens. Legacy retirement is underway: the Work Unit shadow-VM path is removed; the remaining orphaned `routeShellPipeline` render adapter is scoped for a follow-up (it shares a symbol with a still-live perf-trace module — see the handoff §6).
+**Completion (July 2026):** All surfaces render through one Presentation Runtime — Workspace, Work Unit, Focus Panel, Left Nav, and the **Right Rail** (the last slice: `RightRailSurface` now consumes the resolved `right_rail_actions` lane and executes through the existing action runtime — see [`docs/archive/2026-06-handoffs/handoffs/work-unit-right-rail-presentation-v2-handoff.md`](../../archive/2026-06-handoffs/handoffs/work-unit-right-rail-presentation-v2-handoff.md)). Motion, warm-loading, and transition continuity are unified on the operational motion tokens. Legacy retirement is underway: the Work Unit shadow-VM path is removed; the remaining orphaned `routeShellPipeline` render adapter is scoped for a follow-up (it shares a symbol with a still-live perf-trace module — see the handoff §6).
 
-**Thread closeout (July 2026):** Queue Row Builder, Workspace/Work Unit surfaces, and Settings legacy cleanup are frozen complete on `origin/staging` `c99e381f3`. Canonical handoff: [`docs/sprints/07_2026/presentation-surfaces-settings-thread-closeout.md`](../../sprints/07_2026/presentation-surfaces-settings-thread-closeout.md).
+**Thread closeout (July 2026):** Queue Row Builder, Workspace/Work Unit surfaces, and Settings legacy cleanup are frozen complete on `origin/staging` `c99e381f3`. Canonical handoff: `docs/sprints/archive/07_2026/presentation-surfaces-settings-thread-closeout.md` (historical: `../../sprints/archive/07_2026/presentation-surfaces-settings-thread-closeout.md`).
 
 **Scope:** Presentation composition only. Backend, APIs, entities, queue model, calculations,
 configuration, surface definitions, runtime state, Focus Panel internals, and the navigation

@@ -1,8 +1,15 @@
+---
+owner: platform
+status: frozen
+last_reviewed: 2026-07-11
+supersedes: []
+---
+
 # Alloy Platform Manifesto
 
 **Status:** Canonical constitutional doctrine (July 2026). **Required reading** for every engineer, agent, and contributor working on Alloy.
 
-This document states what Alloy **is** today and how we build from here. It is **philosophy** — not certification. For the formal architectural freeze declaration, see [`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md). For merge evidence and statistics, see [`platform-certification-july-2026.md`](./platform-certification-july-2026.md) and [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md).
+This document states what Alloy **is** today and how we build from here. It is **philosophy** — not certification. For the formal architectural freeze declaration, see [`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md). For merge evidence and statistics, see [`milestones/certification-july-2026.md`](../milestones/certification-july-2026.md) and [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md).
 
 ---
 
@@ -114,7 +121,7 @@ We do **not** build: additional foundational runtimes, legacy drawer restoration
 When documents conflict, resolve in this order:
 
 1. This manifesto
-2. [`platform-certification-july-2026.md`](./platform-certification-july-2026.md)
+2. [`milestones/certification-july-2026.md`](../milestones/certification-july-2026.md)
 3. `docs/platform/foundation/*` and `docs/platform/operator/*` canonical doctrine
 4. `docs/system/adminv2-runtime-performance-doctrine.md` (protected infrastructure)
 5. Sprint closeouts and audits (historical execution records)

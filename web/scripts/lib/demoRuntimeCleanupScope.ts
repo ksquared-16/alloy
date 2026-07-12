@@ -1,6 +1,6 @@
 /**
  * Shared scope + delete-order contract for demo/runtime cleanup scripts.
- * @see docs/governance/demo-runtime-cleanup-schema-audit.md
+ * @see docs/platform/governance/demo-runtime-cleanup-schema-audit.md
  */
 
 import {

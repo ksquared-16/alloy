@@ -1,10 +1,17 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Card Composition System
 
 **Status:** Platform doctrine (June 2026). The composition layer between **cards** and the **Experience Builder**.
-**Follows:** [`operational-grammar.md`](./operational-grammar.md) · [`card-language.md`](./card-language.md) · [`card-archetypes.md`](./card-archetypes.md) · [`operational-context-boundary.md`](./operational-context-boundary.md).
+**Follows:** [`operational-grammar.md`](./operational-grammar.md) · [`card-language.md`](./card-language.md) · [`universal-card-archetypes.md`](./universal-card-archetypes.md) · [`operational-context-boundary.md`](./operational-context-boundary.md).
 **Feeds:** [`experience-builder-doctrine.md`](./experience-builder-doctrine.md) (Surface Definitions compose cards using this system).
 **Code model (declarative):** `web/lib/adminV2/runtime/focusPanel/cardCompositionModel.ts`.
-**Engine (wired, V1):** `web/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface.ts` — see [`docs/sprints/06_2026/focus-panel-composition-engine-v1`](../../sprints/06_2026/focus-panel-composition-engine-v1/README.md).
+**Engine (wired, V1):** `web/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface.ts` — see `docs/sprints/archive/06_2026/focus-panel-composition-engine-v1` (historical: `../../sprints/archive/06_2026/focus-panel-composition-engine-v1/README.md`).
 
 > **Composition V2 (June 2026) — published layout is the source of truth.** An
 > operator-authored **published layout** (rows → cells → fractional widths
@@ -264,7 +271,7 @@ a row’s height grows.
 ## 8. Review — current Focus Panel vs the approved vision
 
 Captured against the live authenticated operator surface and the approved mocks
-(screenshots: [`../../sprints/06_2026/focus-panel-composition-review/`](../../sprints/06_2026/focus-panel-composition-review/)).
+(screenshots: `../../sprints/archive/06_2026/focus-panel-composition-review/` (historical: `../../sprints/archive/06_2026/focus-panel-composition-review/`)).
 
 **What still feels like legacy System 5**
 

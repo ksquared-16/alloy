@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: [./identity-surface-composition.md]
+---
+
 # Identity Surface Doctrine — Canonical Disclosure Model
 
 **Status:** Active — July 2026  

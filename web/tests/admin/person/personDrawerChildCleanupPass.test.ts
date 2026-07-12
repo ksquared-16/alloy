@@ -78,7 +78,7 @@ describe("child drawer cleanup pass", () => {
 
     it("documents demo reseed plan is documented — no reseed scripts changed", () => {
         const doctrine = readFileSync(
-            join(process.cwd(), "../docs/sprints/05_2026/child_profile_person_drawer_doctrine.md"),
+            join(process.cwd(), "../docs/sprints/archive/05_2026/child_profile_person_drawer_doctrine.md"),
             "utf8"
         );
         expect(doctrine).toContain("Demo seed plan");

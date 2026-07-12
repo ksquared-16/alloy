@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Runtime Surface Section Map
 
 Status: active · Owner: operator runtime · Source of truth (code): `web/lib/perf/alloySectionMap.ts`

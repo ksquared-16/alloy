@@ -15,7 +15,7 @@
  *   Focus Panel  → subject is inherited; first open stage is inputs/preview.
  *   BOS          → subject + inputs resolved conversationally; first open stage is preview.
  *
- * @see docs/sprints/06_2026/operational_command_runtime_v3.md
+ * @see docs/sprints/archive/06_2026/operational_command_runtime_v3.md
  */
 
 import type { ActionEligibility } from "@/lib/adminV2/actions/actionTypes";

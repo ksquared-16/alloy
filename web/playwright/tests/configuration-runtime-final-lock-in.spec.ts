@@ -8,7 +8,7 @@ loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
 const screenshotDir = path.join(
     __dirname,
-    "../../../docs/sprints/06_2026/configuration-runtime-final-lock-in",
+    "../../../docs/sprints/archive/06_2026/configuration-runtime-final-lock-in",
 );
 
 const BEND_PINE_BG = "rgba(0, 162, 131, 0.08)";

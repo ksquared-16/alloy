@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Roles and permissions
 
 **Status:** Canonical (V1 as-built).

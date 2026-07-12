@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Configuration Workspace V1 Doctrine
 
 **Status:** Frozen — Configuration Runtime V1 (June 2026).

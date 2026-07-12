@@ -26,8 +26,8 @@ const DOCTRINE_DOCS = [
     "../docs/system/configuration-mode-doctrine.md",
     "../docs/system/configuration-runtime-design-alignment.md",
     "../docs/system/configuration-workspace-v1-doctrine.md",
-    "../docs/sprints/06_2026/configuration_runtime_final_ui_review.md",
-    "../docs/sprints/06_2026/configuration_runtime_business_processes_ux_redesign.md",
+    "../docs/sprints/archive/06_2026/configuration_runtime_final_ui_review.md",
+    "../docs/sprints/archive/06_2026/configuration_runtime_business_processes_ux_redesign.md",
 ];
 
 describe("Configuration Mode doctrine", () => {

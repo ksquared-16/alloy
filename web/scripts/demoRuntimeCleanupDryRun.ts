@@ -2,7 +2,7 @@
 /**
  * Phase 1 — demo/runtime cleanup DRY RUN (zero writes).
  *
- * @see docs/governance/demo-runtime-cleanup-schema-audit.md
+ * @see docs/platform/governance/demo-runtime-cleanup-schema-audit.md
  */
 
 import { config as loadEnv } from "dotenv";

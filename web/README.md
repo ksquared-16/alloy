@@ -36,7 +36,7 @@ Notes:
 - All typecheck scripts use an **8 GB Node heap** and are **incremental** with separate `tsconfig.tsbuildinfo` / `tsconfig.build.tsbuildinfo` files.
 - First run after a large change is slower than subsequent runs.
 - These are large, `strict` TypeScript projects (~6.8k program files). `tsc` is CPU-bound — avoid running multiple full type checks at once.
-- **Do not use raw `npx tsc --noEmit`** — it skips the heap override and may OOM. See `docs/governance/typescript-performance.md`.
+- **Do not use raw `npx tsc --noEmit`** — it skips the heap override and may OOM. See `docs/platform/governance/typescript-performance.md`.
 - **Do not leave background `tsc`/`vitest`/`next dev` processes running.** Several concurrent `tsc` processes will starve CPU/RAM. Close unused Cursor worktrees when possible.
 
 ## Learn More

@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Repository state — June 2026
 
 **Path:** `docs/system/repository-state-2026-06.md`  

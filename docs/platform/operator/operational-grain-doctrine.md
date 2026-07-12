@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Grain Doctrine
 
 > **Status:** Architecture Lock — 2026-06-30

@@ -60,7 +60,7 @@ describe("Right rail persistence doctrine", () => {
     });
 
     it("documents persistent command surface in workspace doctrine", () => {
-        const workspaceDoc = readFileSync(join(webRoot, "../docs/system/workspace-system.md"), "utf8");
+        const workspaceDoc = readFileSync(join(webRoot, "../docs/archive/2026-06-superseded-system/workspace-system.md"), "utf8");
         const wuDoc = readFileSync(join(webRoot, "../docs/system/work-unit-layout-doctrine.md"), "utf8");
         expect(workspaceDoc).toContain("persistent command surface");
         expect(wuDoc).toContain("persistent command surface");

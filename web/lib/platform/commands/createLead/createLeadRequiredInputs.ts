@@ -13,7 +13,7 @@
  * required-input hints on top of this code-owned minimum (see the audit doc for the parity
  * boundary).
  *
- * @see docs/sprints/06_2026/create_lead_command_flow_audit.md
+ * @see docs/sprints/archive/06_2026/create_lead_command_flow_audit.md
  */
 
 import {

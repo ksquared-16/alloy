@@ -1,6 +1,6 @@
 /**
  * Configuration Runtime QA fix — drift prevention.
- * @see docs/sprints/06_2026/configuration-runtime-qa-fix/
+ * @see docs/sprints/archive/06_2026/configuration-runtime-qa-fix/
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

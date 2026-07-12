@@ -1,9 +1,16 @@
+---
+owner: experience
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Navigation Runtime Doctrine
 
 **Path:** `docs/platform/experience/navigation-runtime-doctrine.md`
 **Status:** **Architecture (proposed)** — June 2026. Awaiting approval. No implementation until approved.
 **Realizes:** The Experience Layer's deferred keystone — Capability 2 (Continuity System) + Capability 6 (Navigation Continuity) of [`experience-layer-architecture.md`](./experience-layer-architecture.md), unified into one runtime.
-**Closes:** NAV-1 (full-reload navigation), NAV-2 (cold caches), WU-1 (outbound skeleton), WU-3 (dual navigation paradigm), DRW-4 (drawer stack lost on refresh) from the [Experience Audit](../../sprints/06_2026/premium-operational-experience/experience-audit.md).
+**Closes:** NAV-1 (full-reload navigation), NAV-2 (cold caches), WU-1 (outbound skeleton), WU-3 (dual navigation paradigm), DRW-4 (drawer stack lost on refresh) from the Experience Audit (historical: `../../sprints/archive/06_2026/premium-operational-experience/experience-audit.md`).
 **Companion law:** [`operational-experience-doctrine.md`](./operational-experience-doctrine.md) Law 2 (Continuity) and Law 3 (Memory). This doctrine is their navigation-level implementation.
 
 ---

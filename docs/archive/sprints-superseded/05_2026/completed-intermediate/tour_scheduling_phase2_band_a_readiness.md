@@ -845,7 +845,7 @@ Body/subject come from `body_snapshot` / `subject_snapshot` — **no template re
 
 **Prompt to start coding:**
 
-> Implement Tour Scheduling Phase 2 Band A **Batch 1** per `docs/sprints/05_2026/completed/tour_scheduling_phase2_band_a_readiness.md` (A1, A2 migration). Do not hook `tourBookingService` until Batch 5.
+> Implement Tour Scheduling Phase 2 Band A **Batch 1** per `docs/sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_readiness.md` (A1, A2 migration). Do not hook `tourBookingService` until Batch 5.
 
 ---
 
@@ -855,7 +855,7 @@ Body/subject come from `body_snapshot` / `subject_snapshot` — **no template re
 |------------|------|
 | [`tour_scheduling_phase2_foundation.md`](./tour_scheduling_phase2_foundation.md) | Band A scope + doctrine |
 | [`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md) | Band A closeout + QA learnings |
-| [`docs/product/communications.md`](../../product/communications.md) | Canonical comms |
+| [`docs/product/communications.md`](../../archive/2026-06-product/communications.md) | Canonical comms |
 | `web/lib/communications/communicationScheduledSendsService.ts` | Scheduled send processor |
 | `web/lib/communications/communicationScheduledSendProcessMetadata.ts` | Process-due metadata augment |
 | `web/lib/tours/bookings/tourBookingService.ts` | Mutation hooks |

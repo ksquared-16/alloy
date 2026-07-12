@@ -10,7 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
-const OUT = path.join(process.cwd(), "../docs/sprints/08_2026/work-items-v3-platform/qa/slice-6");
+const OUT = path.join(process.cwd(), "../docs/sprints/archive/08_2026/work-items-v3-platform/qa/slice-6");
 const BASE = process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "") || "http://127.0.0.1:3000";
 const ORG_ID = process.env.DEV_QUEUE_ORG_ID?.trim() || "93667019-bd28-49b5-a688-acc9bb1e0a19";
 const THREAD_ID = process.env.WI3_COMMS_QA_THREAD_ID?.trim() || "4de7b8e8-ef5c-4609-b4b0-0e611dcd4600";

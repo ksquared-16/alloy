@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # API contracts
 
 **Status:** Canonical representative map (not full OpenAPI).
@@ -59,7 +66,7 @@ Admin, public, webhook, and worker boundaries for the platform.
 
 ## Expanded reference
 
-- **`../../api/README.md`** — first-class API documentation: per-domain references, generated full route inventory (`../../api/api-index.md`, all 456 `web/app/api/**` handlers), and the API documentation audit. Start here for the complete surface.
+- **`../../../api/README.md`** — first-class API documentation: per-domain references, generated full route inventory (`../../../api/api-index.md`, all 456 `web/app/api/**` handlers), and the API documentation audit. Start here for the complete surface.
 - `../../system/api-contracts.md` — transitional detailed route table.
 
 ---

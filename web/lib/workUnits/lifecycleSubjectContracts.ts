@@ -1,8 +1,8 @@
 /**
  * Lifecycle subject + work-unit surface context contracts.
  *
- * @see docs/sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md
- * @see docs/sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md
+ * @see docs/sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md
+ * @see docs/sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md
  * @see docs/system/work-unit-surface-context-contract.md
  *
  * Frozen architecture contracts for Layout Configuration and queue/drawer runtime.

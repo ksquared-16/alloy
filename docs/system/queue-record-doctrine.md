@@ -1,8 +1,15 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Queue Record Doctrine
 
 **Path:** `docs/system/queue-record-doctrine.md`  
 **Status:** Locked — operational queue row contract (June 2026)  
-**Related:** `docs/system/workspace-system.md` (queue truth boundary), `docs/system/configuration-system.md` (Layouts four-plane), `docs/system/drawer-operating-model-v1.md` (linked drawer dispatch), `docs/system/adminv2-runtime-performance-doctrine.md` (reveal gates — do not weaken for row UI)
+**Related:** `docs/archive/2026-06-superseded-system/workspace-system.md` (queue truth boundary), `docs/system/configuration-system.md` (Layouts four-plane), `docs/system/drawer-operating-model-v1.md` (linked drawer dispatch), `docs/system/adminv2-runtime-performance-doctrine.md` (reveal gates — do not weaken for row UI)
 
 ## Purpose
 

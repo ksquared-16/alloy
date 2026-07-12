@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Index count:** 877
+**Generated:** 2026-07-12 · **Index count:** 877
 
 | Table | Index | Unique | Definition |
 |-------|-------|--------|------------|

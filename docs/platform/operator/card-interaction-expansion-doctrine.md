@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — System 5B — Card Interaction & Expansion Doctrine
 
 **Revision:** 1  

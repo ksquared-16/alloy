@@ -24,7 +24,7 @@ Use audit -> design -> build for substantial work.
 - Search with `rg` for nearby patterns, route guards, tests, and migrations.
 - For admin/API work, identify the auth path: `getAdminContextCached`, `getAdminAccessContextCached`, `requireAdmin`, `requireAdminOrOps`, or a permission-specific guard.
 - For schema work, compare migrations with `docs/supabase/reference/*.csv`.
-- For behavior changes, update the matching **`docs/platform/**`** topic file (or `docs/governance/**` for agent/repo rules) in the same change.
+- For behavior changes, update the matching **`docs/platform/**`** topic file (or `docs/platform/governance/**` for agent/repo rules) in the same change.
 
 ## Hard Rules
 
@@ -51,7 +51,7 @@ Use audit -> design -> build for substantial work.
 Prefer focused checks first:
 
 - `cd web && npm run typecheck` — **required before merge** on any `web/` TypeScript change (production/build graph; same config `next build` uses). Catches errors Vitest may miss.
-- `cd web && npm run typecheck:tests` — **required when changing tests, scripts, Playwright, or shared types consumed by tests** (full graph including `tests/`). See `docs/governance/typescript-performance.md`.
+- `cd web && npm run typecheck:tests` — **required when changing tests, scripts, Playwright, or shared types consumed by tests** (full graph including `tests/`). See `docs/platform/governance/typescript-performance.md`.
 - `cd web && npm run verify:module-imports` — **required before staging deploy** when adding `@/lib/**` imports; catches new files not committed (Vercel `Module not found`).
 - `cd web && npm run lint`
 - `cd web && npm run test -- <relevant test path>` when changing covered behavior
@@ -73,7 +73,7 @@ Rules:
 - Run `worktree:list` to confirm the agent is editing the intended worktree path.
 - Do not run full-tree `rg`/`find` across `web/` — scope to the feature path.
 
-See `docs/governance/workspace-orchestration.md`.
+See `docs/platform/governance/workspace-orchestration.md`.
 
 ### TypeScript: `import type` for props and interfaces
 

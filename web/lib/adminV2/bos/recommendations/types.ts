@@ -1,6 +1,6 @@
 /**
  * BOS Operational Recommendation Intelligence — canonical contract (Phase 1).
- * @see docs/sprints/05_2026/bos_operational_recommendation_phase1_execution.md
+ * @see docs/sprints/archive/05_2026/bos_operational_recommendation_phase1_execution.md
  */
 
 import type { AttentionSuggestionActionFamily } from "@/lib/agent/needsAttentionSuggestion/types";

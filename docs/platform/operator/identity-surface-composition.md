@@ -1,9 +1,18 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Identity surface composition
 
-**Status:** Active — July 2026  
+**Status:** Retained technical baseline — July 2026  
 **Scope:** Focus Panel nested identity cards (Household, Children, Person, Employee, contacts)
 
-> **Canonical disclosure model:** [Identity Surface Doctrine V2](./identity-surface-composition-v2.md) — four-layer progressive disclosure (Summary → Context → Details → Evidence). Builder and runtime share one interaction grammar. V1 sections below remain the technical baseline for persistence, parity, and compatibility.
+> **Disclosure model superseded by V2:** [Identity Surface Doctrine V2](./identity-surface-composition-v2.md) owns the four-layer progressive disclosure model (Summary → Context → Details → Evidence). Builder and runtime share one interaction grammar.
+>
+> **V1 retention boundary:** Sections below remain the authoritative technical baseline for **persistence, parity, and compatibility** until those concerns are fully migrated into V2 or adjacent data-contract docs. Do not treat V1 as the current disclosure doctrine.
 
 ## Summary
 

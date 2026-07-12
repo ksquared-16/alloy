@@ -5,7 +5,7 @@
  * {@link buildNeedsAttentionSuggestion} when canonical build/projection is unavailable.
  * Legacy shapes remain on the wire for existing consumers — compat-only, not authoritative.
  *
- * @see docs/sprints/05_2026/bos_operational_recommendation_phase1_execution.md §9
+ * @see docs/sprints/archive/05_2026/bos_operational_recommendation_phase1_execution.md §9
  */
 
 import {

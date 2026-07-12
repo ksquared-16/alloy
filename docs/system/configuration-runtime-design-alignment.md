@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Configuration Runtime — Design Alignment Spec
 
 **Status:** Approved — Phase 0/1 (Settings shell + doctrine registration) shipped June 2026.

@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Surface ViewModel Composition
 
 Status: active — **canonical presentation ownership model (Runtime V1 complete)** · Owner: operator runtime · Source of truth (code): `web/lib/adminV2/runtime/surface/*`

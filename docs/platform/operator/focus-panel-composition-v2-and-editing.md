@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Focus Panel — Composition V2 + Card Definition V2 (canonical state)
 
 **Status:** Canonical (June 2026). The merged state of the Focus Panel QA + Composition

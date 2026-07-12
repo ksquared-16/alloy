@@ -17,7 +17,7 @@
  *  - Reused by every Create Lead entry point so BOS and Work Unit converge on one lifecycle.
  *
  * @see web/lib/admin/actions/entryLifecycleActionClient.ts (canonical POST helper, reused)
- * @see docs/sprints/06_2026/command_surface_v3.md
+ * @see docs/sprints/archive/06_2026/command_surface_v3.md
  */
 
 import { CREATE_LEAD_ACTION_ENTITY_ID } from "@/lib/admin/actions/createLeadActionConstants";

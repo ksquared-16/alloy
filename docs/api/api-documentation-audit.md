@@ -27,7 +27,7 @@
 
 ## 2. Undocumented routes
 
-Before this sprint there was **no `docs/api/` folder**; the only API references were `docs/platform/governance/api-contracts.md` (a representative map) and `docs/system/api-contracts.md` (a selected table). Neither enumerated the full surface.
+Before this sprint there was **no `docs/api/` folder**; the only API references were `docs/platform/governance/api-contracts.md` (a representative map) and `docs/archive/2026-06-superseded-system/api-contracts.md` (a selected table). Neither enumerated the full surface.
 
 - **Finding:** ~456 routes existed without a first-class inventory.
 - **Resolution:** All routes are now in the generated [`api-index.md`](api-index.md); each domain has a curated doc. No code change required.

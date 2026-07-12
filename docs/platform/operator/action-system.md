@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Action System
 
 **Status:** Canonical (July 2026)  
@@ -185,9 +192,9 @@ Config may only reference **known** keys. Config cannot invent executable behavi
 
 | Doc | Status |
 |-----|--------|
-| `docs/sprints/06_2026/actions_runtime_audit.md` | Phase 1 audit — foundation complete; see this doc for current inventory |
-| `docs/system/actions-and-workflows.md` | Transitional — prefer `platform/modules/actions-and-workflows.md` + this doc |
-| `docs/sprints/05_2026/adminv2_action_runtime_audit_and_plan_v1.md` | Historical |
+| `docs/sprints/archive/06_2026/actions_runtime_audit.md` | Phase 1 audit — foundation complete; see this doc for current inventory |
+| `docs/archive/2026-06-superseded-system/actions-and-workflows.md` | Transitional — prefer `platform/modules/actions-and-workflows.md` + this doc |
+| `docs/sprints/archive/05_2026/adminv2_action_runtime_audit_and_plan_v1.md` | Historical |
 
 ---
 

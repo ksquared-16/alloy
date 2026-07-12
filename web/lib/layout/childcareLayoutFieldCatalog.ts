@@ -2,7 +2,7 @@
  * Childcare layout field catalog — operator-facing starter allowlist.
  *
  * Source of truth for storage paths:
- * docs/platform_convergence/childcare_field_catalog_source_matrix.md
+ * docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/childcare_field_catalog_source_matrix.md
  *
  * Internal refKeys (e.g. inquiry_child.*) remain; picker labels and grouping
  * are operator-facing only.

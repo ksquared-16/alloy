@@ -4,8 +4,8 @@
  * Evolved from canonicalBuilderFieldLibrary to expose the full canonical data-provider
  * model (fields, relationships, collections, runtime signals).
  *
- * @see docs/sprints/07_2026/field-runtime-unification.md
- * @see docs/sprints/08_2026/field-platform-consumer-convergence.md
+ * @see docs/sprints/archive/07_2026/field-runtime-unification.md
+ * @see docs/sprints/archive/08_2026/field-platform-consumer-convergence.md
  */
 
 import { buildFormSystemFieldPicker, type FieldDefinitionPickerRow } from "@/lib/fields/formFieldRegistryPicker";

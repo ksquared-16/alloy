@@ -7,7 +7,7 @@
 **Binding governance (must not regress):**
 - [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md)
 - [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md)
-- Queue / record doctrine in active `docs/system/workspace-system.md`, `docs/system/record-system.md`
+- Queue / record doctrine in active `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`
 
 **Contract tests (required green before merge of any lane):**  
 `adminV2NavigationContracts`, `adminV2QueueRowClick`, `adminV2WorkUnitLaneLocalState`, `adminV2DrawerLoadingCoherence`, `opportunityDrawerQueuePreviewSeed`, `adminV2LoadingGeometry` (extend only when adding stable-geometry contracts)

@@ -6,7 +6,7 @@
  * Pure derivation over `context.signals.tour` — never fabricates scheduling data.
  * Sources: `OperationalTourSignal` (projected from tour_bookings first-paint compose).
  *
- * @see docs/platform/operator/universal-card-archetypes.md (Summary)
+ * @see docs/platform/operator/universal-universal-card-archetypes.md (Summary)
  */
 
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";

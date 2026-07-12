@@ -4,7 +4,7 @@ import { test } from "@playwright/test";
 
 const outDir = path.join(
     __dirname,
-    "../../../docs/sprints/06_2026/workspace-v3-operational-command-center/mockups/final-validation",
+    "../../../docs/sprints/archive/06_2026/workspace-v3-operational-command-center/mockups/final-validation",
 );
 
 test.beforeAll(() => {

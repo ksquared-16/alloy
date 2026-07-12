@@ -1,8 +1,15 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Architecture
 
 **Status:** Canonical (July 2026 stabilization). Describes **current** platform architecture — not sprint history.
 
-> **Platform stabilization (July 2026).** Alloy's operator plane consists of **nine foundational runtimes** — Presentation Runtime, Surface Host, Focus Panel Runtime, VM Runtime, Business Process Runtime, Processing Runtime, Communications Runtime, Configuration Runtime, and Current Work Runtime. There is **no legacy entity drawer runtime**. The composed drawer payload stack is **reveal/payload infrastructure behind the Focus Panel** — not a competing product surface. Canonical: [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md), [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md), [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md).
+> **Platform stabilization (July 2026).** Alloy's operator plane consists of **nine foundational runtimes** — Presentation Runtime, Surface Host, Focus Panel Runtime, VM Runtime, Business Process Runtime, Processing Runtime, Communications Runtime, Configuration Runtime, and Current Work Runtime. There is **no legacy entity drawer runtime**. The composed drawer payload stack is **reveal/payload infrastructure behind the Focus Panel** — not a competing product surface. Canonical: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md), [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md), [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md).
 
 ---
 
@@ -41,7 +48,7 @@
 | **Processing Runtime** | Digital Mailroom operational workspace | [`../modules/documents-and-forms.md`](../modules/documents-and-forms.md) |
 | **Communications Runtime** | Command Center + Activity embed | [`../modules/communications-platform.md`](../modules/communications-platform.md) |
 | **Configuration Runtime** | Settings control plane (`/settings/*`) | [`../modules/configuration-platform.md`](../modules/configuration-platform.md) |
-| **Current Work Runtime** | Stage work completion inside Focus Panel | [`../../sprints/07_2026/alloy-operator-workspace/implementation-closeout.md`](../../sprints/07_2026/alloy-operator-workspace/implementation-closeout.md) |
+| **Current Work Runtime** | Stage work completion inside Focus Panel | `../../sprints/archive/07_2026/alloy-operator-workspace/implementation-closeout.md` (historical: `../../sprints/archive/07_2026/alloy-operator-workspace/implementation-closeout.md`) |
 
 Unsupported historical entities **fail closed** — `AdminEntityDrawer` returns `null`. Rollback is deployment/Git-based only.
 
@@ -109,7 +116,7 @@ Selected record
   → Warm cache on revisit
 ```
 
-**Canonical reference:** Communications Activity (`surfaceVariant="activity_embed"`) — see [`../../sprints/2026-07/communications-preview-vm-doctrine.md`](../../sprints/2026-07/communications-preview-vm-doctrine.md) and [`../modules/communications-platform.md`](../modules/communications-platform.md) § Focus Panel Activity embed.
+**Canonical reference:** Communications Activity (`surfaceVariant="activity_embed"`) — see `../../sprints/archive/2026-07/communications-preview-vm-doctrine.md` (historical: `../../sprints/archive/2026-07/communications-preview-vm-doctrine.md`) and [`../modules/communications-platform.md`](../modules/communications-platform.md) § Focus Panel Activity embed.
 
 **Reuse intent:** Processing, Documents, Scheduling, Billing, Attendance, and future embedded workspaces should adopt the same pattern — not fork parallel load paths.
 
@@ -156,11 +163,11 @@ See `../governance/deployment-and-environments.md`.
 - `os-runtime-map.md` (**OS Runtime Map** — the nine runtime layers, the three flows, the client/server seam, the Effects/Integration service, and the Architecture Evolution & Known Gaps appendix)
 - `system-overview.md`
 - `../core/business-process-system.md`
-- `../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
-- `../../api/api-platform-completion.md` (internal API Platform foundation complete; future API work is expansion)
-- `../platform-capabilities.md` (capability model — new operational modules are designed API-first)
+- `../../../api/api-architecture.md` (API platform doctrine — the API layer is the platform boundary)
+- `../../../api/api-platform-completion.md` (internal API Platform foundation complete; future API work is expansion)
+- `.../foundation/platform-capabilities.md` (capability model — new operational modules are designed API-first)
 - `platform-manifesto.md` (constitutional doctrine)
-- `platform-certification-july-2026.md` (July 2026 certification)
-- `../milestones/platform-stabilization-july-2026.md` (July 2026 stabilization milestone)
+- `milestones/certification-july-2026.md` (July 2026 certification)
+- `../milestones/stabilization-july-2026.md` (July 2026 stabilization milestone)
 - `../../system/repository-state-2026-06.md` (point-in-time snapshot)
 - `docs/schema/` (generated schema reference)

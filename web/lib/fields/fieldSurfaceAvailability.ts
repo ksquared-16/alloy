@@ -4,7 +4,7 @@
  * Delegates to fieldCapabilityEngine (derived from resolver registry).
  * Legacy badge exports preserved for FieldsGroupedEntityPanel closeout components.
  *
- * @see docs/sprints/07_2026/field-runtime-unification.md
+ * @see docs/sprints/archive/07_2026/field-runtime-unification.md
  */
 
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";

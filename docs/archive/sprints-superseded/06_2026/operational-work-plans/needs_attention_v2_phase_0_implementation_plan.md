@@ -1,6 +1,6 @@
 # Needs Attention V2 — Phase 0 Implementation Plan
 
-**Path:** `docs/sprints/06_2026/needs_attention_v2_phase_0_implementation_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/needs_attention_v2_phase_0_implementation_plan.md`  
 **Date:** 2026-06-03  
 **Status:** **Planning complete — architecture frozen for Phase 1 bridge** (no implementation in this sprint)  
 **Scope:** Implementation-planning audit for **Readiness → Needs Attention projection** only.
@@ -719,7 +719,7 @@ At sprint completion we know exactly:
 | Readiness memo | `web/lib/completion/readinessEvaluationMemo.ts` |
 | Drawer readiness | `web/lib/completion/readinessDrawerBootstrap.ts` |
 | Drawer bootstrap | `web/lib/admin/loadOpportunityDrawerOperationalBootstrap.ts` |
-| Operating model | `docs/sprints/06_2026/needs_attention_v2_operating_model.md` |
+| Operating model | `docs/sprints/archive/06_2026/needs_attention_v2_operating_model.md` |
 
 ---
 

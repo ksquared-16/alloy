@@ -1,3 +1,10 @@
+---
+owner: experience
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Experience Layer — Architecture
 
 **Path:** `docs/platform/experience/experience-layer-architecture.md`
@@ -13,7 +20,7 @@ The Experience Layer is a **platform tier**, peer to Cards, Surfaces, Drawers, A
 
 Two facts from the codebase shape the whole architecture and **lower its risk substantially**:
 
-1. **The reveal engine already exists and is already capable.** `computeWorkUnitRevealGate()` already consumes `kpi_ready` and already blocks on it ([workUnitRevealGate.ts:119](../../../web/lib/adminV2/workUnitRevealGate.ts)). The illusion break is not a missing engine — it is that *call sites pass `kpi_ready: true` / `suppress_kpi_strip`*, opting out. **The fix is ownership, not invention.**
+1. **The reveal engine already exists and is already capable.** `computeWorkUnitRevealGate()` already consumes `kpi_ready` and already blocks on it (see `web/lib/adminV2/runtime/*RevealGate*` and `docs/system/adminv2-runtime-performance-doctrine.md`). The illusion break is not a missing engine — it is that *call sites pass `kpi_ready: true` / `suppress_kpi_strip`*, opting out. **The fix is ownership, not invention.**
 2. **The optimistic save engine already exists and is proven.** `drawerOperatingSaveAll()` already does optimistic-apply → parallel-confirm → per-section-rollback ([drawerOperatingSaveCoordinator.ts](../../../web/lib/admin/drawer/drawerOperatingSaveCoordinator.ts)). The Editable Card Runtime is a **state machine + acknowledgement wrapper** over this engine, not a new save system.
 
 So the Experience Layer is built by **(a) centralizing ownership of behaviors today scattered across pages and CSS, and (b) wrapping proven engines in reusable, documented modules** — not by rewriting the runtime. This is the lowest-regression path to the doctrine.

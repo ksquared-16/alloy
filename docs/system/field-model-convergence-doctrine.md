@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Field Model Convergence Doctrine
 
 **Status:** Active planning — Configuration Convergence V4 (June 2026).  
@@ -230,6 +237,6 @@ Recommended: **separate sprint** after F0 doctrine + FC/layout seed stability. F
 ## Related docs
 
 - `docs/system/configuration-ownership-doctrine.md`
-- `docs/platform_convergence/layout_runtime_cutover_plan.md`
-- `docs/platform_convergence/childcare_field_catalog_source_matrix.md` (if present)
-- `docs/sprints/06_2026/lifecycle_required_info_child_fields_audit.md`
+- `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`
+- `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/childcare_field_catalog_source_matrix.md` (if present)
+- `docs/sprints/archive/06_2026/lifecycle_required_info_child_fields_audit.md`

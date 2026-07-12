@@ -34,15 +34,15 @@
 
 | Sprint | Path | Status |
 |--------|------|--------|
-| Messaging V2 platform | [`06_2026/messaging_v2_audit.md`](./06_2026/messaging_v2_audit.md) (+ design, architecture, implementation plan) | Planning / partial ship — see `product/communications.md` |
-| Lifecycle runtime alignment | [`06_2026/lifecycle_runtime_configuration_alignment_sprint.md`](./06_2026/lifecycle_runtime_configuration_alignment_sprint.md) | Planning — audit/backlog |
-| Lifecycle alignment matrix | [`06_2026/lifecycle_runtime_alignment_matrix_v1.md`](./06_2026/lifecycle_runtime_alignment_matrix_v1.md) | Reference |
-| Status / lifecycle grain expansion | [`06_2026/status_ownership_and_lifecycle_grain_expansion.md`](./06_2026/status_ownership_and_lifecycle_grain_expansion.md) | Active |
-| Business processes V1 | [`06_2026/business_processes_v1_sprint_report.md`](./06_2026/business_processes_v1_sprint_report.md) | Active |
-| Child-grain queue conversion | [`06_2026/child_grain_queue_conversion_design.md`](./06_2026/child_grain_queue_conversion_design.md) | Frozen design gate |
-| Child-grain Phase C preflight | [`06_2026/child_grain_phase_c_preflight.md`](./06_2026/child_grain_phase_c_preflight.md) | Complete — see enrolled staging closeout |
-| Backend query/payload optimization | [`06_2026/adminv2_backend_query_payload_optimization_phase.md`](./06_2026/adminv2_backend_query_payload_optimization_phase.md) | Backlog |
-| Tasks V2 framework | [`06_2026/tasks_v2_operational_work_framework.md`](./06_2026/tasks_v2_operational_work_framework.md) | Planning |
+| Messaging V2 platform | [`06_2026/messaging_v2_audit.md`](./archive/06_2026/messaging_v2_audit.md) (+ design, architecture, implementation plan) | Planning / partial ship — see `product/communications.md` |
+| Lifecycle runtime alignment | [`06_2026/lifecycle_runtime_configuration_alignment_sprint.md`](./archive/06_2026/lifecycle_runtime_configuration_alignment_sprint.md) | Planning — audit/backlog |
+| Lifecycle alignment matrix | [`06_2026/lifecycle_runtime_alignment_matrix_v1.md`](./archive/06_2026/lifecycle_runtime_alignment_matrix_v1.md) | Reference |
+| Status / lifecycle grain expansion | [`06_2026/status_ownership_and_lifecycle_grain_expansion.md`](./archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md) | Active |
+| Business processes V1 | [`06_2026/business_processes_v1_sprint_report.md`](./archive/06_2026/business_processes_v1_sprint_report.md) | Active |
+| Child-grain queue conversion | [`06_2026/child_grain_queue_conversion_design.md`](./archive/06_2026/child_grain_queue_conversion_design.md) | Frozen design gate |
+| Child-grain Phase C preflight | [`06_2026/child_grain_phase_c_preflight.md`](./archive/06_2026/child_grain_phase_c_preflight.md) | Complete — see enrolled staging closeout |
+| Backend query/payload optimization | [`06_2026/adminv2_backend_query_payload_optimization_phase.md`](./archive/06_2026/adminv2_backend_query_payload_optimization_phase.md) | Backlog |
+| Tasks V2 framework | [`06_2026/tasks_v2_operational_work_framework.md`](./archive/06_2026/tasks_v2_operational_work_framework.md) | Planning |
 
 Full roadmap sequencing: **`docs/execution/roadmap-and-gaps.md`**.
 
@@ -52,11 +52,11 @@ Full roadmap sequencing: **`docs/execution/roadmap-and-gaps.md`**.
 
 | Area | Closeout |
 |------|----------|
-| Child lifecycle + WU convergence | [`05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`](./05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md) |
-| Communications V1 | [`05_2026/communications.txt`](./05_2026/communications.txt) |
-| Tour Scheduling Phase 2 Band A | [`05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`](./05_2026/completed/tour_scheduling_phase2_band_a_closeout.md) |
-| BOS operational assist | [`06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](./06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) |
-| Operational work + actions | [`06_2026/completed/operational_work_and_action_execution_closeout.md`](./06_2026/completed/operational_work_and_action_execution_closeout.md) |
+| Child lifecycle + WU convergence | [`05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`](./archive/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md) |
+| Communications V1 | [`05_2026/communications.txt`](./archive/05_2026/communications.txt) |
+| Tour Scheduling Phase 2 Band A | [`05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`](./archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md) |
+| BOS operational assist | [`06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](./archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) |
+| Operational work + actions | [`06_2026/completed/operational_work_and_action_execution_closeout.md`](./archive/06_2026/completed/operational_work_and_action_execution_closeout.md) |
 
 See **[`COMPLETED_SPRINTS_SUMMARY.md`](./COMPLETED_SPRINTS_SUMMARY.md)** for the full table.
 
@@ -66,8 +66,8 @@ See **[`COMPLETED_SPRINTS_SUMMARY.md`](./COMPLETED_SPRINTS_SUMMARY.md)** for the
 
 | Pack | Path |
 |------|------|
-| Communications & messaging handoff | **`docs/export/comms-messaging-handoff-pack/`** (folder) or **`docs/export/comms-messaging-handoff-pack.zip`** |
-| Forms & documents handoff | **`docs/export/forms-handoff-pack/`** (folder) or **`docs/export/forms-handoff-pack.zip`** |
+| Communications & messaging handoff | **`docs/archive/2026-06-handoff-packs/comms-messaging-handoff-pack/`** (folder) or **`docs/archive/2026-06-handoff-packs/comms-messaging-handoff-pack.zip`** |
+| Forms & documents handoff | **`docs/archive/2026-06-handoff-packs/forms-handoff-pack/`** (folder) or **`docs/archive/2026-06-handoff-packs/forms-handoff-pack.zip`** |
 
 ---
 

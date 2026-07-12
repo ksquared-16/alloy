@@ -2,7 +2,7 @@
  * OpenAI-compatible Chat Completions → structured JSON enrichment (server-only).
  * Requires org policy + strict permission path + env credentials (see resolver).
  * Never logs API keys. No persistence.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 import type { ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";

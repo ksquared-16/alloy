@@ -163,7 +163,7 @@ describe("Configuration Workspace V2 — workflow QA readiness", () => {
 
     it("enrollment workflow QA doc exists", () => {
         const doc = readFileSync(
-            resolve(root, "../docs/sprints/06_2026/enrollment_workflow_qa_ready_path.md"),
+            resolve(root, "../docs/sprints/archive/06_2026/enrollment_workflow_qa_ready_path.md"),
             "utf8"
         );
         expect(doc).toContain("Create Lead");

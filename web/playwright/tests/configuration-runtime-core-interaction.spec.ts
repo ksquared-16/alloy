@@ -8,7 +8,7 @@ loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
 const screenshotDir = path.join(
     __dirname,
-    "../../../docs/sprints/06_2026/configuration-runtime-core-interaction",
+    "../../../docs/sprints/archive/06_2026/configuration-runtime-core-interaction",
 );
 
 async function ensureSidebarExpanded(page: import("@playwright/test").Page) {

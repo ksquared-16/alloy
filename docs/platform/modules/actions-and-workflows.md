@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Actions and workflows
 
 **Status:** Canonical platform module doc (updated June 2026 — unified actions + relationship framework).
@@ -72,7 +79,7 @@ dev/test (`assertConfiguredActionKeys`) and render disabled in production
 
 **Reference implementations:** `update_status` (generic case-grain status change,
 enrollment as first consumer) and `create_lead` (capture-first record creation).
-See `docs/sprints/06_2026/actions_runtime_audit.md` for the full audit and rollout plan.
+See `docs/sprints/archive/06_2026/actions_runtime_audit.md` for the full audit and rollout plan.
 
 ### Create Lead and requirement timing
 
@@ -286,7 +293,7 @@ Operator behavior after a successful create (Create Lead reliability thread):
 - **Canonical navigation, no legacy drawer.** Open Lead routes to the Work Unit Focus Panel via `resolveCreatedLeadFocusPanelHref` → `operatorWorkUnitHrefFromKey` (`/workspace/work-unit/:slug/:recordId`) — never the legacy adminV2 drawer.
 - **Focus Panel composes by record id.** `composeOpportunityDrawerViewModel` loads the record by `org_id + id` only — it is **not** gated on queue membership, so the just-created record opens even before the queue refresh lands.
 - **Projection refresh seam.** `CreateLeadCommandSurface` dispatches the canonical `dispatchOpportunityQueueUpdated(id, "create_lead")` on success, and `create_lead` is registered in `QUEUE_MEMBERSHIP_ACTION_KEYS`, so every mounted Work Unit view refetches **lane rows + pill counts** (the new lead appears in New Leads without a full reload). The success contract (`buildCreateLeadSuccess`) carries the created `work_unit_id`/`status_key` and a **work-unit refresh target** alongside the opportunity; all entry points (Work Unit / department / workspace rails) honor `onRefresh`.
-- **Refresh recomputes the operational projection, not independent counts.** The canonical refresh event is the unit that re-runs the **operational projection** (`computeOperationalProjection` over the all-records base + Work View predicates), so process card count, Work View counts, queue rows, and active Focus Panel membership all update from the **same** source — never a lane-summary count that disagrees with the rows. See `../core/business-process-system.md` § Operational Projection and `docs/sprints/06_2026/operational_projection_convergence.md`.
+- **Refresh recomputes the operational projection, not independent counts.** The canonical refresh event is the unit that re-runs the **operational projection** (`computeOperationalProjection` over the all-records base + Work View predicates), so process card count, Work View counts, queue rows, and active Focus Panel membership all update from the **same** source — never a lane-summary count that disagrees with the rows. See `../core/business-process-system.md` § Operational Projection and `docs/sprints/archive/06_2026/operational_projection_convergence.md`.
 
 ### Status language — no operator-facing "Inquiry"
 
@@ -395,7 +402,7 @@ stage the runtime points to. The same command from a richer entry point has more
 already complete — Work Unit opens at `resolve_subject`, Focus Panel at
 `resolve_required_inputs`, BOS at `preview`. No execution path diverges by surface; surfaces
 only differ by how much context arrives pre-resolved. See
-`docs/sprints/06_2026/operational_command_runtime_v3.md`.
+`docs/sprints/archive/06_2026/operational_command_runtime_v3.md`.
 
 There are no buttons, drawer actions, or dialog mutations — only commands, placements, and
 flows over one runtime.
@@ -418,7 +425,7 @@ known/missing inputs, preview, and a standardized success descriptor, but never 
   targets, copy).
 
 Server-side required-input parity with stage intake-spec `field_rules` (notably location) is a
-documented follow-up — see `docs/sprints/06_2026/create_lead_command_flow_audit.md` § Phase 6.
+documented follow-up — see `docs/sprints/archive/06_2026/create_lead_command_flow_audit.md` § Phase 6.
 
 ### Command Surface — platform-owned shell (V5)
 
@@ -457,7 +464,7 @@ but owns execution and success. Execution runs through the single shared client 
 modal's visible chrome with `CommandSurfaceShell` remains deferred to avoid regressing the rich
 intake.
 
-See `docs/sprints/06_2026/command_surface_v3.md`, `command_surface_v2.md`, `command_surface_v1.md`.
+See `docs/sprints/archive/06_2026/command_surface_v3.md`, `command_surface_v2.md`, `command_surface_v1.md`.
 
 ## Rules
 

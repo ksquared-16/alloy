@@ -278,7 +278,7 @@ describe("Batch 0 — existing surfaces remain intact", () => {
     });
 
     it("documents Batch 0 in the operational configuration sprint doc", () => {
-        const doc = readFileSync(resolve(root, "../docs/sprints/06_2026/operational_configuration_v1.md"), "utf8");
+        const doc = readFileSync(resolve(root, "../docs/sprints/archive/06_2026/operational_configuration_v1.md"), "utf8");
         expect(doc).toMatch(/Batch 0/);
         expect(doc).toMatch(/read-only/i);
     });

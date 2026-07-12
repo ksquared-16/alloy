@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Status and state system
 
 **Status:** Canonical (July 2026). See [`business-process-execution-platform.md`](../modules/business-process-execution-platform.md) for execution runtime doctrine.

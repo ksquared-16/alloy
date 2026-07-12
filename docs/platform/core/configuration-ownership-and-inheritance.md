@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Configuration Ownership & Inheritance — Core Platform Doctrine
 
 **Status:** Proposed core platform doctrine — pending ratification
@@ -147,7 +154,7 @@ The Inheritance Control takes only: a value type, a scope axis, and a system-of-
 
 ## 6. Configuration language (operator vs. system)
 
-Extends the [Commercial Language Bible](../../sprints/active/commercial-language-bible.md) to the configuration layer. Operators see the left; the system stores the right.
+Extends the Commercial Language Bible (historical: `../../sprints/active/commercial-language-bible.md`) to the configuration layer. Operators see the left; the system stores the right.
 
 | Operator sees | System term |
 |---|---|

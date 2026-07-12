@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Universal Nested-Surface Drill-In Editing
 
 **Status:** Landed (July 2026)  

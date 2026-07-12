@@ -1,6 +1,6 @@
 # Operational Work V1 — UX & Placement Audit
 
-**Path:** `docs/sprints/06_2026/operational_work_v1_ux_placement_audit.md`  
+**Path:** `docs/sprints/archive/06_2026/operational_work_v1_ux_placement_audit.md`  
 **Date:** 2026-06-03  
 **Status:** **UX audit frozen — design only** (no implementation)  
 **Scope:** Determine where Operational Work should appear across Alloy before PR2+ UX delivery.

@@ -1,6 +1,6 @@
 # Needs Attention V2 — Operating Model
 
-**Path:** `docs/sprints/06_2026/needs_attention_v2_operating_model.md`  
+**Path:** `docs/sprints/archive/06_2026/needs_attention_v2_operating_model.md`  
 **Date:** 2026-06-03  
 **Status:** **Operating model frozen — discovery only** (architecture only; no implementation)  
 **Scope:** Define Alloy's **operational awareness framework** (risk, opportunity, conflict, and change signals). Not a UI sprint, schema sprint, workflow sprint, or task sprint.
@@ -294,7 +294,7 @@ OpportunityAttentionResult {
 
 ### 1.4 Existing workspace behavior
 
-Documented in `docs/system/workspace-system.md` § Operational attention.
+Documented in `docs/archive/2026-06-superseded-system/workspace-system.md` § Operational attention.
 
 | Behavior | Detail |
 |----------|--------|
@@ -942,7 +942,7 @@ Use frozen vocabulary — not "violations," not "config only."
 | BOS grounding | `web/lib/adminV2/bos/recommendations/adapters/extractGroundingSignalsFromAttention.ts` |
 | Readiness engine | `web/lib/completion/evaluateOperationalReadiness.ts` |
 | Readiness types | `web/lib/completion/readinessTypes.ts` |
-| Workspace doctrine | `docs/system/workspace-system.md` |
+| Workspace doctrine | `docs/archive/2026-06-superseded-system/workspace-system.md` |
 | CRM NA model | `docs/product/crm-system.md` § Enrollment operational attention |
 
 ---

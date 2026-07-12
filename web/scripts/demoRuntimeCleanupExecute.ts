@@ -15,7 +15,7 @@
  *   npm run demo:cleanup:dry
  *   DEMO_CLEANUP_CONFIRM=DELETE_DEMO_RUNTIME_DATA npm run demo:cleanup:execute
  *
- * @see docs/governance/demo-runtime-cleanup-workflow.md
+ * @see docs/platform/governance/demo-runtime-cleanup-workflow.md
  */
 
 import { config as loadEnv } from "dotenv";

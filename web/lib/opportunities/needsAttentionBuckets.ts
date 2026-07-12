@@ -14,7 +14,7 @@ import { isOpportunityAttentionReasonCode } from "@/lib/opportunities/attentionP
  *
  * **Counts (department lane):** Prefer {@link bucketCountsFromResolverMatches} over work-unit-scoped
  * resolver matches so totals align with the execution queue; histogram sums ({@link hydrateNeedsAttentionBucketCounts})
- * remain useful for org-wide previews only — see `docs/system/workspace-system.md`.
+ * remain useful for org-wide previews only — see `docs/archive/2026-06-superseded-system/workspace-system.md`.
  */
 export type NeedsAttentionBucketConfig = {
     key: string;

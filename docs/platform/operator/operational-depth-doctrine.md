@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — Operational Depth Doctrine
 
 **Status:** Canonical doctrine (June 2026). Defines the **three depths** an operator

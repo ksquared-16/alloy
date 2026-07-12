@@ -1,6 +1,6 @@
 # Required Information V2 — Operational Readiness Framework
 
-**Path:** `docs/sprints/06_2026/required_information_v2_operational_readiness_framework.md`  
+**Path:** `docs/sprints/archive/06_2026/required_information_v2_operational_readiness_framework.md`  
 **Date:** 2026-06-02 (enhancement pass: 2026-06-02)  
 **Status:** **Operating model frozen — enhancement pass complete** (architecture only; no implementation)  
 **Scope:** Define Alloy's **operational readiness framework**. Not a field-configuration sprint, UI sprint, Needs Attention sprint, Tasks sprint, or Orchestration sprint.

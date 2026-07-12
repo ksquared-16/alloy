@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Commercial Configuration
 
 **Status:** ✅ **Commercial Platform V1 — SHIPPED & FROZEN (2026-07-03).** Now spans Programs & Tuition, the unified Catalog (Commercial Products: fees/add-ons/deposits), Commercial & Revenue Categories, and GL Account integration. Canonical architecture: **[Commercial Platform V1](../commercial/commercial-platform-v1.md)**.

@@ -1,6 +1,6 @@
 # Operational Work Creation Model — Discovery Sprint
 
-**Path:** `docs/sprints/06_2026/operational_work_creation_model_discovery.md`  
+**Path:** `docs/sprints/archive/06_2026/operational_work_creation_model_discovery.md`  
 **Date:** 2026-06-03  
 **Status:** **Discovery complete — operating model frozen for Work Definitions planning**  
 **Scope:** Determine how operational work is **instantiated** across the platform. No code, migrations, UI, or Work Definition editor.

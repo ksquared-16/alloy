@@ -1,7 +1,7 @@
 /**
  * Lightweight, removable admin perf tracing for hot read routes.
  *
- * Phase 0 instrumentation (see docs/sprints/06_2026/adminv2_runtime_navigation_performance_execution_plan.md,
+ * Phase 0 instrumentation (see docs/sprints/archive/06_2026/adminv2_runtime_navigation_performance_execution_plan.md,
  * Card 0.1). Captures server handler wall-time per request so optimization work has
  * before/after proof. Mirrors the existing `[BOOK_V2_PERF]` structured-log style
  * (key=value fields, performance.now() with Date.now() fallback).

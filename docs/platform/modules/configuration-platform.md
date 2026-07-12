@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Configuration platform
 
 **Status:** Canonical platform module doc.

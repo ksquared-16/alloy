@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Intelligence Platform
 
 **Status:** Canonical platform module doc (Phase 0 MVP + Phase 1 expansion).
@@ -295,7 +302,7 @@ V1 settings expose active playbooks with **Edit targets** and **Experience place
 
 ## Analytics workspace (Phase 3 — deferred)
 
-Design plan: `docs/sprints/06_2026/analytics_workspace_shell_plan.md` — dedicated route nav (beyond modal). Modal + admin config delivered in Phase 3A.
+Design plan: `docs/sprints/archive/06_2026/analytics_workspace_shell_plan.md` — dedicated route nav (beyond modal). Modal + admin config delivered in Phase 3A.
 
 ---
 

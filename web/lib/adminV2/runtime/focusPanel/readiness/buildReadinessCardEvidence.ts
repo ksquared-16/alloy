@@ -8,7 +8,7 @@
  * program / schedule / desired start) and real signals (attention blockers). The
  * percentage is honest factor-completion (complete ÷ total), not a magic number.
  *
- * @see docs/platform/operator/card-archetypes.md (Intelligence)
+ * @see docs/platform/operator/universal-universal-card-archetypes.md (Intelligence)
  */
 
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";

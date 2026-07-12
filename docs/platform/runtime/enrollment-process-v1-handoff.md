@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Enrollment Process V1 — Implementation Handoff
 
 Status: **implemented + verified on staging; awaiting live browser Golden Path before freeze.**
@@ -241,4 +248,4 @@ Toolchain: **Node 22** (`v22.21.1`). Validation always from `web/`.
 
 - [`enrollment-process-runtime.md`](./enrollment-process-runtime.md) — the runtime ownership reference (updated alongside this handoff).
 - [`enrollment-placement-doctrine.md`](../../system/enrollment-placement-doctrine.md) — placement/waitlist doctrine.
-- Sprint: `docs/sprints/07_2026/enrollment_alignment_closeout.md`.
+- Sprint: `docs/sprints/archive/07_2026/enrollment_alignment_closeout.md`.

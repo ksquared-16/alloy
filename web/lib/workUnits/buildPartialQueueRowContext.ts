@@ -4,7 +4,7 @@
  * Does not change queue membership. When production queues are still case-grain,
  * row_subject is honestly subject_type: "case".
  *
- * @see docs/sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md §4
+ * @see docs/sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md §4
  * @see docs/system/work-unit-surface-context-contract.md
  */
 

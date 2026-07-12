@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Configuration Ownership Doctrine
 
 **Status:** Frozen — Configuration Runtime V1 (June 2026).

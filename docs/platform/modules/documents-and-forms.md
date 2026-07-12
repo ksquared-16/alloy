@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Documents and forms
 
 **Status:** Canonical platform module doc.
@@ -116,7 +123,7 @@ Shared panel chrome: `ProcessingParentPanel`. Folder icons: `ProcessingFolderIco
 Visual tokens: Midnight Forge, Bend Pine, Stone, White in shell chrome.
 
 **Lock:** Digital Mailroom V1 UI is approved and frozen. Extend behavior **inside** this shell only.
-See `docs/sprints/07_2026/processing-v1-lock-closeout.md`.
+See `docs/sprints/archive/07_2026/processing-v1-lock-closeout.md`.
 
 ---
 
@@ -130,5 +137,5 @@ See `docs/sprints/07_2026/processing-v1-lock-closeout.md`.
 
 ## Related
 
-- `../../product/documents-and-forms.md` (transitional expanded reference)
-- `../foundation/platform-capabilities.md`
+- `../../platform/modules/documents-and-forms.md` (transitional expanded reference)
+- `../../foundation/platform-capabilities.md`

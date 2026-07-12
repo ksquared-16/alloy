@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Entity model
 
 **Status:** Canonical (June 2026 freeze). Conceptual model — column detail in `docs/schema/schema-columns.md`.

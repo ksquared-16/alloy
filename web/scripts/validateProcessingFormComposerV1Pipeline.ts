@@ -18,8 +18,8 @@ import { formAuthoringWorkspacePath } from "../lib/admin/forms/formAuthoringWork
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
 const FIXTURE = path.join(process.cwd(), "tests/fixtures/processing/mo500-3313-school-age-child-health-report.pdf");
-const REPORT = path.join(process.cwd(), "docs/sprints/07_2026/processing-form-composer-v1-validation-report.md");
-const SCREENSHOT_DIR = path.join(process.cwd(), "docs/sprints/07_2026/processing-form-composer-v1-screenshots");
+const REPORT = path.join(process.cwd(), "docs/sprints/archive/07_2026/processing-form-composer-v1-validation-report.md");
+const SCREENSHOT_DIR = path.join(process.cwd(), "docs/sprints/archive/07_2026/processing-form-composer-v1-screenshots");
 
 type StepResult = { ok: boolean; detail: string };
 
@@ -263,7 +263,7 @@ ${failed.map((x) => `- ${x}`).join("\n") || "- (none)"}
 ## Playwright UI E2E
 Partial automation in \`playwright/tests/processing-form-composer-v1-e2e.spec.ts\`.
 - Upload + case creation: verified via API script
-- Processing modal UI: intermittent in headless runs (BOS modal portal timing); screenshots in \`docs/sprints/07_2026/processing-form-composer-v1-screenshots/\` when UI test completes
+- Processing modal UI: intermittent in headless runs (BOS modal portal timing); screenshots in \`docs/sprints/archive/07_2026/processing-form-composer-v1-screenshots/\` when UI test completes
 
 ## Unrelated WIP in commit diff
 - Focus-panel composer untracked files: **not** in tracked diff

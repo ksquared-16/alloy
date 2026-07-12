@@ -1,6 +1,6 @@
 /**
  * Needs Attention V2 Phase 1 — readiness → attention projection policy (metadata only).
- * @see docs/sprints/06_2026/needs_attention_v2_phase_0_implementation_plan.md
+ * @see docs/sprints/archive/06_2026/needs_attention_v2_phase_0_implementation_plan.md
  */
 
 export type ReadinessAttentionProjectionProfileV1 = {

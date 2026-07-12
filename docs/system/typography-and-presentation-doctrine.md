@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Typography and Presentation Doctrine
 
 **Path:** `docs/system/typography-and-presentation-doctrine.md`  

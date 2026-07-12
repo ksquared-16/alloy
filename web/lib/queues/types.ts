@@ -30,7 +30,7 @@ export type QueueSummary = {
     calendar_meta?: QueueOperationalCalendarMeta;
     /**
      * Present when `entity_type==="opportunity"` and `key==="needs_attention"`.
-     * Explains bounded candidate fetch vs exhaustive org totals (`docs/system/workspace-system.md`).
+     * Explains bounded candidate fetch vs exhaustive org totals (`docs/archive/2026-06-superseded-system/workspace-system.md`).
      */
     opportunity_needs_attention_semantics?: QueueServiceOpportunityNeedsAttentionSemantics;
     /** v2 queue config metadata (Card 4+) — does not change membership semantics. */

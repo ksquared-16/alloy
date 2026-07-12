@@ -134,7 +134,7 @@ describe("Configuration Workspace V3 — enrollment workflow readiness", () => {
     });
 
     it("enrollment QA doc includes configuration verification section", () => {
-        const doc = readDoc("sprints/06_2026/enrollment_workflow_qa_ready_path.md");
+        const doc = readDoc("sprints/archive/06_2026/enrollment_workflow_qa_ready_path.md");
         expect(doc).toContain("Configuration verification");
         expect(doc).toContain("Create Lead");
         expect(doc).toContain("Enrolled");

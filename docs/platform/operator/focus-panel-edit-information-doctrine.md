@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Focus Panel Edit Information Doctrine
 
 **Status:** Approved / frozen (June 2026) — Phase 1 complete; edit mutations deferred to Phase 2  

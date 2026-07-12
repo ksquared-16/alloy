@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Focus Panel — Canonical Card Library
 
 > **Status**: Canonical (July 2026). Cards 1–8 implemented. Billing Preview, Tour, Communications, and Timeline joined the Core Four (Household, Children, **Current Work**, Readiness). **Current Work** is the canonical operational progression owner on the Focus Panel — see [current-work-surface.md](./current-work-surface.md).

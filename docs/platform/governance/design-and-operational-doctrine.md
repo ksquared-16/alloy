@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Design and operational doctrine
 
 **Status:** Canonical index for cross-cutting operational rules.
@@ -33,7 +40,7 @@ AdminV2 reveal gates, queue empty semantics, composed payload readiness — **pr
 - Operator story (lived flow): `../operator/operator-story.md`
 - Alloy visual language (look/feel; bridge into mockups): `../operator/alloy-visual-language.md`
 - Alloy Runtime Specification (synthesis; read before building any domain): `../operator/alloy-runtime-specification.md`
-- Cross-cutting operational UX (planes/domains): `../operational-ux-doctrine.md`
+- Cross-cutting operational UX (planes/domains): `../core/operational-ux-doctrine.md`
 
 ---
 

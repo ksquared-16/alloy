@@ -1,7 +1,7 @@
 /**
  * Org / work-unit AI policy from JSON metadata only (no migrations).
  * Default: all enrichment off; provider `disabled`.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 import type { AiProviderKey } from "@/lib/ai/providerTypes";
@@ -12,9 +12,9 @@ export const AI_ALLOWED_FEATURES = [
     "draft_enrichment",
     "operational_summary",
     "reasoning_paraphrase",
-    /** Task Assist V1 — deterministic proposal generation (no LLM in default path). @see docs/sprints/05_2026/task_assist_v1.md */
+    /** Task Assist V1 — deterministic proposal generation (no LLM in default path). @see docs/sprints/archive/05_2026/task_assist_v1.md */
     "task_assist_draft",
-    /** Workflow Assist Cards 4–5 — deterministic workflow draft proposals (no LLM). @see docs/sprints/05_2026/workflow_assist_v1.md */
+    /** Workflow Assist Cards 4–5 — deterministic workflow draft proposals (no LLM). @see docs/sprints/archive/05_2026/workflow_assist_v1.md */
     "workflow_assist_draft",
 ] as const;
 

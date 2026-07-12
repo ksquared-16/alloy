@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Enrollment Placement Doctrine
 
 **Status:** Active — Configuration Workspace V3 (June 2026).
@@ -99,4 +106,4 @@ Fields (registry)
 
 - `configuration-workspace-v1-doctrine.md`
 - `configuration-ownership-doctrine.md`
-- `docs/sprints/06_2026/enrollment_workflow_qa_ready_path.md`
+- `docs/sprints/archive/06_2026/enrollment_workflow_qa_ready_path.md`

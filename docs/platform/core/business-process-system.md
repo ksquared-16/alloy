@@ -1,10 +1,17 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Business Process System
 
 **Status:** Canonical (June 2026 freeze). Operator mental model and platform architecture for configurable processes.
 
 **Supersedes:** Work Unit System as the **primary documentation abstraction**. Work units remain a runtime construct — documented here, not as the operator-facing spine.
 
-> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze — RFC D8).** The frozen [`../operational-expansion-phase1-architecture-rfc.md`](../operational-expansion-phase1-architecture-rfc.md) codifies the **process-promotion criteria**: an operational sequence becomes a **Business Process** only when **all four** hold — durable per-subject stage/state, human-confirmed outcomes as the mutation path, queue/work membership, and readiness gates. Otherwise it is modeled with **Actions + status domains** (and surfaced via queues + Current Work). Applied to the expansion: **Attendance** = fact authoring on a roster (not a process); **Billing obligation review** = a consequence lifecycle (not a process); **AR/collections/dunning** = a process *candidate* (meets all four); **Scheduling/Staffing** = actions/facts by default, promoted only on evidence of staged governance.
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze — RFC D8).** The frozen [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) codifies the **process-promotion criteria**: an operational sequence becomes a **Business Process** only when **all four** hold — durable per-subject stage/state, human-confirmed outcomes as the mutation path, queue/work membership, and readiness gates. Otherwise it is modeled with **Actions + status domains** (and surfaced via queues + Current Work). Applied to the expansion: **Attendance** = fact authoring on a roster (not a process); **Billing obligation review** = a consequence lifecycle (not a process); **AR/collections/dunning** = a process *candidate* (meets all four); **Scheduling/Staffing** = actions/facts by default, promoted only on evidence of staged governance.
 
 ---
 
@@ -107,7 +114,7 @@ A Work View's *"Show work when…"* conditions are a real **predicate builder**:
 evaluated against queue-row facts. The condition field list comes from a canonical registry
 (`web/lib/lifecycle/workViewConditionFieldRegistry.ts`) — every field declares its subject/entity, value
 type, **option source**, supported operators, and runtime resolver. See
-`docs/sprints/06_2026/work_view_conditions_v3.md`.
+`docs/sprints/archive/06_2026/work_view_conditions_v3.md`.
 
 - **Fields come from config/canonical registries, never hardcoded subsets.** The Enrollment start set:
   **Stage**, **Lead Status**, **Enrollment Status**, **Campus**, **Program**, **Room**, **Desired
@@ -189,7 +196,7 @@ Panel.
   Leads" instead of silently showing a record the active queue counts as 0.
 - **Refresh recomputes the projection.** Membership-changing actions (Create Lead) dispatch the canonical
   `dispatchOpportunityQueueUpdated` — re-running the projection updates card count, Work View counts, rows,
-  and Focus Panel scope from one event. See `docs/sprints/06_2026/operational_projection_convergence.md`.
+  and Focus Panel scope from one event. See `docs/sprints/archive/06_2026/operational_projection_convergence.md`.
 
 **Outcome picker:** My Tasks **Complete** flow resolves stage outcomes via `GET /api/admin/lifecycle-builder/stage-work-outcomes` — human confirms before side effects.
 
@@ -219,7 +226,7 @@ lifecycle, or component structure. The shell is now implemented (`CommandSurface
 `useCommandSurfaceController`, Create Lead reference); execution is injected through the existing
 registered-action route, so the BPS never gains a parallel mutation path. See
 `../modules/actions-and-workflows.md` § Command Surface and
-`docs/sprints/06_2026/command_surface_v2.md`.
+`docs/sprints/archive/06_2026/command_surface_v2.md`.
 
 ### Stage grain
 
@@ -320,7 +327,7 @@ Stage work surfaced in **Current Work** is the authoritative Business Process ex
 | Queues & preview contract | `queue-system.md` |
 | Status ownership | `status-and-state-system.md` |
 | CRM enrollment grain | `../../product/crm-system.md` (supplemental — childcare vertical) |
-| Sprint closeout | `docs/sprints/06_2026/business_processes_v1_sprint_report.md` |
+| Sprint closeout | `docs/sprints/archive/06_2026/business_processes_v1_sprint_report.md` |
 
 ## When this doc must be updated
 

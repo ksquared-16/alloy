@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Action Workspace Foundation
 
 **Path:** `docs/system/action-workspace-foundation.md`  
@@ -136,11 +143,11 @@ Optional `intake_notes` stored on opportunity `metadata`.
 
 ## Related docs
 
-- `docs/system/actions-and-workflows.md` — execute path
-- `docs/sprints/06_2026/lifecycle_action_intake_model.md` — intake spec design (lifecycle fields post-create)
-- `docs/sprints/06_2026/create_lead_action_ux_foundation.md` — prior sprint closeout
-- `docs/sprints/06_2026/program_interest_configurable_model_audit.md` — program/schedule/room option model (audit before implementation; impacts Create Lead + Add Child gather fields)
-- `docs/sprints/06_2026/location_scoped_programs_configuration_design.md` — Settings → Locations tabs (Programs/Offerings, Rooms/Cohorts), V1 site offerings derived from rooms, form cascade
+- `docs/archive/2026-06-superseded-system/actions-and-workflows.md` — execute path
+- `docs/sprints/archive/06_2026/lifecycle_action_intake_model.md` — intake spec design (lifecycle fields post-create)
+- `docs/sprints/archive/06_2026/create_lead_action_ux_foundation.md` — prior sprint closeout
+- `docs/sprints/archive/06_2026/program_interest_configurable_model_audit.md` — program/schedule/room option model (audit before implementation; impacts Create Lead + Add Child gather fields)
+- `docs/sprints/archive/06_2026/location_scoped_programs_configuration_design.md` — Settings → Locations tabs (Programs/Offerings, Rooms/Cohorts), V1 site offerings derived from rooms, form cascade
 
 ## Visual review (dev gallery + screenshots)
 
@@ -153,7 +160,7 @@ cd web && npm run dev   # separate terminal
 cd web && npm run screenshots:action-workspace
 ```
 
-Output: `docs/sprints/06_2026/assets/action-workspace-review/`
+Output: `docs/sprints/archive/06_2026/assets/action-workspace-review/`
 
 | File | Step |
 |------|------|
@@ -164,7 +171,7 @@ Output: `docs/sprints/06_2026/assets/action-workspace-review/`
 | `05-execute.png` | Execute |
 | `06-success.png` | Success / Continue |
 
-Sprint notes: `docs/sprints/06_2026/action_workspace_v1_1_polish.md`
+Sprint notes: `docs/sprints/archive/06_2026/action_workspace_v1_1_polish.md`
 
 ## Tests
 

@@ -15,7 +15,7 @@
  * Audit parity: the person PATCH route does not write an audit row today; reusing it
  * preserves exactly that behavior — nothing is added, nothing is bypassed.
  *
- * @see docs/sprints/06_2026/focus_panel_live_editing_plan.md
+ * @see docs/sprints/archive/06_2026/focus_panel_live_editing_plan.md
  * @see docs/platform/operator/operational-context-boundary.md (truth is read-only)
  */
 

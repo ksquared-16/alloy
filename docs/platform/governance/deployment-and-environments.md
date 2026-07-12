@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Deployment and environments
 
 **Status:** Canonical environment contract (June 2026 rebaseline).

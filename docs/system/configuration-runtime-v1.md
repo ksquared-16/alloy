@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Configuration Runtime V1
 
 **Status:** Frozen — June 2026
@@ -85,4 +92,4 @@ Not allowed without explicit doctrine update:
 
 ## Sprint artifacts
 
-Screenshots: `docs/sprints/06_2026/configuration-runtime-v1-final/`
+Screenshots: `docs/sprints/archive/06_2026/configuration-runtime-v1-final/`

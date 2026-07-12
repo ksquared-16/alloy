@@ -40,7 +40,7 @@ describe("Work Unit Layout Doctrine V3 (frozen)", () => {
         const adminCss = read("app/adminV2/adminV2.css");
         const doc = readFileSync(join(webRoot, "../docs/system/work-unit-layout-doctrine.md"), "utf8");
         const closeout = readFileSync(
-            join(webRoot, "../docs/sprints/06_2026/completed/work_unit_layout_v3_freeze_closeout.md"),
+            join(webRoot, "../docs/sprints/archive/06_2026/completed/work_unit_layout_v3_freeze_closeout.md"),
             "utf8",
         );
 

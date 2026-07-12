@@ -66,4 +66,4 @@ cd web && npm run test -- tests/lifecycle/lifecycleSimulationCleanup.test.ts
 
 ## Related
 
-- `docs/sprints/06_2026/lifecycle_admin_scope_and_persistence_truth.md`
+- `docs/sprints/archive/06_2026/lifecycle_admin_scope_and_persistence_truth.md`

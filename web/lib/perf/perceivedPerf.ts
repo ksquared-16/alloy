@@ -8,7 +8,7 @@
  * an elapsed value onto `window.__alloyPerf.marks` so a single DevTools timeline spans
  * the operator path: acknowledgement → continuity → hold → reveal.
  *
- * Doctrine anchor: docs/sprints/07_2026/perceived-performance-sprint-audit.md (I1).
+ * Doctrine anchor: docs/sprints/archive/07_2026/perceived-performance-sprint-audit.md (I1).
  *
  * Gating: dev/staging only, and killable via `NEXT_PUBLIC_PERF_PERCEIVED_MARKS=0`
  * (production is off regardless). Marks are boundary-only — never called in a render loop.

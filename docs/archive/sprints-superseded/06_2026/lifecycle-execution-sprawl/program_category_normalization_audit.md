@@ -1,6 +1,6 @@
 # Program Category Normalization — Audit
 
-**Path:** `docs/sprints/06_2026/program_category_normalization_audit.md`  
+**Path:** `docs/sprints/archive/06_2026/program_category_normalization_audit.md`  
 **Date:** 2026-06-09  
 **Status:** Implemented (2026-06-09)  
 **Goal:** Single source of truth for program categories tied to locations (`location_program_categories`), reused across leads, children, rooms, queues, forms, and layouts.
@@ -68,7 +68,7 @@
 |----------|------|
 | `web/lib/layout/runtime/buildOpportunityLayoutRuntimeRecordFromVm.ts` | `enrollment.program_category` compute |
 | `web/tests/layout/relationshipReferenceRuntimePlan.test.ts` | FC-3 binding tests |
-| `docs/platform_convergence/entity_relationship_reference_model.md` | Reference model doc |
+| `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/entity_relationship_reference_model.md` | Reference model doc |
 
 ### Waitlist / placement grouping (org-level classification, not picker)
 

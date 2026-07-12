@@ -1,6 +1,6 @@
 /**
  * Lifecycle stage requirement levels — parse, derive, dual-write metadata.
- * @see docs/sprints/06_2026/readiness_phase_1_implementation_plan.md
+ * @see docs/sprints/archive/06_2026/readiness_phase_1_implementation_plan.md
  */
 
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";

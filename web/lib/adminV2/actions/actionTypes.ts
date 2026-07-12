@@ -10,7 +10,7 @@
  * code-owned and server-authoritative. Manual UI and BOS-confirmed proposals
  * execute through the *same* registry path.
  *
- * @see docs/sprints/06_2026/actions_runtime_audit.md
+ * @see docs/sprints/archive/06_2026/actions_runtime_audit.md
  * @see docs/platform/modules/actions-and-workflows.md
  */
 

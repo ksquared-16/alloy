@@ -9,7 +9,7 @@ import { test, expect } from "@playwright/test";
  * PLAYWRIGHT_BOS_GEOMETRY=1 npx playwright test bos-drawer-geometry-report
  */
 const LIVE = process.env.PLAYWRIGHT_BOS_GEOMETRY === "1";
-const outDir = path.join(__dirname, "../../../docs/sprints/06_2026/assets/bos-drawer-geometry");
+const outDir = path.join(__dirname, "../../../docs/sprints/archive/06_2026/assets/bos-drawer-geometry");
 
 test.describe("BOS drawer geometry report", () => {
     test.skip(!LIVE, "Set PLAYWRIGHT_BOS_GEOMETRY=1 to capture geometry");

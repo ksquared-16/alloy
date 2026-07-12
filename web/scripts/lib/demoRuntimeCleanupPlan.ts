@@ -1,6 +1,6 @@
 /**
  * Shared ID resolution + count planning for demo/runtime cleanup scripts.
- * @see docs/governance/demo-runtime-cleanup-schema-audit.md
+ * @see docs/platform/governance/demo-runtime-cleanup-schema-audit.md
  */
 
 import type { createAdminClient } from "@/lib/supabaseAdmin";

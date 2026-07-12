@@ -1,6 +1,6 @@
 # Lifecycle Runtime Binding E2E Fix
 
-**Path:** `docs/sprints/06_2026/lifecycle_runtime_binding_e2e_fix.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_runtime_binding_e2e_fix.md`  
 **Status:** Implemented  
 **Related audit:** `lifecycle_runtime_binding_audit.md`
 

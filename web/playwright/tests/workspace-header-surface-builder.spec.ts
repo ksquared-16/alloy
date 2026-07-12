@@ -7,7 +7,7 @@ loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
 const SHOT_DIR = path.join(
     __dirname,
-    "../../../docs/sprints/07_2026/workspace-header-surface-builder",
+    "../../../docs/sprints/archive/07_2026/workspace-header-surface-builder",
 );
 
 test.describe("Workspace Header Surface Builder", () => {

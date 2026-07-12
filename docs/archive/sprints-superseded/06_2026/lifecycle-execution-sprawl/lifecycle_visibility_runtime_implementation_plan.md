@@ -1,6 +1,6 @@
 # Lifecycle visibility — runtime implementation plan
 
-**Path:** `docs/sprints/06_2026/lifecycle_visibility_runtime_implementation_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_visibility_runtime_implementation_plan.md`  
 **Status:** **Planning only** — no code, migrations, queue fixes, or repairs in this document  
 **Date:** 2026-06-02  
 

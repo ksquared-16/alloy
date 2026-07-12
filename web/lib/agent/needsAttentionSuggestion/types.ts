@@ -1,6 +1,6 @@
 /**
  * Needs Attention Suggestion Agent — V1 derived-only contracts.
- * @see docs/sprints/05_2026/ai_agents_v1.md
+ * @see docs/sprints/archive/05_2026/ai_agents_v1.md
  *
  * Migration (BOS Phase 1): `_operational_recommendation` is canonical on entity GET.
  * `AttentionSuggestionV1` remains compatibility-only until a later UX wire card replaces consumers.

@@ -2,7 +2,7 @@
  * Inquiry child (OCM) placement field metadata — location → program → room cascade.
  * Consumed by layout runtime, field_definitions.config, and create/intake forms.
  *
- * @see docs/sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md §4.5
+ * @see docs/sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md §4.5
  */
 
 import { normalizeRefKeyOnRead, parseLayoutRefKey } from "@/lib/layout/layoutRefKeyAliases";

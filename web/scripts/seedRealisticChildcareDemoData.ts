@@ -12,7 +12,7 @@
  *   DEMO_CORPORATE_USER_ID, DEMO_REGIONAL_USER_ID, DEMO_DIRECTOR_USER_ID (optional — updates access profiles + roles)
  *   DEMO_STAGING_TIMEZONE (optional IANA, default America/Los_Angeles) — sets org + demo user display timezones when unset
  *
- * @see docs/sprints/05_2026/staging-demo-data-reset-realistic-seed.md
+ * @see docs/sprints/archive/05_2026/staging-demo-data-reset-realistic-seed.md
  *
  * Performance follow-up (135 families = many sequential round-trips):
  * - Bulk upserts / RPC batches for persons, customer_members, opportunities

@@ -35,7 +35,7 @@ tests/fixtures/processing/mo500-3313-school-age-child-health-report.pdf (MO500-s
 - Child name first+last split: **pass**
 
 ## Screenshots
-See `docs/sprints/07_2026/processing-form-composer-v1-screenshots/`
+See `docs/sprints/archive/07_2026/processing-form-composer-v1-screenshots/`
 
 ## Notes
 - Screenshot: 01-workspace-authenticated.png

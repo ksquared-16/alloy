@@ -30,7 +30,7 @@ export const PHASE1_REQUIRED_CATALOG_KEYS = [
 
 /**
  * `waiting_on_internal` is not a platform reason code — use `waiting_on_staff`.
- * @see docs/sprints/05_2026/bos_operational_recommendation_phase1_execution.md
+ * @see docs/sprints/archive/05_2026/bos_operational_recommendation_phase1_execution.md
  */
 export const WAITING_ON_INTERNAL_CATALOG_KEY = "waiting_on_staff" as const satisfies OpportunityAttentionReasonCode;
 

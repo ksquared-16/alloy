@@ -9,7 +9,7 @@ import { validateFormSchema } from "@/lib/forms/schema";
  * Delete-safety contract — Forms / Documents are known reference consumers of field_definitions.
  * P4 adds bounded schema reference discovery for collection providers and nested fields.
  *
- * @see docs/sprints/08_2026/forms-documents-collection-authoring.md
+ * @see docs/sprints/archive/08_2026/forms-documents-collection-authoring.md
  */
 describe("formsDocuments delete-safety contract", () => {
     it("discovers collection provider refs for delete-safety remediation", () => {

@@ -15,7 +15,7 @@ import {
 import { isPublicMarketingChromeSuppressedPath } from "@/lib/admin/canonicalAdminRoutes";
 
 const root = resolve(__dirname, "../..");
-const mockupDir = resolve(root, "../docs/sprints/06_2026/configuration-runtime-bp-ux-redesign");
+const mockupDir = resolve(root, "../docs/sprints/archive/06_2026/configuration-runtime-bp-ux-redesign");
 
 function read(rel: string): string {
     return readFileSync(resolve(root, rel), "utf8");

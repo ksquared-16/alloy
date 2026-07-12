@@ -4,7 +4,7 @@
  * Used when builder or legacy child-grain routing enables the lane and the row
  * carries ocmrow:/pcrow: ids or explicit row_grain.
  *
- * @see docs/sprints/06_2026/child_grain_queue_conversion_design.md §7
+ * @see docs/sprints/archive/06_2026/child_grain_queue_conversion_design.md §7
  */
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";

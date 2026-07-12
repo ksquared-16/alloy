@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Platform event catalog
 
 **Status:** Canonical foundation doc (Phase 0 seed).
