@@ -97,25 +97,25 @@ See the exact first-slice box below. **Includes only:** canonical email / phone 
 - **Dependencies:** B1a (normalizer for de-dup), B2.
 - **Scope:** register `create_person`, `create_household`, `link_person_to_household`, `add_child_to_household`, `create_lead`, `link_person_to_lead`, `create_process_participation`, `update_record_fields`, `attach_document`; register `person_status` handler; add uniqueness (`customer_members` natural key; opportunity/submission/event idempotency) **after** a `lib/identity` de-dup backfill (collisions quarantined, never force-merged). `create_process_participation` owns OCM↔`process_instances` mapping (Decision B).
 - **Inspect:** `lib/mutations/*`, `lib/admin/actions/*`, `entryLifecycleActions.ts`, `lib/persons/*`.
-- **Tests:** each command idempotent (double-call = one record); backfill collision report; uniqueness enforced. **Flags:** `PROCESSING_RECORD_COMMANDS`(off for callers). **Deps:** B1a. **Risk:** backfill collisions — quarantine. **Cursor boundary:** wrap existing helpers; report collision volume before adding uniques.
+- **Tests:** each command idempotent (double-call = one record); backfill collision report; uniqueness enforced. **Flags:** ~~`PROCESSING_RECORD_COMMANDS`~~ **— superseded: D0 introduces NO feature flag** (safety is architectural; commands reachable only via the server-side registry, never from intake sources). **Deps:** B1a. **Risk:** backfill collisions — quarantine. **Cursor boundary:** wrap existing helpers; report collision volume before adding uniques.
 
 ## D1 — Commit Plan + approval
 - **Objective:** generalize `CreateLeadCommitSelection` → persisted, versioned, immutable `processing_commit_plans`/`_plan_operations` + `processing_approvals` (gates G5, G6). No execution.
 - **Dependencies:** B2, D0.
 - **Inspect:** `applyResolutionToCommitSelection`, `createLeadCommitSelection.ts`.
-- **Tests:** plan determinism; hash stability; edit→new version voids approval; whole-plan-approve + per-op include (Decision F). **Flags:** commit flags (off). **Cursor boundary:** ops reference `command_key`; no raw writes.
+- **Tests:** plan determinism; hash stability; edit→new version voids approval; whole-plan-approve + per-op include (Decision F). **Flags:** **superseded — none** (D0–D3 introduce no flags; approval binding is the gate). **Cursor boundary:** ops reference `command_key`; no raw writes.
 
 ## D2 — Commit executor
 - **Objective:** execute an approved plan via semantic commands; atomic groups; idempotency; partial-failure + compensation; stale-plan (Decision G).
 - **Dependencies:** D0, D1.
 - **Inspect:** `lib/pos/processingCase/commit/*` (new), `POST /api/admin/mutations/execute`.
-- **Tests:** scenarios 21–23; idempotent re-exec; tenant revalidation; **comms-failure-does-not-rollback-identity**. **Flags:** commit flags (off). **Cursor boundary:** never reinterpret the plan or change targets; precondition mismatch → fail op + reopen.
+- **Tests:** scenarios 21–23; idempotent re-exec; tenant revalidation; **comms-failure-does-not-rollback-identity**. **Flags:** **superseded — none** (executor is not flag-gated; its safety boundary is "no valid approval → no execution" + no direct source integration). **Cursor boundary:** never reinterpret the plan or change targets; precondition mismatch → fail op + reopen.
 
 ## D3 — Operator review integration
 - **Objective:** three-pane review (Evidence/Resolution/Plan); accept/reject/declare-new/mark-unresolved; approve one immutable plan.
 - **Dependencies:** D1, D2.
 - **Inspect:** `intakeCasePresentation.ts`, submission linkage-review components, `ProcessingModal`.
-- **Non-goals:** no Digital Mailroom restyle (frozen). **Tests:** component + approval-binds-to-hash. **Flags:** commit flags.
+- **Non-goals:** no Digital Mailroom restyle (frozen). **Tests:** component + approval-binds-to-hash. **Flags:** **superseded — none** (D3 is a real working operator workflow on the existing Processing surface; no flag/toggle). Note: **D4/D5 source-cutover flags remain** — they gate *authoritative source integration*, which is explicitly out of the D0–D3 batch.
 
 ## D4 — Manual Create Lead reviewed cutover (FIRST executor cutover, gate G9)
 - **Objective:** route Create Lead commit through plan→approval→executor for pilot org; `executeCreateLeadHouseholdCommit` becomes fallback.
