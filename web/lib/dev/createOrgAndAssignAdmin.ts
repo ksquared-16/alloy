@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { provisionPersonChildRelationshipPlatformConfig } from "@/lib/fields/personChildRelationship/provisionPersonChildRelationshipPlatformConfig";
 
 function slugify(name: string): string {
     const base = name
@@ -78,6 +79,13 @@ export async function createOrgAndAssignAdmin(supabase: SupabaseClient, params: 
 
     if (roleErr) {
         return { ok: false, error: `user_roles: ${roleErr.message}` };
+    }
+
+    try {
+        await provisionPersonChildRelationshipPlatformConfig(supabase, org_id);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "relationship platform provisioning failed";
+        return { ok: false, error: message };
     }
 
     return { ok: true, org_id, slug, industry_id };

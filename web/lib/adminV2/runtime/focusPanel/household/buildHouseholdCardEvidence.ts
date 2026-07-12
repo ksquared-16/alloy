@@ -57,6 +57,7 @@ import {
     formatFocusPanelDate,
     formatFocusPanelDobAgeLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
+import { buildEmergencyContactsEvidence } from "@/lib/adminV2/runtime/focusPanel/emergencyContacts/buildEmergencyContactsEvidence";
 
 /** Display-format a phone for the card (e.g. "(541) 654-3217"); raw fallback if unparseable. */
 function formatPhoneForDisplay(raw: unknown): string | null {
@@ -355,6 +356,26 @@ export function buildHouseholdCardEvidence(
     }
 
     appendSecondaryParentFromRecord(record, primaryPersonId, primaryContact, otherParentGuardianRows);
+
+    const canonicalEmergency = buildEmergencyContactsEvidence({ context });
+    if (canonicalEmergency.count > 0) {
+        emergencyRows.length = 0;
+        const seenPerson = new Set<string>();
+        for (const item of canonicalEmergency.items) {
+            if (primaryPersonId && item.person_id === primaryPersonId) continue;
+            if (seenPerson.has(item.person_id)) continue;
+            seenPerson.add(item.person_id);
+            emergencyRows.push({
+                personId: item.person_id,
+                name: item.person_display_name,
+                roleLabel: item.operational_role_labels[0] ?? "Emergency Contact",
+                isPrimary: false,
+                phone: trimOrNull(item.person_fields.phone),
+                email: trimOrNull(item.person_fields.email),
+                initials: personDrawerHouseholdInitials(item.person_display_name),
+            });
+        }
+    }
 
     const nestedConfig = options.nestedConfig
         ? reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, options.nestedConfig)

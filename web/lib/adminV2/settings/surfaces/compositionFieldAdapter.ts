@@ -69,7 +69,8 @@ export type AvailableFieldEntityNamespace =
     | "child"
     | "inquiry_child"
     | "queue_row"
-    | "concept";
+    | "concept"
+    | "person_child_relationship";
 
 export type AvailableFieldDisplayHint = "text" | "status_pill" | "date" | "money" | "link" | "compact_list";
 
@@ -147,6 +148,7 @@ function namespaceFromRefKey(refKey: string): AvailableFieldEntityNamespace | nu
         case "customer":
         case "inquiry_child":
         case "child":
+        case "person_child_relationship":
             return prefix;
         default:
             return null;

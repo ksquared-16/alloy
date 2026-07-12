@@ -27,6 +27,7 @@ import {
   type InquiryChildHydrateRow,
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
+import { attachPersonChildRelationshipsToEntityRecord } from "@/lib/fields/personChildRelationship/attachPersonChildRelationshipsToEntityRecord";
 import { listEnrollmentInstancesForLead } from "@/lib/process/processInstances";
 import { resolveDurableFactsForChildren } from "@/lib/childcareOperational/inquiryChildrenDurableFactsOverlay";
 import { resolveProcessDraftFactsForChildren } from "@/lib/childcareOperational/inquiryChildrenProcessDraftFactsOverlay";
@@ -2317,6 +2318,34 @@ export async function respondOpportunityEntityGet(
     };
   }
   markPhase("after_inquiry_children_resolved");
+
+  try {
+    const memberIds = (out._inquiry_children as { customer_member_id?: string | null }[] | undefined ?? [])
+      .map((c) => (c.customer_member_id != null ? String(c.customer_member_id).trim() : ""))
+      .filter(Boolean);
+    const memberChildIds = new Map<string, string | null>();
+    for (const child of (out._inquiry_children as { customer_member_id?: string | null; id?: string | null; person_id?: string | null }[] | undefined) ?? []) {
+      const memberId = child.customer_member_id != null ? String(child.customer_member_id).trim() : "";
+      if (!memberId) continue;
+      memberChildIds.set(memberId, child.person_id != null ? String(child.person_id) : child.id != null ? String(child.id) : null);
+    }
+    if (memberIds.length > 0 && out.customer_id) {
+      out._person_child_relationships_by_member = await attachPersonChildRelationshipsToEntityRecord({
+        supabase,
+        orgId,
+        customerId: String(out.customer_id),
+        customerMemberIds: memberIds,
+        memberChildIds,
+      });
+    } else {
+      out._person_child_relationships_by_member = [];
+    }
+  } catch (pcrAttachErr) {
+    out._person_child_relationships_by_member = [];
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[opportunity_entity] person_child_relationship attach failed", pcrAttachErr);
+    }
+  }
   lapSegment("inquiry_children_metadata_fallbacks");
 
   {

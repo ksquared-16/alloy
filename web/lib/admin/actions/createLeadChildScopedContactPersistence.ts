@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { applyCanonicalChildScopedRelationships } from "@/lib/admin/actions/createLeadPersonChildRelationshipPersistence";
 import type { CreateLeadCommitRecord, CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { includedCommitRecords } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { linkedPersonIdFromCommitRecord } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
@@ -519,14 +520,15 @@ export async function persistCreateLeadChildScopedContacts(
         input.explicitAssignments ?? [],
     );
 
-    const result = await applyChildScopedContactAssignments(supabase, {
+    const result = await applyCanonicalChildScopedRelationships(supabase, {
         orgId: input.orgId,
         customerId: input.customerId,
         assignments,
     });
 
     return {
-        ...result,
+        links_written: result.relationships_written,
+        links_skipped_invalid_role: result.skipped,
         assignment_count: assignments.length,
     };
 }

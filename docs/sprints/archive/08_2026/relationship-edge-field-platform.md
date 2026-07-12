@@ -79,3 +79,14 @@ Forward-fix preferred. Deactivate admin routes if needed; legacy read adapter re
 
 - `family-relationship-projection-audit.md`
 - `web/lib/fields/personChildRelationship/*`
+
+---
+
+## Operational completion (2026-07-12)
+
+- Staging migrations verified applied
+- Org provisioning + repair script added
+- Lead creation writes canonical PCR instances
+- Focus Panel Emergency Contacts consume `_person_child_relationships_by_member`
+- Household emergency_contacts group prefers canonical evidence
+- Children surface optional `emergency_contacts` section with person + PCR field picker
