@@ -4,7 +4,7 @@
 
 **Regenerate:** `npm run export:supabase-schema` then `node scripts/generate-schema-docs.mjs`
 
-**Generated:** 2026-06-28
+**Generated:** 2026-07-12
 
 ## Summary
 

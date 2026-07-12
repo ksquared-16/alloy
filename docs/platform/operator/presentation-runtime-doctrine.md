@@ -1,6 +1,15 @@
+---
+owner: platform
+status: superseded
+last_reviewed: 2026-07-12
+superseded_by: ../experience/presentation-runtime-v2.md
+---
+
 # Presentation Runtime Doctrine
 
-**Status:** Approved architecture doctrine (June 2026) — **design stage**, no runtime implementation yet.
+> **Superseded (July 2026).** Shipped Presentation Runtime V2 is canonical at [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md). This operator-folder copy records the June 2026 design-stage umbrella only. See also [`platform/foundation/platform-freeze-july-2026.md`](../foundation/platform-freeze-july-2026.md).
+
+**Status:** Superseded architecture doctrine (June 2026 design stage).
 **Scope:** The unifying doctrine for how Alloy presents record truth to operators across every surface, and how administrators author that presentation.
 **Supersedes:** "Layout" as **product language** (storage terms unchanged — see §8).
 **Source sprint:** [`docs/sprints/06_2026/presentation-runtime-architecture/`](../../sprints/06_2026/presentation-runtime-architecture/) (full deliverables, mockups, surface inventory, reuse map, decision log).

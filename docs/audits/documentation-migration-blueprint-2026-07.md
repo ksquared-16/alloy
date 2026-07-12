@@ -1,6 +1,13 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-07-11
+concept: documentation-migration-blueprint
+---
+
 # Alloy Documentation Migration Blueprint — July 2026
 
-**Status:** Migration blueprint (authoritative implementation plan). Not doctrine.
+**Status:** Migration blueprint (authoritative implementation plan). **Not doctrine.**
 **Built from:** `origin/staging` @ `29fbcfb93`.
 **Type:** BLUEPRINT ONLY — no files changed, moved, or committed by producing this plan.
 **Companion:** [`documentation-architecture-audit-2026-07.md`](./documentation-architecture-audit-2026-07.md) (current-state input).

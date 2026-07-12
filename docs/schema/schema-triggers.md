@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Trigger count:** 201
+**Generated:** 2026-07-12 · **Trigger count:** 201
 
 | Table | Trigger | Event | Function |
 |-------|---------|-------|----------|

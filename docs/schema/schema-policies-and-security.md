@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **RLS policy count:** 581
+**Generated:** 2026-07-12 · **RLS policy count:** 581
 
 ## Posture
 

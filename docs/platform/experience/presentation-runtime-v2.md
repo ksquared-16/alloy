@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-11
+supersedes: [../operator/presentation-runtime-doctrine.md]
+---
+
 # Presentation Runtime V2
 
 **Status:** Canonical (July 2026). Supersedes all prior Workspace / Work Unit presentation cleanup.

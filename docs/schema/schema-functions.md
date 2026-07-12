@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Function count:** 2968
+**Generated:** 2026-07-12 · **Function count:** 2968
 
 | Schema | Function | Return type | Security |
 |--------|----------|-------------|----------|

@@ -1,6 +1,13 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-07-11
+concept: documentation-architecture-audit
+---
+
 # Alloy Documentation Architecture Audit — July 2026
 
-**Status:** Audit record (point-in-time investigation). Not doctrine.
+**Status:** Audit record (point-in-time investigation). **Not doctrine.**
 **Audit date:** 2026-07-10 (refreshed against staging 2026-07-11)
 **Baseline:** `origin/staging` @ `bb720f495` (audit) → re-synced to `29fbcfb93` for the blueprint.
 **Type:** AUDIT ONLY — no files were moved, renamed, deleted, or rewritten.

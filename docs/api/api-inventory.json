@@ -341,7 +341,7 @@
     "rpcs": [],
     "domain": "Actions / Workflows",
     "stability": "admin-only",
-    "lines": 140
+    "lines": 142
   },
   {
     "apiPath": "/api/admin/actions/workspace-root-bundle",
@@ -831,7 +831,7 @@
     "auth": [
       "analytics-gate"
     ],
-    "validation": "manual",
+    "validation": "none",
     "serviceRole": true,
     "writes": false,
     "events": false,
@@ -839,7 +839,7 @@
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
-    "lines": 28
+    "lines": 29
   },
   {
     "apiPath": "/api/admin/analytics/metrics/[id]/preview",
@@ -852,7 +852,7 @@
       "admin-context",
       "analytics-gate"
     ],
-    "validation": "schema",
+    "validation": "none",
     "serviceRole": true,
     "writes": false,
     "events": false,
@@ -860,7 +860,7 @@
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
-    "lines": 49
+    "lines": 50
   },
   {
     "apiPath": "/api/admin/analytics/metrics/[id]",
@@ -882,7 +882,7 @@
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
-    "lines": 76
+    "lines": 84
   },
   {
     "apiPath": "/api/admin/analytics/metrics/[id]/snapshot",
@@ -903,7 +903,7 @@
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
-    "lines": 39
+    "lines": 36
   },
   {
     "apiPath": "/api/admin/analytics/metrics/[id]/trend",
@@ -916,7 +916,7 @@
       "admin-context",
       "analytics-gate"
     ],
-    "validation": "schema",
+    "validation": "none",
     "serviceRole": true,
     "writes": false,
     "events": false,
@@ -924,7 +924,7 @@
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
-    "lines": 63
+    "lines": 67
   },
   {
     "apiPath": "/api/admin/analytics/metrics",
@@ -946,7 +946,7 @@
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
-    "lines": 87
+    "lines": 92
   },
   {
     "apiPath": "/api/admin/analytics/placements/[id]",
@@ -1076,6 +1076,26 @@
     "lines": 66
   },
   {
+    "apiPath": "/api/admin/analytics/surfaces/[surface]/doc",
+    "file": "web/app/api/admin/analytics/surfaces/[surface]/doc/route.ts",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "auth": [
+      "analytics-gate"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Workspace / Queue / Focus Panel",
+    "stability": "admin-only",
+    "lines": 53
+  },
+  {
     "apiPath": "/api/admin/analytics/surfaces/[surface]/placements",
     "file": "web/app/api/admin/analytics/surfaces/[surface]/placements/route.ts",
     "methods": [
@@ -1093,6 +1113,26 @@
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
     "lines": 46
+  },
+  {
+    "apiPath": "/api/admin/analytics/surfaces/operational-intelligence/doc",
+    "file": "web/app/api/admin/analytics/surfaces/operational-intelligence/doc/route.ts",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "auth": [
+      "analytics-gate"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Workspace / Queue / Focus Panel",
+    "stability": "admin-only",
+    "lines": 49
   },
   {
     "apiPath": "/api/admin/analytics/visualizations/[id]/copy",
@@ -1179,7 +1219,7 @@
     "rpcs": [],
     "domain": "Business Process / Status / Lifecycle",
     "stability": "admin-only",
-    "lines": 137
+    "lines": 126
   },
   {
     "apiPath": "/api/admin/child-enrollment-agreements/[id]/cancel",
@@ -1282,6 +1322,26 @@
     "lines": 100
   },
   {
+    "apiPath": "/api/admin/child-participation",
+    "file": "web/app/api/admin/child-participation/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Entity / Record / Resolver",
+    "stability": "admin-only",
+    "lines": 49
+  },
+  {
     "apiPath": "/api/admin/child-placements",
     "file": "web/app/api/admin/child-placements/route.ts",
     "methods": [
@@ -1301,6 +1361,25 @@
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
     "lines": 94
+  },
+  {
+    "apiPath": "/api/admin/childcare-attendance/actual-compliance",
+    "file": "web/app/api/admin/childcare-attendance/actual-compliance/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 79
   },
   {
     "apiPath": "/api/admin/childcare-attendance/expected-vs-actual",
@@ -1340,7 +1419,404 @@
     "rpcs": [],
     "domain": "Admin / Configuration",
     "stability": "admin-only",
-    "lines": 103
+    "lines": 116
+  },
+  {
+    "apiPath": "/api/admin/commercial/addons/[id]",
+    "file": "web/app/api/admin/commercial/addons/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_addons"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 86
+  },
+  {
+    "apiPath": "/api/admin/commercial/addons",
+    "file": "web/app/api/admin/commercial/addons/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_addons"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 97
+  },
+  {
+    "apiPath": "/api/admin/commercial/billing-cadences",
+    "file": "web/app/api/admin/commercial/billing-cadences/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [
+      "option_set_items",
+      "option_sets"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 57
+  },
+  {
+    "apiPath": "/api/admin/commercial/categories/[id]",
+    "file": "web/app/api/admin/commercial/categories/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_categories",
+      "commercial_products"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 77
+  },
+  {
+    "apiPath": "/api/admin/commercial/categories",
+    "file": "web/app/api/admin/commercial/categories/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_categories"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 70
+  },
+  {
+    "apiPath": "/api/admin/commercial/deposits/[id]",
+    "file": "web/app/api/admin/commercial/deposits/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_deposits"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 83
+  },
+  {
+    "apiPath": "/api/admin/commercial/deposits",
+    "file": "web/app/api/admin/commercial/deposits/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_deposits"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 90
+  },
+  {
+    "apiPath": "/api/admin/commercial/execution/preview",
+    "file": "web/app/api/admin/commercial/execution/preview/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 56
+  },
+  {
+    "apiPath": "/api/admin/commercial/fees/[id]",
+    "file": "web/app/api/admin/commercial/fees/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_fees"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 82
+  },
+  {
+    "apiPath": "/api/admin/commercial/fees",
+    "file": "web/app/api/admin/commercial/fees/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_fees"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 91
+  },
+  {
+    "apiPath": "/api/admin/commercial/policies/[id]",
+    "file": "web/app/api/admin/commercial/policies/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "schema",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_policies"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 66
+  },
+  {
+    "apiPath": "/api/admin/commercial/policies",
+    "file": "web/app/api/admin/commercial/policies/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "schema",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_policies"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 143
+  },
+  {
+    "apiPath": "/api/admin/commercial/products/[id]",
+    "file": "web/app/api/admin/commercial/products/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_products"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 89
+  },
+  {
+    "apiPath": "/api/admin/commercial/products",
+    "file": "web/app/api/admin/commercial/products/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_products"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 105
+  },
+  {
+    "apiPath": "/api/admin/commercial/revenue-categories/[id]",
+    "file": "web/app/api/admin/commercial/revenue-categories/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_revenue_categories"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 67
+  },
+  {
+    "apiPath": "/api/admin/commercial/revenue-categories",
+    "file": "web/app/api/admin/commercial/revenue-categories/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_revenue_categories"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 69
+  },
+  {
+    "apiPath": "/api/admin/commercial/tuition-rates/[id]",
+    "file": "web/app/api/admin/commercial/tuition-rates/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_tuition_rates"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 124
+  },
+  {
+    "apiPath": "/api/admin/commercial/tuition-rates",
+    "file": "web/app/api/admin/commercial/tuition-rates/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_tuition_rates",
+      "locations",
+      "program_offering_variants"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 204
   },
   {
     "apiPath": "/api/admin/communication-scheduled-sends/[id]",
@@ -1688,7 +2164,7 @@
     "rpcs": [],
     "domain": "Communications",
     "stability": "admin-only",
-    "lines": 78
+    "lines": 81
   },
   {
     "apiPath": "/api/admin/communications/deliverability",
@@ -1768,7 +2244,7 @@
     "rpcs": [],
     "domain": "Communications",
     "stability": "admin-only",
-    "lines": 104
+    "lines": 116
   },
   {
     "apiPath": "/api/admin/communications/family-workspace",
@@ -1809,6 +2285,25 @@
     "domain": "Communications",
     "stability": "admin-only",
     "lines": 42
+  },
+  {
+    "apiPath": "/api/admin/communications/identities",
+    "file": "web/app/api/admin/communications/identities/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context-light"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Communications",
+    "stability": "admin-only",
+    "lines": 94
   },
   {
     "apiPath": "/api/admin/communications/messages/mark-read",
@@ -2430,7 +2925,7 @@
     "auth": [
       "admin-context"
     ],
-    "validation": "schema",
+    "validation": "manual",
     "serviceRole": true,
     "writes": true,
     "events": false,
@@ -2441,7 +2936,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 203
+    "lines": 158
   },
   {
     "apiPath": "/api/admin/customer-members",
@@ -2500,7 +2995,7 @@
     "auth": [
       "admin-context"
     ],
-    "validation": "manual",
+    "validation": "none",
     "serviceRole": true,
     "writes": true,
     "events": false,
@@ -2510,7 +3005,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 105
+    "lines": 118
   },
   {
     "apiPath": "/api/admin/customer-person-role-types",
@@ -2522,7 +3017,7 @@
     "auth": [
       "admin-context"
     ],
-    "validation": "manual",
+    "validation": "none",
     "serviceRole": true,
     "writes": true,
     "events": false,
@@ -2533,7 +3028,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 166
+    "lines": 188
   },
   {
     "apiPath": "/api/admin/customers/[id]/household-primary-contact",
@@ -2602,7 +3097,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 163
+    "lines": 162
   },
   {
     "apiPath": "/api/admin/db-relationships",
@@ -3260,12 +3755,13 @@
     "writes": true,
     "events": false,
     "tables": [
-      "documents"
+      "documents",
+      "processing_cases"
     ],
     "rpcs": [],
     "domain": "Documents / Forms",
     "stability": "admin-only",
-    "lines": 283
+    "lines": 367
   },
   {
     "apiPath": "/api/admin/enrollment-process/form-coverage",
@@ -3313,7 +3809,7 @@
     "rpcs": [],
     "domain": "Business Process / Status / Lifecycle",
     "stability": "admin-only",
-    "lines": 186
+    "lines": 189
   },
   {
     "apiPath": "/api/admin/enrollment-process/stage-runtime-config",
@@ -3336,7 +3832,7 @@
     "rpcs": [],
     "domain": "Business Process / Status / Lifecycle",
     "stability": "admin-only",
-    "lines": 240
+    "lines": 264
   },
   {
     "apiPath": "/api/admin/enrollment-process/stage-work-unit",
@@ -3629,7 +4125,7 @@
     "rpcs": [],
     "domain": "Admin / Configuration",
     "stability": "admin-only",
-    "lines": 213
+    "lines": 212
   },
   {
     "apiPath": "/api/admin/entity/[type]/[id]",
@@ -3686,7 +4182,28 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 1529
+    "lines": 1535
+  },
+  {
+    "apiPath": "/api/admin/field-definitions/[id]/delete-safety",
+    "file": "web/app/api/admin/field-definitions/[id]/delete-safety/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [
+      "field_definitions"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 49
   },
   {
     "apiPath": "/api/admin/field-definitions/[id]",
@@ -3709,7 +4226,7 @@
     "rpcs": [],
     "domain": "Admin / Configuration",
     "stability": "admin-only",
-    "lines": 287
+    "lines": 310
   },
   {
     "apiPath": "/api/admin/field-definitions/batch-placement",
@@ -3817,6 +4334,281 @@
     "tables": [
       "field_section_definitions"
     ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 124
+  },
+  {
+    "apiPath": "/api/admin/financial-charge-preview",
+    "file": "web/app/api/admin/financial-charge-preview/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 90
+  },
+  {
+    "apiPath": "/api/admin/financial-config/opportunity/[id]",
+    "file": "web/app/api/admin/financial-config/opportunity/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [
+      "commercial_tuition_rates",
+      "opportunities",
+      "opportunity_customer_members"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 145
+  },
+  {
+    "apiPath": "/api/admin/financial/charge-templates",
+    "file": "web/app/api/admin/financial/charge-templates/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 129
+  },
+  {
+    "apiPath": "/api/admin/financial/charge-templates/simulate",
+    "file": "web/app/api/admin/financial/charge-templates/simulate/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 71
+  },
+  {
+    "apiPath": "/api/admin/financial/consumption/obligations",
+    "file": "web/app/api/admin/financial/consumption/obligations/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 92
+  },
+  {
+    "apiPath": "/api/admin/financial/consumption/simulate",
+    "file": "web/app/api/admin/financial/consumption/simulate/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 128
+  },
+  {
+    "apiPath": "/api/admin/financial/gl-config",
+    "file": "web/app/api/admin/financial/gl-config/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 30
+  },
+  {
+    "apiPath": "/api/admin/financial/policies",
+    "file": "web/app/api/admin/financial/policies/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 116
+  },
+  {
+    "apiPath": "/api/admin/financial/rate-config",
+    "file": "web/app/api/admin/financial/rate-config/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 30
+  },
+  {
+    "apiPath": "/api/admin/financial/rate-plans",
+    "file": "web/app/api/admin/financial/rate-plans/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 130
+  },
+  {
+    "apiPath": "/api/admin/financial/rate-rules",
+    "file": "web/app/api/admin/financial/rate-rules/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 101
+  },
+  {
+    "apiPath": "/api/admin/financial/seed-demo",
+    "file": "web/app/api/admin/financial/seed-demo/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "childcare_rate_plans",
+      "childcare_rate_rules",
+      "financial_charge_templates",
+      "financial_policies",
+      "financial_services",
+      "gl_account_mappings",
+      "gl_accounts"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 275
+  },
+  {
+    "apiPath": "/api/admin/financial/services",
+    "file": "web/app/api/admin/financial/services/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
     "rpcs": [],
     "domain": "Admin / Configuration",
     "stability": "admin-only",
@@ -4190,7 +4982,8 @@
     "file": "web/app/api/admin/forms/[formId]/route.ts",
     "methods": [
       "GET",
-      "PATCH"
+      "PATCH",
+      "DELETE"
     ],
     "auth": [
       "admin-context"
@@ -4203,7 +4996,7 @@
     "rpcs": [],
     "domain": "Documents / Forms",
     "stability": "admin-only",
-    "lines": 85
+    "lines": 121
   },
   {
     "apiPath": "/api/admin/forms/[formId]/versions/[versionId]/archive",
@@ -4281,6 +5074,25 @@
     "domain": "Documents / Forms",
     "stability": "admin-only",
     "lines": 83
+  },
+  {
+    "apiPath": "/api/admin/forms/blank",
+    "file": "web/app/api/admin/forms/blank/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Documents / Forms",
+    "stability": "admin-only",
+    "lines": 119
   },
   {
     "apiPath": "/api/admin/forms/crm-entity-search",
@@ -4525,6 +5337,27 @@
     "domain": "Documents / Forms",
     "stability": "admin-only",
     "lines": 34
+  },
+  {
+    "apiPath": "/api/admin/forms/preview-payload",
+    "file": "web/app/api/admin/forms/preview-payload/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "schema",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [
+      "form_definitions"
+    ],
+    "rpcs": [],
+    "domain": "Documents / Forms",
+    "stability": "admin-only",
+    "lines": 83
   },
   {
     "apiPath": "/api/admin/forms",
@@ -4787,6 +5620,26 @@
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
     "lines": 45
+  },
+  {
+    "apiPath": "/api/admin/intelligence/operational",
+    "file": "web/app/api/admin/intelligence/operational/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "access-scope",
+      "admin-context"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 55
   },
   {
     "apiPath": "/api/admin/job-statuses",
@@ -5152,7 +6005,7 @@
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "internal",
-    "lines": 191
+    "lines": 194
   },
   {
     "apiPath": "/api/admin/layout-proof/waitlist-candidates",
@@ -5315,6 +6168,29 @@
     "lines": 66
   },
   {
+    "apiPath": "/api/admin/lifecycle-builder/process-participation",
+    "file": "web/app/api/admin/lifecycle-builder/process-participation/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "access-scope",
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [
+      "departments"
+    ],
+    "rpcs": [],
+    "domain": "Business Process / Status / Lifecycle",
+    "stability": "admin-only",
+    "lines": 146
+  },
+  {
     "apiPath": "/api/admin/lifecycle-builder/process-work-views",
     "file": "web/app/api/admin/lifecycle-builder/process-work-views/route.ts",
     "methods": [
@@ -5335,7 +6211,7 @@
     "rpcs": [],
     "domain": "Business Process / Status / Lifecycle",
     "stability": "admin-only",
-    "lines": 132
+    "lines": 139
   },
   {
     "apiPath": "/api/admin/lifecycle-builder/queue-membership-status-options",
@@ -5654,7 +6530,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 289
+    "lines": 301
   },
   {
     "apiPath": "/api/admin/metrics/kpi-targets",
@@ -5743,6 +6619,125 @@
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
     "lines": 132
+  },
+  {
+    "apiPath": "/api/admin/mutations/execute",
+    "file": "web/app/api/admin/mutations/execute/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "schema",
+    "serviceRole": true,
+    "writes": false,
+    "events": true,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 92
+  },
+  {
+    "apiPath": "/api/admin/operational-config-rules",
+    "file": "web/app/api/admin/operational-config-rules/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 27
+  },
+  {
+    "apiPath": "/api/admin/operational-config/capacity-rules",
+    "file": "web/app/api/admin/operational-config/capacity-rules/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 101
+  },
+  {
+    "apiPath": "/api/admin/operational-config/operating-windows",
+    "file": "web/app/api/admin/operational-config/operating-windows/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 101
+  },
+  {
+    "apiPath": "/api/admin/operational-config/ratio-rules",
+    "file": "web/app/api/admin/operational-config/ratio-rules/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 120
+  },
+  {
+    "apiPath": "/api/admin/operational-config/schedule-rules",
+    "file": "web/app/api/admin/operational-config/schedule-rules/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 127
   },
   {
     "apiPath": "/api/admin/operational-enrollment/summary",
@@ -6072,7 +7067,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 486
+    "lines": 488
   },
   {
     "apiPath": "/api/admin/opportunities/[id]/stage-transition-reconciliation/preflight",
@@ -6115,7 +7110,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 219
+    "lines": 197
   },
   {
     "apiPath": "/api/admin/opportunity-customer-members",
@@ -6401,7 +7396,7 @@
     "auth": [
       "admin-context"
     ],
-    "validation": "manual",
+    "validation": "none",
     "serviceRole": true,
     "writes": true,
     "events": false,
@@ -6411,7 +7406,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 105
+    "lines": 118
   },
   {
     "apiPath": "/api/admin/person-relationship-type-settings",
@@ -6423,7 +7418,7 @@
     "auth": [
       "admin-context"
     ],
-    "validation": "manual",
+    "validation": "none",
     "serviceRole": true,
     "writes": true,
     "events": false,
@@ -6434,7 +7429,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 165
+    "lines": 187
   },
   {
     "apiPath": "/api/admin/persons/[id]",
@@ -6670,6 +7665,7 @@
     "apiPath": "/api/admin/pos/documents/[id]",
     "file": "web/app/api/admin/pos/documents/[id]/route.ts",
     "methods": [
+      "PATCH",
       "DELETE"
     ],
     "auth": [
@@ -6687,7 +7683,7 @@
     "rpcs": [],
     "domain": "Documents / Forms",
     "stability": "admin-only",
-    "lines": 105
+    "lines": 135
   },
   {
     "apiPath": "/api/admin/pos/documents",
@@ -7131,6 +8127,25 @@
     "lines": 76
   },
   {
+    "apiPath": "/api/admin/processing/cases/[caseId]/archive",
+    "file": "web/app/api/admin/processing/cases/[caseId]/archive/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Entity / Record / Resolver",
+    "stability": "admin-only",
+    "lines": 28
+  },
+  {
     "apiPath": "/api/admin/processing/cases/[caseId]/classification",
     "file": "web/app/api/admin/processing/cases/[caseId]/classification/route.ts",
     "methods": [
@@ -7162,13 +8177,15 @@
     ],
     "validation": "none",
     "serviceRole": true,
-    "writes": false,
+    "writes": true,
     "events": false,
-    "tables": [],
+    "tables": [
+      "processing_cases"
+    ],
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 60
+    "lines": 103
   },
   {
     "apiPath": "/api/admin/processing/cases/[caseId]/form-draft",
@@ -7212,7 +8229,7 @@
     "rpcs": [],
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
-    "lines": 118
+    "lines": 122
   },
   {
     "apiPath": "/api/admin/processing/cases/[caseId]/recommendation",
@@ -7237,6 +8254,48 @@
     "lines": 68
   },
   {
+    "apiPath": "/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/commit",
+    "file": "web/app/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/commit/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [
+      "processing_cases"
+    ],
+    "rpcs": [],
+    "domain": "Entity / Record / Resolver",
+    "stability": "admin-only",
+    "lines": 79
+  },
+  {
+    "apiPath": "/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/preview",
+    "file": "web/app/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/preview/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [
+      "processing_cases"
+    ],
+    "rpcs": [],
+    "domain": "Entity / Record / Resolver",
+    "stability": "admin-only",
+    "lines": 74
+  },
+  {
     "apiPath": "/api/admin/processing/cases/[caseId]",
     "file": "web/app/api/admin/processing/cases/[caseId]/route.ts",
     "methods": [
@@ -7254,6 +8313,26 @@
     "domain": "Entity / Record / Resolver",
     "stability": "admin-only",
     "lines": 47
+  },
+  {
+    "apiPath": "/api/admin/processing/dev-cleanup",
+    "file": "web/app/api/admin/processing/dev-cleanup/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "token"
+    ],
+    "validation": "none",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Entity / Record / Resolver",
+    "stability": "admin-only",
+    "lines": 55
   },
   {
     "apiPath": "/api/admin/processing/queue",
@@ -7277,6 +8356,121 @@
     "lines": 137
   },
   {
+    "apiPath": "/api/admin/programs/offerings/[id]",
+    "file": "web/app/api/admin/programs/offerings/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_tuition_rates",
+      "program_offering_variants",
+      "program_offerings"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 198
+  },
+  {
+    "apiPath": "/api/admin/programs/offerings/[id]/variants/[variantId]",
+    "file": "web/app/api/admin/programs/offerings/[id]/variants/[variantId]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "commercial_tuition_rates",
+      "program_offering_variants"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 204
+  },
+  {
+    "apiPath": "/api/admin/programs/offerings/[id]/variants",
+    "file": "web/app/api/admin/programs/offerings/[id]/variants/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "program_offering_variants",
+      "program_offerings"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 188
+  },
+  {
+    "apiPath": "/api/admin/programs/offerings",
+    "file": "web/app/api/admin/programs/offerings/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "program_offering_variants",
+      "program_offerings"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 180
+  },
+  {
+    "apiPath": "/api/admin/queue-row-layout/[surfaceId]",
+    "file": "web/app/api/admin/queue-row-layout/[surfaceId]/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "entity_layouts"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 348
+  },
+  {
     "apiPath": "/api/admin/queues/[workUnitId]/[queueKey]",
     "file": "web/app/api/admin/queues/[workUnitId]/[queueKey]/route.ts",
     "methods": [
@@ -7295,7 +8489,7 @@
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
-    "lines": 273
+    "lines": 278
   },
   {
     "apiPath": "/api/admin/quote-intake/catalog",
@@ -8226,7 +9420,7 @@
     "rpcs": [],
     "domain": "Business Process / Status / Lifecycle",
     "stability": "admin-only",
-    "lines": 80
+    "lines": 88
   },
   {
     "apiPath": "/api/admin/status-transition-rules",
@@ -8311,6 +9505,70 @@
     "domain": "Admin / Configuration",
     "stability": "admin-only",
     "lines": 26
+  },
+  {
+    "apiPath": "/api/admin/surfaces/work-unit-header",
+    "file": "web/app/api/admin/surfaces/work-unit-header/route.ts",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "entity_layouts"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 147
+  },
+  {
+    "apiPath": "/api/admin/surfaces/workspace-header",
+    "file": "web/app/api/admin/surfaces/workspace-header/route.ts",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": true,
+    "events": false,
+    "tables": [
+      "entity_layouts"
+    ],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 152
+  },
+  {
+    "apiPath": "/api/admin/surfaces/workspace-processes",
+    "file": "web/app/api/admin/surfaces/workspace-processes/route.ts",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "auth": [
+      "admin-context"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 99
   },
   {
     "apiPath": "/api/admin/tenant-bootstrap",
@@ -9201,13 +10459,11 @@
     "serviceRole": true,
     "writes": false,
     "events": false,
-    "tables": [
-      "departments"
-    ],
+    "tables": [],
     "rpcs": [],
     "domain": "Workspace / Queue / Focus Panel",
     "stability": "admin-only",
-    "lines": 100
+    "lines": 101
   },
   {
     "apiPath": "/api/admin/work-units",
@@ -9883,7 +11139,7 @@
     "rpcs": [],
     "domain": "Documents / Forms",
     "stability": "public/tokenized",
-    "lines": 217
+    "lines": 249
   },
   {
     "apiPath": "/api/public/forms/[token]/submissions/[submissionId]/submit",
@@ -9906,7 +11162,7 @@
     "rpcs": [],
     "domain": "Documents / Forms",
     "stability": "public/tokenized",
-    "lines": 486
+    "lines": 504
   },
   {
     "apiPath": "/api/public/forms/[token]/submissions",
@@ -9930,7 +11186,7 @@
     "rpcs": [],
     "domain": "Documents / Forms",
     "stability": "public/tokenized",
-    "lines": 260
+    "lines": 309
   },
   {
     "apiPath": "/api/public/tour-booking/[token]/book",
@@ -9990,6 +11246,23 @@
     "domain": "Internal / System / Diagnostics",
     "stability": "public/tokenized",
     "lines": 50
+  },
+  {
+    "apiPath": "/api/runtime-info",
+    "file": "web/app/api/runtime-info/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": [],
+    "validation": "none",
+    "serviceRole": false,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Admin / Configuration",
+    "stability": "admin-only",
+    "lines": 26
   },
   {
     "apiPath": "/api/vendor-application",

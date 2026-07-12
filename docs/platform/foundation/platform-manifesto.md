@@ -1,3 +1,10 @@
+---
+owner: platform
+status: frozen
+last_reviewed: 2026-07-11
+supersedes: []
+---
+
 # Alloy Platform Manifesto
 
 **Status:** Canonical constitutional doctrine (July 2026). **Required reading** for every engineer, agent, and contributor working on Alloy.

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy documentation
 
 **Purpose:** Authoritative navigation for engineers, implementers, and AI agents. Prefer these files over chat memory or archived sprint material.
@@ -177,7 +184,7 @@ CSV source: `supabase/reference/*.csv` (8 files)
 |-----|-----|
 | `product/crm-system.md` | Enrollment pipeline grain detail (childcare) |
 | `product/billing-and-financials.md` | Billing maturity |
-| `system/*` (remaining) | Transitional expanded references — prefer `platform/` |
+| `system/*` (remaining) | **Locked runtime implementation detail** — authoritative; prefer `platform/` for operator model |
 | `core/system-overview.md` | Redirect — see platform foundation |
 | `execution/roadmap-and-gaps.md` | Transitional detailed gap list |
 
@@ -188,18 +195,29 @@ CSV source: `supabase/reference/*.csv` (8 files)
 | Location | Purpose |
 |----------|---------|
 | `sprints/active/` | In-flight initiatives (index) |
+| `sprints/active/documentation-rebaseline-v2/` | **Documentation Rebaseline V2** execution (Wave 1 governance + validation) |
 | `sprints/completed/` | Shipped closeout index |
 | `sprints/archive/` | Historical sprint artifacts |
-| `sprints/05_2026/`, `06_2026/` | **Transitional paths** — migrating to active/completed/archive |
-| `audits/` | Point-in-time investigations |
+| `sprints/05_2026/`, `06_2026/`, `07_2026/`, `08_2026/` | **Transitional paths** — migrating to active/completed/archive |
+| `audits/` | Point-in-time investigations — **not current doctrine** |
 | `archive/` | Superseded docs — not current truth |
-| `export/` | Portable handoff packs |
+| `export/` | Portable handoff packs (scheduled for retirement) |
+
+**July 2026 documentation architecture planning** (historical — not doctrine):
+
+- `audits/documentation-initiative-handoff-2026-07.md` — engineer handoff
+- `audits/documentation-architecture-audit-2026-07.md` — current-state audit
+- `audits/documentation-migration-blueprint-2026-07.md` — migration blueprint
+
+**June 2026 rebaseline audit (prior art):**
+
+- `audits/documentation-audit.md`
+- `audits/documentation-governance-followup.md`
+- `audits/documentation-closeout-report.md`
 
 **Agent development:** [`governance/agent-repo-boundaries.md`](governance/agent-repo-boundaries.md) — Cursor vs Claude repo separation, branching, merge flow
 
-**Rebaseline audit:** `audits/documentation-audit.md`  
-**Governance follow-up:** `audits/documentation-governance-followup.md`  
-**Closeout:** `audits/documentation-closeout-report.md`
+**Documentation validation:** `npm run docs:lint` from repository root — see `scripts/README-docs-lint.md`
 
 ---
 

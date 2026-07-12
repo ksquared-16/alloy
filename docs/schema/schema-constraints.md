@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-06-28 · **Constraint count:** 1004
+**Generated:** 2026-07-12 · **Constraint count:** 1004
 
 | Table | Name | Type | Definition |
 |-------|------|------|------------|
@@ -448,7 +448,7 @@
 | `entity_layouts` | `entity_layouts_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
 | `entity_layouts` | `entity_layouts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
 | `entity_layouts` | `entity_layouts_status_check` | CHECK | CHECK (status = ANY (ARRAY['draft'::text, 'published'::text])) |
-| `entity_layouts` | `entity_layouts_surface_check` | CHECK | CHECK (surface = ANY (ARRAY['drawer'::text, 'queue'::text])) |
+| `entity_layouts` | `entity_layouts_surface_check` | CHECK | CHECK (surface = ANY (ARRAY['drawer'::text, 'queue'::text, 'workspace'::text])) |
 | `entity_layouts` | `entity_layouts_version_check` | CHECK | CHECK (version >= 1) |
 | `external_mappings` | `external_mappings_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
 | `external_mappings` | `external_mappings_source_entity_type_external_id_key` | UNIQUE | UNIQUE (source, entity_type, external_id) |

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: frozen
+last_reviewed: 2026-07-11
+supersedes: []
+---
+
 # Alloy Platform Freeze
 
 **Status:** COMPLETE  

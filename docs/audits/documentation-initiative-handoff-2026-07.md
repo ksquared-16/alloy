@@ -1,6 +1,13 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-07-11
+concept: documentation-initiative-handoff
+---
+
 # Documentation Architecture Initiative — Engineer Handoff (July 2026)
 
-**Status:** Handoff record. Read this first, then the blueprint.
+**Status:** Handoff record. **Not doctrine.** Read this first, then the blueprint.
 **Owner of next phase:** whoever executes the migration.
 **Prepared:** 2026-07-11 against `origin/staging` @ `29fbcfb93` (planning baseline).
 

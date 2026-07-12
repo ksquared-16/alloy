@@ -1,8 +1,10 @@
 # Alloy
 
-Alloy is a **platform connecting homeowners with local service professionals**. The system of record is **Supabase**; the main application is the **Next.js web app** in `web/`, which handles marketing, quoting, booking, and a full admin for opportunities, jobs, schedules, vendors, and operations. The current production vertical is **home cleaning** (e.g. Bend, Oregon).
+Alloy is a **configurable business operations platform** for service businesses. Childcare enrollment is the primary reference implementation, but platform documentation and architecture are industry-agnostic. The system of record is **Supabase**; the main application is the **Next.js web app** in `web/`, which provides the operator workspace, admin surfaces, API routes, and customer-facing flows.
 
-**What’s working today:** A customer gets a quote (quote-start → quote-refine), selects a time (availability), and confirms (book-v2/confirm). That creates or reuses **Opportunity → Job → Schedule** and optionally **Customer/Contact** and **discount redemptions**. Admins manage **vendors** (approve/suspend), set a **job default vendor** (`assigned_vendor_id`), **apply it to upcoming schedules** (creates assignments with status “offered”), and handle **assignments** (accept/decline), **reschedule**, and **cancel**. **Subscriptions** can generate the next occurrence (generate-next). **Workflows** run on business events and integrate with **Communications V1** (`communication_*`) and legacy **`messages` / `messages_outbox`** where workflows still enqueue SMS (see **`docs/product/communications.md`**). A separate **sync** (Python) can pull contacts/opportunities/jobs from GoHighLevel into Supabase; a **backend** (Python) supports GHL/Twilio/dispatcher flows and is optional relative to the core booking → job → schedule path in the web app.
+**Canonical documentation:** Start at [`docs/README.md`](docs/README.md) for platform doctrine, load order, and governance.
+
+**Platform status (July 2026):** Foundational runtime architecture is certified complete and frozen. See `docs/platform/foundation/platform-freeze-july-2026.md`.
 
 ---
 
@@ -108,11 +110,11 @@ pip install -r requirements.txt
 
 ## Docs (active source pack)
 
-**Start here:** **[docs/README.md](docs/README.md)** — load order for onboarding and AI context, the **16 topic files + this index**, **`docs/supabase/reference/*.csv`** (generated schema reference), archive layout, and sprint notes.
+**Start here:** **[docs/README.md](docs/README.md)** — load order for onboarding and AI context, platform doctrine index, **`docs/supabase/reference/*.csv`** (generated schema reference), archive layout, and sprint notes.
 
-**Stale paths:** Top-level **`docs/architecture/`** and **`docs/implementation/`** were removed in the **2026-05-02** documentation reset. Comparable material lives under **`docs/archive/2026-05-02-docs-reset/`** (e.g. **[architecture/README.md](docs/archive/2026-05-02-docs-reset/architecture/README.md)**, **[implementation/ARCHITECTURE.md](docs/archive/2026-05-02-docs-reset/implementation/ARCHITECTURE.md)**) — use only when you intentionally need historical context.
+**Stale paths:** Top-level **`docs/architecture/`** and **`docs/implementation/`** were removed in the **2026-05-02** documentation reset. Comparable material lives under **`docs/archive/2026-05-02-docs-reset/`** — use only when you intentionally need historical context.
 
-**Supplementary audits** (not part of the capped source pack unless loaded explicitly): **`docs/audits/`** — e.g. **`supabase-schema-alignment-audit.md`**, **`workflow-rbac-alignment-audit.md`**, **`legacy-messages-retirement-plan.md`**, **`event-integrity-audit.md`**.
+**Supplementary audits** (not part of the default source pack): **`docs/audits/`** — point-in-time investigations and planning artifacts, not current doctrine.
 
 ---
 
@@ -120,4 +122,4 @@ pip install -r requirements.txt
 
 - Confirm production branch and Vercel project(s).
 - Confirm env vars required per vertical for book-v2 payment (Stripe) and messaging worker URLs.
-- Backend and sync are optional; align **`docs/product/communications.md`** with what each deployment actually runs.
+- Backend and sync are optional; align communications docs with what each deployment actually runs.
