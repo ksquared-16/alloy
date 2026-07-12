@@ -67,6 +67,6 @@ last_reviewed: 2026-07-12
         const baselinePath = path.join(repoRoot, "scripts/docs-lint-baseline.json");
         const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
         expect(baseline.summary["broken-link"]).toBeGreaterThan(100);
-        expect(baseline.summary["invalid-root-placement"]).toBeGreaterThan(10);
+        expect(baseline.summary["duplicate-basename"]).toBeGreaterThan(0);
     });
 });
