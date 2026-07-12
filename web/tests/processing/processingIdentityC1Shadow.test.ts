@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { maybeRunFormIdentityShadowSafe } from "@/lib/pos/processingIdentity/formIdentityShadow";
 import { buildShadowComparisonRecord } from "@/lib/pos/processingIdentity/shadowComparison";
 import type { FormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
@@ -111,34 +111,6 @@ describe("C1 shadow comparison", () => {
 });
 
 describe("C1 maybeRunFormIdentityShadowSafe", () => {
-    const originalEnv = { ...process.env };
-
-    afterEach(() => {
-        process.env = { ...originalEnv };
-    });
-
-    it("skips when feature disabled", async () => {
-        process.env.PROCESSING_SHADOW_FORMS = "false";
-        const result = await maybeRunFormIdentityShadowSafe({ from: vi.fn() } as never, {
-            orgId: "org-1",
-            submissionId: "sub-1",
-            intakeMeta,
-            legacyResult: {
-                person_id: null,
-                customer_id: null,
-                customer_member_id: null,
-                opportunity_id: null,
-                outcomeMeta: {},
-            },
-        });
-        expect(result.skipped).toBe(true);
-        expect(result.reason).toBe("feature_disabled");
-    });
-
-    beforeEach(() => {
-        process.env.PROCESSING_SHADOW_FORMS = "true";
-    });
-
     it("does not throw on resolver failure and records canonical_error", async () => {
         const supabase = {
             from: vi.fn(() => {

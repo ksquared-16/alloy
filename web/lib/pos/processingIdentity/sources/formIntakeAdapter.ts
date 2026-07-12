@@ -85,8 +85,6 @@ export async function ingestPublicFormThroughProcessing(
             household,
             locationId,
             facts,
-            forcePersistFacts: true,
-            forcePersistResolutions: true,
         });
 
         return { ok: true, processingCaseId: opened.processingCaseId, created: opened.created };

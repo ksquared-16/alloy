@@ -17,12 +17,10 @@ import {
 import {
     findResolutionByCaseSubjectGeneration,
     insertProcessingResolution,
-    listProcessingResolutionsByCase,
     markResolutionSuperseded,
     resolutionRowFromSubject,
     type ProcessingResolutionRow,
 } from "./processingResolutionsDb";
-import { isProcessingPersistFactsEnabled, isProcessingRealResolverEnabled } from "./featureFlags";
 import type { IntakeFact } from "@/lib/intake/types";
 
 function bandToLegacyConfidence(band: string): IntakeRecordMatchConfidence {
@@ -201,16 +199,12 @@ export async function runCanonicalIdentityResolution(input: {
     locationId?: string | null;
     facts?: IntakeFact[];
     generationId?: string;
-    forcePersistFacts?: boolean;
-    forcePersistResolutions?: boolean;
 }): Promise<CanonicalResolutionRunResult> {
     const generationId = input.generationId ?? newGenerationId();
-    const persistFacts = input.forcePersistFacts ?? isProcessingPersistFactsEnabled(input.orgId);
-    const persistResolutions = input.forcePersistResolutions ?? isProcessingRealResolverEnabled(input.orgId);
 
     let facts: ProcessingFactRow[] = [];
 
-    if (input.facts?.length && persistFacts) {
+    if (input.facts?.length) {
         const rows = input.facts.map((f) =>
             intakeFactToInsertRow({
                 orgId: input.orgId,
@@ -221,7 +215,7 @@ export async function runCanonicalIdentityResolution(input: {
             }),
         );
         facts = await insertProcessingFacts(input.supabase, rows);
-    } else if (persistFacts) {
+    } else {
         facts = await listProcessingFactsByCase(input.supabase, input.orgId, input.caseId);
     }
 
@@ -261,47 +255,40 @@ export async function runCanonicalIdentityResolution(input: {
             selectedCandidateId: top?.recordId && top.recordId !== "none" ? top.recordId : null,
         });
 
-        if (persistResolutions) {
-            const existing = await findResolutionByCaseSubjectGeneration(input.supabase, {
-                caseId: input.caseId,
-                subjectRef: subject.ref,
-                generationId,
+        const existing = await findResolutionByCaseSubjectGeneration(input.supabase, {
+            caseId: input.caseId,
+            subjectRef: subject.ref,
+            generationId,
+        });
+        if (existing && existing.input_facts_hash === inputFactsHash) {
+            resolutionRows.push(existing);
+            continue;
+        }
+        if (existing) {
+            const inserted = await insertProcessingResolution(input.supabase, rowInput);
+            await markResolutionSuperseded(input.supabase, {
+                resolutionId: existing.id,
+                supersededById: inserted.id,
             });
-            if (existing && existing.input_facts_hash === inputFactsHash) {
-                resolutionRows.push(existing);
-                continue;
-            }
-            if (existing) {
-                const inserted = await insertProcessingResolution(input.supabase, rowInput);
-                await markResolutionSuperseded(input.supabase, {
-                    resolutionId: existing.id,
-                    supersededById: inserted.id,
-                });
-                resolutionRows.push(inserted);
-            } else {
-                resolutionRows.push(await insertProcessingResolution(input.supabase, rowInput));
-            }
+            resolutionRows.push(inserted);
+        } else {
+            resolutionRows.push(await insertProcessingResolution(input.supabase, rowInput));
         }
     }
 
-    if (persistResolutions) {
-        await input.supabase
-            .from("processing_cases")
-            .update({ status: "needs_resolution", status_changed_at: new Date().toISOString() })
-            .eq("org_id", input.orgId)
-            .eq("id", input.caseId);
-    }
+    await input.supabase
+        .from("processing_cases")
+        .update({ status: "needs_resolution", status_changed_at: new Date().toISOString() })
+        .eq("org_id", input.orgId)
+        .eq("id", input.caseId);
 
     return {
         generationId,
         inputFactsHash,
         intakeResult,
         graph,
-        resolutionRows:
-            persistResolutions ?
-                resolutionRows
-            :   await listProcessingResolutionsByCase(input.supabase, input.orgId, input.caseId),
-        factsPersisted: Boolean(input.facts?.length && persistFacts),
-        resolutionsPersisted: persistResolutions,
+        resolutionRows,
+        factsPersisted: Boolean(input.facts?.length),
+        resolutionsPersisted: true,
     };
 }

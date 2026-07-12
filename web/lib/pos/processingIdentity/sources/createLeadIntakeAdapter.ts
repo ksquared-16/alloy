@@ -177,8 +177,6 @@ export async function ingestCreateLeadThroughProcessing(
         household,
         locationId: input.locationId ?? null,
         facts,
-        forcePersistFacts: true,
-        forcePersistResolutions: true,
     });
 
     if (selection) {

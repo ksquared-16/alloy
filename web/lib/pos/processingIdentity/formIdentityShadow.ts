@@ -1,7 +1,7 @@
 /**
- * C1 — Public form identity resolution shadow mode (non-authoritative).
+ * C1 — Historical public-form comparison helper (non-authoritative).
  *
- * Runs alongside legacy applyFormIntakeSafe. Never mutates persons/customers/children/opportunities.
+ * Retained for audit tests only. Never mutates persons/customers/children/opportunities.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -10,7 +10,6 @@ import type { FormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
 import { makeProcessingCaseDbDeps } from "@/lib/pos/processingCase/processingCaseDb";
 import { openProcessingCaseFromSource } from "@/lib/pos/processingCase/openProcessingCaseFromSource";
 import { runCanonicalIdentityResolution } from "./canonicalResolutionEngine";
-import { isProcessingShadowFormsEnabled } from "./featureFlags";
 import {
     buildHouseholdFromFormIntakeMeta,
     extractFactsFromFormIntakeMeta,
@@ -99,9 +98,6 @@ export async function maybeRunFormIdentityShadowSafe(
         locationId?: string | null;
     },
 ): Promise<FormIdentityShadowResult> {
-    if (!isProcessingShadowFormsEnabled(input.orgId)) {
-        return { skipped: true, reason: "feature_disabled" };
-    }
     if (!input.intakeMeta) {
         return { skipped: true, reason: "no_intake_meta" };
     }
@@ -146,8 +142,6 @@ export async function maybeRunFormIdentityShadowSafe(
             locationId: input.locationId ?? formIntakeLocationId(input.intakeMeta),
             facts,
             generationId,
-            forcePersistFacts: true,
-            forcePersistResolutions: true,
         });
 
         const comparison = buildShadowComparisonRecord({

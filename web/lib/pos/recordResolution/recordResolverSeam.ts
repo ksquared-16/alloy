@@ -1,11 +1,8 @@
 /**
  * POS — Record Resolution plug-in seam (consumer-side contract).
  *
- * Alloy is adding a PLATFORM-LEVEL Record Resolution layer for intake. POS must NOT
- * implement matching itself (no POS-specific duplicate detection). This module defines
- * the seam POS uses to call that future resolver, plus a deferred no-op stub so the
- * packet/submission flow can be wired today and swapped to the real resolver when it
- * lands — with zero call-site changes.
+ * POS must NOT implement matching itself (no POS-specific duplicate detection).
+ * This module defines the seam POS uses to call the canonical Processing resolver.
  *
  * Canonical platform flow this plugs into:
  *   intake → Intake Facts → Household Graph → Record Resolution → Create/Link/Update
@@ -13,13 +10,12 @@
  *
  * The household graph type (`IntakeHouseholdCandidate`) is REUSED from the existing
  * platform module `@/lib/intake/types` — not redefined here. This file contains the
- * call contract and a stub ONLY; it performs no email/phone/child matching.
+ * call contract; matching remains owned by the canonical identity engine.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 import { generateHouseholdGraphCandidates } from "@/lib/identity";
-import { isProcessingRealResolverEnabled } from "@/lib/pos/processingIdentity/featureFlags";
 
 /** Identifiers the platform resolver will match on (informational; POS does not match). */
 export type RecordResolutionMatchKey =
@@ -46,27 +42,24 @@ export type RecordResolutionStatus =
     /** Resolver proposes creating a new record (Create Lead path). */
     | "create_proposed"
     /** Multiple plausible records — route to the review queue. */
-    | "ambiguous"
-    /** Resolver not available yet — caller should link to a processing case for manual review. */
-    | "deferred";
+    | "ambiguous";
 
 /** Create/Link/Update proposal returned to POS. POS commits via existing review, never auto. */
 export interface RecordResolutionProposal {
     status: RecordResolutionStatus;
     /** Which signals drove a match (empty unless status === "matched"). */
     matched_on: RecordResolutionMatchKey[];
-    /** Linked/proposed identifiers (null when unknown or deferred). */
+    /** Linked/proposed identifiers (null when unknown). */
     lead_id: string | null;
     household_id: string | null;
     child_ids: string[];
-    /** True when an operator must review before commit (always true for deferred/ambiguous). */
+    /** True when an operator must review before commit. */
     review_required: boolean;
     notes?: string;
 }
 
 /**
- * The seam POS depends on. The platform supplies the real implementation later; POS
- * call sites depend only on this interface.
+ * The seam POS depends on. Call sites depend only on this interface.
  */
 export interface RecordResolver {
     resolve(candidate: IntakeHouseholdCandidate, context: RecordResolutionSourceContext): Promise<RecordResolutionProposal>;
@@ -75,8 +68,7 @@ export interface RecordResolver {
 /**
  * Inspect which match SIGNALS are present on a household candidate. This is a pure
  * presence check on the candidate object — it does NOT compare against any stored
- * record, so it is not matching logic. Used only to show "we'll be able to match on
- * email + phone later" in review UIs and to annotate the deferred proposal.
+ * record, so it is not matching logic.
  */
 export function availableMatchSignals(candidate: IntakeHouseholdCandidate): RecordResolutionMatchKey[] {
     const signals: RecordResolutionMatchKey[] = [];
@@ -140,34 +132,10 @@ function proposalFromGraph(input: {
     };
 }
 
-/**
- * Deferred resolver: the safe default until the platform Record Resolution layer ships.
- */
-export const deferredRecordResolver: RecordResolver = {
-    async resolve(candidate, context) {
-        const signals = availableMatchSignals(candidate);
-        return {
-            status: "deferred",
-            matched_on: [],
-            lead_id: typeof context.launch_context?.opportunity_id === "string" ? (context.launch_context.opportunity_id as string) : null,
-            household_id: typeof context.launch_context?.customer_id === "string" ? (context.launch_context.customer_id as string) : null,
-            child_ids: [],
-            review_required: true,
-            notes:
-                signals.length > 0
-                    ? `Record Resolution layer not yet available; will match on ${signals.join(", ")} once live. Linked to ${context.source_kind} for manual review.`
-                    : `Record Resolution layer not yet available and no match signals present. Linked to ${context.source_kind} for manual review.`,
-        };
-    },
-};
-
-/** Flag-gated canonical resolver (B3). Falls back to deferred when disabled. */
+/** Canonical resolver implementation (B3). */
 export function createProcessingRecordResolver(supabase: SupabaseClient): RecordResolver {
     return {
         async resolve(candidate, context) {
-            if (!isProcessingRealResolverEnabled(context.org_id)) {
-                return deferredRecordResolver.resolve(candidate, context);
-            }
             const graph = await generateHouseholdGraphCandidates(supabase, {
                 orgId: context.org_id,
                 household: candidate,
@@ -181,7 +149,7 @@ export function createProcessingRecordResolver(supabase: SupabaseClient): Record
     };
 }
 
-/** Default resolver export for POS wiring — flag-gated, non-mutating. */
+/** Default resolver export for POS wiring. */
 export function getDefaultRecordResolver(supabase: SupabaseClient): RecordResolver {
     return createProcessingRecordResolver(supabase);
 }

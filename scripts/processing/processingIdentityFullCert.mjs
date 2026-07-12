@@ -25,7 +25,7 @@ console.log("1) Reset isolated cert database…");
 run("bash", ["./scripts/processing/processingIdentityCertStack.sh", "reset"]);
 
 console.log("2) Refresh cert env…");
-run("npm", ["run", "cert:processing-identity-env"], web);
+run("npm", ["run", "cert:processing-identity-env"]);
 
 console.log("3) Postgres cert runner (17 checks)…");
 run("npm", ["run", "cert:processing-identity-local"]);
@@ -38,15 +38,8 @@ run(
         "test",
         "--",
         "--no-file-parallelism",
-        "tests/processing/processingIdentityCertTargetGuard.test.ts",
-        "tests/processing/processingIdentityCertRls.integration.test.ts",
-        "tests/processing/processingIdentityCertE2E.integration.test.ts",
-        "tests/processing/processingIdentityCertOperator.integration.test.ts",
-        "tests/processing/processingIdentityE1Boundaries.test.ts",
-        "tests/processing/processingIdentityD0Commands.test.ts",
-        "tests/processing/processingIdentityD1Plan.test.ts",
-        "tests/processing/processingIdentityD2Executor.test.ts",
-        "tests/processing/processingIdentityD3Operator.test.ts",
+        "tests/processing",
+        "tests/pos/recordResolverSeam.test.ts",
     ],
     web,
 );

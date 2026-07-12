@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import { resolutionRowFromSubject } from "@/lib/pos/processingIdentity/processingResolutionsDb";
 import { IDENTITY_RESOLVER_VERSION } from "@/lib/identity";
 
@@ -56,19 +56,11 @@ describe("B3 resolution row contract", () => {
 });
 
 describe("B3 canonical resolution persistence", () => {
-    const originalEnv = { ...process.env };
-
-    beforeEach(() => {
-        process.env.PROCESSING_REAL_RESOLVER = "true";
-        process.env.PROCESSING_PERSIST_FACTS = "true";
-    });
-
     afterEach(() => {
-        process.env = { ...originalEnv };
         vi.clearAllMocks();
     });
 
-    it("persists resolution rows when forcePersistResolutions is enabled", async () => {
+    it("persists resolution rows through the canonical engine", async () => {
         const { runCanonicalIdentityResolution } = await import(
             "@/lib/pos/processingIdentity/canonicalResolutionEngine"
         );
@@ -150,43 +142,9 @@ describe("B3 canonical resolution persistence", () => {
                 review_warnings: [],
             },
             generationId: "00000000-0000-4000-8000-000000000001",
-            forcePersistResolutions: true,
         });
 
         expect(result.resolutionsPersisted).toBe(true);
         expect(resolutionInserts.length).toBeGreaterThan(0);
-    });
-});
-
-describe("B3 record resolver seam", () => {
-    it("createProcessingRecordResolver returns deferred when flag off", async () => {
-        process.env.PROCESSING_REAL_RESOLVER = "false";
-        const { createProcessingRecordResolver } = await import("@/lib/pos/recordResolution/recordResolverSeam");
-        const resolver = createProcessingRecordResolver({} as never);
-        const proposal = await resolver.resolve(
-            {
-                household_id: "hh-1",
-                parents_guardians: [],
-                parents: [],
-                children: [],
-                household_contacts: [],
-                address: null,
-                location: null,
-                source: null,
-                notes: null,
-                program_interest: null,
-                start_date: null,
-                relationships: [],
-                unassigned_fact_ids: [],
-                unmapped_facts: [],
-                review_warnings: [],
-            },
-            {
-                org_id: "org-1",
-                source_kind: "form_submission",
-                source_id: "sub-1",
-            },
-        );
-        expect(proposal.status).toBe("deferred");
     });
 });
