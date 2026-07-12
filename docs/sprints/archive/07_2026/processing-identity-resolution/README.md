@@ -1,19 +1,10 @@
 # Processing Identity Resolution Engine V1 — Architecture & Implementation Sprint
 
-**Status: Frozen for V1 implementation** (architecture is implementation-authoritative; product-owner decisions incorporated). **Design baseline:** `origin/staging` @ `65afc8527…`; **promotion target:** latest `origin/staging`.
-**B1a status: implemented locally — awaiting full sprint validation and promotion** — Canonical Identity Normalization Primitives and Compatibility Adapters (`web/lib/identity`).
-**B0 status: implemented locally — awaiting full sprint validation and promotion** — Tenant security prerequisites (org-scoped identity RLS + `persons.org_id` FK). See migration `20260716120000_processing_identity_b0_tenant_security.sql`.
-**B1b status: implemented locally — awaiting full sprint validation and promotion** — Canonical candidate generation + 6-band classification (`web/lib/identity/*`, intake bridge). Flags: none (pure library). Tests: `web/tests/identity/candidateClassification.test.ts`.
-**B2 status: implemented locally — awaiting full sprint validation and promotion** — Durable `processing_facts` + case/source extensions. Migration `20260716130000_processing_identity_b2_facts.sql`. Runtime: `web/lib/pos/processingIdentity/processingFactsDb.ts`. Flag: `PROCESSING_PERSIST_FACTS` (default off). Tests: `web/tests/processing/processingIdentityB2Facts.test.ts`, migration shape in `processingIdentityB2B3Migrations.test.ts`.
-**B3 status: implemented locally — awaiting full sprint validation and promotion** — `processing_resolutions` persistence + canonical resolver engine. Migration `20260716140000_processing_identity_b3_resolutions.sql`. Seam: `web/lib/pos/recordResolution/recordResolverSeam.ts` (`createProcessingRecordResolver`). Flag: `PROCESSING_REAL_RESOLVER` (default off). Tests: `web/tests/processing/processingIdentityB3Resolver.test.ts`.
-**C1 status: implemented locally — awaiting full sprint validation and promotion** — Public form shadow mode (non-authoritative). Hook: public submit route + `web/lib/pos/processingIdentity/formIdentityShadow.ts`. Flag: `PROCESSING_SHADOW_FORMS` (default off). Tests: `web/tests/processing/processingIdentityC1Shadow.test.ts`.
-**D0 status: implemented locally — awaiting full sprint validation and promotion** — Registered semantic identity commands (`web/lib/pos/processingIdentity/commands/*`): typed contracts, registry, org/cross-tenant enforcement, idempotency, side-effect-free preview, real handlers over canonical helpers (`IdentityCommandPorts`). **No feature flag** (safety is architectural — commands reachable only via the server-side registry). Tests: `web/tests/commands/identityCommands.test.ts`.
-**D1 status: implemented locally — awaiting full sprint validation and promotion** — Versioned, immutable, content-hashed Commit Plans + approval binding (`web/lib/pos/processingIdentity/plan/*`). Migration `20260717120000_processing_identity_d1_commit_plans.sql` (`processing_commit_plans`/`_plan_operations`/`_approvals`, immutability triggers, RLS). **No feature flag.** Tests: `web/tests/processing/processingIdentityD1Plans.test.ts`.
-**D2 status: implemented locally — awaiting full sprint validation and promotion** — Deterministic commit executor (`web/lib/pos/processingIdentity/executor/*`): fail-closed preflight, one-transaction atomic identity group (`execute_processing_identity_group` RPC), sequenced dependents, async outbox, compensation, idempotent retry/resume. Migration `20260717130000_processing_identity_d2_executor.sql` (`processing_commit_attempts` append-only, `processing_exceptions`, RPC). **No feature flag** — safety boundary is "no valid approval → no execution" and no source integration. Tests: `web/tests/processing/processingIdentityD2Executor.test.ts`.
-**D3 status: implemented locally — awaiting full sprint validation and promotion** — Operator review integration wired into the existing Digital Mailroom case surface. Canonical server-side application service `web/lib/pos/processingIdentity/operator/operatorReviewService.ts` (load review, correction, resolution decision, build/revise plan, approve, explicit execute, read attempts) + deterministic recommendation builder (`recommendationBuilder.ts`, registered semantic ops only; merge = escalation) + readiness projection (`caseStateModel.ts`, derived — no new status column). API: `web/app/api/admin/processing/cases/[caseId]/identity/{review,correction,resolution,plan,approve,execute}/route.ts` (admin context + service-role). UI: `web/app/adminV2/processing/IdentityReviewPanel.tsx` mounted additively in `ProcessingCaseDetailContent.tsx`. **No feature flag** — execution requires a deliberate operator action on an approved plan; no intake source reaches it. Tests: `web/tests/processing/processingIdentityD3Operator.test.ts`.
-**D4 status: implemented locally — awaiting full sprint validation and promotion** — Manual Create Lead authoritative cutover. Source adapter `web/lib/pos/processingIdentity/sources/createLeadIntakeAdapter.ts` opens/reuses `create_lead` Processing Cases, persists facts/resolutions, and returns `mode: processing_review` (no CRM identity writes at intake). `executeCreateLeadAction` routes exclusively through Processing; legacy direct-write body removed from active path. Create Lead modal embeds shared `IdentityReviewPanel` for approve + explicit commit. Migration `20260718120000_processing_identity_d4_d5_source_kinds.sql` adds `create_lead` source kind. **No feature flag.** Tests: `web/tests/processing/processingIdentityD4CreateLead.test.ts` + updated Create Lead action tests.
-**D5 status: implemented locally — awaiting full sprint validation and promotion** — Public form authoritative Processing intake. `ingestPublicFormThroughProcessing` in `formIntakeAdapter.ts` replaces `applyFormIntakeSafe` on public submit for lead-capture forms; public response succeeds without identity commit; CRM FKs remain null until operator commit. C1 shadow dual-authority removed from submit path (comparison helpers retained for audit). **No feature flag.** Tests: `web/tests/processing/processingIdentityD5PublicForm.test.ts`.
-**E1 status: implemented locally — certified locally** — Superseded direct-write paths retired: `applyFormIntakeSafe` always throws; legacy body isolated in-file for archaeology only (no replay flag). Static boundary tests: `web/tests/processing/processingIdentityE1Boundaries.test.ts`.
+**Status:** **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+Architecture and V1 decisions remain frozen. **Design baseline:** `origin/staging` @ `65afc8527…`; **certified branch HEAD:** `4f3bbdb54`; **promotion target:** latest staging after an explicit reconciliation.
+
+All V1 slices **B1a, B0, B1b, B2, B3, C1, D0, D1, D2, D3, D4, D5, and E1 are implemented locally and locally certified.** C1 remains as historical comparison tooling only; D4 and D5 are the authoritative runtime paths. No Processing Identity feature flag, org toggle, or environment toggle is required. Safety is structural: source intake creates Processing state only, and identity mutation requires an approved immutable Commit Plan plus explicit executor invocation.
+**E1 status: implemented locally — certified locally** — Superseded direct-write paths retired: `applyFormIntakeSafe` always throws and has no replay flag. Static boundary tests: `web/tests/processing/processingIdentityE1Boundaries.test.ts`.
 **Type:** Architecture RFC + frozen decision register + phased Cursor implementation plan.
 **Owner:** Platform / Processing. **Created:** 2026-07-10. **Decision + freeze pass:** 2026-07-10.
 
@@ -42,10 +33,10 @@ Everything entering Alloy through an inbound channel passes through **one canoni
 | I | **Shadow public forms first; first executor cutover = Manual Create Lead**; forms commit second | 🔒 (revises "forms first") |
 | J | Deterministic-first, human-authoritative; **no identity auto-commit in V1** | 🔒 |
 
-## First Cursor slice
+## Historical first Cursor slice
 **B1a — Canonical Identity Normalization Primitives and Compatibility Adapters** (`web/lib/identity`: email/phone/name/dob normalizers + E.164 lookup variants + compatibility adapters + bounded **intake** call-site convergence + parity tests + docs). Branch `claude/proc-identity-lib-normalization`. **Non-destructive, no schema, independently mergeable.** **Candidate generation + confidence classification are NOT in B1a — they are B1b.** Security (**B0**) runs on a **separate parallel branch** and is never bundled with B1a. Full boundary at the end of [implementation-plan](processing-identity-resolution-implementation-plan.md).
 
-**Slice order (frozen):** B0 ∥ **B1a** → B1b (candidate generation + match classification) → B2 (facts/evidence) → B3 (resolver persistence) → C1 (form shadow) → D0 (identity commands) → D1 (commit plan + approval) → D2 (executor) → D3 (operator review) → **D4 (Manual Create Lead cutover — first executor)** → D5 (public-form cutover) → E → F → G.
+**Completed V1 order:** B0 ∥ **B1a** → B1b → B2 → B3 → C1 → D0 → D1 → D2 → D3 → **D4** → D5 → E1. Additional source adapters, merge execution, and policy automation remain outside V1.
 
 ## Artifacts
 | # | Artifact | Purpose |
@@ -60,31 +51,36 @@ Everything entering Alloy through an inbound channel passes through **one canoni
 | 8 | [risk-register](processing-identity-resolution-risk-register.md) | Likelihood/impact/detection/prevention/mitigation/rollback |
 | 9 | [open-decisions](processing-identity-resolution-open-decisions.md) | **Decision register (A–J frozen)** + original-20 mapping |
 | 10 | [doctrine-reconciliation](processing-identity-resolution-doctrine-reconciliation.md) | Docs to reconcile at closeout |
+| 11 | [release-notes](processing-identity-resolution-release-notes.md) | PR-ready sprint summary, migration inventory, risks, and verification |
+| 12 | [promotion-checklist](processing-identity-resolution-promotion-checklist.md) | Staging reconciliation through production prerequisites |
+| 13 | [rollback-plan](processing-identity-resolution-rollback-plan.md) | Staging rollback order, data safety, replay, and direct-write authority |
+| 14 | [regression-checklist](processing-identity-resolution-regression-checklist.md) | Consolidated automated, browser, API, security, and domain verification |
+| 15 | [commit-inventory](processing-identity-resolution-commit-inventory.md) | Complete phase-grouped implementation and certification history |
 
 ## Reading order
 Decisions first: **9 (open-decisions)** → **3 (RFC)** → **4 (data-model)** → **5 (migration)** → **6 (implementation)**. Evidence base: **1 → 2**. Validation/impact: **7 → 8 → 10**. Every material claim cites exact repo paths; findings tagged **[C]** confirmed / **[I]** inferred / **[P]** proposed / **[D]** doctrine.
 
 ## Provenance
-Seven parallel read-only trace streams + firsthand reads of the load-bearing contracts + July 2026 Processing/Forms doctrine, followed by a decision-finalization pass (this revision). **B1a–C1 local implementation** on branch `claude/proc-identity-lib-normalization` (not promoted).
+Seven parallel read-only trace streams + firsthand reads of the load-bearing contracts + July 2026 Processing/Forms doctrine, followed by the B1a–E1 local implementation and certification on `claude/proc-identity-lib-normalization`.
 
-## Local implementation notes (B1b–C1)
+## Local implementation notes (B1b–E1)
 | Phase | Commit(s) | Focused tests | Known limitations |
 |---|---|---|---|
 | B1b | see git log | `candidateClassification.test.ts`, B1a/B0 regressions | Booking/comms matchers not migrated; legacy `resolveIntakeRecordResolution` still assembles proposals |
-| B2 | see git log | `processingIdentityB2Facts.test.ts`, migration static | No live DB RLS integration; remote migration not applied |
-| B3 | see git log | `processingIdentityB3Resolver.test.ts` | Resolver persistence flag-gated; no record writes |
-| C1 | see git log | `processingIdentityC1Shadow.test.ts` | Shadow comparison stored in `processing_cases.metadata.identity_shadow`; legacy intake remains authoritative |
+| B2 | see git log | `processingIdentityB2Facts.test.ts`, database certification | Immutable facts and org-scoped RLS certified on the isolated stack |
+| B3 | see git log | `processingIdentityB3Resolver.test.ts`, integration certification | Durable resolver generations certified; no source toggle |
+| C1 | see git log | `processingIdentityC1Shadow.test.ts` | Historical comparison tooling retained for audit; it is not an active authority path |
 | D0 | see git log | `commands/identityCommands.test.ts` | No feature flag (per D0–D3 execution instruction); commands executable only through the server-side registry, never from intake sources; `attach_document`/comms preference ports write directly (no canonical single helper existed); merge is escalation-only (not executable in V1) |
-| D1 | see git log | `processingIdentityD1Plans.test.ts` | No feature flag; migration authored locally, not applied remotely (RLS/immutability validated by static shape + in-memory round-trip, not a live DB); `create_lead` treated as a dependent op sequencing after the atomic identity group (per RFC §7.14), reconciling the §24 example that lists it inside the group |
-| D2 | see git log | `processingIdentityD2Executor.test.ts` | No feature flag; atomic-group RPC authored locally and validated by static shape + all-or-nothing in-memory runner (not a live DB — remote migration prohibited by sprint policy); atomic group = person/household/links/child (lead+participation sequence as dependents); compensation flags created records for the operator (hard-delete prohibited) rather than auto-reversing; executor reachable only via server-side service (no route/source wired in D2) |
-| D3 | see git log | `processingIdentityD3Operator.test.ts` | No feature flag; no new migration (readiness is a derived projection over B2/B3/D1/D2, not a new status column — `processing_cases.status` unchanged); operator workflow surfaced additively in the existing Digital Mailroom case detail (no parallel app); plan built from durable resolution decisions via the deterministic recommendation builder; approval/execute gated on privileged operator role + valid approval; merge/duplicate remain escalation-only; execution reachable only through the operator API service (no intake source), verified against in-memory Supabase + executor fakes (not a live DB) |
-| D4 | see git log | `processingIdentityD4CreateLead.test.ts`, updated Create Lead action tests | No feature flag; migration authored locally not applied remotely; intake opens Processing Case only — records created after operator approve + explicit commit via D3 panel; flat gather and household-commit payloads both supported |
+| D1 | see git log | `processingIdentityD1Plans.test.ts` | No feature flag; immutable plan/version/hash and approval invalidation certified against the isolated local database |
+| D2 | see git log | `processingIdentityD2Executor.test.ts` | Real local RPC certified for atomic rollback, retry, stale-plan rejection, compensation recording, and idempotency |
+| D3 | see git log | `processingIdentityD3Operator.test.ts` | Existing Digital Mailroom case detail owns review; readiness is derived; approval and explicit commit are permission-gated |
+| D4 | see git log | `processingIdentityD4CreateLead.test.ts`, updated Create Lead action tests | Create Lead is structurally authoritative through Processing; no legacy fallback or source flag |
 | D5 | see git log | `processingIdentityD5PublicForm.test.ts` | No feature flag; public submit never commits identity; shadow dual-path removed from submit route; idempotent case open per submission |
 | E1 | see git log | `processingIdentityE1Boundaries.test.ts`, `processingIdentityLocalPostgres.test.ts` | Replay flag removed; `applyFormIntakeSafe` always throws; contacts uniqueness cleanup deferred |
 
 ### Local certification (2026-07-12, isolated stack)
 
-**Implemented locally · Certified locally · Not pushed · Not promoted · Not deployed**
+**Implemented locally · Certified locally · Awaiting staging reconciliation · Not promoted · Not deployed**
 
 | Item | Value |
 |------|-------|
@@ -123,22 +119,22 @@ npm run cert:processing-identity-full    # orchestrator: reset + 17-check runner
 
 **Build / typecheck:** `npm run typecheck` PASS · `npm run typecheck:tests` PASS · `npm run build` PASS
 
-**Combined processing suites:** `web/tests/processing/**` **119/119 PASS** (after isolated DB reset + `--no-file-parallelism` for integration files)
+**Combined Processing + resolver suites:** `web/tests/processing/**` + `web/tests/pos/recordResolverSeam.test.ts` **119/119 PASS** (after isolated DB reset + `--no-file-parallelism`)
 
 **Regression spot-check:** Create Lead · intake · forms · processingCase tests **101/101 PASS**
 
 **Verdict:** **LOCALLY CERTIFIED — READY FOR FINAL STAGING RECONCILIATION**
 
-**Post-promotion follow-ups (not blockers):**
+**Staging reconciliation follow-ups (not local blockers):**
 - Playwright/browser E2E for Manual Create Lead + public form (no `*.spec.ts` in this worktree; API integration is authoritative substitute)
 - Full POS / Digital Mailroom / workflow / record-system browser regression on staging after migration apply
-- Schema doc regeneration after remote migration apply
+- Re-export generated schema docs from the reconciled staging migration set after staging apply
 - RLS write-matrix expansion for all processing tables × all roles
 
-**Not promoted. Not deployed. No push.**
+**Not promoted. Not deployed.**
 
 ### D4–E1 no-flag execution note
 Per the D4–E1 continuous-local execution instruction, **no new feature flags/env vars/org toggles**. D4 and D5 are structurally authoritative — canonical Processing adapters are the only active mutation path for Manual Create Lead and public lead-capture forms. Safety boundary unchanged: only approved Commit Plans reach the D2 executor via deliberate operator action.
 
 ### D0–D3 no-flag execution note
-Per the D0–D3 continuous-local execution instruction, **no new feature flags/env vars/org toggles are introduced for D0–D3**. Safety is architectural: only an approved, immutable Commit Plan reaches the executor, and only the canonical server-side Processing operator workflow may approve and invoke it. This **supersedes** the `PROCESSING_RECORD_COMMANDS` / `PROCESSING_COMMIT_*` / `PROCESSING_OPERATOR_REVIEW` flag references in the frozen implementation and migration plans for the D0–D3 slices (earlier B/C flags are unchanged).
+Per the D0–D3 continuous-local execution instruction, **no feature flags/env vars/org toggles are introduced for D0–D3**. Safety is architectural: only an approved, immutable Commit Plan reaches the executor, and only the canonical server-side Processing operator workflow may approve and invoke it. The authoritative D4/D5 adapters likewise require no Processing Identity runtime toggle.
