@@ -2,49 +2,36 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { executeCreateLeadAction } from "@/lib/admin/actions/entryLifecycleActions";
-import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
-import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
+import { ingestCreateLeadThroughProcessing } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 
 vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
     assertAllowedStatusKey: vi.fn().mockResolvedValue({ ok: true }),
-}));
-
-vi.mock("@/lib/admin/emitStatusChangedEvent", () => ({
-    emitStatusChangedEvent: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("@/lib/opportunityIdentity", () => ({
-    normalizeOpportunityWritePayload: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("@/lib/persons/findOrCreatePersonInOrg", () => ({
-    findOrCreatePersonInOrgWithMeta: vi.fn().mockResolvedValue({ id: "parent-person-1" }),
-}));
-
-vi.mock("@/lib/bookingPersonCustomerResolve", () => ({
-    ensureCustomerForPersonNative: vi.fn().mockResolvedValue({ customer_id: "customer-1" }),
-}));
-
-vi.mock("@/lib/bookingCustomerPersonLink", () => ({
-    ensureCustomerPersonsPrimaryLink: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/lifecycle/lifecycleRuntimeBinding", () => ({
     resolveLifecycleCreateLeadBinding: vi.fn().mockResolvedValue({ work_unit_id: "wu-1", status_key: "open" }),
 }));
 
-vi.mock("@/lib/admin/actions/createLeadChildOcmPersistence", () => ({
-    applyCreateLeadChildParticipation: vi.fn().mockResolvedValue(null),
+vi.mock("@/lib/persons/findOrCreatePersonInOrg", () => ({
+    findOrCreatePersonInOrgWithMeta: vi.fn(),
 }));
 
-vi.mock("@/lib/admin/actions/applyCreateLeadLayoutRuntimePersistence", () => ({
-    applyCreateLeadLayoutRuntimePersistence: vi.fn().mockResolvedValue({
-        child_scoped_contacts: { links_written: 0, links_skipped_invalid_role: 0, assignment_count: 0 },
-        address: { household: { path: "none", location_id: null }, person: { path: "none", keys_written: [] } },
-        role_contacts: { customer_person_roles: [], opportunity_person_roles: [] },
+vi.mock("@/lib/bookingPersonCustomerResolve", () => ({
+    ensureCustomerForPersonNative: vi.fn(),
+}));
+
+vi.mock("@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter", () => ({
+    ingestCreateLeadThroughProcessing: vi.fn().mockResolvedValue({
+        ok: true,
+        processingCaseId: "proc-case-1",
+        sourceId: "src-1",
+        idempotencyKey: "idem-1",
+        created: true,
+        readiness: "needs_plan_review",
     }),
+    opportunityIdFromAttempt: vi.fn(),
 }));
 
 const root = resolve(__dirname, "../../..");
@@ -53,22 +40,15 @@ function read(rel: string): string {
     return readFileSync(resolve(root, rel), "utf8");
 }
 
-/** Documents actual create_lead DB writes for household intake audit (no broad multi-record commit). */
+/** D4: Create Lead intake is Processing-authoritative; CRM writes occur only after operator commit. */
 describe("create lead commit audit — household intake", () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
-    it("writes primary parent, customer, opportunity, and optional first child only", async () => {
-        const insert = vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: { id: "opp-1" }, error: null }),
-            }),
-        });
+    it("routes intake through Processing without direct person/customer/opportunity writes", async () => {
         const supabase = {
             from: vi.fn((table: string) => {
-                if (table === "opportunities") return { insert };
-                if (table === "opportunity_persons") return { insert: vi.fn().mockResolvedValue({ error: null }) };
                 if (table === "verticals") {
                     return {
                         select: vi.fn().mockReturnValue({
@@ -98,53 +78,46 @@ describe("create lead commit audit — household intake", () => {
                     child_date_of_birth: "2013-11-23",
                     location_id: "site-1",
                 },
-                context: { department_id: "dept-1" },
+                context: { department_id: "dept-1", work_unit_id: "wu-1" },
             },
         );
 
         expect(result.ok).toBe(true);
-        expect(findOrCreatePersonInOrgWithMeta).toHaveBeenCalledTimes(1);
-        expect(ensureCustomerForPersonNative).toHaveBeenCalledTimes(1);
-        expect(ensureCustomerPersonsPrimaryLink).toHaveBeenCalledTimes(1);
-        expect(applyCreateLeadChildParticipation).toHaveBeenCalledTimes(1);
-        expect(insert).toHaveBeenCalledTimes(1);
+        if (result.ok) expect(result.mode).toBe("processing_review");
+        expect(ingestCreateLeadThroughProcessing).toHaveBeenCalledTimes(1);
+        expect(findOrCreatePersonInOrgWithMeta).not.toHaveBeenCalled();
+        expect(ensureCustomerForPersonNative).not.toHaveBeenCalled();
     });
 
-    it("source audit: does not reference addresses or person_relationships tables", () => {
+    it("source audit: entryLifecycleActions no longer performs direct CRM inserts", () => {
         const source = read("lib/admin/actions/entryLifecycleActions.ts");
-        const childSource = read("lib/admin/actions/createLeadChildOcmPersistence.ts");
-        expect(source).not.toMatch(/from\("addresses"\)/);
-        expect(source).not.toMatch(/person_relationships/);
-        expect(childSource).toMatch(/customer_members/);
-        expect(childSource).toMatch(/opportunity_customer_members/);
+        expect(source).not.toMatch(/from\("opportunities"\)\.insert/);
+        expect(source).not.toMatch(/findOrCreatePersonInOrg/);
+        expect(source).toContain("ingestCreateLeadThroughProcessing");
     });
 });
 
 export const CREATE_LEAD_COMMIT_AUDIT = {
-    creates: [
-        "persons (primary parent/guardian)",
-        "persons (additional approved guardians when household_commit_v1 present)",
-        "customers (household)",
-        "customer_persons (primary_contact link)",
-        "opportunities (lead)",
-        "opportunity_persons (primary_guardian link)",
-        "persons (included children)",
-        "customer_members (child relationship per included child)",
-        "opportunity_customer_members (child enrollment row per included child)",
-        "workflow_events (status + action_executed)",
+    intake_authority: "Processing case + operator commit plan (D4)",
+    creates_at_commit: [
+        "persons (via create_person command)",
+        "customers (via create_household command)",
+        "customer_persons (via link_person_to_household)",
+        "customer_members (via create_child)",
+        "opportunities (via create_lead command)",
+        "process_instances (via create_process_participation when applicable)",
     ],
-    does_not_create: [
-        "excluded household members (operator unchecked or invalid)",
+    does_not_create_at_intake: [
+        "any identity-bearing CRM record",
         "addresses",
         "person_relationships rows",
-        "contacts table rows on create path",
+        "contacts table rows on intake path",
     ],
 } as const;
 
 describe("CREATE_LEAD_COMMIT_AUDIT reference", () => {
-    it("documents expected vs actual scope for multi-member household intake", () => {
-        expect(CREATE_LEAD_COMMIT_AUDIT.creates).toContain("customers (household)");
-        expect(CREATE_LEAD_COMMIT_AUDIT.does_not_create).toContain("excluded household members (operator unchecked or invalid)");
-        expect(CREATE_LEAD_COMMIT_AUDIT.does_not_create).toContain("addresses");
+    it("documents D4 authoritative intake vs commit-time writes", () => {
+        expect(CREATE_LEAD_COMMIT_AUDIT.intake_authority).toMatch(/Processing/);
+        expect(CREATE_LEAD_COMMIT_AUDIT.creates_at_commit).toContain("opportunities (via create_lead command)");
     });
 });

@@ -58,9 +58,25 @@ vi.mock("@/lib/admin/actions/applyCreateLeadLayoutRuntimePersistence", () => ({
     }),
 }));
 
+vi.mock("@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter")>();
+    return {
+        ...actual,
+        ingestCreateLeadThroughProcessing: vi.fn().mockResolvedValue({
+            ok: true,
+            processingCaseId: "proc-case-1",
+            sourceId: "src-1",
+            idempotencyKey: "idem-1",
+            created: true,
+            readiness: "needs_plan_review",
+        }),
+    };
+});
+
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
+import { ingestCreateLeadThroughProcessing } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 
 describe("isCreateLeadExecuteRequest", () => {
     it("accepts create_lead with sentinel or empty entity id", () => {
@@ -250,7 +266,7 @@ describe("executeCreateLeadAction validation", () => {
         }
     });
 
-    it("creates lead when minimum fields present and org has a vertical", async () => {
+    it("opens Processing review when minimum fields present and org has a vertical", async () => {
         const sb = supabaseForCreate("vert-1");
         const res = await executeCreateLeadAction(sb as never, ctx as never, {
             merged: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
@@ -258,26 +274,16 @@ describe("executeCreateLeadAction validation", () => {
         });
         expect(res.ok).toBe(true);
         if (res.ok) {
-            expect(res.opportunity_id).toBe("opp-new");
-            expect(res.person_id).toBe("person-1");
+            expect(res.mode).toBe("processing_review");
+            expect(res.processing_case_id).toBe("proc-case-1");
+            expect(res.opportunity_id).toBeUndefined();
         }
-        expect(sb.getCapturedOppInsert()?.vertical_id).toBe("vert-1");
-        expect(ensureCustomerForPersonNative).toHaveBeenCalledWith(
-            sb,
-            "person-1",
-            expect.objectContaining({ vertical_id: "vert-1" })
-        );
-        expect(applyCreateLeadChildParticipation).toHaveBeenCalledWith(
-            sb,
-            expect.objectContaining({
-                orgId: "org-1",
-                opportunityId: "opp-new",
-                customerId: "cust-1",
-            })
-        );
+        expect(ingestCreateLeadThroughProcessing).toHaveBeenCalled();
+        expect(ensureCustomerForPersonNative).not.toHaveBeenCalled();
+        expect(applyCreateLeadChildParticipation).not.toHaveBeenCalled();
     });
 
-    it("creates Kelly Kurzman lead with location only — child participation skipped", async () => {
+    it("passes flat child fields to Processing intake (participation at commit, not intake)", async () => {
         const sb = supabaseForCreate("vert-1");
         const siteId = "11111111-1111-4111-8111-111111111111";
         const merged = {
@@ -292,26 +298,23 @@ describe("executeCreateLeadAction validation", () => {
             context: { department_id: "dept-1" },
         });
         expect(res.ok).toBe(true);
-        expect(sb.getCapturedOppInsert()?.location_id).toBe(siteId);
-        expect(applyCreateLeadChildParticipation).toHaveBeenCalledWith(
+        expect(ingestCreateLeadThroughProcessing).toHaveBeenCalledWith(
             sb,
-            expect.objectContaining({ merged }),
+            expect.objectContaining({ merged, locationId: siteId }),
         );
     });
 
-    it("writes lead status to the canonical opportunities.status_key location", async () => {
+    it("returns configured status_key in processing review response (commit applies later)", async () => {
         const sb = supabaseForCreate("vert-1");
         const res = await executeCreateLeadAction(sb as never, ctx as never, {
             merged: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
             context: { department_id: "dept-1" },
         });
         expect(res.ok).toBe(true);
-        // Lead case status is owned by opportunities.status_key (statusCategoryRegistry "Lead Statuses"),
-        // resolved from the configured default-on-create (`open`) — never a hardcoded pipeline key.
-        expect(sb.getCapturedOppInsert()?.status_key).toBe("open");
+        if (res.ok) expect(res.status_key).toBe("open");
     });
 
-    it("creates lead when org has no configured vertical", async () => {
+    it("opens Processing review when org has no configured vertical", async () => {
         const sb = supabaseForCreate(null);
         const res = await executeCreateLeadAction(sb as never, ctx as never, {
             merged: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
@@ -319,19 +322,13 @@ describe("executeCreateLeadAction validation", () => {
         });
         expect(res.ok).toBe(true);
         if (res.ok) {
-            expect(res.opportunity_id).toBe("opp-new");
-            expect(res.person_id).toBe("person-1");
-            expect(res.customer_id).toBe("cust-1");
+            expect(res.mode).toBe("processing_review");
+            expect(res.processing_case_id).toBeTruthy();
         }
-        expect(sb.getCapturedOppInsert()?.vertical_id).toBeUndefined();
-        expect(ensureCustomerForPersonNative).toHaveBeenCalledWith(
-            sb,
-            "person-1",
-            expect.objectContaining({ vertical_id: null })
-        );
+        expect(ensureCustomerForPersonNative).not.toHaveBeenCalled();
     });
 
-    it("prefers explicit merged vertical_id over org default", async () => {
+    it("passes explicit merged vertical_id to Processing intake", async () => {
         const sb = supabaseForCreate("org-default-vert");
         const res = await executeCreateLeadAction(sb as never, ctx as never, {
             merged: {
@@ -343,20 +340,13 @@ describe("executeCreateLeadAction validation", () => {
             context: { department_id: "dept-1" },
         });
         expect(res.ok).toBe(true);
-        expect(sb.getCapturedOppInsert()?.vertical_id).toBe("explicit-vert");
-        expect(ensureCustomerForPersonNative).toHaveBeenCalledWith(
+        expect(ingestCreateLeadThroughProcessing).toHaveBeenCalledWith(
             sb,
-            "person-1",
-            expect.objectContaining({ vertical_id: "explicit-vert" })
+            expect.objectContaining({ verticalId: "explicit-vert" }),
         );
     });
 
-    it("persists child OCM fields when enrollment payload present", async () => {
-        vi.mocked(applyCreateLeadChildParticipation).mockResolvedValueOnce({
-            customer_member_id: "cm-child",
-            ocm_id: null,
-            process_instance_id: "pi-child",
-        });
+    it("forwards enrollment child payload to Processing intake", async () => {
         const sb = supabaseForCreate("vert-1");
         const merged = {
             first_name: "Ada",
@@ -375,24 +365,24 @@ describe("executeCreateLeadAction validation", () => {
             context: { department_id: "dept-1" },
         });
         expect(res.ok).toBe(true);
-        expect(applyCreateLeadChildParticipation).toHaveBeenCalledWith(
+        expect(ingestCreateLeadThroughProcessing).toHaveBeenCalledWith(
             sb,
-            expect.objectContaining({ merged })
+            expect.objectContaining({ merged }),
         );
     });
 
-    it("fails lead create when child OCM persistence fails", async () => {
-        vi.mocked(applyCreateLeadChildParticipation).mockRejectedValueOnce(
-            new Error("Could not link child participation to lead.")
-        );
+    it("surfaces Processing intake failures (no legacy child OCM fallback)", async () => {
+        vi.mocked(ingestCreateLeadThroughProcessing).mockResolvedValueOnce({
+            ok: false,
+            error: "Enrollment participation requires at least one child.",
+            status: 400,
+        });
         const sb = supabaseForCreate("vert-1");
         const res = await executeCreateLeadAction(sb as never, ctx as never, {
             merged: {
                 first_name: "Ada",
                 last_name: "Lovelace",
                 email: "ada@example.com",
-                child_first_name: "Riley",
-                child_last_name: "Nguyen",
                 child_program: "infant",
             },
             context: { department_id: "dept-1" },
@@ -400,7 +390,7 @@ describe("executeCreateLeadAction validation", () => {
         expect(res.ok).toBe(false);
         if (!res.ok) {
             expect(res.status).toBe(400);
-            expect(res.error).toMatch(/child participation/i);
+            expect(res.error).toMatch(/child/i);
         }
     });
 
