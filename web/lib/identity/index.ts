@@ -1,11 +1,8 @@
 /**
- * Canonical identity normalization primitives (Processing Identity Resolution B1a).
+ * Canonical identity library (Processing Identity Resolution).
  *
- * Scope: email / phone / name / DOB normalization + phone lookup variants +
- * compatibility adapters for bounded intake call sites.
- *
- * Out of scope (B1b+): candidate generation, confidence bands, signal scoring,
- * contradiction evaluation, resolver persistence, schema, uniqueness, commit.
+ * B1a: normalization primitives
+ * B1b: candidate generation + 6-band classification
  */
 
 export { normalizeEmail } from "./normalizeEmail";
@@ -29,3 +26,37 @@ export {
     normalizePhoneForFindOrCreate,
     phoneLookupVariantsCompat,
 } from "./compat";
+
+export type {
+    CandidateConfidenceBand,
+    ChildSubjectInput,
+    HouseholdGraphContext,
+    IdentityCandidate,
+    IdentitySignal,
+    IdentitySignalKind,
+    IdentitySignalStrength,
+    IdentitySubjectType,
+    PersonSubjectInput,
+} from "./candidateTypes";
+
+export {
+    CHILD_CANDIDATE_CAP,
+    HOUSEHOLD_MEMBER_CAP,
+    IDENTITY_RESOLVER_VERSION,
+    PERSON_CANDIDATE_CAP,
+} from "./constants";
+
+export { bandRank, mapLegacyConfidenceToBand, sortCandidatesByBand } from "./confidenceBand";
+export { makeSignal, signalsFromLegacyEvaluation } from "./signals";
+
+export {
+    classifyChildCandidateFromEvaluation,
+    classifyPersonCandidateFromEvaluation,
+    generateChildCandidates,
+    generatePersonCandidates,
+    isEligibleOrgScopedRecord,
+    scoreHouseholdCoherence,
+    childNameKey,
+} from "./generateCandidates";
+
+export { generateHouseholdGraphCandidates, opportunityOrgIntegrityDiagnostic } from "./householdGraph";
