@@ -119,7 +119,7 @@ Additional product lanes (not foundational runtime):
 Track in audits and close before declaring customer-ready:
 
 - Residual admin routes without access scope asserts
-- Inbound APIs still creating `contacts` without person threading
+- Inbound APIs still creating `contacts` without person threading — lead-capture forms + Manual Create Lead now route through Processing identity resolution (07_2026); remaining: comms/booking matchers
 - `primary_contact_id` coexistence until backfill complete
 - Event integrity gaps (`docs/audits/event-integrity-audit.md`)
 
