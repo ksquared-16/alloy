@@ -16,7 +16,10 @@
  * call contract and a stub ONLY; it performs no email/phone/child matching.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
+import { generateHouseholdGraphCandidates } from "@/lib/identity";
+import { isProcessingRealResolverEnabled } from "@/lib/pos/processingIdentity/featureFlags";
 
 /** Identifiers the platform resolver will match on (informational; POS does not match). */
 export type RecordResolutionMatchKey =
@@ -77,23 +80,68 @@ export interface RecordResolver {
  */
 export function availableMatchSignals(candidate: IntakeHouseholdCandidate): RecordResolutionMatchKey[] {
     const signals: RecordResolutionMatchKey[] = [];
-    const parents = candidate.parents ?? [];
+    const guardians =
+        candidate.parents_guardians?.length ? candidate.parents_guardians : (candidate.parents ?? []);
     const children = candidate.children ?? [];
 
-    if (parents.some((p) => (p.emails ?? []).some((e) => e.trim().length > 0))) signals.push("parent_email");
-    if (parents.some((p) => (p.phones ?? []).some((ph) => ph.trim().length > 0))) signals.push("parent_phone");
+    if (guardians.some((p) => (p.emails ?? []).some((e) => e.trim().length > 0))) signals.push("parent_email");
+    if (guardians.some((p) => (p.phones ?? []).some((ph) => ph.trim().length > 0))) signals.push("parent_phone");
     if (children.some((c) => (c.first_name || c.last_name) && c.dob)) signals.push("child_name_dob");
-    // household_link / opportunity_lead are derivable from launch context at call time,
-    // not from the candidate alone, so they are not asserted here.
     return signals;
+}
+
+function proposalFromGraph(input: {
+    candidate: IntakeHouseholdCandidate;
+    context: RecordResolutionSourceContext;
+    graph: Awaited<ReturnType<typeof generateHouseholdGraphCandidates>>;
+}): RecordResolutionProposal {
+    const matchedOn = availableMatchSignals(input.candidate);
+    const parent = input.graph.parents[0];
+    const child = input.graph.children[0];
+    const household = input.graph.household[0];
+    const lead = input.graph.leads[0];
+
+    if (parent?.confidenceBand === "conflicted" || lead?.confidenceBand === "conflicted") {
+        return {
+            status: "ambiguous",
+            matched_on: matchedOn,
+            lead_id: lead?.recordId !== "ambiguous" ? (lead?.recordId ?? null) : null,
+            household_id: household?.recordId ?? null,
+            child_ids: child?.recordId && child.recordId !== "none" ? [child.recordId] : [],
+            review_required: true,
+            notes: "Canonical resolver detected conflicts — operator review required.",
+        };
+    }
+
+    if (
+        parent &&
+        (parent.confidenceBand === "confirmed" || parent.confidenceBand === "strong") &&
+        parent.recordId !== "none"
+    ) {
+        return {
+            status: "matched",
+            matched_on: matchedOn,
+            lead_id: lead?.recordId ?? null,
+            household_id: household?.recordId ?? null,
+            child_ids: child?.recordId && child.recordId !== "none" ? [child.recordId] : [],
+            review_required: true,
+            notes: "Canonical resolver matched existing records (proposal only — no commit).",
+        };
+    }
+
+    return {
+        status: "create_proposed",
+        matched_on: matchedOn,
+        lead_id: null,
+        household_id: null,
+        child_ids: [],
+        review_required: true,
+        notes: "Canonical resolver proposes creating new records (proposal only — no commit).",
+    };
 }
 
 /**
  * Deferred resolver: the safe default until the platform Record Resolution layer ships.
- *
- * It performs NO matching. It returns `deferred` and surfaces which signals WILL be
- * usable once the real resolver is in place, so POS can link the packet to a processing
- * case for manual review without creating duplicate leads.
  */
 export const deferredRecordResolver: RecordResolver = {
     async resolve(candidate, context) {
@@ -112,3 +160,28 @@ export const deferredRecordResolver: RecordResolver = {
         };
     },
 };
+
+/** Flag-gated canonical resolver (B3). Falls back to deferred when disabled. */
+export function createProcessingRecordResolver(supabase: SupabaseClient): RecordResolver {
+    return {
+        async resolve(candidate, context) {
+            if (!isProcessingRealResolverEnabled(context.org_id)) {
+                return deferredRecordResolver.resolve(candidate, context);
+            }
+            const graph = await generateHouseholdGraphCandidates(supabase, {
+                orgId: context.org_id,
+                household: candidate,
+                locationId:
+                    typeof context.launch_context?.location_id === "string" ?
+                        (context.launch_context.location_id as string)
+                    :   (candidate.location?.resolved_value ?? null),
+            });
+            return proposalFromGraph({ candidate, context, graph });
+        },
+    };
+}
+
+/** Default resolver export for POS wiring — flag-gated, non-mutating. */
+export function getDefaultRecordResolver(supabase: SupabaseClient): RecordResolver {
+    return createProcessingRecordResolver(supabase);
+}
