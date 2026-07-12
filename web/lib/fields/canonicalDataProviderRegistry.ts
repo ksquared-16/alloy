@@ -38,6 +38,10 @@ import {
 } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { isChildcareOperatorPickerVisible } from "@/lib/fields/childcareFieldCatalogDoctrine";
 import { isWaitlistOnlyFieldKey } from "@/lib/layout/runtime/queueWaitlistPlacementField";
+import {
+    mergePersonChildRelationshipProviders,
+    tenantPersonChildRelationshipProviders,
+} from "@/lib/fields/personChildRelationship/personChildRelationshipProviderCatalogIntegration";
 
 let cachedSeeds: CanonicalDataProvider[] | null = null;
 let cachedFormsSeeds: CanonicalDataProvider[] | null = null;
@@ -55,8 +59,9 @@ function tenantProviders(
     defs: readonly TenantFieldDefinitionRow[],
     isWaitlist: boolean,
 ): CanonicalDataProvider[] {
+    const relationshipTenant = tenantPersonChildRelationshipProviders(defs);
     const surface = queueLayoutSurface(isWaitlist);
-    return buildTenantLayoutCatalogFields(defs, surface)
+    const layoutFields = buildTenantLayoutCatalogFields(defs, surface)
         .filter((field) => {
             const entity = namespaceFromRefKey(field.refKey);
             const fieldKey = field.refKey.includes(".") ? field.refKey.slice(field.refKey.indexOf(".") + 1) : field.refKey;
@@ -85,9 +90,11 @@ function tenantProviders(
             },
             resolverOwner: "web/lib/layout/tenantLayoutFieldPickerCatalog.ts",
         }));
+    return [...relationshipTenant, ...layoutFields] as CanonicalDataProvider[];
 }
 
 function allSeedProviders(): CanonicalDataProvider[] {
+    // person_child_relationship platform providers merged in buildCanonicalDataProviderCatalog
     if (!cachedSeeds) {
         cachedSeeds = buildQueueRowProviderSeeds();
     }
@@ -170,7 +177,7 @@ export function buildCanonicalDataProviderCatalog(options?: {
             if (!seen.has(provider.refKey)) seen.set(provider.refKey, provider);
         }
     }
-    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+    return mergePersonChildRelationshipProviders([...seen.values()], options?.tenantFieldDefinitions).sort((a, b) => a.label.localeCompare(b.label));
 }
 
 export function findCanonicalDataProvider(

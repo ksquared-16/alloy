@@ -4,6 +4,7 @@
  */
 
 import { CUSTOMER_MEMBER_ENTITY_TYPE } from "./customerMemberFieldRegistry";
+import { PERSON_CHILD_RELATIONSHIP_ENTITY_TYPE } from "./personChildRelationship/personChildRelationshipFieldRegistry";
 
 export const INQUIRY_CHILD_ENTITY_TYPE = "inquiry_child" as const;
 
@@ -20,6 +21,7 @@ export const FIELD_DEFINITION_ENTITY_TYPES = [
     "location",
     CUSTOMER_MEMBER_ENTITY_TYPE,
     INQUIRY_CHILD_ENTITY_TYPE,
+    PERSON_CHILD_RELATIONSHIP_ENTITY_TYPE,
 ] as const;
 
 export type FieldDefinitionEntityType = (typeof FIELD_DEFINITION_ENTITY_TYPES)[number];
