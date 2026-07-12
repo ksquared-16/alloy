@@ -265,10 +265,22 @@ describe("D1 persistence round-trip", () => {
 // Migration shape
 // ---------------------------------------------------------------------------
 describe("D1 commit plans migration", () => {
-    const sql = readFileSync(
-        resolve(__dirname, "../../../supabase/migrations/20260717120000_processing_identity_d1_commit_plans.sql"),
-        "utf8",
-    );
+    const migrationsDir = resolve(__dirname, "../../../supabase/migrations");
+    const sql = [
+        "20260717120000_processing_identity_d1_commit_plans.sql",
+        "20260717120500_processing_identity_d1_commit_plans_tables2.sql",
+        "20260717121000_processing_identity_d1_commit_plans_indexes.sql",
+        "20260717121500_processing_identity_d1_processing_approvals.sql",
+        "20260717122000_processing_identity_d1_plan_operations_index.sql",
+        "20260717122500_processing_identity_d1_approvals_plan_index.sql",
+        "20260717123000_processing_identity_d1_approvals_case_index.sql",
+        "20260717123500_processing_identity_d1_approvals_active_unique.sql",
+        "20260717125000_processing_identity_d1_commit_plans_guards_rls.sql",
+        "20260717125500_processing_identity_d1_plan_operations_guard.sql",
+        "20260717126000_processing_identity_d1_commit_plans_rls.sql",
+    ]
+        .map((name) => readFileSync(resolve(migrationsDir, name), "utf8"))
+        .join("\n");
     it("creates the three D1 tables with version+hash and immutability", () => {
         expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.processing_commit_plans");
         expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.processing_plan_operations");

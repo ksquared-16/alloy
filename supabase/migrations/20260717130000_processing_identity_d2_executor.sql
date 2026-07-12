@@ -146,6 +146,7 @@ DECLARE
     v_new_id uuid;
     v_person uuid;
     v_house  uuid;
+    v_role   text;
 BEGIN
     FOR v_op IN SELECT * FROM jsonb_array_elements(p_operations)
     LOOP

@@ -2,7 +2,7 @@
 /**
  * Processing Identity Resolution — local Postgres certification runner.
  *
- * Requires a migrated local Supabase/Postgres (port 54322 default).
+ * Requires a migrated local Supabase/Postgres (isolated cert stack port 55322 default).
  *
  *   DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres \
  *     node scripts/processing/processingIdentityLocalCert.mjs
@@ -15,7 +15,7 @@ const DATABASE_URL =
     process.env.DATABASE_URL?.trim() ||
     process.env.SUPABASE_DB_URL?.trim() ||
     process.env.PROCESSING_LOCAL_CERT_DATABASE_URL?.trim() ||
-    "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+    "postgresql://postgres:postgres@127.0.0.1:55322/postgres";
 
 const results = [];
 function pass(name) {
@@ -203,14 +203,100 @@ async function main() {
     }
     if (createLeadKindOk) pass("create_lead source_kind allowed (D4 migration)");
 
+    // --- Authenticated-role RLS (policy predicate simulation) ---
+    // Note: raw SET ROLE authenticated recurses via user_roles policies calling has_org_role.
+    // We verify the same predicates the policies use, plus has_org_role binding.
+    const userA = randomUUID();
+    const userB = randomUUID();
+    const personA = randomUUID();
+    const personB = randomUUID();
+    await client.query(
+        `INSERT INTO auth.users (id, aud, role, email, email_confirmed_at, created_at, updated_at)
+         VALUES ($1, 'authenticated', 'authenticated', $2, now(), now(), now()),
+                ($3, 'authenticated', 'authenticated', $4, now(), now(), now())`,
+        [userA, `cert-a-${userA.slice(0, 8)}@test.local`, userB, `cert-b-${userB.slice(0, 8)}@test.local`],
+    );
+    await client.query(
+        `INSERT INTO user_roles (user_id, org_id, role) VALUES ($1, $2, 'admin'), ($3, $4, 'admin')`,
+        [userA, orgA, userB, orgB],
+    );
+    await client.query(
+        `INSERT INTO persons (id, org_id, first_name, last_name) VALUES ($1, $2, 'Alice', 'OrgA'), ($3, $4, 'Bob', 'OrgB')`,
+        [personA, orgA, personB, orgB],
+    );
+    const custA = randomUUID();
+    const custB = randomUUID();
+    await client.query(
+        `INSERT INTO customers (id, org_id, name) VALUES ($1, $2, 'Household A'), ($3, $4, 'Household B')`,
+        [custA, orgA, custB, orgB],
+    );
+
+    await client.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [userA]);
+    const roleAOnA = await client.query(`SELECT public.has_org_role($1, ARRAY['admin']) AS ok`, [orgA]);
+    const roleAOnB = await client.query(`SELECT public.has_org_role($1, ARRAY['admin']) AS ok`, [orgB]);
+    if (roleAOnA.rows[0].ok === true) pass("has_org_role: org A admin bound to org A");
+    else fail("has_org_role org A", "expected true");
+    if (roleAOnB.rows[0].ok === false) pass("has_org_role: org A admin not bound to org B");
+    else fail("has_org_role org B", "expected false");
+
+    const personPolicy = `
+        EXISTS (
+            SELECT 1 FROM user_roles ur
+            WHERE ur.user_id = $2 AND ur.org_id = p.org_id
+              AND ur.role = ANY(ARRAY['owner','admin','ops','manager'])
+        )`;
+    const sameOrgPerson = await client.query(
+        `SELECT count(*)::int AS n FROM persons p WHERE p.id = $1 AND ${personPolicy}`,
+        [personA, userA],
+    );
+    const crossOrgPerson = await client.query(
+        `SELECT count(*)::int AS n FROM persons p WHERE p.id = $1 AND ${personPolicy}`,
+        [personB, userA],
+    );
+    if (sameOrgPerson.rows[0].n === 1) pass("RLS predicate: same-org person visible to org A admin");
+    else fail("RLS same-org person", `expected 1, got ${sameOrgPerson.rows[0].n}`);
+    if (crossOrgPerson.rows[0].n === 0) pass("RLS predicate: cross-org person hidden from org A admin");
+    else fail("RLS cross-org person", `expected 0, got ${crossOrgPerson.rows[0].n}`);
+
+    const customerPolicy = `public.has_org_role(p.org_id, ARRAY['owner','admin','ops','manager'])`;
+    const sameOrgCust = await client.query(
+        `SELECT count(*)::int AS n FROM customers p WHERE p.id = $1 AND ${customerPolicy}`,
+        [custA],
+    );
+    const crossOrgCust = await client.query(
+        `SELECT count(*)::int AS n FROM customers p WHERE p.id = $1 AND ${customerPolicy}`,
+        [custB],
+    );
+    if (sameOrgCust.rows[0].n === 1) pass("RLS predicate: same-org customer visible");
+    else fail("RLS same-org customer", `expected 1, got ${sameOrgCust.rows[0].n}`);
+    if (crossOrgCust.rows[0].n === 0) pass("RLS predicate: cross-org customer hidden");
+    else fail("RLS cross-org customer", `expected 0, got ${crossOrgCust.rows[0].n}`);
+
+    const caseOrgB = randomUUID();
+    await client.query(
+        `INSERT INTO processing_cases (id, org_id, status, case_type) VALUES ($1, $2, 'received', 'form_submission')`,
+        [caseOrgB, orgB],
+    );
+    const casePolicy = `public.has_org_role(org_id, ARRAY['owner','admin','ops','manager'])`;
+    const crossCase = await client.query(
+        `SELECT count(*)::int AS n FROM processing_cases WHERE id = $1 AND ${casePolicy}`,
+        [caseOrgB],
+    );
+    if (crossCase.rows[0].n === 0) pass("RLS predicate: cross-org processing_case hidden from org A admin");
+    else fail("RLS cross-org case", `expected 0, got ${crossCase.rows[0].n}`);
+    await client.query(`DELETE FROM processing_cases WHERE id = $1`, [caseOrgB]);
+
     // Cleanup cert data (customers/persons from RPC before org delete)
     await client.query(`DELETE FROM processing_facts WHERE case_id IN ($1, $2)`, [caseId, caseIdLead]);
     await client.query(`DELETE FROM processing_case_sources WHERE processing_case_id IN ($1, $2)`, [caseId, caseIdLead]);
     await client.query(`DELETE FROM processing_cases WHERE id IN ($1, $2)`, [caseId, caseIdLead]);
+    await client.query(`DELETE FROM customers WHERE id IN ($1, $2)`, [custA, custB]);
     await client.query(`DELETE FROM customer_members WHERE org_id = $1`, [orgA]);
     await client.query(`DELETE FROM customer_persons WHERE org_id = $1`, [orgA]);
     await client.query(`DELETE FROM customers WHERE org_id = $1`, [orgA]);
-    await client.query(`DELETE FROM persons WHERE org_id = $1`, [orgA]);
+    await client.query(`DELETE FROM persons WHERE org_id IN ($1, $2)`, [orgA, orgB]);
+    await client.query(`DELETE FROM user_roles WHERE user_id IN ($1, $2)`, [userA, userB]);
+    await client.query(`DELETE FROM auth.users WHERE id IN ($1, $2)`, [userA, userB]);
     await client.query(`DELETE FROM orgs WHERE id IN ($1, $2)`, [orgA, orgB]);
 
     await client.end();
