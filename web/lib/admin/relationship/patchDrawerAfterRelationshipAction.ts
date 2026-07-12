@@ -38,6 +38,9 @@ export async function patchDrawerAfterRelationshipAction(args: {
         ...args.anchorRecord,
         _child_scoped_contact_links: result.scoped_contact_links,
         _child_scoped_contact_links_query_failed: false,
+        ...(result.person_child_relationships_by_member
+            ? { _person_child_relationships_by_member: result.person_child_relationships_by_member }
+            : {}),
     };
     delete (nextRecord as Record<string, unknown>)._child_scoped_contact_links_query_error;
 

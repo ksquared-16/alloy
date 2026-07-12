@@ -33,6 +33,7 @@ import ChildProfileAvatarComposer from "@/components/admin/focusPanel/drillIn/Ch
 import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
 import EvidenceSectionCard from "@/components/admin/focusPanel/drillIn/EvidenceSectionCard";
 import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
+import EmergencyContactsSection from "@/components/admin/focusPanel/emergencyContacts/EmergencyContactsSection";
 import {
     buildChildrenCardEvidence,
     type ChildrenEvidenceChild,
@@ -48,6 +49,7 @@ import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPan
 import {
     CHILDREN_FOCUS_GROUP_KEYS,
     childrenDetailFieldKeysFromNestedConfig,
+    childrenEmergencyContactsSectionFromConfig,
     childrenEvidenceSectionsFromNestedConfig,
     childrenFocusRowsFromNestedConfig,
     readChildrenNestedConfigFromDoc,
@@ -58,6 +60,7 @@ import {
     CHILDREN_SURFACE_ID,
     fieldPresentationLabel,
     groupShowAvatarForNestedGroup,
+    isNestedGroupEnabled,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { cardCapabilities, cardRelatedViews } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLifecycle";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -140,6 +143,13 @@ export default function ChildrenCard({
     );
     const evidenceSections = useMemo(
         () => childrenEvidenceSectionsFromNestedConfig(childrenSurfaceConfig),
+        [childrenSurfaceConfig],
+    );
+    const emergencyContactsSection = useMemo(
+        () =>
+            childrenSurfaceConfig && isNestedGroupEnabled(childrenSurfaceConfig, "emergency_contacts")
+                ? childrenEmergencyContactsSectionFromConfig(childrenSurfaceConfig)
+                : null,
         [childrenSurfaceConfig],
     );
     const childDetailFieldKeys = useMemo(
@@ -386,16 +396,28 @@ export default function ChildrenCard({
     } else if (focused && focusedIdentityRecord && (disclosure.depth === "evidence" || disclosure.depth === "details")) {
         lifecycle = disclosure.depth === "evidence" ? "expanded" : "focus";
         body = (
-            <IdentityDisclosureSurface
-                record={{ ...focusedIdentityRecord, badge: focused.status }}
-                depth={disclosure.depth}
-                onEnterEvidence={
-                    disclosure.depth === "details" && evidenceSections.length > 0
-                        ? () => enterEvidence(focused.id, "roster")
-                        : undefined
-                }
-                onEditField={canEditChild ? () => setEditing(true) : undefined}
-            />
+            <>
+                <IdentityDisclosureSurface
+                    record={{ ...focusedIdentityRecord, badge: focused.status }}
+                    depth={disclosure.depth}
+                    onEnterEvidence={
+                        disclosure.depth === "details" && evidenceSections.length > 0
+                            ? () => enterEvidence(focused.id, "roster")
+                            : undefined
+                    }
+                    onEditField={canEditChild ? () => setEditing(true) : undefined}
+                />
+                {disclosure.depth === "details" && emergencyContactsSection && childrenSurfaceConfig ? (
+                    <EmergencyContactsSection
+                        child={focused}
+                        context={context}
+                        section={emergencyContactsSection}
+                        config={childrenSurfaceConfig}
+                        mutation={mutation}
+                        composing={composingChildrenSurface}
+                    />
+                ) : null}
+            </>
         );
     } else if (focused && disclosure.depth === "details" && composingChildrenSurface) {
         lifecycle = "focus";
@@ -409,6 +431,8 @@ export default function ChildrenCard({
                 childFocusView={childFocusView}
                 focusRows={focusRows}
                 evidenceSections={evidenceSections}
+                emergencyContactsSection={emergencyContactsSection}
+                context={context}
                 childrenSurfaceConfig={childrenSurfaceConfig}
                 opportunityStartDate={opportunityStartDate}
                 mutation={mutation}
@@ -880,6 +904,8 @@ function FocusedChild({
     childFocusView,
     focusRows,
     evidenceSections,
+    emergencyContactsSection = null,
+    context,
     childrenSurfaceConfig,
     opportunityStartDate,
     mutation,
@@ -899,6 +925,8 @@ function FocusedChild({
     childFocusView: ChildFocusView;
     focusRows: ChildrenFocusFieldRow[];
     evidenceSections: ChildrenEvidenceSectionView[];
+    emergencyContactsSection?: ChildrenEvidenceSectionView | null;
+    context: OperationalContext;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
     opportunityStartDate: string | null;
     mutation?: FocusPanelMutation;
@@ -1050,6 +1078,16 @@ function FocusedChild({
                         />
                     </div>
                     <ChildFlags child={child} />
+                    {emergencyContactsSection && childrenSurfaceConfig ? (
+                        <EmergencyContactsSection
+                            child={child}
+                            context={context}
+                            section={emergencyContactsSection}
+                            config={childrenSurfaceConfig}
+                            mutation={mutation}
+                            composing={composingChildrenSurface}
+                        />
+                    ) : null}
                     {composingChildrenSurface ? (
                         <div
                             className="alloy-os-children__evidence-tier"

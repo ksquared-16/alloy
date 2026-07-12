@@ -63,3 +63,12 @@ Focus Panel Household / Children
 
 - Revert PR; legacy read adapter continues projecting `customer_member_contacts`
 - Canonical rows preserved; no destructive legacy deletion in this sprint
+
+## Completion (feat/focus-panel-emergency-contact-completion)
+
+- **Child drill-in:** `EmergencyContactsSection` renders configured `emergency_contacts` at focused-child details depth (`ChildrenCard` + `FocusedChild`).
+- **Field rendering:** `emergencyContactsFieldRuntime.ts` resolves `person.*` vs `person_child_relationship.*` provider refs per relationship instance.
+- **Actions:** `executeRelationshipAction` `child_scoped_contact` writes via `applyCanonicalChildScopedRelationships` (PCR tables); refresh includes `_person_child_relationships_by_member`.
+- **Role lifecycle:** `removePersonChildRelationshipRole` deactivates edge when no active roles remain; Focus Panel truth merge preserves other roles on the same edge.
+- **Legacy dedupe:** canonical `_person_child_relationships_by_member` bag wins over `_customer_member_contacts` projection per member.
+- **Alex / Mia / Noah:** covered by `buildEmergencyContactsEvidence.test.ts` (Mia shows Alex emergency; Noah excludes without role).

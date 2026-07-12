@@ -5,6 +5,8 @@ import {
     ensureContactForPerson,
     type ChildScopedContactAssignment,
 } from "@/lib/admin/actions/createLeadChildScopedContactPersistence";
+import { applyCanonicalChildScopedRelationships } from "@/lib/admin/actions/createLeadPersonChildRelationshipPersistence";
+import { attachPersonChildRelationshipsToEntityRecord } from "@/lib/fields/personChildRelationship/attachPersonChildRelationshipsToEntityRecord";
 import {
     applyCreateLeadChildParticipationFromIdentity,
     type CreateLeadChildIdentity,
@@ -444,21 +446,39 @@ export async function executeRelationshipAction(
                 role_key: roleKey,
                 source: "explicit_child",
             }));
-            const writeResult = await applyChildScopedContactAssignments(supabase, {
-                orgId,
-                customerId,
-                assignments,
-            });
-            linksWritten += writeResult.links_written;
-            linksSkippedInvalidRole += writeResult.links_skipped_invalid_role;
-            if (writeResult.links_skipped_invalid_role > 0 && writeResult.links_written === 0) {
-                throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
+            if (entry.executorKind === "child_scoped_contact") {
+                const pcrWrite = await applyCanonicalChildScopedRelationships(supabase, {
+                    orgId,
+                    customerId,
+                    assignments,
+                });
+                linksWritten += pcrWrite.roles_written;
+                linksSkippedInvalidRole += pcrWrite.skipped;
+                if (pcrWrite.skipped > 0 && pcrWrite.roles_written === 0) {
+                    throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
+                }
+                affectedPreview.push({
+                    label: "Person ↔ Child relationships",
+                    table: "person_child_relationships",
+                    record_ids: memberIds,
+                });
+            } else {
+                const writeResult = await applyChildScopedContactAssignments(supabase, {
+                    orgId,
+                    customerId,
+                    assignments,
+                });
+                linksWritten += writeResult.links_written;
+                linksSkippedInvalidRole += writeResult.links_skipped_invalid_role;
+                if (writeResult.links_skipped_invalid_role > 0 && writeResult.links_written === 0) {
+                    throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
+                }
+                affectedPreview.push({
+                    label: "Child-scoped contact links",
+                    table: "customer_member_contacts",
+                    record_ids: memberIds,
+                });
             }
-            affectedPreview.push({
-                label: "Child-scoped contact links",
-                table: "customer_member_contacts",
-                record_ids: memberIds,
-            });
         } else if (
             entry.executorKind === "link_person"
             && !entry.writeTargets.includes("customer_member_contacts")
@@ -469,6 +489,16 @@ export async function executeRelationshipAction(
     }
 
     const scopedLinks = await refreshScopedContactLinks(supabase, orgId, householdChildren);
+    const memberChildIds = new Map(
+        householdChildren.map((child) => [child.customer_member_id, child.child_person_id]),
+    );
+    const personChildRelationshipsByMember = await attachPersonChildRelationshipsToEntityRecord({
+        supabase,
+        orgId,
+        customerId,
+        customerMemberIds: memberIds.length > 0 ? memberIds : householdChildren.map((c) => c.customer_member_id),
+        memberChildIds,
+    });
     const affectedChildren = resolveRelationshipScopeTargets({
         scope: input.scope,
         anchorCustomerMemberId: anchorMemberId || null,
@@ -505,6 +535,7 @@ export async function executeRelationshipAction(
         affected_children: affectedChildren,
         affected_record_preview: affectedPreview,
         scoped_contact_links: scopedLinks,
+        person_child_relationships_by_member: personChildRelationshipsByMember,
         refresh_hints: buildRefreshHint(input),
     };
 }

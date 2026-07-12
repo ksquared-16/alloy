@@ -70,4 +70,51 @@ describe("buildEmergencyContactsEvidence", () => {
         const bags = relationshipBagsFromTruth(truth);
         expect(bags).toHaveLength(2);
     });
+
+    it("prefers canonical bag over legacy projection for the same member", () => {
+        const truth = {
+            org_id: "org-1",
+            customer_id: "cust-1",
+            _person_child_relationships_by_member: [
+                {
+                    customer_member_id: "member-mia",
+                    customer_id: "cust-1",
+                    child_id: "child-mia",
+                    items: [
+                        {
+                            id: "rel-1",
+                            org_id: "org-1",
+                            customer_id: "cust-1",
+                            customer_member_id: "member-mia",
+                            person_id: "person-alex",
+                            relationship_type: "aunt",
+                            priority: 1,
+                            status: "active",
+                            operational_roles: ["emergency_contact"],
+                            person: { display_name: "Alex Morgan" },
+                            custom_field_values: {},
+                        },
+                    ],
+                },
+            ],
+            _customer_member_contacts: [
+                {
+                    id: "legacy-1",
+                    customer_id: "cust-1",
+                    customer_member_id: "member-mia",
+                    person_id: "person-legacy",
+                    role_key: "emergency_contact",
+                    display_name: "Legacy Contact",
+                    is_active: true,
+                },
+            ],
+        };
+        const context = {
+            subject: { type: "opportunity", id: "opp-1", label: "Test" },
+            truth,
+        } as unknown as OperationalContext;
+        const mia = buildEmergencyContactsEvidenceForChild({ context, customerMemberId: "member-mia" });
+        expect(mia.count).toBe(1);
+        expect(mia.items[0]?.person_id).toBe("person-alex");
+    });
 });

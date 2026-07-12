@@ -5,6 +5,7 @@
  */
 
 import type { ChildScopedContactLinkRow } from "@/lib/admin/person/personDrawerVisibilityTypes";
+import type { PersonChildRelationshipMemberBag } from "@/lib/fields/personChildRelationship/attachPersonChildRelationshipsToEntityRecord";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 export const RELATIONSHIP_ACTION_KEYS = [
@@ -157,6 +158,7 @@ export type RelationshipActionExecutionResult = {
     affected_children: RelationshipActionHouseholdChildTarget[];
     affected_record_preview: RelationshipActionAffectedRecordPreview[];
     scoped_contact_links: ChildScopedContactLinkRow[];
+    person_child_relationships_by_member?: PersonChildRelationshipMemberBag[];
     refresh_hints: {
         entityType: "child" | "person" | "opportunities";
         entityId: string;
