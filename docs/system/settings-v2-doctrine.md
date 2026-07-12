@@ -117,5 +117,5 @@ One **Save stage** action per stage workspace. Avoid per-section Save buttons.
 ## Related docs
 
 - `docs/system/configuration-system.md` — control plane vs runtime
-- `docs/sprints/06_2026/business_processes_v2_qa_path.md` — QA walkthrough
-- `docs/sprints/06_2026/enrollment_operations_configuration_ux_audit.md` — fragmentation diagnosis
+- `docs/sprints/archive/06_2026/business_processes_v2_qa_path.md` — QA walkthrough
+- `docs/sprints/archive/06_2026/enrollment_operations_configuration_ux_audit.md` — fragmentation diagnosis

@@ -3,10 +3,10 @@
 **Path:** `docs/system/adminv2-runtime-performance-doctrine.md`  
 **Status:** **Locked baseline** (June 2026). Implementation detail for reveal/queue/drawer gates.  
 **Platform summary:** **`platform-performance-doctrine.md`** (Passes 1–3, sidecar deferral).  
-**Supplements:** `docs/system/workspace-system.md`, `docs/system/record-system.md`, `docs/system/drawer-doctrine.md`, `docs/execution/operating-doctrine.md`  
-**Historical context:** `docs/sprints/05_2026/adminv2_reveal_doctrine.md`, `docs/sprints/05_2026/completed/adminv2_performance_closeout.md`  
-**Sprint closeout:** `docs/sprints/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`  
-**Next phase (backend only):** `docs/sprints/06_2026/adminv2_backend_query_payload_optimization_phase.md`
+**Supplements:** `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/system/drawer-doctrine.md`, `docs/execution/operating-doctrine.md`  
+**Historical context:** `docs/sprints/archive/05_2026/adminv2_reveal_doctrine.md`, `docs/sprints/archive/05_2026/completed/adminv2_performance_closeout.md`  
+**Sprint closeout:** `docs/sprints/archive/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`  
+**Next phase (backend only):** `docs/sprints/archive/06_2026/adminv2_backend_query_payload_optimization_phase.md`
 
 ---
 
@@ -170,7 +170,7 @@ Modules: `evaluateComposedDrawerPayload`, `evaluateComposedPersonDrawerPayload`,
 
 ### When touching runtime-sensitive files
 
-1. Read this doctrine and `docs/sprints/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`.
+1. Read this doctrine and `docs/sprints/archive/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`.
 2. Run the **required test suite** (§ below).
 3. Do not merge UI-only PRs that change reveal timing without explicit runtime task approval.
 
@@ -226,7 +226,7 @@ Also recommended for broader drawer/queue edits:
 - `tests/adminV2/workUnitRevealGate.test.ts`
 - `tests/adminV2/runtime/adminV2RuntimeContract.test.ts`
 
-Before merge on TypeScript changes: `cd web && npm run typecheck`. When tests or scripts change, also run `npm run typecheck:tests`. See `docs/governance/typescript-performance.md`.
+Before merge on TypeScript changes: `cd web && npm run typecheck`. When tests or scripts change, also run `npm run typecheck:tests`. See `docs/platform/governance/typescript-performance.md`.
 
 ---
 

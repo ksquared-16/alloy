@@ -99,4 +99,4 @@ Fields (registry)
 
 - `configuration-workspace-v1-doctrine.md`
 - `configuration-ownership-doctrine.md`
-- `docs/sprints/06_2026/enrollment_workflow_qa_ready_path.md`
+- `docs/sprints/archive/06_2026/enrollment_workflow_qa_ready_path.md`

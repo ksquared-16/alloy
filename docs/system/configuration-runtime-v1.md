@@ -85,4 +85,4 @@ Not allowed without explicit doctrine update:
 
 ## Sprint artifacts
 
-Screenshots: `docs/sprints/06_2026/configuration-runtime-v1-final/`
+Screenshots: `docs/sprints/archive/06_2026/configuration-runtime-v1-final/`

@@ -118,7 +118,7 @@ Search: `web/lib/adminV2/viewModel/drawer/**`, `*HardCutover*`, `*KillSwitch*`.
 | `routing-doctrine.md`, `navigation-doctrine.md`, `drawer-doctrine.md`, `platform-performance-doctrine.md` | **Canonical** |
 | `adminv2-runtime-performance-doctrine.md` | **Canonical** (implementation locked) |
 | `drawer-operating-model-v1.md`, `drawer-view-model-runtime-contract.md` | **Canonical** (detail) |
-| Sprint perf closeouts under `docs/sprints/06_2026/` | **Historical** — do not duplicate doctrine |
+| Sprint perf closeouts under `docs/sprints/archive/06_2026/` | **Historical** — do not duplicate doctrine |
 | Docs referencing department-first as primary nav | **Legacy** — update or archive banner |
 
 ---

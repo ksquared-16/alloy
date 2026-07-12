@@ -175,12 +175,12 @@ Do not merge these systems.
 1. **Identity frozen** — no redesign sprints unless product explicitly reopens identity.
 2. **Adoption sprints** — wire real workflows to existing primitives; fix regressions only.
 3. **New surfaces** — audit against this doc before shipping; extend adoption tests in `web/tests/bos/`.
-4. **Docs** — behavior changes to *where* identity is applied update **`docs/sprints/06_2026/bos_adoption_sprint01_surface_audit.md`** (or successor adoption audit).
+4. **Docs** — behavior changes to *where* identity is applied update **`docs/sprints/archive/06_2026/bos_adoption_sprint01_surface_audit.md`** (or successor adoption audit).
 
 ---
 
 ## Related docs
 
 - **`docs/product/bos-foundation.md`** — BOS capabilities, orchestrator, proposals
-- **`docs/sprints/06_2026/bos_identity_reveal_system.md`** — reveal implementation notes
-- **`docs/sprints/06_2026/bos_adoption_sprint01_surface_audit.md`** — surface audit (Adoption Sprint 01)
+- **`docs/sprints/archive/06_2026/bos_identity_reveal_system.md`** — reveal implementation notes
+- **`docs/sprints/archive/06_2026/bos_adoption_sprint01_surface_audit.md`** — surface audit (Adoption Sprint 01)
