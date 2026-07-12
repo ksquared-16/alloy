@@ -21,7 +21,9 @@ concept: documentation-rebaseline-v2
 
 - **Branch:** `chore/documentation-rebaseline-v2` (renamed from `chore/documentation-rebaseline-v2-wave1`)
 - **Starting HEAD (hardening pass):** `948c51083e06c6d7463bce7bf982e5c11ff79b43`
-- **Final HEAD:** `git rev-parse HEAD` on this branch after hardening commits (certification commit: `docs(validation): certify active documentation integrity`)
+- **Certification commit:** `85a40cb419c6061b3b518fa5175558e1140fb8f5`
+- **Staging merge base:** `3bc9d73b8ee5ada75798a6c4565c4328cef47871`
+- **Final HEAD:** `git rev-parse HEAD` after promotion closeout commits
 
 ## 3. Full commit list (rebaseline commits)
 
@@ -104,6 +106,21 @@ docs/
 **Key merges:** `card-archetypes.md` archived (survivor: `universal-card-archetypes.md`)
 
 **Key promotions:** 9 `canonical-*` → `platform/core/data/`
+
+## 9a. Content-preservation audit (promotion gate)
+
+Targeted audit of merge/delete clusters using migration manifest, export-deduplication report, and git history. **No unique doctrine or architectural history was found truncated.**
+
+| Cluster | Original | Survivor / archive | Result |
+|---------|----------|-------------------|--------|
+| Card archetypes | `card-archetypes.md` | `platform/operator/universal-card-archetypes.md` + `archive/2026-06-presentation-runtime/card-archetypes.md` | Survivor larger (969 vs 673 words); archived copy retained |
+| Governance consolidation | `docs/governance/*` | `platform/governance/*` | Moved intact (e.g. documentation-governance 853 words) |
+| Export deduplication | 94 `export/` files | Live canonical owners + 2 unique files | 77 byte-identical + 15 stale forks deleted; unique content at `archive/2026-06-handoff-packs/forms-handoff-pack/` |
+| Presentation runtime | v1 doctrine | `platform/experience/presentation-runtime-v2.md` + `archive/2026-06-presentation-runtime/` | v2 supersedes; v1 archived with banner |
+| Canonical data-system | 9 root `canonical-*` | `platform/core/data/*` | Promoted without truncation |
+| Commercial / product duplicates | module stubs | `platform/modules/*` + `product/crm-system.md` | Survivors retained; duplicates archived per manifest |
+
+**Staging reconciliation:** merged `origin/staging` @ `3bc9d73b8` (Person-Child relationships #170); sprint files relocated to `sprints/archive/08_2026/`.
 
 ## 10. Unique export content preserved
 
