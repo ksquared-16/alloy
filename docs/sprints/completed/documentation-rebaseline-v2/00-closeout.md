@@ -20,7 +20,8 @@ concept: documentation-rebaseline-v2
 ## 2. Final local branch and HEAD
 
 - **Branch:** `chore/documentation-rebaseline-v2` (renamed from `chore/documentation-rebaseline-v2-wave1`)
-- **HEAD:** *(see `git rev-parse HEAD` at promotion time)*
+- **Starting HEAD (hardening pass):** `948c51083e06c6d7463bce7bf982e5c11ff79b43`
+- **Final HEAD:** `git rev-parse HEAD` on this branch after hardening commits (certification commit: `docs(validation): certify active documentation integrity`)
 
 ## 3. Full commit list (rebaseline commits)
 
@@ -39,7 +40,12 @@ concept: documentation-rebaseline-v2
 | `daae2952e` | docs(sprints): normalize sprint lifecycle and initiative history |
 | `f5808b214` | docs(reference): regenerate indexes schema API and field catalog |
 | `c8c0fbe7d` | docs(validation): repair links metadata and documentation debt baseline |
-| *(final)* | docs(certification): freeze Documentation Rebaseline V2 |
+| `948c51083` | docs(certification): freeze Documentation Rebaseline V2 |
+| *(hardening)* | docs(links): repair active canonical references |
+| *(hardening)* | docs(governance): remove canonical sprint dependencies |
+| *(hardening)* | docs(metadata): complete governed documentation frontmatter |
+| *(hardening)* | docs(ownership): resolve active duplicate and doctrine authority |
+| *(hardening)* | docs(validation): certify active documentation integrity |
 
 ## 4. Final documentation architecture
 
@@ -128,25 +134,32 @@ Sprint PNG/HTML assets **retained** (~115 MB); LFS deferred.
 
 ## 14. Docs-lint debt before and after
 
-| Category | Wave 1 baseline | Final local |
-|----------|----------------:|------------:|
-| invalid-root-placement | 22 | **0** |
-| broken-link | 621 | 794 |
-| frontmatter-missing | 134 | 126 |
-| orphan-canonical | 68 | 69 |
-| canonical-sprint-dependency | 53 | 49 |
-| duplicate-basename | 13 | 9 |
-| generated-boundary | 21 | 21 |
+| Category | Wave 1 baseline | Post-structural (pre-hardening) | After hardening |
+|----------|----------------:|--------------------------------:|----------------:|
+| invalid-root-placement | 22 | **0** | **0** |
+| broken-link (all) | 621 | 794 | **705** |
+| active canonical broken-link | ~96 | **74** | **0** |
+| frontmatter-missing (governed) | 134 | 126 | **0** |
+| orphan-canonical | 68 | 69 | 70 |
+| canonical-sprint-dependency | 53 | 49 | **0** |
+| duplicate-basename (active ambiguous) | 13 | 9 | **0** |
+| generated-boundary | 21 | 21 | 21 |
 
-**Canonical-scope broken links:** ~74 (mostly web/lib cross-refs and commercial links).
+**Historical debt retained:** ~705 total broken links, predominantly sprint/archive internal cross-refs and preserved historical artifacts. Intentionally not rewritten to chase zero total count.
 
 ## 15. Validation results
 
 | Check | Result |
 |-------|--------|
-| `tests/scripts/docsLint.test.ts` | 7/7 passed |
-| `npm run docs:lint` | Report mode — debt baselined |
-| No UI/DB/migration/product changes | ✅ Confirmed |
+| `tests/scripts/docsLint.test.ts` | pass |
+| `npm run docs:lint` | report mode — active targets clean; historical debt baselined |
+| `npm run docs:lint:ci` | no blocking failures on changed governed files |
+| `npm run generate:schema-docs` + check | pass (checked-in CSV) |
+| `npm run generate:api-inventory` + check | pass |
+| `npm run generate:field-catalog` + check | pass (if available) |
+| Active canonical → sprint links (`rg` on `docs/platform/`) | **0** markdown dependencies |
+| Conflict markers | **0** |
+| No UI/DB/migration/product runtime changes | ✅ Confirmed |
 
 ## 16. Remaining blocked credentials
 
@@ -157,13 +170,20 @@ npm run generate:schema-docs
 
 ## 17. Remaining review gates
 
-1. Phase-5 vs July status examples in configuration-data-alignment
-2. Identity Surface Composition v1 → v2 supersession banner
-3. `web/docs/TIMEZONE_SEMANTICS.md` canonical home
-4. `web/components/workspace/doctrine.ts` visual-token authority
-5. Sprint asset git-LFS migration
-6. ~74 canonical-scope broken links (web/lib README paths, commercial cross-refs)
-7. Historical sprint internal links (~700 in archive — intentionally baselined)
+**Resolved locally:**
+
+1. Identity Surface Composition v1 → v2 — disclosure model superseded; V1 retained for persistence/parity
+2. `web/docs/TIMEZONE_SEMANTICS.md` — canonical home at `platform/governance/timezone-semantics.md`
+3. `doctrine.ts` visual-token authority — documented in `alloy-visual-language.md`
+4. Active canonical broken links — **0**
+5. Canonical → sprint dependencies — **0**
+
+**Nonblocking / post-merge:**
+
+1. Phase-5 vs July status examples in configuration-data-alignment (product-owner judgment)
+2. Sprint asset git-LFS migration (~115 MB retained)
+3. Historical sprint/archive internal links (~705 total broken links — baselined)
+4. Live `export:supabase-schema` — requires staging `DATABASE_URL`; CSV stale for `communications_identity`
 
 ## 18. Proposed final push/PR strategy
 
@@ -190,6 +210,8 @@ git reset --hard origin/staging
 
 ## 20. Certification statement
 
-Documentation Rebaseline V2 is **structurally complete on the local branch**. Canonical doctrine is organized under `docs/platform/` with a promoted data-contract layer, execution artifacts evicted, export duplicates removed, sprint lifecycle normalized, and machine validation in place. Residual debt is documented, baselined, and scoped to historical archives or explicit review gates. **Ready for one consolidated promotion review** when authorized.
+Documentation Rebaseline V2 is **structurally complete** and **active doctrine integrity is certified** on the local branch `chore/documentation-rebaseline-v2`. Canonical doctrine under `docs/platform/` meets hardening targets: zero active canonical broken links, zero canonical→sprint dependencies, zero missing governed frontmatter, and zero ambiguous active duplicate basenames. Historical archive/sprint link debt (~705 total) is baselined and intentionally retained. Live schema CSV export remains a credential-dependent post-merge step.
+
+**Ready for one consolidated promotion review** when authorized. **Nothing has been pushed; no PR opened; no Vercel preview triggered.**
 
 **Milestone:** `docs/platform/milestones/documentation-rebaseline-v2-certification.md`
