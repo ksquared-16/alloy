@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import IdentityFieldGrid from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
+import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
 import type { ChildrenEvidenceChild } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import type { ChildrenEvidenceSectionView } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 import { buildEmergencyContactsEvidenceForChild } from "@/lib/adminV2/runtime/focusPanel/emergencyContacts/buildEmergencyContactsEvidence";
@@ -10,6 +11,9 @@ import {
     isPersonOwnedEmergencyContactField,
     isRelationshipOwnedEmergencyContactField,
 } from "@/lib/adminV2/runtime/focusPanel/emergencyContacts/emergencyContactsFieldRuntime";
+import { resolveEmergencyContactFieldEditControl } from "@/lib/adminV2/runtime/focusPanel/emergencyContacts/emergencyContactFieldEditBinding";
+import { useEmergencyContactPcrFieldDefinitions } from "@/lib/adminV2/runtime/focusPanel/emergencyContacts/useEmergencyContactPcrFieldDefinitions";
+import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -41,24 +45,36 @@ export default function EmergencyContactsSection({
     );
 
     const canMutate = Boolean(mutation?.canEdit && !composing);
+    const { definitions: pcrFieldDefinitions } = useEmergencyContactPcrFieldDefinitions(canMutate);
+
     const [editingField, setEditingField] = useState<{
         relationshipId: string;
         personId: string;
         fieldRef: string;
-        currentValue: string | null;
+        storedValue: string | null;
+        displayLabel: string;
     } | null>(null);
     const [draftValue, setDraftValue] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const editControl = editingField
+        ? resolveEmergencyContactFieldEditControl(editingField.fieldRef, pcrFieldDefinitions)
+        : null;
+    const choiceSetKeys = editControl?.kind === "choice" ? [editControl.optionSetKey] : [];
+    const { optionsBySetKey, loading: choiceOptionsLoading } = useOptionSetSelectOptions(choiceSetKeys);
+    const choiceOptions =
+        editControl?.kind === "choice" ? (optionsBySetKey[editControl.optionSetKey] ?? []) : [];
+
     const beginEdit = (args: {
         relationshipId: string;
         personId: string;
         fieldRef: string;
-        currentValue: string | null;
+        storedValue: string | null;
+        displayLabel: string;
     }) => {
         setEditingField(args);
-        setDraftValue(args.currentValue ?? "");
+        setDraftValue(args.storedValue ?? "");
         setError(null);
     };
 
@@ -67,6 +83,7 @@ export default function EmergencyContactsSection({
         setSaving(true);
         setError(null);
         const { relationshipId, personId, fieldRef } = editingField;
+        const control = resolveEmergencyContactFieldEditControl(fieldRef, pcrFieldDefinitions);
         let result;
         if (isPersonOwnedEmergencyContactField(fieldRef)) {
             const key = fieldRef.slice("person.".length);
@@ -81,7 +98,7 @@ export default function EmergencyContactsSection({
             result = await mutation.savePersonContact(personId, patch);
         } else if (isRelationshipOwnedEmergencyContactField(fieldRef)) {
             const key = fieldRef.slice("person_child_relationship.".length);
-            if (key === "priority") {
+            if (key === "priority" || control.kind === "number") {
                 const n = draftValue.trim() === "" ? null : Number(draftValue);
                 result = await mutation.savePersonChildRelationship(relationshipId, memberId, {
                     priority: n != null && Number.isFinite(n) ? n : null,
@@ -89,6 +106,10 @@ export default function EmergencyContactsSection({
             } else if (key === "relationship_type") {
                 result = await mutation.savePersonChildRelationship(relationshipId, memberId, {
                     relationship_type: draftValue.trim() || null,
+                });
+            } else if (control.kind === "choice") {
+                result = await mutation.savePersonChildRelationship(relationshipId, memberId, {
+                    custom_fields: { [key]: draftValue.trim() || null },
                 });
             } else if (key === "status") {
                 result = await mutation.savePersonChildRelationship(relationshipId, memberId, {
@@ -161,12 +182,22 @@ export default function EmergencyContactsSection({
                                 onEditField={
                                     canMutate
                                         ? (fieldRef) => {
-                                              const cell = rows.flatMap((r) => r.cells).find((c) => c.fieldRef === fieldRef);
+                                              const cell = rows
+                                                  .flatMap((r) => r.cells)
+                                                  .find((c) => c.fieldRef === fieldRef);
+                                              const pcrKey = fieldRef.startsWith("person_child_relationship.")
+                                                  ? fieldRef.slice("person_child_relationship.".length)
+                                                  : null;
+                                              const storedValue =
+                                                  pcrKey && item.relationship_fields[pcrKey] != null
+                                                      ? String(item.relationship_fields[pcrKey])
+                                                      : (cell?.value ?? null);
                                               beginEdit({
                                                   relationshipId: item.relationship_id,
                                                   personId: item.person_id,
                                                   fieldRef,
-                                                  currentValue: cell?.value ?? null,
+                                                  storedValue,
+                                                  displayLabel: cell?.label ?? fieldRef,
                                               });
                                           }
                                         : undefined
@@ -195,17 +226,34 @@ export default function EmergencyContactsSection({
             {editingField ? (
                 <div className="alloy-os-child-emergency-contacts__edit" data-emergency-field-edit="true">
                     <label className="alloy-os-household__row-detail">
-                        Edit {editingField.fieldRef}
-                        <input
-                            className="alloy-os-input"
-                            value={draftValue}
-                            onChange={(e) => setDraftValue(e.target.value)}
-                            disabled={saving}
-                        />
+                        {editingField.displayLabel}
+                        {editControl?.kind === "choice" ? (
+                            <SelectFieldControl
+                                value={draftValue}
+                                onChange={setDraftValue}
+                                options={choiceOptions}
+                                disabled={saving || choiceOptionsLoading}
+                                aria-label={editingField.displayLabel}
+                                data-testid="emergency-contact-choice-field"
+                            />
+                        ) : (
+                            <input
+                                className="alloy-os-input"
+                                type={editControl?.kind === "number" ? "number" : "text"}
+                                value={draftValue}
+                                onChange={(e) => setDraftValue(e.target.value)}
+                                disabled={saving}
+                            />
+                        )}
                     </label>
                     {error ? <p className="alloy-os-household__row-detail">{error}</p> : null}
                     <div className="alloy-os-card-nav">
-                        <button type="button" className="alloy-os-ucard__action" onClick={() => setEditingField(null)} disabled={saving}>
+                        <button
+                            type="button"
+                            className="alloy-os-ucard__action"
+                            onClick={() => setEditingField(null)}
+                            disabled={saving}
+                        >
                             Cancel
                         </button>
                         <button type="button" className="alloy-os-ucard__action" onClick={saveEdit} disabled={saving}>

@@ -168,7 +168,7 @@ export const RELATIONSHIP_ACTION_REGISTRY: RelationshipActionRegistryEntry[] = [
             "household",
         ],
         allowedSourceSurfaces: ["child_drawer", "person_drawer", "opportunity_drawer", "bos_rail"],
-        writeTargets: ["customer_persons", "customer_member_contacts", "opportunity_persons"],
+        writeTargets: ["customer_persons", "opportunity_persons"],
         executorKind: "link_person",
         confirmationCopy: "This will link the selected person with the chosen role on affected records.",
         bosExamples: ["Link existing person Susan as emergency contact for Billie."],
