@@ -1,7 +1,8 @@
 # Processing Identity Resolution Engine V1 — Architecture & Implementation Sprint
 
 **Status: Frozen for V1 implementation** (architecture is implementation-authoritative; product-owner decisions incorporated). **Design baseline:** `origin/staging` @ `65afc8527…`; **promotion target:** latest `origin/staging`.
-**B1a status: implemented (awaiting review)** — Canonical Identity Normalization Primitives and Compatibility Adapters (`web/lib/identity`). Do not start B1b until review.
+**B1a status: implemented locally — awaiting full sprint validation and promotion** — Canonical Identity Normalization Primitives and Compatibility Adapters (`web/lib/identity`).
+**B0 status: implemented locally — awaiting full sprint validation and promotion** — Tenant security prerequisites (org-scoped identity RLS + `persons.org_id` FK). See migration `20260716120000_processing_identity_b0_tenant_security.sql`.
 **Type:** Architecture RFC + frozen decision register + phased Cursor implementation plan.
 **Owner:** Platform / Processing. **Created:** 2026-07-10. **Decision + freeze pass:** 2026-07-10.
 
