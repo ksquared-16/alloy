@@ -138,10 +138,12 @@ export function buildEmergencyContactsEvidenceForChild(args: {
     const truth = args.context.truth as Record<string, unknown>;
     const orgId = String(truth.org_id ?? "");
 
-    let bag = relationshipBagsFromTruth(truth).find((b) => b.customer_member_id === args.customerMemberId);
-    if (!bag) {
-        bag = legacyBagForMember(truth, orgId, args.customerMemberId) ?? undefined;
-    }
+    const canonicalBag = relationshipBagsFromTruth(truth).find(
+        (b) => b.customer_member_id === args.customerMemberId,
+    );
+    // Canonical bag wins when present; legacy projection is compatibility-only.
+    const bag =
+        canonicalBag ?? legacyBagForMember(truth, orgId, args.customerMemberId) ?? undefined;
 
     const emergency = filterEmergencyContacts(bag?.items ?? []);
     const vms = buildFocusPanelRelationshipInstanceViewModels(emergency);

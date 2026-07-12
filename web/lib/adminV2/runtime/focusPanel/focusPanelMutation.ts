@@ -41,6 +41,13 @@ import {
     postTourBookingAction,
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { dispatchOpenRelationshipActionModal } from "@/lib/admin/relationship/relationshipActionClient";
+import {
+    mergePersonChildRelationshipIntoFocusPanelTruth,
+    patchPersonChildRelationshipFromFocusPanel,
+    applyEmergencyRoleRemovalToTruth,
+    removePersonChildRelationshipRoleFromFocusPanel,
+    type PersonChildRelationshipPatchBody,
+} from "@/lib/adminV2/runtime/focusPanel/emergencyContacts/focusPanelPersonChildRelationshipMutation";
 
 /** Primary-contact/person fields editable on the Household card (V1). */
 export type PersonContactValues = {
@@ -85,6 +92,22 @@ export type FocusPanelMutation = {
     }) => Promise<FocusPanelSaveResult>;
     /** Open the existing add-emergency-contact relationship modal. */
     openAddEmergencyContact: () => void;
+    /** Child-scoped add emergency contact (focused child drill-in). */
+    openAddEmergencyContactForChild: (args: {
+        customerMemberId: string;
+        childPersonId?: string | null;
+    }) => void;
+    /** Patch canonical relationship fields (not Person-owned fields). */
+    savePersonChildRelationship: (
+        relationshipId: string,
+        customerMemberId: string,
+        patch: PersonChildRelationshipPatchBody,
+    ) => Promise<FocusPanelSaveResult>;
+    /** Remove emergency_contact role; preserves other roles on the edge. */
+    removeEmergencyContactRole: (args: {
+        relationshipId: string;
+        customerMemberId: string;
+    }) => Promise<FocusPanelSaveResult>;
     /** Tour status actions — present whenever a tour booking row exists and can be acted on. */
     tour: FocusPanelTourMutation;
     /** Communications actions — present for all opportunities. */
@@ -328,7 +351,64 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 source_surface: "opportunity_drawer",
             });
         },
-        tour: {
+        openAddEmergencyContactForChild: ({ customerMemberId, childPersonId }) => {
+            const customerId = trimOrNull(truth.customer_id);
+            dispatchOpenRelationshipActionModal({
+                action_key: "add_emergency_contact",
+                opportunity_id: opportunityId,
+                source_surface: "child_drawer",
+                initial_proposal: {
+                    actionKey: "add_emergency_contact",
+                    sourceSurface: "child_drawer",
+                    sourceRecordId: childPersonId?.trim() || customerMemberId.trim(),
+                    sourceEntityType: "child",
+                    sourceOpportunityId: opportunityId,
+                    sourceChildPersonId: childPersonId?.trim() || null,
+                    sourceCustomerId: customerId ?? "",
+                    anchorCustomerMemberId: customerMemberId.trim(),
+                    scope: "this_child",
+                    selectedChildCustomerMemberIds: [customerMemberId.trim()],
+                },
+            });
+        },
+        savePersonChildRelationship: async (relationshipId, customerMemberId, patch) => {
+            const res = await patchPersonChildRelationshipFromFocusPanel({
+                relationshipId,
+                body: patch,
+                fetchFn: f,
+            });
+            if (!res.ok) return res;
+            if (res.relationship) {
+                const merged = mergePersonChildRelationshipIntoFocusPanelTruth(truth, res.relationship);
+                dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
+                dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                    entityType: "opportunities",
+                    entityId: opportunityId,
+                    record: merged,
+                });
+            }
+            return { ok: true };
+        },
+        removeEmergencyContactRole: async ({ relationshipId, customerMemberId }) => {
+            const res = await removePersonChildRelationshipRoleFromFocusPanel({
+                relationshipId,
+                roleKey: "emergency_contact",
+                fetchFn: f,
+            });
+            if (!res.ok) return res;
+            const merged = applyEmergencyRoleRemovalToTruth(truth, {
+                relationshipId,
+                customerMemberId,
+            });
+            dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
+            dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                entityType: "opportunities",
+                entityId: opportunityId,
+                record: merged,
+            });
+            return { ok: true };
+        },
+                tour: {
             cancelTour: async (bookingId) => {
                 try {
                     await postTourBookingAction(bookingId, "/cancel");

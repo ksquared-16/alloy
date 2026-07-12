@@ -68,7 +68,7 @@ export const RELATIONSHIP_ACTION_REGISTRY: RelationshipActionRegistryEntry[] = [
         allowedContexts: ["section_row", "contact_block"],
         allowedScopes: ["this_child", "selected_children", "all_children_in_household"],
         allowedSourceSurfaces: ["child_drawer", "bos_rail"],
-        writeTargets: ["contacts", "customer_member_contacts", "customer_persons"],
+        writeTargets: ["contacts", "customer_persons"],
         executorKind: "child_scoped_contact",
         confirmationCopy: "This will link the person as an emergency contact on the selected child record(s).",
         bosExamples: [
@@ -88,7 +88,7 @@ export const RELATIONSHIP_ACTION_REGISTRY: RelationshipActionRegistryEntry[] = [
         allowedContexts: ["section_row", "contact_block"],
         allowedScopes: ["this_child", "selected_children", "all_children_in_household"],
         allowedSourceSurfaces: ["child_drawer", "bos_rail"],
-        writeTargets: ["contacts", "customer_member_contacts"],
+        writeTargets: ["contacts"],
         executorKind: "child_scoped_contact",
         confirmationCopy: "This will link the person as authorized pickup on the selected child record(s).",
         bosExamples: ["Add Uncle Mike as authorized pickup for Riley."],

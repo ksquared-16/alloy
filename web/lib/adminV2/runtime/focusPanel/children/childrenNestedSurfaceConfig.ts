@@ -183,3 +183,12 @@ export function childrenRosterFieldKeysFromNestedConfig(config: NestedSurfaceCon
 export function childrenAllFieldKeysFromNestedConfig(config: NestedSurfaceConfig | null): string[] {
     return nestedSurfaceFieldKeysFromConfig(config);
 }
+
+/** Emergency Contacts optional section on focused child drill-in. */
+export function childrenEmergencyContactsSectionFromConfig(
+    config: NestedSurfaceConfig | null,
+): ChildrenEvidenceSectionView | null {
+    if (!config) return null;
+    const sections = childrenEvidenceSectionsFromNestedConfig(config);
+    return sections.find((s) => s.key === "emergency_contacts") ?? null;
+}

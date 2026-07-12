@@ -264,7 +264,28 @@ export async function addPersonChildRelationshipRole(
         { onConflict: "org_id,relationship_id,role_key" },
     );
     if (error) return { ok: false, error: error.message };
+    await deactivateRelationshipWhenNoActiveRoles(supabase, orgId, relationshipId);
     return { ok: true };
+}
+
+
+async function deactivateRelationshipWhenNoActiveRoles(
+    supabase: SupabaseClient,
+    orgId: string,
+    relationshipId: string,
+): Promise<void> {
+    const { data: activeRoles } = await supabase
+        .from("person_child_relationship_roles")
+        .select("role_key")
+        .eq("org_id", orgId)
+        .eq("relationship_id", relationshipId)
+        .eq("is_active", true);
+    if ((activeRoles ?? []).length > 0) return;
+    await supabase
+        .from("person_child_relationships")
+        .update({ status: "inactive", updated_at: new Date().toISOString() })
+        .eq("org_id", orgId)
+        .eq("id", relationshipId);
 }
 
 export async function removePersonChildRelationshipRole(

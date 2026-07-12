@@ -33,6 +33,8 @@ export type ChildEvidenceFlag = {
 export type ChildrenEvidenceChild = {
     id: string;
     name: string;
+    /** Canonical household member id for child-scoped relationship evidence. */
+    customerMemberId?: string | null;
     personId?: string | null;
     /** Optional identity parts for composed display (Surface Composer identity group). */
     firstName?: string | null;
@@ -189,6 +191,7 @@ export function buildChildrenCardEvidence(
         return {
             id: trimOrNull(row.id) ?? trimOrNull(row.person_id) ?? `child-${index}`,
             name,
+            customerMemberId: trimOrNull((row as { customer_member_id?: unknown }).customer_member_id),
             personId: trimOrNull(row.person_id),
             firstName: trimOrNull(row.first_name),
             lastName: trimOrNull(row.last_name),

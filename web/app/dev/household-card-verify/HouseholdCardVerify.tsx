@@ -245,6 +245,9 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
             },
             saveInquiryChild: async () => ({ ok: true }),
             openAddEmergencyContact: () => {},
+            openAddEmergencyContactForChild: () => {},
+            savePersonChildRelationship: async () => ({ ok: true }),
+            removeEmergencyContactRole: async () => ({ ok: true }),
             tour: {
                 cancelTour: async () => ({ ok: true }),
                 confirmTour: async () => ({ ok: true }),
