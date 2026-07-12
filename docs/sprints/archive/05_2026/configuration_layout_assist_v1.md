@@ -1,8 +1,8 @@
 # Sprint: Configuration / Layout Assist V1 (Agent #4)
 
-**Path:** `docs/sprints/05_2026/configuration_layout_assist_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/configuration_layout_assist_v1.md`  
 **Status:** **Cards 1–10 implemented (vertical slice)** — primitives, proposal contract, persistence, permissions, Orchestrator routing, review UX, apply adapters. Cards 11–12 deferred.  
-**Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/workflow_assist_v1.md` (propose/apply + permission patterns), `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/product/bos-foundation.md`.
+**Prerequisites:** `docs/sprints/archive/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/archive/05_2026/workflow_assist_v1.md` (propose/apply + permission patterns), `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/product/bos-foundation.md`.
 
 **Non-goals for this document:** Autonomous config mutation; raw SQL from agents; service-role bypass; childcare-only field keys in platform code; replacing human Settings UI; merging Task Assist or Workflow Assist responsibilities.
 
@@ -725,7 +725,7 @@ All UX lives in the **Orchestrator thread** — proposal action cards, no separa
 
 - `supabase/migrations/*_config_assist_permissions.sql`
 - Propose/apply routes (new under `web/app/api/admin/ai/config-layout-assist/`)
-- `docs/system/roles-and-permissions.md`, `docs/product/bos-foundation.md`
+- `docs/archive/2026-06-superseded-system/roles-and-permissions.md`, `docs/product/bos-foundation.md`
 
 **Acceptance criteria:**
 
@@ -898,10 +898,10 @@ cd web && npm run test -- web/tests/adminV2/commandSurfaceRouter.test.ts
 
 ## 12. Sources of truth
 
-- `docs/system/configuration-system.md`, `docs/system/record-system.md`
-- `docs/system/roles-and-permissions.md`, `docs/product/bos-foundation.md`
-- `docs/sprints/05_2026/agent_interaction_layer_v1.md`, `workflow_assist_v1.md`, `task_assist_v1.md`
-- `docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md` (agent proposal/audit precedent)
+- `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`
+- `docs/archive/2026-06-superseded-system/roles-and-permissions.md`, `docs/product/bos-foundation.md`
+- `docs/sprints/archive/05_2026/agent_interaction_layer_v1.md`, `workflow_assist_v1.md`, `task_assist_v1.md`
+- `docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md` (agent proposal/audit precedent)
 - Schema: `docs/supabase/reference/supabase_tables.csv`, `supabase_schema_columns.csv`
 
 ---

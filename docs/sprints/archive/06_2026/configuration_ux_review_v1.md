@@ -1,6 +1,6 @@
 # Configuration UX Review v1
 
-**Path:** `docs/sprints/06_2026/configuration_ux_review_v1.md`  
+**Path:** `docs/sprints/archive/06_2026/configuration_ux_review_v1.md`  
 **Status:** Phase 6 — operator UX recommendations (May 2026)
 
 ---

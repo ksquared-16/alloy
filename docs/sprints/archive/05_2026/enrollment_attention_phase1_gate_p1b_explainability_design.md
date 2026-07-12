@@ -417,8 +417,8 @@ Use language “Escalated priority” only when **worst** SLA tier breached **an
 
 | File | Action |
 |------|--------|
-| `docs/sprints/05_2026/enrollment_attention_phase1_gate_p1b_explainability_design.md` | **Created** (this document) |
-| `docs/sprints/05_2026/enrollment_operational_attention_v2_sprint.md` | **Update** gate row → P1-B complete pending approval |
+| `docs/sprints/archive/05_2026/enrollment_attention_phase1_gate_p1b_explainability_design.md` | **Created** (this document) |
+| `docs/sprints/archive/05_2026/enrollment_operational_attention_v2_sprint.md` | **Update** gate row → P1-B complete pending approval |
 
 ---
 

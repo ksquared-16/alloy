@@ -34,7 +34,7 @@ Not: `Information arrives → giant textarea`
 
 ## Concepts (screenshots)
 
-Path: `docs/sprints/06_2026/assets/action-workspace-intake-v3-mockups/`
+Path: `docs/sprints/archive/06_2026/assets/action-workspace-intake-v3-mockups/`
 
 | Concept | Model | Empty-state behavior |
 |---------|--------|----------------------|

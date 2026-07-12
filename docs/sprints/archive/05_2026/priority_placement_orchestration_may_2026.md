@@ -9,7 +9,7 @@
 
 ## Executive summary
 
-Alloy already treats **queues as projection surfaces** (`docs/system/workspace-system.md`, `docs/system/record-system.md`). Ordering today is overwhelmingly **SQL sort on a small allowlist of opportunity/job columns**, with **one major exception**: the **`needs_attention`** lane uses **resolver-driven membership** and **in-memory reordering** after filtering (`QueueService`). The **opportunity attention resolver** already demonstrates **explainable, deterministic outputs** (`priority_breakdown`, reason codes) aligned with resolver-first doctrine.
+Alloy already treats **queues as projection surfaces** (`docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`). Ordering today is overwhelmingly **SQL sort on a small allowlist of opportunity/job columns**, with **one major exception**: the **`needs_attention`** lane uses **resolver-driven membership** and **in-memory reordering** after filtering (`QueueService`). The **opportunity attention resolver** already demonstrates **explainable, deterministic outputs** (`priority_breakdown`, reason codes) aligned with resolver-first doctrine.
 
 **Gaps (updated post–V1 close):** **V1 shipped** a **generalized pure evaluator** + **`QueueService`** projection path for **opt-in** lanes (metadata-driven; **no** placement tables). **Remaining cross-cutting gaps:** **`group_by` in queue config is schema-only (unused)**; **two opportunity queue interpreters** still coexist (**`QueueService`** vs **`resolveOpportunityQueueFromDefinition`**), which creates **drift risk** for any consumer still on the Growth path (**Card 0.5** lock: **no** new placement logic in the legacy interpreter). Lanes **without** placement metadata still rely primarily on **SQL sort** on allowlisted columns; childcare **waitlist priority semantics** beyond V1 scope remain **future** (see **§ Phase 2**).
 
@@ -1230,7 +1230,7 @@ This preserves: **Queue → select entity → refetch authoritative data → act
 
 ### 5.1 Sprint file name
 
-**This document:** `docs/sprints/05_2026/priority_placement_orchestration_may_2026.md`
+**This document:** `docs/sprints/archive/05_2026/priority_placement_orchestration_may_2026.md`
 
 ### 5.2 Card sequence (ordered)
 
@@ -1301,12 +1301,12 @@ This preserves: **Queue → select entity → refetch authoritative data → act
 
 ## References (in-repo)
 
-- Queue truth boundary: `docs/system/workspace-system.md`, `docs/system/record-system.md`  
+- Queue truth boundary: `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`  
 - Configuration doctrine: `docs/system/configuration-system.md`  
 - Canonical enrollment queue definition: `web/lib/config/enrollmentPipelineQueueDefinitionV1.ts`  
 - Queue execution: `web/lib/queues/QueueService.ts`  
 - Attention resolver + scoring: `web/lib/opportunities/opportunityAttentionResolver.ts`, `web/lib/opportunities/attentionPriorityScore.ts`  
-- Explainability UX precedent: `docs/sprints/05_2026/enrollment_attention_phase1_gate_p1b_explainability_design.md`  
+- Explainability UX precedent: `docs/sprints/archive/05_2026/enrollment_attention_phase1_gate_p1b_explainability_design.md`  
 - Enrollment operational metadata: `web/lib/opportunities/enrollmentOperationalMetadata.ts`  
 
 ---

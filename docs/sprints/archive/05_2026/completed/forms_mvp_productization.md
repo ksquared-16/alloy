@@ -1,6 +1,6 @@
 # Forms MVP Productization
 
-**Path:** `docs/sprints/05_2026/completed/forms_mvp_productization.md`  
+**Path:** `docs/sprints/archive/05_2026/completed/forms_mvp_productization.md`  
 **Date:** May 2026  
 **Status:** **CLOSED** — Cards 0–6 complete · Forms MVP productization shipped for operator review  
 **Scope:** Move Forms from working infrastructure toward a viable MVP module — operational workflow builder, not runtime configuration.
@@ -13,7 +13,7 @@
 | Enrollment lifecycle coherence | [`enrollment_intake_lifecycle_coherence.md`](./enrollment_intake_lifecycle_coherence.md) |
 | Prefill doctrine | [`docs/system/forms-intake-prefill-doctrine.md`](../../system/forms-intake-prefill-doctrine.md) |
 | Operational workspace (OW) | [`forms_operational_workspace_redesign.md`](./forms_operational_workspace_redesign.md) |
-| Product | [`docs/product/documents-and-forms.md`](../../product/documents-and-forms.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
 
 ---
 

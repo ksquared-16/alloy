@@ -1,7 +1,7 @@
 # Queue Density Experiment — Pass 1
 
 **Status:** **CLOSED — adopted into Work Unit Layout V3 (June 2026)**  
-**Superseded by:** `docs/system/work-unit-layout-doctrine.md` · `docs/sprints/06_2026/completed/work_unit_layout_v3_freeze_closeout.md`
+**Superseded by:** `docs/system/work-unit-layout-doctrine.md` · `docs/sprints/archive/06_2026/completed/work_unit_layout_v3_freeze_closeout.md`
 
 Pass-1 spacing values are now the **default** compact queue baseline on all work-unit surfaces (`adminv2-ws-wu-v2`). The `data-ws-wu-queue-density="pass-1"` opt-in mechanism has been removed.
 

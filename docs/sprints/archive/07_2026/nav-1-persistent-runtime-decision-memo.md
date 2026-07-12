@@ -1,8 +1,8 @@
 # NAV-1 (Persistent Runtime) — Decision Memo
 
-**Path:** `docs/sprints/07_2026/nav-1-persistent-runtime-decision-memo.md`
+**Path:** `docs/sprints/archive/07_2026/nav-1-persistent-runtime-decision-memo.md`
 **Status:** Decision memo (July 2026). Requests one ratification + authorization to start **Phase 0 only**.
-**Grounds:** [`navigation-runtime-doctrine.md`](../../platform/experience/navigation-runtime-doctrine.md) (full design), [`experience-audit.md`](../../platform/premium-operational-experience/experience-audit.md) (NAV-1 sev 5), [`sprint-roadmap.md`](../../platform/premium-operational-experience/sprint-roadmap.md) (Phase 4 keystone).
+**Grounds:** [`navigation-runtime-doctrine.md`](../../platform/experience/navigation-runtime-doctrine.md) (full design), [`experience-audit.md`](../../sprints/archive/06_2026/premium-operational-experience/experience-audit.md) (NAV-1 sev 5), [`sprint-roadmap.md`](../../sprints/archive/06_2026/premium-operational-experience/sprint-roadmap.md) (Phase 4 keystone).
 **Companion:** Motion-adoption slice shipped this pass (queue/pill `acknowledge`, surface `reveal`, value `settle`, record `swap`, rail-menu open `reveal`) — the interaction responsiveness that makes NAV-1's payoff maximal when it lands.
 
 ---

@@ -1,6 +1,6 @@
 # Enrollment Lifecycle + Status Matrix — Architecture Contract
 
-**Path:** `docs/sprints/06_2026/enrollment_lifecycle_status_matrix_contract.md`  
+**Path:** `docs/sprints/archive/06_2026/enrollment_lifecycle_status_matrix_contract.md`  
 **Date:** 2026-06-09  
 **Status:** **Frozen — configurable enrollment vocabulary + mapping doctrine**  
 **Scope:** How customers configure status labels without breaking Alloy’s fixed lifecycle layers. **Documentation + seed matrix only** — no broad status migration in this sprint.

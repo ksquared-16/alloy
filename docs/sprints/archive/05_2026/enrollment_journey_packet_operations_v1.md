@@ -4,9 +4,9 @@
 >
 > **Enrollment Packet E2E Phase 1 is shipped** for the operating loop described in **`docs/product/documents-and-forms.md`** and **`docs/product/crm-system.md`**: opportunity drawer packet launch (incl. multi-child/household launch metadata), Communications-backed templated email with packet link, public packet completion, **`workflow_events`** / Activity projections, compact opportunity overview review + operator **approve / reject / needs correction**, **approval-triggered** idempotent generated PDFs for steps with **`pdf_mapping_json`**, and opportunity **Documents** tab visibility via **`form_submission_documents`** + **`documents`** (not by storing files on `opportunities` rows). Public submit values remain **untrusted proposals** relative to canonical CRM until explicit intake / linkage / future **data change proposal** flows; Phase 1 does **not** auto-mutate person/customer/member from arbitrary public answers beyond existing intake rules.
 >
-> **This file** began as **Card 0 — audit & design** (Sections 1–8 below). Treat detailed bullets as **historical engineering context** where they predate Phase 1; for **current backlog and sequencing**, use **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+> **This file** began as **Card 0 — audit & design** (Sections 1–8 below). Treat detailed bullets as **historical engineering context** where they predate Phase 1; for **current backlog and sequencing**, use **`docs/sprints/archive/05_2026/enrollment_packet_phase_2.md`**.
 >
-> **Phase 2 plan:** **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**
+> **Phase 2 plan:** **`docs/sprints/archive/05_2026/enrollment_packet_phase_2.md`**
 
 **Sprint:** Enrollment Journey & Packet Operations  
 **Card:** 0 — Audit & Design Pass (no implementation in this card)  

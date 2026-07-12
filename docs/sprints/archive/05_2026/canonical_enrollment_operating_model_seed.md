@@ -30,7 +30,7 @@ Additional codes (**waiting on staff/family**, **missing quote**, etc.) remain r
 2. **`web/scripts/ensureEnrollmentPipelineWorkUnitV1.ts`** — Applies shared **`queue_definition`**; validates org **status_definitions**; **seeds department Needs Attention buckets** from **`enrollmentNeedsAttentionBucketsSeed.ts`** when absent.
 3. **`web/lib/opportunities/needsAttentionBuckets.ts`** — **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** is **empty**; buckets resolve **only** from metadata when `needs_attention_buckets` is present.
 4. **`web/lib/opportunities/opportunityAttentionConfig.ts`** — Operator-facing default **reason labels** (resolver copy).
-5. **Docs:** `docs/product/crm-system.md`, `docs/system/workspace-system.md`, `docs/system/configuration-system.md`.
+5. **Docs:** `docs/product/crm-system.md`, `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/system/configuration-system.md`.
 
 ## Overlap / conflict notes
 

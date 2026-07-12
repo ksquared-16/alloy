@@ -64,7 +64,7 @@ Finish the BOS foundation so future capabilities can be added without drift — 
 
 Active topic pack updated to reference **`bos-foundation.md`** and BOS terminology:
 
-- `docs/core/glossary.md`, `docs/system/api-contracts.md`, `configuration-system.md`, `record-system.md`, `roles-and-permissions.md`, `workspace-system.md`
+- `docs/platform/governance/glossary.md`, `docs/archive/2026-06-superseded-system/api-contracts.md`, `configuration-system.md`, `record-system.md`, `roles-and-permissions.md`, `workspace-system.md`
 - `docs/product/crm-system.md`, `communications.md`
 - `docs/execution/roadmap-and-gaps.md`
 - `docs/README.md` load order

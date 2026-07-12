@@ -2,7 +2,7 @@
 
 **Status:** Planning only (June 2026). **No code, no migrations, no runtime, no UI.** Defines the backend doctrine + technical plan for resolving **financial truth from operational truth** as **L5 Operational Consequences** in the truth-flow axis. P1/P1.1 (config rules), P2/P2.1 (attendance facts + actual compliance) are complete; this memo sequences P3.
 
-**Inputs reviewed:** `docs/platform/operational-truth-flow-doctrine.md`; `docs/platform/modules/billing-financials-platform.md`; `docs/product/billing-and-financials.md`; `docs/sprints/06_2026/operational_execution_phase1_backend_building_blocks.md`; P1 config code (`web/lib/childcareOperational/config/*`), P2/P2.1 attendance code (`web/lib/childcareOperational/attendance/*`); existing financial schema (`supabase/migrations/20260331120000_charges_receivables_foundation.sql`, `docs/supabase/reference/supabase_schema_columns.csv`).
+**Inputs reviewed:** `docs/platform/core/operational-truth-flow-doctrine.md`; `docs/platform/modules/billing-financials-platform.md`; `docs/product/billing-and-financials.md`; `docs/sprints/archive/06_2026/operational_execution_phase1_backend_building_blocks.md`; P1 config code (`web/lib/childcareOperational/config/*`), P2/P2.1 attendance code (`web/lib/childcareOperational/attendance/*`); existing financial schema (`supabase/migrations/20260331120000_charges_receivables_foundation.sql`, `docs/supabase/reference/supabase_schema_columns.csv`).
 
 > **This is not "billing UI."** P3 is the backend resolution chain that turns rules + commitments + facts into *who owes what*. Posting (invoices/claims/payments/ledger/GL) is the **last** boundary, not the model.
 

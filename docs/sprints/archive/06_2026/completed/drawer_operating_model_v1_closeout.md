@@ -1,6 +1,6 @@
 # Drawer Operating Model V1 — Sprint Closeout
 
-**Path:** `docs/sprints/06_2026/completed/drawer_operating_model_v1_closeout.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/drawer_operating_model_v1_closeout.md`  
 **Date:** 2026-06-08  
 **Status:** **Closed**  
 **Branch:** `staging`  
@@ -244,7 +244,7 @@ Tests: `web/tests/scripts/*DrawerV2OrgReset.test.ts`
 | Section priority UI | Metadata exists; Layout Builder editor for `priority` / `collapseWhenEmpty` not built |
 | Org activation | Dev org may still be on v1 published docs until reset scripts executed |
 | Legacy emergency fallback | `LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK` paths remain for cutover safety |
-| BOS exploration assets | Visual explorations under `docs/sprints/06_2026/assets/` — not productized |
+| BOS exploration assets | Visual explorations under `docs/sprints/archive/06_2026/assets/` — not productized |
 
 ---
 

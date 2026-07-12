@@ -1,6 +1,6 @@
 # Lifecycle Builder Hardening + Lifecycle V2 Canonical Model
 
-**Path:** `docs/sprints/06_2026/lifecycle_builder_hardening_and_v2_canonical_model.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_builder_hardening_and_v2_canonical_model.md`  
 **Status:** Discovery, hardening audit, and operating-model freeze — **do not implement** from this document  
 **Date:** 2026-06-02  
 **Prerequisite:** [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md) (domain architecture for NA, Tasks, Orchestration, status ownership)

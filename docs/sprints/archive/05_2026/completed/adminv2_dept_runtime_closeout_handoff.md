@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-20  
 **Audience:** `/work-unit` replication sprint, parallel GPT context  
-**Canonical docs:** [`adminv2_performance_scope_lock.md`](./adminv2_performance_scope_lock.md) (Appendix), [`adminv2_performance_cards.md`](./adminv2_performance_cards.md) (PERF-B-06–08), [`docs/system/workspace-system.md`](../system/workspace-system.md)
+**Canonical docs:** [`adminv2_performance_scope_lock.md`](./adminv2_performance_scope_lock.md) (Appendix), [`adminv2_performance_cards.md`](./adminv2_performance_cards.md) (PERF-B-06–08), [`docs/archive/2026-06-superseded-system/workspace-system.md`](../system/workspace-system.md)
 
 ---
 

@@ -128,7 +128,7 @@ flowchart TB
 
 ## Implementation cards (1–7)
 
-See `docs/system/actions-and-workflows.md` (Action buttons section) for post-sprint operator-facing summary.
+See `docs/archive/2026-06-superseded-system/actions-and-workflows.md` (Action buttons section) for post-sprint operator-facing summary.
 
 ### Verification commands
 
@@ -140,4 +140,4 @@ cd web && npm run test -- tests/ui-v2/enrollmentQueueRowPreviewPolicy.test.ts te
 
 Typecheck: `cd web && npx tsc --noEmit`
 
-Migrations: `supabase db push` (action-definition seeds use `WHERE NOT EXISTS`, not `ON CONFLICT (org_id, key)` — see `docs/system/actions-and-workflows.md`).
+Migrations: `supabase db push` (action-definition seeds use `WHERE NOT EXISTS`, not `ON CONFLICT (org_id, key)` — see `docs/archive/2026-06-superseded-system/actions-and-workflows.md`).

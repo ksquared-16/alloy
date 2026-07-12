@@ -20,7 +20,7 @@ Fit the frozen three-column operational intake workspace inside a signature BOS 
 
 ## Shells
 
-Screenshots: `docs/sprints/06_2026/assets/operational-intake-fitted-shell/`
+Screenshots: `docs/sprints/archive/06_2026/assets/operational-intake-fitted-shell/`
 
 | Shell | Role | File |
 |-------|------|------|

@@ -1,6 +1,6 @@
 # Create Lead Action UX Foundation
 
-**Path:** `docs/sprints/06_2026/create_lead_action_ux_foundation.md`  
+**Path:** `docs/sprints/archive/06_2026/create_lead_action_ux_foundation.md`  
 **Date:** 2026-06-08  
 **Status:** Closed — superseded by `docs/system/action-workspace-foundation.md` (Action Workspace V1)
 

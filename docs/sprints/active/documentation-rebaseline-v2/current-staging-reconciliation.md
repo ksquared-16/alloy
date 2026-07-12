@@ -43,7 +43,7 @@ concept: documentation-rebaseline-v2
 | `docs/platform/modules/communications-platform.md` | Content update — convergence with Work Items |
 | `docs/platform/operator/identity-surface-composition.md` | Content update |
 | `docs/platform/operator/queue-system.md` | Content update — Work Items queue integration |
-| `docs/platform/operator/universal-card-archetypes.md` | Content update |
+| `docs/platform/operator/universal-universal-card-archetypes.md` | Content update |
 
 ### New canonical document
 
@@ -55,8 +55,8 @@ concept: documentation-rebaseline-v2
 
 | Paths | Classification |
 |-------|----------------|
-| `docs/sprints/07_2026/current-work-action-hardening/00-sprint-closeout.md` | Sprint closeout update |
-| `docs/sprints/08_2026/*` (field platform, processing, work-items-v3 QA matrices + screenshots) | Sprint execution artifacts |
+| `docs/sprints/archive/07_2026/current-work-action-hardening/00-sprint-closeout.md` | Sprint closeout update |
+| `docs/sprints/archive/08_2026/*` (field platform, processing, work-items-v3 QA matrices + screenshots) | Sprint execution artifacts |
 
 **No path changes, ownership moves, or structural tree edits** occurred in canonical layers since the handoff merge.
 
@@ -66,7 +66,7 @@ concept: documentation-rebaseline-v2
 
 | Blueprint assumption (July plan) | Current staging reality | Manifest adjustment |
 |----------------------------------|-------------------------|---------------------|
-| `platform-freeze-july-2026.md` on unmerged branch | **Merged** at `docs/platform/foundation/platform-freeze-july-2026.md` (PR #163) | Wave 3 MOVE to `milestones/` still planned; location updated |
+| `milestones/freeze-july-2026.md` on unmerged branch | **Merged** at `docs/platform/milestones/freeze-july-2026.md` (PR #163) | Wave 3 MOVE to `milestones/` still planned; location updated |
 | `presentation-runtime-v2.md` cited as superseding operator doctrine | Lives at `docs/platform/experience/presentation-runtime-v2.md` (not `operator/`) | Supersession banner targets operator doc; survivor path is `experience/` |
 | `docs/platform/experience/` folder | **Exists** with 13 files including PR-v2 closeout/handoff | Blueprint MOVE of closeout/handoff to sprints still valid |
 | Work Items V3 platform | **Shipped to staging** (PR #165) after blueprint | Add V3 docs to manifest as KEEP; no structural move in Wave 1 |
@@ -83,7 +83,7 @@ concept: documentation-rebaseline-v2
 | Install `scripts/docs-lint.mjs` | **Wave 1 in progress** (this branch) |
 | Promote `canonical-*` cluster to `platform/core/data/` | **Not started** (Wave 2+) |
 | Evict sprint leakage from `platform/` | **Not started** — `premium-operational-experience/` still in `platform/` |
-| Delete `docs/export/` | **Not started** |
+| Delete `docs/archive/2026-06-handoff-packs/` | **Not started** |
 | Normalize sprints lifecycle folders | **Not started** |
 
 ---
@@ -93,7 +93,7 @@ concept: documentation-rebaseline-v2
 | Item | Severity | Wave 1 action |
 |------|----------|---------------|
 | `identity-surface-composition.md` vs `identity-surface-composition-v2.md` | Expected version progression | **REVIEW-GATE** — confirm v1 supersession relationship in Wave 2 |
-| `presentation-runtime-doctrine.md` (operator) vs `presentation-runtime-v2.md` (experience) | Known live contradiction from audit | Banner in Wave 1 truth-integrity pass |
+| `archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` (operator) vs `presentation-runtime-v2.md` (experience) | Known live contradiction from audit | Banner in Wave 1 truth-integrity pass |
 | 16 `canonical-*` files at `docs/` root | Structural debt (unchanged) | Manifested for Wave 2 MOVE |
 | Schema CSV missing `communications_identity` tables | Generated reference stale | Record blocker; regen needs `DATABASE_URL` |
 

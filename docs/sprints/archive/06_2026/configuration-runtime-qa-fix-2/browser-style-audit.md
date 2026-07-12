@@ -2,7 +2,7 @@
 
 **Date:** June 26, 2026  
 **Method:** Playwright computed-style inspection on live `/settings` and `/settings/processes` (Chromium 1440×960).  
-**Screenshots:** `docs/sprints/06_2026/configuration-runtime-qa-fix-2/01–11`
+**Screenshots:** `docs/sprints/archive/06_2026/configuration-runtime-qa-fix-2/01–11`
 
 ## Visual spec (Alloy Configuration Mode)
 

@@ -1,8 +1,8 @@
 # Layout + field behavior semantics v1 (Phase 1)
 
-**Path:** `docs/sprints/05_2026/layout_field_behavior_semantics_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md`  
 **Status:** **Phase 1 complete — paused.** Do not continue iterating in this sprint.  
-**Phase 2 backlog:** `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md`  
+**Phase 2 backlog:** `docs/sprints/archive/05_2026/layout_field_behavior_semantics_phase_2.md`  
 **Scope lock:** May 2026
 
 ## Sprint goal
@@ -115,7 +115,7 @@ Forms, public booking, workflow status-transition enforcement, inquiry_child/OCM
 
 **Docs (active topic)**
 
-- `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/execution/operating-doctrine.md`
+- `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/execution/operating-doctrine.md`
 
 ---
 
@@ -213,7 +213,7 @@ Presets: requirement `optional` | `required` | `required_on_save`; interaction `
 
 ## References
 
-- `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md` — deferred enhancements
+- `docs/sprints/archive/05_2026/layout_field_behavior_semantics_phase_2.md` — deferred enhancements
 - `docs/system/configuration-system.md` — Fields vs Layouts planes
-- `docs/system/record-system.md` — `_field_policy_resolved`, integrity
+- `docs/archive/2026-06-superseded-system/record-system.md` — `_field_policy_resolved`, integrity
 - `docs/execution/operating-doctrine.md` — structure vs layout behavior

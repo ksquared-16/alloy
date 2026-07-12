@@ -1,6 +1,6 @@
 # Canonical Action Catalog v1
 
-**Path:** `docs/sprints/05_2026/canonical_action_catalog_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/canonical_action_catalog_v1.md`  
 **Status:** Phase 0A stubs seeded (`20260602160000_canonical_action_catalog_v1_stubs.sql`) — inactive global definitions only  
 **Version:** `canonical_action_catalog_v1`  
 **Scope:** Childcare enrollment pipeline — canonical business capabilities (not UI placements).

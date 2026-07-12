@@ -1,6 +1,6 @@
 # Action Button Lifecycle Alignment Audit
 
-**Path:** `docs/sprints/05_2026/action_button_lifecycle_alignment_audit.md`  
+**Path:** `docs/sprints/archive/05_2026/action_button_lifecycle_alignment_audit.md`  
 **Date:** May 2026  
 **Status:** Audit complete — no code changes in this pass  
 **Inputs:** [`alloy_operational_doctrine_v1.md`](./alloy_operational_doctrine_v1.md), [`childcare_lifecycle_matrix_v1.md`](./childcare_lifecycle_matrix_v1.md)
@@ -16,7 +16,7 @@ Compared **Childcare Lifecycle Matrix v1** canonical actions against:
 3. **Runtime surfaces** — drawer header/sections, queue row, workspace right rail
 4. **Non-registry UI** — hardcoded queue chips, tour booking bar, BOS recommendation catalog keys
 
-**Authoritative config sources today:** `docs/system/actions-and-workflows.md`, migrations under `supabase/migrations/20260427*`–`20260529*`, sprint closeout `docs/sprints/06_2026/action_button_configuration_ux_sprint.md`.
+**Authoritative config sources today:** `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, migrations under `supabase/migrations/20260427*`–`20260529*`, sprint closeout `docs/sprints/archive/06_2026/action_button_configuration_ux_sprint.md`.
 
 ---
 
@@ -211,7 +211,7 @@ No code in this pass. Recommended order minimizes drift and respects doctrine (a
 2. Add **`canonical_action_catalog_v1`** table in docs / seed manifest listing matrix keys, handler type, and migration target.
 3. Rename labels in seeds only where safe: `create_inquiry` → **Create Lead** (key can stay until Phase 1).
 4. Deactivate or hide from Settings: `qualify_opportunity`, `start_quote`, `mark_won`, placeholders.
-5. Document lifecycle_stage → placement condition strategy in `docs/system/actions-and-workflows.md`.
+5. Document lifecycle_stage → placement condition strategy in `docs/archive/2026-06-superseded-system/actions-and-workflows.md`.
 
 ### Phase 1 — Entry + early pipeline (P0)
 

@@ -38,7 +38,7 @@
 
 ### Screenshots
 
-`web/docs/sprints/07_2026/processing-form-composer-v1-screenshots/`
+`web/docs/sprints/archive/07_2026/processing-form-composer-v1-screenshots/`
 
 - `01-workspace-authenticated.png`
 - `02-document-imported.png`
@@ -50,7 +50,7 @@
 
 ## API pipeline (headless)
 
-See `web/docs/sprints/07_2026/processing-form-composer-v1-validation-report.md` from script run — AcroForm detection, question resolution simulation, native form create, `builder_path: /adminV2/forms/[id]`, rich builder HTTP 200.
+See `web/docs/sprints/archive/07_2026/processing-form-composer-v1-validation-report.md` from script run — AcroForm detection, question resolution simulation, native form create, `builder_path: /adminV2/forms/[id]`, rich builder HTTP 200.
 
 ## Unrelated WIP excluded
 

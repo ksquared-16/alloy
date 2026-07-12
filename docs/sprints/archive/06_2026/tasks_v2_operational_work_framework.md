@@ -1,6 +1,6 @@
 # Tasks V2 — Operational Work Framework
 
-**Path:** `docs/sprints/06_2026/tasks_v2_operational_work_framework.md`  
+**Path:** `docs/sprints/archive/06_2026/tasks_v2_operational_work_framework.md`  
 **Date:** 2026-06-03  
 **Status:** **Operating model frozen — discovery only** (architecture only; no implementation)  
 **Scope:** Define Alloy's **operational work framework**. Not a UI sprint, schema sprint, workflow sprint, or Needs Attention sprint.
@@ -1189,8 +1189,8 @@ Escalation = **create replacement task** and/or **reassign** — not a task stat
 | Follow-up sync | `syncOpportunityNextFollowUpFromOperationalTasks` in service |
 | Task preview | `web/lib/admin/drawer/opportunityInquirySummaryTaskPreview.ts` |
 | WU bootstrap | `web/app/api/admin/work-units/[id]/operational-bootstrap/route.ts` |
-| May 2026 audit | `docs/sprints/05_2026/task_system_audit_v1.md` |
-| Lifecycle V2 task § | `docs/sprints/06_2026/lifecycle_v2_discovery_and_operating_model.md` §5 |
+| May 2026 audit | `docs/sprints/archive/05_2026/task_system_audit_v1.md` |
+| Lifecycle V2 task § | `docs/sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md` §5 |
 
 ---
 

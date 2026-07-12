@@ -1,9 +1,9 @@
 # BOS Identity System — Sprint 02 Migration Report
 
-**Path:** `docs/sprints/06_2026/bos_identity_system_sprint02_migration_report.md`  
+**Path:** `docs/sprints/archive/06_2026/bos_identity_system_sprint02_migration_report.md`  
 **Status:** Complete (identity consolidation)  
 **Date:** 2026-06-10  
-**Depends on:** `docs/sprints/06_2026/bos_identity_system_sprint01.md`
+**Depends on:** `docs/sprints/archive/06_2026/bos_identity_system_sprint01.md`
 
 ---
 
@@ -151,7 +151,7 @@ These surfaces expose BOS **functionality** without requiring mark/header/shell 
 cd web && npm run screenshots:bos-identity-system
 ```
 
-**Output:** `docs/sprints/06_2026/assets/bos-identity-system/`
+**Output:** `docs/sprints/archive/06_2026/assets/bos-identity-system/`
 
 | File | State |
 |------|-------|

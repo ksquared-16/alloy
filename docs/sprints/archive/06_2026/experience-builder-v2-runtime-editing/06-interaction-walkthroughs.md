@@ -1,6 +1,6 @@
 # Interaction Walkthroughs
 
-**Path:** `docs/sprints/06_2026/experience-builder-v2-runtime-editing/06-interaction-walkthroughs.md`
+**Path:** `docs/sprints/archive/06_2026/experience-builder-v2-runtime-editing/06-interaction-walkthroughs.md`
 **Status:** UX architecture sprint — design only (June 2026)
 **Deliverable:** 7 — Interaction walkthroughs (complete flows)
 

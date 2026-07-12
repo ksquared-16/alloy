@@ -1,8 +1,8 @@
 # Sprint: Record Experience Builder — Phase 1
 
-**Path:** `docs/sprints/05_2026/record_experience_builder_phase_1.md`  
+**Path:** `docs/sprints/archive/05_2026/record_experience_builder_phase_1.md`  
 **Status:** **Checkpoint — Cards 0–4 + UX correction + control plane closeout; Cards 5–9 deferred**  
-**Prerequisites:** `docs/sprints/05_2026/settings_record_ux_parity_sprint.md` (closed), `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`  
+**Prerequisites:** `docs/sprints/archive/05_2026/settings_record_ux_parity_sprint.md` (closed), `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`  
 **Program framing:** Extend the **four-plane Settings control plane** so **Layouts** is the operator-facing **drawer composition** surface — **not** a no-code builder, second layout SoT, or raw JSON editor. Align with **BOS** (`docs/product/bos-foundation.md`) as orchestration intelligence over the same validated Settings APIs.
 
 ---
@@ -52,7 +52,7 @@ Phase 1 closes that gap **on existing tables and APIs** — aligned with roadmap
 | **Actions** | Placement | `action_placements.section_key` |
 | **Automations** | Execution | `executeAdminAction`, workflows — **out of scope** |
 
-**Queues remain preview-only** — `docs/system/record-system.md`.
+**Queues remain preview-only** — `docs/archive/2026-06-superseded-system/record-system.md`.
 
 ---
 
@@ -439,7 +439,7 @@ Implement as extensions to `DrawerLayoutPreviewSection` / `editor_sections` meta
 **Work:**
 
 - Update `docs/system/configuration-system.md` — Layouts composition scope, mutation classes, linked primitives deferred.
-- Update `docs/system/record-system.md` — drawer composition operator path.
+- Update `docs/archive/2026-06-superseded-system/record-system.md` — drawer composition operator path.
 - Update `docs/execution/roadmap-and-gaps.md` — Phase 1 shipped vs Phase 2 builder items.
 - This sprint doc status line per card.
 
@@ -550,9 +550,9 @@ cd web && npm run test -- tests/adminV2/layoutCompositionCapabilities.test.ts te
 | File | When |
 |------|------|
 | `docs/system/configuration-system.md` | Cards 1, 3–5, 9 — composition model, Layouts scope |
-| `docs/system/record-system.md` | Card 9 — operator composition path |
+| `docs/archive/2026-06-superseded-system/record-system.md` | Card 9 — operator composition path |
 | `docs/execution/roadmap-and-gaps.md` | Card 9 — Record Experience Builder Phase 1 status |
-| `docs/system/actions-and-workflows.md` | Card 5 — only if action preview documents new query contract |
+| `docs/archive/2026-06-superseded-system/actions-and-workflows.md` | Card 5 — only if action preview documents new query contract |
 | This sprint doc | Each card — status + checkboxes |
 
 ---
@@ -591,7 +591,7 @@ cd web && npm run test -- tests/adminV2/layoutCompositionCapabilities.test.ts te
 | Fields UI | `web/components/admin/EntityFieldsClient.tsx` |
 | Actions placements | `web/lib/admin/actions/actionPlacementMutation.ts` |
 | Layout integrity | `web/lib/config/layoutIntegrityValidator.ts` |
-| Prior sprint | `docs/sprints/05_2026/settings_record_ux_parity_sprint.md` |
+| Prior sprint | `docs/sprints/archive/05_2026/settings_record_ux_parity_sprint.md` |
 
 ---
 
@@ -600,7 +600,7 @@ cd web && npm run test -- tests/adminV2/layoutCompositionCapabilities.test.ts te
 Copy the block below into a **new Cursor task** (read-only audit preferred for Card 0):
 
 ```markdown
-You are implementing **Card 0** of sprint `docs/sprints/05_2026/record_experience_builder_phase_1.md`.
+You are implementing **Card 0** of sprint `docs/sprints/archive/05_2026/record_experience_builder_phase_1.md`.
 
 ## Task
 Perform a **read-only audit** that locks the sprint baseline. Update **§4 Current state summary**, **Appendix A**, and Card 0 acceptance checkboxes in that sprint doc. Do **not** change product code in Card 0.
@@ -609,9 +609,9 @@ Perform a **read-only audit** that locks the sprint baseline. Update **§4 Curre
 1. `docs/README.md`
 2. `docs/execution/operating-doctrine.md`
 3. `docs/system/configuration-system.md`
-4. `docs/system/record-system.md`
-5. `docs/sprints/05_2026/settings_record_ux_parity_sprint.md` §12–§13
-6. `docs/sprints/05_2026/record_experience_builder_phase_1.md` (full)
+4. `docs/archive/2026-06-superseded-system/record-system.md`
+5. `docs/sprints/archive/05_2026/settings_record_ux_parity_sprint.md` §12–§13
+6. `docs/sprints/archive/05_2026/record_experience_builder_phase_1.md` (full)
 
 ## Audit checklist
 1. **Layouts UI** — List all files under `web/app/adminV2/settings/layouts/` and `web/components/adminV2/settings/*Layout*` / `*Workflow*`. For each operator action (reorder, hide, restore, rename, preview), note component + API route.
@@ -662,7 +662,7 @@ Perform a **read-only audit** that locks the sprint baseline. Update **§4 Curre
 
 ## 23. Control plane closeout (May 2026)
 
-**Doc:** `docs/sprints/05_2026/completed/settings_control_plane_closeout.md` (also reflected in **`docs/system/configuration-system.md`** and **`docs/system/actions-and-workflows.md`**).
+**Doc:** `docs/sprints/archive/05_2026/completed/settings_control_plane_closeout.md` (also reflected in **`docs/system/configuration-system.md`** and **`docs/archive/2026-06-superseded-system/actions-and-workflows.md`**).
 
 - **Layouts UX correction:** drawer composition list = effective layout only (not all catalog rows); section copy uses **section name**; field picker uses `layoutFieldPickerEligibility.ts`.
 - **Actions:** Settings tile under **Workflows & automation**; create org placement from catalog; edit org placements (surfaces include workspace side panel / queue row); built-in **Add org placement**; operator help in `actionPlacementPresentation.ts`.

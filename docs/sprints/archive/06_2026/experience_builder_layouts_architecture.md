@@ -3,7 +3,7 @@
 **Sprint:** June 2026  
 **Status:** Design / architecture — **no implementation until spec + mockups approved**  
 **Route target:** `/settings/layouts`  
-**Depends on:** Configuration Mode shell (Context → Queue → Workspace → BOS), [`presentation-runtime-doctrine.md`](../../platform/operator/presentation-runtime-doctrine.md), [`experience-builder-doctrine.md`](../../platform/operator/experience-builder-doctrine.md), [`universal-card-system.md`](../../platform/operator/universal-card-system.md)
+**Depends on:** Configuration Mode shell (Context → Queue → Workspace → BOS), [`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md), [`experience-builder-doctrine.md`](../../platform/operator/experience-builder-doctrine.md), [`universal-card-system.md`](../../platform/operator/universal-card-system.md)
 
 ---
 

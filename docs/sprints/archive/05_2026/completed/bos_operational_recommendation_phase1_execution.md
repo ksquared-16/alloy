@@ -1,6 +1,6 @@
 # BOS Operational Recommendation Intelligence — Phase 1 Execution Pack
 
-**Path:** `docs/sprints/05_2026/completed/bos_operational_recommendation_phase1_execution.md`  
+**Path:** `docs/sprints/archive/05_2026/completed/bos_operational_recommendation_phase1_execution.md`  
 **Status:** Phase 1 **COMPLETE** — GATE 1 passed (closeout §12)  
 **Date:** 2026-05-21
 

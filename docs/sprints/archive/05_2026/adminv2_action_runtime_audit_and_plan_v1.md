@@ -1,6 +1,6 @@
 # AdminV2 Action Runtime — Audit & Implementation Plan v1
 
-**Path:** `docs/sprints/05_2026/adminv2_action_runtime_audit_and_plan_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/adminv2_action_runtime_audit_and_plan_v1.md`  
 **Status:** Audit + plan (no broad implementation in this pass)  
 **Date:** 2026-05-31  
 **Builds on:** `lifecycle_configuration_requirements_design_package_v1.md`, `canonical_action_catalog_v1.md`, `configured_drawer_actions_fix.md`, runtime preflight slice (`evaluateEffectiveRequirements`, `ActionPreflightBlockedPanel`)

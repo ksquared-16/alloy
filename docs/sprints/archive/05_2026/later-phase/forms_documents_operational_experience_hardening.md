@@ -1,6 +1,6 @@
 # Forms/Documents — Operational Experience Hardening Sprint
 
-**Path:** `docs/sprints/05_2026/forms_documents_operational_experience_hardening.md`  
+**Path:** `docs/sprints/archive/05_2026/forms_documents_operational_experience_hardening.md`  
 **Date:** May 2026  
 **Status:** UX implementation cards **UX-G through UX-H + P2-5** shipped — operational architecture ahead of visual layer.  
 **Position in program:** Inserted **after** Forms/Documents Phase 2 **P2-1 → P2-4**; established the **canonical BOS operational interaction reference** for AdminV2.  
@@ -13,7 +13,7 @@
 | Phase 2 foundation | [`forms_documents_phase_2_packet_review_mvp.md`](./forms_documents_phase_2_packet_review_mvp.md) |
 | Phase 2 audit | [`forms_documents_phase_2_step0_audit.md`](./forms_documents_phase_2_step0_audit.md) |
 | Phase 2 design | [`forms_documents_phase_2_step1_design.md`](./forms_documents_phase_2_step1_design.md) |
-| Product | [`docs/product/documents-and-forms.md`](../../product/documents-and-forms.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
 | BOS placement (read-only) | [`docs/product/bos-foundation.md`](../../product/bos-foundation.md), [`bos_ux_coherence_sprint.md`](./bos_ux_coherence_sprint.md) |
 | BOS recommendation program | [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md), [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) |
 

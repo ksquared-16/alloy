@@ -70,5 +70,5 @@ single child at full operational depth. This is the operational truth that
 Household deliberately excludes (Household children are belonging-only).
 
 > Architecture spine: `Queue → Operational Context → Focus Panel → Configured Surface → Cards → Perspectives`.
-> See `docs/platform/operator/card-archetypes.md` and
+> See `docs/platform/operator/universal-universal-card-archetypes.md` and
 > `docs/platform/operator/operational-context-boundary.md`.

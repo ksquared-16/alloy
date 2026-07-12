@@ -23,12 +23,12 @@
 | `web/app/adminV2/components/workspace/blocks/QueueBlock.tsx` | Renders operational next line; softens activity-stale styling when operational headline present. |
 | `web/app/adminV2/components/workspace/workspace.css` | `adminv2-ws-queue-preview-stale--muted-footnote` for calmer dual-signal rows. |
 | `web/tests/opportunities/operationalAttentionExplain.test.ts` | **New.** Unit tests for queue presentation helper. |
-| `docs/sprints/05_2026/enrollment_operational_attention_v2_sprint.md` | Gate row → P1-C complete / review. |
+| `docs/sprints/archive/05_2026/enrollment_operational_attention_v2_sprint.md` | Gate row → P1-C complete / review. |
 | `web/app/dev/p1c-operational-attention-review/*` | **Dev-only** fixture gallery (`page.tsx` → `notFound` in production). |
-| `web/playwright/tests/p1c-operational-attention-review.spec.ts` | Captures PNGs into `docs/sprints/05_2026/assets/p1c-review/`. |
+| `web/playwright/tests/p1c-operational-attention-review.spec.ts` | Captures PNGs into `docs/sprints/archive/05_2026/assets/p1c-review/`. |
 | `web/package.json` | Script `screenshots:p1c-review`. |
-| `docs/sprints/05_2026/enrollment_attention_phase1_gate_p1c_ux_review_package.md` | Screenshot index + self-review + audits. |
-| `docs/sprints/05_2026/assets/p1c-review/*.png` | **10** fixture screenshots (regenerate via `npm run screenshots:p1c-review`). |
+| `docs/sprints/archive/05_2026/enrollment_attention_phase1_gate_p1c_ux_review_package.md` | Screenshot index + self-review + audits. |
+| `docs/sprints/archive/05_2026/assets/p1c-review/*.png` | **10** fixture screenshots (regenerate via `npm run screenshots:p1c-review`). |
 
 ---
 

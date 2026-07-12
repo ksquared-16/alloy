@@ -75,7 +75,7 @@
 | Backend payload optimization | [`06_2026/adminv2_backend_query_payload_optimization_phase.md`](./06_2026/adminv2_backend_query_payload_optimization_phase.md) |
 | Tasks V2 framework | [`06_2026/tasks_v2_operational_work_framework.md`](./06_2026/tasks_v2_operational_work_framework.md) |
 
-**Deferred (still valid):** `docs/sprints/05_2026/later-phase/` — enrollment packet Phase 2 remainder, tour Band B+, waitlist Phase 2, record experience builder.
+**Deferred (still valid):** `docs/sprints/archive/05_2026/later-phase/` — enrollment packet Phase 2 remainder, tour Band B+, waitlist Phase 2, record experience builder.
 
 **Future (paused):** `docs/sprints/future/` — BOS Phase 2–4, autonomous agents.
 

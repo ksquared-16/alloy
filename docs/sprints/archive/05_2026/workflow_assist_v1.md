@@ -1,8 +1,8 @@
 # Sprint: Workflow Assist V1 (Agent #3)
 
-**Path:** `docs/sprints/05_2026/workflow_assist_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/workflow_assist_v1.md`  
 **Status:** **Cards 1–5 + stabilization + Explain v1 (operational trace) shipped** — read-only cards, deterministic propose/apply, role-aware UX, create-template guardrails, **`GET /api/admin/ai/workflow-assist/explain`** returns Explain v1 with **`WorkflowOperationalTraceV1`**. LLM, durable proposals, bulk pause, multi-event disambiguation remain deferred.  
-**Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/task_assist_v1_1.md` (Task Assist patterns), `docs/sprints/05_2026/ai_agents_v1.md` §9 (`WorkflowAssistSuggestionV1` template), `docs/product/bos-foundation.md`, `docs/system/actions-and-workflows.md`.
+**Prerequisites:** `docs/sprints/archive/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/archive/05_2026/task_assist_v1_1.md` (Task Assist patterns), `docs/sprints/archive/05_2026/ai_agents_v1.md` §9 (`WorkflowAssistSuggestionV1` template), `docs/product/bos-foundation.md`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md`.
 
 **Non-goals for this document:** Task Assist transactional scope; new workflow execution engine; autonomous `executeWorkflowRun` from NL; childcare-only automation rules in platform code.
 
@@ -82,7 +82,7 @@ The migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_t
 
 | Area | Evidence | Notes |
 |------|-----------|--------|
-| **Event spine** | `web/lib/emitEvent.ts` → `workflow_events` | Canonical insert; callers fan out to workflow matching (`docs/system/actions-and-workflows.md`). |
+| **Event spine** | `web/lib/emitEvent.ts` → `workflow_events` | Canonical insert; callers fan out to workflow matching (`docs/archive/2026-06-superseded-system/actions-and-workflows.md`). |
 | **Workflow runner** | `web/lib/workflowRun.ts` | Large implementation: loads workflows, enriches payload, evaluates conditions, executes `workflow_actions`, logs, integrations (comms mirror, action links, etc.). |
 | **Status → events** | `web/lib/admin/emitStatusChangedEvent.ts` | `opportunity_status_changed` / `entity_status_changed` + `executeWorkflowRun` with `event_id`. |
 | **Admin actions** | `web/lib/admin/actions/executeAdminAction.ts` | Workflow starts emit events + runs where applicable. |
@@ -96,7 +96,7 @@ The migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_t
 | **Task Assist guard** | `web/lib/agent/taskAssist/taskAssistCommandIntent.ts` | Duplicate `WORKFLOW_RE`; sets **`workflow_blocked`** so Task Assist does not absorb automation language. |
 | **Audits** | `docs/audits/workflow-execution-consistency-audit.md`, `docs/audits/event-integrity-audit.md` | Intended vs exceptional paths (e.g. manual run without `event_id`). |
 | **Agent config pattern** | `docs/product/bos-foundation.md` §SECURITY DEFINER RPCs | `agent_v0/v1/v2` proposal + apply audit + stale checks for **queue_definition**, record overview layout, field visibility — **template** for durable AI-mediated config (workflows are **not** yet on this pattern). |
-| **AI policy / RBAC** | `org_settings.metadata.ai_policy`, `ai.enrichment.use`, `docs/system/roles-and-permissions.md` | Task Assist draft gated by policy + permissions; workflow CRUD today is **`requireAdmin`**. |
+| **AI policy / RBAC** | `org_settings.metadata.ai_policy`, `ai.enrichment.use`, `docs/archive/2026-06-superseded-system/roles-and-permissions.md` | Task Assist draft gated by policy + permissions; workflow CRUD today is **`requireAdmin`**. |
 
 ### 1.2 What is reusable
 
@@ -284,12 +284,12 @@ All inside **Orchestrator thread** (`CommandSurfaceThread` + action cards) — n
 
 ## 10. Sources of truth and references
 
-- **Doctrine:** `docs/execution/operating-doctrine.md`, `docs/core/system-overview.md`
-- **Workflows:** `docs/system/actions-and-workflows.md`, `docs/audits/workflow-execution-consistency-audit.md`
+- **Doctrine:** `docs/execution/operating-doctrine.md`, `docs/platform/foundation/system-overview.md`
+- **Workflows:** `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, `docs/audits/workflow-execution-consistency-audit.md`
 - **Config / AI:** `docs/system/configuration-system.md`, `docs/product/bos-foundation.md`
-- **API map:** `docs/system/api-contracts.md`
-- **RBAC:** `docs/system/roles-and-permissions.md`
-- **Prior agent sprints:** `docs/sprints/05_2026/task_assist_v1.md`, `agent_interaction_layer_v1.md`, `ai_enrichment_and_agent_actions_v1.md`, `ai_agents_v1.md` §9
+- **API map:** `docs/archive/2026-06-superseded-system/api-contracts.md`
+- **RBAC:** `docs/archive/2026-06-superseded-system/roles-and-permissions.md`
+- **Prior agent sprints:** `docs/sprints/archive/05_2026/task_assist_v1.md`, `agent_interaction_layer_v1.md`, `ai_enrichment_and_agent_actions_v1.md`, `ai_agents_v1.md` §9
 
 ---
 

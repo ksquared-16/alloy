@@ -1,6 +1,6 @@
 # Action Workspace V1.1 — UX Polish Sprint
 
-**Path:** `docs/sprints/06_2026/action_workspace_v1_1_polish.md`  
+**Path:** `docs/sprints/archive/06_2026/action_workspace_v1_1_polish.md`  
 **Status:** Complete (Create Lead reference)  
 **Date:** 2026-06-08  
 **Scope:** Polish only — no new actions, action types, or AI features

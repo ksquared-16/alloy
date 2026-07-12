@@ -263,7 +263,7 @@ Opportunity → Waitlist → Tours → **Enrollment activity** → Schedule → 
 | `web/lib/admin/person/personDrawerPresentationEmphasis.ts` | Document slot rendering status |
 | `web/components/admin/AdminEntityDrawer.tsx` | Wire summary; child section ordering |
 | `web/tests/admin/person/personDrawerChildLifecycleSurface.test.ts` | **New** |
-| `docs/sprints/05_2026/person_relationship_child_lifecycle_foundation.md` | Pass 4 lifecycle configurability |
+| `docs/sprints/archive/05_2026/person_relationship_child_lifecycle_foundation.md` | Pass 4 lifecycle configurability |
 
 ### Prior pass files
 
@@ -279,7 +279,7 @@ Opportunity → Waitlist → Tours → **Enrollment activity** → Schedule → 
 | `web/components/admin/entity/PersonDrawerContextPanel.tsx` | Quick links only |
 | `web/components/admin/AdminEntityDrawer.tsx` | Dynamic section title + visibility |
 | `web/tests/admin/person/personRelationshipChildLifecycle.test.ts` | **New** |
-| `docs/sprints/05_2026/person_relationship_child_lifecycle_foundation.md` | This document |
+| `docs/sprints/archive/05_2026/person_relationship_child_lifecycle_foundation.md` | This document |
 
 ### Child drawer (final pass)
 
@@ -304,4 +304,4 @@ cd web && npx tsc --noEmit
 ## Related
 
 - [`person_location_ux_reset.md`](./person_location_ux_reset.md) — inquiry child identity sync
-- [`docs/system/entity-model.md`](../../system/entity-model.md) — persons, customer_persons, customer_members
+- [`docs/archive/2026-06-superseded-system/entity-model.md`](../../system/entity-model.md) — persons, customer_persons, customer_members

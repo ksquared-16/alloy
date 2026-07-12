@@ -4,7 +4,7 @@
 
 **Anchored doctrine (do not violate):**
 - Configuration Runtime V1 is **frozen**: `docs/system/configuration-runtime-v1.md`, `configuration-ownership-doctrine.md`, `configuration-workspace-v1-doctrine.md`, `configuration-mode-doctrine.md`. Interaction model: **Context → Queue → Workspace → BOS**. "No new IA changes without explicit doctrine update."
-- Operational truth-flow: `docs/platform/operational-truth-flow-doctrine.md` (L1 Config → L2 Intent → L3 Expectations → L4 Facts → L5 Consequences). Expectations are derived, never persisted.
+- Operational truth-flow: `docs/platform/core/operational-truth-flow-doctrine.md` (L1 Config → L2 Intent → L3 Expectations → L4 Facts → L5 Consequences). Expectations are derived, never persisted.
 - Billing/financials: `docs/platform/modules/billing-financials-platform.md`.
 - Platform principle: **childcare is the first implementation, not the architecture.** Generic platform naming everywhere.
 

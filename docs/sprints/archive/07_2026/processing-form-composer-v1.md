@@ -74,5 +74,5 @@ Use real PDFs (enrollment packet page, state form, medical form):
 
 ## Related docs
 
-- `docs/sprints/06_2026/pos_document_form_template_checkpoint.md` — prior pipeline checkpoint
+- `docs/sprints/archive/06_2026/pos_document_form_template_checkpoint.md` — prior pipeline checkpoint
 - `docs/platform/modules/documents-and-forms.md` — forms platform module

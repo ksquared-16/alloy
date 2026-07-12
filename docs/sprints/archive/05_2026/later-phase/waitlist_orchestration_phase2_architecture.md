@@ -490,7 +490,7 @@ Capacity/openings engine · classroom transition forecasting · sibling coordina
 - [Implementation cards](waitlist_orchestration_phase2_cards.md)  
 - [Pilot playbook](waitlist_orchestration_phase2_pilot_playbook.md)  
 - [Priority Placement V1](priority_placement_orchestration_may_2026.md)  
-- `docs/system/workspace-system.md`, `docs/product/crm-system.md`
+- `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/product/crm-system.md`
 
 ---
 

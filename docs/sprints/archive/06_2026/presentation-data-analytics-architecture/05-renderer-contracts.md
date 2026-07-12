@@ -1,6 +1,6 @@
 # Renderer Contracts
 
-**Path:** `docs/sprints/06_2026/presentation-data-analytics-architecture/05-renderer-contracts.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-data-analytics-architecture/05-renderer-contracts.md`
 **Status:** Architecture sprint — design only (June 2026)
 **Deliverable:** 6 — Renderer contracts
 
@@ -137,4 +137,4 @@ Neither side needs to know the other's internals. Adding a new renderer (future 
 | Presentation Types & Binding | [`01-presentation-data-doctrine.md`](./01-presentation-data-doctrine.md) §2 |
 | `Metric` shape | [`04-analytics-architecture.md`](./04-analytics-architecture.md) §4 |
 | Renderer picker UX | [`07-data-source-browser.md`](./07-data-source-browser.md) + mockup `06-renderer-picker-contracts` |
-| Renderer catalog (groups) | `docs/platform/operator/presentation-runtime-doctrine.md` |
+| Renderer catalog (groups) | `docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` |

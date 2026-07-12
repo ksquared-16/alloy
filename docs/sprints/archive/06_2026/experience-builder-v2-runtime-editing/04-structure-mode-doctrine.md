@@ -1,6 +1,6 @@
 # Structure Mode Doctrine
 
-**Path:** `docs/sprints/06_2026/experience-builder-v2-runtime-editing/04-structure-mode-doctrine.md`
+**Path:** `docs/sprints/archive/06_2026/experience-builder-v2-runtime-editing/04-structure-mode-doctrine.md`
 **Status:** UX architecture sprint — design only (June 2026)
 **Deliverable:** 4 — Structure Mode doctrine
 

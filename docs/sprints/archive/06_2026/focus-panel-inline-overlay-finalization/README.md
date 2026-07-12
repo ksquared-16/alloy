@@ -133,7 +133,7 @@ No large edit buttons; one consistent size/weight/color.
 | `web/components/admin/focusPanel/cards/CurrentWorkCard.tsx` | Compact default + inline overlay (queue + owner handoffs) |
 | `web/app/adminV2/components/alloyOsRuntime.css` | Spacing tokens, white-on-white base, natural heights, overlay styles |
 | `web/playwright/tests/focus-panel-inline-overlay.spec.ts` | **New** — 8 deliverables + covers-not-moves assertions |
-| `docs/sprints/06_2026/focus-panel-inline-overlay-finalization/README.md` | This document |
+| `docs/sprints/archive/06_2026/focus-panel-inline-overlay-finalization/README.md` | This document |
 
 Truth-card Focus Card behavior (`HouseholdCard`, `ChildrenCard`, the host depth
 layer, the soft-glass scrim) is **unchanged** — verified, not regressed.

@@ -9,7 +9,7 @@
 
 ## Decision matrix
 
-See `docs/sprints/08_2026/work-items-v3-platform/14-communications-convergence-matrix.md`.
+See `docs/sprints/archive/08_2026/work-items-v3-platform/14-communications-convergence-matrix.md`.
 
 **Selected lane:** Needs Reply (`needs_response`, `awaiting_parent_reply`).
 

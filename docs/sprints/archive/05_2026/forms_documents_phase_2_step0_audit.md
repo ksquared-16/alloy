@@ -2,7 +2,7 @@
 
 **Date:** May 2026  
 **Scope:** Audit only (STEP 0). No implementation, migrations, or refactor.  
-**Aligns with:** `docs/product/documents-and-forms.md`, `docs/product/crm-system.md`, `docs/product/communications.md`, `docs/product/bos-foundation.md`, `docs/product/actions-and-workflows.md`, `docs/execution/roadmap-and-gaps.md`, `docs/sprints/05_2026/enrollment_packet_phase_2.md`, `docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`
+**Aligns with:** `docs/product/documents-and-forms.md`, `docs/product/crm-system.md`, `docs/product/communications.md`, `docs/product/bos-foundation.md`, `docs/product/actions-and-workflows.md`, `docs/execution/roadmap-and-gaps.md`, `docs/sprints/archive/05_2026/enrollment_packet_phase_2.md`, `docs/sprints/archive/05_2026/enrollment_journey_packet_operations_v1.md`
 
 **Evidence base:** Migrations under `supabase/migrations/20260506100000_forms_engine_v1_foundation.sql`, `20260510120000_forms_packet_foundation.sql`, `20260508150000_form_packet_session_operator_review.sql`; services in `web/lib/forms/**`, `web/lib/forms/packets/**`; admin/public routes; AdminV2 + opportunity drawer UI; ~45+ Vitest files touching forms/packets/public embed.
 
@@ -83,7 +83,7 @@
 
 ## 3. What is documented as Phase 2 but NOT implemented
 
-Cross-reference: `docs/sprints/05_2026/enrollment_packet_phase_2.md` sections A–G.
+Cross-reference: `docs/sprints/archive/05_2026/enrollment_packet_phase_2.md` sections A–G.
 
 | Phase 2 item | Doc section | Implementation status |
 |--------------|-------------|------------------------|
@@ -322,4 +322,4 @@ The **thinnest high-value Phase 2 slice** is **review + documents readability (B
 | Opportunity packets API | `web/app/api/admin/opportunities/[id]/enrollment-packets/route.ts` |
 | Drawer review UI | `web/components/admin/opportunity/OpportunityPacketReviewOverview.tsx` |
 | Projections | `web/lib/forms/workflow/opportunityEnrollmentPacketProjections.ts` |
-| Phase 2 plan | `docs/sprints/05_2026/enrollment_packet_phase_2.md` |
+| Phase 2 plan | `docs/sprints/archive/05_2026/enrollment_packet_phase_2.md` |

@@ -1,6 +1,6 @@
 # Action Intake Spec Resolver — P0
 
-**Path:** `docs/sprints/06_2026/action_intake_spec_resolver_p0.md`  
+**Path:** `docs/sprints/archive/06_2026/action_intake_spec_resolver_p0.md`  
 **Date:** 2026-05-31  
 **Status:** Implemented (hybrid create_lead + V1 deterministic paste parser — see `create_lead_action_ux_foundation.md`)
 

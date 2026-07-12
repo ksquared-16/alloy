@@ -1,6 +1,6 @@
 # Completion Guardrails Foundation — Audit (Sprint B)
 
-**Path:** `docs/sprints/05_2026/required_fields_completion_guardrails_audit.md`  
+**Path:** `docs/sprints/archive/05_2026/required_fields_completion_guardrails_audit.md`  
 **Sprint name:** **Completion Guardrails Foundation** (not final required-field configuration)  
 **Status:** Sprint B — foundation shipped  
 **Date:** 2026-05-30
@@ -42,7 +42,7 @@ Inventory existing requiredness and validation before building completion guardr
 | **Forms / intake** | Full server validation (`validateFormPayload`) | Separate model from drawer/record guardrails |
 | **Work units** | Scoped via opportunity + `status_transition_rules` | No dedicated WU transition API |
 
-**Reusable foundation:** Layout + field behavior semantics v1 (`docs/sprints/05_2026/layout_field_behavior_semantics_v1.md`) — opportunity `field_placements_v1` + `enforceDrawerFieldPoliciesOnPatch`. Sprint B adds the **completion guardrails layer** on top; it does not replace Settings field/layout configuration.
+**Reusable foundation:** Layout + field behavior semantics v1 (`docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md`) — opportunity `field_placements_v1` + `enforceDrawerFieldPoliciesOnPatch`. Sprint B adds the **completion guardrails layer** on top; it does not replace Settings field/layout configuration.
 
 ---
 
@@ -158,8 +158,8 @@ Seeded example: enrollment WU → `tour_scheduled` requires `tour_date`, `tour_t
 
 ## Related docs
 
-- `docs/sprints/05_2026/required_fields_completion_guardrails_policy.md` — policy model + deferred rules
-- `docs/sprints/05_2026/person_layout_completion_reconciliation.md` — Sprint A + B wiring
-- `docs/sprints/05_2026/layout_field_behavior_semantics_v1.md` — opportunity placement model
+- `docs/sprints/archive/05_2026/required_fields_completion_guardrails_policy.md` — policy model + deferred rules
+- `docs/sprints/archive/05_2026/person_layout_completion_reconciliation.md` — Sprint A + B wiring
+- `docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md` — opportunity placement model
 - `docs/system/configuration-system.md` — four-plane control plane
-- `docs/system/record-system.md` — drawer truth vs previews
+- `docs/archive/2026-06-superseded-system/record-system.md` — drawer truth vs previews

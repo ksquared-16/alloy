@@ -1,6 +1,6 @@
 # Enrollment Status Seed + Migration Plan
 
-**Path:** `docs/sprints/06_2026/enrollment_status_seed_and_migration_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/enrollment_status_seed_and_migration_plan.md`  
 **Date:** 2026-06-10  
 **Status:** **Frozen — Phase 1 seed/migration (no queue membership or runtime behavior change)**  
 **Doctrine:** [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md)

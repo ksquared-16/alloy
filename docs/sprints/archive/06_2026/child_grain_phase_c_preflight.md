@@ -1,6 +1,6 @@
 # Child-Grain Queue Conversion — Phase C Preflight
 
-**Path:** `docs/sprints/06_2026/child_grain_phase_c_preflight.md`  
+**Path:** `docs/sprints/archive/06_2026/child_grain_phase_c_preflight.md`  
 **Date:** 2026-06-06  
 **Status:** **Preflight complete** · Enrolled staging flip documented in [`completed/child_grain_phase_c_enrolled_staging_flip.md`](./completed/child_grain_phase_c_enrolled_staging_flip.md)  
 **Prerequisites:** Phase A (`cca53e7a`), Phase B (see below), design [`child_grain_queue_conversion_design.md`](./child_grain_queue_conversion_design.md)

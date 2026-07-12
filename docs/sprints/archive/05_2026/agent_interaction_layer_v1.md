@@ -1,8 +1,8 @@
 # Sprint: Agent UX / Interaction Layer V1 — Orchestrator command surface
 
-**Path:** `docs/sprints/05_2026/agent_interaction_layer_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/agent_interaction_layer_v1.md`  
 **Status:** **Interaction Layer V1 complete** (Cards **0–7**). Cards **1–5** shipped universal command surface; Cards **6–7** removed header Assistant, aligned docs, hardened tests.  
-**Prerequisite (shipped):** `docs/sprints/05_2026/task_assist_v1_1.md` (Cards **0–9** — Task Assist backend + command bar pivot, entity-search, intent routing).  
+**Prerequisite (shipped):** `docs/sprints/archive/05_2026/task_assist_v1_1.md` (Cards **0–9** — Task Assist backend + command bar pivot, entity-search, intent routing).  
 **Non-goals (V1 interaction layer):** New backend send/schema routes; autonomous agents; bulk send; **Workflow Assist execution** (Agent #3); LLM-required parsing (optional gated extract-only is a **later** card, not V1 default).
 
 **Product doctrine (2026-05):** The bottom command bar is the **Orchestrator Agent** — not Task Assist. Task Assist and Workflow Assist are **specialist agents** the Orchestrator routes to. See **`docs/product/bos-foundation.md`** (AdminV2 agent model).
@@ -19,7 +19,7 @@
 
 ### Permission matrix (org policy vs user capability)
 
-Orchestrator **never** performs sends, schedules, or workflow writes — it only calls read/search routes and mounts specialist UIs. **Org `metadata.ai_policy`** gates whether **AI draft/propose** features are enabled for the tenant; **role / `role_permission_grants`** gates whether the **signed-in user** may invoke the corresponding admin APIs. Canonical matrix: **`docs/product/bos-foundation.md`** § *Agent permission matrix*; summary in **`docs/system/roles-and-permissions.md`**.
+Orchestrator **never** performs sends, schedules, or workflow writes — it only calls read/search routes and mounts specialist UIs. **Org `metadata.ai_policy`** gates whether **AI draft/propose** features are enabled for the tenant; **role / `role_permission_grants`** gates whether the **signed-in user** may invoke the corresponding admin APIs. Canonical matrix: **`docs/product/bos-foundation.md`** § *Agent permission matrix*; summary in **`docs/archive/2026-06-superseded-system/roles-and-permissions.md`**.
 
 ---
 
@@ -38,7 +38,7 @@ Orchestrator **never** performs sends, schedules, or workflow writes — it only
 | **Header** | `web/app/adminV2/components/TopNavBar.tsx` | **Assistant** button → **`focusCommandBar()`** only; redundant if bar is universal home. |
 | **Shell mount** | `web/app/adminV2/components/AdminV2Shell.tsx` | **`GlobalAssistantProvider`** + persistent bottom bar + **`pb-[96px]`** reserve. |
 | **Tests** | `web/tests/agent/taskAssist/*`, `web/tests/agent/adminV2AiCommandSurfaceModel.test.ts` | Contract tests **assert mode tabs** and **Find target** — will need rewrite in Card 4+. |
-| **Docs** | `docs/sprints/05_2026/task_assist_v1_1.md`, `docs/product/bos-foundation.md`, `communications.md`, `crm-system.md` | Describe **Card 9** accurately but **mode tabs**, **Find target**, header **Assistant** — stale relative to this sprint goal. |
+| **Docs** | `docs/sprints/archive/05_2026/task_assist_v1_1.md`, `docs/product/bos-foundation.md`, `communications.md`, `crm-system.md` | Describe **Card 9** accurately but **mode tabs**, **Find target**, header **Assistant** — stale relative to this sprint goal. |
 
 ### 0.2 UX / architecture gaps (summary)
 
@@ -288,7 +288,7 @@ When workflow regex matches, the **Orchestrator** shows a **Workflow Assist noti
 
 ## References
 
-- `docs/sprints/05_2026/task_assist_v1_1.md` (Card 9 shipped behavior — baseline)
+- `docs/sprints/archive/05_2026/task_assist_v1_1.md` (Card 9 shipped behavior — baseline)
 - `docs/product/bos-foundation.md`
 - `web/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx`
 - `web/lib/agent/taskAssist/taskAssistCommandIntent.ts`

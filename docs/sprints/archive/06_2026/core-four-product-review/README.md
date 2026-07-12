@@ -106,7 +106,7 @@ Cards answer questions. They do not display fields.
 | **Avatars / leads** | Consistent 24px circles; `!` / `✓` / `●` leads only in lists, not beside insight |
 | **Calm** | Reduce border contrast on `.alloy-os-ucard`; one shadow level; whitespace between cards ≥ 16px in stack mode |
 
-Compare target: approved Household mock (`docs/sprints/06_2026/household-card-mock/`) — insight dominates, evidence is quiet, stats are pills not rows.
+Compare target: approved Household mock (`docs/sprints/archive/06_2026/household-card-mock/`) — insight dominates, evidence is quiet, stats are pills not rows.
 
 ---
 
@@ -297,7 +297,7 @@ Readiness “Program selected”
 | Card spacing | Airy | Improved but stacked tight in 440px column | Accept stack; add inter-card rhythm |
 | Composition | Wide + narrow pairs | Single column at operator width | See composition review §2 |
 
-Reference mocks: `docs/sprints/06_2026/household-card-mock/`, `docs/sprints/06_2026/archetype-card-mocks/`.
+Reference mocks: `docs/sprints/archive/06_2026/household-card-mock/`, `docs/sprints/archive/06_2026/archetype-card-mocks/`.
 
 ---
 
@@ -358,4 +358,4 @@ After P0–P1 (~1 focused sprint): **Ready for production validation** with real
 | Card shell | `web/components/admin/focusPanel/UniversalCard.tsx` |
 | Panel shell | `FocusPanelCompactHeader.tsx`, `FocusPanelModeSwitch.tsx`, `OpportunityFocusPanelModeGrid.tsx` |
 | Styles | `web/app/adminV2/components/alloyOsRuntime.css` |
-| Runtime screenshots | `docs/sprints/06_2026/focus-panel-composition-review/` |
+| Runtime screenshots | `docs/sprints/archive/06_2026/focus-panel-composition-review/` |

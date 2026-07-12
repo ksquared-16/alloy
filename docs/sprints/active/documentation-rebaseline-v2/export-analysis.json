@@ -1,0 +1,470 @@
+[
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/01-canonical/api-contracts.md",
+    "live": "docs/platform/governance/api-contracts.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/01-canonical/bos-foundation.md",
+    "live": "docs/product/bos-foundation.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/01-canonical/communications.md",
+    "live": "docs/archive/2026-06-product/communications.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/01-canonical/entity-model.md",
+    "live": "docs/platform/core/entity-model.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/01-canonical/glossary.md",
+    "live": "docs/platform/governance/glossary.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/01-canonical/navigation-doctrine.md",
+    "live": "docs/archive/2026-06-superseded-system/navigation-doctrine.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/01-canonical/roadmap-and-gaps.md",
+    "live": "docs/archive/2026-06-execution/roadmap-and-gaps.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/02-messaging-v2/claude_frontend_communications_performance_hardening.md",
+    "live": "docs/sprints/archive/06_2026/claude_frontend_communications_performance_hardening.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/02-messaging-v2/messaging_v2_architecture.md",
+    "live": "docs/sprints/archive/06_2026/messaging_v2_architecture.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/02-messaging-v2/messaging_v2_audit.md",
+    "live": "docs/sprints/archive/06_2026/messaging_v2_audit.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/02-messaging-v2/messaging_v2_design.md",
+    "live": "docs/sprints/archive/06_2026/messaging_v2_design.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/02-messaging-v2/messaging_v2_implementation_plan.md",
+    "live": "docs/sprints/archive/06_2026/messaging_v2_implementation_plan.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/03-shipped-closeouts/bos_assist_routing_communication_drafting_closeout.md",
+    "live": "docs/sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/03-shipped-closeouts/bos_operational_recommendation_phase1_execution.md",
+    "live": "docs/sprints/archive/05_2026/completed/bos_operational_recommendation_phase1_execution.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/03-shipped-closeouts/bos_operational_recommendation_phase2_operational_ux.md",
+    "live": "docs/sprints/archive/05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/03-shipped-closeouts/bos_operational_ux_refinement_pass.md",
+    "live": "docs/sprints/archive/06_2026/completed/bos_operational_ux_refinement_pass.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/03-shipped-closeouts/enrollment_journey_packet_operations_v1.md",
+    "live": "docs/sprints/archive/05_2026/enrollment_journey_packet_operations_v1.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/03-shipped-closeouts/enrollment_packet_phase_2.md",
+    "live": "docs/sprints/archive/05_2026/later-phase/enrollment_packet_phase_2.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/03-shipped-closeouts/forms_intake_inbox_operationalization.md",
+    "live": "docs/sprints/archive/05_2026/forms_intake_inbox_operationalization.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/03-shipped-closeouts/tour_scheduling_phase2_band_a_closeout.md",
+    "live": "docs/sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/04-future-planning/bos_operational_assist_phase2.md",
+    "live": "docs/sprints/archive/future/bos_operational_assist_phase2.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/04-future-planning/bos_operational_intelligence_phase3_workflow_comms.md",
+    "live": "docs/sprints/archive/future/bos_operational_intelligence_phase3_workflow_comms.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/04-future-planning/bos_operational_intelligence_phase4_bounded_ai_enrich.md",
+    "live": "docs/sprints/archive/future/bos_operational_intelligence_phase4_bounded_ai_enrich.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/05-audits-retirement/legacy-messages-retirement-plan.md",
+    "live": "docs/audits/active/legacy-messages-retirement-plan.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/06-task-assist-agents/agent_interaction_layer_v1.md",
+    "live": "docs/sprints/archive/05_2026/agent_interaction_layer_v1.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/06-task-assist-agents/task_assist_v1.md",
+    "live": "docs/sprints/archive/05_2026/task_assist_v1.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/06-task-assist-agents/task_assist_v1_1.md",
+    "live": "docs/sprints/archive/05_2026/task_assist_v1_1.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/06-task-assist-agents/task_assist_v1_step0_audit.md",
+    "live": "docs/sprints/archive/05_2026/task_assist_v1_step0_audit.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/bulk-messaging-planning-card19-5.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/bulk-messaging-planning-card19-5.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/card10-migration-rls-verification.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/card10-migration-rls-verification.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/card14-production-security-audit.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/card14-production-security-audit.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/card20-sprint-completion-audit.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/card20-sprint-completion-audit.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/drawer-email-recipients-card16.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/drawer-email-recipients-card16.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/provider-binding-staging-setup.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/provider-binding-staging-setup.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/provider-setup-runbook.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/provider-setup-runbook.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/resend-delivery-debug-investigation.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/resend-delivery-debug-investigation.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/resend-outbound-smoke-test.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/resend-outbound-smoke-test.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/07-archived-runbooks/template-planning-card19.md",
+    "live": "docs/archive/2026-05-02-docs-reset/implementation/communications/template-planning-card19.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/comms-messaging-handoff-pack/README.md",
+    "live": "docs/sprints/completed/README.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/01-canonical/actions-and-workflows.md",
+    "live": "docs/platform/modules/actions-and-workflows.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/01-canonical/communications.md",
+    "live": "docs/archive/2026-06-product/communications.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/01-canonical/configuration-system.md",
+    "live": "docs/system/configuration-system.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/01-canonical/crm-system.md",
+    "live": "docs/product/crm-system.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/01-canonical/documents-and-forms.md",
+    "live": "docs/platform/modules/documents-and-forms.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/01-canonical/roadmap-and-gaps.md",
+    "live": "docs/archive/2026-06-execution/roadmap-and-gaps.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/02-engine-architecture/forms-engine-v1-2-operator-usability.md",
+    "live": "docs/sprints/archive/05_2026/forms-engine-v1-2-operator-usability.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/02-engine-architecture/forms_documents_phase_2_step0_audit.md",
+    "live": "docs/sprints/archive/05_2026/forms_documents_phase_2_step0_audit.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/02-engine-architecture/forms_documents_phase_2_step1_design.md",
+    "live": "docs/sprints/archive/05_2026/forms_documents_phase_2_step1_design.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/02-engine-architecture/forms_intelligence_document_infrastructure.md",
+    "live": "docs/sprints/archive/05_2026/forms_intelligence_document_infrastructure.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/03-doctrine-contracts/deferred_builder_blocks_e2_6.md",
+    "live": "docs/sprints/archive/06_2026/forms/deferred_builder_blocks_e2_6.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/03-doctrine-contracts/deferred_public_ux_e2_7.md",
+    "live": "docs/sprints/archive/06_2026/forms/deferred_public_ux_e2_7.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/03-doctrine-contracts/e3_enrollment_launch_deferred.md",
+    "live": "docs/sprints/archive/06_2026/forms/e3_enrollment_launch_deferred.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/03-doctrine-contracts/existing-record-public-link-contract.md",
+    "live": "docs/platform/modules/existing-record-public-link-contract.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/03-doctrine-contracts/forms-intake-embed-doctrine.md",
+    "live": "docs/sprints/archive/05_2026/completed/forms-intake-embed-doctrine.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/03-doctrine-contracts/forms-intake-prefill-doctrine.md",
+    "live": "docs/sprints/archive/05_2026/completed/forms-intake-prefill-doctrine.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/03-doctrine-contracts/future_ai_hooks_v1.md",
+    "live": "docs/sprints/archive/06_2026/forms/future_ai_hooks_v1.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/03-doctrine-contracts/linkage-review-operator-flow.md",
+    "live": "docs/platform/modules/linkage-review-operator-flow.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/04-shipped-closeouts/enrollment_journey_packet_operations_v1.md",
+    "live": "docs/sprints/archive/05_2026/enrollment_journey_packet_operations_v1.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/04-shipped-closeouts/forms-intake-runtime-phase.md",
+    "live": "docs/sprints/archive/05_2026/completed/forms-intake-runtime-phase.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/04-shipped-closeouts/forms_documents_phase_2_packet_review_mvp.md",
+    "live": "docs/sprints/archive/05_2026/forms_documents_phase_2_packet_review_mvp.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/04-shipped-closeouts/forms_documents_product_experience_refresh.md",
+    "live": "docs/sprints/archive/05_2026/forms_documents_product_experience_refresh.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/04-shipped-closeouts/forms_intake_case_operational_model.md",
+    "live": "docs/sprints/archive/05_2026/completed/forms_intake_case_operational_model.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/04-shipped-closeouts/forms_intake_inbox_operationalization.md",
+    "live": "docs/sprints/archive/05_2026/forms_intake_inbox_operationalization.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/04-shipped-closeouts/forms_intake_runtime_validation_closeout.md",
+    "live": "docs/sprints/archive/05_2026/completed/forms_intake_runtime_validation_closeout.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/04-shipped-closeouts/forms_lifecycle_requirement_coverage.md",
+    "live": "docs/sprints/archive/06_2026/completed/forms_lifecycle_requirement_coverage.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/04-shipped-closeouts/forms_mvp_productization.md",
+    "live": "docs/sprints/archive/05_2026/completed/forms_mvp_productization.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/05-active-planning/enrollment_packet_phase_2.md",
+    "live": "docs/sprints/archive/05_2026/later-phase/enrollment_packet_phase_2.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/05-active-planning/forms-ai-document-recreation.md",
+    "live": "docs/sprints/archive/05_2026/later-phase/forms-ai-document-recreation.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/05-active-planning/forms_authoring_stability.md",
+    "live": "docs/sprints/archive/05_2026/forms_authoring_stability.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/05-active-planning/forms_authoring_stability_audit.md",
+    "live": "docs/sprints/archive/05_2026/forms_authoring_stability_audit.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/05-active-planning/forms_documents_operational_experience_hardening.md",
+    "live": "docs/sprints/archive/05_2026/later-phase/forms_documents_operational_experience_hardening.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/05-active-planning/forms_operational_intelligence_workflow_polish.md",
+    "live": "docs/sprints/archive/05_2026/forms_operational_intelligence_workflow_polish.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/05-active-planning/forms_operational_workspace_redesign.md",
+    "live": "docs/sprints/archive/05_2026/forms_operational_workspace_redesign.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/05-active-planning/forms_real_world_use_case_1_stabilization.md",
+    "live": "docs/sprints/archive/05_2026/forms_real_world_use_case_1_stabilization.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/06-deferred-future/deferred_builder_blocks_e2_6.md",
+    "live": "docs/sprints/archive/06_2026/forms/deferred_builder_blocks_e2_6.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/06-deferred-future/deferred_public_ux_e2_7.md",
+    "live": "docs/sprints/archive/06_2026/forms/deferred_public_ux_e2_7.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/06-deferred-future/e3_enrollment_launch_deferred.md",
+    "live": "docs/sprints/archive/06_2026/forms/e3_enrollment_launch_deferred.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/06-deferred-future/enrollment_packet_phase_2.md",
+    "live": "docs/sprints/archive/05_2026/later-phase/enrollment_packet_phase_2.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/06-deferred-future/forms-ai-document-recreation.md",
+    "live": "docs/sprints/archive/05_2026/later-phase/forms-ai-document-recreation.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/06-deferred-future/future_ai_hooks_v1.md",
+    "live": "docs/sprints/archive/06_2026/forms/future_ai_hooks_v1.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/07-runtime-debug-archive/forms_runtime_test_1_external_intake_opportunity.md",
+    "live": "docs/archive/sprints-superseded/05_2026/forms-runtime-debug/forms_runtime_test_1_external_intake_opportunity.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/07-runtime-debug-archive/forms_runtime_test_2_submission_review_finalize.md",
+    "live": "docs/archive/sprints-superseded/05_2026/forms-runtime-debug/forms_runtime_test_2_submission_review_finalize.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/07-runtime-debug-archive/forms_runtime_test_2a_submission_visibility_debug.md",
+    "live": "docs/archive/sprints-superseded/05_2026/forms-runtime-debug/forms_runtime_test_2a_submission_visibility_debug.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/07-runtime-debug-archive/forms_runtime_test_2b_workload_visibility_modal.md",
+    "live": "docs/sprints/archive/05_2026/forms_runtime_test_2b_workload_visibility_modal.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/07-runtime-debug-archive/forms_runtime_test_2c_ui_data_mismatch.md",
+    "live": "docs/archive/sprints-superseded/05_2026/forms-runtime-debug/forms_runtime_test_2c_ui_data_mismatch.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/07-runtime-debug-archive/forms_runtime_test_2d_demo_childcare_intake.md",
+    "live": "docs/archive/sprints-superseded/05_2026/forms-runtime-debug/forms_runtime_test_2d_demo_childcare_intake.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/07-runtime-debug-archive/lifecycle_action_save_and_forms_removal.md",
+    "live": "docs/archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/lifecycle_action_save_and_forms_removal.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/08-lifecycle-crm-integration/enrollment_intake_lifecycle_coherence.md",
+    "live": "docs/sprints/archive/05_2026/enrollment_intake_lifecycle_coherence.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/08-lifecycle-crm-integration/lifecycle_action_intake_model.md",
+    "live": "docs/sprints/archive/06_2026/lifecycle_action_intake_model.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/08-lifecycle-crm-integration/lifecycle_information_matrix_v1.md",
+    "live": "docs/sprints/archive/05_2026/lifecycle_information_matrix_v1.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/08-lifecycle-crm-integration/waitlist_priority_fact_truth_child_scope.md",
+    "live": "docs/sprints/archive/05_2026/completed/waitlist_priority_fact_truth_child_scope.md",
+    "kind": "byte-identical"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/CODE-ENTRY-POINTS.md",
+    "kind": "unique-no-basename-match"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/README.md",
+    "live": "docs/sprints/completed/README.md",
+    "kind": "stale-fork"
+  },
+  {
+    "export": "docs/export/forms-handoff-pack/SCHEMA-AND-MIGRATIONS.md",
+    "kind": "unique-no-basename-match"
+  }
+]

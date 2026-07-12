@@ -1,6 +1,6 @@
 # Readiness Phase 1 — Sprint Closeout
 
-**Path:** `docs/sprints/06_2026/completed/readiness_phase_1_closeout.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/readiness_phase_1_closeout.md`  
 **Date:** 2026-06-02  
 **Status:** **Closed**  
 **Scope:** Phase 1 implementation complete — record-scope operational readiness with builder levels, runtime evaluation, consumer wiring, and operator-facing display.

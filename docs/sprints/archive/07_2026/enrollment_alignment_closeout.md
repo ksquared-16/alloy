@@ -48,9 +48,9 @@ Entity → Process → Stage → Work → Outcome → Durable State → Work Vie
 
 ## Doctrine updated
 
-- `docs/canonical-status-architecture.md` (rewritten to the collapsed model)
+- `docs/platform/core/data/status-architecture.md` (rewritten to the collapsed model)
 - `docs/platform/core/stage-membership-and-outcomes.md` (new — the ownership chain + anti-patterns)
-- `docs/canonical-entity-specification.md`, `docs/canonical-action-status-field-matrix.md`
+- `docs/platform/core/data/entity-specification.md`, `docs/platform/core/data/action-status-field-matrix.md`
 - `docs/platform/core/status-and-state-system.md`, `docs/platform/core/business-process-system.md`
 - `docs/platform/modules/business-process-execution-platform.md`
 

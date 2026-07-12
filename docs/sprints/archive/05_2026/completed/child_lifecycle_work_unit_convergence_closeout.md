@@ -1,8 +1,8 @@
 # Child Lifecycle + Work Unit Convergence — Closeout
 
-**Path:** `docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`  
+**Path:** `docs/sprints/archive/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`  
 **Status:** **CLOSED** (May 2026) — Cards 0–14C complete; strict-mode activation and Settings CRUD **deferred** to follow-on sprints.  
-**Canonical supplements:** `docs/system/workspace-system.md`, `docs/product/crm-system.md`, `docs/core/glossary.md`, `docs/execution/roadmap-and-gaps.md`.
+**Canonical supplements:** `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/product/crm-system.md`, `docs/platform/governance/glossary.md`, `docs/execution/roadmap-and-gaps.md`.
 
 ---
 
@@ -48,7 +48,7 @@
 | Waitlist Phase 2 | [waitlist_orchestration_phase2_architecture.md](../waitlist_orchestration_phase2_architecture.md), [pilot playbook](../waitlist_orchestration_phase2_pilot_playbook.md) |
 | Work unit consolidation (May 2026) | [work_unit_runtime_consolidation_audit.md](../work_unit_runtime_consolidation_audit.md) |
 | Enrollment pipeline canonical | [canonical_enrollment_operating_model_seed.md](../canonical_enrollment_operating_model_seed.md), `web/lib/config/enrollmentPipelineQueueDefinitionV2.ts` |
-| CRM / workspace | `docs/product/crm-system.md`, `docs/system/workspace-system.md` |
+| CRM / workspace | `docs/product/crm-system.md`, `docs/archive/2026-06-superseded-system/workspace-system.md` |
 | Intake case doctrine | [forms_intake_case_operational_model.md](../forms_intake_case_operational_model.md) |
 | Placement facts | `web/lib/orchestration/placement/adapters/opportunityPlacementFacts.ts`, `placementCandidateFacts.ts` |
 | Inquiry children | `supabase/migrations/20260430143000_opportunity_customer_members_outcome_status_key.sql`, `OpportunityInquiryChildrenSection.tsx` |
@@ -921,7 +921,7 @@ Enrollment Pipeline
 
 For Cards 3–6 implementation — **locked design rules:**
 
-1. **Queue truth boundary** (unchanged): queues are **select/preview only**; mutations refetch authoritative entity before acting (`docs/system/workspace-system.md`).
+1. **Queue truth boundary** (unchanged): queues are **select/preview only**; mutations refetch authoritative entity before acting (`docs/archive/2026-06-superseded-system/workspace-system.md`).
 
 2. **Row grain → refetch target:**
 

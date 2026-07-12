@@ -73,7 +73,7 @@ Dev preview: `/dev/analytics-surface-mocks` (404 in production).
 
 ## Non-negotiables (carried from platform doctrine)
 
-- **Metric math stays in OIP / `metric_definitions`.** Presentation never computes or overrides truth (`presentation-runtime-doctrine.md` §6).
+- **Metric math stays in OIP / `metric_definitions`.** Presentation never computes or overrides truth (`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` §6).
 - **Analytics = the Dashboard Design Surface category.** No second configuration model.
 - **One Metric archetype, many Renderers.** KPI / Trend / Comparison / Gauge / Scorecard / Table / Sparkline are renderers, not archetypes.
 - **No storage migration authorized here.** `metric_placements` is the dashboard composition store; OIP owns calculation.
@@ -85,9 +85,9 @@ Dev preview: `/dev/analytics-surface-mocks` (404 in production).
 
 | Concern | Doc |
 |---|---|
-| Presentation Runtime (Analytics = Design Surface category) | `docs/platform/operator/presentation-runtime-doctrine.md` |
-| Card Language / Archetypes / Universal Card | `docs/platform/operator/card-language.md`, `card-archetypes.md`, `universal-card-system.md` |
+| Presentation Runtime (Analytics = Design Surface category) | `docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` |
+| Card Language / Archetypes / Universal Card | `docs/platform/operator/card-language.md`, `universal-card-archetypes.md`, `universal-card-system.md` |
 | Operational Context boundary | `docs/platform/operator/operational-context-boundary.md` |
 | OIP (metric math) | `docs/platform/modules/operational-intelligence-platform.md` |
 | Analytics V2 platform | `docs/platform/analytics/metric-platform-doctrine.md`, `metric-data-model.md` |
-| Surface inventory (Analytics rows) | `docs/sprints/06_2026/presentation-runtime-architecture/05-surface-inventory.md` |
+| Surface inventory (Analytics rows) | `docs/sprints/archive/06_2026/presentation-runtime-architecture/05-surface-inventory.md` |

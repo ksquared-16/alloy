@@ -1,6 +1,6 @@
 # Communications V2 — Scheduling/Sending Reuse & Drift Audit (pre‑B7)
 
-**Path:** `docs/sprints/06_2026/communications-v2/communications_v2_scheduling_reuse_drift_audit.md`
+**Path:** `docs/sprints/archive/06_2026/communications-v2/communications_v2_scheduling_reuse_drift_audit.md`
 **Status:** Audit — **planning only, no code.** Gate for any announcement schedule/send work (B7).
 **Date:** 2026-06-22
 **Scope owner:** Claude (POS / Documents / Communications / Sprint packages)

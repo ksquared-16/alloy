@@ -61,7 +61,7 @@ Future hook (defined, not wired):
 3. Next: `field_placements_v1.requirement` presets on person layout rows (same pattern as opportunity workflow v1)
 4. Then: retire code bootstrap slices per field as placements seed
 
-See `docs/sprints/05_2026/required_fields_completion_guardrails_policy.md` Phase 3.
+See `docs/sprints/archive/05_2026/required_fields_completion_guardrails_policy.md` Phase 3.
 
 ## Known gaps (deferred)
 

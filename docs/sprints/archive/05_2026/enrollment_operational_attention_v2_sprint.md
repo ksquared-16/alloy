@@ -1,6 +1,6 @@
 # Sprint — Enrollment operational attention V2 (prioritization layer)
 
-**Path:** `docs/sprints/05_2026/enrollment_operational_attention_v2_sprint.md`  
+**Path:** `docs/sprints/archive/05_2026/enrollment_operational_attention_v2_sprint.md`  
 **Period:** May 2026  
 **Status:** **GATE 3 foundation approved** — proceed with **Phase 1 (explainability UX)** next; no leap to AI / mass automation / event materialization without staged rollout.
 
@@ -15,7 +15,7 @@ Ship an **operational prioritization layer for enrollment**, not a “warning ba
 **Related as-built context:**
 
 - Canonical evaluator: `web/lib/opportunities/opportunityAttentionResolver.ts` (**resolver v2**).
-- Count / cohort / histogram semantics: `docs/system/workspace-system.md` § Needs attention count semantics.
+- Count / cohort / histogram semantics: `docs/archive/2026-06-superseded-system/workspace-system.md` § Needs attention count semantics.
 - Settings vs runtime parity: `docs/system/configuration-system.md`.
 - AI agent boundaries: `docs/product/bos-foundation.md`.
 - **Canonical enrollment execution vs overlay (pipeline pills + default lenses):** [`canonical_enrollment_operating_model_seed.md`](./canonical_enrollment_operating_model_seed.md).
@@ -54,7 +54,7 @@ Ship an **operational prioritization layer for enrollment**, not a “warning ba
 - Multi-reason histograms **change the meaning** of the data vs primary-only rollups.
 - **Requirement:** Label in UI/tooltips/copy that totals are **reason-level** unless using primary-only aggregation; **never imply** bin sums equal unique inquiries without qualification.
 - **Engineering:** `summarizeAttentionReasonCountsPrimaryOnly` documents primary-only call sites; multi-reason default remains for operational breadth.
-- **Docs:** `docs/system/workspace-system.md` § Needs attention count semantics expanded accordingly.
+- **Docs:** `docs/archive/2026-06-superseded-system/workspace-system.md` § Needs attention count semantics expanded accordingly.
 
 ### B. Invalid PATCH behavior
 

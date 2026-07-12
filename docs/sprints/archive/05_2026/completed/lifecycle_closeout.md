@@ -193,6 +193,6 @@ Readiness inventory (documentation only — no wiring):
 
 ## Related docs
 
-- `docs/sprints/05_2026/enrollment_alignment_audit.md` — Phase 3/3b action matrix
-- `docs/sprints/05_2026/canonical_action_catalog_v1.md` — action definitions
-- `docs/sprints/05_2026/action_definition_legacy_mapping_v1.md` — legacy mapping
+- `docs/sprints/archive/05_2026/enrollment_alignment_audit.md` — Phase 3/3b action matrix
+- `docs/sprints/archive/05_2026/canonical_action_catalog_v1.md` — action definitions
+- `docs/sprints/archive/05_2026/action_definition_legacy_mapping_v1.md` — legacy mapping

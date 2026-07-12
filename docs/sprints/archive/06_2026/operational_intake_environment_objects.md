@@ -27,7 +27,7 @@ Analysis happens in-place. No wizard. No Analyze-then-navigate.
 
 ## Environmental objects
 
-Screenshots: `docs/sprints/06_2026/assets/operational-intake-environment/`
+Screenshots: `docs/sprints/archive/06_2026/assets/operational-intake-environment/`
 
 ### 1 — Oval Command Table
 

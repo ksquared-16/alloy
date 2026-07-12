@@ -1,6 +1,6 @@
 # Presentation Data Doctrine
 
-**Path:** `docs/sprints/06_2026/presentation-data-analytics-architecture/01-presentation-data-doctrine.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-data-analytics-architecture/01-presentation-data-doctrine.md`
 **Status:** Architecture sprint — design only (June 2026)
 **Deliverable:** 1 — Presentation Data doctrine
 
@@ -114,4 +114,4 @@ Naming the nine kinds (taxonomy doc) is what makes the Experience Builder *under
 | One condition engine | [`06-condition-builder.md`](./06-condition-builder.md) |
 | Browsing business concepts | [`07-data-source-browser.md`](./07-data-source-browser.md) |
 | Ownership answers | [`08-architecture-recommendations.md`](./08-architecture-recommendations.md) |
-| Primitives & composition axis | `docs/platform/operator/presentation-runtime-doctrine.md` |
+| Primitives & composition axis | `docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` |

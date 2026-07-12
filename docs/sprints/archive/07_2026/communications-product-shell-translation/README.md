@@ -76,7 +76,7 @@ Results:
 - PASS: Full `tsc --noEmit` (8GB heap)
 - BLOCKED: Browser screenshots — local `/workspace` requires authenticated Supabase config
 
-Screenshots: `docs/sprints/07_2026/communications-product-shell-translation/screenshots/`
+Screenshots: `docs/sprints/archive/07_2026/communications-product-shell-translation/screenshots/`
 
 ---
 

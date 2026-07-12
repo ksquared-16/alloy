@@ -1,6 +1,6 @@
 # Presentation Runtime Doctrine
 
-**Path:** `docs/sprints/06_2026/presentation-runtime-architecture/01-presentation-runtime-doctrine.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-runtime-architecture/01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`
 **Status:** Architecture sprint — design only (June 2026)
 **Audience:** Platform architects, product, and implementation leads
 **Companion:** [`07-architecture-recommendations.md`](./07-architecture-recommendations.md) (decisions), [`02-experience-builder-doctrine.md`](./02-experience-builder-doctrine.md) (authoring)
@@ -36,7 +36,7 @@ The Presentation Runtime **builds on top of** prior freezes. It does not replace
 | **Queue UX** | 52px compressed two-line row; State 1 / State 2 | Runtime Spec Part 4 |
 | **Focus Panel shell** | Concept B chrome + subject + mode control; fixed bounds; no remount on swap | Focus Panel UX freeze |
 | **Universal Card anatomy** | Header / Body / Footer; platform-owned slots; 6 tiers; 4 densities | `universal-card-system.md` |
-| **8 Card Archetypes** | Action, Status, Summary, Profile, Collection, Metric, Timeline, Launcher | `universal-card-archetypes.md` (5A) |
+| **8 Card Archetypes** | Action, Status, Summary, Profile, Collection, Metric, Timeline, Launcher | `universal-universal-card-archetypes.md` (5A) |
 | **5 Interaction models** | Expand, Embedded Workspace, Drill, Change Subject, External | `card-interaction-expansion-doctrine.md` (5B) |
 | **Content templates** | Fields enter cards only through templates at compact/expanded/drill/workspace depths | `card-content-template-field-inclusion-doctrine.md` (5C) |
 | **Reveal / performance** | Coordinated reveal; no section-owned skeletons; queue null ≠ empty | `adminv2-runtime-performance-doctrine.md` |
@@ -557,7 +557,7 @@ Renderers consume typography tiers and visual tokens. The Experience Builder exp
 | Reuse map | [`06-reuse-map.md`](./06-reuse-map.md) |
 | Mockups | [`mockups/README.md`](./mockups/README.md) |
 | Frozen card system | `docs/platform/operator/universal-card-system.md` |
-| Frozen archetypes | `docs/platform/operator/universal-card-archetypes.md` |
+| Frozen archetypes | `docs/platform/operator/universal-universal-card-archetypes.md` |
 | Frozen interaction models | `docs/platform/operator/card-interaction-expansion-doctrine.md` |
 | Frozen content templates | `docs/platform/operator/card-content-template-field-inclusion-doctrine.md` |
 | Existing EB doctrine | `docs/platform/operator/experience-builder-doctrine.md` |

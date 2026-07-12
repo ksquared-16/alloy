@@ -69,5 +69,5 @@ Child drawer was **not** modified in this pass.
 ## Related
 
 - `web/lib/workspace/extractPipelineExecutionLanes.ts` — lane extraction (shared with dept/WU surfaces)
-- `docs/sprints/05_2026/adminv2_drawer_performance_hardening_phase0.md` — prior calm-loading header doctrine
-- `docs/sprints/05_2026/child_profile_person_drawer_doctrine.md` — child lifecycle strip (future `RecordLifecycleRail` consumer)
+- `docs/sprints/archive/05_2026/adminv2_drawer_performance_hardening_phase0.md` — prior calm-loading header doctrine
+- `docs/sprints/archive/05_2026/child_profile_person_drawer_doctrine.md` — child lifecycle strip (future `RecordLifecycleRail` consumer)

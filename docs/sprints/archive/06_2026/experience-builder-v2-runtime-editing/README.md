@@ -1,9 +1,9 @@
 # Alloy OS — Experience Builder V2 · Runtime Editing Architecture
 
-**Path:** `docs/sprints/06_2026/experience-builder-v2-runtime-editing/`
+**Path:** `docs/sprints/archive/06_2026/experience-builder-v2-runtime-editing/`
 **Status:** **UX architecture sprint — design only. No code. No schemas. No migrations. No React. No CSS.**
 **Type:** Authoring experience redesign.
-**Depends on:** [`../presentation-runtime-architecture/`](../presentation-runtime-architecture/) (approved primitives) and the canonical [`docs/platform/operator/presentation-runtime-doctrine.md`](../../../platform/operator/presentation-runtime-doctrine.md).
+**Depends on:** [`../presentation-runtime-architecture/`](../presentation-runtime-architecture/) (approved primitives) and the canonical [`docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md).
 
 > The Presentation Runtime Architecture sprint gave us the **primitives** — Design Surfaces, Zones, Cards, Card Slots, Renderers, Perspectives, Viewpoints, and the Experience Builder. The architecture is approved. This sprint redesigns the **authoring experience** itself, because the first-pass mockups still think like a traditional configuration application — and that is not the Alloy experience.
 

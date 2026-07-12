@@ -10,7 +10,7 @@ This document extends **Tour Scheduling V1** (`tour_scheduling_v1.md`) after **m
 
 ## Current V1 foundation
 
-The following is **in production code** and documented in **`docs/sprints/05_2026/tour_scheduling_v1.md`** (§9–§13):
+The following is **in production code** and documented in **`docs/sprints/archive/05_2026/tour_scheduling_v1.md`** (§9–§13):
 
 - **`tour_bookings`** as **scheduling source of truth** (`start_at`, `end_at`, `timezone`, booking `status_key`, location, org scope).
 - **`tour_availability_rules`** as **data-driven** availability (recurring windows, buffers, capacity, optional approval).
@@ -184,9 +184,9 @@ Expected: after confirm/reschedule, prior pending rows for the booking are cance
 
 ## References
 
-- **V1 sprint + audit table:** `docs/sprints/05_2026/tour_scheduling_v1.md`
-- **Band A closeout (shipped):** `docs/sprints/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`
-- **Band A implementation:** `docs/sprints/05_2026/completed/tour_scheduling_phase2_foundation.md`, `docs/sprints/05_2026/completed/tour_scheduling_phase2_band_a_readiness.md`
-- **Entity boundaries:** `docs/system/entity-model.md`
-- **Queue vs record:** `docs/system/record-system.md`, `docs/system/workspace-system.md`
+- **V1 sprint + audit table:** `docs/sprints/archive/05_2026/tour_scheduling_v1.md`
+- **Band A closeout (shipped):** `docs/sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`
+- **Band A implementation:** `docs/sprints/archive/05_2026/completed/tour_scheduling_phase2_foundation.md`, `docs/sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_readiness.md`
+- **Entity boundaries:** `docs/archive/2026-06-superseded-system/entity-model.md`
+- **Queue vs record:** `docs/archive/2026-06-superseded-system/record-system.md`, `docs/archive/2026-06-superseded-system/workspace-system.md`
 - **Product backlog context:** `docs/execution/roadmap-and-gaps.md`

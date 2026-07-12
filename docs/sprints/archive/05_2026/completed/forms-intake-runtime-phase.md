@@ -3,7 +3,7 @@
 **Status:** Active (post Runtime Test 1 closeout · May 2026)  
 **Scope:** Operating doctrine for external intake, distribution context, outcomes, and the **next manual runtime test sequence**. No new product features in this document.
 
-**Completed:** [Runtime Test 1](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md) — embed intake → opportunity create + dedup attach (medication demo, Alloy Bend staging).
+**Completed:** [Runtime Test 1](../sprints/archive/05_2026/forms_runtime_test_1_external_intake_opportunity.md) — embed intake → opportunity create + dedup attach (medication demo, Alloy Bend staging).
 
 **Related doctrine:** [forms-intake-embed-doctrine.md](./forms-intake-embed-doctrine.md) · [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md) · [forms-intake-runtime-validation.md](./forms-intake-runtime-validation.md)
 

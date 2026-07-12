@@ -48,8 +48,8 @@ Business Process
 |---|---|---|
 | Operational Context | `OperationalContext` | `web/lib/adminV2/runtime/operationalContext/` |
 | Surface | **Design Surface** (category = Dashboard / Intelligence) | `metric_placements` + `entity_layouts` |
-| Composition | Composition axis: Design Surface → Zone → Card → Slot → Renderer | `presentation-runtime-doctrine.md` §4–5 |
-| Cards | **Metric** archetype | `card-archetypes.md` |
+| Composition | Composition axis: Design Surface → Zone → Card → Slot → Renderer | `archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` §4–5 |
+| Cards | **Metric** archetype | `universal-card-archetypes.md` |
 | Actions | Card interaction families (Observe → Reveal → Focus → Edit → Act → **Navigate**) | `card-language.md` |
 | Work | queue / record / workflow / action | existing runtime |
 
@@ -125,7 +125,7 @@ This list is **configuration-driven** (each row is a Design Surface in the Dashb
 
 ## 5. Surface Hierarchy (Analytics Design Surfaces)
 
-Each surface declares: **entity/scope binding · ownership model · primary zones · key Metric card types**. Ownership models are from `presentation-runtime-doctrine.md` §10.
+Each surface declares: **entity/scope binding · ownership model · primary zones · key Metric card types**. Ownership models are from `archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` §10.
 
 | Surface | Scope | Ownership | Primary zones | Key Metric cards |
 |---|---|---|---|---|
@@ -252,7 +252,7 @@ Reporting reuses the same metric definitions and roll-ups; it differs only in **
 
 ## 9. Metric Card Language
 
-Continuation of `card-archetypes.md` (Metrics archetype) and `card-language.md`. **One archetype (`Metric`), expressed through Renderers and Compositions.**
+Continuation of `universal-card-archetypes.md` (Metrics archetype) and `card-language.md`. **One archetype (`Metric`), expressed through Renderers and Compositions.**
 
 ### 9.1 Renderers vs Compositions vs related archetypes
 

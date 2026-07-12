@@ -35,7 +35,7 @@ Phase 5.15 attempted to break the Opportunity Drawer Layout Builder through prog
 ### Docs
 | File | Change |
 |------|--------|
-| `docs/sprints/06_2026/visual_layout_configuration_builder_phase5_15_certification_report.md` | This report. |
+| `docs/sprints/archive/06_2026/visual_layout_configuration_builder_phase5_15_certification_report.md` | This report. |
 
 ---
 

@@ -1,6 +1,6 @@
 # Enrollment Process Configuration Hub — Spec v1
 
-**Path:** `docs/sprints/06_2026/enrollment_process_configuration_hub_spec_v1.md`  
+**Path:** `docs/sprints/archive/06_2026/enrollment_process_configuration_hub_spec_v1.md`  
 **Status:** Design spec (no implementation in this pass)  
 **Date:** May 2026  
 **Sprint:** Lifecycle Runtime & Configuration Alignment — **final deliverable** (Settings IA / operator UX)

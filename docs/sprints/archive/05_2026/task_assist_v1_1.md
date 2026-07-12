@@ -1,11 +1,11 @@
 # Sprint: Task Assist V1.1 — Durable proposals, scheduling, reminders
 
-**Path:** `docs/sprints/05_2026/task_assist_v1_1.md`  
+**Path:** `docs/sprints/archive/05_2026/task_assist_v1_1.md`  
 **Status:** **Task Assist V1.1 complete** (Cards **0–9**, including **9b** entity search + **9c** intent routing). **Interaction Layer V1** (Cards **1–7** in **`agent_interaction_layer_v1.md`**) superseded Card 9 **UX** — **Orchestrator** command bar with thread + action cards; **backend routes unchanged**. **Agent #2 (Task Assist)** is a **specialist** routed from the Orchestrator — action cards + **`TaskAssistOpportunityWorkspace`**, not the whole command bar. The bar itself is **Orchestrator**, not Task Assist.  
-**Prerequisite (shipped):** `docs/sprints/05_2026/task_assist_v1.md` (V1 — ephemeral proposal, send-now, opportunities, SMS/email, **`executeCommunicationsSend`**).  
+**Prerequisite (shipped):** `docs/sprints/archive/05_2026/task_assist_v1.md` (V1 — ephemeral proposal, send-now, opportunities, SMS/email, **`executeCommunicationsSend`**).  
 **Non-goals:** Workflow configuration (Agent #3), bulk/mass send, autonomous agents, legacy **`public.messages`** / **`messages_outbox`**, bypassing **`enqueueCanonicalOutboundMessage`**.
 
-**Sources of truth:** `docs/product/communications.md`, `docs/product/bos-foundation.md`, `docs/system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`, `web/lib/communications/executeCommunicationsSend.ts`, `web/lib/communications/canonicalOutboundEnqueue.ts`, `web/lib/communications/communicationScheduledSendsService.ts`, `docs/supabase/reference/*.csv`.
+**Sources of truth:** `docs/product/communications.md`, `docs/product/bos-foundation.md`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`, `web/lib/communications/executeCommunicationsSend.ts`, `web/lib/communications/canonicalOutboundEnqueue.ts`, `web/lib/communications/communicationScheduledSendsService.ts`, `docs/supabase/reference/*.csv`.
 
 ### V1.1 shipped behavior summary (operator-facing)
 
@@ -855,15 +855,15 @@ flowchart TD
 - [x] **`docs/product/bos-foundation.md`** — Task Assist V1.1 routes, flags, propose deterministic note.
 - [x] **`docs/product/communications.md`** — scheduled sends + **`process-due`** + canonical send link.
 - [x] **`docs/product/crm-system.md`** — one-line pointer for opportunity-scoped tasks (optional file touch).
-- [x] **`docs/sprints/05_2026/task_assist_v1.md`** — forward pointer to V1.1 sprint.
+- [x] **`docs/sprints/archive/05_2026/task_assist_v1.md`** — forward pointer to V1.1 sprint.
 - [x] **`docs/supabase/reference/*.csv`** — **`task_assist_proposals`**, **`communication_scheduled_sends`**, **`operational_tasks`**, **`claim_due_communication_scheduled_sends`** present (verified Card 7; regenerate via **`npm run export:supabase-schema`** when DB drifts).
 
 ---
 
 ## 15. References
 
-- `docs/sprints/05_2026/task_assist_v1.md`
-- `docs/sprints/05_2026/ai_agents_v1.md` §8
+- `docs/sprints/archive/05_2026/task_assist_v1.md`
+- `docs/sprints/archive/05_2026/ai_agents_v1.md` §8
 - `docs/product/communications.md`
 - `docs/product/bos-foundation.md`
 - `supabase/migrations/20260413100000_agent_v1_record_overview_layout_audit.sql` (RLS / proposal pattern)

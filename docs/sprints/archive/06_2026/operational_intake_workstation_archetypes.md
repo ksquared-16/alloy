@@ -29,7 +29,7 @@ Avoid CRM dashboard columns (`BOS │ Intake │ Findings` with different outlin
 
 ## Archetypes
 
-Screenshots: `docs/sprints/06_2026/assets/operational-intake-workstation/`
+Screenshots: `docs/sprints/archive/06_2026/assets/operational-intake-workstation/`
 
 | # | Archetype | Spatial idea |
 |---|-----------|--------------|

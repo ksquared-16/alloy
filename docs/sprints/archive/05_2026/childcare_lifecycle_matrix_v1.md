@@ -1,6 +1,6 @@
 # Childcare Lifecycle Matrix v1
 
-**Path:** `docs/sprints/05_2026/childcare_lifecycle_matrix_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/childcare_lifecycle_matrix_v1.md`  
 **Status:** Draft v1 (May 2026)  
 **Scope:** Default childcare lead-to-enrollment lifecycle — statuses, actions, requirements, automations, and BOS guidance.
 

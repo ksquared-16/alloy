@@ -1,6 +1,6 @@
 # Messaging V2 — Phase 1 UX & Product Design
 
-**Path:** `docs/sprints/06_2026/messaging_v2_design.md`  
+**Path:** `docs/sprints/archive/06_2026/messaging_v2_design.md`  
 **Status:** Design specification (June 2026) — **planning only; no implementation**  
 **Depends on:** [messaging_v2_audit.md](./messaging_v2_audit.md)
 

@@ -87,7 +87,7 @@ No new option-set editor was added in this pass; reuse `OptionSetsClient` / `Opt
 ---
 
 ## Header + locations table correction (2026-05-29)  
-**Audit:** `docs/sprints/05_2026/person_location_polish_reset_audit.md`
+**Audit:** `docs/sprints/archive/05_2026/person_location_polish_reset_audit.md`
 
 ## Summary
 

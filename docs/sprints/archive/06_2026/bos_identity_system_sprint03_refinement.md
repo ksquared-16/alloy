@@ -58,7 +58,7 @@ cd web && npx playwright install chromium   # if browsers missing
 cd web && npm run screenshots:bos-identity-system
 ```
 
-Output: `docs/sprints/06_2026/assets/bos-identity-system/*.png`
+Output: `docs/sprints/archive/06_2026/assets/bos-identity-system/*.png`
 
 ## Files touched
 

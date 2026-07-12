@@ -1,6 +1,6 @@
 # Work Unit Queue UX Redesign Proposal
 
-**Path:** `docs/sprints/06_2026/work_unit_queue_ux_redesign_proposal.md`  
+**Path:** `docs/sprints/archive/06_2026/work_unit_queue_ux_redesign_proposal.md`  
 **Status:** WU-UX V2 shipped (June 2026) — lifecycle-aware band framework  
 **Prior:** Proposal approved; WU-UX-1/2 compact operational record baseline shipped  
 **Related:** `docs/audits/work_unit_runtime_cutover_audit.md`, Phase D-A row bands in `QueueBlock.tsx`

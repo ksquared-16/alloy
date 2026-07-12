@@ -3,7 +3,7 @@
 **Date:** 2026-07-08  
 **Branch:** `feat/processing-form-composer-v1` → `staging`  
 **Product name:** Digital Mailroom  
-**Status:** **Locked** — see `docs/sprints/07_2026/processing-v1-lock-closeout.md` for final closeout.
+**Status:** **Locked** — see `docs/sprints/archive/07_2026/processing-v1-lock-closeout.md` for final closeout.
 
 ---
 
@@ -57,7 +57,7 @@ cd web && npm run test -- \
 cd web && NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit
 ```
 
-Screenshots: `docs/sprints/07_2026/digital-mailroom-identity-screenshots/`
+Screenshots: `docs/sprints/archive/07_2026/digital-mailroom-identity-screenshots/`
 
 ---
 

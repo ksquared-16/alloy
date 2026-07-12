@@ -1,6 +1,6 @@
 # Completion Guardrails Foundation — Policy Model (Sprint B)
 
-**Path:** `docs/sprints/05_2026/required_fields_completion_guardrails_policy.md`  
+**Path:** `docs/sprints/archive/05_2026/required_fields_completion_guardrails_policy.md`  
 **Sprint name:** **Completion Guardrails Foundation** (not final required-field configuration)  
 **Status:** Foundation shipped — bootstrap rules only  
 **Date:** 2026-05-30

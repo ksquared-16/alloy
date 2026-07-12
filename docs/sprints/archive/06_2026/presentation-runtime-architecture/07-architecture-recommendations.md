@@ -1,6 +1,6 @@
 # Architecture Recommendations
 
-**Path:** `docs/sprints/06_2026/presentation-runtime-architecture/07-architecture-recommendations.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-runtime-architecture/07-architecture-recommendations.md`
 **Status:** Architecture sprint — design only (June 2026)
 **This is the decision document.** Read this first if you want the headline answers.
 
@@ -304,7 +304,7 @@ These require dedicated follow-on sprints or stakeholder sign-off:
 
 | Concern | Doc |
 |---|---|
-| Presentation Runtime doctrine (full primitive specs) | [`01-presentation-runtime-doctrine.md`](./01-presentation-runtime-doctrine.md) |
+| Presentation Runtime doctrine (full primitive specs) | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
 | Experience Builder doctrine | [`02-experience-builder-doctrine.md`](./02-experience-builder-doctrine.md) |
 | Reuse map + migration phasing | [`06-reuse-map.md`](./06-reuse-map.md) |
 | Surface inventory | [`05-surface-inventory.md`](./05-surface-inventory.md) |

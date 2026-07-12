@@ -1,6 +1,6 @@
 # Tour Implementation Alignment Audit
 
-**Path:** `docs/sprints/05_2026/tour_implementation_alignment_audit.md`  
+**Path:** `docs/sprints/archive/05_2026/tour_implementation_alignment_audit.md`  
 **Date:** May 2026  
 **Related:** [`canonical_action_catalog_v1.md`](./canonical_action_catalog_v1.md), [`action_definition_legacy_mapping_v1.md`](./action_definition_legacy_mapping_v1.md), [`completed/tour_scheduling_phase2_foundation.md`](./completed/tour_scheduling_phase2_foundation.md)
 

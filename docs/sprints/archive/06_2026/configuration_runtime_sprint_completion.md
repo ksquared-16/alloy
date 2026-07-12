@@ -91,7 +91,7 @@ Deliver a **Configuration Mode** experience for `/settings/*` that mirrors Runti
 
 ## QA fix acceptance (final pass)
 
-Captured in `docs/sprints/06_2026/configuration-runtime-qa-fix/`:
+Captured in `docs/sprints/archive/06_2026/configuration-runtime-qa-fix/`:
 
 1. `01-settings-hub-tiles.png` — `/settings` hub with 9 config tiles  
 2. `02-settings-rail-icons-home.png` — Settings rail with Lucide icons + Home  
@@ -160,5 +160,5 @@ cd web && npm run test -- \
 
 - `docs/system/configuration-mode-doctrine.md` — frozen visual + interaction rules  
 - `docs/system/configuration-runtime-design-alignment.md` — alignment checklist  
-- `docs/sprints/06_2026/configuration_runtime_core_interaction_doctrine.md` — core interaction (updated: `/settings` hub)  
+- `docs/sprints/archive/06_2026/configuration_runtime_core_interaction_doctrine.md` — core interaction (updated: `/settings` hub)  
 - `docs/platform/operator/universal-card-system.md` — operational surface references where touched  

@@ -1,6 +1,6 @@
 # BOS Operational Recommendation Intelligence — Phase 2 Operational UX Sprint
 
-**Path:** `docs/sprints/05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md`  
+**Path:** `docs/sprints/archive/05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md`  
 **Status:** Phase 2 **COMPLETE** (GATE 2 passed) — Cards 2.1–2.8 shipped; Card 2.9 optional deferred  
 **Date:** 2026-05-21 (Card 2.8 closeout: 2026-05-21)
 

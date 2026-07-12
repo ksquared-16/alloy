@@ -1,6 +1,6 @@
 # AdminV2 UI Shell Doctrine — Preload Structure, Hydrate Data Only
 
-**Path:** `docs/sprints/05_2026/adminv2_shell_doctrine_preload_structure_hydrate_data_only.md`  
+**Path:** `docs/sprints/archive/05_2026/adminv2_shell_doctrine_preload_structure_hydrate_data_only.md`  
 **Status:** Audit + design complete; **P1-1 + P1-2 implemented** (2026-05-22). P1-3+ remain gated.  
 **Date:** 2026-05-22  
 **Sprint type:** Platform doctrine (extends performance/runtime work; not an isolated perf patch)

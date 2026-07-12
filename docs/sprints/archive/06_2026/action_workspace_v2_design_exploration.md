@@ -1,6 +1,6 @@
 # Action Workspace V2 — Design Exploration Sprint
 
-**Path:** `docs/sprints/06_2026/action_workspace_v2_design_exploration.md`  
+**Path:** `docs/sprints/archive/06_2026/action_workspace_v2_design_exploration.md`  
 **Status:** **Concept B+ approved** — mockups for sign-off  
 **Date:** 2026-06-08
 
@@ -27,7 +27,7 @@ cd web && npm run dev   # separate terminal
 cd web && npm run screenshots:action-workspace-v2
 ```
 
-Output: `docs/sprints/06_2026/assets/action-workspace-v2-mockups/`
+Output: `docs/sprints/archive/06_2026/assets/action-workspace-v2-mockups/`
 
 | File | State |
 |------|-------|

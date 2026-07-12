@@ -1,16 +1,16 @@
 # Requirement + Workflow Configuration Schema Audit
 
-**Path:** `docs/sprints/05_2026/requirement_workflow_configuration_schema_audit.md`  
+**Path:** `docs/sprints/archive/05_2026/requirement_workflow_configuration_schema_audit.md`  
 **Status:** Audit complete — **no code changes**  
 **Date:** 2026-05-30  
 **Goal:** Before implementing admin-configured requirement rules, inventory where policies can live today (schema + runtime) and recommend the smallest config model that supports layout requirements, conditional requirements, transition blockers, workflow automations, and BOS explanations.
 
 **Related (prior work):**
 
-- `docs/sprints/05_2026/required_fields_completion_guardrails_audit.md` — Sprint B foundation inventory
-- `docs/sprints/05_2026/required_fields_completion_guardrails_policy.md` — requirement vocabulary + deferred product rules
-- `docs/sprints/05_2026/layout_field_behavior_semantics_v1.md` — opportunity `field_placements_v1` control plane
-- `docs/sprints/05_2026/person_layout_completion_reconciliation.md` — Sprint A + B wiring
+- `docs/sprints/archive/05_2026/required_fields_completion_guardrails_audit.md` — Sprint B foundation inventory
+- `docs/sprints/archive/05_2026/required_fields_completion_guardrails_policy.md` — requirement vocabulary + deferred product rules
+- `docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md` — opportunity `field_placements_v1` control plane
+- `docs/sprints/archive/05_2026/person_layout_completion_reconciliation.md` — Sprint A + B wiring
 - `docs/system/configuration-system.md` — four-plane Settings model
 
 ---
@@ -510,7 +510,7 @@ Audit-only — sequencing for a follow-on **Requirement Rules** sprint.
 
 **Docs**
 
-- `docs/system/configuration-system.md`, `docs/system/actions-and-workflows.md`
+- `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md`
 - Sprint B + layout semantics docs (listed above)
 
 ---

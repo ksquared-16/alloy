@@ -1,10 +1,10 @@
 # Alloy Operational Doctrine v1
 
-**Path:** `docs/sprints/05_2026/alloy_operational_doctrine_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/alloy_operational_doctrine_v1.md`  
 **Status:** Draft v1 (May 2026)  
 **Scope:** Platform operating concepts across CRM, enrollment, billing, scheduling, payments, and future industries.
 
-**Related:** [`childcare_lifecycle_matrix_v1.md`](./childcare_lifecycle_matrix_v1.md), [`action_button_lifecycle_alignment_audit.md`](./action_button_lifecycle_alignment_audit.md), [`docs/system/actions-and-workflows.md`](../../system/actions-and-workflows.md), [`docs/execution/operating-doctrine.md`](../../execution/operating-doctrine.md)
+**Related:** [`childcare_lifecycle_matrix_v1.md`](./childcare_lifecycle_matrix_v1.md), [`action_button_lifecycle_alignment_audit.md`](./action_button_lifecycle_alignment_audit.md), [`docs/archive/2026-06-superseded-system/actions-and-workflows.md`](../../system/actions-and-workflows.md), [`docs/execution/operating-doctrine.md`](../../execution/operating-doctrine.md)
 
 ---
 

@@ -83,9 +83,9 @@ Each page below shows `ConfigurationPatternPlaceholder` until converted:
 
 ## Screenshots
 
-Latest cleanup pass: `docs/sprints/06_2026/configuration-runtime-doctrine-cleanup/`
+Latest cleanup pass: `docs/sprints/archive/06_2026/configuration-runtime-doctrine-cleanup/`
 
-Prior rollout: `docs/sprints/06_2026/configuration-runtime-settings-pattern/`
+Prior rollout: `docs/sprints/archive/06_2026/configuration-runtime-settings-pattern/`
 
 ## Tests
 

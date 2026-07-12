@@ -1,6 +1,6 @@
 # Enrollment Implementation Alignment Audit
 
-**Path:** `docs/sprints/05_2026/enrollment_alignment_audit.md`  
+**Path:** `docs/sprints/archive/05_2026/enrollment_alignment_audit.md`  
 **Date:** May 2026  
 **Related:** [`canonical_action_catalog_v1.md`](./canonical_action_catalog_v1.md), [`action_definition_legacy_mapping_v1.md`](./action_definition_legacy_mapping_v1.md), [`childcare_lifecycle_matrix_v1.md`](./childcare_lifecycle_matrix_v1.md), [`tour_implementation_alignment_audit.md`](./tour_implementation_alignment_audit.md)
 

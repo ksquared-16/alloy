@@ -1,6 +1,6 @@
 # Design Critique — Existing Experience Builder Mockups
 
-**Path:** `docs/sprints/06_2026/experience-builder-v2-runtime-editing/07-design-critique.md`
+**Path:** `docs/sprints/archive/06_2026/experience-builder-v2-runtime-editing/07-design-critique.md`
 **Status:** UX architecture sprint — design only (June 2026)
 **Deliverable:** 8 — Design critique
 

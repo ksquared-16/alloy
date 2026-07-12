@@ -1,6 +1,6 @@
 # Data Source Browser — Information Architecture
 
-**Path:** `docs/sprints/06_2026/presentation-data-analytics-architecture/07-data-source-browser.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-data-analytics-architecture/07-data-source-browser.md`
 **Status:** Architecture sprint — design only (June 2026)
 **Deliverable:** 4 — Data Source browser (IA)
 

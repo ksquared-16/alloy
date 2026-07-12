@@ -120,7 +120,7 @@ Scoped `tsc` over focus-panel files: **clean**. Full repo `tsc` reports ~85 pre-
 | `web/components/admin/focusPanel/FocusPanelCardGrid.tsx` | Position-aware zoom motion (`--fp-from-*` measured at elevation) |
 | `web/app/adminV2/components/alloyOsRuntime.css` | Soft-glass scrim, `alloy-os-fp-card-zoom` keyframe, 240ms timing |
 | `web/playwright/tests/focus-panel-canvas-finalization.spec.ts` | Six deliverable screenshots + assertions |
-| `docs/sprints/06_2026/focus-panel-canvas-finalization/README.md` | This document |
+| `docs/sprints/archive/06_2026/focus-panel-canvas-finalization/README.md` | This document |
 
 ---
 

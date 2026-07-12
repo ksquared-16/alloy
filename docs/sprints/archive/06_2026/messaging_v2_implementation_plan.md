@@ -1,6 +1,6 @@
 # Messaging V2 — Phase 3 Implementation Plan
 
-**Path:** `docs/sprints/06_2026/messaging_v2_implementation_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/messaging_v2_implementation_plan.md`  
 **Status:** Implementation plan (June 2026) — **no code until audit + design + architecture reviewed**  
 **Depends on:** [messaging_v2_audit.md](./messaging_v2_audit.md), [messaging_v2_design.md](./messaging_v2_design.md), [messaging_v2_architecture.md](./messaging_v2_architecture.md)
 

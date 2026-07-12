@@ -1,9 +1,9 @@
 # Work Unit VM Cutover Sprint — WU-VM-0 / WU-VM-1 + Queue UX
 
-**Path:** `docs/sprints/06_2026/work_unit_vm_cutover_sprint_wu0_wu1.md`  
+**Path:** `docs/sprints/archive/06_2026/work_unit_vm_cutover_sprint_wu0_wu1.md`  
 **Status:** WU-VM-0/1 verified · WU-VM-2 cache foundation · WU-VM-3/4 plans documented (June 2026)  
 **Audit:** `docs/audits/work_unit_runtime_cutover_audit.md`  
-**UX baseline:** `docs/sprints/06_2026/work_unit_queue_ux_redesign_proposal.md`
+**UX baseline:** `docs/sprints/archive/06_2026/work_unit_queue_ux_redesign_proposal.md`
 
 ---
 

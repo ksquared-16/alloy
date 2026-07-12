@@ -1,6 +1,6 @@
 # Person drawer — primary contact, location & category doctrine
 
-Active sprint note for parent/child drawer IA. See also `docs/system/roles-and-permissions.md`.
+Active sprint note for parent/child drawer IA. See also `docs/archive/2026-06-superseded-system/roles-and-permissions.md`.
 
 ## Primary contact (household-scoped)
 

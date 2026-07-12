@@ -5,11 +5,11 @@
 
 **Validated:** Embed intake → opportunity create + dedup attach (Alloy Bend Test 1C/1D; Demo Childcare Co Test 2D). Workload Review/Recent lanes, centered quick review, operator narratives.
 
-**Active validation org:** Demo Childcare Co — [Test 2D](../sprints/05_2026/forms_runtime_test_2d_demo_childcare_intake.md).
+**Active validation org:** Demo Childcare Co — [Test 2D](../sprints/archive/05_2026/forms_runtime_test_2d_demo_childcare_intake.md).
 
-**Next sprint:** [Intake Case Operational Model](../sprints/05_2026/forms_intake_case_operational_model.md) — case grouping, outcome config UI, workflow events (deferred).
+**Next sprint:** [Intake Case Operational Model](../sprints/archive/05_2026/forms_intake_case_operational_model.md) — case grouping, outcome config UI, workflow events (deferred).
 
-Aligns with [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md), [forms-intake-embed-doctrine.md](./forms-intake-embed-doctrine.md), and [../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md).
+Aligns with [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md), [forms-intake-embed-doctrine.md](./forms-intake-embed-doctrine.md), and [../sprints/archive/05_2026/forms_runtime_test_1_external_intake_opportunity.md](../sprints/archive/05_2026/forms_runtime_test_1_external_intake_opportunity.md).
 
 ---
 
@@ -50,7 +50,7 @@ Until a dedicated UI ships, operators set outcomes via **public link metadata** 
 ## Runtime Test 1 — executed results (medication demo)
 
 **Fixture:** `medication_authorization_demo` on Alloy Bend staging — embed token `alloy_demo_medication_authorization_v1`.  
-Full IDs and link metadata: [forms_runtime_test_1_external_intake_opportunity.md § Step 5](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md).
+Full IDs and link metadata: [forms_runtime_test_1_external_intake_opportunity.md § Step 5](../sprints/archive/05_2026/forms_runtime_test_1_external_intake_opportunity.md).
 
 ### Test 1C — first submit → create opportunity
 
@@ -247,9 +247,9 @@ Prefilled fields, blank/manual fields, standard (no CRM) link, and packet run-th
 - [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md)
 - [forms-intake-embed-doctrine.md](./forms-intake-embed-doctrine.md)
 - [forms-intake-runtime-phase.md](./forms-intake-runtime-phase.md)
-- [../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md](../sprints/05_2026/forms_runtime_test_1_external_intake_opportunity.md)
+- [../sprints/archive/05_2026/forms_runtime_test_1_external_intake_opportunity.md](../sprints/archive/05_2026/forms_runtime_test_1_external_intake_opportunity.md)
 - [../product/documents-and-forms.md](../product/documents-and-forms.md)
-- [../sprints/05_2026/forms_intelligence_document_infrastructure.md](../sprints/05_2026/forms_intelligence_document_infrastructure.md)
+- [../sprints/archive/05_2026/forms_intelligence_document_infrastructure.md](../sprints/archive/05_2026/forms_intelligence_document_infrastructure.md)
 
 ---
 

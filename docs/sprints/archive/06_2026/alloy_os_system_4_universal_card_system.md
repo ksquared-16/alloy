@@ -1,6 +1,6 @@
 # Alloy OS — System 4: Universal Card System
 
-**Path:** `docs/sprints/06_2026/alloy_os_system_4_universal_card_system.md`
+**Path:** `docs/sprints/archive/06_2026/alloy_os_system_4_universal_card_system.md`
 **Status:** **REVISION 5 — domain pressure test, recommend freeze pending sign-off.** No production code. No runtime spec promotion.
 **Primary artifact:** Cursor Canvas `universal-card-system.canvas.tsx` (Revision 5)
 

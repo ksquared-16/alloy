@@ -1,6 +1,6 @@
 # Analytics Architecture — Metric Definition vs Metric Presentation
 
-**Path:** `docs/sprints/06_2026/presentation-data-analytics-architecture/04-analytics-architecture.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-data-analytics-architecture/04-analytics-architecture.md`
 **Status:** Architecture sprint — design only (June 2026)
 **Deliverable:** 2 — Analytics architecture
 
@@ -118,4 +118,4 @@ The Experience Builder **references** but does not own:
 | `Metric` type in renderer contracts | [`05-renderer-contracts.md`](./05-renderer-contracts.md) |
 | Analytics placement UX | [`07-data-source-browser.md`](./07-data-source-browser.md) + mockup `07-analytics-placement` |
 | Ownership answers | [`08-architecture-recommendations.md`](./08-architecture-recommendations.md) |
-| Analytics as a Design Surface | `docs/platform/operator/presentation-runtime-doctrine.md` |
+| Analytics as a Design Surface | `docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` |

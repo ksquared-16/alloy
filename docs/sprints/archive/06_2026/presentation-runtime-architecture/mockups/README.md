@@ -1,6 +1,6 @@
 # Mockups — Presentation Runtime Architecture
 
-**Path:** `docs/sprints/06_2026/presentation-runtime-architecture/mockups/`
+**Path:** `docs/sprints/archive/06_2026/presentation-runtime-architecture/mockups/`
 **Status:** Architecture sprint — design only (June 2026)
 **Format:** Self-contained HTML + shared CSS. Open in a browser for full fidelity. Screenshot to PNG for doc embedding.
 
@@ -139,7 +139,7 @@ No blue, slate, or gray active states (Configuration Mode visual doctrine).
 ## How to view
 
 ```bash
-open docs/sprints/06_2026/presentation-runtime-architecture/mockups/01-design-surfaces-landing.html
+open docs/sprints/archive/06_2026/presentation-runtime-architecture/mockups/01-design-surfaces-landing.html
 ```
 
 Or open any `.html` file in a browser. All mockups are 1440px wide (except mobile mockup which includes a 375px frame).
@@ -157,5 +157,5 @@ The PNGs were captured with Playwright driving system Chrome (the sandbox cache 
 | IA + routes | [`../03-information-architecture.md`](../03-information-architecture.md) |
 | Interaction model | [`../04-interaction-model.md`](../04-interaction-model.md) |
 | Visual language | `docs/platform/operator/alloy-visual-language.md` |
-| Configuration Runtime mockups (reference) | `docs/sprints/06_2026/configuration-runtime-core-interaction/` |
-| Workspace V3 mockups (reference) | `docs/sprints/06_2026/workspace-v3-operational-command-center/mockups/` |
+| Configuration Runtime mockups (reference) | `docs/sprints/archive/06_2026/configuration-runtime-core-interaction/` |
+| Workspace V3 mockups (reference) | `docs/sprints/archive/06_2026/workspace-v3-operational-command-center/mockups/` |

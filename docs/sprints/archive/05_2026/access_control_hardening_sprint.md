@@ -69,7 +69,7 @@ Tests: `web/tests/admin/adminFinancialScope.test.ts` (helper-level).
 
 ## Card C — Seed script
 
-- **Follow-on (product data):** After the communications sprint, staging should move to a **realistic reseed** — see **`docs/sprints/05_2026/staging_demo_reseed_sprint.md`**. Do not keep growing `access_validation_demo_*` for new CRM features.
+- **Follow-on (product data):** After the communications sprint, staging should move to a **realistic reseed** — see **`docs/sprints/archive/05_2026/staging_demo_reseed_sprint.md`**. Do not keep growing `access_validation_demo_*` for new CRM features.
 - **File:** `web/scripts/seedAccessValidationDemo.ts`
 - **npm script:** `npm run dev:seed:access-validation`
 - **Package marker:** `demo_seed_package = access_validation_demo_v2` on inserted rows (alongside `access_validation_seed_key`). Inserts only when that entity’s seed key is not already present; **does not** truncate org data.
@@ -128,7 +128,7 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
 - **Options:** only site `location_type === 'site'` locations the user is already allowed to see (from access scope — not a permission change).
 - **Semantics:** _view filter_ only. Effective rows = **`access_scope ∩ selected_site`**. Changing the control does not elevate or bypass RBAC.
 
-**Shipped (May 2026, plumbing):** `GET /api/admin/workspace/site-filter`, `WorkspaceSiteFilterContext`, header strip on workspace routes (`WorkspaceSiteFilterGate`), minimal dropdown / single-site label. **Remaining:** thread `selectedSiteId` into workspace data loads per **`docs/sprints/05_2026/site_filter_workspace_card.md`**.
+**Shipped (May 2026, plumbing):** `GET /api/admin/workspace/site-filter`, `WorkspaceSiteFilterContext`, header strip on workspace routes (`WorkspaceSiteFilterGate`), minimal dropdown / single-site label. **Remaining:** thread `selectedSiteId` into workspace data loads per **`docs/sprints/archive/05_2026/site_filter_workspace_card.md`**.
 
 ---
 
@@ -178,7 +178,7 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
 
 6. Ensure org has **`new_inquiry`** (or chosen `status_key`) allowed for opportunities if status-definition triggers apply.
 
-See also **`docs/sprints/05_2026/site_filter_workspace_card.md`** (header site filter plumbing).
+See also **`docs/sprints/archive/05_2026/site_filter_workspace_card.md`** (header site filter plumbing).
 
 ---
 

@@ -570,7 +570,7 @@ If assumption risk is high for breakdown performance, one reversible spike:
 - Add `evaluateMetricBreakdown` for **`enrollment.tour_conversion_rate` × `site_id`** only.
 - Wire to dev preview Diagnostic surface behind flag.
 - Measure query cost with org scope filters.
-- Document in `docs/sprints/06_2026/analytics-operational-intelligence-platform/05-breakdown-spike.md`.
+- Document in `docs/sprints/archive/06_2026/analytics-operational-intelligence-platform/05-breakdown-spike.md`.
 
 No migrations. No protected runtime files.
 

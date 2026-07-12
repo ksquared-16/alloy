@@ -1,6 +1,6 @@
 # Child-Grain Queue Conversion — Design + Migration Plan
 
-**Path:** `docs/sprints/06_2026/child_grain_queue_conversion_design.md`  
+**Path:** `docs/sprints/archive/06_2026/child_grain_queue_conversion_design.md`  
 **Date:** 2026-06-06  
 **Status:** **Frozen — architecture gate before queue membership / count changes**  
 **Scope:** Design + phased migration only. **No runtime queue conversion in this sprint.**

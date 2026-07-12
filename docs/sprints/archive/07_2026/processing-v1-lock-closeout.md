@@ -114,7 +114,7 @@ cd web && npm run test -- \
 cd web && NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit --pretty false
 ```
 
-Screenshots: `docs/sprints/07_2026/digital-mailroom-identity-screenshots/`
+Screenshots: `docs/sprints/archive/07_2026/digital-mailroom-identity-screenshots/`
 
 ---
 
@@ -128,6 +128,6 @@ Screenshots: `docs/sprints/07_2026/digital-mailroom-identity-screenshots/`
 4. **Studio Fields / Branding** — config surfaces inside Studio
 5. **Runtime forms** — submission → case linkage polish
 
-Canonical docs: `docs/platform/modules/documents-and-forms.md`, `docs/sprints/07_2026/processing-v1-gpt-handoff.md`
+Canonical docs: `docs/platform/modules/documents-and-forms.md`, `docs/sprints/archive/07_2026/processing-v1-gpt-handoff.md`
 
 Key files: `ProcessingModal.tsx`, `DigitalMailroomShell.tsx`, `PosProcessingWorkspace.tsx`, `PosTemplateSetupColumn.tsx`

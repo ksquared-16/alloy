@@ -1,6 +1,6 @@
 # Condition Builder — One Condition Engine
 
-**Path:** `docs/sprints/06_2026/presentation-data-analytics-architecture/06-condition-builder.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-data-analytics-architecture/06-condition-builder.md`
 **Status:** Architecture sprint — design only (June 2026)
 **Deliverable:** 5 — Condition Builder
 

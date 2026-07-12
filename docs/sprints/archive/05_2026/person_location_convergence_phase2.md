@@ -5,7 +5,7 @@
 
 This document captures deferred work for archive/delete governance, person enhancements, location enhancements, and navigation enhancements. Phase 2 should be scoped as its own sprint or card sequence after convergence closeout.
 
-**Canonical references:** `docs/sprints/05_2026/record_person_location_convergence_audit.md`, `docs/core/glossary.md`, `docs/system/record-system.md`
+**Canonical references:** `docs/sprints/archive/05_2026/record_person_location_convergence_audit.md`, `docs/platform/governance/glossary.md`, `docs/archive/2026-06-superseded-system/record-system.md`
 
 ---
 

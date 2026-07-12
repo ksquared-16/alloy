@@ -90,4 +90,4 @@ BOS Phase 3+ may **propose**; platform APIs and operator actions remain authorit
 - `docs/product/bos-foundation.md`
 - `docs/system/forms-intake-runtime-validation.md` — outcome doctrine + QA checklist (FD-14)
 - `docs/system/forms-intake-runtime-phase.md` — phase operating model + Tests 2–5
-- `docs/sprints/05_2026/forms_operational_intelligence_workflow_polish.md`
+- `docs/sprints/archive/05_2026/forms_operational_intelligence_workflow_polish.md`

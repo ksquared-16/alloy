@@ -2,7 +2,7 @@
 
 **Status:** Decision memo (June 2026). Resolves Open Questions 1-3 from [`operational_execution_phase1_backend_building_blocks.md`](operational_execution_phase1_backend_building_blocks.md) before authorizing Prompt P1. **No code, migrations, schema, or implementation.**
 
-**Doctrine basis:** [`docs/platform/operational-truth-flow-doctrine.md`](../../platform/operational-truth-flow-doctrine.md) (L1 Configuration; config-as-first-class), [`docs/platform/core/placement-system.md`](../../platform/core/placement-system.md) (School → Program → Room cascade), [`docs/platform_convergence/child_namespace_decision.md`](../../platform_convergence/child_namespace_decision.md).
+**Doctrine basis:** [`docs/platform/core/operational-truth-flow-doctrine.md`](../../platform/core/operational-truth-flow-doctrine.md) (L1 Configuration; config-as-first-class), [`docs/platform/core/placement-system.md`](../../platform/core/placement-system.md) (School → Program → Room cascade), [`docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md).
 
 **Direction tested (from operator):** org defaults with location overrides; program/room specificity where operationally required; ratio rules as first-class compliance config; `schedule_patterns` remain child schedule intent; `schedule_rules` define operating constraints/windows/eligibility/policy; expectations stay derived/non-authoritative. **This memo confirms that direction** with grain specifics and guardrails.
 

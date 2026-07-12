@@ -1,6 +1,6 @@
 # Entity Status + Lifecycle Stage + Location Scope — Architecture Contract
 
-**Path:** `docs/sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`  
+**Path:** `docs/sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`  
 **Date:** 2026-06-08 · **2026-06-09** (enrollment stage vs child identity correction)  
 **Status:** **Frozen — architecture for layout config, queue/drawer redesign, and convergence sprints**  
 **Scope:** Status vocabulary, lifecycle stage vs status, mixed households, location/program/room ownership, access control, layout compatibility. **Documentation + low-risk type extensions only.**
@@ -650,7 +650,7 @@ See `web/lib/workUnits/lifecycleSubjectContracts.ts` — optional fields documen
 
 **Upstream config:** Lifecycle Builder (`departments.metadata` lifecycle activation board) — see [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md).  
 **Runtime contract:** [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md), `web/lib/workUnits/lifecycleSubjectContracts.ts`.  
-**Layout cutover:** [`layout_runtime_cutover_plan.md`](../platform_convergence/layout_runtime_cutover_plan.md) (C4 queue rows require `QueueRowContext`).
+**Layout cutover:** [`layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) (C4 queue rows require `QueueRowContext`).
 
 ### 7.1 Lifecycle Builder integration
 
@@ -878,7 +878,7 @@ Configured layouts (published `entity_layouts` / drawer variants) **place system
 | Redaction before render | Access resolver sets `visibility` on siblings **before** `LayoutRuntimeRenderer` — layout never sees cross-site PII for restricted users |
 | Queue vs drawer | Queue row blocks read `item._queue_row_context`; drawer blocks read drawer VM + same context paths |
 
-**Parallel sprint:** Layout Configuration may author block layouts and field placements against **stub/fixture** `WorkUnitSurfaceContext` and partial `_queue_row_context` today — see [`layout_runtime_cutover_plan.md`](../platform_convergence/layout_runtime_cutover_plan.md) C1–C4.
+**Parallel sprint:** Layout Configuration may author block layouts and field placements against **stub/fixture** `WorkUnitSurfaceContext` and partial `_queue_row_context` today — see [`layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) C1–C4.
 
 ---
 
@@ -993,7 +993,7 @@ Freeze vocabulary, stage vs status, location ownership, access redaction, layout
 | [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md) | Lifecycle subject + queue row context |
 | [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md) | Settings UX for programs/rooms |
 | [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md) | Current program field audit |
-| [`../platform_convergence/layout_runtime_cutover_plan.md`](../platform_convergence/layout_runtime_cutover_plan.md) | Layout runtime parallel work |
+| [`../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) | Layout runtime parallel work |
 | [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md) | Builder stage / queue view config plane |
 | [`../system/work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) | `QueueRowContext` developer contract |
 | [`../system/entity-model.md`](../system/entity-model.md) | Entity location semantics |

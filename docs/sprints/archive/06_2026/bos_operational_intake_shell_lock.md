@@ -30,9 +30,9 @@ cd web && npm run screenshots:bos-operational-intake-shell-lock
 
 | Asset | Path |
 |-------|------|
-| Desktop | `docs/sprints/06_2026/assets/bos-operational-intake-shell-lock/desktop-locked-shell.png` |
-| Laptop | `docs/sprints/06_2026/assets/bos-operational-intake-shell-lock/laptop-locked-shell.png` |
-| Before/after | `docs/sprints/06_2026/assets/bos-operational-intake-shell-lock/before-after-shell-lock.png` |
+| Desktop | `docs/sprints/archive/06_2026/assets/bos-operational-intake-shell-lock/desktop-locked-shell.png` |
+| Laptop | `docs/sprints/archive/06_2026/assets/bos-operational-intake-shell-lock/laptop-locked-shell.png` |
+| Before/after | `docs/sprints/archive/06_2026/assets/bos-operational-intake-shell-lock/before-after-shell-lock.png` |
 
 Gallery: `/dev/bos-operational-intake-shell-lock`
 

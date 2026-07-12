@@ -28,7 +28,7 @@ Findings appear **live** in column 3. User does not click Analyze and move to an
 
 ## Mockups
 
-Screenshots: `docs/sprints/06_2026/assets/operational-intake-workspace/`
+Screenshots: `docs/sprints/archive/06_2026/assets/operational-intake-workspace/`
 
 | # | Intake surface | File |
 |---|----------------|------|

@@ -1,6 +1,6 @@
 # Sprint: AI Agents V1 (Suggestion + Task Assist + Workflow Assist)
 
-**Path:** `docs/sprints/05_2026/ai_agents_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/ai_agents_v1.md`  
 **Status:** Sprint specification — implementation follows cards in order.  
 **Sources of truth:** `ai_agents_v1_step0_audit.md`, `ai_agents_v1_step1_design.md`, and execution doctrine in-repo.
 
@@ -11,9 +11,9 @@
 This sprint introduces **AI agents as first-class platform capabilities** without a standalone agent framework.
 
 - **Agent 1 — Needs Attention Suggestion:** extends the existing **needs attention / operational attention** system with a **structured, deterministic suggestion** (`next_action`, `reasoning`, optional **draft** message content) tied to resolver output.
-- **Agent 2 — Task Assist V1:** **Shipped (narrow V1)** per **`docs/sprints/05_2026/task_assist_v1.md`** — **transactional, one-off, user-directed** draft + approve-to-send for **opportunities** (SMS/email, single recipient, no durable proposals, no scheduled send in-product). **Out of scope for Agent 2:** reusable workflow configuration, workflow graph authoring, and any durable automation definition as the deliverable.
+- **Agent 2 — Task Assist V1:** **Shipped (narrow V1)** per **`docs/sprints/archive/05_2026/task_assist_v1.md`** — **transactional, one-off, user-directed** draft + approve-to-send for **opportunities** (SMS/email, single recipient, no durable proposals, no scheduled send in-product). **Out of scope for Agent 2:** reusable workflow configuration, workflow graph authoring, and any durable automation definition as the deliverable.
 - **Agent 3 — Workflow Assist:** **design and documentation only** in this sprint — **reusable workflow configuration** (draft generation, maintenance, diagnostics). **Out of scope for Agent 3:** one-off transactional execution (send/schedule) as the agent’s core job; those belong to **Task Assist**.
-- **Orchestrator (AdminV2 command bar — Interaction Layer V1):** **Shipped** as **`AICommandSurfaceShell`** + **`routeCommandSurface`**. Parses operator NL, resolves entity/context, routes to **Task Assist**, **Workflow Assist notice** (specialist later), or job layout — shows thread/clarification/candidates; **never directly executes** operational actions. See **`docs/sprints/05_2026/agent_interaction_layer_v1.md`**.
+- **Orchestrator (AdminV2 command bar — Interaction Layer V1):** **Shipped** as **`AICommandSurfaceShell`** + **`routeCommandSurface`**. Parses operator NL, resolves entity/context, routes to **Task Assist**, **Workflow Assist notice** (specialist later), or job layout — shows thread/clarification/candidates; **never directly executes** operational actions. See **`docs/sprints/archive/05_2026/agent_interaction_layer_v1.md`**.
 
 **Product separation (non-negotiable):** **Orchestrator**, **Task Assist**, and **Workflow Assist** are distinct roles. **Task Assist** and **Workflow Assist** are **separate specialist agents**. They share the same **four-layer architecture** (see §6) but must **not** be conflated: one addresses **ephemeral / transactional** operator intents with **human approval before send** (scheduled send and follow-up apply are **out of scope** for shipped Task Assist V1 — see **`task_assist_v1.md`**); the other addresses **workflow definitions** with drafts **disabled by default** and human approval before save/apply to persisted automation.
 
@@ -92,7 +92,7 @@ Work is sequenced as **cards** (audit validation → model → engine → integr
 
 **Workflows & events**
 
-- Workflows: **`workflows`** table + **`executeWorkflowRun`** + **`emitEvent`** / `workflow_events` — see `docs/system/actions-and-workflows.md`.
+- Workflows: **`workflows`** table + **`executeWorkflowRun`** + **`emitEvent`** / `workflow_events` — see `docs/archive/2026-06-superseded-system/actions-and-workflows.md`.
 
 **Gaps addressed by this sprint**
 
@@ -165,7 +165,7 @@ The architecture is shared; **product contracts are not**. Each agent owns its o
 
 **Explicit non-goals (V1):** authoring **reusable workflow configuration** (`workflows` / conditions / actions graphs), NL→workflow, scheduled send, durable proposals, reminders/follow-up apply, bulk send, **`jobs`** drawer — see **`task_assist_v1.md`** limitations + follow-ups.
 
-**Canonical spec:** **`docs/sprints/05_2026/task_assist_v1.md`** — contract §3, validation §4, apply §5, UI §6, safety §7.
+**Canonical spec:** **`docs/sprints/archive/05_2026/task_assist_v1.md`** — contract §3, validation §4, apply §5, UI §6, safety §7.
 
 ### 8.1 `TaskAssistSuggestionV1`
 
@@ -322,7 +322,7 @@ As specified in Step 1 design (verbatim structure — implement in TypeScript in
 
 ### 10.2 `TaskAssistSuggestionV1` (Agent #2)
 
-Canonical contract and execution plan: **`docs/sprints/05_2026/task_assist_v1.md` §3** (supersedes the §8.1 sketch pointer in this file).
+Canonical contract and execution plan: **`docs/sprints/archive/05_2026/task_assist_v1.md` §3** (supersedes the §8.1 sketch pointer in this file).
 
 ### 10.3 `WorkflowAssistSuggestionV1` (Agent 3 — doc-only this sprint)
 
@@ -408,7 +408,7 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 | **3** | **Needs attention integration** | Attach **`_attention_suggestion`** on authoritative opportunity **entity GET** next to **`_operational_attention`**; wire activity input when available on that path. |
 | **4** | **UI rendering (drawer)** | Production drawer: **header chrome** as primary suggestion surface; collapsible operational detail in overview; Admin V2 patterns. |
 | **5** | **Suggested message generation** | Deterministic **`suggested_content`** only; safe channels/families; no send path. |
-| **6** | **Task Assist + Workflow Assist — docs** | **Task Assist:** Step 1 + cards in **`docs/sprints/05_2026/task_assist_v1.md`** (implementation follows that file after Card 0). **Workflow Assist:** template docs only (`WorkflowAssistSuggestionV1`, …) — **no runtime** unless a separate card pack is opened. |
+| **6** | **Task Assist + Workflow Assist — docs** | **Task Assist:** Step 1 + cards in **`docs/sprints/archive/05_2026/task_assist_v1.md`** (implementation follows that file after Card 0). **Workflow Assist:** template docs only (`WorkflowAssistSuggestionV1`, …) — **no runtime** unless a separate card pack is opened. |
 | **7** | **Testing + validation** | Run targeted tests, typecheck, doc tweaks if behavior is adjusted; sign-off checklist. |
 
 ---
@@ -441,12 +441,12 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 
 ## 17. References
 
-- `docs/sprints/05_2026/ai_agents_v1_step0_audit.md`
-- `docs/sprints/05_2026/task_assist_v1_step0_audit.md` (Agent #2 — Task Assist V1)
-- `docs/sprints/05_2026/task_assist_v1.md` (Agent #2 — Step 1 design + cards)
-- `docs/sprints/05_2026/ai_agents_v1_step1_design.md`
+- `docs/sprints/archive/05_2026/ai_agents_v1_step0_audit.md`
+- `docs/sprints/archive/05_2026/task_assist_v1_step0_audit.md` (Agent #2 — Task Assist V1)
+- `docs/sprints/archive/05_2026/task_assist_v1.md` (Agent #2 — Step 1 design + cards)
+- `docs/sprints/archive/05_2026/ai_agents_v1_step1_design.md`
 - `web/lib/opportunities/opportunityAttentionResolver.ts`
 - `web/lib/admin/operationalAttentionEntityAttachment.ts`
 - `web/lib/admin/opportunityEntityRecord.ts`
-- `docs/system/actions-and-workflows.md`
-- `docs/system/workspace-system.md`
+- `docs/archive/2026-06-superseded-system/actions-and-workflows.md`
+- `docs/archive/2026-06-superseded-system/workspace-system.md`

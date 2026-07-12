@@ -22,7 +22,7 @@ Stop exploring content layouts. Explore **outer workspace geometry** only.
 
 ## Silhouettes
 
-Screenshots: `docs/sprints/06_2026/assets/operational-intake-silhouette/`
+Screenshots: `docs/sprints/archive/06_2026/assets/operational-intake-silhouette/`
 
 | # | Geometry | File |
 |---|----------|------|

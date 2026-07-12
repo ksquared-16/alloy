@@ -1,6 +1,6 @@
 # Lifecycle Builder Subject-Grain Alignment — Design + Implementation Plan
 
-**Path:** `docs/sprints/06_2026/lifecycle_builder_subject_grain_alignment_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_builder_subject_grain_alignment_plan.md`  
 **Date:** 2026-06-06  
 **Status:** **Architecture gate — metadata bridge before Phase C lane flips resume**  
 **Scope:** Design + low-risk metadata/type planning. **No queue membership, lane counts, or production behavior changes in this sprint.**

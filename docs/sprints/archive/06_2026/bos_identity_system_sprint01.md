@@ -1,8 +1,8 @@
 # BOS Identity System — Sprint 01
 
-**Path:** `docs/sprints/06_2026/bos_identity_system_sprint01.md`  
+**Path:** `docs/sprints/archive/06_2026/bos_identity_system_sprint01.md`  
 **Status:** Complete — see Sprint 02 migration report  
-**Follow-up:** `docs/sprints/06_2026/bos_identity_system_sprint02_migration_report.md`
+**Follow-up:** `docs/sprints/archive/06_2026/bos_identity_system_sprint02_migration_report.md`
 
 ## Objective
 

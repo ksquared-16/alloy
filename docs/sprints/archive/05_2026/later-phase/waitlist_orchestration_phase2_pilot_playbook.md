@@ -186,4 +186,4 @@ npx tsc --noEmit   # required; document unrelated pre-existing errors if any
 - [Implementation cards](waitlist_orchestration_phase2_cards.md)  
 - [Architecture](waitlist_orchestration_phase2_architecture.md)  
 - [Priority Placement V1](priority_placement_orchestration_may_2026.md)  
-- `docs/product/crm-system.md`, `docs/system/workspace-system.md`
+- `docs/product/crm-system.md`, `docs/archive/2026-06-superseded-system/workspace-system.md`

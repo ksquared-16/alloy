@@ -1,6 +1,6 @@
 # BOS Assist Routing + Communication Drafting — Sprint Closeout
 
-**Path:** `docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`  
 **Status:** **COMPLETE** (functionally closed 2026-05-26)  
 **Wall-clock span:** 2026-05-21 → 2026-05-26 (fix passes through channel-aware drafting)
 

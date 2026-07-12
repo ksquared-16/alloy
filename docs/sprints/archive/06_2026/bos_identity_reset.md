@@ -1,6 +1,6 @@
 # BOS Identity Reset
 
-**Path:** `docs/sprints/06_2026/bos_identity_reset.md`  
+**Path:** `docs/sprints/archive/06_2026/bos_identity_reset.md`  
 **Status:** Shape exploration — design sign-off gate  
 **Date:** 2026-06-08
 
@@ -56,7 +56,7 @@ Each exploration applied to:
 cd web && npm run screenshots:bos-shape
 ```
 
-Output: `docs/sprints/06_2026/assets/bos-shape-exploration/`
+Output: `docs/sprints/archive/06_2026/assets/bos-shape-exploration/`
 
 | File | Shape |
 |------|-------|
@@ -141,7 +141,7 @@ Each shows **closed** and **open** states over simulated Alloy workspace. Interi
 cd web && npm run screenshots:bos-workspace-shell
 ```
 
-Output: `docs/sprints/06_2026/assets/bos-workspace-shell-exploration/`
+Output: `docs/sprints/archive/06_2026/assets/bos-workspace-shell-exploration/`
 
 ---
 
@@ -169,7 +169,7 @@ Three explorations:
 cd web && npm run screenshots:bos-atmospheric-border
 ```
 
-Output: `docs/sprints/06_2026/assets/bos-atmospheric-border-exploration/`
+Output: `docs/sprints/archive/06_2026/assets/bos-atmospheric-border-exploration/`
 
 User read: *"this surface feels different"* — not *"that's a cloud"*.
 
@@ -195,7 +195,7 @@ User read: *"this surface feels different"* — not *"that's a cloud"*.
 cd web && npm run screenshots:action-workspace-bos-cloud
 ```
 
-Output: `docs/sprints/06_2026/assets/action-workspace-bos-cloud/`
+Output: `docs/sprints/archive/06_2026/assets/action-workspace-bos-cloud/`
 
 Post sign-off:
 

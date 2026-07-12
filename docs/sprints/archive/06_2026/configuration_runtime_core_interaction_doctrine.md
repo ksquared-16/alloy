@@ -104,8 +104,8 @@ Do not hardcode the pattern only for Processes.
 ## Related docs
 
 - `docs/system/configuration-mode-doctrine.md`
-- `docs/sprints/06_2026/configuration_runtime_final_ui_review.md`
+- `docs/sprints/archive/06_2026/configuration_runtime_final_ui_review.md`
 
 ## Screenshots
 
-Captured in `docs/sprints/06_2026/configuration-runtime-core-interaction/` after Playwright pass.
+Captured in `docs/sprints/archive/06_2026/configuration-runtime-core-interaction/` after Playwright pass.

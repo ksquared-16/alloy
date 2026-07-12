@@ -66,4 +66,4 @@ Forms editing stays **in-modal**. Never hand off to `/admin/forms` for operator 
 
 OCR · AI extraction · Studio Packets/Fields/Branding · Runtime submission · BOS in Work surfaces
 
-Docs: `docs/platform/modules/documents-and-forms.md`, `docs/sprints/07_2026/processing-v1-lock-closeout.md`
+Docs: `docs/platform/modules/documents-and-forms.md`, `docs/sprints/archive/07_2026/processing-v1-lock-closeout.md`

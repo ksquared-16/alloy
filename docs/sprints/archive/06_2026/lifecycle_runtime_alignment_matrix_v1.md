@@ -1,6 +1,6 @@
 # Lifecycle Runtime Alignment Matrix v1
 
-**Path:** `docs/sprints/06_2026/lifecycle_runtime_alignment_matrix_v1.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_runtime_alignment_matrix_v1.md`  
 **Status:** Planning artifact (May 2026) — **no implementation in this pass**  
 **Sprint:** Lifecycle Runtime & Configuration Alignment  
 **Doctrine (canonical):** Lead → Qualification → Tour → Waitlist → Enrollment → Enrolled  

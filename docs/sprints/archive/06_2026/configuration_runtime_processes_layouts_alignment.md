@@ -311,7 +311,7 @@ Actual UI must match approved mockups — not restyled legacy forms.
 | 6 | `/settings/layouts` — target IA mock or wireframe (Layouts slice plan) |
 | 7 | Preview runtime — opened from Work View |
 
-Directory: `docs/sprints/06_2026/configuration-runtime-vertical-slice/`
+Directory: `docs/sprints/archive/06_2026/configuration-runtime-vertical-slice/`
 
 ---
 

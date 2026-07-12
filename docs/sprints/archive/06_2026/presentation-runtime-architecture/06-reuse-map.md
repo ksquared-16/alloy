@@ -1,8 +1,8 @@
 # Reuse Map — Presentation Runtime
 
-**Path:** `docs/sprints/06_2026/presentation-runtime-architecture/06-reuse-map.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-runtime-architecture/06-reuse-map.md`
 **Status:** Architecture sprint — design only (June 2026)
-**Companion:** [`01-presentation-runtime-doctrine.md`](./01-presentation-runtime-doctrine.md), [`05-surface-inventory.md`](./05-surface-inventory.md)
+**Companion:** [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md), [`05-surface-inventory.md`](./05-surface-inventory.md)
 
 ---
 
@@ -20,7 +20,7 @@ These are production-ready or design-frozen artifacts that the Presentation Runt
 |---|---|---|
 | **Runtime spine** | `canonical-interaction-model.md` | Operational interaction hierarchy — unchanged |
 | **Universal Card anatomy** | `universal-card-system.md`, `UniversalCard.tsx` | Card shell primitive — platform-owned anatomy |
-| **8 Card Archetypes** | `universal-card-archetypes.md`, `FocusPanelCardRenderer.tsx` | Structural card behavior — frozen |
+| **8 Card Archetypes** | `universal-universal-card-archetypes.md`, `FocusPanelCardRenderer.tsx` | Structural card behavior — frozen |
 | **5 Interaction models** | `card-interaction-expansion-doctrine.md` | Expansion/drill/workspace/subject-change — frozen |
 | **Content templates** | `card-content-template-field-inclusion-doctrine.md` | Field inclusion at compact/expanded/drill depths — frozen |
 | **Configuration Mode shell** | `ConfigurationModeShell.tsx`, `BusinessProcessConfigurationShell.tsx` | Experience Builder page shell — reuse directly |
@@ -137,7 +137,7 @@ This sprint defines architecture only. Implementation should follow this phasing
 
 | Concern | Doc |
 |---|---|
-| Presentation Runtime doctrine | [`01-presentation-runtime-doctrine.md`](./01-presentation-runtime-doctrine.md) |
+| Presentation Runtime doctrine | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
 | Surface inventory | [`05-surface-inventory.md`](./05-surface-inventory.md) |
 | Architecture recommendations | [`07-architecture-recommendations.md`](./07-architecture-recommendations.md) |
 | Existing EB doctrine | `docs/platform/operator/experience-builder-doctrine.md` |

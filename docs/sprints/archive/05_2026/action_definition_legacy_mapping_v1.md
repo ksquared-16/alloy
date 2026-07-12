@@ -1,6 +1,6 @@
 # Action Definition Legacy Mapping v1
 
-**Path:** `docs/sprints/05_2026/action_definition_legacy_mapping_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/action_definition_legacy_mapping_v1.md`  
 **Status:** Phase 0 — review before migrations  
 **Companion:** [`canonical_action_catalog_v1.md`](./canonical_action_catalog_v1.md)
 

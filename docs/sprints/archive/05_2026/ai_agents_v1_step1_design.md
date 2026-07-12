@@ -254,7 +254,7 @@ Minimum tests for Agent 1 build:
 
 ## Agent 2: Task Assist V1 (template)
 
-**Canonical Step 1 design:** `docs/sprints/05_2026/task_assist_v1.md` (contract §3, cards §8). The sketch below is **obsolete** — kept only as a historical stub.
+**Canonical Step 1 design:** `docs/sprints/archive/05_2026/task_assist_v1.md` (contract §3, cards §8). The sketch below is **obsolete** — kept only as a historical stub.
 
 ### Purpose (summary)
 

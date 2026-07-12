@@ -80,7 +80,7 @@ in legacy shape.
    persists stage, membership criteria, delete stage bindings + queue status filters.
 5. **S5 — Work Views + Actions alignment.**
 6. **S6 — Default process template + operating plans (qualification removal).**
-7. **S7 — Doctrine doc updates** (`canonical-status-architecture.md`,
+7. **S7 — Doctrine doc updates** (`platform/core/data/status-architecture.md`,
    `business-process-system.md`, `status-and-state-system.md`, entity spec terminology,
    new stage-membership doctrine section).
 

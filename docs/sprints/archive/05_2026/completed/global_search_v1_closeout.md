@@ -1,6 +1,6 @@
 # Global Search V1 — Sprint Closeout
 
-**Path:** `docs/sprints/05_2026/completed/global_search_v1_closeout.md`  
+**Path:** `docs/sprints/archive/05_2026/completed/global_search_v1_closeout.md`  
 **Status:** **CLOSED** (May 2026)  
 **Canonical doc:** [global_search_foundation.md](../global_search_foundation.md)  
 **Phase 2 ideas:** [global_search_phase2_candidates.md](../global_search_phase2_candidates.md)

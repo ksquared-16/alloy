@@ -37,7 +37,7 @@ PORT=3001 npm run dev
 ## Load validation harness
 
 In DevTools Console (both ports), paste the contents of:
-`docs/sprints/07_2026/perceived-performance-browser-validation.js`
+`docs/sprints/archive/07_2026/perceived-performance-browser-validation.js`
 
 Confirm: `[perceived-validation] loaded`
 

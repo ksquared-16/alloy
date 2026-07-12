@@ -32,7 +32,7 @@ Target feeling: **“I’m entering a BOS workspace”** — not **“I’m fill
 
 ## Layout options
 
-Screenshots: `docs/sprints/06_2026/assets/action-workspace-intake-mockups/`
+Screenshots: `docs/sprints/archive/06_2026/assets/action-workspace-intake-mockups/`
 
 ### Option A · Preferred — Cohesive BOS environment
 

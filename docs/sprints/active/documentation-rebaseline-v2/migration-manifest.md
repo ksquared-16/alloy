@@ -24,7 +24,7 @@ concept: documentation-rebaseline-v2
 | `docs/system/` | 36 | Locked runtime implementation |
 | `docs/sprints/` | ~441 | Execution history (+ 111 MB assets) |
 | `docs/archive/` | 226 | Historical |
-| `docs/export/` | ~94 | 68% duplicate of live docs |
+| `docs/archive/2026-06-handoff-packs/` | ~94 | 68% duplicate of live docs |
 | `docs/audits/` | 21 | Point-in-time investigations |
 | `docs/schema/` + `docs/api/` | 29 | Generated reference |
 | Loose `docs/` root | 23 | 16 `canonical-*` + layout_v2 orphans |
@@ -59,15 +59,15 @@ concept: documentation-rebaseline-v2
 | Current path | Classification | Concept | Authority | Action | Target | Reconciliation |
 |--------------|----------------|---------|-----------|--------|--------|----------------|
 | `docs/README.md` | Navigation hub | Doc system index | Canonical | KEEP + EDIT | — | Add audit trio index; fix system/ framing |
-| `canonical-data-system.md` | Misfiled doctrine | Data System SSOT | Canonical (de facto) | MOVE+RENAME | `platform/core/data/data-system.md` | None |
-| `canonical-entity-specification.md` | Misfiled doctrine | Entity spec | Canonical | MOVE+RENAME + BANNER | `platform/core/data/entity-specification.md` | Banner current |
-| `canonical-relationship-model.md` | Misfiled doctrine | Relationships | Canonical | MOVE+RENAME | `platform/core/data/relationship-model.md` | None |
-| `canonical-field-catalog.md` | Generated doctrine | Field catalog | Generated | MOVE | `platform/core/data/field-catalog.md` | Generator: `web/scripts/generateCanonicalFieldCatalogDoc.ts` |
-| `universal-field-system.md` | Misfiled doctrine | Field System | Canonical | MOVE+RENAME | `platform/core/data/field-system.md` | None |
-| `canonical-status-architecture.md` | Misfiled doctrine | Status architecture | Canonical | MOVE+RENAME + BANNER | `platform/core/data/status-architecture.md` | REVIEW-GATE vs Phase-5 |
-| `canonical-action-status-field-matrix.md` | Misfiled doctrine | Action/status matrix | Canonical | MOVE+RENAME | `platform/core/data/action-status-field-matrix.md` | None |
-| `canonical-configuration-data-alignment.md` | Misfiled doctrine | Config alignment | Canonical | MOVE+RENAME | `platform/core/data/configuration-data-alignment.md` | REVIEW-GATE |
-| `canonical-runtime-data-alignment.md` | Misfiled doctrine | Runtime alignment | Canonical | MOVE+RENAME | `platform/core/data/runtime-data-alignment.md` | REVIEW-GATE |
+| `platform/core/data/data-system.md` | Misfiled doctrine | Data System SSOT | Canonical (de facto) | MOVE+RENAME | `platform/core/data/data-system.md` | None |
+| `platform/core/data/entity-specification.md` | Misfiled doctrine | Entity spec | Canonical | MOVE+RENAME + BANNER | `platform/core/data/entity-specification.md` | Banner current |
+| `platform/core/data/relationship-model.md` | Misfiled doctrine | Relationships | Canonical | MOVE+RENAME | `platform/core/data/relationship-model.md` | None |
+| `platform/core/data/field-catalog.md` | Generated doctrine | Field catalog | Generated | MOVE | `platform/core/data/field-catalog.md` | Generator: `web/scripts/generateCanonicalFieldCatalogDoc.ts` |
+| `platform/core/data/field-system.md` | Misfiled doctrine | Field System | Canonical | MOVE+RENAME | `platform/core/data/field-system.md` | None |
+| `platform/core/data/status-architecture.md` | Misfiled doctrine | Status architecture | Canonical | MOVE+RENAME + BANNER | `platform/core/data/status-architecture.md` | REVIEW-GATE vs Phase-5 |
+| `platform/core/data/action-status-field-matrix.md` | Misfiled doctrine | Action/status matrix | Canonical | MOVE+RENAME | `platform/core/data/action-status-field-matrix.md` | None |
+| `platform/core/data/configuration-data-alignment.md` | Misfiled doctrine | Config alignment | Canonical | MOVE+RENAME | `platform/core/data/configuration-data-alignment.md` | REVIEW-GATE |
+| `platform/core/data/runtime-data-alignment.md` | Misfiled doctrine | Runtime alignment | Canonical | MOVE+RENAME | `platform/core/data/runtime-data-alignment.md` | REVIEW-GATE |
 | `canonical-data-system-phase-1..7*.md` (7) | Sprint phases | Data system rollout | Sprint | MOVE | `sprints/completed/canonical-data-system/` | Historical |
 | `canonical-data-system-audit.md` | Audit | Data system investigation | Historical | MOVE | `audits/archive/` | None |
 | `layout_v2_*.md` (3) + `LAYOUT_CONFIG_V2_*` + `waitlist_*` (3) | Superseded sprint | Layout v2 | Historical | ARCHIVE | `archive/2026-06-layout-v2/` | None |
@@ -80,7 +80,7 @@ concept: documentation-rebaseline-v2
 
 | Current path | Action | Target |
 |--------------|--------|--------|
-| `platform/premium-operational-experience/` (6) | MOVE | `sprints/archive/06_2026/premium-operational-experience/` |
+| `sprints/archive/06_2026/premium-operational-experience/` (6) | MOVE | `sprints/archive/06_2026/premium-operational-experience/` |
 | `platform/operational-expansion-wave1-cursor-execution-packet.md` | MOVE | `sprints/archive/06_2026/operational-expansion/` |
 | `platform/operational-expansion-wave1-implementation-spec.md` | MOVE | `sprints/archive/06_2026/operational-expansion/` |
 | `platform/operational-expansion-phase1-architecture-rfc.md` | MOVE + REVIEW-GATE | `platform/rfcs/` (new) |
@@ -89,18 +89,18 @@ concept: documentation-rebaseline-v2
 
 | Current path | Action | Target |
 |--------------|--------|--------|
-| `platform/foundation/platform-certification-july-2026.md` | MOVE | `platform/milestones/certification-july-2026.md` |
-| `platform/foundation/platform-freeze-july-2026.md` | MOVE | `platform/milestones/freeze-july-2026.md` |
-| `platform/milestones/platform-stabilization-july-2026.md` | KEEP+RENAME | `platform/milestones/stabilization-july-2026.md` |
+| `platform/milestones/certification-july-2026.md` | MOVE | `platform/milestones/certification-july-2026.md` |
+| `platform/milestones/freeze-july-2026.md` | MOVE | `platform/milestones/freeze-july-2026.md` |
+| `platform/milestones/stabilization-july-2026.md` | KEEP+RENAME | `platform/milestones/stabilization-july-2026.md` |
 | `platform/foundation/platform-manifesto.md` | KEEP | Stays in foundation (living constitution) |
 
 ### Duplicate / supersession (Wave 2–3)
 
 | Current path | Action | Notes |
 |--------------|--------|-------|
-| `platform/platform-capabilities.md` | MOVE+RENAME | → `platform/foundation/capability-model-doctrine.md` (basename collision) |
-| `platform/operator/card-archetypes.md` | MERGE | → `universal-card-archetypes.md` |
-| `platform/operator/presentation-runtime-doctrine.md` | ARCHIVE+BANNER | Superseded by `experience/presentation-runtime-v2.md` |
+| `platform/foundation/capability-model-doctrine.md` | MOVE+RENAME | → `platform/foundation/capability-model-doctrine.md` (basename collision) |
+| `platform/operator/universal-universal-card-archetypes.md` | MERGE | → `universal-universal-card-archetypes.md` |
+| `platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` | ARCHIVE+BANNER | Superseded by `experience/presentation-runtime-v2.md` |
 | `platform/operator/focus-panel-edit-information-doctrine.md` | BANNER | Superseded-by editing shipped |
 | `platform/modules/operational-mutation-platform.md` | ARCHIVE | Superseded module |
 | `platform/commercial/commercial-configuration.md` | ARCHIVE | Dup of `modules/commercial-configuration.md` |
@@ -145,7 +145,7 @@ concept: documentation-rebaseline-v2
 | `docs/schema/*.md` (7) | `scripts/generate-schema-docs.mjs` | `docs/supabase/reference/*.csv` | Yes (CSV present) | **Stale** — missing post-`20260715` communications_identity tables |
 | `docs/supabase/reference/*.csv` (8) | `npm run export:supabase-schema` | Live DB (`DATABASE_URL`) | No (needs DB) | **Blocked** without staging credentials |
 | `docs/api/api-index.md` + inventory | `scripts/generate-api-inventory.mjs` | `web/app/api/**` routes | Yes | Regenerated Wave 1 |
-| `docs/canonical-field-catalog.md` | `web/scripts/generateCanonicalFieldCatalogDoc.ts` | Field registry code | Yes | Not regenerated Wave 1 (separate from schema) |
+| `docs/platform/core/data/field-catalog.md` | `web/scripts/generateCanonicalFieldCatalogDoc.ts` | Field registry code | Yes | Not regenerated Wave 1 (separate from schema) |
 
 ---
 
@@ -153,10 +153,10 @@ concept: documentation-rebaseline-v2
 
 | Tree | Files | Action | Wave |
 |------|-------|--------|------|
-| `docs/export/` | ~94 | DELETE after extract ~18 unique | 6 |
-| `docs/platform_convergence/` | 28 | ARCHIVE → `archive/2026-06-runtime-convergence/` | 6 |
-| `docs/handoffs/` | 3 | ARCHIVE | 6 |
-| `docs/governance/` (4) | 4 | MOVE → `platform/governance/` | 5 |
+| `docs/archive/2026-06-handoff-packs/` | ~94 | DELETE after extract ~18 unique | 6 |
+| `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/` | 28 | ARCHIVE → `archive/2026-06-runtime-convergence/` | 6 |
+| `docs/archive/2026-06-handoffs/handoffs/` | 3 | ARCHIVE | 6 |
+| `docs/platform/governance/` (4) | 4 | MOVE → `platform/governance/` | 5 |
 | `docs/core/` stubs | 2 | DELETE post-link-sweep | 5 |
 | `docs/doctrine/` | 1 | MOVE → `system/` | 5 |
 | `docs/execution/` | 2 | MERGE/ARCHIVE | 5 |
@@ -231,7 +231,7 @@ concept: documentation-rebaseline-v2
 **Mechanical moves must update inbound links in the same commit.** Highest fan-in paths before Wave 2:
 
 - `docs/README.md` (navigation hub — 200+ outbound refs)
-- `docs/platform/operator/presentation-runtime-doctrine.md` (supersession target)
+- `docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` (supersession target)
 - Loose `canonical-*` cluster (unindexed but referenced from sprint docs)
 
 Use `node scripts/docs-lint.mjs --json` before/after each move wave to measure link delta.

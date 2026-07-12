@@ -1,8 +1,8 @@
 # Sprint plan: AI Enrichment, Operational Summaries, Proposal / Apply (post–AI Agents V1)
 
-**Path:** `docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md`  
 **Status:** Phase 1 **Cards 0–6** + Phase 2 **Cards 7–11** + Phase 2.5 **Cards 11.5–11.8** implemented: permission-aware AI route gate, org policy pre-check, adapter design placeholders, **RBAC seed migration** for **`ai.enrichment.use`** (+ optional catalog keys). No live HTTP providers / SDKs / secrets. Live provider remains behind pilot approval.  
-**Prerequisite:** AI Agents V1 complete (`docs/sprints/05_2026/ai_agents_v1.md`) — deterministic needs-attention suggestion, `_attention_suggestion`, drawer header UX, queue preview, and **documentation templates** for **Agent 2 — Task Assist V1** (transactional / schedule; approval before send-schedule) and **Agent 3 — Workflow Assist** (reusable workflow config; drafts disabled-by-default; approval before save-apply) as **separate** agents.
+**Prerequisite:** AI Agents V1 complete (`docs/sprints/archive/05_2026/ai_agents_v1.md`) — deterministic needs-attention suggestion, `_attention_suggestion`, drawer header UX, queue preview, and **documentation templates** for **Agent 2 — Task Assist V1** (transactional / schedule; approval before send-schedule) and **Agent 3 — Workflow Assist** (reusable workflow config; drafts disabled-by-default; approval before save-apply) as **separate** agents.
 
 ---
 
@@ -80,7 +80,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 | 17 | Existing proposal/apply patterns? | **Yes — mature:** proposal row + apply audit + **SECURITY DEFINER** RPC with stale checks for agent v0/v1/v2. This is the **template** for durable needs-attention proposals. |
 | 18 | Approval / audit flows? | Same RPC pattern encodes **human-initiated apply** with trace ids (`proposal_id`, `request_id`, `correlation_id`, `result_id`). |
 | 19 | Tables for accept/dismiss/apply suggestion? | **New** tables (or new agent version namespace) **recommended** for suggestion proposals — do **not** overload field-visibility or queue-definition proposal tables. Mirror **shape**: proposals + apply_audit + optional dismiss table or status column. |
-| 20 | Connection to workflows / comms / records? | **Apply** should call **existing** mutations (`executeWorkflowRun` where appropriate, comms APIs, status actions) **only** after validated proposal + permission check — same doctrine as `docs/sprints/05_2026/ai_agents_v1.md` **Agent 3** §9.6 “future apply path” for workflow config, and **Agent 2** §8.2 for transactional send/schedule (separate contracts and surfaces). |
+| 20 | Connection to workflows / comms / records? | **Apply** should call **existing** mutations (`executeWorkflowRun` where appropriate, comms APIs, status actions) **only** after validated proposal + permission check — same doctrine as `docs/sprints/archive/05_2026/ai_agents_v1.md` **Agent 3** §9.6 “future apply path” for workflow config, and **Agent 2** §8.2 for transactional send/schedule (separate contracts and surfaces). |
 
 ---
 
@@ -281,7 +281,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 - `web/lib/emitEvent.ts` — `workflow_events` insert.  
 - `supabase/migrations/20260412100000_agent_v0_audit.sql`, `20260413100000_agent_v1_record_overview_layout_audit.sql`, `20260414100000_agent_v2_field_visibility_audit.sql` — proposal/apply audit precedent.  
 - `web/lib/opportunities/opportunityAttentionConfig.ts` — metadata-driven config pattern.  
-- `docs/sprints/05_2026/ai_agents_v1.md` — V1 agent contracts and non-goals.  
+- `docs/sprints/archive/05_2026/ai_agents_v1.md` — V1 agent contracts and non-goals.  
 - `docs/forms/future_ai_hooks_v1.md` — telemetry / RBAC hooks for future AI.  
 - **`web/lib/ai/**`** — Phase 1 foundation: policy parser, redaction, provider types, disabled provider, enrichment + telemetry contracts (`@/lib/ai` barrel).
 
@@ -380,7 +380,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 | Topic | Finding |
 |-------|---------|
 | **Prior route guard** | `POST …/enrich-attention-suggestion` used `getAdminContextCached` + **`ctx.role === "admin"`** only — no `permissionKeys`, no explicit org-policy pre-check at route boundary. |
-| **Canonical access stack** | `resolveAdminAccessCore` → `permissionKeys` union from **`role_permission_grants`** (`web/lib/admin/resolveAdminAccessCore.ts`). Portal shell uses **`admin` / `ops`** role_keys for **`portalEligible`** only — not per-feature RBAC (`docs/system/roles-and-permissions.md`). |
+| **Canonical access stack** | `resolveAdminAccessCore` → `permissionKeys` union from **`role_permission_grants`** (`web/lib/admin/resolveAdminAccessCore.ts`). Portal shell uses **`admin` / `ops`** role_keys for **`portalEligible`** only — not per-feature RBAC (`docs/archive/2026-06-superseded-system/roles-and-permissions.md`). |
 | **Feature-flag pattern** | Env truthy gates (e.g. `AI_ENRICHMENT_STUB_ENABLED`) match agent v2 style; complement with org **`metadata.ai_policy`**. |
 | **Recommended capability key** | **`ai.enrichment.use`** — single gate for “invoke server-side AI enrichment” (stub or future live). Split later if needed: **`ai.provider.config.manage`** (org policy / model allowlist admin), **`ai.telemetry.review`** (internal dashboards), **`agent.suggestion.apply`** (Phase 3 proposal/apply) — **not** implemented as keys in this slice. |
 | **Least privilege** | Prefer **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true`** + DB grants for any human who should call enrichment routes; avoid widening to all portal admins for live traffic. |

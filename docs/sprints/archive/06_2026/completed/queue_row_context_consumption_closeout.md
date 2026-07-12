@@ -1,6 +1,6 @@
 # QueueRowContext Consumption — Sprint Closeout
 
-**Path:** `docs/sprints/06_2026/completed/queue_row_context_consumption_closeout.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/queue_row_context_consumption_closeout.md`  
 **Date:** 2026-06-09 (updated 2026-06-06 — visual polish + runtime QA)  
 **Status:** **Closed — `OperationalQueueRecordRow` live on staging; polish sprint complete**  
 **Head commit (consumption):** `bfb0e02a`  
@@ -9,11 +9,11 @@
 **Planning / architecture docs (canonical):**
 
 - [`docs/system/work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) — developer contract, API attach, consumption table
-- [`docs/sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md`](../status_ownership_and_lifecycle_grain_expansion.md) — grain / ownership doctrine
-- [`docs/sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`](../entity_status_lifecycle_stage_and_location_scope_contract.md) — stage, location scope, placement on OCM
-- [`docs/sprints/06_2026/enrollment_lifecycle_status_matrix_contract.md`](../enrollment_lifecycle_status_matrix_contract.md) — enrollment disposition vocabulary
-- [`docs/sprints/06_2026/enrollment_status_seed_and_migration_plan.md`](../enrollment_status_seed_and_migration_plan.md) — status_definitions seed (related)
-- [`docs/sprints/06_2026/child_grain_queue_conversion_design.md`](../child_grain_queue_conversion_design.md) — **design gate** before child/candidate membership + honest `row_subject` (Phase 6 A–F)
+- [`docs/sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md`](../status_ownership_and_lifecycle_grain_expansion.md) — grain / ownership doctrine
+- [`docs/sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`](../entity_status_lifecycle_stage_and_location_scope_contract.md) — stage, location scope, placement on OCM
+- [`docs/sprints/archive/06_2026/enrollment_lifecycle_status_matrix_contract.md`](../enrollment_lifecycle_status_matrix_contract.md) — enrollment disposition vocabulary
+- [`docs/sprints/archive/06_2026/enrollment_status_seed_and_migration_plan.md`](../enrollment_status_seed_and_migration_plan.md) — status_definitions seed (related)
+- [`docs/sprints/archive/06_2026/child_grain_queue_conversion_design.md`](../child_grain_queue_conversion_design.md) — **design gate** before child/candidate membership + honest `row_subject` (Phase 6 A–F)
 
 **Types / modules:**
 

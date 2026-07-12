@@ -1,6 +1,6 @@
 # Communications V2 — Phase 1 Sprint Plan (Implementation-Ready)
 
-**Path:** `docs/sprints/06_2026/communications-v2/communications_v2_phase1_sprint_plan.md`
+**Path:** `docs/sprints/archive/06_2026/communications-v2/communications_v2_phase1_sprint_plan.md`
 **Status:** Implementation-ready plan — **planning only; do not implement yet.**
 **Date:** 2026-06-22
 **Source of truth:** `communications_v2_phase_next_audit.md` (this folder).

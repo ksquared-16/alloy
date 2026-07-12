@@ -1,6 +1,6 @@
 # Alloy — Operational Visual System Foundation (Product Experience Refresh)
 
-**Path:** `docs/sprints/05_2026/forms_documents_product_experience_refresh.md`  
+**Path:** `docs/sprints/archive/05_2026/forms_documents_product_experience_refresh.md`  
 **Date:** May 2026  
 **Status:** **PX-0 complete** · **PX-1 shipped** · **PX-2 shipped** (operational surface + card refinement)  
 **Scope:** Alloy-wide operational surfaces — Forms/Documents are the **first adopter** and **reference interaction model**, not the only consumer.
@@ -14,7 +14,7 @@
 | BOS presentation Phase 2 | [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) |
 | AdminV2 workspace | `web/app/adminV2/components/workspace/workspace.css`, workspace blocks |
 | Forms review primitives (seed) | `web/lib/forms/review/formsReviewClassTokens.ts`, `formsReviewBadgeStyles.ts` |
-| Product | [`docs/product/documents-and-forms.md`](../../product/documents-and-forms.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
 
 **Influences (target consumers):** Forms/Documents, BOS drawer/queue/handoff, work-unit review, operational cards, drawers, future workflow/review systems.
 

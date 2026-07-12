@@ -1,6 +1,6 @@
 # Communications V2 — Announcement Audience Target Classification (B6 correction)
 
-**Path:** `docs/sprints/06_2026/communications-v2/communications_v2_audience_target_classification.md`
+**Path:** `docs/sprints/archive/06_2026/communications-v2/communications_v2_audience_target_classification.md`
 **Status:** CRM audience-model audit + B6 resolver classification. Planning/reference.
 **Date:** 2026-06-22
 **Scope owner:** Claude (POS / Documents / Communications / Sprint packages)

@@ -90,7 +90,7 @@ Authoritative TypeScript: `web/lib/recordChrome/types.ts` → `RecordLayoutConfi
 
 Authoritative types: `web/lib/layout/layoutV2.ts`  
 Validator: `web/lib/layout/layoutV2Schema.ts`  
-Frozen architecture reference: `docs/platform_convergence/layout_contract_v1.md`
+Frozen architecture reference: `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/layout_contract_v1.md`
 
 ```
 LayoutDoc {
@@ -289,7 +289,7 @@ ALTER TABLE entity_layouts
 | Shell zones | `splitDrawerLayoutDocShellZones.ts`, `entityDrawerOperatingModel.ts` |
 | Runtime body | `evaluateOpportunityLayoutRuntimeBody.ts`, `drawerLayoutRuntimePresentation.ts` |
 | Flags | `featureFlag.ts` |
-| Doctrine | `docs/system/drawer-operating-model-v1.md`, `docs/platform_convergence/layout_contract_v1.md` |
+| Doctrine | `docs/system/drawer-operating-model-v1.md`, `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/layout_contract_v1.md` |
 
 ---
 

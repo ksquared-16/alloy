@@ -1,6 +1,6 @@
 # Enrollment Intake Lifecycle Coherence
 
-**Path:** `docs/sprints/05_2026/enrollment_intake_lifecycle_coherence.md`  
+**Path:** `docs/sprints/archive/05_2026/enrollment_intake_lifecycle_coherence.md`  
 **Date:** May 2026  
 **Status:** Cards 0–4 implemented · manual browser validation pending  
 **Scope:** Prove end-to-end enrollment lifecycle feels like one operational system — not a new forms sprint.

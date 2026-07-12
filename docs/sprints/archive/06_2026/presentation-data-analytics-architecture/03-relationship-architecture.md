@@ -1,6 +1,6 @@
 # Relationship Architecture
 
-**Path:** `docs/sprints/06_2026/presentation-data-analytics-architecture/03-relationship-architecture.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-data-analytics-architecture/03-relationship-architecture.md`
 **Status:** Architecture sprint — design only (June 2026)
 **Deliverable:** 3 — Relationship architecture
 

@@ -1,6 +1,6 @@
 # Alloy — Forms/Documents Operational Workspace Redesign
 
-**Path:** `docs/sprints/05_2026/forms_operational_workspace_redesign.md`  
+**Path:** `docs/sprints/archive/05_2026/forms_operational_workspace_redesign.md`  
 **Date:** May 2026  
 **Status:** **OW-0 complete** · **OW-1 shipped** · **OW-2 shipped** · **OW-3 shipped** · **OW-4 shipped** · **OW-5 shipped** · **OW-6 shipped** · **OW-7 shipped**  
 **Scope:** Forms/Documents **operational workspace layer** — hub, form lifecycle, packet orchestration, distribution, session/submission navigation. **Not** review rollup contracts, BOS logic, or forms engine rewrite.
@@ -12,7 +12,7 @@
 | Visual system PX-0–PX-2 | [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) |
 | Interaction / case-file doctrine | [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) |
 | Packet review MVP | [`forms_documents_phase_2_packet_review_mvp.md`](./forms_documents_phase_2_packet_review_mvp.md) |
-| Product | [`docs/product/documents-and-forms.md`](../../product/documents-and-forms.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
 
 ---
 

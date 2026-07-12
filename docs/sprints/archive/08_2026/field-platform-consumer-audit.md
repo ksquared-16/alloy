@@ -96,7 +96,7 @@ fieldSurfaceAvailability.ts (consumer surfaces: forms, drawer, table,
 
 Fields are one kind of **canonical data provider**. Relationships and collections are first-class provider kinds — not flattened scalar fields.
 
-See `docs/sprints/08_2026/field-platform-consumer-convergence.md` and `web/lib/fields/canonicalDataProviderModel.ts`.
+See `docs/sprints/archive/08_2026/field-platform-consumer-convergence.md` and `web/lib/fields/canonicalDataProviderModel.ts`.
 
 ---
 
@@ -931,8 +931,8 @@ Key reference files:
 | Entity catalog | `web/lib/adminV2/configuration/configurationEntityCatalog.ts` |
 | Field concepts doctrine | `docs/platform/modules/field-concepts.md` |
 | Config workspace doctrine | `docs/doctrine/configuration-workspace-doctrine.md` |
-| Data Model closeout | `docs/sprints/07_2026/data-model-fields-closeout-and-consumer-audit-handoff.md` |
-| Runtime unification target | `docs/sprints/07_2026/field-runtime-unification.md` |
+| Data Model closeout | `docs/sprints/archive/07_2026/data-model-fields-closeout-and-consumer-audit-handoff.md` |
+| Runtime unification target | `docs/sprints/archive/07_2026/field-runtime-unification.md` |
 
 Prior handoff tests:
 
@@ -976,7 +976,7 @@ Forms/Documents now implements bounded collection-bound repeatable sections:
 - Authoring: iteration-filtered nested picker; publish + submission security validation
 - Processing: envelope preserved in submission meta — execution deferred to P5
 
-See `docs/sprints/08_2026/forms-documents-collection-authoring.md`.
+See `docs/sprints/archive/08_2026/forms-documents-collection-authoring.md`.
 
 
 ## Processing collection evidence (P5A)

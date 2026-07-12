@@ -2,7 +2,7 @@
 
 **Status:** Audit complete. Returned before implementation (per sprint instruction).
 **Branch:** `claude/experience-builder-v3` (from `origin/staging` @ 34c6e6273).
-**Method:** Four parallel deep-reads of the four builder areas against the proposed target hierarchy, cross-referenced with the canonical doctrine (`presentation-runtime-doctrine.md`, `experience-builder-doctrine.md`, `universal-card-lifecycle.md`, `operational-grain-doctrine.md`, `queue-row-platform.md`).
+**Method:** Four parallel deep-reads of the four builder areas against the proposed target hierarchy, cross-referenced with the canonical doctrine (`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`, `experience-builder-doctrine.md`, `universal-card-lifecycle.md`, `operational-grain-doctrine.md`, `queue-row-platform.md`).
 
 Target hierarchy under evaluation:
 `Surface → Perspective → Component → Evidence Group → Composition Item (Field | Widget | Related List | Calculation | AI Summary | Action) → Conditions → Actions`
@@ -44,12 +44,12 @@ The sprint proposes `Surface → Perspective → Component → Evidence Group �
 
 | Sprint term | Existing canonical term | Status | Source |
 |---|---|---|---|
-| Surface | **Design Surface** | ✅ same concept, keep | `presentation-runtime-doctrine.md:48` |
-| **Perspective** | **Perspective = operating lens (saved filter/sort/grouping), FROZEN, "not renamed"** | 🔴 **COLLISION** | `presentation-runtime-doctrine.md:74-77` |
+| Surface | **Design Surface** | ✅ same concept, keep | `archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md:48` |
+| **Perspective** | **Perspective = operating lens (saved filter/sort/grouping), FROZEN, "not renamed"** | 🔴 **COLLISION** | `archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md:74-77` |
 | Component | **Card** | ✅ same concept, keep "Card" | `universal-card-lifecycle.md` |
 | Evidence Group | Evidence Group | ✅ already canonical | `experience-builder-doctrine.md:62-79` |
 | Composition Item | Slot → Renderer / "Fields, Widgets, Actions are peer primitives" | ✅ compatible | `experience-builder-doctrine.md:316-326` |
-| (audience axis) | **Viewpoint** (Director/Teacher/Parent/Corporate) | already exists — relevant to Portals | `presentation-runtime-doctrine.md:75` |
+| (audience axis) | **Viewpoint** (Director/Teacher/Parent/Corporate) | already exists — relevant to Portals | `archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md:75` |
 
 **The collision:** the sprint's "Perspective" layer is really the **card lifecycle / depth axis** — Summary → Focus → Edit → **Expanded** → Workspace (`universal-card-lifecycle.md:22-29`), already implemented as `CardPerspectiveExpansion` / `focusPanelCardLifecycle.ts:28`. But "Perspective" is a *frozen* Selection-axis primitive meaning something entirely different. Freezing a doctrine that redefines it would break the Presentation Runtime doctrine.
 

@@ -3,7 +3,7 @@
 **Date:** 2026-06-28
 **Author:** Claude Code (incoming primary executor)
 **Branch of record:** `staging` (canonical) — audited at handoff commit `f1e1c883d` (= `origin/staging` HEAD).
-**Inputs:** `docs/handoffs/2026-06-28-claude-code-repo-handoff.md`, `docs/system/adminv2-runtime-performance-doctrine.md` (locked), `docs/platform/operator/surface-view-model-composition.md`, `docs/platform/operator/drawer-sunset-roadmap.md`.
+**Inputs:** `docs/archive/2026-06-handoffs/handoffs/2026-06-28-claude-code-repo-handoff.md`, `docs/system/adminv2-runtime-performance-doctrine.md` (locked), `docs/platform/operator/surface-view-model-composition.md`, `docs/platform/operator/drawer-sunset-roadmap.md`.
 **Type:** Audit + plan + first-slice selection. **Not** a rewrite.
 
 > Framing discipline (per operational-ux-doctrine): each finding is tagged **[current]** (what ships), **[issue]** (observed problem), **[target]** (desired end state), or **[plan]** (migration step). Target behavior is **not** documented as if it already ships.

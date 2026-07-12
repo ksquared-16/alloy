@@ -1,6 +1,6 @@
 # Create Lead Action Workspace — Narrative + CTA Cleanup
 
-**Path:** `docs/sprints/06_2026/completed/create_lead_narrative_cta_cleanup.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/create_lead_narrative_cta_cleanup.md`  
 **Date:** 2026-06-08  
 **Status:** Complete
 

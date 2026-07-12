@@ -1,6 +1,6 @@
 # Surface Builder / Header Surfaces — Phase Closeout
 
-**Path:** `docs/sprints/06_2026/completed/header-surfaces-closeout.md`
+**Path:** `docs/sprints/archive/06_2026/completed/header-surfaces-closeout.md`
 **Date:** 2026-07-01
 **Status:** **Closed**
 **Scope:** Header surface runtime convergence — Workspace Header and Work Unit Header now read from and display published metric surfaces.
@@ -144,7 +144,7 @@ Listed in intended sequencing — **no design work committed here.**
 
 ## Recommended next phase
 
-**Premium tile treatment.** The header surfaces are now functionally complete and consistent. The immediate quality gap is the tile visual language — the mockups in `docs/sprints/06_2026/analytics-operational-intelligence-platform/mockups/` show the intended Alloy-specific tile design (density-aware type, refined accent rail, subtle surface treatment). Delivering this creates the "header surfaces are the best part of Alloy" impression before expanding the Surface Builder to more surface types.
+**Premium tile treatment.** The header surfaces are now functionally complete and consistent. The immediate quality gap is the tile visual language — the mockups in `docs/sprints/archive/06_2026/analytics-operational-intelligence-platform/mockups/` show the intended Alloy-specific tile design (density-aware type, refined accent rail, subtle surface treatment). Delivering this creates the "header surfaces are the best part of Alloy" impression before expanding the Surface Builder to more surface types.
 
 **Success criteria for next phase:**
 - Workspace Header and Work Unit Header tiles match the `05-workspace-header-metrics.html` and `06-work-unit-header-metrics.html` mockups exactly

@@ -71,6 +71,6 @@ Regression companions: `web/tests/adminV2/workUnitCoordinatedRevealRegression.te
 
 ## Related
 
-- `docs/system/record-system.md` — record/drawer truth boundary
-- `docs/system/workspace-system.md` — queue preview vs authoritative records
-- `docs/sprints/05_2026/completed/adminv2_performance_closeout.md` — historical reveal-gate work
+- `docs/archive/2026-06-superseded-system/record-system.md` — record/drawer truth boundary
+- `docs/archive/2026-06-superseded-system/workspace-system.md` — queue preview vs authoritative records
+- `docs/sprints/archive/05_2026/completed/adminv2_performance_closeout.md` — historical reveal-gate work

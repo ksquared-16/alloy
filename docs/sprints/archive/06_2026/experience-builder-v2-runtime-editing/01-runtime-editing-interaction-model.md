@@ -1,6 +1,6 @@
 # Runtime Editing — Interaction Model
 
-**Path:** `docs/sprints/06_2026/experience-builder-v2-runtime-editing/01-runtime-editing-interaction-model.md`
+**Path:** `docs/sprints/archive/06_2026/experience-builder-v2-runtime-editing/01-runtime-editing-interaction-model.md`
 **Status:** UX architecture sprint — design only (June 2026)
 **Deliverable:** 1 — Redesigned Experience Builder interaction model
 
@@ -147,5 +147,5 @@ The **only** additions in Editing are: the Edit Bar, hover/selection outlines, d
 | IA + entry points + scale | [`02-information-architecture.md`](./02-information-architecture.md) |
 | Walkthroughs | [`06-interaction-walkthroughs.md`](./06-interaction-walkthroughs.md) |
 | Critique of prior mockups | [`07-design-critique.md`](./07-design-critique.md) |
-| Primitive definitions | `docs/platform/operator/presentation-runtime-doctrine.md` |
+| Primitive definitions | `docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` |
 | Visual language | `docs/platform/operator/alloy-visual-language.md` |

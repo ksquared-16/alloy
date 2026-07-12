@@ -1,6 +1,6 @@
 # Data Taxonomy — The Nine Source Kinds
 
-**Path:** `docs/sprints/06_2026/presentation-data-analytics-architecture/02-data-taxonomy.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-data-analytics-architecture/02-data-taxonomy.md`
 **Status:** Architecture sprint — design only (June 2026)
 **Deliverable:** 7 — Data taxonomy
 

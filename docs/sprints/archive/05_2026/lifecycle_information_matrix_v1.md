@@ -1,6 +1,6 @@
 # Lifecycle Information Matrix v1
 
-**Path:** `docs/sprints/05_2026/lifecycle_information_matrix_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/lifecycle_information_matrix_v1.md`  
 **Status:** Product/system matrix (May 2026) — guides implementation after Pass A  
 **Scope:** Childcare enrollment pipeline — information requirements, capture surfaces, actions, BOS, and demo gaps.
 
@@ -670,4 +670,4 @@ For each new execute-now action: add catalog preflight → `recommended_action_p
 | Add child submit | `web/lib/admin/actions/submitAddInquiryChildFromDrawer.ts` |
 | Blocked panel | `web/components/admin/opportunity/ActionPreflightBlockedPanel.tsx` |
 | BOS catalog | `web/lib/adminV2/bos/recommendations/catalog/operationalRecommendationCatalog.ts` |
-| Action runtime audit | `docs/sprints/05_2026/adminv2_action_runtime_audit_and_plan_v1.md` |
+| Action runtime audit | `docs/sprints/archive/05_2026/adminv2_action_runtime_audit_and_plan_v1.md` |

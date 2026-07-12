@@ -1,6 +1,6 @@
 # Alloy OS — Operational Workflow Validation
 
-**Path:** `docs/sprints/06_2026/alloy_os_operational_workflow_validation.md`
+**Path:** `docs/sprints/archive/06_2026/alloy_os_operational_workflow_validation.md`
 **Status:** **FINAL DESIGN PRESSURE TEST — Runtime complete (pending sign-off)**
 **Primary artifact:** Cursor Canvas `operational-workflow-validation.canvas.tsx`
 **Date:** June 2026

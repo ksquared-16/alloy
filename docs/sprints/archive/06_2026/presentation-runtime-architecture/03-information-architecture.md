@@ -1,6 +1,6 @@
 # Information Architecture — Experience Builder
 
-**Path:** `docs/sprints/06_2026/presentation-runtime-architecture/03-information-architecture.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-runtime-architecture/03-information-architecture.md`
 **Status:** Architecture sprint — design only (June 2026)
 **Companion:** [`02-experience-builder-doctrine.md`](./02-experience-builder-doctrine.md), [`04-interaction-model.md`](./04-interaction-model.md)
 
@@ -32,7 +32,7 @@ When the operator enters `/settings/*`, the left app rail switches to Configurat
 | 8 | Integrations | `/settings/integrations` | Shipped |
 | 9 | Security / Roles | `/settings/security` | Shipped |
 
-> **Operational Intelligence** remains the home for **metric definition** (math, aggregation, thresholds). **Design Surfaces** is the home for **metric placement and visualization** (where and how metrics appear). The split is intentional — see `01-presentation-runtime-doctrine.md` §6.
+> **Operational Intelligence** remains the home for **metric definition** (math, aggregation, thresholds). **Design Surfaces** is the home for **metric placement and visualization** (where and how metrics appear). The split is intentional — see `01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` §6.
 
 ### `/settings` hub tile
 

@@ -1,8 +1,8 @@
 # Experience Builder Doctrine
 
-**Path:** `docs/sprints/06_2026/presentation-runtime-architecture/02-experience-builder-doctrine.md`
+**Path:** `docs/sprints/archive/06_2026/presentation-runtime-architecture/02-experience-builder-doctrine.md`
 **Status:** Architecture sprint — design only (June 2026)
-**Companion:** [`01-presentation-runtime-doctrine.md`](./01-presentation-runtime-doctrine.md) (runtime), [`03-information-architecture.md`](./03-information-architecture.md) (IA)
+**Companion:** [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) (runtime), [`03-information-architecture.md`](./03-information-architecture.md) (IA)
 
 ---
 
@@ -222,7 +222,7 @@ All editors share:
 
 | Concern | Doc |
 |---|---|
-| Presentation Runtime (what is being authored) | [`01-presentation-runtime-doctrine.md`](./01-presentation-runtime-doctrine.md) |
+| Presentation Runtime (what is being authored) | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
 | IA + routes | [`03-information-architecture.md`](./03-information-architecture.md) |
 | Interaction model | [`04-interaction-model.md`](./04-interaction-model.md) |
 | Existing EB doctrine (storage, LayoutDoc) | `docs/platform/operator/experience-builder-doctrine.md` |

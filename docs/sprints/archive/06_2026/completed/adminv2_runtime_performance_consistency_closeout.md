@@ -1,11 +1,11 @@
 # AdminV2 Performance & Runtime Consistency — Sprint Closeout
 
-**Path:** `docs/sprints/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`  
 **Status:** **CLOSED** (June 2026)  
 **Canonical doctrine (locked):** **`docs/system/adminv2-runtime-performance-doctrine.md`**  
 **Cursor rule:** **`.cursor/rules/adminv2-runtime-performance.mdc`**
 
-**Builds on:** `docs/sprints/05_2026/adminv2_reveal_doctrine.md`, `docs/sprints/05_2026/completed/adminv2_performance_closeout.md`
+**Builds on:** `docs/sprints/archive/05_2026/adminv2_reveal_doctrine.md`, `docs/sprints/archive/05_2026/completed/adminv2_performance_closeout.md`
 
 ---
 
@@ -73,4 +73,4 @@ cd web && npm run test -- \
 
 ## Next phase
 
-**Do later, not now:** `docs/sprints/06_2026/adminv2_backend_query_payload_optimization_phase.md`
+**Do later, not now:** `docs/sprints/archive/06_2026/adminv2_backend_query_payload_optimization_phase.md`

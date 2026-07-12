@@ -1,6 +1,6 @@
 # Edit Mode Doctrine
 
-**Path:** `docs/sprints/06_2026/experience-builder-v2-runtime-editing/03-edit-mode-doctrine.md`
+**Path:** `docs/sprints/archive/06_2026/experience-builder-v2-runtime-editing/03-edit-mode-doctrine.md`
 **Status:** UX architecture sprint — design only (June 2026)
 **Deliverable:** 3 — Complete Edit Mode doctrine
 
@@ -114,7 +114,7 @@ This sprint sets **assumptions**, not an implementation. They exist so the model
 | Edit at Viewpoint scope | `experience.configure.viewpoint` |
 | Publish | `experience.publish` (may be same as configure in V1) |
 
-Permissions gate **authoring capability**. They are distinct from Viewpoints, which gate **operator presentation**. (Frozen distinction — `presentation-runtime-doctrine.md` §5.)
+Permissions gate **authoring capability**. They are distinct from Viewpoints, which gate **operator presentation**. (Frozen distinction — `archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` §5.)
 
 ## 11. Non-negotiables
 
@@ -130,4 +130,4 @@ Permissions gate **authoring capability**. They are distinct from Viewpoints, wh
 | Structure Mode | [`04-structure-mode-doctrine.md`](./04-structure-mode-doctrine.md) |
 | Content Mode | [`05-content-mode-doctrine.md`](./05-content-mode-doctrine.md) |
 | Walkthroughs (publish, undo, history, restore) | [`06-interaction-walkthroughs.md`](./06-interaction-walkthroughs.md) |
-| Canonical publishing/inheritance | `docs/platform/operator/presentation-runtime-doctrine.md` §9 |
+| Canonical publishing/inheritance | `docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` §9 |

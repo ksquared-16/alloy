@@ -161,9 +161,9 @@ cd web && NODE_OPTIONS='--max-old-space-size=8192' npm run typecheck -- --projec
 
 | Topic | Document |
 |-------|----------|
-| **This handoff** | `docs/sprints/07_2026/presentation-surfaces-settings-thread-closeout.md` |
-| Queue Row Builder freeze + vocabulary | `docs/sprints/07_2026/queue-row-builder-runtime-vocabulary-handoff.md` |
-| Focus Panel Composer next | `docs/sprints/07_2026/focus-panel-composer-handoff.md` |
+| **This handoff** | `docs/sprints/archive/07_2026/presentation-surfaces-settings-thread-closeout.md` |
+| Queue Row Builder freeze + vocabulary | `docs/sprints/archive/07_2026/queue-row-builder-runtime-vocabulary-handoff.md` |
+| Focus Panel Composer next | `docs/sprints/archive/07_2026/focus-panel-composer-handoff.md` |
 | Presentation Runtime V2 | `docs/platform/experience/presentation-runtime-v2.md` |
 | Surface Builder / V3 composition | `docs/platform/operator/experience-builder-v3-universal-surface-composition.md` |
 | Platform Configuration | `docs/platform/modules/configuration-platform.md` |

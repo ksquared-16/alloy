@@ -1,10 +1,10 @@
 # Sprint: Settings Control Plane Closeout (May 2026)
 
-**Path:** `docs/sprints/05_2026/completed/settings_control_plane_closeout.md`  
+**Path:** `docs/sprints/archive/05_2026/completed/settings_control_plane_closeout.md`  
 **Status:** **Closed (foundation checkpoint)**  
 **Scope:** Fast pass on **Layouts**, **Actions**, and **Workflow/Status ownership** — no new builder architecture.
 
-**Canonical system docs:** [`docs/system/configuration-system.md`](../../system/configuration-system.md) (four-plane model), [`docs/system/actions-and-workflows.md`](../../system/actions-and-workflows.md) (placement vs execution).
+**Canonical system docs:** [`docs/system/configuration-system.md`](../../system/configuration-system.md) (four-plane model), [`docs/archive/2026-06-superseded-system/actions-and-workflows.md`](../../system/actions-and-workflows.md) (placement vs execution).
 
 ---
 
@@ -115,8 +115,8 @@ Action buttons is **not** under Records & layouts. Tiles use the same default ca
 
 ## Related / follow-on (outside this sprint closeout)
 
-- **Linked record field editing V1** — see `docs/sprints/05_2026/linked_record_field_editing_v1.md`.
-- **Record Experience Builder Phase 1** Cards 5–9 — action preview in Layouts, job/schedule editors, etc. — see `docs/sprints/05_2026/record_experience_builder_phase_1.md` §23.
+- **Linked record field editing V1** — see `docs/sprints/archive/05_2026/linked_record_field_editing_v1.md`.
+- **Record Experience Builder Phase 1** Cards 5–9 — action preview in Layouts, job/schedule editors, etc. — see `docs/sprints/archive/05_2026/record_experience_builder_phase_1.md` §23.
 
 ## Deferred (do not start without new sprint)
 

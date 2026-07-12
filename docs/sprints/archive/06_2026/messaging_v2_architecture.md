@@ -1,6 +1,6 @@
 # Messaging V2 — Phase 2 Architecture Review
 
-**Path:** `docs/sprints/06_2026/messaging_v2_architecture.md`  
+**Path:** `docs/sprints/archive/06_2026/messaging_v2_architecture.md`  
 **Status:** Architecture review (June 2026) — **planning only; no migrations in this sprint**  
 **Depends on:** [messaging_v2_audit.md](./messaging_v2_audit.md), [messaging_v2_design.md](./messaging_v2_design.md)
 

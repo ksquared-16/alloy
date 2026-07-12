@@ -16,7 +16,7 @@ Sprint expansion audit: [`adminv2_drawer_pipeline_expansion.md`](./adminv2_drawe
 4. **Full-hydrate gates affect values, not layout** — `drawerFullBoundValuesReady` controls strip/activity value phases, not column count or panel swap.
 5. **Generic renderer owns composition** — `AdminEntityDrawer` (today) reads the pipeline snapshot; entity-specific components fill slots.
 
-See also: `docs/sprints/05_2026/adminv2_shell_doctrine_preload_structure_hydrate_data_only.md`.
+See also: `docs/sprints/archive/05_2026/adminv2_shell_doctrine_preload_structure_hydrate_data_only.md`.
 
 ## Pipeline types (`web/lib/adminV2/drawerPipeline/types.ts`)
 

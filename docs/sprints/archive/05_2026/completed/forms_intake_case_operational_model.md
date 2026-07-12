@@ -1,6 +1,6 @@
 # Forms / Intake — Intake Case Operational Model + Outcome Configuration
 
-**Path:** `docs/sprints/05_2026/forms_intake_case_operational_model.md`  
+**Path:** `docs/sprints/archive/05_2026/forms_intake_case_operational_model.md`  
 **Date:** May 2026  
 **Status:** IC-0.5 through IC-6 code shipped · **IC-8 intake experience simplification in progress**  
 **Scope:** Shift operator work from raw submissions to **Intake Cases**; surface outcome configuration near form authoring; confidence-based review routing. **No OCR. No packet runtime rewrite. No large schema migration without approval.**
@@ -24,7 +24,7 @@
 | Prefill / launch context | [`docs/system/forms-intake-prefill-doctrine.md`](../../system/forms-intake-prefill-doctrine.md) |
 | Inbox operationalization (OI-4) | [`forms_intake_inbox_operationalization.md`](./forms_intake_inbox_operationalization.md) |
 | Demo childcare test | [`forms_runtime_test_2d_demo_childcare_intake.md`](./forms_runtime_test_2d_demo_childcare_intake.md) |
-| Product | [`docs/product/documents-and-forms.md`](../../product/documents-and-forms.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
 
 ---
 

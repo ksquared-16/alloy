@@ -1,6 +1,6 @@
 # Status Ownership & Lifecycle Grain — Architecture Contract
 
-**Path:** `docs/sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md`  
+**Path:** `docs/sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md`  
 **Date:** 2026-06-06 (initial discovery) · **2026-06-07** (contract refinement)  
 **Status:** **Frozen — runtime contracts for Layout Configuration, queues, stages, work, attention, automations, and BOS**  
 **Scope:** Status ownership, lifecycle grain, **lifecycle subject**, queue row context, drawer context, status display, and layout compatibility. **Architecture / documentation only.**

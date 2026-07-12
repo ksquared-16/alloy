@@ -11,10 +11,10 @@ AI Agents V1 starts with **Needs Attention Suggestion (Agent 1)**, **Task Assist
 - `docs/README.md`
 - `docs/execution/operating-doctrine.md`
 - `docs/execution/roadmap-and-gaps.md`
-- `docs/system/workspace-system.md`
+- `docs/archive/2026-06-superseded-system/workspace-system.md`
 - `docs/product/crm-system.md`
-- `docs/system/actions-and-workflows.md`
-- `docs/system/record-system.md`
+- `docs/archive/2026-06-superseded-system/actions-and-workflows.md`
+- `docs/archive/2026-06-superseded-system/record-system.md`
 - `docs/product/bos-foundation.md`
 - `web/lib/opportunities/opportunityAttentionResolver.ts`
 - `web/lib/opportunities/opportunityAttentionConfig.ts`

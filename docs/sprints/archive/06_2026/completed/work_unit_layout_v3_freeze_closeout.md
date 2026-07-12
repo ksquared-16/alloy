@@ -58,4 +58,4 @@ Staging validation (June 2026):
 
 ## Supersedes
 
-- `docs/sprints/06_2026/queue_density_experiment_pass_1.md` — experiment closed; pass-1 adopted into V3 baseline
+- `docs/sprints/archive/06_2026/queue_density_experiment_pass_1.md` — experiment closed; pass-1 adopted into V3 baseline

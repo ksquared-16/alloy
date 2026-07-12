@@ -1,18 +1,18 @@
 # Task Assist V1 (Agent #2) — Step 0 Audit
 
 **Status:** Audit only — no implementation, no migrations, no UI changes.  
-**Step 1 design:** `docs/sprints/05_2026/task_assist_v1.md`  
-**Sprint alignment:** `docs/sprints/05_2026/ai_agents_v1.md` (Agent #2 = Task Assist V1, separate from Agent #3 Workflow Assist).  
+**Step 1 design:** `docs/sprints/archive/05_2026/task_assist_v1.md`  
+**Sprint alignment:** `docs/sprints/archive/05_2026/ai_agents_v1.md` (Agent #2 = Task Assist V1, separate from Agent #3 Workflow Assist).  
 **Doctrine:** Human approval before send/schedule/create; no autonomous sends; no direct DB writes from model output; existing APIs, permissions, org scoping, and audit paths remain authoritative.
 
 ---
 
 ## Files inspected (representative)
 
-- `docs/sprints/05_2026/ai_agents_v1.md` (§6.1 per-agent ownership, §8 Task Assist template sketch)
-- `docs/sprints/05_2026/ai_agents_v1_step1_design.md` (Agent 2 section)
+- `docs/sprints/archive/05_2026/ai_agents_v1.md` (§6.1 per-agent ownership, §8 Task Assist template sketch)
+- `docs/sprints/archive/05_2026/ai_agents_v1_step1_design.md` (Agent 2 section)
 - `docs/product/bos-foundation.md` (enrichment, permissions, DEFINER RPC patterns)
-- `docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md` (proposal/apply posture)
+- `docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md` (proposal/apply posture)
 - `supabase/migrations/20260430254100_communications_v1_foundation.sql`
 - `supabase/migrations/20260329165048_remote_schema.sql` (excerpts: `messages`, `messages_outbox`, `activity_log`, `opportunities`)
 - `web/app/api/admin/communications/send/route.ts`

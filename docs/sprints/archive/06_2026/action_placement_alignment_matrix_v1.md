@@ -1,6 +1,6 @@
 # Action Placement Alignment Matrix v1
 
-**Path:** `docs/sprints/06_2026/action_placement_alignment_matrix_v1.md`  
+**Path:** `docs/sprints/archive/06_2026/action_placement_alignment_matrix_v1.md`  
 **Status:** Shipped alignment (May 2026) — Phase 2 deliverable  
 **Doctrine:** Lead → Qualification → Tour → Waitlist → Enrollment → Enrolled
 

@@ -1,12 +1,12 @@
 # Alloy OS — Presentation Data & Analytics Architecture
 
-**Path:** `docs/sprints/06_2026/presentation-data-analytics-architecture/`
+**Path:** `docs/sprints/archive/06_2026/presentation-data-analytics-architecture/`
 **Status:** **Architecture sprint — design only. No code. No schemas. No migrations. No React. No DB/API work.**
 **Type:** Foundational information-layer architecture.
 **Depends on:**
 - [`../presentation-runtime-architecture/`](../presentation-runtime-architecture/) — primitives (Design Surface, Zone, Card, Slot, Renderer, Viewpoint, Perspective)
 - [`../experience-builder-v2-runtime-editing/`](../experience-builder-v2-runtime-editing/) — the editable-runtime authoring model
-- Canonical: [`docs/platform/operator/presentation-runtime-doctrine.md`](../../../platform/operator/presentation-runtime-doctrine.md)
+- Canonical: [`docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md)
 
 > The Presentation Runtime architecture is complete. The Experience Builder architecture is complete. The editable-runtime model is complete. **One foundational architecture remains before implementation: how information enters the Presentation Runtime.** This sprint defines the **Presentation Data Model** — the universal information layer every Design Surface consumes.
 

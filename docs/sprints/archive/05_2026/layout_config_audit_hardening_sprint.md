@@ -259,4 +259,4 @@ Reference migrations (pattern, not person drawer): `20260520120000_inquiry_child
 - `parent_operating_surface_person_drawer.md`
 - `person_drawer_hardening_performance_sprint.md`
 - `docs/system/configuration-system.md`
-- `docs/system/record-system.md`
+- `docs/archive/2026-06-superseded-system/record-system.md`

@@ -1,6 +1,6 @@
 # Claude Sprint 1 — Frontend + Communications Performance Hardening
 
-**Path:** `docs/sprints/06_2026/claude_frontend_communications_performance_hardening.md`
+**Path:** `docs/sprints/archive/06_2026/claude_frontend_communications_performance_hardening.md`
 **Status:** Planning (Card 0 complete — document only, no application code changed)
 **Owner:** Claude
 **Created:** 2026-06-03
@@ -8,8 +8,8 @@
 
 **Related context:**
 - `docs/system/adminv2-runtime-performance-doctrine.md` (locked runtime/reveal baseline — must not be regressed)
-- `docs/sprints/06_2026/messaging_v2_audit.md`, `messaging_v2_design.md`, `messaging_v2_architecture.md`
-- `docs/sprints/06_2026/adminv2_backend_query_payload_optimization_phase.md` (backend payload phase — out of scope here)
+- `docs/sprints/archive/06_2026/messaging_v2_audit.md`, `messaging_v2_design.md`, `messaging_v2_architecture.md`
+- `docs/sprints/archive/06_2026/adminv2_backend_query_payload_optimization_phase.md` (backend payload phase — out of scope here)
 
 ---
 

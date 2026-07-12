@@ -3,12 +3,12 @@
 **Status:** Planning only (June 2026). No code, migrations, schema, or runtime changes. This report maps backend building blocks for the first implementation arc: **L1 Configuration truth → L3 Schedule-derived Expectations → L4 Attendance facts → L5 Billing generalization**.
 
 **Doctrine basis (locked, not revisited here):**
-- [`docs/platform/operational-truth-flow-doctrine.md`](../../platform/operational-truth-flow-doctrine.md)
+- [`docs/platform/core/operational-truth-flow-doctrine.md`](../../platform/core/operational-truth-flow-doctrine.md)
 - [`docs/platform/modules/attendance-system.md`](../../platform/modules/attendance-system.md)
 - [`docs/platform/modules/billing-financials-platform.md`](../../platform/modules/billing-financials-platform.md)
-- [`docs/platform/operational-ux-doctrine.md`](../../platform/operational-ux-doctrine.md)
+- [`docs/platform/core/operational-ux-doctrine.md`](../../platform/core/operational-ux-doctrine.md)
 - [`docs/platform/core/placement-system.md`](../../platform/core/placement-system.md)
-- [`docs/platform_convergence/child_namespace_decision.md`](../../platform_convergence/child_namespace_decision.md) §6
+- [`docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6
 
 ---
 
@@ -195,7 +195,7 @@ Grouped by layer. "New" = net-new entity/service; "Derive" = read model only; "G
 
 ## 10. Recommended Cursor / Claude build prompts (DO NOT EXECUTE YET)
 
-Per [`docs/governance/agent-repo-boundaries.md`](../../governance/agent-repo-boundaries.md), the Cursor workspace owns scheduling/billing/attendance platform layers; these are scoped for this repo. Hold until config-rule grain (Open Questions 1-3) is decided.
+Per [`docs/platform/governance/agent-repo-boundaries.md`](../../platform/governance/agent-repo-boundaries.md), the Cursor workspace owns scheduling/billing/attendance platform layers; these are scoped for this repo. Hold until config-rule grain (Open Questions 1-3) is decided.
 
 **Prompt P1 — L1 config rules (Cursor):**
 > Implement first-class L1 config tables `capacity_rules`, `ratio_rules`, `schedule_rules`, and a `rate_rules` shell, modeled on `schedule_patterns` (config-posture RLS via `has_org_role`, BEFORE INSERT/UPDATE validation triggers, `set_updated_at`, org+site scoping). Add row types and read/write services under `web/lib/childcareOperational/config/`. No EAV dual-write; no operator UI. Include migration + Vitest + `tsc --noEmit`. Honor truth-flow + placement doctrine.

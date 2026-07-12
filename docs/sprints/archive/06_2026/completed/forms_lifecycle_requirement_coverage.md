@@ -1,6 +1,6 @@
 # Forms Lifecycle Requirement Coverage — Card 0 Audit
 
-**Path:** `docs/sprints/06_2026/completed/forms_lifecycle_requirement_coverage.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/forms_lifecycle_requirement_coverage.md`  
 **Date:** 2026-06-02  
 **Status:** **Closed** — Cards 0–6 shipped (June 2026)
 
@@ -12,11 +12,11 @@ Add lifecycle-aware validation to Forms so operators can configure **Lifecycle �
 
 **Related:**
 
-- `docs/sprints/06_2026/action_intake_spec_resolver_p0.md` — Create Lead action intake spec (implemented)
-- `docs/sprints/06_2026/lifecycle_action_intake_model.md` — action intake design
-- `docs/sprints/06_2026/lifecycle_required_info_child_fields_audit.md` — Child / inquiry_child grain
-- `docs/sprints/05_2026/completed/forms_intake_runtime_validation_closeout.md` — intake runtime doctrine
-- `docs/sprints/05_2026/completed/forms_mvp_productization.md` — operational intent templates
+- `docs/sprints/archive/06_2026/action_intake_spec_resolver_p0.md` — Create Lead action intake spec (implemented)
+- `docs/sprints/archive/06_2026/lifecycle_action_intake_model.md` — action intake design
+- `docs/sprints/archive/06_2026/lifecycle_required_info_child_fields_audit.md` — Child / inquiry_child grain
+- `docs/sprints/archive/05_2026/completed/forms_intake_runtime_validation_closeout.md` — intake runtime doctrine
+- `docs/sprints/archive/05_2026/completed/forms_mvp_productization.md` — operational intent templates
 - `docs/product/documents-and-forms.md` — forms engine overview
 
 ---
@@ -554,7 +554,7 @@ Do not expose `rule_id` or raw field keys in primary UI.
 | 3 | `web/components/forms/admin/FormLifecycleUsagePanel.tsx`, `web/app/admin/forms/[formId]/FormDetailClient.tsx`, `web/app/api/admin/forms/[formId]/route.ts`, `web/app/api/admin/forms/[formId]/lifecycle-coverage/route.ts` (new) |
 | 4 | `web/lib/forms/intakeRuntimeOrchestrationPresentation.ts`, `web/lib/forms/formLifecyclePresentation.ts`, `web/components/forms/admin/FormIntakeRuntimeOrchestrationPanel.tsx` |
 | 5 | `web/app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts`, `web/lib/forms/lifecycle/validateSubmissionLifecycleCoverage.ts`, `web/lib/forms/intake/buildFormIntakeMetaFromPayload.ts` (coordination) |
-| 6 | `docs/product/documents-and-forms.md`, `docs/sprints/06_2026/forms_lifecycle_requirement_coverage.md` (closeout section) |
+| 6 | `docs/product/documents-and-forms.md`, `docs/sprints/archive/06_2026/forms_lifecycle_requirement_coverage.md` (closeout section) |
 
 **Read-only reference (do not fork):**
 

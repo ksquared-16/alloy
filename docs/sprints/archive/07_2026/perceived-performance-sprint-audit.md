@@ -50,7 +50,7 @@ No new runtime. Extends existing BOS identity + AdminV2 shell geometry.
 
 ### Cold-load browser validation (2026-07-07, localhost:3001, 3 runs)
 
-Artifact: `docs/sprints/07_2026/perceived-performance-boot-shell-validation.json`
+Artifact: `docs/sprints/archive/07_2026/perceived-performance-boot-shell-validation.json`
 
 | Metric | Median | Pass? |
 |--------|--------|-------|
@@ -76,7 +76,7 @@ Artifact: `docs/sprints/07_2026/perceived-performance-boot-shell-validation.json
 
 Kill switch: `NEXT_PUBLIC_PERF_PERCEIVED_MARKS=0`
 
-Browser validation artifact: `docs/sprints/07_2026/perceived-performance-browser-validation-results.json`
+Browser validation artifact: `docs/sprints/archive/07_2026/perceived-performance-browser-validation-results.json`
 
 ---
 

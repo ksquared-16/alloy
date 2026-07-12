@@ -1,8 +1,8 @@
 # AdminV2 — Backend Query & Payload Optimization (Next Phase)
 
-**Path:** `docs/sprints/06_2026/adminv2_backend_query_payload_optimization_phase.md`  
+**Path:** `docs/sprints/archive/06_2026/adminv2_backend_query_payload_optimization_phase.md`  
 **Status:** **Backlog** — not active implementation  
-**Prerequisite:** Closed runtime consistency sprint — **`docs/sprints/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`**  
+**Prerequisite:** Closed runtime consistency sprint — **`docs/sprints/archive/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`**  
 **Doctrine (do not regress):** **`docs/system/adminv2-runtime-performance-doctrine.md`**
 
 ---
@@ -48,7 +48,7 @@ UI/layout work continues under the locked runtime doctrine.
 ### 5. Messages route duplicate navigation / loading
 
 - Logs show repeated `/adminV2/messages` loads.
-- **Separate sprint** — see messaging v2 docs under `docs/sprints/06_2026/messaging_v2_*.md`.
+- **Separate sprint** — see messaging v2 docs under `docs/sprints/archive/06_2026/messaging_v2_*.md`.
 
 ---
 

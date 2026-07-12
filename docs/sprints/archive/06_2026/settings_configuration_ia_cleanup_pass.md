@@ -1,6 +1,6 @@
 # Settings Configuration & IA Cleanup Pass
 
-**Path:** `docs/sprints/06_2026/settings_configuration_ia_cleanup_pass.md`  
+**Path:** `docs/sprints/archive/06_2026/settings_configuration_ia_cleanup_pass.md`  
 **Status:** Audit + editable lifecycle MVP (May 2026)  
 **Route:** `/adminV2/settings/lifecycle` (lifecycle hub shipped prior pass)
 

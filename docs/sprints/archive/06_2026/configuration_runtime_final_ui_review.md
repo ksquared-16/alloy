@@ -6,9 +6,9 @@
 
 ## Approved mockup reference
 
-- `docs/sprints/06_2026/configuration-runtime-bp-ux-redesign/mockup-business-processes-page.png`
-- `docs/sprints/06_2026/configuration-runtime-bp-ux-redesign/mockup-perspective-card.png`
-- `docs/sprints/06_2026/configuration-runtime-bp-ux-redesign/mockup-presentation-assignment.png`
+- `docs/sprints/archive/06_2026/configuration-runtime-bp-ux-redesign/mockup-business-processes-page.png`
+- `docs/sprints/archive/06_2026/configuration-runtime-bp-ux-redesign/mockup-perspective-card.png`
+- `docs/sprints/archive/06_2026/configuration-runtime-bp-ux-redesign/mockup-presentation-assignment.png`
 
 ## Configuration Mode pattern
 
@@ -34,7 +34,7 @@ Operators see · **Purpose** · Show work when… (typed controls including rela
 
 ## Screenshots (after)
 
-Captured in `docs/sprints/06_2026/configuration-runtime-final-ui/`:
+Captured in `docs/sprints/archive/06_2026/configuration-runtime-final-ui/`:
 
 1. `01-processes-full-page-with-bos.png` — full page with BOS rail
 2. `02-stages-selected.png` — Stages queue + stage list + setup
@@ -46,7 +46,7 @@ Captured in `docs/sprints/06_2026/configuration-runtime-final-ui/`:
 8. `08-presentation-assignment-cards.png` — queue / focus panel assignment (inside Work View)
 9. `09-preview-runtime.png` — preview runtime navigation (when lane mapped)
 
-Prior visual pass screenshots remain in `docs/sprints/06_2026/configuration-runtime-visual-parity/` for comparison.
+Prior visual pass screenshots remain in `docs/sprints/archive/06_2026/configuration-runtime-visual-parity/` for comparison.
 
 ## Remaining deviations
 

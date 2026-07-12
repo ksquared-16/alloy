@@ -1,6 +1,6 @@
 # BOS Operational UX — Work-Unit Queue Parity + Drawer Assist Refinement
 
-**Path:** `docs/sprints/06_2026/completed/bos_operational_ux_refinement_pass.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/bos_operational_ux_refinement_pass.md`  
 **Status:** **COMPLETE** — refinement pass + assist routing + communication synthesis + channel-aware drafting  
 **Date:** 2026-05-26 (fix passes 2026-05-21)
 
@@ -89,7 +89,7 @@ Queue row preview actions are **not** edited in AdminV2 Settings UI today. They 
 | **Queue read** | Two-line L0: do-next + muted why; queue `why_line` projects grounded `urgency_reason`; chips only P0 or P1 when breached/high+. |
 | **Urgency** | Medium + non-breached defaults to `p2_soon` (quiet chip); `queueUrgencyChipLabel` context-aware. |
 
-**Provenance reference:** `docs/sprints/06_2026/completed/bos_operational_ux_refinement_pass.md` + `operationalTimingCopy.ts`.
+**Provenance reference:** `docs/sprints/archive/06_2026/completed/bos_operational_ux_refinement_pass.md` + `operationalTimingCopy.ts`.
 
 ### Fix pass 3 (2026-05-21) — action configuration cleanup + BOS assist placement
 

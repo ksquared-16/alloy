@@ -1,6 +1,6 @@
 # Layout + field behavior semantics — Phase 2 (backlog)
 
-**Path:** `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md`  
+**Path:** `docs/sprints/archive/05_2026/layout_field_behavior_semantics_phase_2.md`  
 **Status:** **Backlog only** — not scheduled; no implementation in Phase 1 sprint.  
 **Prerequisite:** Phase 1 complete — see `layout_field_behavior_semantics_v1.md`.
 
@@ -106,6 +106,6 @@ Global bar when any theme ships:
 
 ## References
 
-- `docs/sprints/05_2026/layout_field_behavior_semantics_v1.md` — Phase 1 closeout
+- `docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md` — Phase 1 closeout
 - `docs/system/configuration-system.md`
-- `docs/system/record-system.md`
+- `docs/archive/2026-06-superseded-system/record-system.md`

@@ -138,5 +138,5 @@ Dynamic `import()` for non-workspace legacy surfaces; split compile units below 
 
 ## Related docs
 
-- `docs/sprints/06_2026/platform_simplification_phase3_drawer_deletion_audit.md`
+- `docs/sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md`
 - `docs/system/adminv2-runtime-performance-doctrine.md`

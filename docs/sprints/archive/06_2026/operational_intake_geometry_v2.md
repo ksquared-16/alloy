@@ -23,7 +23,7 @@ Full workspace size — no floating mini-objects, no metaphor scenes, no empty m
 
 ## Geometries
 
-Screenshots: `docs/sprints/06_2026/assets/operational-intake-geometry/`
+Screenshots: `docs/sprints/archive/06_2026/assets/operational-intake-geometry/`
 
 | # | Silhouette | Notes |
 |---|------------|-------|

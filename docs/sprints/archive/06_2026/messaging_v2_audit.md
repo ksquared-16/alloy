@@ -1,10 +1,10 @@
 # Messaging V2 — Phase 0 Audit
 
-**Path:** `docs/sprints/06_2026/messaging_v2_audit.md`  
+**Path:** `docs/sprints/archive/06_2026/messaging_v2_audit.md`  
 **Status:** Audit complete (June 2026) — **planning only; no implementation**  
 **Scope:** Communications Platform foundation audit preceding Inbox, Composer V2, provider integrations, and notification convergence.
 
-**Inputs:** `docs/product/communications.md`, `docs/supabase/reference/*.csv` (committed schema snapshot — `DATABASE_URL` not available in this environment; regenerate with `npm run export:supabase-schema` before merge if schema drift is suspected), `docs/sprints/05_2026/communications.txt`, `docs/audits/legacy-messages-retirement-plan.md`, codebase inspection (May–June 2026).
+**Inputs:** `docs/product/communications.md`, `docs/supabase/reference/*.csv` (committed schema snapshot — `DATABASE_URL` not available in this environment; regenerate with `npm run export:supabase-schema` before merge if schema drift is suspected), `docs/sprints/archive/05_2026/communications.txt`, `docs/audits/legacy-messages-retirement-plan.md`, codebase inspection (May–June 2026).
 
 **Executive summary:** Alloy already has a **canonical communications spine** (`communication_*` tables + `executeCommunicationsSend` + Python worker + webhooks). Roughly **55–65% of Messaging V2 foundation exists** as refactor-and-extend work rather than a greenfield rewrite. Gaps are concentrated in **global inbox UX**, **org-wide thread aggregation APIs**, **draft/archive folders**, **attachments**, **provider OAuth (Google/Microsoft)**, **notification center**, and **entity-generalization** beyond opportunities/jobs/persons.
 

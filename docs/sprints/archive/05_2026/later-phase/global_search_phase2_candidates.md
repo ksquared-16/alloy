@@ -1,6 +1,6 @@
 # Global Search — Phase 2 Candidates
 
-**Path:** `docs/sprints/05_2026/global_search_phase2_candidates.md`  
+**Path:** `docs/sprints/archive/05_2026/global_search_phase2_candidates.md`  
 **Status:** **Future** — ideas only; not scheduled.  
 **Prerequisite:** [global_search_foundation.md](./global_search_foundation.md) — **Global Search V1 is COMPLETE and operational** without any item below.
 

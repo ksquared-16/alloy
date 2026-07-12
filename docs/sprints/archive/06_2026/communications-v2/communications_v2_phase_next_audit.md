@@ -1,6 +1,6 @@
 # Communications V2 — Phase Next Audit (Communications Hub)
 
-**Path:** `docs/sprints/06_2026/communications-v2/communications_v2_phase_next_audit.md`
+**Path:** `docs/sprints/archive/06_2026/communications-v2/communications_v2_phase_next_audit.md`
 **Status:** Audit + forward design — **planning only; no implementation.**
 **Date:** 2026-06-22
 **Scope owner:** Claude (POS / Documents / Communications / Sprint packages)

@@ -1,6 +1,6 @@
 # Sprint: Linked Record Field Editing V1 (May 2026)
 
-**Path:** `docs/sprints/05_2026/linked_record_field_editing_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/linked_record_field_editing_v1.md`  
 **Status:** **V1 person card shipped; V1b inquiry children + source fields + summary layout + horizontal child-row grid shipped (May 2026).** Remaining: broader linked-record surfaces (job/schedule), Record Experience Builder parity.  
 **Parent:** Settings control plane closeout; record UX parity.
 

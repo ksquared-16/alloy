@@ -1,8 +1,8 @@
 # Settings + Record UX Parity Sprint
 
-**Path:** `docs/sprints/05_2026/settings_record_ux_parity_sprint.md`  
+**Path:** `docs/sprints/archive/05_2026/settings_record_ux_parity_sprint.md`  
 **Status:** **Sprint complete (Cards 0–9 + post-closeout passes).** Shipped May 2026 — settings/record UX parity, field policy enforcement subset, layout integrity panel, action placement V1, opportunity workflow v1 layout sections, UX contract pass (four-plane copy + unified field modal). See **§12–§13**.  
-**Prerequisites:** Step 0 audit (conversation / product hardening backlog); active docs: `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/system/workspace-system.md`, `docs/system/actions-and-workflows.md`, `docs/execution/roadmap-and-gaps.md`, `docs/system/configuration-system.md`.  
+**Prerequisites:** Step 0 audit (conversation / product hardening backlog); active docs: `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, `docs/execution/roadmap-and-gaps.md`, `docs/system/configuration-system.md`.  
 **Program framing:** Operational completion + product hardening; **AI agent expansion paused** — this sprint does not expand Config/Layout Assist apply catalog or autonomous agents.
 
 ---
@@ -53,7 +53,7 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 | **Forms config** | **Product hub** — not on Settings index | `/adminV2/forms/**` |
 | **Legacy admin** | **Parallel** routes | `/admin/system/**` sharing clients with AdminV2 Settings |
 
-**Queue doctrine (unchanged):** Queue rows are preview/selection only; drawer and mutations must use entity GET / resolver payloads — see `docs/system/record-system.md`.
+**Queue doctrine (unchanged):** Queue rows are preview/selection only; drawer and mutations must use entity GET / resolver payloads — see `docs/archive/2026-06-superseded-system/record-system.md`.
 
 ---
 
@@ -357,7 +357,7 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 - `web/app/adminV2/workspace/dept/.../work-unit/[workUnitId]/page.tsx`
 - `web/app/adminV2/settings/actions/page.tsx`
 - `web/components/admin/AdminEntityDrawer.tsx` (surgical: `excludeActionKeys` on customer_booking panel only)
-- `docs/system/configuration-system.md`, `docs/system/actions-and-workflows.md`
+- `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md`
 
 **Acceptance:**
 
@@ -415,7 +415,7 @@ This sprint closes **parity and trust gaps** on stable primitives — aligned wi
 **Files:**
 
 - `web/tests/admin/settingsRecordUxParityAccess.test.ts`
-- `docs/system/roles-and-permissions.md`, `docs/system/record-system.md`, `docs/system/configuration-system.md`
+- `docs/archive/2026-06-superseded-system/roles-and-permissions.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/system/configuration-system.md`
 
 **Acceptance:**
 
@@ -519,11 +519,11 @@ See **Acceptance** checklists under each card in §8.
 Must land before sprint is **closed** (can land incrementally per card):
 
 1. `docs/system/configuration-system.md` — field policies UI + enforcement; layout integrity entry
-2. `docs/system/record-system.md` — drawer validation/save; read-only semantics
+2. `docs/archive/2026-06-superseded-system/record-system.md` — drawer validation/save; read-only semantics
 3. `docs/execution/roadmap-and-gaps.md` — checklist items 4–6 progress
 4. `docs/system/configuration-system.md` — Settings truth table; integrity; actions inventory
-5. `docs/system/actions-and-workflows.md` — **if** Card 5 changes primary execute path for any shipped action
-6. `docs/system/roles-and-permissions.md` — **if** Card 7 documents ops mutate deferral or changes
+5. `docs/archive/2026-06-superseded-system/actions-and-workflows.md` — **if** Card 5 changes primary execute path for any shipped action
+6. `docs/archive/2026-06-superseded-system/roles-and-permissions.md` — **if** Card 7 documents ops mutate deferral or changes
 7. This file — update **Status** line per card completion
 
 ---

@@ -1,7 +1,7 @@
 # Enrollment Packet — Phase 2 Enhancement Plan
 
 **Date:** May 2026  
-**Depends on:** **Enrollment Packet E2E Phase 1** (shipped — see **`docs/product/documents-and-forms.md`**, **`docs/product/crm-system.md`**, **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`**, **`docs/product/communications.md`**).
+**Depends on:** **Enrollment Packet E2E Phase 1** (shipped — see **`docs/product/documents-and-forms.md`**, **`docs/product/crm-system.md`**, **`docs/sprints/archive/05_2026/enrollment_journey_packet_operations_v1.md`**, **`docs/product/communications.md`**).
 
 **Execution trail (thin slice):**
 
@@ -226,7 +226,7 @@ Swap **D** earlier if deliverability is blocking pilots.
 | As-built forms + documents | **`docs/product/documents-and-forms.md`** |
 | CRM surfaces + doctrine | **`docs/product/crm-system.md`** |
 | Communications + webhooks | **`docs/product/communications.md`** |
-| Sprint comms QA / matrix | **`docs/sprints/05_2026/communications.txt`** |
-| Historical packet audit (Card 0) | **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`** |
+| Sprint comms QA / matrix | **`docs/sprints/archive/05_2026/communications.txt`** |
+| Historical packet audit (Card 0) | **`docs/sprints/archive/05_2026/enrollment_journey_packet_operations_v1.md`** |
 | Long-range forms vision | **`docs/product/documents-and-forms.md`** (long-term vision) |
 | Roadmap tracking | **`docs/execution/roadmap-and-gaps.md`** |

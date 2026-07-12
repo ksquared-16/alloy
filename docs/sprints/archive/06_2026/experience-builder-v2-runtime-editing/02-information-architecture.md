@@ -1,6 +1,6 @@
 # Information Architecture — Experience Builder V2
 
-**Path:** `docs/sprints/06_2026/experience-builder-v2-runtime-editing/02-information-architecture.md`
+**Path:** `docs/sprints/archive/06_2026/experience-builder-v2-runtime-editing/02-information-architecture.md`
 **Status:** UX architecture sprint — design only (June 2026)
 **Deliverable:** 2 — Revised Information Architecture
 

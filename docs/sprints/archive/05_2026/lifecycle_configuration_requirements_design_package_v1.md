@@ -1,6 +1,6 @@
 # Lifecycle Configuration & Requirements — Design Package v1
 
-**Path:** `docs/sprints/05_2026/lifecycle_configuration_requirements_design_package_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/lifecycle_configuration_requirements_design_package_v1.md`  
 **Status:** Design package (audit). Implementation: **Phase 1 shipped** — see `web/lib/completion/evaluateEffectiveRequirements.ts`, `lifecycleActionRequirementCatalog.ts`, `adminActionPreflight.ts`, `POST /api/admin/actions/preflight`.  
 **Date:** 2026-05-31  
 **Sprint:** Lifecycle Configuration & Requirements (follows Lifecycle Alignment closeout)

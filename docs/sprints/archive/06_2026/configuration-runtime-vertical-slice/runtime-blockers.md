@@ -86,7 +86,7 @@ LAYOUT_RUNTIME_OPPORTUNITY_DRAWER=1
 | `/settings/business-processes` | Redirects → `/settings/processes` |
 | `/settings/layouts` | Layout gallery + Lead Summary blueprint |
 
-**Screenshots:** `docs/sprints/06_2026/configuration-runtime-end-to-end/` (`01-settings-home.png` … `08-runtime-active-work-view.png`)
+**Screenshots:** `docs/sprints/archive/06_2026/configuration-runtime-end-to-end/` (`01-settings-home.png` … `08-runtime-active-work-view.png`)
 
 **Playwright:** `web/playwright/tests/configuration-runtime-end-to-end.spec.ts`  
 **Vitest:** `web/tests/adminV2/configurationRuntimeEndToEnd.test.ts`

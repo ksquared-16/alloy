@@ -55,7 +55,7 @@ Card 0 ──► Card 1 ──► Card 2 ──► Card 3 ──► Card 4 ─�
 | **Forecasting** | **Hooks and optional facts only** (Card 6) — **not** a capacity engine, auto-promotion, or schedule solver. |
 | **`queue_definition.group_by`** | **Defer / deprecate** — use **`primary_group_fact_key`** + server-side cohort keys for grouping; do not implement unused `group_by` in Card 3 without separate approval. |
 
-Cross-links added: **`docs/product/crm-system.md`**, **`docs/system/workspace-system.md`** (Phase 2 = planned architecture, not shipped runtime).
+Cross-links added: **`docs/product/crm-system.md`**, **`docs/archive/2026-06-superseded-system/workspace-system.md`** (Phase 2 = planned architecture, not shipped runtime).
 
 ### Scope (completed)
 

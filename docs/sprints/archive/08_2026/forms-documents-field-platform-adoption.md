@@ -736,7 +736,7 @@ Relationship leaves are **read-only prefill in P2** — submission may include i
 **Status:** **Merged** — PR #146 → staging `35e1a2669`  
 **Branch:** `feat/relationship-runtime-resolution`
 
-See `docs/sprints/08_2026/forms-documents-relationship-runtime-resolution.md`.
+See `docs/sprints/archive/08_2026/forms-documents-relationship-runtime-resolution.md`.
 
 ## 23. P4 — Collection-bound repeatable authoring (in progress)
 
@@ -759,7 +759,7 @@ Children (`customer_member` iteration) and Parents/Guardians (`person` iteration
 
 Optional `collection` metadata on group rows; org/household security validation; Processing envelope preserved in `meta.collection_submission_envelope`.
 
-See `docs/sprints/08_2026/forms-documents-collection-authoring.md`.
+See `docs/sprints/archive/08_2026/forms-documents-collection-authoring.md`.
 
 
 

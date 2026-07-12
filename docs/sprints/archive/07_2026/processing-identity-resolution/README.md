@@ -4,7 +4,7 @@
 **Type:** Architecture RFC + frozen decision register + phased Cursor implementation plan. **Documentation only — no runtime changes.**
 **Owner:** Platform / Processing. **Created:** 2026-07-10. **Decision + freeze pass:** 2026-07-10.
 
-> This is the sprint **named and explicitly deferred** by `docs/sprints/07_2026/processing-form-workflow-finish-closeout.md`:
+> This is the sprint **named and explicitly deferred** by `docs/sprints/archive/07_2026/processing-form-workflow-finish-closeout.md`:
 > *"Record identity resolution … is intentionally out of scope and remains the next separate sprint."*
 
 ## Scope in one line

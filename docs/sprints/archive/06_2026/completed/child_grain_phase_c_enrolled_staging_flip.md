@@ -1,6 +1,6 @@
 # Child-Grain Phase C — Enrolled Lane Staging Flip
 
-**Path:** `docs/sprints/06_2026/completed/child_grain_phase_c_enrolled_staging_flip.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/child_grain_phase_c_enrolled_staging_flip.md`  
 **Date:** 2026-06-06  
 **Status:** **Staging flip — Enrolled lane only**  
 **Preflight:** [`child_grain_phase_c_preflight.md`](../child_grain_phase_c_preflight.md)  

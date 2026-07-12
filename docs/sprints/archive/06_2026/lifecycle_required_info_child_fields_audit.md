@@ -1,6 +1,6 @@
 # Lifecycle Required Information — Child Field Source Audit
 
-**Path:** `docs/sprints/06_2026/lifecycle_required_info_child_fields_audit.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_required_info_child_fields_audit.md`  
 **Date:** 2026-05-31  
 **Status:** Audit only (no merge of inquiry vs canonical child in this pass)
 

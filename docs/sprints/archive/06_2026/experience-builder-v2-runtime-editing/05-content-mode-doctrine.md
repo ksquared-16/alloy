@@ -1,6 +1,6 @@
 # Content Mode Doctrine
 
-**Path:** `docs/sprints/06_2026/experience-builder-v2-runtime-editing/05-content-mode-doctrine.md`
+**Path:** `docs/sprints/archive/06_2026/experience-builder-v2-runtime-editing/05-content-mode-doctrine.md`
 **Status:** UX architecture sprint — design only (June 2026)
 **Deliverable:** 5 — Content Mode doctrine
 
@@ -125,5 +125,5 @@ A Metric card's inline editor shows the metric ref (read-only, with a link to OI
 | Structure Mode (the other half) | [`04-structure-mode-doctrine.md`](./04-structure-mode-doctrine.md) |
 | Interaction model | [`01-runtime-editing-interaction-model.md`](./01-runtime-editing-interaction-model.md) |
 | Walkthroughs (edit renderer, edit field) | [`06-interaction-walkthroughs.md`](./06-interaction-walkthroughs.md) |
-| Renderers / Slots / Data Sources | `docs/platform/operator/presentation-runtime-doctrine.md` §4–5 |
+| Renderers / Slots / Data Sources | `docs/platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` §4–5 |
 | Content templates (5C) | `docs/platform/operator/card-content-template-field-inclusion-doctrine.md` |

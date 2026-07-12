@@ -319,7 +319,7 @@ Keep **resolver-driven visibility** in `applyPersonDrawerPresentationProfile`. C
 3. **Field visibility conditions** — extend `field_placements_v1` or person-specific placement metadata
 4. **Settings UX** — enable person layout mutation parity with opportunity workflow v1 (section order, hide/show)
 
-Reference: `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md` (deferred enhancements).
+Reference: `docs/sprints/archive/05_2026/layout_field_behavior_semantics_phase_2.md` (deferred enhancements).
 
 ---
 
@@ -356,7 +356,7 @@ Reference: `docs/sprints/05_2026/layout_field_behavior_semantics_phase_2.md` (de
 | `supabase/migrations/20260529210000_person_communication_opt_out_field.sql` | Seed `communication_opt_out` + consent section for all orgs |
 | `web/lib/admin/person/personDrawerPresentationProfile.ts` | Parent consent key + strict profile gating |
 | `web/tests/admin/person/personDrawerPresentationProfile.test.ts` | Opt-out + photo consent profile tests |
-| `docs/sprints/05_2026/child_profile_person_drawer_doctrine.md` | This document |
+| `docs/sprints/archive/05_2026/child_profile_person_drawer_doctrine.md` | This document |
 
 ### Pass 2 (architecture + UX)
 
@@ -594,8 +594,8 @@ Reseed scripts (`seedRealisticChildcareDemoData.ts`, waitlist demo) are **out of
 
 ## Related docs
 
-- `docs/sprints/05_2026/person_relationship_child_lifecycle_foundation.md` — relationship audit + parent/child foundation
-- `docs/sprints/05_2026/person_location_ux_reset.md` — inquiry child identity sync, visual parity
-- `docs/sprints/05_2026/completed/settings_control_plane_closeout.md` — four-plane model
+- `docs/sprints/archive/05_2026/person_relationship_child_lifecycle_foundation.md` — relationship audit + parent/child foundation
+- `docs/sprints/archive/05_2026/person_location_ux_reset.md` — inquiry child identity sync, visual parity
+- `docs/sprints/archive/05_2026/completed/settings_control_plane_closeout.md` — four-plane model
 - `docs/system/configuration-system.md` — Fields vs Layouts doctrine
-- `docs/system/entity-model.md` — persons, customer_persons, customer_members
+- `docs/archive/2026-06-superseded-system/entity-model.md` — persons, customer_persons, customer_members

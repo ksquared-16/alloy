@@ -35,7 +35,7 @@ Each section shows **A | B | C** side by side:
 | 7 | Forged Oval | Flattened oval, wider center mass |
 | 8 | Signature BOS | Strongest opinionated brand silhouette |
 
-Screenshots: `docs/sprints/06_2026/assets/operational-intake-shape-r2/`  
+Screenshots: `docs/sprints/archive/06_2026/assets/operational-intake-shape-r2/`  
 One PNG per shape (triple atmosphere in each).
 
 ## Rules

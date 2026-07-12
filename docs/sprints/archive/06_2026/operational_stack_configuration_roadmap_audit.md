@@ -1,6 +1,6 @@
 # Operational Stack Configuration Roadmap Audit
 
-**Path:** `docs/sprints/06_2026/operational_stack_configuration_roadmap_audit.md`  
+**Path:** `docs/sprints/archive/06_2026/operational_stack_configuration_roadmap_audit.md`  
 **Status:** Audit complete — no implementation, no schema changes  
 **Date:** June 2026  
 **Scope:** Lifecycle → Readiness → Needs Attention → Operational Work → Actions → Automations → BOS
@@ -14,7 +14,7 @@
 - `operational_work_v1_implementation_plan.md`
 - `lifecycle_runtime_configuration_alignment_sprint.md`
 - `docs/system/configuration-system.md`
-- `docs/system/actions-and-workflows.md`
+- `docs/archive/2026-06-superseded-system/actions-and-workflows.md`
 
 ---
 

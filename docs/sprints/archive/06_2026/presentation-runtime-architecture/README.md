@@ -1,6 +1,6 @@
 # Alloy OS — Presentation Runtime Architecture
 
-**Path:** `docs/sprints/06_2026/presentation-runtime-architecture/`
+**Path:** `docs/sprints/archive/06_2026/presentation-runtime-architecture/`
 **Status:** **Architecture sprint — design only. No code. No migrations. No schemas.**
 **Type:** Defining architecture document (unification sprint).
 **Depends on / does not reopen:** the frozen runtime spine, Universal Card System (System 4 / 5 / 5A / 5B / 5C), Experience Builder doctrine, OIP/Analytics platform, Configuration Runtime, and the AdminV2 runtime-performance doctrine.
@@ -96,7 +96,7 @@ The brief's "Perspective" (role-based: Director/Teacher/Parent) is the **Audienc
 
 | # | Deliverable | Document |
 |---|---|---|
-| 1, 6, 9 | Presentation Runtime doctrine + complete primitive architecture | [`01-presentation-runtime-doctrine.md`](./01-presentation-runtime-doctrine.md) |
+| 1, 6, 9 | Presentation Runtime doctrine + complete primitive architecture | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
 | 2 | Experience Builder doctrine | [`02-experience-builder-doctrine.md`](./02-experience-builder-doctrine.md) |
 | 3 | Information Architecture | [`03-information-architecture.md`](./03-information-architecture.md) |
 | 4 | Interaction Model (navigation, config flow, publishing, preview, assignments, versioning) | [`04-interaction-model.md`](./04-interaction-model.md) |
@@ -128,7 +128,7 @@ The brief's "Perspective" (role-based: Director/Teacher/Parent) is the **Audienc
 Canonical inputs this sprint reconciles (does not contradict):
 
 - `docs/platform/operator/canonical-interaction-model.md` — the spine
-- `docs/platform/operator/universal-card-system.md`, `universal-card-archetypes.md` (5A), `card-interaction-expansion-doctrine.md` (5B), `card-content-template-field-inclusion-doctrine.md` (5C)
+- `docs/platform/operator/universal-card-system.md`, `universal-universal-card-archetypes.md` (5A), `card-interaction-expansion-doctrine.md` (5B), `card-content-template-field-inclusion-doctrine.md` (5C)
 - `docs/platform/operator/experience-builder-doctrine.md`, `operational-action-doctrine.md`, `focus-panel-architecture-vocabulary.md`
 - `docs/platform/modules/operational-intelligence-platform.md` (Analytics), `documents-and-forms.md`, `actions-and-workflows.md`
 - `docs/platform/core/placement-system.md`, `record-system.md`, `entity-model.md`

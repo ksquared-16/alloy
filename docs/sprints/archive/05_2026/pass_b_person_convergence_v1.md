@@ -1,6 +1,6 @@
 # Pass B — Person Convergence & Lifecycle Gate Alignment v1
 
-**Path:** `docs/sprints/05_2026/pass_b_person_convergence_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/pass_b_person_convergence_v1.md`  
 **Status:** Shipped (May 2026)  
 **Builds on:** `lifecycle_information_matrix_v1.md`, Pass A (`AddInquiryChildModal`)
 

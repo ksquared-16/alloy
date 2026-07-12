@@ -1,6 +1,6 @@
 # Enrollment Operations Configuration UX Audit
 
-**Path:** `docs/sprints/06_2026/enrollment_operations_configuration_ux_audit.md`  
+**Path:** `docs/sprints/archive/06_2026/enrollment_operations_configuration_ux_audit.md`  
 **Status:** Audit + recommendations only (no implementation in this pass)  
 **Date:** May 2026  
 **Audience:** Product, design, engineering — framed for an **Enrollment Director** configuring Lead → Enrolled  

@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Doctrine Reconciliation
 
-**Baseline:** `origin/staging` @ `65afc8527`. This table lists documentation that must change **if this architecture is approved**. Per repo governance (`documentation-governance.md`): freeze before documenting — this sprint lives under `docs/sprints/07_2026/`; canonical `docs/platform/` edits happen only at closeout, when decisions are frozen. **No doctrine is edited now.**
+**Baseline:** `origin/staging` @ `65afc8527`. This table lists documentation that must change **if this architecture is approved**. Per repo governance (`documentation-governance.md`): freeze before documenting — this sprint lives under `docs/sprints/archive/07_2026/`; canonical `docs/platform/` edits happen only at closeout, when decisions are frozen. **No doctrine is edited now.**
 
 | Document | Current statement | Runtime evidence | Required change | Architecture phase |
 |---|---|---|---|---|
@@ -15,10 +15,10 @@
 | `docs/audits/person-vs-contact-audit.md` (follow-up #1) | "Enumerate every route that inserts contacts without person threading" | gutters + backend leads still write contacts **[C]** | Close the follow-up as sources cut over; mark inbound parity done | E4 |
 | `docs/platform/foundation/platform-event-catalog.md` | `intake_case_*` events catalogued | not all emitted; new commit/resolution events needed **[C]** | Add resolution/commit/exception event keys; reconcile which `intake_case_*` are emitted | B3, D2 |
 | `docs/platform/foundation/product-roadmap.md` / `platform-capabilities.md` | "Record identity resolution — next separate sprint"; DCP In Progress | this sprint delivers it **[C]** | On closeout: move to Complete; summarize in `release-history.md` | closeout |
-| `docs/platform/governance/glossary.md` / `docs/core/glossary.md` | Person/Customer/Contact/Opportunity defined; **Intake/Processing/Processing Case/Identity Resolution/DCP not defined** | terms used in sprint docs + code, absent from canonical glossary **[C]** | Add canonical glossary entries: Intake, Processing, Processing Case, Intake Envelope, Identity Subject, Candidate Match, Resolution, Commit Plan, Identity Resolution, DCP, Merge | closeout |
+| `docs/platform/governance/glossary.md` / `docs/platform/governance/glossary.md` | Person/Customer/Contact/Opportunity defined; **Intake/Processing/Processing Case/Identity Resolution/DCP not defined** | terms used in sprint docs + code, absent from canonical glossary **[C]** | Add canonical glossary entries: Intake, Processing, Processing Case, Intake Envelope, Identity Subject, Candidate Match, Resolution, Commit Plan, Identity Resolution, DCP, Merge | closeout |
 | `docs/platform/modules/communications-identity-platform.md` | comms identity = sender/channel resolution | separate domain; naming-collision risk with record identity **[C]** | Add a disambiguation note: comms identity ≠ record identity resolution | B (README already states) |
 | `docs/schema/schema-policies-and-security.md` | documents `admin_ops_full_access` | policy is **non-org-scoped** on customers/opportunities/contacts/OCM **[C]** | Document the org-scoped replacement (B0) | B0 |
-| `docs/sprints/07_2026/processing-form-workflow-finish-closeout.md` | "identity resolution … remains the next separate sprint" | this is that sprint | Cross-link to this sprint folder | now (link only) |
+| `docs/sprints/archive/07_2026/processing-form-workflow-finish-closeout.md` | "identity resolution … remains the next separate sprint" | this is that sprint | Cross-link to this sprint folder | now (link only) |
 
 ## Consistency with established Alloy principles
 

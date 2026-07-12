@@ -86,5 +86,5 @@ Use an org that already has at least one form (e.g. medication demo seeded) or f
 
 ## Related docs
 
-- `docs/sprints/05_2026/forms-engine-v1-1-usable-flow.txt` — V1.1 foundation and placement.
-- `docs/sprints/05_2026/forms-engine-v1.txt` — engine freeze / architecture references.
+- `docs/sprints/archive/05_2026/forms-engine-v1-1-usable-flow.txt` — V1.1 foundation and placement.
+- `docs/sprints/archive/05_2026/forms-engine-v1.txt` — engine freeze / architecture references.

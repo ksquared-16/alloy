@@ -51,7 +51,7 @@ Sprint scope: published Person Drawer runtime matches Experience Builder configu
 - `web/components/admin/vmDrawer/DrawerLayoutRuntimeShellZoneView.tsx` — honorLayoutDocBlocks in shell zones
 - `web/components/layout/person/PersonConnectedChildrenCardList.tsx` — responsive meta wrapping
 - `web/tests/layout/personDrawerPublishedRuntimeParity.test.ts` — durable parity tests
-- `docs/sprints/06_2026/person_drawer_published_runtime_parity.md` — this report
+- `docs/sprints/archive/06_2026/person_drawer_published_runtime_parity.md` — this report
 
 ## 6. Tests added
 

@@ -1,10 +1,10 @@
 # Sprint: Task Assist V1 (Agent #2)
 
-**Path:** `docs/sprints/05_2026/task_assist_v1.md`  
-**Status:** **V1 shipped** (Cards 0–7 complete as of 2026-05-14). Ephemeral proposals, **opportunities-only** drawer UI behind **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**, **`POST /api/admin/ai/task-assist/propose`** + **`POST /api/admin/ai/task-assist/apply`**, canonical send via **`executeCommunicationsSend`** (same stack as **`POST /api/admin/communications/send`**). No migrations for core path. **Durable proposals, scheduled sends, and operational tasks** ship in **`docs/sprints/05_2026/task_assist_v1_1.md`** (Task Assist V1.1).  
-**Prerequisites:** `docs/sprints/05_2026/task_assist_v1_step0_audit.md`, `docs/sprints/05_2026/ai_agents_v1.md` (§6.1 Agent #2 ownership, §8 historical sketch — **canonical contract is §3 below**).
+**Path:** `docs/sprints/archive/05_2026/task_assist_v1.md`  
+**Status:** **V1 shipped** (Cards 0–7 complete as of 2026-05-14). Ephemeral proposals, **opportunities-only** drawer UI behind **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**, **`POST /api/admin/ai/task-assist/propose`** + **`POST /api/admin/ai/task-assist/apply`**, canonical send via **`executeCommunicationsSend`** (same stack as **`POST /api/admin/communications/send`**). No migrations for core path. **Durable proposals, scheduled sends, and operational tasks** ship in **`docs/sprints/archive/05_2026/task_assist_v1_1.md`** (Task Assist V1.1).  
+**Prerequisites:** `docs/sprints/archive/05_2026/task_assist_v1_step0_audit.md`, `docs/sprints/archive/05_2026/ai_agents_v1.md` (§6.1 Agent #2 ownership, §8 historical sketch — **canonical contract is §3 below**).
 
-**Sources of truth (behavior):** `docs/product/communications.md` (canonical comms system — there is no `docs/system/communications.md` in-repo; use this file), `docs/system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`, `web/app/api/admin/communications/send/route.ts`, `web/lib/communications/canonicalOutboundEnqueue.ts`.
+**Sources of truth (behavior):** `docs/product/communications.md` (canonical comms system — there is no `docs/system/communications.md` in-repo; use this file), `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`, `web/app/api/admin/communications/send/route.ts`, `web/lib/communications/canonicalOutboundEnqueue.ts`.
 
 **Non-goal:** This document is **not** Workflow Assist (Agent #3). No `workflows` / `workflow_actions` / NL→workflow.
 
@@ -78,7 +78,7 @@ If Card 0 decides reminder scope is too fuzzy, **ship comms-only V1** and defer 
 - **Apply** reuses **`POST /api/admin/communications/send`** → **`enqueueCanonicalOutboundMessage`** — already the canonical stack (`docs/product/communications.md`).
 - Aligns with **operating doctrine**: ship behavior-changing work with minimal reversible scope; add tables when product requires **durable** audit of *proposed* (not sent) content or deferred execution.
 
-**When to move to B:** Operator must **leave and return** to the same proposal, compliance requires **stored AI artifacts**, or **accept/reject** analytics — then add `task_assist_proposals` (+ RLS) mirroring `agent_v1_*` proposal shape (see `docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md` Phase 3).
+**When to move to B:** Operator must **leave and return** to the same proposal, compliance requires **stored AI artifacts**, or **accept/reject** analytics — then add `task_assist_proposals` (+ RLS) mirroring `agent_v1_*` proposal shape (see `docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md` Phase 3).
 
 **When to add C:** After **Option A** ships, add migration for `scheduled_send_at` (or dedicated queue table) **only** if worker contract is written to dequeue **without** creating a second “truth” for message bodies (e.g. row stays `queued` with `metadata.send_after` reviewed by security — **design separately**; not V1 default).
 
@@ -328,11 +328,11 @@ Run **after** operator clicks Apply, on **server**, on the **final** body (post-
 
 ## 10. References
 
-- `docs/sprints/05_2026/task_assist_v1_step0_audit.md`
-- `docs/sprints/05_2026/ai_agents_v1.md`
-- `docs/sprints/05_2026/ai_agents_v1_step1_design.md` (four-layer pattern; Agent 2 sketch superseded by §3 here)
+- `docs/sprints/archive/05_2026/task_assist_v1_step0_audit.md`
+- `docs/sprints/archive/05_2026/ai_agents_v1.md`
+- `docs/sprints/archive/05_2026/ai_agents_v1_step1_design.md` (four-layer pattern; Agent 2 sketch superseded by §3 here)
 - `docs/product/communications.md`
-- `docs/system/actions-and-workflows.md` (boundary: Task Assist does **not** create workflows)
+- `docs/archive/2026-06-superseded-system/actions-and-workflows.md` (boundary: Task Assist does **not** create workflows)
 - `docs/execution/operating-doctrine.md`
 - `docs/product/bos-foundation.md`
 - `web/app/api/admin/communications/send/route.ts`

@@ -1,9 +1,9 @@
 # Sticky Location Filter + Configuration Scope Audit (Hot Fix)
 
-**Path:** `docs/sprints/05_2026/sticky_location_filter_hotfix.md`  
+**Path:** `docs/sprints/archive/05_2026/sticky_location_filter_hotfix.md`  
 **Status:** **Implemented** (Cards 0, 1, 2, 3, 5 — Card 4 deferred)  
 **Date:** 2026-05-21  
-**Prior art:** `docs/sprints/05_2026/site_filter_workspace_card.md` (first-pass site filter plumbing)
+**Prior art:** `docs/sprints/archive/05_2026/site_filter_workspace_card.md` (first-pass site filter plumbing)
 
 ---
 
@@ -352,14 +352,14 @@ Not required for sticky-filter acceptance: URL param persists on navigation to `
 
 ### Card 5 — Docs + contract update ✅
 
-**Done:** `docs/system/workspace-system.md`, `site_filter_workspace_card.md`, this file.
+**Done:** `docs/archive/2026-06-superseded-system/workspace-system.md`, `site_filter_workspace_card.md`, this file.
 
 **Note:** Location-level **configuration** overrides (org default + site override) were **audit-only** in this sprint — not implemented.
 
 **Files:**
 
-- `docs/sprints/05_2026/site_filter_workspace_card.md` — mark persistence shipped, link this sprint.
-- `docs/system/workspace-system.md` — short § “Workspace view site (operator context)”: URL param, storage, not config.
+- `docs/sprints/archive/05_2026/site_filter_workspace_card.md` — mark persistence shipped, link this sprint.
+- `docs/archive/2026-06-superseded-system/workspace-system.md` — short § “Workspace view site (operator context)”: URL param, storage, not config.
 - This file — update status to **implemented** when done.
 
 **Acceptance:** Active docs reflect behavior; operating doctrine unchanged (no new bypass paths).
@@ -436,7 +436,7 @@ against site-filter bootstrap.
 | Shell | `AdminV2Shell.tsx`, `WorkspaceSiteFilterGate.tsx` |
 | API bootstrap | `web/app/api/admin/workspace/site-filter/route.ts` |
 | Tests | `web/tests/admin/resolveQueueRecordScopeConstraints.test.ts`, new `workspaceSiteFilterClient.test.ts` |
-| Docs | `docs/system/workspace-system.md`, `site_filter_workspace_card.md` |
+| Docs | `docs/archive/2026-06-superseded-system/workspace-system.md`, `site_filter_workspace_card.md` |
 
 ---
 

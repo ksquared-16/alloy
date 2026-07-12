@@ -1,6 +1,6 @@
 # Lifecycle Builder Hardening — Sprint Closeout
 
-**Path:** `docs/sprints/06_2026/completed/lifecycle_builder_hardening_closeout.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/lifecycle_builder_hardening_closeout.md`  
 **Date:** 2026-06-02  
 **Status:** **Closed**  
 **Commit:** `6b6174ec` — `Harden Lifecycle Builder stage workspace` (branch: `staging`)
@@ -33,9 +33,9 @@ Improve **trust and usability** of the existing Lifecycle Builder configuration 
 |------|------|
 | `web/components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx` | Unified stage shell (summary, sections, sticky save, Ready check slot) |
 | `web/lib/lifecycle/persistLifecycleStageFieldRules.ts` | Server-side field-rules persistence for unified stage save |
-| `docs/sprints/06_2026/lifecycle_builder_hardening_execution_plan.md` | Execution plan (planning artifact) |
-| `docs/sprints/06_2026/lifecycle_builder_hardening_and_v2_canonical_model.md` | Builder audit + canonical model (planning artifact) |
-| `docs/sprints/06_2026/lifecycle_v2_discovery_and_operating_model.md` | V2 discovery (planning artifact; not implemented) |
+| `docs/sprints/archive/06_2026/lifecycle_builder_hardening_execution_plan.md` | Execution plan (planning artifact) |
+| `docs/sprints/archive/06_2026/lifecycle_builder_hardening_and_v2_canonical_model.md` | Builder audit + canonical model (planning artifact) |
+| `docs/sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md` | V2 discovery (planning artifact; not implemented) |
 
 ### Modified — UI
 
@@ -206,4 +206,4 @@ All meaningful side effects continue to route through existing **stage-runtime-c
 
 ## Next sprint
 
-**Not started.** V2 discovery docs remain under `docs/sprints/06_2026/` for a future sprint. Do not treat this closeout as approval to implement Needs Attention, Tasks, Orchestration, or runtime expansion.
+**Not started.** V2 discovery docs remain under `docs/sprints/archive/06_2026/` for a future sprint. Do not treat this closeout as approval to implement Needs Attention, Tasks, Orchestration, or runtime expansion.

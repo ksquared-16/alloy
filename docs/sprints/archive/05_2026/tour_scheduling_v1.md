@@ -4,7 +4,7 @@
 
 This sprint delivers **Tour Scheduling V1** as a first-class Alloy capability for enrollment CRM: admin-defined **availability rules**, **token-scoped public booking**, and **opportunity-attached tour appointments** with clear separation from queue previews and from the existing **`schedules`** (job-bound) model.
 
-**Sources of truth:** Step 0 audit (`docs/sprints/…` conversation / `docs/system/*`, `docs/execution/*`, repo inspection) and Step 1 design decisions. Implementation must stay aligned with **`docs/system/record-system.md`**, **`docs/system/workspace-system.md`**, **`docs/system/actions-and-workflows.md`**, **`docs/system/entity-model.md`**, **`docs/system/configuration-system.md`**, and **`docs/product/documents-and-forms.md`**.
+**Sources of truth:** Step 0 audit (`docs/sprints/…` conversation / `docs/system/*`, `docs/execution/*`, repo inspection) and Step 1 design decisions. Implementation must stay aligned with **`docs/archive/2026-06-superseded-system/record-system.md`**, **`docs/archive/2026-06-superseded-system/workspace-system.md`**, **`docs/archive/2026-06-superseded-system/actions-and-workflows.md`**, **`docs/archive/2026-06-superseded-system/entity-model.md`**, **`docs/system/configuration-system.md`**, and **`docs/product/documents-and-forms.md`**.
 
 **Outcome:** Operators and families can book tours against real slots; **`tour_bookings`** holds scheduling truth; **opportunities** remain the CRM lifecycle anchor; **workflow_events** capture tour lifecycle; queues continue as **selection/preview only** with compatibility via metadata mirror for existing pipeline UX.
 
@@ -62,7 +62,7 @@ This sprint delivers **Tour Scheduling V1** as a first-class Alloy capability fo
 - Changing global meaning of **`schedules`** or creating job rows solely to host tours.
 - Retiring **`metadata.tour_*`** read paths in queues in V1 (mirror keeps compatibility).
 
-**Follow-on planning:** items above that move from “non-scope” to product are captured under **`docs/sprints/05_2026/later-phase/tour_scheduling_phase_2.md`** (not committed work until scheduled).
+**Follow-on planning:** items above that move from “non-scope” to product are captured under **`docs/sprints/archive/05_2026/later-phase/tour_scheduling_phase_2.md`** (not committed work until scheduled).
 
 ## 6. Data Model Summary
 
@@ -155,7 +155,7 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 | **`tour_bookings`** | **Scheduling source of truth** — absolute `start_at` / `end_at`, IANA `timezone`, booking `status_key`, location, provenance. All slot validation and “what time is the tour?” authority for operators flows from here. |
 | **`opportunities`** | **CRM lifecycle source of truth** — `status_key`, work unit, identity links, pipeline metadata. Status moves (e.g. to **`tour_scheduled`**) go through **`validateStatusTransition`** + **`updateOpportunityStatusWithEvent`** when integration applies. |
 | **`opportunities.metadata.tour_date` / `tour_time`** | **Compatibility mirror only** — populated from the confirmed booking’s wall time so queues, Needs Attention, legacy CRM, and filters keep working without joining **`tour_bookings`** everywhere. Never treat mirror alone as scheduling authority when a booking row exists. |
-| **Queue rows** | **Selection / preview only** — may show tour labels from mirror and/or enriched booking read; mutations and “truth” always **entity GET** (see **`docs/system/record-system.md`**). |
+| **Queue rows** | **Selection / preview only** — may show tour labels from mirror and/or enriched booking read; mutations and “truth” always **entity GET** (see **`docs/archive/2026-06-superseded-system/record-system.md`**). |
 
 ---
 
@@ -172,7 +172,7 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 | **Public booking** | **`tour_public_booking_links`** rows (token, org, opportunity, location, active flag). | Rate limit ceilings + window sizes (**`TOUR_PUBLIC_RATE_LIMIT`**, **`TOUR_PUBLIC_SLOTS_MAX_RANGE_MS`**), generic error text for bad tokens, in-process limiter (**not** distributed). | Redis/global limits, CAPTCHA, branded pages, expiring links — see Phase 2. |
 | **Opportunity update helper** | RLS/org patterns on **`opportunities`**. | **`updateOpportunityStatusWithEvent`** requires **`org_id`** on update and treats **0-row** update as failure (no spurious **`opportunity_status_changed`**). | Transactional “booking insert + opportunity patch” single unit of work if product demands it. |
 
-**Summary:** V1 is **intentionally opinionated** in code for event names, default opportunity status targets, blocking statuses, and public abuse guards — those are **acceptable product defaults**. Items marked for Phase 2 should move toward **org/vertical settings**, richer **admin config**, or **platform hardening** as described in **`docs/sprints/05_2026/later-phase/tour_scheduling_phase_2.md`**.
+**Summary:** V1 is **intentionally opinionated** in code for event names, default opportunity status targets, blocking statuses, and public abuse guards — those are **acceptable product defaults**. Items marked for Phase 2 should move toward **org/vertical settings**, richer **admin config**, or **platform hardening** as described in **`docs/sprints/archive/05_2026/later-phase/tour_scheduling_phase_2.md`**.
 
 ---
 
@@ -182,7 +182,7 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 
 **Objective:** Re-verify Step 0 findings against the repo **immediately before coding** (schema, opportunity PATCH/event paths, queue metadata usage, public forms routes, `record_drawer_layouts` resolution). Update sprint doc or linked audit notes only if drift is found.
 
-**Files likely touched:** `docs/sprints/05_2026/tour_scheduling_v1.md` (changelog note only); optionally `docs/execution/roadmap-and-gaps.md` if scope status changes; **no** `web/` or `supabase/` unless audit discovers a doc bug worth fixing in same PR as a one-line correction.
+**Files likely touched:** `docs/sprints/archive/05_2026/tour_scheduling_v1.md` (changelog note only); optionally `docs/execution/roadmap-and-gaps.md` if scope status changes; **no** `web/` or `supabase/` unless audit discovers a doc bug worth fixing in same PR as a one-line correction.
 
 **Acceptance criteria:**
 
@@ -209,7 +209,7 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 - **Migration:** `supabase/migrations/20260511143000_tour_scheduling_v1_foundation.sql` — tables, CHECKs, partial unique (one active non-terminal booking per opportunity), indexes, org-integrity triggers, RLS + grants (anon revoked), `set_updated_at` triggers.
 - **Local `supabase db reset --local`:** Failed early on unrelated migration `20260328120000_firstfree4x120_discount_program.sql` (`discount_programs` missing in clean reset order) — **not** attributed to tour SQL; apply tour migration in a healthy local/remote DB to verify end-to-end.
 - **`npm run export:supabase-schema`:** Not executed here — no `DATABASE_URL` / `SUPABASE_DB_URL` in this environment; **CSV reference files were not modified** (per doctrine: do not hand-edit; regenerate when DB is available).
-- **Doctrine doc:** `docs/system/entity-model.md` updated in same change set (tour entities + `schedules` boundary).
+- **Doctrine doc:** `docs/archive/2026-06-superseded-system/entity-model.md` updated in same change set (tour entities + `schedules` boundary).
 
 ---
 
@@ -217,7 +217,7 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 
 **Objective:** Add **`tour_availability_rules`** and **`tour_bookings`** migrations: PKs, FKs to `orgs`, `opportunities`, `locations`, optional `form_submissions` / `form_public_links`, CHECKs, partial unique for **one active non-terminal booking per opportunity**, indexes for availability queries and org scope. Enable RLS with policies consistent with other org-scoped tables (authenticated + service_role). Regenerate **`docs/supabase/reference/*.csv`**.
 
-**Files likely touched:** `supabase/migrations/*_tour_scheduling_v1*.sql`; `docs/supabase/reference/*.csv`; `docs/system/entity-model.md` or `api-contracts.md` if new families need a representative row (same PR per doctrine).
+**Files likely touched:** `supabase/migrations/*_tour_scheduling_v1*.sql`; `docs/supabase/reference/*.csv`; `docs/archive/2026-06-superseded-system/entity-model.md` or `api-contracts.md` if new families need a representative row (same PR per doctrine).
 
 **Acceptance criteria:**
 
@@ -290,7 +290,7 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 
 **Objective:** Emit **`tour_requested`**, **`tour_booking_pending`**, **`tour_confirmed`**, **`tour_rescheduled`**, **`tour_canceled`**, **`tour_no_show`**, **`tour_completed`** via **`emitEvent`** with `entity_type = tour_bookings`; run **`executeWorkflowRun`** with `event_id`; **never** register workflows on a `tour_scheduled` **event_type**. Preserve **`opportunity_status_changed`** only when opportunity status changes.
 
-**Files likely touched:** `web/lib/tours/tourEvents.ts` (new); `web/lib/emitEvent.ts` (reuse only); `web/lib/workflowRun.ts` (reuse only); booking service from Card 3; `docs/system/actions-and-workflows.md` when event catalog changes.
+**Files likely touched:** `web/lib/tours/tourEvents.ts` (new); `web/lib/emitEvent.ts` (reuse only); `web/lib/workflowRun.ts` (reuse only); booking service from Card 3; `docs/archive/2026-06-superseded-system/actions-and-workflows.md` when event catalog changes.
 
 **Acceptance criteria:**
 
@@ -394,7 +394,7 @@ Manual QA sign-off: **Tour Scheduling V1** is working as intended for the enroll
 - `web/app/api/public/tour-booking/[token]/resolve/route.ts`, `slots/route.ts`, `book/route.ts` — rate limits, window guard, org-scoped labels, safer book path
 - `web/app/api/admin/tours/bookings/route.ts` — doctrine comment
 - `web/tests/tours/tourCard8.hardening.test.ts`
-- `docs/sprints/05_2026/tour_scheduling_v1.md` — this record + §9 drawer table clarification
+- `docs/sprints/archive/05_2026/tour_scheduling_v1.md` — this record + §9 drawer table clarification
 
 **Remaining gaps (product / infra, not blocking V1 code merge)**
 

@@ -1,6 +1,6 @@
 # Lifecycle Canonical Vocabulary
 
-**Path:** `docs/sprints/06_2026/completed/lifecycle_canonical_vocabulary.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md`  
 **Date:** 2026-06-02  
 **Status:** **Frozen** — canonical reference for Lifecycle domain work beginning with Required Information V2  
 **Scope:** Documentation only. No code, UI, or schema changes implied by this document.
@@ -11,7 +11,7 @@
 - [`../lifecycle_v2_discovery_and_operating_model.md`](../lifecycle_v2_discovery_and_operating_model.md)
 - [`../lifecycle_builder_hardening_and_v2_canonical_model.md`](../lifecycle_builder_hardening_and_v2_canonical_model.md)
 - [`../enrollment_lifecycle_status_matrix_contract.md`](../enrollment_lifecycle_status_matrix_contract.md) — configurable labels vs fixed enrollment layers
-- [`docs/core/glossary.md`](../../../core/glossary.md)
+- [`docs/platform/governance/glossary.md`](../../../platform/governance/glossary.md)
 - [`docs/product/bos-foundation.md`](../../../product/bos-foundation.md)
 
 **Authority:** When product copy, docs, or V2 specs disagree with this file, **update the other artifact** to match this vocabulary unless an explicit exception is recorded in §6.
@@ -480,5 +480,5 @@ Update this file when:
 |-----|------|
 | [`lifecycle_builder_hardening_closeout.md`](./lifecycle_builder_hardening_closeout.md) | What shipped in hardening |
 | [`../lifecycle_v2_discovery_and_operating_model.md`](../lifecycle_v2_discovery_and_operating_model.md) | V2 architecture (not implemented) |
-| [`docs/core/glossary.md`](../../../core/glossary.md) | Platform-wide terms |
+| [`docs/platform/governance/glossary.md`](../../../platform/governance/glossary.md) | Platform-wide terms |
 | [`docs/product/bos-foundation.md`](../../../product/bos-foundation.md) | BOS capability classes |

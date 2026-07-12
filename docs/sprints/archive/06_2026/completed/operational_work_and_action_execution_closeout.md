@@ -1,6 +1,6 @@
 # Operational Work + Opportunity Action Execution — Sprint Closeout
 
-**Path:** `docs/sprints/06_2026/completed/operational_work_and_action_execution_closeout.md`  
+**Path:** `docs/sprints/archive/06_2026/completed/operational_work_and_action_execution_closeout.md`  
 **Date:** 2026-06-03  
 **Status:** **Closed — promoted to `staging`**  
 **Branch:** `staging` (includes `48e0cf48` Operational Work bundle + VM drawer action execution fixes `7a69bdab`, `52b71bcf`)
@@ -602,7 +602,7 @@ Goals:
 Do not start Work Definitions Builder editor — defer until layout IA is stable.
 
 Load:
-- docs/sprints/06_2026/completed/operational_work_and_action_execution_closeout.md
+- docs/sprints/archive/06_2026/completed/operational_work_and_action_execution_closeout.md
 - docs/system/adminv2-runtime-performance-doctrine.md
 - Layout V2 foundation docs and d226d295 / 76fc9785 merge artifacts
 ```

@@ -1,6 +1,6 @@
 # Enrollment Summary Vertical Slice — Implementation Plan (for review)
 
-**Path:** `docs/sprints/06_2026/enrollment-summary-vertical-slice/`
+**Path:** `docs/sprints/archive/06_2026/enrollment-summary-vertical-slice/`
 **Status:** **PLAN ONLY — no code written. Awaiting review before implementation.**
 **Goal:** Prove the smallest real loop of Presentation Runtime + Experience Builder V2 + Presentation Data: **configure → publish → operate → revise → publish again**, on **Enrollment Focus Panel Summary only**.
 

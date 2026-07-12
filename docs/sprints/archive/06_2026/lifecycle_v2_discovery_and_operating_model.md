@@ -1,6 +1,6 @@
 # Lifecycle V2 — Discovery & Operating Model
 
-**Path:** `docs/sprints/06_2026/lifecycle_v2_discovery_and_operating_model.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md`  
 **Status:** Discovery & architecture only — **do not implement** from this document  
 **Date:** 2026-06-02  
 **Baseline:** Lifecycle Builder V1 (activation board on `/adminV2/settings/lifecycle`)
@@ -17,8 +17,8 @@
 
 **Canonical system docs:**
 
-- `docs/system/configuration-system.md`, `docs/system/actions-and-workflows.md`
-- `docs/system/workspace-system.md`, `docs/product/crm-system.md`
+- `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md`
+- `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/product/crm-system.md`
 - `docs/product/bos-foundation.md`
 
 ---

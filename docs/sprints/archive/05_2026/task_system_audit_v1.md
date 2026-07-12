@@ -1,6 +1,6 @@
 # Task System Audit v1
 
-**Path:** `docs/sprints/05_2026/task_system_audit_v1.md`  
+**Path:** `docs/sprints/archive/05_2026/task_system_audit_v1.md`  
 **Status:** Audit (May 2026) — no implementation  
 **Scope:** AdminV2 operational tasks (`operational_tasks`), Task Assist V1.1, BOS handoffs, registry `create_task`, and adjacent scheduled communications.
 

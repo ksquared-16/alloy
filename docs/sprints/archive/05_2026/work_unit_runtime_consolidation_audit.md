@@ -5,7 +5,7 @@
 **Next phases:** DESIGN → IMPLEMENT (separate docs)  
 **Sprint objective (target state):** Move from **status-driven work units** (one WU per status cohort) to **operational-domain work units** (e.g. All, Pipeline, Touring, Enrolling, Needs Attention) where **statuses become filters**, not top-level navigation surfaces.
 
-**Canonical references loaded for this audit:** `docs/system/workspace-system.md`, `docs/product/crm-system.md`, `docs/sprints/05_2026/completed/adminv2_dept_runtime_closeout_handoff.md`, `docs/sprints/05_2026/adminv2_work_unit_runtime_cards_1_3_plan.md`, `docs/sprints/05_2026/canonical_enrollment_operating_model_seed.md`, `docs/sprints/05_2026/completed/adminv2_performance_closeout.md`.
+**Canonical references loaded for this audit:** `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/product/crm-system.md`, `docs/sprints/archive/05_2026/completed/adminv2_dept_runtime_closeout_handoff.md`, `docs/sprints/archive/05_2026/adminv2_work_unit_runtime_cards_1_3_plan.md`, `docs/sprints/archive/05_2026/canonical_enrollment_operating_model_seed.md`, `docs/sprints/archive/05_2026/completed/adminv2_performance_closeout.md`.
 
 ---
 
@@ -130,7 +130,7 @@ Legacy bootstrap JSON:  invalid for QueueService until converted
 ### 3.1 Code-owned metrics
 
 - **Registry:** `web/lib/kpi/registry.ts` — `metric_key` definitions, allowed surfaces (`workspace`, `department`, `work_unit`).
-- **Doctrine:** `docs/sprints/05_2026/kpi_config.txt` — config chooses **which** metric; code owns calculation; V1 = **context-derived** from same batches as the surface.
+- **Doctrine:** `docs/sprints/archive/05_2026/kpi_config.txt` — config chooses **which** metric; code owns calculation; V1 = **context-derived** from same batches as the surface.
 
 ### 3.2 Config-owned placements
 
@@ -631,7 +631,7 @@ flowchart LR
 
 ## 28. Files inspected (audit trail)
 
-**Docs:** `docs/system/workspace-system.md`, `docs/product/crm-system.md`, `docs/sprints/05_2026/adminv2_*`, `docs/sprints/05_2026/canonical_enrollment_operating_model_seed.md`, `docs/archive/.../workspace-work-unit-scope-doctrine.md`
+**Docs:** `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/product/crm-system.md`, `docs/sprints/archive/05_2026/adminv2_*`, `docs/sprints/archive/05_2026/canonical_enrollment_operating_model_seed.md`, `docs/archive/.../workspace-work-unit-scope-doctrine.md`
 
 **Schema / migrations:** `work_units` table, `20260430232500_enrollment_pipeline_*`, `20260414140000_growth_*`, `20260409090000_cleaning_*`, `20260427173000_opportunities_work_unit_id.sql`
 

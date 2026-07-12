@@ -1,18 +1,18 @@
 # Lifecycle Action Intake Model — Design Before Build
 
-**Path:** `docs/sprints/06_2026/lifecycle_action_intake_model.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_action_intake_model.md`  
 **Status:** Design / audit only — **no implementation in this sprint**  
 **Date:** 2026-05-31  
 **Principle:** Connect Lifecycle Builder **required information** to **action execution** through a single **action intake** contract. Reuse platform actions, forms, BOS, and the existing requirement evaluator — do not add a parallel rules engine.
 
 **Related:**
 
-- `docs/sprints/06_2026/lifecycle_actions_model_simplification.md` — configured actions (empty by default; lifecycle-wide vs stage-specific)
-- `docs/sprints/06_2026/lifecycle_builder_guided_board_prefetch.md` — stage bootstrap (field rules, form coverage)
-- `docs/sprints/05_2026/lifecycle_configuration_requirements_design_package_v1.md` — unified requirements spine
-- `docs/sprints/05_2026/lifecycle_information_matrix_v1.md` — capture-first vs execute-now actions
+- `docs/sprints/archive/06_2026/lifecycle_actions_model_simplification.md` — configured actions (empty by default; lifecycle-wide vs stage-specific)
+- `docs/sprints/archive/06_2026/lifecycle_builder_guided_board_prefetch.md` — stage bootstrap (field rules, form coverage)
+- `docs/sprints/archive/05_2026/lifecycle_configuration_requirements_design_package_v1.md` — unified requirements spine
+- `docs/sprints/archive/05_2026/lifecycle_information_matrix_v1.md` — capture-first vs execute-now actions
 - `docs/product/bos-foundation.md` — BOS doctrine (propose/approve; platform executes)
-- `docs/system/actions-and-workflows.md` — `executeAdminAction`, events, workflows
+- `docs/archive/2026-06-superseded-system/actions-and-workflows.md` — `executeAdminAction`, events, workflows
 
 ---
 
