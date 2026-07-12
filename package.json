@@ -9,7 +9,10 @@
     "workspace:ports": "node scripts/workspace/ports.mjs",
     "workspace:cleanup": "node scripts/workspace/cleanup.mjs",
     "worktree:list": "node scripts/workspace/worktree-list.mjs",
-    "worktree:prune-safe": "node scripts/workspace/worktree-prune-safe.mjs"
+    "worktree:prune-safe": "node scripts/workspace/worktree-prune-safe.mjs",
+    "docs:lint": "node scripts/docs-lint.mjs",
+    "docs:lint:ci": "node scripts/docs-lint.mjs --ci --base origin/staging",
+    "docs:lint:baseline": "node scripts/docs-lint.mjs --write-baseline"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
