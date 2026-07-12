@@ -12,6 +12,10 @@
  * Doctrine: docs/platform/modules/operational-consumption-platform.md
  */
 
+import type { OperationalFactEntryType } from "@/lib/operationalFacts/factContract";
+
+export type { OperationalFactEntryType } from "@/lib/operationalFacts/factContract";
+
 /** A Consumption Event's runtime status. */
 export const CONSUMPTION_EVENT_STATUSES = ["recorded", "resolved", "no_obligation", "superseded"] as const;
 export type ConsumptionEventStatus = (typeof CONSUMPTION_EVENT_STATUSES)[number];
@@ -177,6 +181,21 @@ export type OperationalFactDto = {
     hours?: number | null;
     /** Whether the child is vacation-credit eligible (policy-supplied) — gates absence → vacation credit. */
     vacationEligible?: boolean | null;
+
+    // --- Correction identity (D12a) ---
+    /**
+     * original | correction | reversal. Defaults to 'original'. A correction
+     * re-interprets the corrected values; a reversal yields zero directives and
+     * reconciles the prior obligation by supersession. (Section 5.1/5.2.)
+     */
+    entryType?: OperationalFactEntryType | null;
+    /**
+     * The prior FACT id this correction/reversal restates or voids — for
+     * attendance, the prior `child_attendance_events.id`. Lineage ONLY (never in
+     * the idempotency key, DP-3); maps to the prior consumption event in the
+     * service. Null on a correction/reversal => treated as original.
+     */
+    correctsFactId?: string | null;
 };
 
 /**
@@ -206,6 +225,8 @@ export type ConsumptionEventIntent = {
     status: ConsumptionEventStatus;
     context: Record<string, unknown>;
     idempotencyKey: string;
+    /** D12a: the prior consumption event id this correction/reversal supersedes (lineage). */
+    correctsEventId?: string | null;
 };
 
 /** A draft obligation the consumption event resolves to (preview shape). */
@@ -245,6 +266,8 @@ export type ConsumptionEventRow = {
     status: ConsumptionEventStatus;
     context: Record<string, unknown> | null;
     idempotency_key: string;
+    /** D12a lineage: the prior event this correction/reversal supersedes. */
+    corrects_event_id?: string | null;
 };
 
 export type ResolvedObligationRow = {
@@ -266,4 +289,99 @@ export type ResolvedObligationRow = {
     obligation_kind: ObligationKind | null;
     period_start: string | null;
     period_end: string | null;
+    /** D12a: the correction event that superseded this obligation (provenance). */
+    superseded_by_event_id?: string | null;
+};
+
+// ============================================================================
+// D12a — correction reconciliation contract (types)
+// ============================================================================
+
+/** Read-only preview of which prior obligations a correction/reversal would retire. */
+export type SupersededObligationPreview = {
+    id: string;
+    resolutionKey: string | null;
+    obligationKind: string | null;
+    priorAmountCents: number | null;
+};
+
+/** The supersession delta `previewConsumption` returns for a correction/reversal (writes nothing). */
+export type ConsumptionSupersessionDelta = {
+    priorConsumptionEventId: string | null;
+    supersededObligations: SupersededObligationPreview[];
+};
+
+/** The reconciliation outcome `draftConsumption` returns for a correction/reversal. */
+export type ConsumptionSupersededResult = {
+    obligationIds: string[];
+    voidedDraftChargeIds: string[];
+    reparentedObligationIds: string[];
+    priorConsumptionEventId: string | null;
+};
+
+/** Pre-resolved draft-charge intent carried in the reconciliation plan (no pricing in the RPC). */
+export type ReconcileChargePlan = {
+    op: "create" | "recalc";
+    draftChargeId?: string | null;
+    billableSourceId: string | null;
+    chargeType?: string;
+    chargeCategory: string | null;
+    currencyCode: string;
+    amountCents: number | null;
+    serviceDate: string | null;
+    occursOn: string | null;
+    billableOn: string | null;
+    chargeTemplateId: string | null;
+    serviceId: string | null;
+    description: string | null;
+    metadata: Record<string, unknown>;
+};
+
+/** One obligation in the reconciliation plan (all values pre-resolved in TS). */
+export type ReconcileObligationPlan = {
+    resolutionKey: string | null;
+    obligationKind: string | null;
+    chargeTemplateId: string | null;
+    serviceId: string | null;
+    amountCents: number | null;
+    currencyCode: string;
+    responsibilityKey: string | null;
+    occursOn: string | null;
+    billableOn: string | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+    reviewRequired: boolean;
+    status: ResolvedObligationStatus;
+    /** Whether the RPC should mark review_status='stale' (amount/billable changed). */
+    reviewStatusStale: boolean;
+    explanation: Record<string, unknown>;
+    /** Pre-resolved charge op (null => obligation carries no charge). */
+    charge: ReconcileChargePlan | null;
+};
+
+/** The correction's OWN consumption event (fact-anchored idempotency key, DP-3). */
+export type ReconcileCorrectionEventPlan = {
+    idempotencyKey: string;
+    eventTypeId: string | null;
+    eventKey: string;
+    sourceFamily: string;
+    sourceEntityType: string;
+    sourceEntityId: string;
+    subjectType: string | null;
+    subjectId: string | null;
+    locationId: string | null;
+    occursOn: string;
+    effectiveOn: string | null;
+    status: ConsumptionEventStatus;
+    context: Record<string, unknown>;
+};
+
+/** The complete, pre-resolved reconciliation plan handed to the atomic RPC (DP-1). */
+export type ReconcileConsumptionPlan = {
+    correctionEvent: ReconcileCorrectionEventPlan;
+    /** The prior FACT id (= prior consumption event's source_entity_id). */
+    priorFactId: string;
+    newObligations: ReconcileObligationPlan[];
+    /** Draft charge ids of orphan obligations to retire (DP-2). */
+    retireChargeIds: string[];
 };

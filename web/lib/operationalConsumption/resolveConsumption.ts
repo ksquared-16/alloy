@@ -22,10 +22,32 @@ import {
     type ResolvedObligationIntent,
 } from "@/lib/operationalConsumption/consumptionTypes";
 
+/**
+ * DP-3: a correction/reversal event key is anchored on the correction fact's OWN
+ * `sourceEntityId` (never on `correctsFactId`). This guarantees (a) two distinct
+ * correction facts of the same prior fact get DISTINCT events, and (b) replay of
+ * the SAME correction fact converges. Originals get an empty suffix (unchanged).
+ */
+export function factAnchorSuffix(fact: OperationalFactDto): string {
+    const entryType = fact.entryType ?? "original";
+    return entryType === "correction" || entryType === "reversal" ? `:fact:${fact.sourceEntityId}` : "";
+}
+
+/** Correction lineage stamped into the consumption event context (never into the key). */
+export function correctionLineageContext(fact: OperationalFactDto): Record<string, unknown> {
+    const entryType = fact.entryType ?? "original";
+    if (entryType === "original") return {};
+    return {
+        entry_type: entryType,
+        corrects_fact_id: fact.correctsFactId ?? null,
+        ...(fact.correctsFactId ? {} : { correction_lineage_missing: true }),
+    };
+}
+
 /** Stable idempotency key for a fact: cev:<event_key>:<entity_type>:<entity_id>:<occurs_on>. */
 export function deriveConsumptionIdempotencyKey(fact: OperationalFactDto, occursOn: string): string {
     if (fact.idempotencyKey && fact.idempotencyKey.trim()) return fact.idempotencyKey.trim();
-    return `cev:${fact.eventKey}:${fact.sourceEntityType}:${fact.sourceEntityId}:${occursOn}`;
+    return `cev:${fact.eventKey}:${fact.sourceEntityType}:${fact.sourceEntityId}:${occursOn}${factAnchorSuffix(fact)}`;
 }
 
 export type ConsumptionResolution = {
@@ -115,8 +137,9 @@ export function resolveConsumption(
         occursOn,
         effectiveOn: fact.effectiveOn ?? null,
         status,
-        context: { ...(fact.context ?? {}), source_family: fact.sourceFamily, fact_snapshot: buildFactSnapshot(fact) },
+        context: { ...(fact.context ?? {}), source_family: fact.sourceFamily, ...correctionLineageContext(fact), fact_snapshot: buildFactSnapshot(fact) },
         idempotencyKey,
+        correctsEventId: null,
     };
 
     return { event, obligations, explanation };

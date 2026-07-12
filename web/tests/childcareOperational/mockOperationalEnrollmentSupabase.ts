@@ -152,6 +152,288 @@ export function commercialTuitionSeed(opts: {
     };
 }
 
+/**
+ * In-memory emulation of the `reconcile_consumption_correction` RPC — kept
+ * SEMANTICALLY IDENTICAL to
+ *   supabase/migrations/20260716000000_consumption_correction_lineage_and_reconcile_rpc.sql
+ * (they are two encodings of ONE contract). It mirrors the SQL step-for-step:
+ *   1. locate + "lock" the prior consumption event by (org, source_entity_id);
+ *   2. upsert the correction event by (org, idempotency_key) with corrects_event_id;
+ *   3. reparent/upsert same-key obligations (create/recalc draft charge);
+ *   4. supersede absent-key orphans (+ superseded_by_event_id, review_status='stale');
+ *   5. retire orphan/planned DRAFT charges in place (draft -> void, metadata.retirement);
+ *   6. retire the prior event.
+ * All-or-nothing: it snapshots the three mutable tables at entry and, on any thrown
+ * (or injected) failure, restores them so a fault-injection test observes ZERO
+ * partial state — exactly what the SQL transaction guarantees.
+ */
+export type ReconcileFault = (phase: "after_event" | "after_reparent" | "after_supersede" | "after_retire") => void;
+
+function emulateReconcileConsumptionCorrection(
+    store: OperationalEnrollmentMockStore,
+    orgId: string,
+    actorUserId: string | null,
+    plan: Record<string, unknown>,
+    counters: Record<string, number>,
+    fault?: ReconcileFault,
+): { data: Record<string, unknown> | null; error: { message: string } | null } {
+    const ce = (plan.correction_event ?? {}) as Record<string, unknown>;
+    const priorFactId = plan.prior_fact_id as string;
+    const sourceFamily = (ce.source_family as string) ?? null;
+    const now = new Date().toISOString();
+
+    // Snapshot for all-or-nothing restore.
+    const snap = {
+        consumption_events: clone(store.consumption_events),
+        resolved_obligations: clone(store.resolved_obligations),
+        charges: clone(store.charges),
+    };
+
+    try {
+        // 1. Locate the prior consumption event by its fact anchor.
+        const priorCandidates = store.consumption_events
+            .filter(
+                (e) =>
+                    e.org_id === orgId &&
+                    e.source_entity_id === priorFactId &&
+                    (sourceFamily == null || e.source_family === sourceFamily),
+            )
+            .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+        const prior = priorCandidates[0];
+        if (!prior) throw new Error("reconcile_consumption:no_prior_event");
+        const priorEventId = prior.id as string;
+
+        // 2. Upsert the correction's OWN consumption event by (org, idempotency_key).
+        let e1: string;
+        const existingEvent = store.consumption_events.find(
+            (e) => e.org_id === orgId && e.idempotency_key === ce.idempotency_key,
+        );
+        if (existingEvent) {
+            existingEvent.status = (ce.status as string) ?? existingEvent.status;
+            existingEvent.context = (ce.context as Record<string, unknown>) ?? existingEvent.context;
+            existingEvent.corrects_event_id = priorEventId;
+            existingEvent.updated_by = actorUserId;
+            e1 = existingEvent.id as string;
+        } else {
+            counters.consumption_events = (counters.consumption_events ?? 0) + 1;
+            const id = `consumption_events-${counters.consumption_events}`;
+            store.consumption_events.push({
+                id,
+                org_id: orgId,
+                location_id: ce.location_id ?? null,
+                event_type_id: ce.event_type_id ?? null,
+                source_family: ce.source_family,
+                event_key: ce.event_key,
+                source_entity_type: ce.source_entity_type,
+                source_entity_id: ce.source_entity_id,
+                subject_type: ce.subject_type ?? null,
+                subject_id: ce.subject_id ?? null,
+                occurs_on: ce.occurs_on,
+                effective_on: ce.effective_on ?? null,
+                status: ce.status ?? "resolved",
+                context: ce.context ?? {},
+                idempotency_key: ce.idempotency_key,
+                corrects_event_id: priorEventId,
+                created_by: actorUserId,
+                created_at: now,
+                updated_at: now,
+            });
+            e1 = id;
+        }
+
+        // 3. Reparent + upsert each new obligation.
+        const reparented: string[] = [];
+        const upserted: string[] = [];
+        const createdChg: string[] = [];
+        const newKeys: string[] = [];
+        for (const rawObl of (plan.new_obligations ?? []) as Record<string, unknown>[]) {
+            const reso = rawObl.resolution_key as string | null;
+            if (reso != null) newKeys.push(reso);
+            const charge = rawObl.charge as Record<string, unknown> | null;
+            const existingObl = store.resolved_obligations.find(
+                (o) => o.org_id === orgId && o.resolution_key === reso,
+            );
+            const prevEvent = existingObl?.consumption_event_id ?? null;
+            const prevCharge = (existingObl?.draft_charge_id as string | null) ?? null;
+            let newChargeId: string | null = prevCharge;
+
+            if (charge && typeof charge === "object") {
+                if (charge.op === "recalc") {
+                    newChargeId = (charge.draft_charge_id as string | null) ?? prevCharge;
+                    if (newChargeId) {
+                        const c = store.charges.find(
+                            (x) => x.id === newChargeId && x.org_id === orgId && x.status === "draft",
+                        );
+                        if (c) {
+                            c.amount_cents = charge.amount_cents ?? null;
+                            c.occurs_on = charge.occurs_on ?? null;
+                            c.billable_on = charge.billable_on ?? null;
+                            c.service_date = charge.service_date ?? null;
+                            c.metadata = (charge.metadata as Record<string, unknown>) ?? c.metadata;
+                            c.updated_by = actorUserId;
+                            c.updated_at = now;
+                        }
+                    }
+                } else if (charge.op === "create") {
+                    counters.charges = (counters.charges ?? 0) + 1;
+                    const cid = `charges-${counters.charges}`;
+                    store.charges.push({
+                        id: cid,
+                        org_id: orgId,
+                        job_id: null,
+                        billable_source_type: "enrollment_agreement",
+                        billable_source_id: charge.billable_source_id ?? null,
+                        charge_type: charge.charge_type ?? "fee",
+                        charge_category: charge.charge_category ?? null,
+                        status: "draft",
+                        currency_code: charge.currency_code ?? "USD",
+                        amount_cents: charge.amount_cents ?? null,
+                        service_date: charge.service_date ?? null,
+                        occurs_on: charge.occurs_on ?? null,
+                        billable_on: charge.billable_on ?? null,
+                        charge_template_id: charge.charge_template_id ?? null,
+                        service_id: charge.service_id ?? null,
+                        description: charge.description ?? null,
+                        metadata: (charge.metadata as Record<string, unknown>) ?? {},
+                        created_at: now,
+                        updated_at: now,
+                    });
+                    newChargeId = cid;
+                    createdChg.push(cid);
+                }
+            }
+
+            if (existingObl) {
+                existingObl.consumption_event_id = e1;
+                existingObl.charge_template_id = rawObl.charge_template_id ?? null;
+                existingObl.service_id = rawObl.service_id ?? null;
+                existingObl.amount_cents = rawObl.amount_cents ?? null;
+                existingObl.currency_code = rawObl.currency_code ?? "USD";
+                existingObl.responsibility_key = rawObl.responsibility_key ?? null;
+                existingObl.occurs_on = rawObl.occurs_on ?? null;
+                existingObl.billable_on = rawObl.billable_on ?? null;
+                existingObl.period_start = rawObl.period_start ?? null;
+                existingObl.period_end = rawObl.period_end ?? null;
+                existingObl.status = (rawObl.status as string) ?? existingObl.status;
+                existingObl.review_required = rawObl.review_required ?? existingObl.review_required;
+                existingObl.explanation = rawObl.explanation ?? existingObl.explanation;
+                existingObl.obligation_kind = rawObl.obligation_kind ?? null;
+                existingObl.draft_charge_id = newChargeId;
+                existingObl.superseded_by_event_id = null;
+                if (rawObl.review_status_stale === true) existingObl.review_status = "stale";
+                existingObl.updated_by = actorUserId;
+                existingObl.updated_at = now;
+                if (prevEvent !== e1) reparented.push(existingObl.id as string);
+                upserted.push(existingObl.id as string);
+            } else {
+                counters.resolved_obligations = (counters.resolved_obligations ?? 0) + 1;
+                const oid = `resolved_obligations-${counters.resolved_obligations}`;
+                store.resolved_obligations.push({
+                    id: oid,
+                    org_id: orgId,
+                    consumption_event_id: e1,
+                    charge_template_id: rawObl.charge_template_id ?? null,
+                    service_id: rawObl.service_id ?? null,
+                    amount_cents: rawObl.amount_cents ?? null,
+                    currency_code: rawObl.currency_code ?? "USD",
+                    responsibility_key: rawObl.responsibility_key ?? null,
+                    occurs_on: rawObl.occurs_on ?? null,
+                    billable_on: rawObl.billable_on ?? null,
+                    period_start: rawObl.period_start ?? null,
+                    period_end: rawObl.period_end ?? null,
+                    status: rawObl.status ?? "previewed",
+                    review_required: rawObl.review_required ?? false,
+                    explanation: rawObl.explanation ?? {},
+                    draft_charge_id: newChargeId,
+                    resolution_key: reso,
+                    obligation_kind: rawObl.obligation_kind ?? null,
+                    superseded_by_event_id: null,
+                    review_status: rawObl.review_required ? "review_required" : "pending",
+                    created_by: actorUserId,
+                    created_at: now,
+                    updated_at: now,
+                });
+                upserted.push(oid);
+            }
+        }
+        fault?.("after_reparent");
+
+        // 4. Supersede orphans (prior obligations whose key is absent from the new pass).
+        const superseded: string[] = [];
+        const retired: string[] = [];
+        const orphans = store.resolved_obligations.filter(
+            (o) =>
+                o.org_id === orgId &&
+                o.consumption_event_id === priorEventId &&
+                (o.resolution_key == null || !newKeys.includes(o.resolution_key as string)),
+        );
+        for (const orphan of orphans) {
+            orphan.status = "superseded";
+            orphan.superseded_by_event_id = e1;
+            orphan.review_status = "stale";
+            orphan.updated_by = actorUserId;
+            orphan.updated_at = now;
+            superseded.push(orphan.id as string);
+            if (orphan.draft_charge_id) retired.push(orphan.draft_charge_id as string);
+        }
+        for (const rid of (plan.retire_charge_ids ?? []) as string[]) {
+            if (!retired.includes(rid)) retired.push(rid);
+        }
+        fault?.("after_supersede");
+
+        // 5. Retire draft charges in place (draft -> void). Posted/non-draft => no-op.
+        for (const cid of retired) {
+            const c = store.charges.find(
+                (x) =>
+                    x.id === cid &&
+                    x.org_id === orgId &&
+                    x.billable_source_type === "enrollment_agreement" &&
+                    x.status === "draft",
+            );
+            if (c) {
+                c.status = "void";
+                c.voided_at = now;
+                c.metadata = {
+                    ...((c.metadata as Record<string, unknown>) ?? {}),
+                    retirement: {
+                        reason: "obligation_superseded",
+                        actor_user_id: actorUserId,
+                        superseded_by_consumption_event_id: e1,
+                        retired_at: now,
+                    },
+                };
+                c.updated_at = now;
+            }
+        }
+        fault?.("after_retire");
+
+        // 6. Retire the prior event.
+        prior.status = "superseded";
+        prior.updated_by = actorUserId;
+        prior.updated_at = now;
+
+        return {
+            data: {
+                ok: true,
+                consumption_event_id: e1,
+                prior_consumption_event_id: priorEventId,
+                obligation_ids: upserted,
+                reparented_obligation_ids: reparented,
+                superseded_obligation_ids: superseded,
+                retired_charge_ids: retired,
+                created_charge_ids: createdChg,
+            },
+            error: null,
+        };
+    } catch (e) {
+        // All-or-nothing: restore the pre-call snapshot (no partial state persists).
+        store.consumption_events.splice(0, store.consumption_events.length, ...snap.consumption_events);
+        store.resolved_obligations.splice(0, store.resolved_obligations.length, ...snap.resolved_obligations);
+        store.charges.splice(0, store.charges.length, ...snap.charges);
+        return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
+    }
+}
+
 type Filter = { col: string; op: "eq" | "in"; value: unknown };
 
 function applyFilters(rows: Row[], filters: Filter[]): Row[] {
@@ -168,7 +450,8 @@ function applyFilters(rows: Row[], filters: Filter[]): Row[] {
 }
 
 export function createOperationalEnrollmentMockSupabase(
-    store: OperationalEnrollmentMockStore
+    store: OperationalEnrollmentMockStore,
+    opts?: { reconcileFault?: ReconcileFault }
 ): SupabaseClient {
     const counters: Record<string, number> = {
         child_enrollment_agreements: 0,
@@ -358,7 +641,21 @@ export function createOperationalEnrollmentMockSupabase(
 
     const from = vi.fn((table: string) => buildChain(table));
 
-    return { from } as unknown as SupabaseClient;
+    const rpc = vi.fn(async (fnName: string, params: Record<string, unknown>) => {
+        if (fnName === "reconcile_consumption_correction") {
+            return emulateReconcileConsumptionCorrection(
+                store,
+                params.p_org_id as string,
+                (params.p_actor_user_id as string | null) ?? null,
+                params.p_plan as Record<string, unknown>,
+                counters,
+                opts?.reconcileFault,
+            );
+        }
+        return { data: null, error: { message: `unknown rpc: ${fnName}` } };
+    });
+
+    return { from, rpc } as unknown as SupabaseClient;
 }
 
 export const ORG_ID = "org-1";

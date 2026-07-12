@@ -114,6 +114,22 @@ function assertChargeCategory(value: unknown): asserts value is ChargeCategory {
     }
 }
 
+/**
+ * D12a PLANNING helper (no write). Given a superseded obligation's DRAFT charge id,
+ * produce the retirement intent the reconciliation plan carries. The actual write
+ * (draft -> void in place, DP-2) happens atomically inside the
+ * reconcile_consumption_correction RPC — never here. Charge-domain knowledge (the
+ * retirement reason + that only DRAFT charges are retired) stays in this service.
+ */
+export type DraftChargeRetirementIntent = {
+    draftChargeId: string;
+    reason: "obligation_superseded";
+};
+
+export function buildDraftChargeRetirementIntent(draftChargeId: string): DraftChargeRetirementIntent {
+    return { draftChargeId, reason: "obligation_superseded" };
+}
+
 async function loadCharge(
     supabase: SupabaseClient,
     orgId: string,

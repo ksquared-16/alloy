@@ -47,12 +47,22 @@ import {
 } from "@/lib/operationalConsumption/scheduleInterpretation";
 import { interpretAttendance, type AttendanceInterpretation } from "@/lib/operationalConsumption/attendanceInterpretation";
 import { buildFactSnapshot } from "@/lib/operationalConsumption/consumptionTypes";
+import { factAnchorSuffix, correctionLineageContext } from "@/lib/operationalConsumption/resolveConsumption";
+import {
+    reconcileConsumptionCorrection,
+} from "@/lib/operationalConsumption/reconcileConsumptionCorrectionAtomicCommit";
+import { buildDraftChargeRetirementIntent } from "@/lib/financials/childcareChargeService";
 import type {
     ConsumptionCandidate,
     ConsumptionEventIntent,
     ConsumptionEventTypeRow,
+    ConsumptionSupersededResult,
+    ConsumptionSupersessionDelta,
     ObligationKind,
     OperationalFactDto,
+    ReconcileChargePlan,
+    ReconcileConsumptionPlan,
+    ReconcileObligationPlan,
     ResolvedObligationIntent,
 } from "@/lib/operationalConsumption/consumptionTypes";
 
@@ -99,6 +109,12 @@ export type ConsumptionPreviewResult = {
     candidate?: ConsumptionCandidate | null;
     /** The attendance interpretation (null for non-attendance facts). */
     attendanceInterpretation?: AttendanceInterpretation | null;
+    // --- Wave 1 (D12a) ---
+    /**
+     * For a correction/reversal fact: which prior obligations it WOULD retire
+     * (read-only delta; writes nothing). Null for originals. (Section 5.3.)
+     */
+    supersession?: ConsumptionSupersessionDelta | null;
 };
 
 /** A Commercial Model object surfaced in the explanation (labels, not raw UUIDs). */
@@ -127,6 +143,11 @@ export type ConsumptionDraftResult = ConsumptionPreviewResult & {
         draftChargeStatus: string | null;
         obligations: { obligationKind: ObligationKind; draftChargeId: string | null; draftChargeStatus: string | null }[];
     };
+    /**
+     * For a correction/reversal fact: the reconciliation outcome (retired/reparented
+     * obligations + voided draft charges). Null for originals. (Section 5.4.)
+     */
+    superseded?: ConsumptionSupersededResult | null;
 };
 
 /** Load the Consumption Event Type for a key — org override preferred over global. */
@@ -248,7 +269,23 @@ function buildCandidate(fact: OperationalFactDto, today: string): ConsumptionCan
     };
 }
 
+/**
+ * Public preview: resolve the fact (core) then, for a correction/reversal, attach
+ * the read-only supersession delta. Writes NOTHING. Originals are byte-behavior
+ * unchanged (supersession is null, an added optional field). (Section 5.3.)
+ */
 export async function previewConsumption(
+    supabase: SupabaseClient,
+    orgId: string,
+    fact: OperationalFactDto,
+    today: string,
+): Promise<ConsumptionPreviewResult> {
+    const preview = await previewConsumptionCore(supabase, orgId, fact, today);
+    const supersession = await computeSupersessionDelta(supabase, orgId, fact, preview);
+    return { ...preview, supersession };
+}
+
+async function previewConsumptionCore(
     supabase: SupabaseClient,
     orgId: string,
     fact: OperationalFactDto,
@@ -503,8 +540,8 @@ async function previewScheduleConsumption(
         occursOn,
         effectiveOn: fact.effectiveOn ?? null,
         status: obligations.length > 0 ? "resolved" : "no_obligation",
-        context: { ...(fact.context ?? {}), source_family: "schedule", schedule_change_kind: interpretation.scheduleChangeKind, schedule_basis: derivedBasis ?? fact.scheduleBasis ?? null, weekdays: fact.weekdays ?? null, no_impact_reason: interpretation.noImpactReason, fact_snapshot: buildFactSnapshot(fact) },
-        idempotencyKey: fact.idempotencyKey?.trim() || `cev:schedule:${interpretation.scheduleChangeKind}:${agreementId ?? fact.sourceEntityId}:${occursOn}`,
+        context: { ...(fact.context ?? {}), source_family: "schedule", schedule_change_kind: interpretation.scheduleChangeKind, schedule_basis: derivedBasis ?? fact.scheduleBasis ?? null, weekdays: fact.weekdays ?? null, no_impact_reason: interpretation.noImpactReason, ...correctionLineageContext(fact), fact_snapshot: buildFactSnapshot(fact) },
+        idempotencyKey: fact.idempotencyKey?.trim() || `cev:schedule:${interpretation.scheduleChangeKind}:${agreementId ?? fact.sourceEntityId}:${occursOn}${factAnchorSuffix(fact)}`,
     };
 
     const resolution: ConsumptionResolution = {
@@ -625,8 +662,8 @@ async function previewAttendanceConsumption(
         occursOn: anchorDate,
         effectiveOn: fact.effectiveOn ?? null,
         status: obligations.length > 0 ? "resolved" : "no_obligation",
-        context: { ...(fact.context ?? {}), source_family: "attendance", attendance_fact_type: interpretation.attendanceFactType, discard_reason: interpretation.discardReason, check_out_time: fact.checkOutTime ?? null, late_threshold_time: fact.lateThresholdTime ?? null, fact_snapshot: buildFactSnapshot(fact) },
-        idempotencyKey: fact.idempotencyKey?.trim() || `cev:attendance:${interpretation.attendanceFactType}:${agreementId ?? fact.sourceEntityId}:${anchorDate}`,
+        context: { ...(fact.context ?? {}), source_family: "attendance", attendance_fact_type: interpretation.attendanceFactType, discard_reason: interpretation.discardReason, check_out_time: fact.checkOutTime ?? null, late_threshold_time: fact.lateThresholdTime ?? null, ...correctionLineageContext(fact), fact_snapshot: buildFactSnapshot(fact) },
+        idempotencyKey: fact.idempotencyKey?.trim() || `cev:attendance:${interpretation.attendanceFactType}:${agreementId ?? fact.sourceEntityId}:${anchorDate}${factAnchorSuffix(fact)}`,
     };
 
     const resolution: ConsumptionResolution = {
@@ -961,11 +998,294 @@ async function upsertObligation(
     return (data as { id: string }).id;
 }
 
+// ============================================================================
+// D12a — correction/reversal reconciliation. Plan in TS (read-only), then execute
+// ALL writes in ONE atomic RPC (DP-1). The `original` path is unchanged.
+// ============================================================================
+
+type PriorEventRow = { id: string; source_family: string | null; source_entity_id: string | null; status: string | null };
+type PriorObligationRow = {
+    id: string;
+    resolution_key: string | null;
+    amount_cents: number | null;
+    billable_on: string | null;
+    draft_charge_id: string | null;
+    obligation_kind: string | null;
+    status: string | null;
+};
+type PriorLineage = { priorEvent: PriorEventRow; priorObligations: PriorObligationRow[] };
+
+/** Locate the prior consumption event by (org, source_entity_id = correctsFactId) + its obligations. */
+async function locatePriorEvent(
+    supabase: SupabaseClient,
+    orgId: string,
+    fact: OperationalFactDto,
+): Promise<PriorLineage | null> {
+    if (!fact.correctsFactId) return null;
+    const { data, error } = await supabase
+        .from(EVENTS_TABLE)
+        .select("id, source_family, source_entity_id, status")
+        .eq("org_id", orgId)
+        .eq("source_entity_id", fact.correctsFactId);
+    if (error) fail("db_error", error.message);
+    const events = (data ?? []) as PriorEventRow[];
+    const priorEvent =
+        events.find((e) => !fact.sourceFamily || e.source_family === fact.sourceFamily) ?? events[0] ?? null;
+    if (!priorEvent) return null;
+    const { data: obls, error: oErr } = await supabase
+        .from(OBLIGATIONS_TABLE)
+        .select("id, resolution_key, amount_cents, billable_on, draft_charge_id, obligation_kind, status")
+        .eq("org_id", orgId)
+        .eq("consumption_event_id", priorEvent.id);
+    if (oErr) fail("db_error", oErr.message);
+    return { priorEvent, priorObligations: (obls ?? []) as PriorObligationRow[] };
+}
+
+/** Pure: the orphan set (prior obligations whose resolution_key is absent from the corrected pass). */
+function supersessionFromPrior(preview: ConsumptionPreviewResult, prior: PriorLineage): ConsumptionSupersessionDelta {
+    const newKeys = new Set(
+        preview.resolution.obligations.map((o) => o.resolutionKey).filter((k): k is string => !!k),
+    );
+    const orphans = prior.priorObligations.filter((o) => !o.resolution_key || !newKeys.has(o.resolution_key));
+    return {
+        priorConsumptionEventId: prior.priorEvent.id,
+        supersededObligations: orphans.map((o) => ({
+            id: o.id,
+            resolutionKey: o.resolution_key ?? null,
+            obligationKind: o.obligation_kind ?? null,
+            priorAmountCents: o.amount_cents ?? null,
+        })),
+    };
+}
+
+/** Read-only supersession delta for `previewConsumption` (null for originals; writes nothing). */
+async function computeSupersessionDelta(
+    supabase: SupabaseClient,
+    orgId: string,
+    fact: OperationalFactDto,
+    preview: ConsumptionPreviewResult,
+): Promise<ConsumptionSupersessionDelta | null> {
+    const entryType = fact.entryType ?? "original";
+    if (entryType === "original") return null;
+    const prior = await locatePriorEvent(supabase, orgId, fact);
+    if (!prior) return { priorConsumptionEventId: null, supersededObligations: [] };
+    return supersessionFromPrior(preview, prior);
+}
+
+/**
+ * Load the CURRENT obligation for a resolution_key GLOBALLY (unique per org) — the
+ * same lookup the RPC's upsert uses. The planner must decide create-vs-recalc and
+ * stale-drift against the live obligation, which may already have been reparented
+ * onto another correction event (DP-4 convergence), not only the immediate prior
+ * event's obligations.
+ */
+async function loadObligationByResolutionKey(
+    supabase: SupabaseClient,
+    orgId: string,
+    resolutionKey: string,
+): Promise<{ draft_charge_id: string | null; amount_cents: number | null; billable_on: string | null } | null> {
+    const { data, error } = await supabase
+        .from(OBLIGATIONS_TABLE)
+        .select("id, draft_charge_id, amount_cents, billable_on")
+        .eq("org_id", orgId)
+        .eq("resolution_key", resolutionKey);
+    if (error) fail("db_error", error.message);
+    return (((data ?? []) as { draft_charge_id: string | null; amount_cents: number | null; billable_on: string | null }[])[0]) ?? null;
+}
+
+/** Build the pre-resolved draft-charge plan for one obligation (create vs recalc). No write. */
+async function buildChargePlanForObligation(
+    supabase: SupabaseClient,
+    orgId: string,
+    obligation: ResolvedObligationIntent,
+    priorDraftChargeId: string | null,
+    agreementId: string | null,
+    today: string,
+): Promise<ReconcileChargePlan | null> {
+    if (
+        !(
+            obligation.draftable &&
+            obligation.chargeTemplateId &&
+            agreementId &&
+            obligation.amountCents != null &&
+            obligation.amountCents > 0 &&
+            obligation.status !== "no_charge"
+        )
+    ) {
+        return null;
+    }
+    const cp = await previewTemplateCharge(supabase, orgId, {
+        templateId: obligation.chargeTemplateId,
+        agreementId,
+        resolvedAmountCents: obligation.amountCents,
+        servicePeriodStart: obligation.periodStart ?? undefined,
+        eventDate: obligation.occursOn ?? undefined,
+        today,
+    });
+    const intent = cp.intent;
+    if (!intent.eligible || intent.amountCents == null || intent.amountCents <= 0) return null;
+    const metadata = {
+        resolution_key: intent.resolutionKey,
+        charge_template_key: intent.templateKey,
+        gl_mapping_key: intent.glMappingKey,
+        responsibility_key: intent.responsibilityKey,
+        review_required: intent.reviewRequired,
+        lifecycle_status: intent.lifecycleStatus,
+        source: "charge_template",
+    };
+    return {
+        op: priorDraftChargeId ? "recalc" : "create",
+        draftChargeId: priorDraftChargeId ?? null,
+        billableSourceId: agreementId,
+        chargeType: "fee",
+        chargeCategory: intent.chargeCategory,
+        currencyCode: intent.currencyCode,
+        amountCents: intent.amountCents,
+        serviceDate: intent.occursOn,
+        occursOn: intent.occursOn,
+        billableOn: intent.billableOn,
+        chargeTemplateId: intent.templateId,
+        serviceId: intent.serviceId,
+        description: intent.templateKey,
+        metadata,
+    };
+}
+
+/** Build the full reconciliation plan (correction event + reparent/supersede/retire). No write. */
+async function buildReconcilePlan(
+    supabase: SupabaseClient,
+    orgId: string,
+    fact: OperationalFactDto,
+    preview: ConsumptionPreviewResult,
+    prior: PriorLineage,
+    agreementId: string | null,
+    today: string,
+): Promise<ReconcileConsumptionPlan> {
+    const newObligations: ReconcileObligationPlan[] = [];
+    const newKeys = new Set<string>();
+    for (const o of preview.resolution.obligations) {
+        if (o.resolutionKey) newKeys.add(o.resolutionKey);
+        // Decide create-vs-recalc + drift against the LIVE obligation (global by key).
+        const existing = o.resolutionKey ? await loadObligationByResolutionKey(supabase, orgId, o.resolutionKey) : null;
+        const charge = await buildChargePlanForObligation(supabase, orgId, o, existing?.draft_charge_id ?? null, agreementId, today);
+        const stale = existing != null && (existing.amount_cents !== o.amountCents || existing.billable_on !== o.billableOn);
+        newObligations.push({
+            resolutionKey: o.resolutionKey,
+            obligationKind: o.obligationKind,
+            chargeTemplateId: o.chargeTemplateId,
+            serviceId: o.serviceId,
+            amountCents: o.amountCents,
+            currencyCode: o.currencyCode,
+            responsibilityKey: o.responsibilityKey,
+            occursOn: o.occursOn,
+            billableOn: o.billableOn,
+            periodStart: o.periodStart,
+            periodEnd: o.periodEnd,
+            reviewRequired: o.reviewRequired,
+            status: charge != null ? "drafted" : o.status,
+            reviewStatusStale: stale,
+            explanation: o.explanation,
+            charge,
+        });
+    }
+
+    const retireChargeIds: string[] = [];
+    for (const po of prior.priorObligations) {
+        const absent = !po.resolution_key || !newKeys.has(po.resolution_key);
+        if (absent && po.draft_charge_id) {
+            retireChargeIds.push(buildDraftChargeRetirementIntent(po.draft_charge_id).draftChargeId);
+        }
+    }
+
+    const ev = preview.resolution.event;
+    return {
+        correctionEvent: {
+            idempotencyKey: ev.idempotencyKey,
+            eventTypeId: ev.eventTypeId,
+            eventKey: ev.eventKey,
+            sourceFamily: ev.sourceFamily,
+            sourceEntityType: ev.sourceEntityType,
+            sourceEntityId: ev.sourceEntityId,
+            subjectType: ev.subjectType,
+            subjectId: ev.subjectId,
+            locationId: ev.locationId,
+            occursOn: ev.occursOn,
+            effectiveOn: ev.effectiveOn,
+            status: ev.status,
+            context: ev.context,
+        },
+        priorFactId: fact.correctsFactId as string,
+        newObligations,
+        retireChargeIds,
+    };
+}
+
+/**
+ * Draft a correction/reversal fact. Plans in TS, then executes ALL reconciliation
+ * writes in ONE atomic RPC (DP-1). Returns null (→ caller falls through to the
+ * original path) when lineage is missing or no prior consumption event exists.
+ */
+async function draftCorrectionConsumption(
+    supabase: SupabaseClient,
+    orgId: string,
+    fact: OperationalFactDto,
+    today: string,
+    actorUserId: string | null,
+): Promise<ConsumptionDraftResult | null> {
+    if (!fact.correctsFactId) return null; // correction_lineage_missing → original path
+    const preview = await previewConsumptionCore(supabase, orgId, fact, today);
+    const prior = await locatePriorEvent(supabase, orgId, fact);
+    if (!prior) return null; // no_prior_consumption_event → original path
+
+    const supersession = supersessionFromPrior(preview, prior);
+    const agreementId = agreementIdFromFact(fact);
+    const plan = await buildReconcilePlan(supabase, orgId, fact, preview, prior, agreementId, today);
+    const result = await reconcileConsumptionCorrection(supabase, { orgId, actorUserId, plan });
+    if (!result.ok) fail("db_error", `reconcile_consumption failed: ${result.error}`);
+
+    // Load the final obligations owned by the new correction event for the breakdown.
+    const { data, error } = await supabase
+        .from(OBLIGATIONS_TABLE)
+        .select("id, obligation_kind, draft_charge_id, status")
+        .eq("org_id", orgId)
+        .eq("consumption_event_id", result.consumptionEventId);
+    if (error) fail("db_error", error.message);
+    const e1Obls = (data ?? []) as { id: string; obligation_kind: ObligationKind | null; draft_charge_id: string | null; status: string }[];
+    const drafted = e1Obls.map((o) => ({
+        obligationKind: (o.obligation_kind ?? "registration") as ObligationKind,
+        draftChargeId: o.draft_charge_id,
+        draftChargeStatus: o.draft_charge_id ? "draft" : null,
+    }));
+    const firstDraft = e1Obls.find((o) => o.draft_charge_id)?.draft_charge_id ?? null;
+
+    return {
+        ...preview,
+        supersession,
+        persisted: {
+            consumptionEventId: result.consumptionEventId,
+            resolvedObligationIds: e1Obls.map((o) => o.id),
+            draftChargeId: firstDraft,
+            draftChargeStatus: firstDraft ? "draft" : null,
+            obligations: drafted,
+        },
+        superseded: {
+            obligationIds: result.supersededObligationIds,
+            voidedDraftChargeIds: result.retiredChargeIds,
+            reparentedObligationIds: result.reparentedObligationIds,
+            priorConsumptionEventId: result.priorConsumptionEventId,
+        },
+    };
+}
+
 /**
  * Persist a Consumption Event, its Resolved Obligation(s), and (via the existing
  * lifecycle service) an idempotent DRAFT charge. Re-running is idempotent. Never
  * posts; never mutates a posted charge. Preview-only computation lives in
  * previewConsumption — this is the only path that writes.
+ *
+ * D12a: a correction/reversal fact with resolvable lineage routes through the
+ * atomic reconciliation RPC (draftCorrectionConsumption); the `original` path
+ * below is byte-behavior unchanged.
  */
 export async function draftConsumption(
     supabase: SupabaseClient,
@@ -974,6 +1294,13 @@ export async function draftConsumption(
     today: string,
     actorUserId: string | null = null,
 ): Promise<ConsumptionDraftResult> {
+    const entryType = fact.entryType ?? "original";
+    if (entryType === "correction" || entryType === "reversal") {
+        const reconciled = await draftCorrectionConsumption(supabase, orgId, fact, today, actorUserId);
+        if (reconciled) return reconciled;
+        // lineage missing / no prior event → fall through to the original write path.
+    }
+
     const preview = await previewConsumption(supabase, orgId, fact, today);
     const consumptionEventId = await upsertConsumptionEvent(supabase, orgId, preview.resolution, actorUserId);
 
