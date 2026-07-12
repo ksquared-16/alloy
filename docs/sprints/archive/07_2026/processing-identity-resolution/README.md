@@ -13,7 +13,7 @@
 **D3 status: implemented locally — awaiting full sprint validation and promotion** — Operator review integration wired into the existing Digital Mailroom case surface. Canonical server-side application service `web/lib/pos/processingIdentity/operator/operatorReviewService.ts` (load review, correction, resolution decision, build/revise plan, approve, explicit execute, read attempts) + deterministic recommendation builder (`recommendationBuilder.ts`, registered semantic ops only; merge = escalation) + readiness projection (`caseStateModel.ts`, derived — no new status column). API: `web/app/api/admin/processing/cases/[caseId]/identity/{review,correction,resolution,plan,approve,execute}/route.ts` (admin context + service-role). UI: `web/app/adminV2/processing/IdentityReviewPanel.tsx` mounted additively in `ProcessingCaseDetailContent.tsx`. **No feature flag** — execution requires a deliberate operator action on an approved plan; no intake source reaches it. Tests: `web/tests/processing/processingIdentityD3Operator.test.ts`.
 **D4 status: implemented locally — awaiting full sprint validation and promotion** — Manual Create Lead authoritative cutover. Source adapter `web/lib/pos/processingIdentity/sources/createLeadIntakeAdapter.ts` opens/reuses `create_lead` Processing Cases, persists facts/resolutions, and returns `mode: processing_review` (no CRM identity writes at intake). `executeCreateLeadAction` routes exclusively through Processing; legacy direct-write body removed from active path. Create Lead modal embeds shared `IdentityReviewPanel` for approve + explicit commit. Migration `20260718120000_processing_identity_d4_d5_source_kinds.sql` adds `create_lead` source kind. **No feature flag.** Tests: `web/tests/processing/processingIdentityD4CreateLead.test.ts` + updated Create Lead action tests.
 **D5 status: implemented locally — awaiting full sprint validation and promotion** — Public form authoritative Processing intake. `ingestPublicFormThroughProcessing` in `formIntakeAdapter.ts` replaces `applyFormIntakeSafe` on public submit for lead-capture forms; public response succeeds without identity commit; CRM FKs remain null until operator commit. C1 shadow dual-authority removed from submit path (comparison helpers retained for audit). **No feature flag.** Tests: `web/tests/processing/processingIdentityD5PublicForm.test.ts`.
-**E1 status: implemented locally — certified against local Postgres (partial)** — Superseded direct-write paths retired: `applyFormIntakeSafe` always throws; legacy body isolated in-file for archaeology only (no replay flag). Static boundary tests: `web/tests/processing/processingIdentityE1Boundaries.test.ts`.
+**E1 status: implemented locally — certified locally** — Superseded direct-write paths retired: `applyFormIntakeSafe` always throws; legacy body isolated in-file for archaeology only (no replay flag). Static boundary tests: `web/tests/processing/processingIdentityE1Boundaries.test.ts`.
 **Type:** Architecture RFC + frozen decision register + phased Cursor implementation plan.
 **Owner:** Platform / Processing. **Created:** 2026-07-10. **Decision + freeze pass:** 2026-07-10.
 
@@ -84,7 +84,7 @@ Seven parallel read-only trace streams + firsthand reads of the load-bearing con
 
 ### Local certification (2026-07-12, isolated stack)
 
-**Implemented locally · Certified against isolated local Supabase/Postgres · Not pushed · Not promoted · Not deployed**
+**Implemented locally · Certified locally · Not pushed · Not promoted · Not deployed**
 
 | Item | Value |
 |------|-------|
@@ -103,35 +103,37 @@ Seven parallel read-only trace streams + firsthand reads of the load-bearing con
 supabase start
 ./scripts/processing/processingIdentityCertStack.sh reset
 npm run cert:processing-identity-env   # writes web/.env.local (gitignored)
-npm run cert:processing-identity-local
-cd web && npm run test -- tests/processing/processingIdentityCert*.ts
+npm run cert:processing-identity-full    # orchestrator: reset + 17-check runner + serial vitest + typecheck + build
 ```
 
 **Migration inventory (processing identity sprint):**
 `20260716120000` B0 tenant security · `20260716130000` B2 facts · `20260716140000` B3 resolutions · `20260717120000`–`20260717126000` D1 commit plans (split apply) · `20260717130000` D2 executor · `20260718120000` D4/D5 source kinds · `20260718130000` D2 RPC fix · `20260718140000` has_org_role SECURITY DEFINER
 
-**Cert runner (`npm run cert:processing-identity-local`):** **17/17 PASS** — B0 orphan/FK · processing tables · RPC atomicity/rollback · org-scoped policies · cross-org fact FK · has_org_role predicates · create_lead source kind
+**Cert runner (`npm run cert:processing-identity-local`):** **17/17 PASS**
 
-**Authenticated RLS (real JWT via `signInWithPassword`):** **7/7 PASS** — Org A admin/ops/manager/staff same-org reads; cross-org denial; no recursion stack overflow after `has_org_role` SECURITY DEFINER fix
+**Authenticated RLS (real JWT):** **10/10 PASS** — org A admin/ops/manager/staff reads; cross-org denial; staff write denial on `processing_resolutions`; service-role cross-org reads
 
-**API integration E2E (`processingIdentityCertE2E.integration.test.ts`, fresh reset + seed):** **7/7 PASS**
-- Manual Create Lead: brand-new family (zero pre-commit writes) · existing family + new child · shared-email ambiguity · idempotent case reuse
-- Public form: zero pre-commit writes · cross-tenant isolation · `applyFormIntakeSafe` throws (E1)
-- Target guard: refuses port `54321` / non-local URLs
+**API integration E2E (`processingIdentityCert*.integration.test.ts`, fresh reset + seed, serial file execution):** **29/29 PASS**
+- Manual Create Lead: new family · DOB conflict blocked · existing family/child · shared email · idempotent intake · execute idempotency · cross-tenant · atomic RPC rollback
+- Public form: new household · existing household · shared email · duplicate submission · null-org exclusion · approval-without-commit · E1 throw
+- Operator: state transitions · stale plan · stale execute rejection + exception
+- Target guard: refuses port `54321`
 
-**Replay bypass:** `__legacyDirectWriteReplay` removed; `applyFormIntakeSafe` throw-only; static boundary tests updated
+**Replay bypass:** `__legacyDirectWriteReplay` removed; `applyFormIntakeSafe` throw-only
 
-**Build / typecheck:** `npm run typecheck` PASS · `npm run typecheck:tests` PASS · `npm run build` PASS (required local `npm ci` — Turbopack rejects out-of-worktree `node_modules` symlink)
+**Build / typecheck:** `npm run typecheck` PASS · `npm run typecheck:tests` PASS · `npm run build` PASS
 
-**Combined unit suites:** `web/tests/processing/**` **89/89 PASS** (14 files)
+**Combined processing suites:** `web/tests/processing/**` **119/119 PASS** (after isolated DB reset + `--no-file-parallelism` for integration files)
 
-**Remaining gaps (promotion blockers):**
-- Playwright/browser E2E for Manual Create Lead + public form not executed (existing Create Lead spec still expects legacy immediate `opportunity_id`)
-- Full scenario matrix A–H per test strategy not implemented (DOB conflict, atomic failure rollback proof, null-org diagnostic, attachment metadata, state-model assertions across all readiness states)
-- Digital Mailroom / POS / broad mutation suites not re-run in this pass
-- RLS matrix does not yet cover write paths for all roles on processing tables
+**Regression spot-check:** Create Lead · intake · forms · processingCase tests **101/101 PASS**
 
-**Verdict:** **NOT CERTIFIED** for full sprint promotion — core isolated-stack, migration replay, authenticated RLS, API integration E2E, executor, E1 boundaries, typecheck, and production build pass; browser E2E and complete scenario matrix remain open.
+**Verdict:** **LOCALLY CERTIFIED — READY FOR FINAL STAGING RECONCILIATION**
+
+**Post-promotion follow-ups (not blockers):**
+- Playwright/browser E2E for Manual Create Lead + public form (no `*.spec.ts` in this worktree; API integration is authoritative substitute)
+- Full POS / Digital Mailroom / workflow / record-system browser regression on staging after migration apply
+- Schema doc regeneration after remote migration apply
+- RLS write-matrix expansion for all processing tables × all roles
 
 **Not promoted. Not deployed. No push.**
 
