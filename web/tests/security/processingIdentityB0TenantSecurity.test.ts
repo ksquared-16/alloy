@@ -99,20 +99,22 @@ describe("processing identity B0 — cumulative schema expectations", () => {
         "utf8",
     );
 
-    it("audit baseline: admin_ops_full_access was present on named identity tables", () => {
+    it("post-B0 certified: identity tables use org-scoped policies (not admin_ops_full_access)", () => {
         for (const table of [
             "customers",
             "opportunities",
-            "contacts",
             "opportunity_customer_members",
             "opportunity_persons",
         ]) {
-            expect(rlsCsv).toContain(`${table},admin_ops_full_access`);
+            expect(rlsCsv).toContain(`${table},${table}_select_org`);
+            expect(rlsCsv).not.toContain(`${table},admin_ops_full_access`);
         }
+        expect(rlsCsv).not.toContain("contacts,admin_ops_full_access");
+        expect(rlsCsv).toContain("contacts,contacts_delete_by_org_role");
     });
 
-    it("audit baseline: persons lacked org_id FK in generated constraints reference", () => {
-        expect(constraintsCsv).not.toMatch(/,persons,persons_org_id_fkey,/);
+    it("post-B0 certified: persons.org_id FK present in generated constraints reference", () => {
+        expect(constraintsCsv).toContain("persons_org_id_fkey");
         expect(constraintsCsv).toContain("customers_org_id_fkey");
         expect(constraintsCsv).toContain("contacts_org_id_fkey");
     });
