@@ -5,19 +5,18 @@
 -- Null location_id = org default. Non-null = location override.
 -- Configuration Runtime: scope is org | location; inheritance resolves
 -- location override → org default.
+--
+-- Idempotent: safe when the table already exists in a later v2 shape
+-- (e.g. Supabase Preview branch replay against a parent snapshot where
+-- program_key was dropped by 20260702000002_commercial_tuition_rates_v2).
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.commercial_tuition_rates (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     org_id uuid NOT NULL REFERENCES public.orgs (id) ON DELETE CASCADE,
-    -- NULL = org default; non-null = site-level override
     location_id uuid REFERENCES public.locations (id) ON DELETE CASCADE,
-    -- FK to location_program_categories; org defaults reference a "canonical"
-    -- category row (typically the first site's row for that key).
-    -- The schedule_key + program_key pair identifies the cell uniquely.
     program_key text NOT NULL,
     schedule_key text NOT NULL,
-    -- Rate stored as integer cents to avoid floating-point rounding
     rate_cents integer NOT NULL CHECK (rate_cents >= 0),
     billing_period text NOT NULL DEFAULT 'monthly'
         CHECK (billing_period IN ('weekly', 'biweekly', 'monthly', 'annual')),
@@ -25,24 +24,67 @@ CREATE TABLE IF NOT EXISTS public.commercial_tuition_rates (
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz,
-    -- One rate per (org, location, program, schedule, billing_period)
-    -- location_id nullable, so use COALESCE in the unique expression
     CONSTRAINT commercial_tuition_rates_unique
         UNIQUE NULLS NOT DISTINCT (org_id, location_id, program_key, schedule_key, billing_period)
 );
 
-COMMENT ON TABLE public.commercial_tuition_rates IS
-    'Tuition rate grid: program × schedule → rate, per org or per site. '
-    'location_id NULL = org default; non-null = site override.';
+-- Backfill v1 columns when the table pre-exists without them (schema drift / partial apply).
+ALTER TABLE public.commercial_tuition_rates
+    ADD COLUMN IF NOT EXISTS location_id uuid,
+    ADD COLUMN IF NOT EXISTS program_key text,
+    ADD COLUMN IF NOT EXISTS schedule_key text,
+    ADD COLUMN IF NOT EXISTS rate_cents integer,
+    ADD COLUMN IF NOT EXISTS billing_period text DEFAULT 'monthly',
+    ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true,
+    ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now(),
+    ADD COLUMN IF NOT EXISTS updated_at timestamptz;
 
-COMMENT ON COLUMN public.commercial_tuition_rates.program_key IS
-    'Matches location_program_categories.key (infant, toddler, etc.)';
+DO $$
+BEGIN
+    EXECUTE $comment$
+        COMMENT ON TABLE public.commercial_tuition_rates IS
+            'Tuition rate grid: program × schedule → rate, per org or per site. '
+            'location_id NULL = org default; non-null = site override.'
+    $comment$;
 
-COMMENT ON COLUMN public.commercial_tuition_rates.schedule_key IS
-    'Matches option set key from childcare_schedule_type (full_time, part_time, etc.)';
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'commercial_tuition_rates'
+          AND column_name = 'program_key'
+    ) THEN
+        EXECUTE $comment$
+            COMMENT ON COLUMN public.commercial_tuition_rates.program_key IS
+                'Matches location_program_categories.key (infant, toddler, etc.)'
+        $comment$;
+    END IF;
 
-COMMENT ON COLUMN public.commercial_tuition_rates.rate_cents IS
-    'Rate in US cents for the billing_period. e.g. $2,200/month = 220000.';
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'commercial_tuition_rates'
+          AND column_name = 'schedule_key'
+    ) THEN
+        EXECUTE $comment$
+            COMMENT ON COLUMN public.commercial_tuition_rates.schedule_key IS
+                'Matches option set key from childcare_schedule_type (full_time, part_time, etc.)'
+        $comment$;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'commercial_tuition_rates'
+          AND column_name = 'rate_cents'
+    ) THEN
+        EXECUTE $comment$
+            COMMENT ON COLUMN public.commercial_tuition_rates.rate_cents IS
+                'Rate in US cents for the billing_period. e.g. $2,200/month = 220000.'
+        $comment$;
+    END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS idx_commercial_tuition_rates_org
     ON public.commercial_tuition_rates (org_id);
@@ -51,7 +93,6 @@ CREATE INDEX IF NOT EXISTS idx_commercial_tuition_rates_org_location
     ON public.commercial_tuition_rates (org_id, location_id)
     WHERE location_id IS NOT NULL;
 
--- RLS: org-scoped, consistent with other commercial config tables
 ALTER TABLE public.commercial_tuition_rates ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS commercial_tuition_rates_select_org ON public.commercial_tuition_rates;
