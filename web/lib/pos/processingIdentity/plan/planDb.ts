@@ -146,6 +146,23 @@ export async function loadCommitPlan(
     return planFromRow(planRow as Record<string, unknown>, operations);
 }
 
+/** Load the latest (highest-version) plan for a case. */
+export async function loadLatestPlanForCase(
+    supabase: Client,
+    args: { orgId: string; caseId: string },
+): Promise<CommitPlan | null> {
+    const { data } = await supabase
+        .from("processing_commit_plans")
+        .select("id, version")
+        .eq("org_id", args.orgId)
+        .eq("case_id", args.caseId)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (!data) return null;
+    return loadCommitPlan(supabase, { orgId: args.orgId, planId: String((data as { id: string }).id) });
+}
+
 /** Mark a plan superseded by its successor and invalidate its active approval. */
 export async function supersedePlan(
     supabase: Client,
