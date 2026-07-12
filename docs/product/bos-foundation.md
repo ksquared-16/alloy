@@ -14,9 +14,9 @@ Define **BOS** as Alloy’s unified **orchestration intelligence layer**: how as
 
 **May 2026:** **Deeper BOS capability expansion is paused.** Shipped surfaces are **assistive groundwork** — narrow, policy-gated, **human-in-the-loop**. Operational product loops take precedence — see **`docs/execution/roadmap-and-gaps.md`**.
 
-**UX coherence (May 2026 — partially implemented):** AdminV2 BOS surfaces unified in **`docs/sprints/05_2026/bos_ux_coherence_sprint.md`** (with **`bos_ux_coherence_design.md`**). **Shipped ~2026-05-20 → 2026-05-22:** shared **`OperationalProposalCardFrame`** on Task/Workflow/Config Assist proposal cards; execution receipts on apply outcomes; routing/governance denial copy improvements. **Still open:** full active operational context seeding, attention hierarchy cleanup, demo-path contract completion. **Not** autonomous agents or recommendation-intelligence expansion.
+**UX coherence (May 2026 — partially implemented):** AdminV2 BOS surfaces unified in **`docs/sprints/archive/05_2026/bos_ux_coherence_sprint.md`** (with **`bos_ux_coherence_design.md`**). **Shipped ~2026-05-20 → 2026-05-22:** shared **`OperationalProposalCardFrame`** on Task/Workflow/Config Assist proposal cards; execution receipts on apply outcomes; routing/governance denial copy improvements. **Still open:** full active operational context seeding, attention hierarchy cleanup, demo-path contract completion. **Not** autonomous agents or recommendation-intelligence expansion.
 
-**Operational assist closeout (May 2026 — shipped):** Deterministic **BOS assist routing**, **communication draft synthesis** (separate from recommendation copy), **channel-aware SMS/email** bodies in Task Assist review, Review Assist + drawer stability, native **Work with BOS** CTA — **`docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`**. **Forward planning only:** **`docs/sprints/future/bos_operational_assist_phase2.md`**.
+**Operational assist closeout (May 2026 — shipped):** Deterministic **BOS assist routing**, **communication draft synthesis** (separate from recommendation copy), **channel-aware SMS/email** bodies in Task Assist review, Review Assist + drawer stability, native **Work with BOS** CTA — **`docs/sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`**. **Forward planning only:** **`docs/sprints/future/bos_operational_assist_phase2.md`**.
 
 | Category | Status |
 |----------|--------|
@@ -57,7 +57,7 @@ Recommendation strings must not be copied into outbound `draft_body` without syn
 
 Product posture: **operational narrator**, **guided reviewer**, **workflow copilot** — not open-ended chat, autonomous agent, or recommendation spam. Orchestrator routes; specialists propose; operators approve.
 
-**Closeout detail:** [`docs/sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../sprints/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md).
+**Closeout detail:** [`docs/sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md).
 
 ### Hard prohibitions (system-enforced)
 
@@ -259,7 +259,7 @@ Do **not** ship UI integration without steps 1 and 3.
 | HTTP — config commits | `web/app/api/admin/agent/` | BOS config-commit family |
 | Tests | `web/tests/bos/` | Registry + adapters + command metadata |
 
-**Docs:** Active doctrine = this file. Sprint audits = `docs/sprints/05_2026/bos_standardization_*.md`. Archived AI agent contracts = `docs/archive/2026-05-02-docs-reset/architecture/ai-agent-*.md` (historical shapes; prefer BOS sections here for new work).
+**Docs:** Active doctrine = this file. Sprint audits = `docs/sprints/archive/05_2026/bos_standardization_*.md`. Archived AI agent contracts = `docs/archive/2026-05-02-docs-reset/architecture/ai-agent-*.md` (historical shapes; prefer BOS sections here for new work).
 
 ## Orchestrator + specialists (AdminV2)
 
@@ -276,8 +276,8 @@ The bottom **command bar** is the **Orchestrator** surface. Operators use one in
 **Session state (`GlobalAssistantContext`, May 2026):**
 
 - **Thread + UI chrome:** `commandSurfaceThread`, `commandSurfaceThreadExpanded`, `commandSurfaceJobCardUi` — backed by **`sessionStorage`** (`commandSurfaceThreadPersistence.ts`) for AdminV2 navigation within a tab session; **Clear** resets explicitly.
-- **SSR / hydration:** First paint uses an **empty thread** on server and client; **`loadPersistedCommandSurfaceSession()`** runs in a mount **`useEffect`** only. Persist writes are gated until restore completes. **Do not** read `sessionStorage` in `useState` initializers (caused `AICommandSurfaceShell` hydration mismatch). Detail: **`docs/sprints/05_2026/agent_interaction_layer_v1.md`**.
-- **Workspace route context:** `workspaceScope` (`department_id`, optional `work_unit_id`, names) is set from department/work-unit pages for Workflow Assist create proposals; **`setWorkspaceScope`** shallow-compares before updating to avoid render loops. Detail: **`docs/sprints/05_2026/workflow_assist_v1.md`** § Workspace panels.
+- **SSR / hydration:** First paint uses an **empty thread** on server and client; **`loadPersistedCommandSurfaceSession()`** runs in a mount **`useEffect`** only. Persist writes are gated until restore completes. **Do not** read `sessionStorage` in `useState` initializers (caused `AICommandSurfaceShell` hydration mismatch). Detail: **`docs/sprints/archive/05_2026/agent_interaction_layer_v1.md`**.
+- **Workspace route context:** `workspaceScope` (`department_id`, optional `work_unit_id`, names) is set from department/work-unit pages for Workflow Assist create proposals; **`setWorkspaceScope`** shallow-compares before updating to avoid render loops. Detail: **`docs/sprints/archive/05_2026/workflow_assist_v1.md`** § Workspace panels.
 
 ## Policy and permissions
 
@@ -297,9 +297,9 @@ See **§ Implementation inventory — Agent permission matrix** for the full rou
 | Topic | Doc |
 |-------|-----|
 | Config control plane | `docs/system/configuration-system.md` § BOS readiness |
-| Workflows / events | `docs/system/actions-and-workflows.md` |
-| API families | `docs/system/api-contracts.md` |
-| Workspace / queues | `docs/system/workspace-system.md` |
+| Workflows / events | `docs/archive/2026-06-superseded-system/actions-and-workflows.md` |
+| API families | `docs/archive/2026-06-superseded-system/api-contracts.md` |
+| Workspace / queues | `docs/archive/2026-06-superseded-system/workspace-system.md` |
 | Execution pause | `docs/execution/roadmap-and-gaps.md` |
 | Historical typed contract | `docs/archive/.../architecture/ai-agent-system-contract.md` |
 

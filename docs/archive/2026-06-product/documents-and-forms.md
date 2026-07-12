@@ -21,7 +21,7 @@ Cover **`documents`** (file + metadata records) attached to entities and the **f
 - **Schema:** **`form_definitions`**, **`form_definition_versions`** (draft / published / archived), **`form_public_links`**, **`form_submissions`** (canonical **`payload`** JSONB per migration **`20260506100000_forms_engine_v1_foundation.sql`**), plus linkage/signatures tables as migrated.
 - **Admin APIs:** **`/api/admin/forms`** (list/create definitions), **`/api/admin/forms/[formId]`**, versions CRUD/publish/archive, public links, submissions listing and mutation helpers, packet sessions and packet links (`web/app/api/admin/forms/**`).
 - **Public capture:** **`/api/public/forms/[token]/submissions`** (and related) for tokenized submit flows.
-- **Admin UI:** Forms hub **`/adminV2/forms`** (`FormsHubClient.tsx`) — workspace per definition, links to packet sessions. **Workspace redesign planned:** **`docs/sprints/05_2026/forms_operational_workspace_redesign.md`** (hub, lifecycle, packet builder — align with packet review UX).
+- **Admin UI:** Forms hub **`/adminV2/forms`** (`FormsHubClient.tsx`) — workspace per definition, links to packet sessions. **Workspace redesign planned:** **`docs/sprints/archive/05_2026/forms_operational_workspace_redesign.md`** (hub, lifecycle, packet builder — align with packet review UX).
 - **Tests:** Broad route coverage in **`web/tests/admin/formsAdminRoutes.test.ts`**.
 
 **Enrollment Packet — Phase 1 (E2E operating loop, shipped May 2026):**
@@ -34,11 +34,11 @@ Cover **`documents`** (file + metadata records) attached to entities and the **f
 - **Documents tab (opportunity drawer):** Merges (a) **`documents`** rows already parented to the opportunity with (b) **`documents`** linked through **`form_submission_documents`** for submissions belonging to packet sessions for that opportunity — enriched with optional **Form submission** / **Packet session** admin links in the list. **Documents are not stored “on” the opportunity row** beyond normal `documents.entity_type` / `entity_id` when the PDF parent resolver chooses `opportunity`; packet artifacts are still tied through **submissions + junction**.
 - **Trust boundary:** Public values are **proposals** in **`form_submissions.payload`** until explicit operator/intake flows promote them; **Phase 1 does not** auto-write canonical CRM customer/person/member fields from arbitrary public packet answers beyond existing **intake** rules (see **`docs/forms/linkage-review-operator-flow.md`**, **`docs/product/crm-system.md`**).
 
-**Forms MVP productization (May 2026 — shipped ~2026-05-28):** Operational intent templates, simplified Form Detail setup, location-specific share links, inline field tokens (UI/review only) — **`docs/sprints/05_2026/completed/forms_mvp_productization.md`**. **Intake outcome doctrine:** public submit does **not** auto-create opportunities unless link metadata enables it — **`docs/sprints/05_2026/completed/forms_intake_runtime_validation_closeout.md`**.
+**Forms MVP productization (May 2026 — shipped ~2026-05-28):** Operational intent templates, simplified Form Detail setup, location-specific share links, inline field tokens (UI/review only) — **`docs/sprints/archive/05_2026/completed/forms_mvp_productization.md`**. **Intake outcome doctrine:** public submit does **not** auto-create opportunities unless link metadata enables it — **`docs/sprints/archive/05_2026/completed/forms_intake_runtime_validation_closeout.md`**.
 
 **Still open / Phase 2+ (not claiming “product complete” for all enrollment):**
 
-- **Field-level data change proposals (DCP)**, richer review UX hardening (UX cards), template/reminder productization — see **`docs/sprints/05_2026/later-phase/enrollment_packet_phase_2.md`**, **`docs/sprints/05_2026/later-phase/forms_documents_operational_experience_hardening.md`**.
+- **Field-level data change proposals (DCP)**, richer review UX hardening (UX cards), template/reminder productization — see **`docs/sprints/archive/05_2026/later-phase/enrollment_packet_phase_2.md`**, **`docs/sprints/archive/05_2026/later-phase/forms_documents_operational_experience_hardening.md`**.
 - **Phase 2 review MVP (P2-1–P2-4, shipped ~2026-05-21):**
   - **Read API:** `GET /api/admin/forms/packet-sessions/[packetSessionId]/review-rollup` → **`buildPacketReviewRollupV1`** (`web/lib/forms/packets/buildPacketReviewRollupV1.ts`) — labeled answers, warnings, **`documents_index`**, intake context; **read-only** (no writes).
   - **Packet session review console:** `/adminV2/forms/packets/[packetSessionId]` — **`PacketReviewRollupView`** + **`PacketSessionReviewClient`**; approve / reject / needs correction via existing review PATCH.
@@ -50,7 +50,7 @@ Cover **`documents`** (file + metadata records) attached to entities and the **f
 
 ### Long-term vision (not current production scope)
 
-Unified intake, documents, and compliance-oriented capture: web/API/email channels; outcomes include CRM intake, enrollment packets, compliance artifacts, billing-adjacent forms. **Advanced (future):** AI-assisted parsing, document recreation, jurisdiction rules, dynamic field logic. **Not V1:** PDF builder, full compliance engine, AI ingestion as critical path. Phase 2: **`docs/sprints/05_2026/later-phase/enrollment_packet_phase_2.md`**.
+Unified intake, documents, and compliance-oriented capture: web/API/email channels; outcomes include CRM intake, enrollment packets, compliance artifacts, billing-adjacent forms. **Advanced (future):** AI-assisted parsing, document recreation, jurisdiction rules, dynamic field logic. **Not V1:** PDF builder, full compliance engine, AI ingestion as critical path. Phase 2: **`docs/sprints/archive/05_2026/later-phase/enrollment_packet_phase_2.md`**.
 
 ### Relationship to Settings (four-plane model)
 
@@ -95,7 +95,7 @@ Shared building blocks: versioned definitions, public links, prefill (`web/lib/f
 
 - **Prefill** hydrates draft `payload.values` from CRM/context when link metadata allows (`prefill_enabled`, `prefill_field_map`, `form_context_mode` existing_record or anchored packet). See **`docs/forms/existing-record-public-link-contract.md`**.
 - **Submitted values** in `form_submissions.payload` remain intake truth until explicit intake/linkage/review paths promote CRM fields.
-- **Lead capture → CRM (May 2026):** `buildFormIntakeMetaFromPayload` + `applyFormIntakeSafe` write **`opportunity_customer_members.location_id`** and **`program_room_cohort_key`** when link `intake_field_paths` map child site/cohort (or per-child `children[]`). See **`docs/sprints/05_2026/waitlist_priority_fact_truth_child_scope.md`** (Card 4–5). **Org-level** cohort keys until site-scoped catalog (deferred — not a blocker for fact-truth sprint closeout).
+- **Lead capture → CRM (May 2026):** `buildFormIntakeMetaFromPayload` + `applyFormIntakeSafe` write **`opportunity_customer_members.location_id`** and **`program_room_cohort_key`** when link `intake_field_paths` map child site/cohort (or per-child `children[]`). See **`docs/sprints/archive/05_2026/waitlist_priority_fact_truth_child_scope.md`** (Card 4–5). **Org-level** cohort keys until site-scoped catalog (deferred — not a blocker for fact-truth sprint closeout).
 - **Packet `shared_values`** is a shallow cross-step scalar merge — not a full prefill store or CRM mirror.
 - Review UX should eventually distinguish **already known** (aligned with snapshot/context) vs **new or changed** (submitted differs) — Phase 2 rollup warnings are a first slice (name hints only).
 
@@ -109,15 +109,15 @@ Shared building blocks: versioned definitions, public links, prefill (`web/lib/f
 ## Known gaps / risks
 
 - **Needs verification:** Org-wide compliance hooks (virus scan, retention jobs) for documents — not evidenced beyond Storage + DB.
-- **Enrollment packets:** **Phase 1 E2E** is **shipped**; **Phase 2 review MVP (P2-1–P2-4) shipped ~2026-05-21**; DCP, P2-5 BOS insight, and UX hardening cards remain **partially implemented / next execution** — **`docs/sprints/05_2026/later-phase/enrollment_packet_phase_2.md`**, **`forms_documents_phase_2_packet_review_mvp.md`**. **Document AI extraction** is **not implemented** and **not** in the current sprint lane (AI agent expansion **paused**).
+- **Enrollment packets:** **Phase 1 E2E** is **shipped**; **Phase 2 review MVP (P2-1–P2-4) shipped ~2026-05-21**; DCP, P2-5 BOS insight, and UX hardening cards remain **partially implemented / next execution** — **`docs/sprints/archive/05_2026/later-phase/enrollment_packet_phase_2.md`**, **`forms_documents_phase_2_packet_review_mvp.md`**. **Document AI extraction** is **not implemented** and **not** in the current sprint lane (AI agent expansion **paused**).
 - **Required vs optional:** **`field_definitions.requirement_policy`** exists in DB; cross-surface behavior **needs verification** (`roadmap-and-gaps.md` item 5).
 
 ## Related
 
 - **CRM / opportunity surfaces:** **`docs/product/crm-system.md`**
 - **Communications (packet email):** **`docs/product/communications.md`**
-- **Enrollment packet audit + status banner:** **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`**
-- **Phase 2 enhancement plan:** **`docs/sprints/05_2026/later-phase/enrollment_packet_phase_2.md`**
+- **Enrollment packet audit + status banner:** **`docs/sprints/archive/05_2026/enrollment_journey_packet_operations_v1.md`**
+- **Phase 2 enhancement plan:** **`docs/sprints/archive/05_2026/later-phase/enrollment_packet_phase_2.md`**
 - **Roadmap tracking:** **`docs/execution/roadmap-and-gaps.md`**
 
 ## When this doc must be updated

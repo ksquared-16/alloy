@@ -82,7 +82,7 @@ Org-wide thread list via **`GET /api/admin/inbox/threads`** (`web/lib/communicat
 - Packet invitation / reminder copy from the **opportunity drawer** is sent through the **same canonical path** as other CRM email: **`enqueueCanonicalOutboundMessage`** → **`communication_messages.status: queued`** → Python worker → provider.
 - **States are not interchangeable:** **`queued`** (awaiting worker) → **`sent`** + non-null **`provider_message_id`** when the provider accepts the handoff → **`delivered_at`** / bounce metadata when **Resend** (email) or **Twilio** (SMS status) webhooks match the outbound id. Treat “queued” vs “provider accepted” vs “delivered to mailbox” as **distinct** when debugging deliverability.
 - **Resend:** Webhook handler is **`POST /api/webhooks/resend`** — requires **`RESEND_WEBHOOK_SECRET`** (Svix); misconfiguration yields **`ignored`** updates (see route comments). SPF/DKIM alignment remains **tenant DNS + provider** responsibility; Alloy does not auto-fix tenant deliverability.
-- Deeper sprint notes / QA matrix: **`docs/sprints/05_2026/communications.txt`**; packet × CRM narrative: **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`**. **Phase 2** (templating in packet settings, reminders, SMS option): **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+- Deeper sprint notes / QA matrix: **`docs/sprints/archive/05_2026/communications.txt`**; packet × CRM narrative: **`docs/sprints/archive/05_2026/enrollment_journey_packet_operations_v1.md`**. **Phase 2** (templating in packet settings, reminders, SMS option): **`docs/sprints/archive/05_2026/enrollment_packet_phase_2.md`**.
 
 **Threads, read/unread**
 
@@ -159,7 +159,7 @@ Org-wide thread list via **`GET /api/admin/inbox/threads`** (`web/lib/communicat
 ## Related
 
 - **CRM / opportunities context:** `docs/product/crm-system.md`
-- **Enrollment packet Phase 2 (templates, reminders, SMS):** `docs/sprints/05_2026/enrollment_packet_phase_2.md`
+- **Enrollment packet Phase 2 (templates, reminders, SMS):** `docs/sprints/archive/05_2026/enrollment_packet_phase_2.md`
 - **Legacy retirement phases (audit):** `docs/audits/legacy-messages-retirement-plan.md`
 
 ## When this doc must be updated
@@ -170,7 +170,7 @@ Channels, enqueue model, provider bindings, dual-write flags, worker contracts, 
 
 ## Communications V2 — foundation (June 2026, branch `communications-v2`)
 
-**Status:** Implementation in progress on the dedicated `communications-v2` branch, package-by-package. Canonical sprint source: **`docs/sprints/06_2026/communications-v2/`** (Architecture & Scope Freeze r2, Governance Charter, Package Tracker, QA Workbook, Sprint Backlog, Plan, Work Orders).
+**Status:** Implementation in progress on the dedicated `communications-v2` branch, package-by-package. Canonical sprint source: **`docs/sprints/archive/06_2026/communications-v2/`** (Architecture & Scope Freeze r2, Governance Charter, Package Tracker, QA Workbook, Sprint Backlog, Plan, Work Orders).
 
 Communications V2 transforms Messaging into a **Communications Command Center** (Queue → Conversation Workspace → BOS rail) plus an upgraded record-drawer Communications tab, **extending the canonical `communication_*` path** — it does **not** expand legacy `messages`. V1 providers are **Resend (email)** and **Twilio (SMS)** behind a new provider abstraction; **Google Workspace and Microsoft 365 remain in the architecture but off the V1 critical path** (V1.5 adapters, no schema/UX change).
 
