@@ -2,7 +2,7 @@
 
 **Generated:** 2026-07-12 by `scripts/generate-api-inventory.mjs`. Do not edit by hand — re-run the script.
 
-**Routes:** 520 `route.ts` handlers under `web/app/api/**`.
+**Routes:** 524 `route.ts` handlers under `web/app/api/**`.
 
 This is a static, heuristic inventory. Columns are extracted from source text:
 
@@ -18,18 +18,18 @@ This is a static, heuristic inventory. Columns are extracted from source text:
 |---|---|
 | [Admin / Configuration](admin-configuration-api.md) | 125 |
 | [Workspace / Queue / Focus Panel](workspace-api.md) | 50 |
-| [Entity / Record / Resolver](entity-record-api.md) | 131 |
+| [Entity / Record / Resolver](entity-record-api.md) | 135 |
 | [Business Process / Status / Lifecycle](business-process-api.md) | 46 |
 | [Actions / Workflows](actions-workflows-api.md) | 31 |
 | [Documents / Forms](documents-forms-api.md) | 48 |
 | [Communications](communications-api.md) | 40 |
 | [AI / BOS](ai-bos-api.md) | 23 |
 | [Internal / System / Diagnostics](internal-system-api.md) | 26 |
-| **Total** | **520** |
+| **Total** | **524** |
 
 | Stability | Routes |
 |---|---|
-| admin-only | 469 |
+| admin-only | 473 |
 | experimental | 8 |
 | internal | 13 |
 | public/tokenized | 27 |
@@ -304,6 +304,10 @@ Detailed conventions: [`entity-record-api.md`](entity-record-api.md).
 | GET | `/api/admin/payments` | access-scope, admin-context, admin-or-ops | none | y | — | — | admin-only | charges, customers, jobs, payment_allocations, payments |
 | PATCH | `/api/admin/payments/[id]` | access-scope, admin-context, admin-or-ops | manual | y | y | — | admin-only | payments |
 | POST | `/api/admin/payments/run` | admin-context, require-admin | schema | y | — | y | admin-only | — |
+| GET POST | `/api/admin/person-child-relationships` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| GET PATCH | `/api/admin/person-child-relationships/[id]` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| POST | `/api/admin/person-child-relationships/[id]/roles` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
+| DELETE | `/api/admin/person-child-relationships/[id]/roles/[roleKey]` | admin-context, admin-or-ops | manual | y | — | — | admin-only | — |
 | GET | `/api/admin/person-options` | admin-context | none | y | — | — | admin-only | contacts, customer_persons, persons |
 | GET POST | `/api/admin/person-relationship-type-settings` | admin-context | none | y | y | — | admin-only | orgs, person_relationship_type_settings |
 | PATCH DELETE | `/api/admin/person-relationship-type-settings/[id]` | admin-context | none | y | y | — | admin-only | person_relationship_type_settings |

@@ -7364,6 +7364,88 @@
     "lines": 137
   },
   {
+    "apiPath": "/api/admin/person-child-relationships/[id]/roles/[roleKey]",
+    "file": "web/app/api/admin/person-child-relationships/[id]/roles/[roleKey]/route.ts",
+    "methods": [
+      "DELETE"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Entity / Record / Resolver",
+    "stability": "admin-only",
+    "lines": 20
+  },
+  {
+    "apiPath": "/api/admin/person-child-relationships/[id]/roles",
+    "file": "web/app/api/admin/person-child-relationships/[id]/roles/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Entity / Record / Resolver",
+    "stability": "admin-only",
+    "lines": 23
+  },
+  {
+    "apiPath": "/api/admin/person-child-relationships/[id]",
+    "file": "web/app/api/admin/person-child-relationships/[id]/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Entity / Record / Resolver",
+    "stability": "admin-only",
+    "lines": 35
+  },
+  {
+    "apiPath": "/api/admin/person-child-relationships",
+    "file": "web/app/api/admin/person-child-relationships/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": [
+      "admin-context",
+      "admin-or-ops"
+    ],
+    "validation": "manual",
+    "serviceRole": true,
+    "writes": false,
+    "events": false,
+    "tables": [],
+    "rpcs": [],
+    "domain": "Entity / Record / Resolver",
+    "stability": "admin-only",
+    "lines": 64
+  },
+  {
     "apiPath": "/api/admin/person-options",
     "file": "web/app/api/admin/person-options/route.ts",
     "methods": [
