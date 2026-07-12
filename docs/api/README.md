@@ -125,7 +125,7 @@ Rewrites `docs/api/api-index.md` and `docs/api/api-inventory.json` from current 
 
 ## Related
 
-- `docs/platform/platform-capabilities.md` — capability model (API-first doctrine for new modules)
+- `docs/platform/foundation/capability-model-doctrine.md` — capability model (API-first doctrine for new modules)
 - `docs/platform/governance/api-contracts.md` — canonical representative map
 - `docs/platform/foundation/architecture.md` — system context
 - `docs/platform/governance/roles-and-permissions.md` — capability vs visibility model

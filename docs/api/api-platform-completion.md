@@ -111,7 +111,7 @@ See [`openapi-readiness.md`](openapi-readiness.md) §0 for the Platform Complete
 - **Operational products should now be built on this pattern.** Attendance, Scheduling, Billing,
   Processing, Parent Experience, and Staff Experience should be designed as **platform capabilities
   first** (canonical entities → canonical API → generated client → consumers), then surfaced through
-  UI. See [`../platform/platform-capabilities.md`](../platform/platform-capabilities.md).
+  UI. See [`../platform/foundation/capability-model-doctrine.md`](../platform/foundation/capability-model-doctrine.md).
 - **API work resumes as expansion** when a new capability needs a stable, typed boundary — applying
   the readiness gate and the Definition of Done, not re-litigating the foundation.
 
@@ -123,4 +123,4 @@ See [`openapi-readiness.md`](openapi-readiness.md) §0 for the Platform Complete
 - [`api-platform-governance.md`](api-platform-governance.md) — operating contract + lifecycle + CI
 - [`openapi-readiness.md`](openapi-readiness.md) — readiness gate + Platform Complete vs Expansion
 - [`internal-typescript-client.md`](internal-typescript-client.md) — the generated client
-- [`../platform/platform-capabilities.md`](../platform/platform-capabilities.md) — capability model (API-first)
+- [`../platform/foundation/capability-model-doctrine.md`](../platform/foundation/capability-model-doctrine.md) — capability model (API-first)
