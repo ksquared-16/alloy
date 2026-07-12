@@ -17,6 +17,13 @@ import IdentityDisclosureSurface from "@/components/admin/focusPanel/identity/Id
 import IdentityCollectionContext from "@/components/admin/focusPanel/identity/IdentityCollectionContext";
 import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity/IdentityDisclosureBackAction";
 import { useIdentityDisclosureState } from "@/lib/adminV2/runtime/focusPanel/identity/useIdentityDisclosureState";
+import { layoutFieldsFromIdentityRecord } from "@/lib/adminV2/runtime/focusPanel/identity/layoutFieldsFromIdentityRecord";
+import {
+    builderPurposeForDisclosureDepth,
+    useSyncBuilderDisclosure,
+} from "@/lib/adminV2/runtime/focusPanel/identity/useSyncBuilderDisclosure";
+import { backIdentityDisclosure } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
+import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import type { IdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import {
     readHouseholdNestedConfigFromDoc,
@@ -29,6 +36,7 @@ import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurf
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
 import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
+import NestedSurfaceFieldLayoutSurface from "@/components/admin/focusPanel/drillIn/NestedSurfaceFieldLayoutSurface";
 import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
 import InlineSectionControls from "@/components/admin/focusPanel/drillIn/InlineSectionControls";
 import {
@@ -113,11 +121,39 @@ export default function HouseholdCard({
             ? applyHouseholdDisplayView(base, composerPreview.displayView)
             : base;
     }, [context, nestedConfig, composerPreview?.displayView]);
+    const composePurpose: IdentityConfigurationPurpose | null = composingHouseholdSurface
+        ? composer?.activeConfigPurpose ?? "summary"
+        : null;
+
+    useSyncBuilderDisclosure(composingHouseholdSurface, disclosure, {
+        enterContext,
+        selectIdentity,
+        enterEvidence,
+        reset: resetDisclosure,
+    });
+
     useEffect(() => {
         if (!composingHouseholdSurface) return;
-        enterContext();
         setEditingPersonId(null);
-    }, [composingHouseholdSurface, enterContext]);
+    }, [composingHouseholdSurface]);
+
+    const backWithComposerSync = () => {
+        const next = backIdentityDisclosure(disclosure);
+        backDisclosure();
+        if (composingHouseholdSurface && composer) {
+            composer.setActiveConfigPurpose(builderPurposeForDisclosureDepth(next.depth));
+            composer.setSelectedIdentityId(next.selectedIdentityId ?? null);
+        }
+    };
+
+    const handleSelectIdentityForCompose = (personId: string, sectionKey: string) => {
+        if (composingHouseholdSurface && composer) {
+            composer.setSelectedIdentityId(personId);
+            composer.setActiveConfigPurpose("details");
+            composer.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: sectionKey });
+        }
+        selectIdentity(personId, sectionKey);
+    };
     useEffect(() => {
         if (!composerPreview) return;
         enterContext();
@@ -222,11 +258,11 @@ export default function HouseholdCard({
     const footerAction =
         isEmpty || editing ? null :
         disclosure.depth === "evidence" && selectedIdentityRecord ?
-            <IdentityDisclosureBackAction label="← Back to details" onBack={backDisclosure} dataAction="back-to-details" />
+            <IdentityDisclosureBackAction label="← Back to details" onBack={composingHouseholdSurface ? backWithComposerSync : backDisclosure} dataAction="back-to-details" />
         : disclosure.depth === "details" && selectedIdentityRecord ?
-            <IdentityDisclosureBackAction label="← View household" onBack={backDisclosure} dataAction="back-to-context" />
+            <IdentityDisclosureBackAction label="← View household" onBack={composingHouseholdSurface ? backWithComposerSync : backDisclosure} dataAction="back-to-context" />
         : disclosure.depth === "context" ?
-            <IdentityDisclosureBackAction label="← Back to panel" onBack={backDisclosure} dataAction="back-to-summary" />
+            <IdentityDisclosureBackAction label="← Back to panel" onBack={composingHouseholdSurface ? backWithComposerSync : backDisclosure} dataAction="back-to-summary" />
         : evidence.groups.length > 0 ?
             <button
                 type="button"
@@ -257,6 +293,21 @@ export default function HouseholdCard({
                 nestedConfig={nestedConfig}
             />
         );
+    } else if (
+        selectedIdentityRecord &&
+        disclosure.depth === "details" &&
+        composingHouseholdSurface &&
+        composePurpose === "details"
+    ) {
+        perspective = "focused";
+        body = (
+            <NestedSurfaceFieldLayoutSurface
+                surfaceId={HOUSEHOLD_SURFACE_ID}
+                groupKey={disclosure.selectedSectionKey ?? "primary_contact"}
+                fields={layoutFieldsFromIdentityRecord(selectedIdentityRecord, "details")}
+                tier="details"
+            />
+        );
     } else if (selectedIdentityRecord && (disclosure.depth === "details" || disclosure.depth === "evidence")) {
         perspective = disclosure.depth === "evidence" ? "focused" : "focused";
         body = (
@@ -279,11 +330,14 @@ export default function HouseholdCard({
                 masked={maskedChannels}
                 onOpenChild={openChild}
                 onEditContact={onEditContact}
-                onSelectIdentity={(personId, sectionKey) => selectIdentity(personId, sectionKey)}
+                onSelectIdentity={
+                    composingHouseholdSurface ? handleSelectIdentityForCompose : (personId, sectionKey) => selectIdentity(personId, sectionKey)
+                }
                 onAddEmergencyContact={
                     canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
                 }
                 composing={composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false}
+                composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
             />
         );
@@ -294,6 +348,7 @@ export default function HouseholdCard({
                 evidence={evidence}
                 masked={maskedChannels}
                 composing={composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false}
+                composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
                 canEdit={canEdit}
                 onPreviewGroup={() => enterContext()}
@@ -362,6 +417,7 @@ function CollapsedBody({
     evidence,
     masked,
     composing = false,
+    composePurpose = null,
     nestedConfig,
     canEdit,
     onPreviewGroup,
@@ -371,6 +427,7 @@ function CollapsedBody({
     evidence: ReturnType<typeof buildHouseholdCardEvidence>;
     masked: boolean;
     composing?: boolean;
+    composePurpose?: IdentityConfigurationPurpose | null;
     nestedConfig: NestedSurfaceConfig | null;
     canEdit?: boolean;
     onPreviewGroup: (key: HouseholdEvidenceGroupKey) => void;
@@ -432,7 +489,14 @@ function CollapsedBody({
                 className="alloy-os-household__summary-region identity-summary-columns__cell"
                 dataAttrs={{ "data-household-summary-region": "primary_contact" }}
             >
-                {primaryRecord ? (
+                {composing && composePurpose === "summary" && primaryRecord ?
+                    <NestedSurfaceFieldLayoutSurface
+                        surfaceId={HOUSEHOLD_SURFACE_ID}
+                        groupKey="primary_contact"
+                        fields={layoutFieldsFromIdentityRecord(primaryRecord, "summary")}
+                        tier="summary"
+                    />
+                : primaryRecord ? (
                     <IdentityRecordSummary
                         record={primaryRecord}
                         depth="summary"
@@ -475,7 +539,7 @@ function CollapsedBody({
                         Primary contact needed
                     </p>
                 )}
-                {composing ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="primary_contact" /> : null}
+                {composing && composePurpose !== "summary" ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="primary_contact" /> : null}
             </ComposableRegionShell>
 
             {secondaryRecords.length > 0 ? (
@@ -485,7 +549,14 @@ function CollapsedBody({
                     className="alloy-os-household__summary-region identity-summary-columns__cell"
                     dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
                 >
-                    {secondaryRecords.map((record) => (
+                    {composing && composePurpose === "summary" && secondaryRecords[0] ?
+                        <NestedSurfaceFieldLayoutSurface
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey="other_parent_guardian"
+                            fields={layoutFieldsFromIdentityRecord(secondaryRecords[0]!, "summary")}
+                            tier="summary"
+                        />
+                    : secondaryRecords.map((record) => (
                         <IdentityRecordSummary
                             key={record.id}
                             record={record}
@@ -499,7 +570,7 @@ function CollapsedBody({
                             dataAttr={record.id}
                         />
                     ))}
-                    {composing ? (
+                    {composing && composePurpose !== "summary" ? (
                         <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="other_parent_guardian" />
                     ) : null}
                 </ComposableRegionShell>
@@ -511,7 +582,14 @@ function CollapsedBody({
                     dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
                 >
                     <p className="alloy-os-household__row-detail">Add secondary parent fields when contacts exist</p>
-                    <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="other_parent_guardian" />
+                    {composePurpose === "summary" ?
+                        <NestedSurfaceFieldLayoutSurface
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey="other_parent_guardian"
+                            fields={[]}
+                            tier="summary"
+                        />
+                    :   <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="other_parent_guardian" />}
                 </ComposableRegionShell>
             ) : null}
             </div>
@@ -584,6 +662,7 @@ function ExpandedBody({
     onEditContact,
     onAddEmergencyContact,
     composing,
+    composePurpose = null,
     nestedConfig,
 }: {
     groups: HouseholdEvidenceGroup[];
@@ -593,6 +672,7 @@ function ExpandedBody({
     onEditContact?: (personId: string) => void;
     onAddEmergencyContact?: () => void;
     composing: boolean;
+    composePurpose?: IdentityConfigurationPurpose | null;
     nestedConfig: NestedSurfaceConfig | null;
 }) {
     return (
@@ -625,8 +705,9 @@ function ExpandedBody({
                         onAddEmergencyContact={onAddEmergencyContact}
                         nestedConfig={nestedConfig}
                         composing={composing}
+                        composePurpose={composePurpose}
                     />
-                    {composing ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey={group.key} /> : null}
+                    {composing && composePurpose !== "context_facts" ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey={group.key} /> : null}
                 </ComposableRegionShell>
             ))}
             {composing ? <AddSectionMenu surfaceId={HOUSEHOLD_SURFACE_ID} /> : null}
@@ -674,6 +755,7 @@ function GroupRows({
     onAddEmergencyContact,
     nestedConfig = null,
     composing = false,
+    composePurpose = null,
 }: {
     group: HouseholdEvidenceGroup;
     masked: boolean;
@@ -684,6 +766,7 @@ function GroupRows({
     onAddEmergencyContact?: () => void;
     nestedConfig?: NestedSurfaceConfig | null;
     composing?: boolean;
+    composePurpose?: IdentityConfigurationPurpose | null;
 }) {
     if (group.key === "address" && group.addressLine) {
         return <AddressLine address={group.addressLine} />;
@@ -709,7 +792,25 @@ function GroupRows({
                     Belonging only — open Children for enrollment detail
                 </p>
             ) : null}
-            {group.contacts.length > 0 ? (
+            {composing && composePurpose === "context_facts" && visible[0] ? (
+                <>
+                    <NestedSurfaceFieldLayoutSurface
+                        surfaceId={HOUSEHOLD_SURFACE_ID}
+                        groupKey={group.key}
+                        fields={layoutFieldsFromIdentityRecord(visible[0], "context_facts")}
+                        tier="context_fact"
+                    />
+                    <IdentityCollectionContext
+                        records={visible}
+                        selectable={Boolean(onSelectIdentity)}
+                        onSelectIdentity={
+                            onSelectIdentity
+                                ? (personId) => onSelectIdentity(personId, group.key)
+                                : undefined
+                        }
+                    />
+                </>
+            ) : group.contacts.length > 0 ? (
                 <IdentityCollectionContext
                     records={visible}
                     selectable={Boolean(onSelectIdentity && !composing)}

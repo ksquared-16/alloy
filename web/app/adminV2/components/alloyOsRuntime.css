@@ -3451,9 +3451,17 @@ html[data-alloy-os-runtime-split="true"]
   pointer-events: auto;
 }
 .fp-layout-field--composing:hover .fp-field-instance__toolbar,
-.fp-layout-field--composing.is-selected .fp-field-instance__toolbar {
+.fp-layout-field--composing.is-selected .fp-field-instance__toolbar,
+.fp-layout-surface--composing .fp-field-instance__toolbar {
   opacity: 1;
   transform: translateY(0);
+}
+.fp-layout-surface--composing .fp-field-instance__remove {
+  opacity: 1;
+  pointer-events: auto;
+}
+.fp-layout-surface--composing .fp-layout-drop-zone {
+  opacity: 1;
 }
 .fp-layout-field--composing:hover .fp-field-instance__remove,
 .fp-layout-field--composing.is-selected .fp-field-instance__remove {

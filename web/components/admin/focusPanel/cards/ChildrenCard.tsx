@@ -74,6 +74,13 @@ import {
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { buildChildIdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
+import { layoutFieldsFromIdentityRecord } from "@/lib/adminV2/runtime/focusPanel/identity/layoutFieldsFromIdentityRecord";
+import {
+    builderPurposeForDisclosureDepth,
+    useSyncBuilderDisclosure,
+} from "@/lib/adminV2/runtime/focusPanel/identity/useSyncBuilderDisclosure";
+import { backIdentityDisclosure } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
+import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
 type ChildrenComposerPreview = {
     perspective: "roster" | "child_focus" | "child_edit";
@@ -192,12 +199,25 @@ export default function ChildrenCard({
         setEditing(composerPreview.perspective === "child_edit");
     }, [composerPreview, evidence.children, enterContext, selectIdentity]);
 
-    useEffect(() => {
-        if (!composingChildrenSurface) return;
-        if (disclosure.depth !== "summary") return;
-        if (evidence.children.length === 0) return;
-        enterContext();
-    }, [composingChildrenSurface, disclosure.depth, evidence.children.length, enterContext]);
+    const composePurpose: IdentityConfigurationPurpose | null = composingChildrenSurface
+        ? composer?.activeConfigPurpose ?? "summary"
+        : null;
+
+    useSyncBuilderDisclosure(composingChildrenSurface, disclosure, {
+        enterContext,
+        selectIdentity,
+        enterEvidence,
+        reset: resetDisclosure,
+    });
+
+    const backWithComposerSync = () => {
+        const next = backIdentityDisclosure(disclosure);
+        backDisclosure();
+        if (composingChildrenSurface && composer) {
+            composer.setActiveConfigPurpose(builderPurposeForDisclosureDepth(next.depth));
+            composer.setSelectedIdentityId(next.selectedIdentityId ?? null);
+        }
+    };
 
     const isEmpty = evidence.count === 0;
     const focused =
@@ -217,9 +237,11 @@ export default function ChildrenCard({
         selectIdentity(id, "roster");
         setEditing(false);
         setRelatedViewId(null);
-        if (composingChildrenSurface) {
-            composer?.setDrillDepth({ kind: "child-focus", childId: id });
-            composer?.select({ kind: "region", surfaceId: CHILDREN_SURFACE_ID, groupKey: "identity" });
+        if (composingChildrenSurface && composer) {
+            composer.setSelectedIdentityId(id);
+            composer.setActiveConfigPurpose("details");
+            composer.setDrillDepth({ kind: "child-focus", childId: id });
+            composer.select({ kind: "region", surfaceId: CHILDREN_SURFACE_ID, groupKey: "identity" });
         }
     };
     const backToFocus = () => {
@@ -284,7 +306,7 @@ export default function ChildrenCard({
                 {backToSourceButton ?? (
                     <IdentityDisclosureBackAction
                         label="← All children"
-                        onBack={backDisclosure}
+                        onBack={composingChildrenSurface ? backWithComposerSync : backDisclosure}
                         dataAction="back"
                     />
                 )}
@@ -315,7 +337,7 @@ export default function ChildrenCard({
             backToSourceButton ?? (
                 <IdentityDisclosureBackAction
                     label="← Back to panel"
-                    onBack={backDisclosure}
+                    onBack={composingChildrenSurface ? backWithComposerSync : backDisclosure}
                     dataAction="collapse"
                 />
             );
@@ -431,12 +453,20 @@ export default function ChildrenCard({
                 className="alloy-os-children__composer-region"
                 dataAttrs={{ "data-children-roster-region": "true", "data-identity-depth": "context" }}
             >
-                <IdentityCollectionContext
-                    records={contextRosterRecords}
-                    selectable={!composingChildrenSurface}
-                    onSelectIdentity={selectChildIdentity}
-                />
-                {composingChildrenSurface ?
+                {composingChildrenSurface && composePurpose === "context_facts" && contextRosterRecords[0] ?
+                    <NestedSurfaceFieldLayoutSurface
+                        surfaceId={CHILDREN_SURFACE_ID}
+                        groupKey="roster"
+                        fields={layoutFieldsFromIdentityRecord(contextRosterRecords[0], "context_facts")}
+                        tier="context_fact"
+                    />
+                :   <IdentityCollectionContext
+                        records={contextRosterRecords}
+                        selectable={!composingChildrenSurface || composePurpose === "context_facts"}
+                        onSelectIdentity={selectChildIdentity}
+                    />
+                }
+                {composingChildrenSurface && composePurpose !== "context_facts" ?
                     <NestedSurfaceAddField surfaceId={CHILDREN_SURFACE_ID} groupKey="roster" />
                 :   null}
             </ComposableRegionShell>
@@ -451,17 +481,32 @@ export default function ChildrenCard({
                 className="alloy-os-children__composer-region"
                 dataAttrs={{ "data-children-roster-region": "true", "data-identity-depth": "summary" }}
             >
-                <div className="alloy-os-children__roster" data-children-roster>
-                    {evidence.children.map((child) => (
-                        <ChildSummaryRow
-                            key={child.id}
-                            child={child}
-                            depth="summary"
-                            childrenSurfaceConfig={childrenSurfaceConfig}
-                        />
-                    ))}
-                </div>
-                {composingChildrenSurface ?
+                {composingChildrenSurface && composePurpose === "summary" && evidence.children[0] ?
+                    <NestedSurfaceFieldLayoutSurface
+                        surfaceId={CHILDREN_SURFACE_ID}
+                        groupKey="roster"
+                        fields={layoutFieldsFromIdentityRecord(
+                            buildChildIdentityRecordVM({
+                                config: childrenSurfaceConfig,
+                                child: evidence.children[0]!,
+                                groupKey: "roster",
+                            }),
+                            "summary",
+                        )}
+                        tier="summary"
+                    />
+                :   <div className="alloy-os-children__roster" data-children-roster>
+                        {evidence.children.map((child) => (
+                            <ChildSummaryRow
+                                key={child.id}
+                                child={child}
+                                depth="summary"
+                                childrenSurfaceConfig={childrenSurfaceConfig}
+                            />
+                        ))}
+                    </div>
+                }
+                {composingChildrenSurface && composePurpose !== "summary" ?
                     <NestedSurfaceAddField surfaceId={CHILDREN_SURFACE_ID} groupKey="roster" />
                 :   null}
             </ComposableRegionShell>
@@ -693,6 +738,7 @@ function ConfiguredChildEnrollmentBody({
                         surfaceId={CHILDREN_SURFACE_ID}
                         groupKey={groupKey}
                         fields={fieldsByGroup.get(groupKey) ?? []}
+                        tier="details"
                     />
                 ))}
             </div>

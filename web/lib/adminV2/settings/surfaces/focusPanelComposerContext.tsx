@@ -27,6 +27,7 @@ import {
     reconcileIdentityNestedConfigsFromMetadata,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import type { SurfaceFieldVisibility } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
+import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
 /** Card key → nested surface id for in-canvas drill-in composition. */
 export const FOCUS_PANEL_CARD_NESTED_SURFACE: Partial<Record<FocusPanelCardKey, string>> = {
@@ -57,6 +58,12 @@ type FocusPanelComposerContextValue = {
     drillIn: FocusPanelComposerDrillIn | null;
     selection: FocusPanelComposerSelection | null;
     nestedConfigs: Record<string, NestedSurfaceConfig>;
+    /** Shared builder disclosure purpose — Summary / Context Facts / Details / Evidence. */
+    activeConfigPurpose: IdentityConfigurationPurpose;
+    setActiveConfigPurpose: (purpose: IdentityConfigurationPurpose) => void;
+    /** Selected person/child when configuring Details or Evidence. */
+    selectedIdentityId: string | null;
+    setSelectedIdentityId: (identityId: string | null) => void;
     enterDrillIn: (cardKey: FocusPanelCardKey, surfaceId: string) => void;
     setDrillDepth: (depth: FocusPanelComposerDrillDepth) => void;
     exitDrillIn: () => void;
@@ -101,6 +108,8 @@ export function FocusPanelComposerProvider({
     const [selection, setSelection] = useState<FocusPanelComposerSelection | null>(null);
     const [nestedConfigs, setNestedConfigs] = useState<Record<string, NestedSurfaceConfig>>(initialNestedConfigs);
     const [childAvatarPreviewUrls, setChildAvatarPreviewUrls] = useState<Record<string, string>>({});
+    const [activeConfigPurpose, setActiveConfigPurpose] = useState<IdentityConfigurationPurpose>("summary");
+    const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null);
 
     const configFor = useCallback(
         (surfaceId: string) => {
@@ -136,6 +145,8 @@ export function FocusPanelComposerProvider({
     const enterDrillIn = useCallback((cardKey: FocusPanelCardKey, surfaceId: string) => {
         setDrillIn({ cardKey, surfaceId, depth: { kind: "surface" } });
         setSelection({ kind: "region", surfaceId, groupKey: defaultGroupForSurface(surfaceId) });
+        setActiveConfigPurpose("summary");
+        setSelectedIdentityId(null);
     }, []);
 
     const setDrillDepth = useCallback((depth: FocusPanelComposerDrillDepth) => {
@@ -145,6 +156,8 @@ export function FocusPanelComposerProvider({
     const exitDrillIn = useCallback(() => {
         setDrillIn(null);
         setSelection(null);
+        setActiveConfigPurpose("summary");
+        setSelectedIdentityId(null);
     }, []);
 
     const isComposingSurface = useCallback(
@@ -188,6 +201,10 @@ export function FocusPanelComposerProvider({
             drillIn,
             selection,
             nestedConfigs,
+            activeConfigPurpose,
+            setActiveConfigPurpose,
+            selectedIdentityId,
+            setSelectedIdentityId,
             enterDrillIn,
             setDrillDepth,
             exitDrillIn,
@@ -205,6 +222,10 @@ export function FocusPanelComposerProvider({
             drillIn,
             selection,
             nestedConfigs,
+            activeConfigPurpose,
+            setActiveConfigPurpose,
+            selectedIdentityId,
+            setSelectedIdentityId,
             enterDrillIn,
             setDrillDepth,
             exitDrillIn,

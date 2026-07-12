@@ -40,6 +40,7 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceComposerModel";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import { SURFACE_COMPOSER_EMPTY_HINT } from "@/lib/adminV2/settings/surfaces/surfaceComposer";
+import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 
 export type IdentitySurfaceBuilderInspectorProps = {
     surfaceId: string;
@@ -65,14 +66,23 @@ export default function IdentitySurfaceBuilderInspector({
     grainEntityType = "opportunities",
     className,
 }: IdentitySurfaceBuilderInspectorProps) {
+    const composer = useFocusPanelComposer();
     const { tenantFieldDefinitions } = useTenantFieldDefinitions(grainEntityType);
-    const [activeConfigPurpose, setActiveConfigPurpose] = useState<IdentityConfigurationPurpose>("summary");
+    const [localPurpose, setLocalPurpose] = useState<IdentityConfigurationPurpose>("summary");
     const [libraryOpen, setLibraryOpen] = useState(false);
     const [libraryGroupKey, setLibraryGroupKey] = useState<string | null>(null);
 
+    const usesSharedPurpose = Boolean(composer?.enabled && composer.isComposingSurface(surfaceId));
+    const activeConfigPurpose = usesSharedPurpose ? composer!.activeConfigPurpose : localPurpose;
+    const setActiveConfigPurpose = (purpose: IdentityConfigurationPurpose) => {
+        if (usesSharedPurpose) composer!.setActiveConfigPurpose(purpose);
+        else setLocalPurpose(purpose);
+    };
+
     useEffect(() => {
-        setActiveConfigPurpose("summary");
-    }, [selectedGroupKey]);
+        if (usesSharedPurpose) return;
+        setLocalPurpose("summary");
+    }, [selectedGroupKey, usesSharedPurpose]);
 
     const activeFieldTier = useMemo(() => {
         if (activeConfigPurpose === "evidence") return undefined;
