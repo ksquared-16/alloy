@@ -65,7 +65,7 @@ Alloy documentation grew through sprint-driven accumulation (614 markdown files)
 
 | Document | Action | Target |
 |----------|--------|--------|
-| `docs/core/system-overview.md` | **Rewrite** | `docs/platform/foundation/system-overview.md` + stub pointer in core |
+| `docs/platform/foundation/system-overview.md` | **Rewrite** | `docs/platform/foundation/system-overview.md` + stub pointer in core |
 | *(none)* | **Create** | `architecture.md`, `release-history.md`, `platform-capabilities.md` |
 | `docs/execution/roadmap-and-gaps.md` | **Merge** | `product-roadmap.md` (canonical); keep execution copy as transitional |
 | `docs/system/repository-state-2026-06.md` | **Keep** | Point-in-time snapshot — link from architecture |
@@ -74,10 +74,10 @@ Alloy documentation grew through sprint-driven accumulation (614 markdown files)
 
 | Document | Action | Target |
 |----------|--------|--------|
-| `docs/system/entity-model.md` | **Merge** | `platform/core/entity-model.md` (canonical summary) |
-| `docs/system/navigation-doctrine.md` + `routing-doctrine.md` + workspace landing | **Merge** | `navigation-and-workspace-doctrine.md` |
-| `docs/system/record-system.md` | **Merge** | `platform/core/record-system.md` |
-| `docs/system/workspace-system.md` | **Rewrite/Merge** | `business-process-system.md` + `queue-system.md`; archive enrollment-only sections to supplemental |
+| `docs/archive/2026-06-superseded-system/entity-model.md` | **Merge** | `platform/core/entity-model.md` (canonical summary) |
+| `docs/archive/2026-06-superseded-system/navigation-doctrine.md` + `routing-doctrine.md` + workspace landing | **Merge** | `navigation-and-workspace-doctrine.md` |
+| `docs/archive/2026-06-superseded-system/record-system.md` | **Merge** | `platform/core/record-system.md` |
+| `docs/archive/2026-06-superseded-system/workspace-system.md` | **Rewrite/Merge** | `business-process-system.md` + `queue-system.md`; archive enrollment-only sections to supplemental |
 | *(none)* | **Create** | `status-and-state-system.md` |
 
 ### Platform — Operator
@@ -93,7 +93,7 @@ Alloy documentation grew through sprint-driven accumulation (614 markdown files)
 |----------|--------|--------|
 | `docs/product/documents-and-forms.md` | **Rewrite** | `modules/documents-and-forms.md` |
 | `docs/product/communications.md` | **Rewrite** | `modules/communications-platform.md` |
-| `docs/system/actions-and-workflows.md` | **Rewrite** | `modules/actions-and-workflows.md` |
+| `docs/archive/2026-06-superseded-system/actions-and-workflows.md` | **Rewrite** | `modules/actions-and-workflows.md` |
 | `docs/system/configuration-system.md` | **Rewrite** | `modules/configuration-platform.md` |
 | `docs/product/bos-foundation.md` + `ai-system.md` | **Merge** | `modules/ai-platform.md` |
 | `docs/product/crm-system.md` | **Archive → supplemental** | Keep file; demote in README load order |
@@ -103,10 +103,10 @@ Alloy documentation grew through sprint-driven accumulation (614 markdown files)
 
 | Document | Action | Target |
 |----------|--------|--------|
-| `docs/system/api-contracts.md` | **Merge** | `governance/api-contracts.md` |
-| `docs/system/roles-and-permissions.md` | **Merge** | `governance/roles-and-permissions.md` |
+| `docs/archive/2026-06-superseded-system/api-contracts.md` | **Merge** | `governance/api-contracts.md` |
+| `docs/archive/2026-06-superseded-system/roles-and-permissions.md` | **Merge** | `governance/roles-and-permissions.md` |
 | `docs/execution/operating-doctrine.md` | **Merge** | `design-and-operational-doctrine.md` + `documentation-governance.md` |
-| `docs/core/glossary.md` | **Rewrite** | `governance/glossary.md` |
+| `docs/platform/governance/glossary.md` | **Rewrite** | `governance/glossary.md` |
 | *(none)* | **Create** | `implementation-patterns.md`, `deployment-and-environments.md`, `testing-and-quality.md` |
 
 ### Locked runtime (keep in place)
@@ -147,7 +147,7 @@ Alloy documentation grew through sprint-driven accumulation (614 markdown files)
 | `docs/archive/2026-05-02-docs-reset/` | **Keep** |
 | `docs/archive/2026-06-freeze/` | **Keep** |
 | `docs/archive/sprints-superseded/` | **Keep** |
-| `docs/export/*-handoff-pack/` | **Keep** supplemental |
+| `docs/archive/2026-06-handoff-packs/*-handoff-pack/` | **Keep** supplemental |
 
 ---
 
@@ -176,7 +176,7 @@ Alloy documentation grew through sprint-driven accumulation (614 markdown files)
 
 | Path | Reason |
 |------|--------|
-| `docs/platform_convergence/` | Historical cutover plans — merge milestones to release-history |
+| `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/` | Historical cutover plans — merge milestones to release-history |
 | Duplicate glossary in archive | Already superseded |
 | Sprint intermediate performance cards | Already in `sprints-superseded` |
 | Orphan `.txt` sprint exports | After capability extraction |

@@ -1,6 +1,6 @@
 # Childcare Field Catalog — Source-of-Truth Matrix
 
-**Path:** `docs/platform_convergence/childcare_field_catalog_source_matrix.md`  
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/childcare_field_catalog_source_matrix.md`  
 **Date:** 2026-06-08  
 **Scope:** Audit / correction pass — catalog + migration **draft** updated; **no commit, no migration apply** until sign-off  
 **Catalog under review:** `web/lib/layout/childcareLayoutFieldCatalog.ts`  
@@ -10,7 +10,7 @@
 
 ## Executive summary
 
-The childcare layout catalog was grouped by **operator-facing entity**, but several refKeys assume storage on the wrong table or duplicate address/contact data across Person and Household. This matrix maps each catalog field to its **actual** storage path per schema (`docs/supabase/reference/supabase_schema_columns.csv`) and active doctrine (`docs/system/entity-model.md`, `docs/platform_convergence/entity_relationship_reference_model.md`).
+The childcare layout catalog was grouped by **operator-facing entity**, but several refKeys assume storage on the wrong table or duplicate address/contact data across Person and Household. This matrix maps each catalog field to its **actual** storage path per schema (`docs/supabase/reference/supabase_schema_columns.csv`) and active doctrine (`docs/archive/2026-06-superseded-system/entity-model.md`, `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/entity_relationship_reference_model.md`).
 
 **Key corrections required before further seeding:**
 
@@ -76,7 +76,7 @@ Split into **durable child profile**, **enrollment/participation (OCM)**, **medi
 | Child | Date of birth | `child.date_of_birth` | Native column | `customer_members` | `customer_members.dob` | Yes | **Yes** | |
 | Child | Age | `child.age` | Computed field | `customer_members` | Derived from `customer_members.dob` | No | **Yes** | Computed projection; blank until FC-3 |
 | Child | Gender | `child.gender` | Config field | `customer_members` | `field_values` (entity_type=**customer_member**) | Yes | **Yes** | **Moved from `person.gender`.** Legacy person seed (`20260529220000`) is adult/legacy bridge only — not childcare child profile SoT |
-| Child | Program interest | `inquiry_child.desired_program_type` | Native column | `opportunity_customer_members` | `opportunity_customer_members.desired_program_type` | Yes | **Yes** | Enrollment grain only — not on Lead. **Options:** org `childcare_program_type` option set (stable `item_key`); **should** filter by site offerings — audit: [`program_interest_configurable_model_audit.md`](../sprints/06_2026/program_interest_configurable_model_audit.md). FC-15 `field_definitions` missing `config.option_set_key`; forms/intake render as text today. |
+| Child | Program interest | `inquiry_child.desired_program_type` | Native column | `opportunity_customer_members` | `opportunity_customer_members.desired_program_type` | Yes | **Yes** | Enrollment grain only — not on Lead. **Options:** org `childcare_program_type` option set (stable `item_key`); **should** filter by site offerings — audit: [`program_interest_configurable_model_audit.md`](../sprints/archive/06_2026/program_interest_configurable_model_audit.md). FC-15 `field_definitions` missing `config.option_set_key`; forms/intake render as text today. |
 | Child | Schedule interest | `inquiry_child.desired_schedule_type` | Native column | `opportunity_customer_members` | `opportunity_customer_members.desired_schedule_type` | Yes | **Yes** | **Options:** org `childcare_schedule_type` option set. Same form wiring gap as program; site-scoped schedule deferred. |
 | Child | Desired start date | `inquiry_child.desired_start_date` | Native column | `opportunity_customer_members` | `opportunity_customer_members.desired_start_date` | Yes | **Yes** | Per-child; not duplicated on Lead |
 | Child | Room / cohort | `inquiry_child.program_room_cohort_key` | Native column | `opportunity_customer_members` | `opportunity_customer_members.program_room_cohort_key` | Yes | **Yes** | **Options:** `locations.id` of `unit` under selected site (drawer); filter by site + optionally `metadata.category` ↔ program key. Not option_set. |
@@ -154,7 +154,7 @@ Site/school address ≠ household address. Location rows use native address colu
 | **School / site** | `locations` where `location_type = site` | OCM `location_id` or reference field | `inquiry_child.location_id` is correct FK; display = site label |
 | **Room / classroom** | `locations` where `location_type = unit` | OCM `program_room_cohort_key` | Do not conflate with site address |
 
-Reference: `docs/platform_convergence/relationship_reference_runtime_notes.md` §4 (LocationReferenceRole: `household_address` vs `site`).
+Reference: `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/relationship_reference_runtime_notes.md` §4 (LocationReferenceRole: `household_address` vs `site`).
 
 ---
 

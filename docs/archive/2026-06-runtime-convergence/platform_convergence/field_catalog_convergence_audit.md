@@ -1,6 +1,6 @@
 # Field Catalog Convergence Audit
 
-**Path:** `docs/platform_convergence/field_catalog_convergence_audit.md`  
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/field_catalog_convergence_audit.md`  
 **Date:** 2026-06-06  
 **Status:** Audit only — no implementation  
 **Scope:** Inventory every **active** field-definition / field-catalog system in Alloy as of this audit. Document reality; do not propose new catalog architectures beyond what existing platform docs already target.
@@ -8,10 +8,10 @@
 **Canonical inputs:**
 
 - `docs/system/configuration-system.md` — four-plane control plane (Fields, Field grouping, Layouts, Actions)
-- `docs/system/record-system.md` — drawer authority, inquiry child, field policy
-- `docs/sprints/06_2026/required_information_v2_operational_readiness_framework.md` — readiness / lifecycle field-rule convergence direction
-- `docs/sprints/06_2026/lifecycle_required_info_child_fields_audit.md` — Child vs inquiry_child grain
-- `docs/sprints/05_2026/layout_field_behavior_semantics_v1.md` — layout vs field_definitions behavior split
+- `docs/archive/2026-06-superseded-system/record-system.md` — drawer authority, inquiry child, field policy
+- `docs/sprints/archive/06_2026/required_information_v2_operational_readiness_framework.md` — readiness / lifecycle field-rule convergence direction
+- `docs/sprints/archive/06_2026/lifecycle_required_info_child_fields_audit.md` — Child vs inquiry_child grain
+- `docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md` — layout vs field_definitions behavior split
 - `docs/product/documents-and-forms.md` — forms schema vs field_definitions boundary
 
 ---

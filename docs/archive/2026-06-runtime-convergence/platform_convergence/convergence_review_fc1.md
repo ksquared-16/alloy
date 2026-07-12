@@ -23,7 +23,7 @@
 
 | # | Gate | Result | Evidence |
 |---|---|---|---|
-| 1 | Duplicate systems? | **Concern (docs)** | Code introduces no duplicate system. **However** FC-1 adds its own `docs/platform_convergence/child_namespace_decision.md` (+43, ND-1..ND-6) that **differs** from the canonical doctrine version of that same file held by the review authority — two competing "child namespace decision" docs. See Concern 1. |
+| 1 | Duplicate systems? | **Concern (docs)** | Code introduces no duplicate system. **However** FC-1 adds its own `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md` (+43, ND-1..ND-6) that **differs** from the canonical doctrine version of that same file held by the review authority — two competing "child namespace decision" docs. See Concern 1. |
 | 2 | Contract violations? | **No** | RefKey conventions align to the contract; no block/tab/widget/surface change. |
 | 3 | Namespace drift? | **No (corrects it)** | Enforces `child.*`/`inquiry_child.*`; deprecates `child_inquiry.*`; reroutes mis-namespaced `child.program/location/room/...` → `inquiry_child.*`. |
 | 4 | Runtime divergence? | **No** | Catalog/builder + alias layer only; no runtime read-path or evaluator change. |

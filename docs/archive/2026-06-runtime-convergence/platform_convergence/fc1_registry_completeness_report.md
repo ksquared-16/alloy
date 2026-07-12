@@ -1,6 +1,6 @@
 # FC-1 Registry Completeness Report
 
-**Path:** `docs/platform_convergence/fc1_registry_completeness_report.md`  
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/fc1_registry_completeness_report.md`  
 **Date:** 2026-06-06  
 **Sprint:** FC-1 — Layout Field Catalog Convergence  
 **Status:** Post-implementation snapshot (static + code paths)

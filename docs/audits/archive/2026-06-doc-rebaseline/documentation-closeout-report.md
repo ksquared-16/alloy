@@ -77,7 +77,7 @@ Old files **retained as transitional expanded references** — not deleted in th
 | Path | Action |
 |------|--------|
 | Sprint superseded cards | Already in `docs/archive/sprints-superseded/` |
-| `docs/platform_convergence/` | Recommend archive after milestone extraction |
+| `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/` | Recommend archive after milestone extraction |
 | Month sprint folders | Phased move to `sprints/archive/` (not executed — link sweep first) |
 
 ---
@@ -114,7 +114,7 @@ Documented as **decisions** (not debates):
 2. Update `.cursor/rules/alloy-project-context.mdc` load order
 3. Demote `product/crm-system.md` to supplemental in all indexes
 4. Physical sprint file migration to `active/` / `completed/` / `archive/`
-5. `docs/core/glossary.md` full merge into platform glossary
+5. `docs/platform/governance/glossary.md` full merge into platform glossary
 6. Regenerate schema CSVs from latest staging when `DATABASE_URL` available
 
 ---

@@ -112,9 +112,9 @@ Expect **`proconfig`** to include `{search_path=public,pg_temp}` (or equivalent)
 
 ## References
 
-- Identity / entities: `docs/system/entity-model.md`
-- Access: `docs/system/roles-and-permissions.md`
-- Workflows / events: `docs/system/actions-and-workflows.md`
+- Identity / entities: `docs/archive/2026-06-superseded-system/entity-model.md`
+- Access: `docs/archive/2026-06-superseded-system/roles-and-permissions.md`
+- Workflows / events: `docs/archive/2026-06-superseded-system/actions-and-workflows.md`
 - Communications: `docs/product/communications.md`
 - Billing surface (doc vs schema depth): `docs/product/billing-and-financials.md`
 - Schema exports: `docs/supabase/reference/*.csv`

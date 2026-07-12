@@ -1,6 +1,6 @@
 # Child Model Convergence — Architecture Decision Audit
 
-**Path:** `docs/platform_convergence/child_model_convergence_audit.md`
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_model_convergence_audit.md`
 **Date:** 2026-06-06
 **Type:** Architecture audit only. No code, no migrations, no implementation proposal, no redesign.
 **Purpose:** Remove ambiguity about `inquiry_child` before runtime convergence begins.

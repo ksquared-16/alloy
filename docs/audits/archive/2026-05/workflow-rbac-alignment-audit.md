@@ -66,7 +66,7 @@ This is **orthogonal** to **`workflows` RLS** but couples product semantics to *
 
 1. **RLS migration** — Replace **`user_profiles.role = admin`** on **`workflows`**, **`workflow_actions`**, **`workflow_conditions`** with a predicate that matches **Admin V2** intent, e.g. org-scoped membership plus **`ops.workflows.read` / `ops.workflows.write`** (or a single “manage workflows” permission) from **`role_permission_grants`**. Decide whether **ops** may PATCH workflow definitions in RLS (today API allows ops where routes use shared admin/ops gates — confirm product).  
 2. **Policy role** — Consider `TO authenticated` instead of `{public}` for clarity (optional; behavior depends on Supabase role mapping).  
-3. **Align `web/README_ADMIN_AUTH.md`** with **`docs/system/roles-and-permissions.md`**.  
+3. **Align `web/README_ADMIN_AUTH.md`** with **`docs/archive/2026-06-superseded-system/roles-and-permissions.md`**.  
 4. **Regression tests** — After RLS change, add tests that an **authenticated** user **without** grants cannot mutate workflow rows via PostgREST (if that access path is ever supported).
 
 ---
@@ -74,5 +74,5 @@ This is **orthogonal** to **`workflows` RLS** but couples product semantics to *
 ## Related
 
 - **`docs/audits/supabase-schema-alignment-audit.md`** — `workflows` / `user_profiles` called out in risk table.  
-- **`docs/system/roles-and-permissions.md`** — capability model.  
-- **`docs/system/actions-and-workflows.md`** — event and workflow behavior.
+- **`docs/archive/2026-06-superseded-system/roles-and-permissions.md`** — capability model.  
+- **`docs/archive/2026-06-superseded-system/actions-and-workflows.md`** — event and workflow behavior.

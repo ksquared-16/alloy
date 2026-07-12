@@ -39,7 +39,7 @@ entropy wave cannot form.
    `platform/rfcs/`.
 3. **Give milestone/certification/freeze records one home** — `platform/milestones/`.
 4. **Delete the `export/` duplication** (68% byte-identical) after extracting ~18 unique files.
-5. **Collapse three archive-like trees into one** — `platform_convergence/` + `handoffs/` → `docs/archive/`.
+5. **Collapse three archive-like trees into one** — `archive/2026-06-runtime-convergence/platform_convergence/` + `handoffs/` → `docs/archive/`.
 6. **Reclassify `docs/system/`** from "transitional" (wrong) to "Locked Runtime Implementation
    Detail" (authoritative); archive the ~7 true duplicates within it.
 7. **Normalize sprints** onto `active/completed/archive`, evict **111 MB** of stale mockups,
@@ -71,7 +71,7 @@ docs/
 │   ├── commercial/               # commercial domain (+ absorbs programs/)
 │   ├── analytics/                # metric platform
 │   ├── runtime/                  # runtime topology + enrollment runtime
-│   ├── governance/               # THE single governance home (absorbs docs/governance/)
+│   ├── governance/               # THE single governance home (absorbs docs/platform/governance/)
 │   ├── milestones/               # NEW-consolidated: certification / stabilization / freeze records
 │   └── rfcs/                     # NEW: frozen/ratified RFCs awaiting fold-in to doctrine
 ├── system/                       # LOCKED RUNTIME IMPLEMENTATION DETAIL (authoritative)
@@ -114,15 +114,15 @@ Legend — Action ∈ {KEEP, MOVE, MERGE, ARCHIVE, DELETE, RENAME, GENERATE, BAN
 | Current path | Action | Destination / Notes |
 |---|---|---|
 | `README.md` | KEEP + EDIT | fix 4 dead refs; add new tiers |
-| `canonical-data-system.md` | MOVE+RENAME | → `platform/core/data/data-system.md` |
-| `canonical-entity-specification.md` | MOVE+RENAME | → `platform/core/data/entity-specification.md`; BANNER current |
-| `canonical-relationship-model.md` | MOVE+RENAME | → `platform/core/data/relationship-model.md` |
-| `canonical-field-catalog.md` | MOVE | → `platform/core/data/field-catalog.md`; keep generator note (`web/scripts/generateCanonicalFieldCatalogDoc.ts`) |
-| `universal-field-system.md` | MOVE+RENAME | → `platform/core/data/field-system.md` |
-| `canonical-status-architecture.md` | MOVE+RENAME | → `platform/core/data/status-architecture.md`; BANNER current, supersedes Phase-5 status |
-| `canonical-action-status-field-matrix.md` | MOVE+RENAME | → `platform/core/data/action-status-field-matrix.md` |
-| `canonical-configuration-data-alignment.md` | MOVE+RENAME + `REVIEW-GATE` | → `platform/core/data/configuration-data-alignment.md`; reconcile vs July status contract |
-| `canonical-runtime-data-alignment.md` | MOVE+RENAME + `REVIEW-GATE` | → `platform/core/data/runtime-data-alignment.md` |
+| `platform/core/data/data-system.md` | MOVE+RENAME | → `platform/core/data/data-system.md` |
+| `platform/core/data/entity-specification.md` | MOVE+RENAME | → `platform/core/data/entity-specification.md`; BANNER current |
+| `platform/core/data/relationship-model.md` | MOVE+RENAME | → `platform/core/data/relationship-model.md` |
+| `platform/core/data/field-catalog.md` | MOVE | → `platform/core/data/field-catalog.md`; keep generator note (`web/scripts/generateCanonicalFieldCatalogDoc.ts`) |
+| `platform/core/data/field-system.md` | MOVE+RENAME | → `platform/core/data/field-system.md` |
+| `platform/core/data/status-architecture.md` | MOVE+RENAME | → `platform/core/data/status-architecture.md`; BANNER current, supersedes Phase-5 status |
+| `platform/core/data/action-status-field-matrix.md` | MOVE+RENAME | → `platform/core/data/action-status-field-matrix.md` |
+| `platform/core/data/configuration-data-alignment.md` | MOVE+RENAME + `REVIEW-GATE` | → `platform/core/data/configuration-data-alignment.md`; reconcile vs July status contract |
+| `platform/core/data/runtime-data-alignment.md` | MOVE+RENAME + `REVIEW-GATE` | → `platform/core/data/runtime-data-alignment.md` |
 | `canonical-data-system-phase-1..7*.md` (7) | MOVE | → `sprints/completed/canonical-data-system/` |
 | `canonical-data-system-audit.md` | MOVE | → `audits/archive/` |
 | `LAYOUT_CONFIG_V2_FOUNDATION_AUDIT.md` | ARCHIVE | → `archive/2026-06-layout-v2/` |
@@ -135,19 +135,19 @@ Legend — Action ∈ {KEEP, MOVE, MERGE, ARCHIVE, DELETE, RENAME, GENERATE, BAN
 
 | Current path | Action | Destination / Notes |
 |---|---|---|
-| `platform/premium-operational-experience/` (6) | MOVE | → `sprints/archive/06_2026/premium-operational-experience/` |
+| `sprints/archive/06_2026/premium-operational-experience/` (6) | MOVE | → `sprints/archive/06_2026/premium-operational-experience/` |
 | `platform/operational-expansion-wave1-cursor-execution-packet.md` | MOVE | → `sprints/archive/06_2026/operational-expansion/` |
 | `platform/operational-expansion-wave1-implementation-spec.md` | MOVE | → `sprints/archive/06_2026/operational-expansion/` |
 | `platform/operational-expansion-phase1-architecture-rfc.md` | MOVE + `REVIEW-GATE` | → `platform/rfcs/operational-expansion-phase1.md`; promote ratified decisions into `core/` |
-| `platform/operational-truth-flow-doctrine.md` | MOVE | → `platform/core/operational-truth-flow-doctrine.md` |
-| `platform/operational-ux-doctrine.md` | MOVE | → `platform/core/operational-ux-doctrine.md` |
-| `platform/platform-capabilities.md` (root) | MOVE+RENAME | → `platform/foundation/capability-model-doctrine.md` |
-| `platform/foundation/platform-certification-july-2026.md` | MOVE | → `platform/milestones/certification-july-2026.md` |
+| `platform/core/operational-truth-flow-doctrine.md` | MOVE | → `platform/core/operational-truth-flow-doctrine.md` |
+| `platform/core/operational-ux-doctrine.md` | MOVE | → `platform/core/operational-ux-doctrine.md` |
+| `platform/foundation/capability-model-doctrine.md` (root) | MOVE+RENAME | → `platform/foundation/capability-model-doctrine.md` |
+| `platform/milestones/certification-july-2026.md` | MOVE | → `platform/milestones/certification-july-2026.md` |
 | `platform/foundation/platform-manifesto.md` | KEEP | stays in `foundation/` |
-| `platform/milestones/platform-stabilization-july-2026.md` | KEEP+RENAME | → `platform/milestones/stabilization-july-2026.md` |
-| *(unmerged)* `platform/foundation/platform-freeze-july-2026.md` | ON MERGE → MOVE | → `platform/milestones/freeze-july-2026.md`; coordinate with branch owner |
-| `platform/operator/card-archetypes.md` | MERGE | → `platform/operator/universal-card-archetypes.md` (§5) |
-| `platform/operator/presentation-runtime-doctrine.md` | ARCHIVE+BANNER | → `archive/2026-06-presentation-runtime/`; superseded by `experience/presentation-runtime-v2.md` |
+| `platform/milestones/stabilization-july-2026.md` | KEEP+RENAME | → `platform/milestones/stabilization-july-2026.md` |
+| *(unmerged)* `platform/milestones/freeze-july-2026.md` | ON MERGE → MOVE | → `platform/milestones/freeze-july-2026.md`; coordinate with branch owner |
+| `platform/operator/universal-universal-card-archetypes.md` | MERGE | → `platform/operator/universal-universal-card-archetypes.md` (§5) |
+| `platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` | ARCHIVE+BANNER | → `archive/2026-06-presentation-runtime/`; superseded by `experience/presentation-runtime-v2.md` |
 | `platform/operator/focus-panel-edit-information-doctrine.md` | BANNER | superseded-by → `focus-panel-composition-v2-and-editing.md` |
 | `platform/operator/universal-card-system.md` | BANNER | note editing shipped; keep doc |
 | `platform/operator/*` (remaining ~47) | KEEP | + GENERATE `operator/README.md` (version map, §8) |
@@ -158,7 +158,7 @@ Legend — Action ∈ {KEEP, MOVE, MERGE, ARCHIVE, DELETE, RENAME, GENERATE, BAN
 | `platform/modules/operational-mutation-platform.md` | ARCHIVE | → `archive/2026-06-superseded-modules/` |
 | `platform/modules/commercial-configuration.md` | KEEP | canonical commercial config |
 | `platform/commercial/commercial-configuration.md` | ARCHIVE | → `archive/2026-06-superseded-modules/` (resolves dup) |
-| `platform/programs/program-offerings.md` | MOVE | → `platform/commercial/program-offerings.md`; delete `programs/` |
+| `platform/commercial/program-offerings.md` | MOVE | → `platform/commercial/program-offerings.md`; delete `programs/` |
 | `platform/runtime/operational-runtime-topology.md` | ARCHIVE+BANNER | → `archive/2026-06-runtime/` |
 | `platform/runtime/work-unit-runtime-simplification-closeout.md` | MOVE | → `sprints/completed/` |
 | `platform/runtime/enrollment-process-v1-handoff.md` | KEEP | canonical handoff |
@@ -192,17 +192,17 @@ Legend — Action ∈ {KEEP, MOVE, MERGE, ARCHIVE, DELETE, RENAME, GENERATE, BAN
 
 | Current path | Action | Notes |
 |---|---|---|
-| `docs/export/` `*/01-canonical/*` + files with a live twin (63 exact + 11 stale) + 2 `.zip` | DELETE | live copy wins (§5) |
-| `docs/export/` unique (~18) | MOVE | → `archive/2026-06-handoff-packs/` — **extract before deleting** |
-| `docs/platform_convergence/` (28) | ARCHIVE | → `archive/2026-06-runtime-convergence/`; drop 7 dead `convergence_review_rubric.md` links |
-| `docs/handoffs/` (3, closed) | ARCHIVE | → `archive/2026-06-handoffs/` |
+| `docs/archive/2026-06-handoff-packs/` `*/01-canonical/*` + files with a live twin (63 exact + 11 stale) + 2 `.zip` | DELETE | live copy wins (§5) |
+| `docs/archive/2026-06-handoff-packs/` unique (~18) | MOVE | → `archive/2026-06-handoff-packs/` — **extract before deleting** |
+| `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/` (28) | ARCHIVE | → `archive/2026-06-runtime-convergence/`; drop 7 dead `convergence_review_rubric.md` links |
+| `docs/archive/2026-06-handoffs/handoffs/` (3, closed) | ARCHIVE | → `archive/2026-06-handoffs/` |
 | `docs/archive/**` (226) | KEEP | prune `dev-assets/` JSON + labeled `duplicates/` |
 
 ### 3.6 Small / singleton folders
 
 | Current path | Action | Notes |
 |---|---|---|
-| `docs/governance/` (4) | MOVE | → `platform/governance/`; update README + `.cursor` refs to agent-repo-boundaries |
+| `docs/platform/governance/` (4) | MOVE | → `platform/governance/`; update README + `.cursor` refs to agent-repo-boundaries |
 | `docs/core/{glossary,system-overview}.md` | DELETE | redirect stubs; repoint inbound links to `platform/` |
 | `docs/doctrine/configuration-workspace-doctrine.md` | MOVE | → `docs/system/`; delete `doctrine/` |
 | `docs/execution/operating-doctrine.md` | MERGE | → `platform/governance/design-and-operational-doctrine.md` |
@@ -230,7 +230,7 @@ Legend — Action ∈ {KEEP, MOVE, MERGE, ARCHIVE, DELETE, RENAME, GENERATE, BAN
 | `web/components/workspace/doctrine.ts` | KEEP + RECONCILE + `REVIEW-GATE` | code-vs-docs authority for visual tokens |
 | `.cursor/rules/alloy-project-context.mdc` | GENERATE | from `docs/README.md` load order |
 | `web/test-results/` | UNTRACK | add to `.gitignore` |
-| `web/docs/sprints/07_2026/**` (50 PDF/PNG) | MOVE | out of git → external/LFS |
+| `web/docs/sprints/archive/07_2026/**` (50 PDF/PNG) | MOVE | out of git → external/LFS |
 | `backend/ghl_cusotm_field_ids.txt` | RENAME | typo → `ghl_custom_field_ids.txt` |
 | `sync/`, `backend/README_*`, `web/README_ADMIN_AUTH`, `web/README_GUTTERS_LEAD`, `web/lib/.../THREAD_SEMANTICS.md`, `web/docs/DEV_TENANT_SPINUP` | KEEP | legitimate co-located dev docs |
 
@@ -287,7 +287,7 @@ Legend — Action ∈ {KEEP, MOVE, MERGE, ARCHIVE, DELETE, RENAME, GENERATE, BAN
 | system/ ↔ platform/ (7) | Pre-rebaseline copies | platform/ | verify+fold unique detail | 7 system copies → ARCHIVE | Yes (archive/2026-06-superseded-system) |
 | glossary ×4 | Reset residue + export | `platform/governance/glossary.md` | missing terms merged | core/ + 2 export | No |
 | platform-capabilities ×2 | Basename clash | `foundation/platform-capabilities.md` | root doc renamed, kept distinct | none | Both kept |
-| card-archetypes ↔ universal-card-archetypes | Concept + System-5A doc, same 8 archetypes | `universal-card-archetypes.md` | concept-primer intro | redundant descriptions | Yes (git history) |
+| card-archetypes ↔ universal-card-archetypes | Concept + System-5A doc, same 8 archetypes | `universal-universal-card-archetypes.md` | concept-primer intro | redundant descriptions | Yes (git history) |
 | commercial-configuration ×2 | Superseded config vs module | `modules/commercial-configuration.md` | none | `commercial/` one → ARCHIVE | Yes |
 | operating-doctrine → design-and-operational-doctrine | Transitional doc-rules | `governance/design-and-operational-doctrine.md` | unique rules | overlap | Yes (execution/ archived) |
 | product module stubs ↔ modules/ (3) | Thin stubs | `modules/*` | none | product stubs → ARCHIVE redirect | Yes |
@@ -305,8 +305,8 @@ One archive, dated sub-buckets, each with a supersession-pointer `README.md`.
 | Archive bucket | Contents | Reason |
 |---|---|---|
 | `archive/2026-05-02-docs-reset/` | *(existing)* frozen old docs root | pre-rebaseline snapshot |
-| `archive/2026-06-runtime-convergence/` | `platform_convergence/` (28) | completed migration |
-| `archive/2026-06-handoffs/` | `docs/handoffs/` (3) | closed handoffs |
+| `archive/2026-06-runtime-convergence/` | `archive/2026-06-runtime-convergence/platform_convergence/` (28) | completed migration |
+| `archive/2026-06-handoffs/` | `docs/archive/2026-06-handoffs/handoffs/` (3) | closed handoffs |
 | `archive/2026-06-handoff-packs/` | export/ unique (~18) | portable-pack remnants |
 | `archive/2026-06-superseded-system/` | 7 system/ duplicates | platform/ supersedes |
 | `archive/2026-06-superseded-modules/` | operational-mutation-platform, commercial/commercial-configuration | self-superseded |
@@ -438,7 +438,7 @@ leaves before hubs, update links immediately, delete last.
   card-archetypes; move experience handoffs → sprints; archive superseded operator/runtime/
   module/commercial docs. Update links.
 - **Phase 4 — Reclassify `system/` + fold governance.** Add `system/README.md`; archive 7
-  duplicates; loader-audit → audits, reverted/snapshot → archive; `docs/governance/` →
+  duplicates; loader-audit → audits, reverted/snapshot → archive; `docs/platform/governance/` →
   `platform/governance/`; delete `core/` stubs; fold doctrine/execution/backlog/forms.
 - **Phase 5 — Product + duplication purge.** Move `product/pos/` → sprints; archive product
   stubs; extract export unique then DELETE `export/` + zips; collapse platform_convergence +
@@ -507,9 +507,9 @@ Execution is complete when all pass:
 
 - [ ] `docs-lint` green: 0 broken links in `platform/`,`system/`,`README`; repo-wide < 20 (from 532).
 - [ ] No file at `docs/` root except `README.md`.
-- [ ] No new singleton folders; `doctrine/`, `execution/`, `core/`(stubs), `forms/`, `programs/`, `platform/premium-operational-experience/` gone.
-- [ ] `docs/export/` deleted; ~18 unique files preserved in `archive/`; no `.zip` in docs.
-- [ ] `platform_convergence/` + `handoffs/` collapsed into `archive/`; 0 dead `convergence_review_rubric.md` links.
+- [ ] No new singleton folders; `doctrine/`, `execution/`, `core/`(stubs), `forms/`, `programs/`, `sprints/archive/06_2026/premium-operational-experience/` gone.
+- [ ] `docs/archive/2026-06-handoff-packs/` deleted; ~18 unique files preserved in `archive/`; no `.zip` in docs.
+- [ ] `archive/2026-06-runtime-convergence/platform_convergence/` + `handoffs/` collapsed into `archive/`; 0 dead `convergence_review_rubric.md` links.
 - [ ] `platform/core/data/` exists with 9 docs; `data-system` + `field-system` have owners; README references them.
 - [ ] Every `platform/**` + `system/**` doc has valid frontmatter; every `superseded` doc lives in `archive/` with `superseded_by`.
 - [ ] `card-archetypes` merged; `commercial-configuration` de-duplicated; `platform-capabilities` collision resolved.

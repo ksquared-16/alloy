@@ -1,6 +1,6 @@
 # Runtime Convergence Inventory
 
-**Path:** `docs/platform_convergence/runtime_convergence_inventory.md`  
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/runtime_convergence_inventory.md`  
 **Date:** 2026-06-06  
 **Status:** Audit — documents production reality only  
 **Scope:** Every active presentation system that must eventually be removed or absorbed into the layout runtime  
@@ -10,7 +10,7 @@
 
 - `docs/LAYOUT_CONFIG_V2_FOUNDATION_AUDIT.md` — Layer 0 registry vs Layout V2 foundation
 - `docs/system/work-unit-surface-context-contract.md` — queue row / work-unit surface contracts
-- `docs/sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md` — lifecycle subject + layout configuration contracts
+- `docs/sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md` — lifecycle subject + layout configuration contracts
 - `web/lib/layout/layoutV2.ts` — explicit non-goals: not wired to live runtime today
 
 ---

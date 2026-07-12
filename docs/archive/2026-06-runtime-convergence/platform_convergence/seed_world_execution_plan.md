@@ -1,6 +1,6 @@
 # Seed World v1 — Execution Plan
 
-**Path:** `docs/platform_convergence/seed_world_execution_plan.md`  
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/seed_world_execution_plan.md`  
 **Status:** Implementation strategy (June 2026) — **planning only**  
 **Scope:** Replace noisy staging demo data with the operational world defined in [`seed_world_v1.md`](./seed_world_v1.md)  
 **Out of scope:** Loaders, migrations, database resets, script authorship, or staging execution in this document
@@ -581,7 +581,7 @@ These are **separate deliverables** — not part of this planning doc:
 |-----|--------------|
 | [`seed_world_v1.md`](./seed_world_v1.md) | **What** to load |
 | **This file** | **How** to cut over safely |
-| `docs/sprints/05_2026/staging_demo_reseed_sprint.md` | Historical intent — superseded by platform convergence |
+| `docs/sprints/archive/05_2026/staging_demo_reseed_sprint.md` | Historical intent — superseded by platform convergence |
 | `docs/execution/operating-doctrine.md` | Same-PR doc updates if loader changes behavior |
 
 ---

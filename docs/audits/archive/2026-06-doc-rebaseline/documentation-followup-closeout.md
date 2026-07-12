@@ -30,16 +30,16 @@ docs: rebaseline platform documentation around Business Process System
 |------|--------|
 | `docs/platform/core/business-process-system.md` | Broken `enrollment-and-pipeline.md` → `../../product/crm-system.md` |
 | `docs/platform/governance/documentation-governance.md` | Wrong `../audits/` → `../../audits/documentation-audit.md` |
-| `docs/core/system-overview.md` | Process-first hierarchy; platform doc links for workspace/enrollment |
+| `docs/platform/foundation/system-overview.md` | Process-first hierarchy; platform doc links for workspace/enrollment |
 | `docs/system/repository-state-2026-06.md` | Developer load order → `docs/platform/*`; related-docs pointer |
-| `docs/system/record-system.md` | Canonical pointer; queue context → `platform/operator/queue-system.md` |
-| `docs/system/entity-model.md` | Canonical pointer to `platform/core/entity-model.md` |
-| `docs/system/workspace-system.md` | Process-first purpose line + canonical links |
+| `docs/archive/2026-06-superseded-system/record-system.md` | Canonical pointer; queue context → `platform/operator/queue-system.md` |
+| `docs/archive/2026-06-superseded-system/entity-model.md` | Canonical pointer to `platform/core/entity-model.md` |
+| `docs/archive/2026-06-superseded-system/workspace-system.md` | Process-first purpose line + canonical links |
 | `docs/product/crm-system.md` | Supplemental banner; navigation → Business Process → Stage → Record |
 | `docs/execution/roadmap-and-gaps.md` | Platform maturity + canonical roadmap/capabilities pointers |
 | `docs/execution/operating-doctrine.md` | Source-pack load order → platform docs |
 
-**Not swept (intentionally):** `docs/archive/**`, `docs/export/**`, month sprint folders (`05_2026/`, `06_2026/`) — historical references retained per guardrails.
+**Not swept (intentionally):** `docs/archive/**`, `docs/archive/2026-06-handoff-packs/**`, month sprint folders (`05_2026/`, `06_2026/`) — historical references retained per guardrails.
 
 ---
 

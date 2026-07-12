@@ -195,4 +195,4 @@ Use ripgrep for drift detection:
 - `contact_id`, `primary_contact_id`, `to_contact_id`, `owner_contact_id`, `customer_member_contacts`, `vendor_users`
 - `person_id`, `primary_person_id`, `customer_persons`, `person_relationships`, `person_locations`
 
-Archived audits under `docs/archive/` may repeat themes; **`docs/system/entity-model.md`** and this file should win for current policy.
+Archived audits under `docs/archive/` may repeat themes; **`docs/archive/2026-06-superseded-system/entity-model.md`** and this file should win for current policy.

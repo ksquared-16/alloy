@@ -1,6 +1,6 @@
 # Child Namespace Addendum (naming only)
 
-**Path:** `docs/platform_convergence/child_namespace_addendum.md`
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_addendum.md`
 **Status:** Bounded addendum — **clarifies naming only.** Does **not** reopen the Child Model decision.
 **Frozen (do not revisit):** [`child_model_convergence_audit.md`](./child_model_convergence_audit.md) §FINAL DECISION. Person / Customer Member / OCM / `inquiry_child` roles are settled.
 **Companions:** [`entity_relationship_reference_model.md`](./entity_relationship_reference_model.md), [`field_catalog_execution_plan.md`](./field_catalog_execution_plan.md).

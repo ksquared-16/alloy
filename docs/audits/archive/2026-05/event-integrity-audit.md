@@ -234,7 +234,7 @@ Coverage legend:
 
 ## Related documentation
 
-- `docs/system/actions-and-workflows.md`
+- `docs/archive/2026-06-superseded-system/actions-and-workflows.md`
 - `docs/audits/workflow-execution-consistency-audit.md` — event → workflow fan-out for status, messaging, scheduling
-- `docs/system/api-contracts.md`
+- `docs/archive/2026-06-superseded-system/api-contracts.md`
 - `docs/execution/roadmap-and-gaps.md`

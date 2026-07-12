@@ -37,7 +37,7 @@ Aligned Cursor rules, development guardrails, and active transitional docs with 
 ### `.cursor/rules/alloy-development-guardrails.mdc`
 
 - Before-editing doc paths → `docs/platform/governance/design-and-operational-doctrine.md` and `docs/platform/**`
-- Behavior-change updates → `docs/platform/**` or `docs/governance/**`
+- Behavior-change updates → `docs/platform/**` or `docs/platform/governance/**`
 
 ### `.cursor/rules/adminv2-runtime-performance.mdc`
 
@@ -45,7 +45,7 @@ Aligned Cursor rules, development guardrails, and active transitional docs with 
 
 ### `.cursor/rules/repo-boundry.mdc`
 
-- **Unchanged** — links to `docs/governance/agent-repo-boundaries.md`
+- **Unchanged** — links to `docs/platform/governance/agent-repo-boundaries.md`
 
 ---
 
@@ -53,7 +53,7 @@ Aligned Cursor rules, development guardrails, and active transitional docs with 
 
 | File | Change |
 |------|--------|
-| `docs/system/actions-and-workflows.md` | Canonical module pointer; glossary → platform |
+| `docs/archive/2026-06-superseded-system/actions-and-workflows.md` | Canonical module pointer; glossary → platform |
 | `docs/execution/roadmap-and-gaps.md` | Fold-into targets → platform entity-model + glossary |
 | `docs/execution/operating-doctrine.md` | Canonical governance pointers; load order → README + cursor rules |
 | `docs/audits/person-vs-contact-audit.md` | Related docs → platform paths |
@@ -61,9 +61,9 @@ Aligned Cursor rules, development guardrails, and active transitional docs with 
 | `docs/platform/foundation/system-overview.md` | Maturity line de-enrollmentized |
 | `docs/platform/foundation/platform-capabilities.md` | Placement priority row generalized |
 | `docs/README.md` | Load order aligned with agent rules; governance table reordered |
-| `docs/governance/agent-repo-boundaries.md` | Related → cursor rules load order |
+| `docs/platform/governance/agent-repo-boundaries.md` | Related → cursor rules load order |
 
-**Not swept:** `docs/archive/**`, `docs/export/**`, month sprint folders (intentional).
+**Not swept:** `docs/archive/**`, `docs/archive/2026-06-handoff-packs/**`, month sprint folders (intentional).
 
 ---
 
@@ -90,7 +90,7 @@ Aligned Cursor rules, development guardrails, and active transitional docs with 
 | `CLAUDE.md` | Not present in repo |
 | `AGENTS.md` | Not present in repo |
 | `docs/README.md` | Updated |
-| `docs/governance/agent-repo-boundaries.md` | Updated related links |
+| `docs/platform/governance/agent-repo-boundaries.md` | Updated related links |
 
 ---
 
@@ -111,12 +111,12 @@ These retain expanded detail; canonical pointer at top where updated:
 
 | Transitional path | Canonical replacement |
 |-------------------|----------------------|
-| `docs/core/system-overview.md` | `docs/platform/foundation/system-overview.md` |
-| `docs/core/glossary.md` | `docs/platform/governance/glossary.md` |
-| `docs/system/entity-model.md` | `docs/platform/core/entity-model.md` |
-| `docs/system/record-system.md` | `docs/platform/core/record-system.md` |
-| `docs/system/workspace-system.md` | `docs/platform/core/business-process-system.md` + `queue-system.md` |
-| `docs/system/actions-and-workflows.md` | `docs/platform/modules/actions-and-workflows.md` |
+| `docs/platform/foundation/system-overview.md` | `docs/platform/foundation/system-overview.md` |
+| `docs/platform/governance/glossary.md` | `docs/platform/governance/glossary.md` |
+| `docs/archive/2026-06-superseded-system/entity-model.md` | `docs/platform/core/entity-model.md` |
+| `docs/archive/2026-06-superseded-system/record-system.md` | `docs/platform/core/record-system.md` |
+| `docs/archive/2026-06-superseded-system/workspace-system.md` | `docs/platform/core/business-process-system.md` + `queue-system.md` |
+| `docs/archive/2026-06-superseded-system/actions-and-workflows.md` | `docs/platform/modules/actions-and-workflows.md` |
 | `docs/execution/operating-doctrine.md` | `documentation-governance.md` + `design-and-operational-doctrine.md` |
 | `docs/execution/roadmap-and-gaps.md` | `product-roadmap.md` + `platform-capabilities.md` |
 | `docs/product/crm-system.md` | Supplemental vertical — not canonical |

@@ -1,6 +1,6 @@
 # Staging Layout Runtime Hard Cutover
 
-**Path:** `docs/platform_convergence/staging_layout_runtime_hard_cutover.md`  
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/staging_layout_runtime_hard_cutover.md`  
 **Status:** Staging defaults ON — no manual Vercel layout flags required
 
 ## Product model

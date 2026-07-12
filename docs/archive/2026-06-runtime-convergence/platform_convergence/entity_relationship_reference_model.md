@@ -1,6 +1,6 @@
 # Entity Relationship & Reference Model — Convergence Doctrine
 
-**Path:** `docs/platform_convergence/entity_relationship_reference_model.md`
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/entity_relationship_reference_model.md`
 **Status:** Doctrine (classification + usage rules). **Not** new architecture.
 **Mandate:** Define how Layout Contract V1 represents **relationships, references, projections, and computed values** without flattening them into field definitions.
 **Frozen — do not revisit / redesign:** [`layout_contract_v1.md`](./layout_contract_v1.md) (block kinds, RelationDescriptor, surfaces, reveal-as-readiness), the Child Model ([`child_model_convergence_audit.md`](./child_model_convergence_audit.md) §FINAL DECISION — Person / Customer Member / OCM / `inquiry_child`), the field catalog ([`field_catalog_execution_plan.md`](./field_catalog_execution_plan.md)).

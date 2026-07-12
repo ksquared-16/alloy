@@ -190,7 +190,7 @@ CONFIRM_RESET_OPERATIONAL_STATE=true RESET_ORG_ID=<org> \
 **Preserves:** all configuration — departments, work_units, status definitions, fields, layouts,
 actions, locations, form definitions, etc.
 
-Runbook cross-ref: `docs/sprints/07_2026/platform_reset_runbook.md`.
+Runbook cross-ref: `docs/sprints/archive/07_2026/platform_reset_runbook.md`.
 
 ---
 

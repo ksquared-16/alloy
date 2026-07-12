@@ -1,6 +1,6 @@
 # Seed World v1 — Operational Demo Dataset Design
 
-**Path:** `docs/platform_convergence/seed_world_v1.md`  
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/seed_world_v1.md`  
 **Status:** Architecture & data strategy (June 2026) — **no implementation**  
 **Scope:** Ideal staging/demo operational world for Alloy enrollment childcare vertical  
 **Out of scope:** Seed scripts, migrations, database resets, or executable loaders
@@ -15,10 +15,10 @@ This document is the **target dataset contract** for staging/demo tenants. Imple
 
 **Related doctrine:**
 
-- `docs/core/glossary.md` — case vs child lifecycle, queues, work units
+- `docs/platform/governance/glossary.md` — case vs child lifecycle, queues, work units
 - `docs/product/crm-system.md` — enrollment pipeline, Needs Attention, waitlist
-- `docs/sprints/05_2026/lifecycle_information_matrix_v1.md` — stage requirements
-- `docs/sprints/05_2026/childcare_lifecycle_matrix_v1.md` — status/action vocabulary
+- `docs/sprints/archive/05_2026/lifecycle_information_matrix_v1.md` — stage requirements
+- `docs/sprints/archive/05_2026/childcare_lifecycle_matrix_v1.md` — status/action vocabulary
 - `web/lib/config/enrollmentPipelineQueueDefinitionV2.ts` — canonical queue lanes
 
 ---

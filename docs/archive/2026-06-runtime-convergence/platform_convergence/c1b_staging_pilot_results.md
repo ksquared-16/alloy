@@ -1,6 +1,6 @@
 # C1b Staging Pilot Results — Opportunity Drawer Overview Body Layout Runtime
 
-**Path:** `docs/platform_convergence/c1b_staging_pilot_results.md`  
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/c1b_staging_pilot_results.md`  
 **Date:** 2026-06-07 (updated staging cutover acceleration)  
 **Status:** Flicker fix + max-hold merged to staging; **enable Vercel staging flags + redeploy for live pilot**  
 **Staging tip:** `0134cc0b` — flicker fix, max-hold timeout (1750ms), queue shadow foundation, effective layout inspector  

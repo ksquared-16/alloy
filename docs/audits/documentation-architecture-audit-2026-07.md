@@ -49,7 +49,7 @@ Three findings define the situation:
    status, config, and the honest "staged drawer sunset" framing are all **ACCURATE**. The only
    real accuracy gap is the schema snapshot lagging migrations. Meanwhile hygiene has rotted:
    **532 broken internal links (~20%)**, `docs/sprints/` weighs **111 MB** (mostly 473 stale
-   mockup images), `docs/export/` is **68% byte-identical duplicate** of live docs, and **three
+   mockup images), `docs/archive/2026-06-handoff-packs/` is **68% byte-identical duplicate** of live docs, and **three
    uncoordinated versioning schemes** (System 1–5C / V1–V4 / Rev N) trap every newcomer.
 
 **The verdict:** Alloy does not need a doctrine rewrite. It needs a **rebaseline v2** — finish
@@ -66,10 +66,10 @@ hundreds of engineers; the surrounding entropy is not.
 | `docs/sprints/` | 441 | 473 img/html + 11 office | **111 MB** | 2026-07-10 | Execution history; 104 MB in `06_2026/` alone |
 | `docs/archive/` | 226 | 3 | 3.5 MB | 2026-06-10 | Genuinely superseded; **clean** |
 | `docs/platform/` | 134→137 | 0 | 1.9 MB | 2026-07-10 | **Canonical doctrine** |
-| `docs/export/` | ~94 | 2 zips (580 KB) | 2.3 MB | 2026-06-12 | **68% byte-identical duplicates** of live docs |
+| `docs/archive/2026-06-handoff-packs/` | ~94 | 2 zips (580 KB) | 2.3 MB | 2026-06-12 | **68% byte-identical duplicates** of live docs |
 | `docs/system/` | 36 | 0 | 0.4 MB | 2026-07-10 | ~22 locked doctrines + ~6 transitional |
 | `docs/product/` | 33 | 0 | 0.5 MB | 2026-06-25 | Childcare vertical + misfiled `pos/` (24) |
-| `docs/platform_convergence/` | 28 | 0 | 0.6 MB | 2026-06-09 | **Completed** migration; 7 dead links |
+| `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/` | 28 | 0 | 0.6 MB | 2026-06-09 | **Completed** migration; 7 dead links |
 | `docs/api/` | 22 | 0 | 0.5 MB | 2026-06-28 | **Healthy**; generated 460-route index |
 | `docs/audits/` | 18 | 0 | 0.3 MB | 2026-07-10 | Prior doc audits + ~11 closed investigations |
 | `docs/schema/` | 7 | — | 0.7 MB | 2026-06-28 | **Generated**; stale vs newer migrations |
@@ -83,9 +83,9 @@ hundreds of engineers; the surrounding entropy is not.
 via `generate-api-inventory.mjs`).
 
 **July staging deltas folded in:** foundation gained `platform-manifesto.md` +
-`platform-certification-july-2026.md`; a new `platform/milestones/` folder appeared
+`milestones/certification-july-2026.md`; a new `platform/milestones/` folder appeared
 (`platform-stabilization-july-2026.md`); an unmerged `docs/platform-freeze-july-2026` branch
-adds `platform-freeze-july-2026.md`. These milestone-class records are being placed
+adds `milestones/freeze-july-2026.md`. These milestone-class records are being placed
 inconsistently (certification in `foundation/`, stabilization in `milestones/`) — the same
 entropy pattern continuing.
 
@@ -101,9 +101,9 @@ entropy pattern continuing.
 | **Schema Reference (generated)** | `docs/schema/` + `docs/supabase/reference/*.csv` | 7 + 8 | Keep; regenerate |
 | **API Reference (generated + governed)** | `docs/api/` | 22 | Keep as-is |
 | **Operator/Developer Guide** | `web/README_ADMIN_AUTH`, `sync/README`, `backend/README_*` | ~10 | Keep co-located |
-| **Historical Decision / Migration** | `platform_convergence/`, `handoffs/`, `archive/2026-06-freeze` | ~31 | **Collapse into `archive/`** |
+| **Historical Decision / Migration** | `archive/2026-06-runtime-convergence/platform_convergence/`, `handoffs/`, `archive/2026-06-freeze` | ~31 | **Collapse into `archive/`** |
 | **Promotion / Closeout Report** | `sprints/**/*closeout`, `documentation-closeout-report` | ~38 | Archive after summary → release-history |
-| **Sprint Artifact** | `sprints/**`, `product/pos/`, `platform/premium-operational-experience/`, `operational-expansion-wave1-*` | ~450 | Archive; evict the ones inside `platform/` |
+| **Sprint Artifact** | `sprints/**`, `product/pos/`, `sprints/archive/06_2026/premium-operational-experience/`, `operational-expansion-wave1-*` | ~450 | Archive; evict the ones inside `platform/` |
 | **Audit (point-in-time)** | `docs/audits/**` (2026-05-02 cluster) | ~11 | Move to `audits/archive/` |
 | **Audit (living)** | `supabase-schema-alignment-audit`, `operational-expansion-architecture-audit-2026-07` | 2 | Keep in `audits/active/` |
 | **Duplicate (snapshot copy)** | `export/*/01-canonical/*`, `system/{entity-model,record-system,…}` | ~74 | Delete / banner |
@@ -121,13 +121,13 @@ ownership problems** (as opposed to clean layering):
 | Concept | Problem | Recommended owner |
 |---|---|---|
 | **Field Catalog** | No owner exists in `platform/` | create `platform/core/data/field-system.md` |
-| **Data System** | Only lives loose at root | promote `canonical-data-system.md` → `platform/core/data/data-system.md` |
-| **Cards** | 11 docs, `card-archetypes` ≈ `universal-card-archetypes` | merge to `universal-card-archetypes.md` |
+| **Data System** | Only lives loose at root | promote `platform/core/data/data-system.md` → `platform/core/data/data-system.md` |
+| **Cards** | 11 docs, `card-archetypes` ≈ `universal-card-archetypes` | merge to `universal-universal-card-archetypes.md` |
 | **Presentation Runtime** | operator doctrine ("no runtime") contradicts shipped `experience/presentation-runtime-v2` | `experience/presentation-runtime-v2.md`; archive the operator umbrella |
 | **Focus Panel** | read-only-blocker docs vs shipped-edit docs | `focus-panel-composition-v2-and-editing.md`; banner the stale ones |
-| **Capability model** | basename collision (`platform/platform-capabilities.md` vs `foundation/platform-capabilities.md`) | rename root → `capability-model-doctrine.md` |
+| **Capability model** | basename collision (`platform/foundation/capability-model-doctrine.md` vs `foundation/platform-capabilities.md`) | rename root → `capability-model-doctrine.md` |
 | **Commercial config** | duplicated (`commercial/` vs `modules/`) | keep `modules/commercial-configuration.md`; archive the other |
-| **Governance** | two folders (`docs/governance/` + `platform/governance/`) | consolidate to `platform/governance/` |
+| **Governance** | two folders (`docs/platform/governance/` + `platform/governance/`) | consolidate to `platform/governance/` |
 | **Visual tokens** | doctrine lives in code (`web/components/workspace/doctrine.ts`) and docs | reconcile authority (review) |
 | **Timezone contract** | canonical doc stranded in `web/docs/` | mirror into `platform/` |
 
@@ -141,7 +141,7 @@ ownership problems** (as opposed to clean layering):
 | `communications.md` | 3 divergent copies (177/159/169 ln) | Same doc forked 3 ways | Single owner `modules/communications-platform.md` |
 | `system/{entity-model,record-system,actions-and-workflows,navigation-doctrine,api-contracts,roles-and-permissions,workspace-system}` ↔ `platform/*` | 7 pairs | Pre-rebaseline copies retained | Banner or archive |
 | `glossary.md` | ×4 (core, platform/governance, 2× export) | Reset residue + export copies | Owner = `platform/governance/glossary.md` |
-| `platform/platform-capabilities.md` ↔ `platform/foundation/platform-capabilities.md` | 2 (different content, **same basename**) | Intra-canon collision | Rename root → `capability-model-doctrine.md` |
+| `platform/foundation/capability-model-doctrine.md` ↔ `platform/foundation/platform-capabilities.md` | 2 (different content, **same basename**) | Intra-canon collision | Rename root → `capability-model-doctrine.md` |
 | `roadmap-and-gaps.md` | ×3 (execution + 2 export) | Export copies | Owner = `platform/foundation/product-roadmap.md` |
 | `product/{communications,billing-and-financials,documents-and-forms}.md` ↔ `platform/modules/*` | 3 | Thin vertical stubs | Banner or archive |
 | `export/*.zip` (2, 580 KB) | duplicate their own folders | Committed binaries | Remove |
@@ -154,13 +154,13 @@ Genuine contradictions where a reader can reach opposite conclusions:
 
 | Conflict | Doc A says | Doc B says | Resolution |
 |---|---|---|---|
-| **Presentation Runtime status** | `operator/presentation-runtime-doctrine.md`: "design stage, no runtime yet" | `experience/presentation-runtime-v2.md`: "all surfaces render through one Presentation Runtime, frozen on staging" | Banner A as superseded-by-B |
+| **Presentation Runtime status** | `operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`: "design stage, no runtime yet" | `experience/presentation-runtime-v2.md`: "all surfaces render through one Presentation Runtime, frozen on staging" | Banner A as superseded-by-B |
 | **Focus Panel editing** | `focus-panel-edit-information-doctrine` + `universal-card-system`: "June 2026 read-only blocker" | `focus-panel-composition-v2-and-editing` + July closeout: "runtime edit shipped" | Banner the read-only docs |
 | **`system/` authority** | `docs/README.md`: "transitional, prefer platform/" | ~22 system/ files: "Locked / Canonical / Frozen" | Rewrite README framing — system/ is authoritative |
 | **Experience Builder version** | `experience-builder-doctrine.md`: "V4 Canvas" | `experience-builder-v3-universal-surface-composition.md`: "V3", dated later (July) | Publish one version map; V2/V3/V4 are axes not a sequence |
 | **canonical-* Phase 5 vs July** | July `canonical-status-architecture`: "supersedes Phase 5" | Phase 5 siblings sit beside it, no banner | Add superseded-by headers |
 | **Product framing** | root `README.md`: "home cleaning, Bend Oregon" | canonical docs + `.cursor` rules: "childcare-first platform" | Update root README |
-| **Canonical↔sprint direction** | `platform/experience/*` links into `sprints/06_2026/*` (5 links) | governance anti-pattern | Fix links; promote or inline |
+| **Canonical↔sprint direction** | `platform/experience/*` links into `sprints/archive/06_2026/*` (5 links) | governance anti-pattern | Fix links; promote or inline |
 
 ---
 
@@ -168,12 +168,12 @@ Genuine contradictions where a reader can reach opposite conclusions:
 
 - **Self-declared superseded, still in canonical folders:** `commercial/commercial-configuration.md`,
   `modules/operational-mutation-platform.md`, `runtime/operational-runtime-topology.md`,
-  `operator/presentation-runtime-doctrine.md`.
+  `operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`.
 - **Superseded sprint artifacts at root:** `layout_v2_foundation_design.md`,
   `layout_v2_drawer_doctrine.md`, `LAYOUT_CONFIG_V2_FOUNDATION_AUDIT.md`,
   `waitlist_layout_v2_audit.md`, `waitlist_candidate_card_vm_layout_v2_plan.md`.
 - **Reverted-in-production doc presented as doctrine:** `system/bos-operational-intake-shell-doctrine.md`.
-- **Completed migrations still living as active trees:** `platform_convergence/` (28), `handoffs/` (3, all closed).
+- **Completed migrations still living as active trees:** `archive/2026-06-runtime-convergence/platform_convergence/` (28), `handoffs/` (3, all closed).
 - **Stale generated snapshots:** `docs/schema/*` (2026-06-28) predates
   `20260715120000_communications_identity_platform_foundation.sql` → the freshest subsystem
   (Communications Identity) *looks* undocumented.
@@ -192,7 +192,7 @@ Genuine contradictions where a reader can reach opposite conclusions:
 | **`operator/` folder index/README** | 51 files, 11 on Cards alone, no map |
 | **`.github/` PR template + CONTRIBUTING** | Heavy agent-governance elsewhere, none at the contribution gate |
 | **`foundation/runtime-architecture-map.md`** | Referenced twice from `experience/`, does not exist |
-| **`convergence_review_rubric.md`** | Referenced by 7 files in `platform_convergence/`, does not exist |
+| **`convergence_review_rubric.md`** | Referenced by 7 files in `archive/2026-06-runtime-convergence/platform_convergence/`, does not exist |
 | **Doc ownership / CODEOWNERS + versioning/governance metadata** | No per-doc owner, status vocabulary, or review date |
 | **Link-integrity + schema-freshness CI** | 532 broken links and a month-stale schema went undetected |
 | **Timezone contract in canonical tree** | Real doctrine stranded in `web/docs/` |
@@ -238,12 +238,12 @@ blueprint. See [`documentation-migration-blueprint-2026-07.md`](./documentation-
 
 | Item | Size/count | Recommendation |
 |---|---|---|
-| `docs/sprints/06_2026/` mockup assets | ~104 MB, ~400 PNG + 70 HTML | Evict from git (LFS/external) |
-| `docs/export/*.zip` (2) | 580 KB | Remove (duplicate their own folders) |
-| `docs/export/` markdown | 74 dup/stale of 94 | Delete tree; extract ~18 unique first |
-| `web/docs/sprints/07_2026/**` | 50 PDF/PNG | Move out of git |
+| `docs/sprints/archive/06_2026/` mockup assets | ~104 MB, ~400 PNG + 70 HTML | Evict from git (LFS/external) |
+| `docs/archive/2026-06-handoff-packs/*.zip` (2) | 580 KB | Remove (duplicate their own folders) |
+| `docs/archive/2026-06-handoff-packs/` markdown | 74 dup/stale of 94 | Delete tree; extract ~18 unique first |
+| `web/docs/sprints/archive/07_2026/**` | 50 PDF/PNG | Move out of git |
 | `web/test-results/` | committed Playwright output | Untrack + `.gitignore` |
-| `docs/sprints/06_2026/communications-v2/*.docx/.xlsx` | 7 office files | Archive/external |
+| `docs/sprints/archive/06_2026/communications-v2/*.docx/.xlsx` | 7 office files | Archive/external |
 | `PRE_COMMIT_SHIP_CHECK.md` (root) | 1 | Delete or archive |
 | `backend/ghl_cusotm_field_ids.txt` | 1 (typo) | Rename |
 | `.cursor/rules/repo-boundry.mdc` | typo + hard-scoped to `/Users/Kelly/Alloy` | Fix |

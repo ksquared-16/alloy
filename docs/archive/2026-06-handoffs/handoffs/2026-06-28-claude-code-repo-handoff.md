@@ -5,7 +5,7 @@
 **Branch of record:** `staging` (canonical source of truth)
 **Purpose:** Close the Cursor working session cleanly, account for current docs, and make Claude Code's first sprint obvious. This is a **closure + handoff + audit** document — not a build kickoff.
 
-> Read this with: `.cursor/rules/alloy-project-context.mdc`, `.cursor/rules/alloy-development-guardrails.mdc`, `docs/governance/agent-repo-boundaries.md`, and the locked runtime doctrine `docs/system/adminv2-runtime-performance-doctrine.md`.
+> Read this with: `.cursor/rules/alloy-project-context.mdc`, `.cursor/rules/alloy-development-guardrails.mdc`, `docs/platform/governance/agent-repo-boundaries.md`, and the locked runtime doctrine `docs/system/adminv2-runtime-performance-doctrine.md`.
 
 ---
 
@@ -13,7 +13,7 @@
 
 - **Branch:** `staging`, up to date with `origin/staging` (no ahead/behind at handoff time, before the handoff commit).
 - **Latest commit (pre-handoff):** `1a32c185 feat(focus-panel): compose Summary surface from card semantics (Composition Engine V1)`.
-- **This handoff commit:** adds this document, the runtime convergence doc notes, the new `docs/sprints/06_2026/*` documentation, and two passing evidence-test updates. (See §Files in the closing chat summary / final commit.)
+- **This handoff commit:** adds this document, the runtime convergence doc notes, the new `docs/sprints/archive/06_2026/*` documentation, and two passing evidence-test updates. (See §Files in the closing chat summary / final commit.)
 - **Pushed to `origin/staging`:** yes — the handoff commit is pushed (see final commit hash in the closing summary).
 - **Validation run at handoff:**
   - `cd web && npm run typecheck:build` → **fails with 13 errors**, **all** isolated to **uncommitted WIP** under `web/components/adminV2/settings/actions/*` (`ActionConfigurationDetailPanel.tsx`, `ActionsConfigurationPage.tsx`, `useActionsConfigurationSettings.ts`). The **committed tree is clean** for `typecheck:build` — these files are intentionally **not committed** (see §Known WIP).
@@ -111,7 +111,7 @@ For **each** area below, identify: (a) canonical path, (b) legacy path, (c) dupl
 | Settings index | `web/app/adminV2/settings/SettingsConfigurationHub.tsx`, `layout.tsx` |
 | Settings/configuration subpages | `web/app/adminV2/settings/{actions,fields,communications,users-roles,analytics,layouts,...}/*` + (uncommitted) `web/components/adminV2/settings/*` |
 | Actions/commands surfaces | Command Surface host, `actions/execute` envelope, `web/lib/admin/actions/*` |
-| Analytics pages | `web/app/adminV2/settings/analytics/*`, OIP renderers; see `docs/sprints/06_2026/analytics-operational-intelligence-platform/04-runtime-convergence.md` |
+| Analytics pages | `web/app/adminV2/settings/analytics/*`, OIP renderers; see `docs/sprints/archive/06_2026/analytics-operational-intelligence-platform/04-runtime-convergence.md` |
 | Shared preload/cache utils | `prefetchOpportunityDrawerOnRowIntent`, `prefetchPersonDrawerSnapshot`, `adminV2WorkspaceSessionCache`, `metricRenderBundleCache`, `loadWorkUnitOperationalBootstrap` |
 | Save flows | entity GET → mutation → re-render path; find anywhere a save triggers reload/remount |
 
@@ -164,7 +164,7 @@ cd web && npm run test -- \
 
 - **Large repo / slow TS.** Whole-project typecheck is slow and has baseline noise — prefer `typecheck:build` + scoped tests.
 - **Stale background processes.** Prior sessions left scratch (`web/tmp/`, `test-results/`) and tracked-legacy build artifacts (`*.tsbuildinfo`, `web/test-results/`). Kill stray dev servers/watchers before measuring performance.
-- **Multiple agents can cross wires.** Honor `docs/governance/agent-repo-boundaries.md` and `.cursor/rules/repo-boundry.mdc`: this repo is `/Users/Kelly/Alloy` only; Claude-owned work outside it must not leak in. `staging` is the shared canonical branch.
+- **Multiple agents can cross wires.** Honor `docs/platform/governance/agent-repo-boundaries.md` and `.cursor/rules/repo-boundry.mdc`: this repo is `/Users/Kelly/Alloy` only; Claude-owned work outside it must not leak in. `staging` is the shared canonical branch.
 - **Baseline test/typecheck failures.** Confirm the pre-existing baseline before attributing any failure to new work.
 - **Legacy branches may still be reachable by edge routes** (dept compat routes, flag-off paths). Do not assume "quarantined" means "dead" without verifying reachability.
 - **Performance regressions from duplicate fetches.** Adding a VM without removing the legacy owner can double-fetch; prove single-owner before deleting fallbacks.

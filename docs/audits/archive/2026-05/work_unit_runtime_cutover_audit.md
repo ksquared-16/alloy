@@ -3,9 +3,9 @@
 **Path:** `docs/audits/work_unit_runtime_cutover_audit.md`  
 **Status:** Audit + design complete — **no implementation in this batch**  
 **Date:** 2026-06-03  
-**Supersedes (for runtime cutover scope):** incremental fixes only; historical context in `docs/sprints/05_2026/work_unit_runtime_consolidation_audit.md`  
+**Supersedes (for runtime cutover scope):** incremental fixes only; historical context in `docs/sprints/archive/05_2026/work_unit_runtime_consolidation_audit.md`  
 **Canonical doctrine:** `docs/system/adminv2-runtime-performance-doctrine.md`  
-**Drawer VM reference:** `docs/sprints/06_2026/adminv2_drawer_runtime_phase_d_speed_pass.md`, `docs/audits/drawer-to-drawer-navigation-vm-audit.md`
+**Drawer VM reference:** `docs/sprints/archive/06_2026/adminv2_drawer_runtime_phase_d_speed_pass.md`, `docs/audits/drawer-to-drawer-navigation-vm-audit.md`
 
 ---
 
@@ -684,11 +684,11 @@ Estimates from bootstrap contract analysis, drawer VM benchmarks, and `[wu-revea
 | Doc | Relevance |
 |-----|-----------|
 | `docs/system/adminv2-runtime-performance-doctrine.md` | Locked reveal/queue rules |
-| `docs/sprints/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md` | Pre-cutover baseline |
-| `docs/sprints/06_2026/adminv2_drawer_runtime_phase_d_speed_pass.md` | Drawer VM target pattern |
+| `docs/sprints/archive/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md` | Pre-cutover baseline |
+| `docs/sprints/archive/06_2026/adminv2_drawer_runtime_phase_d_speed_pass.md` | Drawer VM target pattern |
 | `docs/audits/drawer-to-drawer-navigation-vm-audit.md` | Model swap reference |
-| `docs/sprints/05_2026/work_unit_runtime_consolidation_audit.md` | Domain model / queue definition (historical) |
-| `docs/sprints/06_2026/adminv2_runtime_navigation_performance_audit_v1.md` | Cross-surface perf context |
+| `docs/sprints/archive/05_2026/work_unit_runtime_consolidation_audit.md` | Domain model / queue definition (historical) |
+| `docs/sprints/archive/06_2026/adminv2_runtime_navigation_performance_audit_v1.md` | Cross-surface perf context |
 
 ---
 

@@ -146,7 +146,7 @@ open http://localhost:3000/dev/bos-identity-system
 # Navigate dept → work unit cold — observe DeptPageLoadingGate / WorkUnitPageLoadingGate
 ```
 
-**Asset folder (recommended):** `docs/sprints/06_2026/assets/alloy-loader-audit/`
+**Asset folder (recommended):** `docs/sprints/archive/06_2026/assets/alloy-loader-audit/`
 
 ---
 

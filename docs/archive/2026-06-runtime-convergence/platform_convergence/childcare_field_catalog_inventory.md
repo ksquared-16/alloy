@@ -1,6 +1,6 @@
 # Childcare Field Catalog Inventory
 
-**Path:** `docs/platform_convergence/childcare_field_catalog_inventory.md`  
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/childcare_field_catalog_inventory.md`  
 **Date:** 2026-06-08  
 **Scope:** Layout config picker (`/adminV2/settings/layouts`) — catalog only, no runtime cutover
 

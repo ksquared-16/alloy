@@ -1,6 +1,6 @@
 # Child Namespace Decision (final, canonical)
 
-**Path:** `docs/platform_convergence/child_namespace_decision.md`
+**Path:** `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`
 **Status:** Doctrine — the **single canonical namespace decision** for child concepts. Source of truth.
 **Does not reopen:** [`child_model_convergence_audit.md`](./child_model_convergence_audit.md) §FINAL DECISION (frozen) or [`child_namespace_addendum.md`](./child_namespace_addendum.md) (approved). This document **ratifies and extends** them per layer and for future modules.
 **Reconciliation:** This is the **one** canonical decision doc. It absorbs the FC-1 branch's ratification doc — the FC-1 **ND-1…ND-8** decisions are folded in as §9; there is no separate FC-1 decision file. (Resolves the FC-1 review's documentation-governance concern.)

@@ -1,7 +1,7 @@
 # Workflow execution consistency audit
 
 **Date:** 2026-05-02  
-**Related:** `docs/system/actions-and-workflows.md`, `docs/audits/event-integrity-audit.md`, `docs/product/crm-system.md`
+**Related:** `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, `docs/audits/event-integrity-audit.md`, `docs/product/crm-system.md`
 
 ## Intended model
 

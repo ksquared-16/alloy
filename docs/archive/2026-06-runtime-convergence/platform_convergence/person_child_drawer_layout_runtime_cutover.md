@@ -39,7 +39,7 @@
 | Opening overlay | `web/components/admin/OpportunityDrawerOpeningOverlay.tsx` |
 | Tab prefetch | `web/lib/admin/opportunityDrawerTabPrefetch.ts` |
 | Drawer transition | `web/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator.ts` |
-| Ownership map | `docs/platform_convergence/opportunity_drawer_runtime_ownership.md` |
+| Ownership map | `docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/opportunity_drawer_runtime_ownership.md` |
 
 ---
 
