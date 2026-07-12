@@ -14,7 +14,7 @@ Do not read, edit, diff, commit, push, or reference:
 /Users/Kelly/Alloy-Claude
 /Users/Kelly/Claude/Projects/Alloy
 
-Canonical doc: `docs/governance/agent-repo-boundaries.md`
+Canonical doc: `docs/platform/governance/agent-repo-boundaries.md`
 
 Default branch behavior:
 - Use `staging` for shared documentation/tooling/hotfix work.

@@ -48,7 +48,7 @@ When starting non-trivial Alloy work, load context in this order:
 
 Add **`docs/platform/modules/communications-platform.md`** or **`docs/platform/modules/configuration-platform.md`** when the task touches those areas.
 
-For behavior-changing work, include item 14 in context. For agent/repo workflow, also read **`docs/governance/agent-repo-boundaries.md`**.
+For behavior-changing work, include item 14 in context. For agent/repo workflow, also read **`docs/platform/governance/agent-repo-boundaries.md`**.
 
 **Supplemental (vertical detail):** `docs/product/crm-system.md` — enrollment pipeline reference implementation, not canonical platform framing.
 

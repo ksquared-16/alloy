@@ -70,4 +70,4 @@ cd web && npm run test -- \
 cd web && npm run typecheck
 ```
 
-Before merge on TypeScript changes (production/build graph). For test-only or test-adjacent changes, also run `npm run typecheck:tests`. See `docs/governance/typescript-performance.md`.
+Before merge on TypeScript changes (production/build graph). For test-only or test-adjacent changes, also run `npm run typecheck:tests`. See `docs/platform/governance/typescript-performance.md`.

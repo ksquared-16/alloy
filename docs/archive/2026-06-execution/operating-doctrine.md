@@ -18,7 +18,7 @@ Normative rules for **documentation**, **GPT/Cursor source-pack usage**, **deplo
 2. When behavior changes, update docs **in the same PR/commit** as the code (preferred).
 3. If reality diverged before docs caught up, either **fix code** or **update docs first** in the same commit — do not leave them contradictory across merges.
 
-- Entity **fields** define structure; **layout field placements** define operator-surface behavior (Required / editability on record surfaces such as the opportunity drawer overview). See **`docs/system/configuration-system.md`** and **`docs/sprints/05_2026/layout_field_behavior_semantics_v1.md`**.
+- Entity **fields** define structure; **layout field placements** define operator-surface behavior (Required / editability on record surfaces such as the opportunity drawer overview). See **`docs/system/configuration-system.md`** and **`docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md`**.
 
 ## Mandatory update rule
 
@@ -37,7 +37,7 @@ Normative rules for **documentation**, **GPT/Cursor source-pack usage**, **deplo
 - scheduling lifecycle,
 - deployment / tenancy / env contracts,
 
-must update the matching topic file in **`docs/platform/**`**, **`docs/governance/**`**, or transitional **`docs/core` / `docs/system` / `docs/product` / `docs/execution`** in the **same PR/commit**.
+must update the matching topic file in **`docs/platform/**`**, **`docs/platform/governance/**`**, or transitional **`docs/core` / `docs/system` / `docs/product` / `docs/execution`** in the **same PR/commit**.
 
 ## Source-pack rules (AI / GPT / Cursor)
 
@@ -77,7 +77,7 @@ If implementation must change doctrine, **update docs with the code** and record
 | Admin client | `web/lib/supabaseAdmin.ts` |
 | Server service client | `web/lib/supabase/serverServiceClient.ts` |
 | Admin context | `web/lib/admin/getAdminContext.ts` |
-| CRM access scope | `docs/system/roles-and-permissions.md`; `web/lib/admin/getAdminAccessContext.ts`, `web/lib/admin/resolveAdminAccessCore.ts`, `web/lib/admin/accessScope.ts` |
+| CRM access scope | `docs/archive/2026-06-superseded-system/roles-and-permissions.md`; `web/lib/admin/getAdminAccessContext.ts`, `web/lib/admin/resolveAdminAccessCore.ts`, `web/lib/admin/accessScope.ts` |
 | Perf overlay | `web/components/admin/AdminV2PerfOverlay.tsx`, `web/lib/perf/alloyPerfGlobal.ts` |
 | Queue hot path | `web/lib/queues/QueueService.ts` |
 
