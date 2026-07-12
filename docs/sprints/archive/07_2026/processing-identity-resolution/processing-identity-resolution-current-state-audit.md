@@ -23,7 +23,7 @@
 
 ### What is fragmented or dangerous
 - **The Processing Case is opened in parallel, never as a gate.** For the live public-form path, `applyFormIntakeSafe` writes `persons/customers/opportunities/customer_members` *before* the case is opened; the case only references the submission. **No inbound source commits identity through a Processing Case approval step — that gate does not exist yet.** **[C]**
-- **The record-resolver seam is a no-op stub.** `web/lib/pos/recordResolution/recordResolverSeam.ts` (`deferredRecordResolver`) returns `deferred` and never calls the real `lib/intake/resolve` brain. **[C]**
+- **At the audit baseline, the record-resolver seam was a no-op stub.** `web/lib/pos/recordResolution/recordResolverSeam.ts` exposed `deferredRecordResolver`, which returned `deferred` and never called the real `lib/intake/resolve` brain. V1 replaced and removed that fallback. **[C]**
 - **The canonical mutation layer governs almost nothing.** `web/lib/mutations/*` is wired to two commands (status only), one route, two tables; even those two status fields have **three** competing writers; there is **no record-creation, link, or merge command**. Every identity record is created/linked/hard-deleted by raw `supabase.from(...)`. **[C]**
 - **The canonical identity table has no uniqueness.** `persons` has no unique constraint on email/phone/name/dob and no org FK — duplicate persons are DB-legal; the 23505 recovery guarding person inserts can never fire (dead code). Meanwhile the *deprecated* `contacts` table carries **global (non-org) unique** indexes on email/phone (cross-tenant collision + doubled redundant indexes). **[C]**
 - **Normalization is inconsistent.** Phone has **three mutually incompatible canonical forms** (E.164, digits-only-10, no-canon); email has 9 normalizers; "find-or-create person" has 6 entry points; two person-matchers disagree (ambiguity-safe vs first-match). **[C]**
@@ -81,7 +81,7 @@ Promote `lib/intake/resolve` to the **canonical Record Resolution service** behi
 ### `web/lib/pos/processingCase/types.ts` + `recordResolution/recordResolverSeam.ts` **[C]**
 - `ProcessingCaseStatus` = `received | processing | needs_review | needs_resolution | ready | completed | archived`.
 - `ProcessingCaseSourceKind` = `form_submission | form_packet_session | document | upload | email_attachment | import | recreated_document` — full source taxonomy already enumerated.
-- `RecordResolver.resolve(candidate, context) → RecordResolutionProposal` — the seam this sprint fills; `deferredRecordResolver` is the current no-op.
+- `RecordResolver.resolve(candidate, context) → RecordResolutionProposal` — the seam V1 subsequently filled; `deferredRecordResolver` was the audit-baseline no-op.
 
 ---
 
@@ -141,7 +141,7 @@ The full matrix is in [source-mutation-inventory](processing-identity-resolution
 | **Dual person representation** | `persons` vs legacy `contacts.person_id` | entity-model.md; person-vs-contact-audit.md **[C]** |
 | **Dual child-participation substrate** | `opportunity_customer_members` vs `process_instances` (create-lead moved to the latter; intake/relationship/REST still write OCM) | `createLeadChildOcmPersistence.ts`, `20260713000000_process_instances.sql` **[C]** |
 | **Dead code** | `applyFormLeadCaptureIntake.ts`; `persons`/`opportunity_persons` 23505 recovery (no constraint to violate) | **[C]** |
-| **Deferred stub** | `deferredRecordResolver` (POS never calls real resolver) | `recordResolverSeam.ts` **[C]** |
+| **Deferred stub (audit baseline)** | `deferredRecordResolver` (POS did not call the real resolver; removed by V1 closeout) | `recordResolverSeam.ts` **[C]** |
 | **Superseded doctrine** | `operational-mutation-platform.md` (never realized for identity) | header marks Superseded **[C]** |
 
 **Deletion caution:** do not delete `applyFormLeadCaptureIntake.ts` or the 23505 recovery blocks without a dependency pass — the recovery code becomes live if/when `persons`/`opportunity_persons` gain unique constraints (a proposal in the data model). Retire only after the constraint decision is made.
