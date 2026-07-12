@@ -82,17 +82,58 @@ Seven parallel read-only trace streams + firsthand reads of the load-bearing con
 | D5 | see git log | `processingIdentityD5PublicForm.test.ts` | No feature flag; public submit never commits identity; shadow dual-path removed from submit route; idempotent case open per submission |
 | E1 | see git log | `processingIdentityE1Boundaries.test.ts`, `processingIdentityLocalPostgres.test.ts` | Replay flag removed; `applyFormIntakeSafe` always throws; contacts uniqueness cleanup deferred |
 
-### Local certification (2026-07-12)
+### Local certification (2026-07-12, isolated stack)
 
-**Tooling:** Supabase CLI 2.75.0 · Docker 28.3.0 · Postgres 17 @ `127.0.0.1:54322` · `npm run cert:processing-identity-local`
+**Implemented locally · Certified against isolated local Supabase/Postgres · Not pushed · Not promoted · Not deployed**
 
-**Migrations certified locally (7):** B0, B2, B3, D1, D2, D4/D5 source kinds, D2 RPC customer_persons fix (`20260718130000`).
+| Item | Value |
+|------|-------|
+| Stack project ID | `alloy-processing-identity-cert` |
+| API | `http://127.0.0.1:55321` |
+| Postgres | `postgresql://postgres:postgres@127.0.0.1:55322/postgres` |
+| Default stack | `54321`/`54322` left untouched |
+| Branch | `claude/proc-identity-lib-normalization` |
+| Baseline commit | `5b44c475a` |
+| Supabase CLI | 2.75.0 |
+| Migrations applied | **263** (262 prior + `20260718140000_has_org_role_security_definer.sql`) |
 
-**Pass:** B0 orphan preflight (0) · persons.org_id FK · all processing tables · RPC atomic create/rollback · org-scoped RLS policies · cross-org fact FK · schema docs regenerated from live DB · 140+ identity/processing tests · typecheck + typecheck:tests
+**Procedure (isolated stack):**
+```bash
+./scripts/processing/processingIdentityCertStack.sh ports
+supabase start
+./scripts/processing/processingIdentityCertStack.sh reset
+npm run cert:processing-identity-env   # writes web/.env.local (gitignored)
+npm run cert:processing-identity-local
+cd web && npm run test -- tests/processing/processingIdentityCert*.ts
+```
 
-**Blockers before promotion:** isolated `supabase db reset` replay on dedicated worktree stack (port conflict with existing local instance) · authenticated-role RLS matrix with seeded JWT users · browser/API E2E for Create Lead + public forms (no worktree `.env.local`) · `next build` in worktree (invalid `node_modules` symlink)
+**Migration inventory (processing identity sprint):**
+`20260716120000` B0 tenant security · `20260716130000` B2 facts · `20260716140000` B3 resolutions · `20260717120000`–`20260717126000` D1 commit plans (split apply) · `20260717130000` D2 executor · `20260718120000` D4/D5 source kinds · `20260718130000` D2 RPC fix · `20260718140000` has_org_role SECURITY DEFINER
 
-**Verdict:** **NOT CERTIFIED** for full sprint promotion — local Postgres certification partial; see blockers above. **Not promoted. Not deployed.**
+**Cert runner (`npm run cert:processing-identity-local`):** **17/17 PASS** — B0 orphan/FK · processing tables · RPC atomicity/rollback · org-scoped policies · cross-org fact FK · has_org_role predicates · create_lead source kind
+
+**Authenticated RLS (real JWT via `signInWithPassword`):** **7/7 PASS** — Org A admin/ops/manager/staff same-org reads; cross-org denial; no recursion stack overflow after `has_org_role` SECURITY DEFINER fix
+
+**API integration E2E (`processingIdentityCertE2E.integration.test.ts`, fresh reset + seed):** **7/7 PASS**
+- Manual Create Lead: brand-new family (zero pre-commit writes) · existing family + new child · shared-email ambiguity · idempotent case reuse
+- Public form: zero pre-commit writes · cross-tenant isolation · `applyFormIntakeSafe` throws (E1)
+- Target guard: refuses port `54321` / non-local URLs
+
+**Replay bypass:** `__legacyDirectWriteReplay` removed; `applyFormIntakeSafe` throw-only; static boundary tests updated
+
+**Build / typecheck:** `npm run typecheck` PASS · `npm run typecheck:tests` PASS · `npm run build` PASS (required local `npm ci` — Turbopack rejects out-of-worktree `node_modules` symlink)
+
+**Combined unit suites:** `web/tests/processing/**` **89/89 PASS** (14 files)
+
+**Remaining gaps (promotion blockers):**
+- Playwright/browser E2E for Manual Create Lead + public form not executed (existing Create Lead spec still expects legacy immediate `opportunity_id`)
+- Full scenario matrix A–H per test strategy not implemented (DOB conflict, atomic failure rollback proof, null-org diagnostic, attachment metadata, state-model assertions across all readiness states)
+- Digital Mailroom / POS / broad mutation suites not re-run in this pass
+- RLS matrix does not yet cover write paths for all roles on processing tables
+
+**Verdict:** **NOT CERTIFIED** for full sprint promotion — core isolated-stack, migration replay, authenticated RLS, API integration E2E, executor, E1 boundaries, typecheck, and production build pass; browser E2E and complete scenario matrix remain open.
+
+**Not promoted. Not deployed. No push.**
 
 ### D4–E1 no-flag execution note
 Per the D4–E1 continuous-local execution instruction, **no new feature flags/env vars/org toggles**. D4 and D5 are structurally authoritative — canonical Processing adapters are the only active mutation path for Manual Create Lead and public lead-capture forms. Safety boundary unchanged: only approved Commit Plans reach the D2 executor via deliberate operator action.
