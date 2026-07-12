@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Workspace atmosphere doctrine
 
 **Path:** `docs/system/workspace-atmosphere-doctrine.md`  

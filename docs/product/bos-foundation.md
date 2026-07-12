@@ -1,3 +1,10 @@
+---
+owner: product
+status: proposed
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # BOS — Business Orchestration System
 
 ## Purpose
@@ -57,7 +64,7 @@ Recommendation strings must not be copied into outbound `draft_body` without syn
 
 Product posture: **operational narrator**, **guided reviewer**, **workflow copilot** — not open-ended chat, autonomous agent, or recommendation spam. Orchestrator routes; specialists propose; operators approve.
 
-**Closeout detail:** [`docs/sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md).
+**Closeout detail:** `docs/sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md` (historical: `../sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`).
 
 ### Hard prohibitions (system-enforced)
 

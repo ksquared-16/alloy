@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Drawer View Model runtime contract
 
 **Status:** Active — Opportunity validated on staging; Person/Child extend the same pattern.  

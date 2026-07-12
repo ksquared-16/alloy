@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operating Plan Runtime Doctrine
 
 **Status:** Canonical (June 2026). Stage execution contract for Business Processes.

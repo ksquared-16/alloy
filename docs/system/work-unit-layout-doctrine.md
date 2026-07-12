@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Work Unit Layout Doctrine
 
 **Status:** **Canonical V3 — frozen (June 2026)**  

@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Enrollment Placement Doctrine
 
 **Status:** Active — Configuration Workspace V3 (June 2026).

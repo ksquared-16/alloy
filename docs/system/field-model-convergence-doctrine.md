@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Field Model Convergence Doctrine
 
 **Status:** Active planning — Configuration Convergence V4 (June 2026).  

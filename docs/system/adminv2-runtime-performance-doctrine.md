@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # AdminV2 runtime performance doctrine
 
 **Path:** `docs/system/adminv2-runtime-performance-doctrine.md`  

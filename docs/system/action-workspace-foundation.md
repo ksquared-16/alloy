@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Action Workspace Foundation
 
 **Path:** `docs/system/action-workspace-foundation.md`  

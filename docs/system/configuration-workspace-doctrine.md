@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Configuration Workspace Doctrine
 
 **Status:** Active — July 2026  

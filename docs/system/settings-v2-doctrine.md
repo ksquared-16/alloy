@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Settings V2 Doctrine
 
 **Status:** Active — Business Processes is the first reference implementation (June 2026).

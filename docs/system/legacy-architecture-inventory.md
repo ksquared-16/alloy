@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Legacy architecture inventory
 
 **Path:** `docs/system/legacy-architecture-inventory.md`  

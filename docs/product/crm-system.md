@@ -1,3 +1,10 @@
+---
+owner: product
+status: proposed
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # CRM system
 
 > **Supplemental (childcare vertical).** Canonical platform model: **`docs/platform/core/business-process-system.md`**, **`docs/platform/core/status-and-state-system.md`**. This file retains enrollment pipeline implementation detail.
@@ -170,8 +177,8 @@ Canonical documentation: **`docs/product/communications.md`** (threads, enqueue,
 ### Known gaps / risks
 
 - **Partially implemented:** **`schedules`** CRUD, action-link reschedule, workspace “today” hooks — exist for CRM/tour/booking-adjacent flows.
-- **Shipped (May 2026):** **Tour Scheduling V1** + **Phase 2 Band A** — `tour_bookings`, availability rules, public token booking, operator drawer lifecycle, confirmation/reminder/reschedule/cancel comms (`communication_scheduled_sends`), quiet hours, add-to-calendar links — see [`completed/tour_scheduling_phase2_band_a_closeout.md`](../sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md), [`tour_scheduling_v1.md`](../sprints/archive/05_2026/tour_scheduling_v1.md).
-- **Deferred / roadmap (Band B+):** External calendar OAuth/sync, distributed public rate limits/CAPTCHA, branded public booking, settings UI for tour comms templates, tour analytics dashboards — [`later-phase/tour_scheduling_phase_2.md`](../sprints/archive/05_2026/later-phase/tour_scheduling_phase_2.md).
+- **Shipped (May 2026):** **Tour Scheduling V1** + **Phase 2 Band A** — `tour_bookings`, availability rules, public token booking, operator drawer lifecycle, confirmation/reminder/reschedule/cancel comms (`communication_scheduled_sends`), quiet hours, add-to-calendar links — see `completed/tour_scheduling_phase2_band_a_closeout.md` (historical: `../sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`), `tour_scheduling_v1.md` (historical: `../sprints/archive/05_2026/tour_scheduling_v1.md`).
+- **Deferred / roadmap (Band B+):** External calendar OAuth/sync, distributed public rate limits/CAPTCHA, branded public booking, settings UI for tour comms templates, tour analytics dashboards — `later-phase/tour_scheduling_phase_2.md` (historical: `../sprints/archive/05_2026/later-phase/tour_scheduling_phase_2.md`).
 - **Needs verification:** Complete cross-vertical scheduling UX (field services vs childcare).
 - **Needs verification:** Labor compliance / attendance feature depth.
 

@@ -1,18 +1,25 @@
+---
+owner: runtime
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Drawer Operating Model v1
 
 **Path:** `docs/system/drawer-operating-model-v1.md`  
 **Status:** Active — **locked at v1 closeout (June 2026)**  
 **Canonical index:** **`drawer-doctrine.md`** — read first for ownership and navigation semantics; this doc retains shell/layout detail.  
 **Audience:** Platform convergence, AdminV2 drawer runtime, `/admin/settings/layouts`  
-**Closeout:** [`../sprints/archive/06_2026/completed/drawer_operating_model_v1_closeout.md`](../sprints/archive/06_2026/completed/drawer_operating_model_v1_closeout.md)  
+**Closeout:** `../sprints/archive/06_2026/completed/drawer_operating_model_v1_closeout.md` (historical: `../sprints/archive/06_2026/completed/drawer_operating_model_v1_closeout.md`)  
 **Supersedes:** Nothing — extends and operationalizes existing contracts below.
 
 **Governing contracts (must not regress):**
 
 - [`adminv2-runtime-performance-doctrine.md`](./adminv2-runtime-performance-doctrine.md) — composed reveal, no partial above-fold pop-in
 - [`drawer-view-model-runtime-contract.md`](./drawer-view-model-runtime-contract.md) — VM compose → preload → apply → pin
-- [`../archive/2026-06-runtime-convergence/platform_convergence/layout_contract_v1.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_contract_v1.md) — LayoutDoc ownership boundaries
-- [`../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) — entity cutover order and flags
+- [`../../archive/2026-06-runtime-convergence/platform_convergence/layout_contract_v1.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_contract_v1.md) — LayoutDoc ownership boundaries
+- [`../../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) — entity cutover order and flags
 
 ---
 
@@ -677,6 +684,6 @@ Queue rows inherit **date formatting**, **empty-collapse**, **child merge**, and
 
 - VM runtime: [`drawer-view-model-runtime-contract.md`](./drawer-view-model-runtime-contract.md)
 - Performance: [`adminv2-runtime-performance-doctrine.md`](./adminv2-runtime-performance-doctrine.md)
-- Layout cutover: [`../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md)
-- Record truth vs previews: [`record-system.md`](./record-system.md)
+- Layout cutover: [`../../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md)
+- Record truth vs previews: [`record-system.md`](../platform/core/record-system.md)
 - Settings layouts plane: [`configuration-system.md`](./configuration-system.md)

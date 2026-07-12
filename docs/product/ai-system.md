@@ -1,3 +1,10 @@
+---
+owner: product
+status: proposed
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # AI system
 
 **Canonical BOS doctrine and implementation inventory:** **[bos-foundation.md](./bos-foundation.md)**
