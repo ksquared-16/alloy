@@ -1,6 +1,10 @@
 # Processing Identity Resolution — Current-State Audit
 
-**Baseline:** `origin/staging` @ `65afc8527506057ece2798675c6050e86ca92bcf` (HEAD of audit branch `claude/proc-identity-resolution-audit`; the merge of PR #141 `feat/processing-form-workflow-finish`). Working tree clean. Read-only audit — no runtime code, schema, or migration modified.
+**Status:** Historical pre-implementation audit. **Do not treat the findings below as current runtime state.**
+
+**Implementation reconciliation (2026-07-12):** the gaps identified here were closed locally through E1: durable facts and resolutions, immutable Commit Plans and approvals, registered identity commands, deterministic executor, operator review, authoritative Create Lead and public-form adapters, and retirement of their direct-write paths. Current status: **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+
+**Audit baseline:** `origin/staging` @ `65afc8527506057ece2798675c6050e86ca92bcf` (HEAD of audit branch `claude/proc-identity-resolution-audit`; the merge of PR #141 `feat/processing-form-workflow-finish`). Read-only audit — no runtime code, schema, or migration was modified by this artifact.
 
 **Evidence tags:** **[C]** = confirmed by reading the code/migration. **[I]** = inferred from structure, comments, or absence of a constraint.
 
@@ -8,7 +12,7 @@
 
 ## 1. Executive summary
 
-**Does Alloy have a canonical intake engine today? No — it has three overlapping intake substrates plus a purpose-built seam that explicitly anticipates this sprint.** The good news dominates the bad: the hard contracts already exist and are well-typed; the missing pieces are a durable evidence store, a versioned commit plan bound to approval, a single commit executor that invokes canonical commands, and the retirement of pre-resolution direct writes. This is a **converge-and-formalize** effort, not a greenfield build.
+**At this audit baseline, Alloy did not have a canonical intake engine.** It had three overlapping intake substrates plus a purpose-built seam that anticipated this sprint. The hard contracts already existed and were well-typed; the audit identified the durable evidence store, versioned approval-bound plan, executor, and direct-write retirement work that V1 subsequently implemented.
 
 ### What exists (reusable)
 - A **pure, source-agnostic intake pipeline** — `web/lib/intake/*`: extract → normalize → group → map → **resolve** → recommend → review, with typed Facts (with evidence), a Household Graph, Candidate Matches (with `reasons[]` and `blocking_conflicts[]`), a 5-band confidence, and Proposals. **[C]**

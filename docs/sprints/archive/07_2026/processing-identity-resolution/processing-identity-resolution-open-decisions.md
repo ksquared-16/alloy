@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Decision Register (V1 FROZEN)
 
-**Baseline:** `origin/staging` @ `65afc8527`. **Status:** Decision-finalization pass complete. This register is now **implementation-authoritative** — Cursor implements these; it does not re-decide them.
+**Design baseline:** `origin/staging` @ `65afc8527`. **Status:** V1 decisions frozen and implemented locally. The branch is **locally certified, awaiting staging reconciliation, not promoted, and not deployed.** This register remains architecture-authoritative; deferred sub-points are future work and do not reopen V1.
 
 **Status legend:** 🔒 **Frozen for V1** · 🧩 **Deferred behind an abstraction** (Processing does not depend on the unresolved detail) · 👤 **Requires product-owner approval** (default stated; safe to proceed on default).
 

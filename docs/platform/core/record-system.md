@@ -49,6 +49,22 @@ Person/Child: canonical VM runtime with Focus Panel body (July 2026 hard cutover
 
 ---
 
+## Inbound identity mutation authority
+
+Manual Create Lead and public lead-capture forms use one authority path:
+
+`source adapter → Processing Case → immutable facts → candidate resolution → operator decision → immutable Commit Plan → exact approval → explicit executor commit`
+
+- Intake writes no `persons`, `customers`, `customer_members`, or `opportunities`.
+- Plans contain registered semantic command keys, never arbitrary table writes.
+- Approval binds to one plan version/content hash; revisions invalidate approval.
+- Atomic identity operations execute in one database transaction; dependent failures are recorded for retry/compensation.
+- `applyFormIntakeSafe` is retired and throw-only. There is no D4/D5 legacy fallback or runtime feature flag.
+
+Processing owns inbound information resolution; entity, workflow, and Business Process systems retain authority after handoff.
+
+---
+
 ## Inquiry children
 
 - `_inquiry_children` merges OCM + active `customer_members` (child relationship)

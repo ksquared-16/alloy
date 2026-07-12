@@ -22,6 +22,7 @@ Forms engine, document handling, enrollment packets — industry-agnostic core w
 | Packet sessions | Complete | Enrollment packet flows |
 | Review rollup MVP | Complete | Packet review console |
 | DCP / UX hardening | In Progress | Sprint `later-phase/` |
+| Record identity resolution | Complete (promotion candidate) | Processing Case identity review for public lead-capture and Manual Create Lead; locally certified, awaiting staging reconciliation |
 
 ---
 
@@ -96,6 +97,12 @@ Import Form → Review Alloy's understanding → Generate native form → Studio
 Review uses human language ("Where should this answer go?", "Store on Child"). Implementation
 labels stay under Advanced or off-screen.
 
+### Identity resolution and public intake
+
+For lead-capture submissions, the public submit route opens/reuses a Processing Case and persists source facts and candidate resolutions. It does **not** create or link `persons`, `customers`, `customer_members`, or `opportunities` at submit time. Operators review candidates/corrections, build and approve an immutable Commit Plan, then explicitly invoke the executor.
+
+Manual Create Lead uses the same source-agnostic Processing spine. `applyFormIntakeSafe` is retired and throw-only; the C1 comparison helpers are retained for audit, not runtime authority. There is no source-cutover feature flag.
+
 ### Studio — Forms and Builder
 
 Canvas-first interaction translated from Surface Builder:
@@ -132,6 +139,7 @@ See `docs/sprints/archive/07_2026/processing-v1-lock-closeout.md`.
 - Opportunity drawer — packet review modal, form status
 - Workflows — submission events
 - Field policy — forms parity with settings **planned**
+- Processing Identity Resolution — public lead-capture and Manual Create Lead source adapters; facts/resolutions/approval/executor
 
 ---
 

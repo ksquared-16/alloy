@@ -44,6 +44,7 @@ Foundations operators and implementers can rely on today:
 - Focus Panel + VM Runtime hard cutover (Opportunity, Person, Child)
 - Current Work Focus Panel surface (PR #95)
 - Processing operational workspace (Digital Mailroom)
+- Processing Identity Resolution V1 — locally certified promotion candidate: canonical candidate resolution, durable evidence, approved immutable Commit Plans, executor, and authoritative Create Lead/public-form intake
 - Communications Command Center + identity platform
 - Platform simplification — legacy drawer deleted; canonical location Settings surface
 - TypeScript canonical typecheck + workspace orchestration

@@ -48,7 +48,7 @@ Work units, departments, and internal routing constructs support this model but 
 - **Database:** Supabase Postgres with RLS (`org_id` scoping)
 - **Side effects:** Events (`workflow_events`) → workflows → actions → effects
 - **Record truth:** Resolver-backed entity GET — not queue previews
-- **Identity:** `persons` + `customer_persons` canonical; `contacts` compatibility only
+- **Identity:** `persons` + `customer_persons` canonical; `contacts` compatibility only. Inbound identity for Manual Create Lead and public lead-capture forms resolves through Processing facts/resolutions → immutable Commit Plan → approval → explicit executor commit.
 
 ---
 

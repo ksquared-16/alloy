@@ -87,6 +87,15 @@ Canonical spine: **Workspace → Perspective → Queue → Row → Drawer → Co
 | **Customer person** | `customer_persons` — person ↔ customer link. |
 | **Contact** | Legacy compatibility — not forward CRM identity. |
 | **Customer** | Household/account shell. |
+| **Processing** | Inbound information-resolution runtime: source intake → facts/evidence → identity resolution → recommendation/plan → approval → explicit commit. |
+| **Processing Case** | Durable org-scoped unit of inbound work and its source/replay boundary. |
+| **Intake Envelope** | Immutable source event plus trusted context presented to a Processing adapter. |
+| **Identity Subject** | Provisional real-world parent, child, or household being resolved. |
+| **Candidate Match** | Existing canonical record that may represent an Identity Subject, with signals/conflicts. |
+| **Identity Resolution** | Deterministic, human-authoritative selection between linking an existing record, creating a record, requesting information, or rejecting/escalating. |
+| **Commit Plan** | Versioned immutable set of registered semantic operations; approval binds to its exact version and content hash. |
+| **Commit Attempt** | One audited executor invocation with per-operation results, compensation, and retry identity. |
+| **Merge** | Privileged proposal to collapse duplicate existing records. Propose-only in Processing Identity V1; never an intake side effect. |
 
 ---
 

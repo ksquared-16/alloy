@@ -31,6 +31,24 @@ supersedes: []
 
 **Deferred follow-ups** (recorded, not implemented) — see [`../../audits/active/operational-expansion-architecture-audit-2026-07.md`](../../audits/active/operational-expansion-architecture-audit-2026-07.md) §4: **F4/G10** consumption lineage uniqueness; **F5/G11** superseded obligation review-queue visibility.
 
+### July 2026 — Processing Identity Resolution V1 (promotion candidate)
+
+**Implemented locally and locally certified; awaiting staging reconciliation; not promoted or deployed.**
+
+- Canonical identity normalization, org-scoped candidate generation, confidence bands, evidence signals, and conflict detection
+- Durable Processing facts and resolution generations
+- Registered semantic identity commands; no arbitrary table operations in plans
+- Versioned immutable Commit Plans and approvals bound to exact version/content hash
+- Deterministic executor with atomic identity RPC, stale-plan preflight, idempotent retry, compensation audit, and exceptions
+- Operator review/correction/plan/approve/explicit-commit flow in Digital Mailroom
+- Manual Create Lead and public lead-capture forms cut over to Processing; zero identity writes before approval
+- D4/D5 direct-write replay and fallback authority retired
+- Org-scoped RLS hardening, including authenticated `has_org_role` recursion fix
+
+Local certification: 263-migration fresh replay, 17/17 database checks, 29/29 integration scenarios, 119/119 combined Processing + resolver tests on isolated serial execution, production/test typechecks, and production build.
+
+---
+
 ### July 2026 — Platform Stabilization Complete
 
 **Initiative closed.** Foundational platform architecture is certified stable. Formal declaration: [`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md). Constitutional doctrine: [`platform-manifesto.md`](../foundation/platform-manifesto.md).

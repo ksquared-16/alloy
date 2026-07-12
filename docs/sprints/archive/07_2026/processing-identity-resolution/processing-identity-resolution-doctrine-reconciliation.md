@@ -1,6 +1,18 @@
 # Processing Identity Resolution — Doctrine Reconciliation
 
-**Baseline:** `origin/staging` @ `65afc8527`. This table lists documentation that must change **if this architecture is approved**. Per repo governance (`documentation-governance.md`): freeze before documenting — this sprint lives under `docs/sprints/archive/07_2026/`; canonical `docs/platform/` edits happen only at closeout, when decisions are frozen. **No doctrine is edited now.**
+**Status:** Closeout reconciliation record. **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+
+**Design baseline:** `origin/staging` @ `65afc8527`. The table below is the original design-time reconciliation ledger; the closeout disposition is now recorded here and in the affected canonical docs.
+
+## Closeout disposition
+
+- Updated: `docs/platform/foundation/architecture.md`, `platform-capabilities.md`, `product-roadmap.md`, `release-history.md`.
+- Updated: `docs/platform/core/entity-model.md`, `record-system.md`.
+- Updated: `docs/platform/modules/documents-and-forms.md`.
+- Updated: `docs/platform/governance/implementation-patterns.md`, `glossary.md`.
+- Verified with no new Processing event keys required: `docs/platform/foundation/platform-event-catalog.md`; executor operation results are attempt audit data, not new `workflow_events`.
+- Preserved without broad rewrite: Business Process doctrine and unrelated product/form historical docs. Processing resolves inbound identity and hands off; it does not redefine Business Process ownership.
+- Generated schema references were regenerated against the isolated certified stack. The sprint-owned processing entries were already current; unrelated communication-schema regressions from the older branch baseline were intentionally not committed.
 
 | Document | Current statement | Runtime evidence | Required change | Architecture phase |
 |---|---|---|---|---|

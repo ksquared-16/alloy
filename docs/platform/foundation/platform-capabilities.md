@@ -23,6 +23,7 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | VM Runtime (Opportunity/Person/Child) | **Complete** | Hard cutover; no kill-switch rollback | Legacy drawer deleted |
 | Business Process Runtime | **Complete** | Landing → stage queues → record focus | Operator model frozen |
 | Processing Runtime | **Complete** | Digital Mailroom operational workspace | Reference module shell |
+| Processing Identity Resolution V1 | **Complete** (promotion candidate) | Canonical normalization/candidates, durable facts/resolutions, immutable approval-bound plans, deterministic executor, operator review, Create Lead + public-form cutovers | Locally certified; awaiting staging reconciliation; not deployed |
 | Communications Runtime | **Complete** | Command Center + Activity embed + identity platform | PR #132, #147 |
 | Configuration Runtime | **Complete** | `/settings/*` control plane + Surfaces builder | Locations inline create |
 | Current Work Runtime | **Complete** | Config-driven stage work in Focus Panel | PR #95 |
@@ -118,6 +119,7 @@ The frozen [Operational Expectations architecture](../operational-expectations-s
 | Enrollment packet Phase 1 | **Complete** | E2E intake | |
 | Packet review MVP (P2-1–4) | **Complete** | Review rollup console | |
 | DCP / UX hardening | **In Progress** | Phase 2 remainder | |
+| Inbound identity resolution | **Complete** (promotion candidate) | Public lead-capture and Manual Create Lead enter Processing; zero identity writes before approval | Explicit commit; no legacy fallback or runtime flag |
 
 ## Actions & workflows
 

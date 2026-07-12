@@ -1,14 +1,14 @@
 # Processing Identity Resolution — Implementation Plan (Cursor-ready, V1 FROZEN)
 
-**Status: Frozen for V1 implementation.** Cursor: (1) verify baseline SHA, (2) inspect named code, (3) implement the bounded slice, (4) run named tests, (5) report deviations. **Cursor makes no architectural decisions — all are frozen in [open-decisions](processing-identity-resolution-open-decisions.md) and the [RFC](processing-identity-resolution-architecture-rfc.md).** Branch from the **promoted `origin/staging` tip** (recorded in the README / handoff), not the old design baseline.
+**Status:** Historical implementation plan; V1 slices B1a through E1 are **implemented locally and locally certified**. The branch is **awaiting staging reconciliation, not promoted, and not deployed.** Frozen decisions remain authoritative in [open-decisions](processing-identity-resolution-open-decisions.md) and the [RFC](processing-identity-resolution-architecture-rfc.md).
 
 **Global non-goals (all slices):** no OCR; no AI in extraction/matching/commit; no email-attachment/inbound-email intake; no destructive schema before parity; no new source-specific matcher/normalizer; no raw identity writes from Processing (semantic commands only); no auto-commit of identity.
 
-**Validation baseline (every slice):** `cd web && npm run typecheck:build` passes; run the slice's named tests; gate on *new* failures only vs an isolated-worktree diff (repo vitest baseline ~750 red). Node 20+. (Staging recently split/hardened typecheck scripts — use the canonical `typecheck:build`.)
+**Final validation:** `npm run cert:processing-identity-full` resets the isolated stack, replays migrations, runs the 17-check database certification, runs the serial Processing suites, then runs `npm run typecheck`, `npm run typecheck:tests`, and the production build.
 
 ---
 
-## Slice DAG (frozen)
+## Slice DAG (completed V1 sequence)
 
 ```
 B0  Tenant security prerequisites ───────────── (independent, parallel; never bundled with B1a)
@@ -24,7 +24,7 @@ B2  Durable facts / evidence            (processing_facts + case/source extensio
  ▼
 B3  Resolver persistence                (real RecordResolver → processing_resolutions; proposals only)
  ▼
-C1  Public-form shadow mode             (build plans, never execute; divergence recorder)
+C1  Public-form comparison              (historical pre-cutover divergence recorder)
  │
 D0  Registered identity commands ◄──────┘   (semantic record/link/participation commands; uniqueness after de-dup)
  ▼
@@ -38,14 +38,10 @@ D4  Manual Create Lead reviewed cutover  (FIRST executor cutover; low blast radi
  ▼
 D5  Public form reviewed cutover         (after executor validation; largest dup-prevention win)
  ▼
-E   Remaining source adapters            (document/packet · book-v2 · gutters+backend retire · vendor)
- ▼
-F   Merge workflow and broader graph     (privileged merge execution; import; multi-household)
- ▼
-G   Controlled policy automation         (versioned org policy; measured accuracy only)
+E1  Direct-write retirement              (Create Lead + public forms only)
 ```
 
-**Parallelization.** B0 runs on its own branch in parallel with the B-line. **B0 and B1a are never bundled** (unrelated concerns: security vs normalization). E-slices are mutually independent after D5. F/G are last. Critical path: **B1a→B1b→B2→B3→C1** and **D0→D1→D2→D3→D4→D5**.
+All listed V1 slices are complete on `claude/proc-identity-lib-normalization`. Remaining source adapters, privileged merge execution, import/multi-household work, and policy automation are future roadmap work outside this sprint.
 
 ---
 
@@ -76,28 +72,24 @@ See the exact first-slice box below. **Includes only:** canonical email / phone 
 - **Inspect:** `20260612120100_pos_processing_cases_v1.sql`; `lib/pos/processingCase/*`.
 - **Schema:** additive tables/columns + RLS (`has_org_role` + service) + immutability trigger on `processing_facts`; `retention_class` column from foundation (data-model §7).
 - **Non-goals:** no writes wired; no uniqueness; no purge job.
-- **Tests:** migration applies; RLS + immutability tests. **Flags:** `PROCESSING_PERSIST_FACTS`(off). **Rollback:** drop migration. **Exit (G3):** facts populate with lineage under flag. **Cursor boundary:** match data-model column list; flag ambiguous types.
+- **Implemented:** migration, org-scoped RLS, immutable facts, append-only corrections, and source lineage. **Runtime toggle:** none required by the authoritative D4/D5 paths.
 
 ## B3 — Resolver persistence
 - **Objective:** implement the real `RecordResolver` behind the seam (B1a+B1b), persisting `processing_resolutions` (gate G4). Proposals only.
 - **Dependencies:** B1a, B1b, B2.
 - **Inspect:** `recordResolverSeam.ts`, `intake/resolve/*`.
 - **Non-goals:** no plan; no identity writes; no commit.
-- **Tests:** integration (envelope→facts→resolutions); parity vs `resolveIntakeRecordResolution`. **Flags:** `PROCESSING_REAL_RESOLVER`(off). **Rollback:** flag→deferred stub. **Exit (G4):** persisted proposals; parity green. **Cursor boundary:** reuse `matchIdentity`/`queryMatches`; do not fork.
+- **Implemented:** canonical engine persists org-scoped resolution generations and candidate evidence through the existing resolver seam. **Runtime toggle:** none required by the authoritative D4/D5 paths.
 
-## C1 — Public-form shadow mode
-- **Objective:** forms build a proposed `processing_commit_plans` while legacy commits; record divergence (gates G5 build-only, G8 parity).
-- **Dependencies:** B3, D1 (plan builder).
-- **Inspect:** `forms/intake/*`, `maybeOpenProcessingCaseFromFormSubmissionSafe`.
-- **Non-goals:** no engine commit; no legacy change.
-- **Schema:** `form_submissions.submission_idempotency_key`. **Tests:** shadow harness. **Flags:** `PROCESSING_SHADOW_FORMS`(pilot). **Observability:** divergence dashboard (would-create-dup must be 0). **Exit (G8):** would-create-dup==0, agreement≥target. **Rollback:** flag off. **Cursor boundary:** plan built + stored, never executed.
+## C1 — Public-form shadow certification (historical bridge)
+- **Implemented outcome:** comparison tooling validated canonical resolution without identity mutation. It is retained for audit only and is not an active authority path after D5.
 
 ## D0 — Registered identity commands
 - **Objective:** register semantic commands + uniqueness (gate G7).
 - **Dependencies:** B1a (normalizer for de-dup), B2.
 - **Scope:** register `create_person`, `create_household`, `link_person_to_household`, `add_child_to_household`, `create_lead`, `link_person_to_lead`, `create_process_participation`, `update_record_fields`, `attach_document`; register `person_status` handler; add uniqueness (`customer_members` natural key; opportunity/submission/event idempotency) **after** a `lib/identity` de-dup backfill (collisions quarantined, never force-merged). `create_process_participation` owns OCM↔`process_instances` mapping (Decision B).
 - **Inspect:** `lib/mutations/*`, `lib/admin/actions/*`, `entryLifecycleActions.ts`, `lib/persons/*`.
-- **Tests:** each command idempotent (double-call = one record); backfill collision report; uniqueness enforced. **Flags:** ~~`PROCESSING_RECORD_COMMANDS`~~ **— superseded: D0 introduces NO feature flag** (safety is architectural; commands reachable only via the server-side registry, never from intake sources). **Deps:** B1a. **Risk:** backfill collisions — quarantine. **Cursor boundary:** wrap existing helpers; report collision volume before adding uniques.
+- **Tests:** each command idempotent (double-call = one record); backfill collision report; uniqueness enforced. **Runtime toggle:** none; safety is architectural and commands are reachable only through the server-side registry. **Deps:** B1a. **Risk:** backfill collisions — quarantine. **Cursor boundary:** wrap existing helpers; report collision volume before adding uniques.
 
 ## D1 — Commit Plan + approval
 - **Objective:** generalize `CreateLeadCommitSelection` → persisted, versioned, immutable `processing_commit_plans`/`_plan_operations` + `processing_approvals` (gates G5, G6). No execution.
@@ -115,22 +107,23 @@ See the exact first-slice box below. **Includes only:** canonical email / phone 
 - **Objective:** three-pane review (Evidence/Resolution/Plan); accept/reject/declare-new/mark-unresolved; approve one immutable plan.
 - **Dependencies:** D1, D2.
 - **Inspect:** `intakeCasePresentation.ts`, submission linkage-review components, `ProcessingModal`.
-- **Non-goals:** no Digital Mailroom restyle (frozen). **Tests:** component + approval-binds-to-hash. **Flags:** **superseded — none** (D3 is a real working operator workflow on the existing Processing surface; no flag/toggle). Note: **D4/D5 source-cutover flags remain** — they gate *authoritative source integration*, which is explicitly out of the D0–D3 batch.
+- **Non-goals:** no Digital Mailroom restyle (frozen). **Tests:** component + approval-binds-to-hash. **Flags:** none.
 
-## D4 — Manual Create Lead reviewed cutover (FIRST executor cutover, gate G9)
-- **Objective:** route Create Lead commit through plan→approval→executor for pilot org; `executeCreateLeadHouseholdCommit` becomes fallback.
-- **Dependencies:** D2, D3.
-- **Tests:** scenarios 1–5,18–23; dup-regression guard. **Flags:** `PROCESSING_COMMIT_CREATE_LEAD`(pilot). **Rollback:** flag off→legacy. **Exit (G9):** pilot on engine, no dup regression, acceptable review load.
+## D4 — Manual Create Lead reviewed cutover (first executor cutover, complete)
+- **Implemented outcome:** Create Lead routes exclusively through intake → resolution → plan → approval → explicit executor commit. The direct-write fallback is retired and there is no source flag.
 
-## D5 — Public form reviewed cutover
-- **Objective:** route forms lead-capture commit through the engine (de-risked by C1 shadow + D4 executor); `applyFormIntakeSafe` fallback.
-- **Dependencies:** D4, C1 (G8).
-- **Tests:** forms scenarios; dup-regression. **Flags:** `PROCESSING_COMMIT_FORMS`(pilot). **Rollback:** flag off.
+## D5 — Public form reviewed cutover (complete)
+- **Implemented outcome:** public lead-capture submissions create Processing facts/resolutions and zero identity records before operator approval and explicit commit. `applyFormIntakeSafe` is a throw-only retired boundary; there is no source flag.
 
-## E · F · G
-- **E** Remaining source adapters — document/packet (wire real resolver seam) → book-v2 quote-start (share ambiguity-aware matcher) → gutters+backend cleaning leads (**retire**) → vendor; each an independent flag-gated slice: adapter + tests + retire legacy + remove dead code (`applyFormLeadCaptureIntake.ts`, `deferredRecordResolver`); retire global `contacts` uniques after person-first parity (gate G10).
-- **F** Merge workflow + broader graph — privileged `identity_merges` execution (Decision H), import adapter, multi-household split.
-- **G** Controlled policy automation — versioned org `processing_policies`; only on measured accuracy; never overrides hard protections.
+## E1 — Direct-write retirement (complete)
+- Manual Create Lead and public forms each have one authoritative identity mutation path through Processing.
+- `__legacyDirectWriteReplay` is removed and `applyFormIntakeSafe` always throws.
+- Other source families (document/packet, book-v2, gutters/backend, vendor, import, communications-derived) are future independent adapters, not duplicate D4/D5 authority.
+
+## Deferred beyond V1
+- Remaining source adapters and compatibility retirement.
+- Privileged merge execution, import, and broader household graph operations.
+- Versioned policy automation. No such automation may bypass human approval for V1 identity changes.
 
 ---
 
