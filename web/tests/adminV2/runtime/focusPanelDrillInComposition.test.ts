@@ -387,11 +387,12 @@ describe("Focus Panel in-canvas drill-in composer wiring", () => {
         expect(canvas).toContain("data-fp-composer-edit-mode");
     });
 
-    it("uses inline runtime field editing and metadata-only drill-in inspector", () => {
+    it("mounts shared identity builder inspector for household and children drill-in", () => {
         expect(householdCard).toContain("NestedSurfaceAddField");
         expect(householdCard).toContain("IdentityRecordSummary");
+        expect(drillInspector).toContain("IdentitySurfaceBuilderInspector");
+        expect(drillInspector).toContain('data-focus-panel-drill-in-mode={identitySurface ? "identity-builder" : "metadata"}');
         expect(drillInspector).toContain("metadataOnly");
-        expect(drillInspector).not.toContain("data-inspector-field-list");
         expect(cardInspector).toContain("metadataOnly");
     });
 

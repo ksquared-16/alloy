@@ -147,15 +147,18 @@ function FocusPanelComposerInspectorSlot({
 
 function FocusPanelInspectorColumn(props: Parameters<typeof FocusPanelComposerInspectorSlot>[0]) {
     const composer = useFocusPanelComposer();
-    const drillIn = Boolean(composer?.drillIn);
+    const drillIn = composer?.drillIn;
+    const identityBuilderDrillIn =
+        Boolean(drillIn)
+        && (drillIn!.surfaceId === "household_surface" || drillIn!.surfaceId === "children_surface");
     return (
         <div
             className={[
                 "shrink-0 overflow-y-auto rounded-xl border border-alloy-stone/15 bg-white",
-                drillIn ? "w-[300px]" : "w-[380px]",
+                identityBuilderDrillIn ? "w-[360px]" : drillIn ? "w-[300px]" : "w-[380px]",
             ].join(" ")}
             data-surface-inspector="true"
-            data-surface-inspector-mode={drillIn ? "drill-in-metadata" : "card"}
+            data-surface-inspector-mode={identityBuilderDrillIn ? "identity-builder" : drillIn ? "drill-in-metadata" : "card"}
         >
             <FocusPanelComposerInspectorSlot {...props} />
         </div>

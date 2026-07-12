@@ -1,8 +1,13 @@
 "use client";
 
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
+import IdentitySurfaceBuilderInspector from "@/components/adminV2/settings/surfaces/composer/IdentitySurfaceBuilderInspector";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
-import { nestedSurfaceLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    CHILDREN_SURFACE_ID,
+    HOUSEHOLD_SURFACE_ID,
+    nestedSurfaceLabel,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { FocusPanelCardConfig } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { SummaryCardOrderEntry } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryDocOps";
@@ -21,9 +26,13 @@ type Props = {
     history: HistoryInfo;
 };
 
+function isIdentitySurfaceId(surfaceId: string): boolean {
+    return surfaceId === HOUSEHOLD_SURFACE_ID || surfaceId === CHILDREN_SURFACE_ID;
+}
+
 /**
- * Surface Composer V3 — secondary metadata rail during in-canvas drill-in.
- * Presentation and field policy live inline on the runtime; this rail holds card metadata only.
+ * Focus Panel drill-in inspector — identity surfaces mount the shared layout composer;
+ * other nested surfaces keep metadata-only card inspector.
  */
 export default function FocusPanelDrillInInspector({
     drillCardKey,
@@ -39,9 +48,24 @@ export default function FocusPanelDrillInInspector({
     if (!composer || !drillIn || !surfaceId) return null;
 
     const breadcrumb = drillInLabel(drillCardKey, drillIn.depth);
+    const identitySurface = isIdentitySurfaceId(surfaceId);
+
+    const selectedGroupKey =
+        composer.selection?.kind === "region" || composer.selection?.kind === "field"
+            ? composer.selection.groupKey
+            : null;
+
+    const selectedFieldId =
+        composer.selection?.kind === "field"
+            ? `${composer.selection.groupKey}:${composer.selection.fieldKey}`
+            : null;
 
     return (
-        <div className="flex h-full min-h-0 flex-col" data-focus-panel-drill-in-inspector={surfaceId}>
+        <div
+            className="flex h-full min-h-0 flex-col"
+            data-focus-panel-drill-in-inspector={surfaceId}
+            data-focus-panel-drill-in-mode={identitySurface ? "identity-builder" : "metadata"}
+        >
             <header className="border-b border-alloy-stone/10 px-4 py-3">
                 <button
                     type="button"
@@ -58,19 +82,51 @@ export default function FocusPanelDrillInInspector({
                     {nestedSurfaceLabel(surfaceId)}
                 </h2>
                 <p className="mt-0.5 text-xs text-alloy-midnight/50">
-                    Edit fields directly on the runtime surface. This panel is for card metadata only.
+                    {identitySurface
+                        ? "Configure layout — drag fields, set width, and manage evidence collections."
+                        : "Edit fields directly on the runtime surface. This panel is for card metadata only."}
                 </p>
             </header>
-            <div className="min-h-0 flex-1 overflow-hidden">
-                <FocusPanelCardInspector
-                    baseModel={drillModel}
-                    instanceId={drillEntry.instanceId}
-                    config={drillEntry.config ?? {}}
-                    onChange={(config) => onConfigChange(drillEntry.instanceId, config)}
-                    onClose={() => composer.exitDrillIn()}
-                    history={history}
-                    metadataOnly
-                />
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                {identitySurface ?
+                    <IdentitySurfaceBuilderInspector
+                        surfaceId={surfaceId}
+                        config={composer.configFor(surfaceId)}
+                        onChange={(next) => composer.updateConfig(surfaceId, next)}
+                        selectedGroupKey={selectedGroupKey}
+                        onSelectGroup={(groupKey) => {
+                            if (groupKey) {
+                                composer.select({ kind: "region", surfaceId, groupKey });
+                            } else {
+                                composer.select(null);
+                            }
+                        }}
+                        selectedFieldId={selectedFieldId}
+                        onSelectField={(fieldId) => {
+                            if (!fieldId) {
+                                composer.select(
+                                    selectedGroupKey
+                                        ? { kind: "region", surfaceId, groupKey: selectedGroupKey }
+                                        : null,
+                                );
+                                return;
+                            }
+                            const colon = fieldId.indexOf(":");
+                            const groupKey = fieldId.slice(0, colon);
+                            const fieldKey = fieldId.slice(colon + 1);
+                            composer.select({ kind: "field", surfaceId, groupKey, fieldKey });
+                        }}
+                    />
+                :   <FocusPanelCardInspector
+                        baseModel={drillModel}
+                        instanceId={drillEntry.instanceId}
+                        config={drillEntry.config ?? {}}
+                        onChange={(config) => onConfigChange(drillEntry.instanceId, config)}
+                        onClose={() => composer.exitDrillIn()}
+                        history={history}
+                        metadataOnly
+                    />
+                }
             </div>
         </div>
     );
