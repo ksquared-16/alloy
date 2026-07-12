@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **Function count:** 2968
+**Generated:** 2026-07-12 · **Function count:** 3282
 
 | Schema | Function | Return type | Security |
 |--------|----------|-------------|----------|
@@ -792,6 +792,143 @@
 | `end;` | `` | — | — |
 | `$function$` | `` | — | — |
 | `public` | `` | — | — |
+| ` RETURNS jsonb` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| ` SECURITY DEFINER` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `declare` | `` | — | — |
+| `    v_mutation_id  uuid := gen_random_uuid();` | `` | — | — |
+| `    v_previous_key text;` | `` | — | — |
+| `    v_opportunity_id uuid;` | `` | — | — |
+| `begin` | `` | — | — |
+| `    -- Lock and read current state` | `` | — | — |
+| `    from opportunity_customer_members` | `` | — | — |
+| `    where id = p_ocm_id` | `` | — | — |
+| `      and org_id = p_org_id` | `` | — | — |
+| `    for update;` | `` | — | — |
+| `public` | `` | — | — |
+| `    if not found then` | `` | — | — |
+| `        raise exception 'ocm_not_found';` | `` | — | — |
+| `    end if;` | `` | — | — |
+| `public` | `` | — | — |
+| `    if v_previous_key = p_new_status_key then` | `` | — | — |
+| `        raise exception 'no_state_change';` | `` | — | — |
+| `    end if;` | `` | — | — |
+| `public` | `` | — | — |
+| `    -- Write canonical state (enrollment_status domain only)` | `` | — | — |
+| `    update opportunity_customer_members` | `` | — | — |
+| `    set outcome_status_key = p_new_status_key` | `` | — | — |
+| `        updated_at         = now()` | `` | — | — |
+| `    where id     = p_ocm_id` | `` | — | — |
+| `      and org_id = p_org_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    -- Outbox record` | `` | — | — |
+| `    insert into mutation_events (` | `` | — | — |
+| `        context_payload` | `` | — | — |
+| `    ) values (` | `` | — | — |
+| `        p_context_payload` | `` | — | — |
+| `    );` | `` | — | — |
+| `public` | `` | — | — |
+| `    return jsonb_build_object(` | `` | — | — |
+| `    );` | `` | — | — |
+| `end;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS jsonb` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| ` SECURITY DEFINER` | `` | — | — |
+| ` SET search_path TO 'public'` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `declare` | `` | — | — |
+| `    v_old_status_key text;` | `` | — | — |
+| `    v_mutation_id    uuid := gen_random_uuid();` | `` | — | — |
+| `begin` | `` | — | — |
+| `    -- Read current state (will error if not found / wrong org)` | `` | — | — |
+| `    select status_key into v_old_status_key` | `` | — | — |
+| `    from opportunities` | `` | — | — |
+| `    where id = p_opportunity_id and org_id = p_org_id` | `` | — | — |
+| `    for update;` | `` | — | — |
+| `public` | `` | — | — |
+| `    if not found then` | `` | — | — |
+| `        raise exception 'opportunity_not_found';` | `` | — | — |
+| `    end if;` | `` | — | — |
+| `public` | `` | — | — |
+| `    if v_old_status_key = p_new_status_key then` | `` | — | — |
+| `        raise exception 'no_state_change';` | `` | — | — |
+| `    end if;` | `` | — | — |
+| `public` | `` | — | — |
+| `    -- Write state` | `` | — | — |
+| `    update opportunities` | `` | — | — |
+| `    set status_key = p_new_status_key` | `` | — | — |
+| `        updated_at = now()` | `` | — | — |
+| `    where id = p_opportunity_id and org_id = p_org_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `    -- Write outbox (same transaction — atomicity guaranteed)` | `` | — | — |
+| `    insert into mutation_events (` | `` | — | — |
+| `    ) values (` | `` | — | — |
+| `    );` | `` | — | — |
+| `public` | `` | — | — |
+| `    return jsonb_build_object(` | `` | — | — |
+| `    );` | `` | — | — |
+| `end;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS jsonb` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| ` SECURITY DEFINER` | `` | — | — |
+| ` SET search_path TO 'public'` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
+| `    v_refs   jsonb := '{}'::jsonb;` | `` | — | — |
+| `    v_op     jsonb;` | `` | — | — |
+| `    v_op_id  text;` | `` | — | — |
+| `    v_key    text;` | `` | — | — |
+| `    v_pl     jsonb;` | `` | — | — |
+| `    v_new_id uuid;` | `` | — | — |
+| `    v_person uuid;` | `` | — | — |
+| `    v_house  uuid;` | `` | — | — |
+| `    v_role   text;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    FOR v_op IN SELECT * FROM jsonb_array_elements(p_operations)` | `` | — | — |
+| `    LOOP` | `` | — | — |
+| `        v_op_id := v_op ->> 'op_id';` | `` | — | — |
+| `        v_key   := v_op ->> 'command_key';` | `` | — | — |
+| `        v_pl    := v_op -> 'payload';` | `` | — | — |
+| `public` | `` | — | — |
+| `        IF v_key = 'create_person' THEN` | `` | — | — |
+| `            VALUES (` | `` | — | — |
+| `                p_org_id` | `` | — | — |
+| `                v_pl ->> 'first_name'` | `` | — | — |
+| `                v_pl ->> 'last_name'` | `` | — | — |
+| `                v_pl ->> 'email'` | `` | — | — |
+| `                v_pl ->> 'phone'` | `` | — | — |
+| `            )` | `` | — | — |
+| `            RETURNING id INTO v_new_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `        ELSIF v_key = 'create_household' THEN` | `` | — | — |
+| `            RETURNING id INTO v_new_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `        ELSIF v_key = 'link_person_to_household' THEN` | `` | — | — |
+| `            RETURNING id INTO v_new_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `            INSERT INTO customer_members (` | `` | — | — |
+| `            )` | `` | — | — |
+| `            VALUES (` | `` | — | — |
+| `                p_org_id` | `` | — | — |
+| `                v_house` | `` | — | — |
+| `                v_pl ->> 'first_name'` | `` | — | — |
+| `                v_pl ->> 'last_name'` | `` | — | — |
+| `            )` | `` | — | — |
+| `            RETURNING id INTO v_new_id;` | `` | — | — |
+| `public` | `` | — | — |
+| `        ELSE` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `public` | `` | — | — |
+| `    END LOOP;` | `` | — | — |
+| `public` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
 | ` LANGUAGE plpgsql` | `` | — | — |
 | `AS $function$` | `` | — | — |
 | `begin` | `` | — | — |
@@ -1253,6 +1390,64 @@
 | `end;` | `` | — | — |
 | `$function$` | `` | — | — |
 | `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| ` SET search_path TO 'public'` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    RAISE EXCEPTION 'processing_commit_attempts is append-only; record a new attempt instead';` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| ` SET search_path TO 'public'` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    -- Only the supersession pointer + status may change after build.` | `` | — | — |
+| `    IF NEW.version IS DISTINCT FROM OLD.version` | `` | — | — |
+| `        OR NEW.content_hash IS DISTINCT FROM OLD.content_hash` | `` | — | — |
+| `        OR NEW.case_id IS DISTINCT FROM OLD.case_id` | `` | — | — |
+| `        OR NEW.org_id IS DISTINCT FROM OLD.org_id` | `` | — | — |
+| `        OR NEW.built_at IS DISTINCT FROM OLD.built_at THEN` | `` | — | — |
+| `        RAISE EXCEPTION 'processing_commit_plans core columns are immutable; create a new version instead';` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    RAISE EXCEPTION 'processing_facts rows are immutable; append a corrected fact instead';` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| ` SET search_path TO 'public'` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    RAISE EXCEPTION 'processing_plan_operations rows are immutable; build a new plan version instead';` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS text` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| ` IMMUTABLE` | `` | — | — |
+| ` SET search_path TO 'public'` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    IF p_val IS NULL THEN` | `` | — | — |
+| `        RETURN NULL;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `        RETURN p_refs ->> substring(p_val FROM 2);` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    RETURN p_val;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
 | ` RETURNS integer` | `` | — | — |
 | ` LANGUAGE plpgsql` | `` | — | — |
 | `AS $function$` | `` | — | — |
@@ -1305,6 +1500,24 @@
 | `begin` | `` | — | — |
 | `  return new;` | `` | — | — |
 | `end;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    NEW.updated_at = now();` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    NEW.updated_at = now();` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
 | `$function$` | `` | — | — |
 | `public` | `` | — | — |
 | ` RETURNS trigger` | `` | — | — |
@@ -1980,6 +2193,42 @@
 | ` LANGUAGE plpgsql` | `` | — | — |
 | `AS $function$` | `` | — | — |
 | `DECLARE` | `` | — | — |
+| `    loc_org uuid;` | `` | — | — |
+| `    svc_org uuid;` | `` | — | — |
+| `    plan_org uuid;` | `` | — | — |
+| `BEGIN` | `` | — | — |
+| `    IF NEW.location_id IS NOT NULL THEN` | `` | — | — |
+| `        SELECT l.org_id INTO loc_org FROM public.locations l WHERE l.id = NEW.location_id;` | `` | — | — |
+| `        IF loc_org IS NULL THEN` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF loc_org <> NEW.org_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'financial policy scope: location org mismatch' USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF NEW.service_id IS NOT NULL THEN` | `` | — | — |
+| `        SELECT s.org_id INTO svc_org FROM public.financial_services s WHERE s.id = NEW.service_id;` | `` | — | — |
+| `        IF svc_org IS NULL THEN` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF svc_org <> NEW.org_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'financial policy scope: service org mismatch' USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    IF NEW.rate_plan_id IS NOT NULL THEN` | `` | — | — |
+| `        SELECT p.org_id INTO plan_org FROM public.childcare_rate_plans p WHERE p.id = NEW.rate_plan_id;` | `` | — | — |
+| `        IF plan_org IS NULL THEN` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `        IF plan_org <> NEW.org_id THEN` | `` | — | — |
+| `            RAISE EXCEPTION 'financial policy scope: rate plan org mismatch' USING ERRCODE = '23514';` | `` | — | — |
+| `        END IF;` | `` | — | — |
+| `    END IF;` | `` | — | — |
+| `    RETURN NEW;` | `` | — | — |
+| `END;` | `` | — | — |
+| `$function$` | `` | — | — |
+| `public` | `` | — | — |
+| ` RETURNS trigger` | `` | — | — |
+| ` LANGUAGE plpgsql` | `` | — | — |
+| `AS $function$` | `` | — | — |
+| `DECLARE` | `` | — | — |
 | `    def_org uuid;` | `` | — | — |
 | `    ver_form uuid;` | `` | — | — |
 | `    ver_org uuid;` | `` | — | — |
@@ -2613,19 +2862,30 @@
 | `end;` | `` | — | — |
 | `$function$` | `` | — | — |
 | `public` | `` | — | — |
+| `        'ok'` | `             true` | — | — |
+| `        'ok'` | `             true` | — | — |
+| `        'new_state'` | `      p_new_status_key` | — | — |
+| `        'new_state'` | `      p_new_status_key` | — | — |
+| `        'mutation_id'` | `    v_mutation_id` | — | — |
+| `        'mutation_id'` | `    v_mutation_id` | — | — |
 | `  IF coalesce(trim(p_frequency_key)` | ` '') <> '' THEN` | — | — |
+| `                NULLIF(v_pl ->> 'dob'` | ` '')::date` | — | — |
 | `    SELECT coalesce(wu.queue_definition` | ` '{}'::jsonb)` | — | — |
 | `        COALESCE(p -> 'values'` | ` '{}'::jsonb)` | — | — |
 | `        COALESCE(p -> 'signatures'` | ` '{}'::jsonb)` | — | — |
 | `        COALESCE(p -> 'option_values_by_field_id'` | ` '{}'::jsonb)` | — | — |
 | `    (p_org_id` | ` 'admin'` | — | — |
 | `  select p_org_id` | ` 'admin'` | — | — |
+| `                coalesce(v_pl ->> 'relationship'` | ` 'child')` | — | — |
+| `                coalesce(v_pl ->> 'display_name'` | ` 'Child')` | — | — |
 | `        NEW.customer_number := public.next_org_scoped_record_number(NEW.org_id` | ` 'customer');` | — | — |
+| `        'update_child_enrollment_status'` | ` 'enrollment_status'` | — | — |
 | `      ' | Add-ons: $' || to_char(v_addons/100.0` | ` 'FM999990.00')` | — | — |
 | `    ' | First cleaning (base): $' || to_char(v_first/100.0` | ` 'FM999990.00') ||` | — | — |
 | `    ' | First visit total: $' || to_char((v_first + v_addons)/100.0` | ` 'FM999990.00') ||` | — | — |
 | `      to_char(v_recurring/100.0` | ` 'FM999990.00') || ' / visit' ||` | — | — |
 | `        NEW.job_number := public.next_org_scoped_record_number(NEW.org_id` | ` 'job');` | — | — |
+| `        ELSIF v_key IN ('create_child'` | ` 'link_child_to_household') THEN` | — | — |
 | `        NEW.location_number := public.next_org_scoped_record_number(NEW.org_id` | ` 'location');` | — | — |
 | `    ('ops.contacts.write'` | ` 'Manage contacts'` | — | — |
 | `    ('ops.customers.write'` | ` 'Manage customers'` | — | — |
@@ -2638,6 +2898,8 @@
 | `    ('admin.users.write'` | ` 'Manage users'` | — | — |
 | `    ('ops.workflows.write'` | ` 'Manage workflows'` | — | — |
 | `  IF lower(p_service_key) IN ('move_out_heavy'` | ` 'move-out'` | — | — |
+| `        p_ocm_id` | ` 'opportunity_customer_member'` | — | — |
+| `        p_opportunity_id` | ` 'opportunity'` | — | — |
 | `        NEW.opportunity_number := public.next_org_scoped_record_number(NEW.org_id` | ` 'opportunity');` | — | — |
 | `    (p_org_id` | ` 'ops'` | — | — |
 | `  select p_org_id` | ` 'ops'` | — | — |
@@ -2648,6 +2910,7 @@
 | ` SET search_path TO 'public'` | ` 'pg_temp'` | — | — |
 | ` SET search_path TO 'public'` | ` 'pg_temp'` | — | — |
 | ` SET search_path TO 'public'` | ` 'pg_temp'` | — | — |
+| `            v_role   := coalesce(v_pl ->> 'role_type'` | ` 'primary_contact');` | — | — |
 | `        NEW.schedule_number := public.next_org_scoped_record_number(NEW.org_id` | ` 'schedule');` | — | — |
 | `    ('ops.messaging.write'` | ` 'Send/manage messages'` | — | — |
 | `          AND css.source = ANY (ARRAY['task_assist'::text` | ` 'tour_scheduling'::text])  -- announcement execution: Phase 3` | — | — |
@@ -2680,6 +2943,7 @@
 | `    v_old := coalesce((cur->>'version')::integer` | ` 0);` | — | — |
 | `        v_old := coalesce((cur->>'version')::integer` | ` 0);` | — | — |
 | `    AND (coalesce(array_length(p_addon_keys` | ` 1)` | — | — |
+| `    IF left(p_val` | ` 1) = '@' THEN` | — | — |
 | `    return query select 9000` | ` 1000; -- job 11+` | — | — |
 | `    return query select 8000` | ` 2000; -- jobs 2-10` | — | — |
 | `    return query select 7000` | ` 3000; -- job 1` | — | — |
@@ -2691,6 +2955,7 @@
 | `    INTO agr_org` | ` agr_member` | — | — |
 | `  select contractor_bps` | ` alloy_bps` | — | — |
 | ` RETURNS TABLE(contractor_bps integer` | ` alloy_bps integer)` | — | — |
+| `        v_refs := jsonb_set(v_refs` | ` ARRAY[v_op_id]` | — | — |
 | `  -- If the OLD row is completed` | ` block historical rewrites` | — | — |
 | `    SELECT c.org_id` | ` c.opportunity_id INTO cand_org` | — | — |
 | `    SELECT c.org_id` | ` c.program_room_cohort_key` | — | — |
@@ -2699,14 +2964,20 @@
 | `    SELECT cm.org_id` | ` cm.customer_id` | — | — |
 | `        SELECT cm.org_id` | ` cm.customer_id` | — | — |
 | `    SELECT rol.id` | ` coalesce(rol.config` | — | — |
+| `            VALUES (p_org_id` | ` coalesce(v_pl ->> 'household_name'` | — | — |
 | `  -- contractor_payout: Dr Contractor COGS` | ` Cr Contractor Payable (or Cash if you pay immediately)` | — | — |
 | `  -- customer_charge (Stripe): Dr Stripe Clearing` | ` Cr Revenue (Gross)` | — | — |
 | `  -- processing_fee: Dr Processing Fees` | ` Cr Stripe Clearing` | — | — |
 | `        ORDER BY css.scheduled_for ASC` | ` css.id ASC` | — | — |
 | `    INTO layout_id` | ` cur` | — | — |
+| `            INSERT INTO customer_persons (org_id` | ` customer_id` | — | — |
+| `            ON CONFLICT (org_id` | ` customer_id` | — | — |
+| `                org_id` | ` customer_id` |  relationship |  last_name |
 | `            RAISE EXCEPTION 'schedule_patterns.weekdays element % out of range 0-6'` | ` d` | — | — |
 | `            NEW.org_id` | ` d_org` | — | — |
+| `        command_key` | ` domain` | — | — |
 | `        SELECT e.org_id` | ` e.enrollment_agreement_id INTO c_org` | — | — |
+| `        committed_at` | ` effective_at` | — | — |
 | `  -- prefer gross_price_cents if provided` | ` else fall back to estimated_total_cents.` | — | — |
 | `    -- If the opportunity is linked to a family/customer` | ` enforce member belongs to same family.` | — | — |
 | `        INSERT INTO public.record_overview_layouts (org_id` | ` entity_type` | — |  is_active) |
@@ -2720,6 +2991,7 @@
 | `        'is_visible_in_form'` | ` fd.is_visible_in_form` | — | — |
 | `        'is_visible_in_public_booking'` | ` fd.is_visible_in_public_booking` | — | — |
 | `        'is_visible_in_table'` | ` fd.is_visible_in_table` | — | — |
+| `            INSERT INTO persons (org_id` | ` first_name` | — | — |
 | `    SELECT g.org_id` | ` g.opportunity_id INTO grp_org` | — | — |
 | `      RAISE EXCEPTION 'next_org_scoped_record_number: unknown entity % (expected customer` | ` job` |  p_entity; |  vendor |
 | `            SELECT l.org_id` | ` l.location_type` | — | — |
@@ -2741,6 +3013,10 @@
 | `        RAISE EXCEPTION 'opportunity_customer_members: customer_member.customer_id % does not match opportunity.customer_id %'` | ` mem_customer` | — | — |
 | `        INTO mem_org` | ` mem_customer` | — | — |
 | `        RAISE EXCEPTION 'opportunity_customer_members: org_id mismatch (row %` | ` member %)'` | — | — |
+| `        org_id` | ` mutation_id` | — | — |
+| `            INSERT INTO customers (org_id` | ` name)` | — | — |
+| `        previous_state` | ` new_state` | — | — |
+| `        previous_state` | ` new_state` | — | — |
 | `            RAISE EXCEPTION 'child_attendance_events: corrects_event_id % not found'` | ` NEW.corrects_event_id USING ERRCODE = '23503';` | — | — |
 | `        RAISE EXCEPTION 'child_enrollment_agreements: customer_member_id % not found'` | ` NEW.customer_member_id` | — | — |
 | `            RAISE EXCEPTION 'placement_candidates: customer_member_id % not found'` | ` NEW.customer_member_id` | — | — |
@@ -2762,6 +3038,7 @@
 | `            RAISE EXCEPTION 'tour_bookings: form_submission_id % not found'` | ` NEW.form_submission_id;` | — | — |
 | `            WHERE l.id = ANY (ARRAY[NEW.room_location_id` | ` NEW.from_room_location_id` | — | — |
 | `        RAISE EXCEPTION 'user_site_access: location_id % does not exist'` | ` NEW.location_id` | — | — |
+| `            RAISE EXCEPTION 'financial policy scope: location_id % not found'` | ` NEW.location_id USING ERRCODE = '23503';` | — | — |
 | `        RAISE EXCEPTION 'tour_availability_rules: location_id % not found'` | ` NEW.location_id;` | — | — |
 | `        RAISE EXCEPTION 'tour_bookings: location_id % not found'` | ` NEW.location_id;` | — | — |
 | `        RAISE EXCEPTION 'tour_public_booking_links: location_id % not found'` | ` NEW.location_id;` | — | — |
@@ -2784,11 +3061,13 @@
 | `            RAISE EXCEPTION 'child_placements: program_category_id % not found'` | ` NEW.program_category_id` | — | — |
 | `            RAISE EXCEPTION 'childcare config scope: program_category_id % not found'` | ` NEW.program_category_id` | — | — |
 | `        RAISE EXCEPTION 'childcare rate rule: rate_plan_id % not found'` | ` NEW.rate_plan_id` | — | — |
+| `            RAISE EXCEPTION 'financial policy scope: rate_plan_id % not found'` | ` NEW.rate_plan_id USING ERRCODE = '23503';` | — | — |
 | `            RAISE EXCEPTION 'tour_bookings: rescheduled_from_booking_id % not found'` | ` NEW.rescheduled_from_booking_id;` | — | — |
 | `            RAISE EXCEPTION 'child_placements: room_location_id % not found'` | ` NEW.room_location_id` | — | — |
 | `            RAISE EXCEPTION 'child_placements: room_location_id % must be location_type unit'` | ` NEW.room_location_id` | — | — |
 | `            RAISE EXCEPTION 'childcare config scope: room_location_id % not found'` | ` NEW.room_location_id` | — | — |
 | `        RAISE EXCEPTION 'schedule_assignments: schedule_pattern_id % not found'` | ` NEW.schedule_pattern_id` | — | — |
+| `            RAISE EXCEPTION 'financial policy scope: service_id % not found'` | ` NEW.service_id USING ERRCODE = '23503';` | — | — |
 | `            RAISE EXCEPTION 'placement_candidates: site_id % not found'` | ` NEW.site_id USING ERRCODE = '23503';` | — | — |
 | `        RAISE EXCEPTION 'child_enrollment_agreements: site_location_id % not found'` | ` NEW.site_location_id` | — | — |
 | `        RAISE EXCEPTION 'child_placements: invalid site_location_id %'` | ` NEW.site_location_id` | — | — |
@@ -2801,6 +3080,7 @@
 | `    RAISE EXCEPTION 'jobs.work_unit_id % does not reference an existing work unit'` | ` NEW.work_unit_id` | — | — |
 | `    RAISE EXCEPTION 'opportunities.work_unit_id % does not reference an existing work unit'` | ` NEW.work_unit_id` | — | — |
 | `        -- revert to draft or void in place (void = a reversal row` | ` not an edit).` | — | — |
+| `        now()` | ` now()` | — | — |
 | `        SELECT o.org_id` | ` o.customer_id` | — | — |
 | `    SELECT o.org_id` | ` o.customer_id` | — | — |
 | `    SELECT o.org_id` | ` o.customer_id` | — | — |
@@ -2817,6 +3097,10 @@
 | `    INTO opp_org` | ` opp_customer` | — | — |
 | `    INTO opp_org` | ` opp_customer` | — | — |
 | `        RAISE EXCEPTION 'opportunity_persons: org_id mismatch (row %` | ` opportunity %)'` | — | — |
+| `    select outcome_status_key` | ` opportunity_id` | — | — |
+| `        id` | ` org_id` | — | — |
+| `        operator_id` | ` origin` | — | — |
+| `        operator_id` | ` origin` | — | — |
 | ` RETURNS TABLE(out_vertical_slug text` | ` out_service_key text` |  total_first_visit_cents integer |  recurring_cents integer |
 | `        VALUES (p_org_id` | ` p_entity_type` | — |  true) |
 | `        'is_visible_in_drawer'` | ` p_is_visible_in_drawer` | — | — |
@@ -2824,6 +3108,11 @@
 | `        'is_visible_in_public_booking'` | ` p_is_visible_in_public_booking` | — | — |
 | `        'is_visible_in_table'` | ` p_is_visible_in_table` | — | — |
 | `    raise exception 'ledger tx not found: %'` | ` p_ledger_tx_id;` | — | — |
+| `        v_previous_key` | ` p_new_status_key` | — | — |
+| `        v_old_status_key` | ` p_new_status_key` | — | — |
+| `        gen_random_uuid()` | ` p_org_id` | — | — |
+| `        p_operator_id` | ` p_origin` | — | — |
+| `        p_operator_id` | ` p_origin` | — | — |
 | `    RAISE EXCEPTION 'Unknown service_key for %: %'` | ` p_vertical_slug` | — | — |
 | `    RAISE EXCEPTION 'Unknown sqft tier_key for %: %'` | ` p_vertical_slug` | — | — |
 | `    RAISE EXCEPTION 'Missing first_clean price for % / % / %'` | ` p_vertical_slug` | — | — |
@@ -2867,8 +3156,11 @@
 | `    SELECT sp.org_id` | ` sp.site_location_id` | — | — |
 | `  SELECT st.id` | ` st.dimension_value_id INTO v_sqft_tier_id` | — | — |
 | `    SELECT st.id AS tier_id` | ` st.tier_key` | — | — |
+| `        subject_id` | ` subject_type` | — | — |
+| `        subject_id` | ` subject_type` | — | — |
 | `    RAISE EXCEPTION 'child_attendance_events is append-only: % is not allowed. Record a correction or reversal event instead.'` | ` TG_OP` | — | — |
 | `      RAISE EXCEPTION 'trg_assign_org_scoped_record_number: unexpected table %'` | ` TG_TABLE_NAME::text;` | — | — |
+| `    RETURN jsonb_build_object('ok'` | ` true` | — | — |
 | `    into v_contractor_bps` | ` v_alloy_bps` | — | — |
 | `      (v_tx.org_id` | ` v_entry_id` |  v_tx.job_id |  0 |
 | `      (v_tx.org_id` | ` v_entry_id` |  v_tx.job_id |  v_tx.amount_cents |
@@ -2877,7 +3169,18 @@
 | `      (v_tx.org_id` | ` v_entry_id` |  v_tx.job_id |  0 |
 | `      (v_tx.org_id` | ` v_entry_id` |  v_tx.job_id |  v_tx.amount_cents |
 | `      INTO v_frequency_id` | ` v_freq_label` | — | — |
+| `            VALUES (p_org_id` | ` v_house` | — | — |
+| `            RAISE EXCEPTION 'unsupported_atomic_group_command:%'` | ` v_key;` | — | — |
+| `        p_org_id` | ` v_mutation_id` | — | — |
+| `        'previous_state'` | ` v_old_status_key` | — | — |
+| `    into v_previous_key` | ` v_opportunity_id` | — | — |
+| `        'opportunity_id'` | ` v_opportunity_id` | — | — |
 | `    INTO v_service_offering_id` | ` v_org_id` | — | — |
+| `        'previous_state'` | ` v_previous_key` | — | — |
+| `                NULLIF(public.processing_resolve_ref(v_pl ->> 'person_id'` | ` v_refs)` | — | — |
+| `            v_person := public.processing_resolve_ref(v_pl ->> 'person_id'` | ` v_refs)::uuid;` | — | — |
+| `            v_house  := public.processing_resolve_ref(v_pl ->> 'household_id'` | ` v_refs)::uuid;` | — | — |
+| `            v_house := public.processing_resolve_ref(v_pl ->> 'household_id'` | ` v_refs)::uuid;` | — | — |
 | `    jsonb_build_object('ledger_transaction_id'` | ` v_tx.id)` | — | — |
 | `    raise exception 'missing required GL mappings for org %'` | ` v_tx.org_id;` | — | — |
 | `      raise exception 'missing contractor mappings (contractor_payable/contractor_cogs) for org %'` | ` v_tx.org_id;` | — | — |
@@ -2914,6 +3217,9 @@
 | `public` | `enforce_opportunities_work_unit_same_org` | trigger | false |
 | `public` | `enforce_task_assist_proposals_org_matches_opportunity` | trigger | false |
 | `public` | `ensure_vendor_primary_contact_link` | trigger | false |
+| `public` | `execute_enrollment_status_mutation` | jsonb | true |
+| `public` | `execute_lead_status_mutation` | jsonb | true |
+| `public` | `execute_processing_identity_group` | jsonb | true |
 | `public` | `fn_job_split_bps` | record | false |
 | `public` | `form_submission_canonical_capture` | jsonb | false |
 | `public` | `get_quote_pricing` | record | true |
@@ -2927,10 +3233,17 @@
 | `public` | `post_payment_to_ledger` | void | true |
 | `public` | `prevent_child_attendance_events_mutation` | trigger | false |
 | `public` | `prevent_completed_schedule_history_rewrite` | trigger | false |
+| `public` | `processing_commit_attempts_append_only_guard` | trigger | false |
+| `public` | `processing_commit_plans_immutable_guard` | trigger | false |
+| `public` | `processing_facts_immutable_guard` | trigger | false |
+| `public` | `processing_plan_operations_immutable_guard` | trigger | false |
+| `public` | `processing_resolve_ref` | text | false |
 | `public` | `round_to_nearest_5_cents` | integer | false |
 | `public` | `scaled_base_cents` | integer | false |
 | `public` | `seed_default_rbac` | void | true |
 | `public` | `set_person_full_name` | trigger | false |
+| `public` | `set_program_offering_variants_updated_at` | trigger | false |
+| `public` | `set_program_offerings_updated_at` | trigger | false |
 | `public` | `set_updated_at` | trigger | false |
 | `public` | `set_updated_at_opportunities` | trigger | false |
 | `public` | `sync_communication_template_version_legacy` | trigger | false |
@@ -2952,6 +3265,7 @@
 | `public` | `validate_child_placements_consistency` | trigger | false |
 | `public` | `validate_childcare_config_scope` | trigger | false |
 | `public` | `validate_childcare_rate_rule` | trigger | false |
+| `public` | `validate_financial_policy_scope` | trigger | false |
 | `public` | `validate_form_packet_items_form_org` | trigger | false |
 | `public` | `validate_form_packet_session_items_packet_match` | trigger | false |
 | `public` | `validate_form_packet_session_items_submission_org` | trigger | false |

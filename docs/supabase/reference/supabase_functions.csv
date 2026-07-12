@@ -849,6 +849,196 @@ begin
 end;
 $function$
 "
+public,execute_enrollment_status_mutation,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_ocm_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb",jsonb,"CREATE OR REPLACE FUNCTION public.execute_enrollment_status_mutation(p_org_id uuid, p_ocm_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+declare
+    v_mutation_id  uuid := gen_random_uuid();
+    v_previous_key text;
+    v_opportunity_id uuid;
+begin
+    -- Lock and read current state
+    select outcome_status_key, opportunity_id
+    into v_previous_key, v_opportunity_id
+    from opportunity_customer_members
+    where id = p_ocm_id
+      and org_id = p_org_id
+    for update;
+
+    if not found then
+        raise exception 'ocm_not_found';
+    end if;
+
+    if v_previous_key = p_new_status_key then
+        raise exception 'no_state_change';
+    end if;
+
+    -- Write canonical state (enrollment_status domain only)
+    update opportunity_customer_members
+    set outcome_status_key = p_new_status_key,
+        updated_at         = now()
+    where id     = p_ocm_id
+      and org_id = p_org_id;
+
+    -- Outbox record
+    insert into mutation_events (
+        id, org_id, mutation_id,
+        command_key, domain,
+        subject_id, subject_type,
+        previous_state, new_state,
+        operator_id, origin,
+        context_payload
+    ) values (
+        gen_random_uuid(), p_org_id, v_mutation_id,
+        'update_child_enrollment_status', 'enrollment_status',
+        p_ocm_id, 'opportunity_customer_member',
+        v_previous_key, p_new_status_key,
+        p_operator_id, p_origin,
+        p_context_payload
+    );
+
+    return jsonb_build_object(
+        'ok',             true,
+        'mutation_id',    v_mutation_id,
+        'previous_state', v_previous_key,
+        'new_state',      p_new_status_key,
+        'opportunity_id', v_opportunity_id
+    );
+end;
+$function$
+"
+public,execute_lead_status_mutation,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_opportunity_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb",jsonb,"CREATE OR REPLACE FUNCTION public.execute_lead_status_mutation(p_org_id uuid, p_opportunity_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+    v_old_status_key text;
+    v_mutation_id    uuid := gen_random_uuid();
+begin
+    -- Read current state (will error if not found / wrong org)
+    select status_key into v_old_status_key
+    from opportunities
+    where id = p_opportunity_id and org_id = p_org_id
+    for update;
+
+    if not found then
+        raise exception 'opportunity_not_found';
+    end if;
+
+    if v_old_status_key = p_new_status_key then
+        raise exception 'no_state_change';
+    end if;
+
+    -- Write state
+    update opportunities
+    set status_key = p_new_status_key,
+        updated_at = now()
+    where id = p_opportunity_id and org_id = p_org_id;
+
+    -- Write outbox (same transaction — atomicity guaranteed)
+    insert into mutation_events (
+        org_id, mutation_id, command_key, domain,
+        subject_id, subject_type,
+        previous_state, new_state,
+        operator_id, origin, context_payload,
+        committed_at, effective_at
+    ) values (
+        p_org_id, v_mutation_id, 'update_lead_status', 'lead_status',
+        p_opportunity_id, 'opportunity',
+        v_old_status_key, p_new_status_key,
+        p_operator_id, p_origin, p_context_payload,
+        now(), now()
+    );
+
+    return jsonb_build_object(
+        'ok',             true,
+        'mutation_id',    v_mutation_id,
+        'previous_state', v_old_status_key,
+        'new_state',      p_new_status_key
+    );
+end;
+$function$
+"
+public,execute_processing_identity_group,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_actor text, p_idempotency_key text, p_operations jsonb",jsonb,"CREATE OR REPLACE FUNCTION public.execute_processing_identity_group(p_org_id uuid, p_actor text, p_idempotency_key text, p_operations jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_refs   jsonb := '{}'::jsonb;
+    v_op     jsonb;
+    v_op_id  text;
+    v_key    text;
+    v_pl     jsonb;
+    v_new_id uuid;
+    v_person uuid;
+    v_house  uuid;
+    v_role   text;
+BEGIN
+    FOR v_op IN SELECT * FROM jsonb_array_elements(p_operations)
+    LOOP
+        v_op_id := v_op ->> 'op_id';
+        v_key   := v_op ->> 'command_key';
+        v_pl    := v_op -> 'payload';
+
+        IF v_key = 'create_person' THEN
+            INSERT INTO persons (org_id, first_name, last_name, email, phone)
+            VALUES (
+                p_org_id,
+                v_pl ->> 'first_name',
+                v_pl ->> 'last_name',
+                v_pl ->> 'email',
+                v_pl ->> 'phone'
+            )
+            RETURNING id INTO v_new_id;
+
+        ELSIF v_key = 'create_household' THEN
+            INSERT INTO customers (org_id, name)
+            VALUES (p_org_id, coalesce(v_pl ->> 'household_name', 'Household'))
+            RETURNING id INTO v_new_id;
+
+        ELSIF v_key = 'link_person_to_household' THEN
+            v_person := public.processing_resolve_ref(v_pl ->> 'person_id', v_refs)::uuid;
+            v_house  := public.processing_resolve_ref(v_pl ->> 'household_id', v_refs)::uuid;
+            v_role   := coalesce(v_pl ->> 'role_type', 'primary_contact');
+            INSERT INTO customer_persons (org_id, customer_id, person_id, role_type)
+            VALUES (p_org_id, v_house, v_person, v_role)
+            ON CONFLICT (org_id, customer_id, person_id, role_type) DO UPDATE SET role_type = EXCLUDED.role_type
+            RETURNING id INTO v_new_id;
+
+        ELSIF v_key IN ('create_child', 'link_child_to_household') THEN
+            v_house := public.processing_resolve_ref(v_pl ->> 'household_id', v_refs)::uuid;
+            INSERT INTO customer_members (
+                org_id, customer_id, person_id, display_name, first_name, last_name, dob, relationship
+            )
+            VALUES (
+                p_org_id,
+                v_house,
+                NULLIF(public.processing_resolve_ref(v_pl ->> 'person_id', v_refs), '')::uuid,
+                coalesce(v_pl ->> 'display_name', 'Child'),
+                v_pl ->> 'first_name',
+                v_pl ->> 'last_name',
+                NULLIF(v_pl ->> 'dob', '')::date,
+                coalesce(v_pl ->> 'relationship', 'child')
+            )
+            RETURNING id INTO v_new_id;
+
+        ELSE
+            RAISE EXCEPTION 'unsupported_atomic_group_command:%', v_key;
+        END IF;
+
+        v_refs := jsonb_set(v_refs, ARRAY[v_op_id], to_jsonb(v_new_id::text));
+    END LOOP;
+
+    RETURN jsonb_build_object('ok', true, 'refs', v_refs);
+END;
+$function$
+"
 public,fn_job_split_bps,function,plpgsql,VOLATILE,false,p_job_number integer,record,"CREATE OR REPLACE FUNCTION public.fn_job_split_bps(p_job_number integer)
  RETURNS TABLE(contractor_bps integer, alloy_bps integer)
  LANGUAGE plpgsql
@@ -1386,6 +1576,70 @@ begin
 end;
 $function$
 "
+public,processing_commit_attempts_append_only_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.processing_commit_attempts_append_only_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'processing_commit_attempts is append-only; record a new attempt instead';
+END;
+$function$
+"
+public,processing_commit_plans_immutable_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.processing_commit_plans_immutable_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    -- Only the supersession pointer + status may change after build.
+    IF NEW.version IS DISTINCT FROM OLD.version
+        OR NEW.content_hash IS DISTINCT FROM OLD.content_hash
+        OR NEW.case_id IS DISTINCT FROM OLD.case_id
+        OR NEW.org_id IS DISTINCT FROM OLD.org_id
+        OR NEW.built_at IS DISTINCT FROM OLD.built_at THEN
+        RAISE EXCEPTION 'processing_commit_plans core columns are immutable; create a new version instead';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,processing_facts_immutable_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.processing_facts_immutable_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'processing_facts rows are immutable; append a corrected fact instead';
+END;
+$function$
+"
+public,processing_plan_operations_immutable_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.processing_plan_operations_immutable_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'processing_plan_operations rows are immutable; build a new plan version instead';
+END;
+$function$
+"
+public,processing_resolve_ref,function,plpgsql,IMMUTABLE,false,"p_val text, p_refs jsonb",text,"CREATE OR REPLACE FUNCTION public.processing_resolve_ref(p_val text, p_refs jsonb)
+ RETURNS text
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    IF p_val IS NULL THEN
+        RETURN NULL;
+    END IF;
+    IF left(p_val, 1) = '@' THEN
+        RETURN p_refs ->> substring(p_val FROM 2);
+    END IF;
+    RETURN p_val;
+END;
+$function$
+"
 public,round_to_nearest_5_cents,function,plpgsql,VOLATILE,false,p_cents integer,integer,"CREATE OR REPLACE FUNCTION public.round_to_nearest_5_cents(p_cents integer)
  RETURNS integer
  LANGUAGE plpgsql
@@ -1478,6 +1732,26 @@ begin
   new.full_name := nullif(trim(concat_ws(' ', new.first_name, new.last_name)), '');
   return new;
 end;
+$function$
+"
+public,set_program_offering_variants_updated_at,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.set_program_offering_variants_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$function$
+"
+public,set_program_offerings_updated_at,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.set_program_offerings_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
 $function$
 "
 public,set_updated_at,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.set_updated_at()
@@ -2236,6 +2510,46 @@ BEGIN
     END IF;
     IF plan_org <> NEW.org_id THEN
         RAISE EXCEPTION 'childcare rate rule: org_id must match parent rate plan org' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_financial_policy_scope,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_financial_policy_scope()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    loc_org uuid;
+    svc_org uuid;
+    plan_org uuid;
+BEGIN
+    IF NEW.location_id IS NOT NULL THEN
+        SELECT l.org_id INTO loc_org FROM public.locations l WHERE l.id = NEW.location_id;
+        IF loc_org IS NULL THEN
+            RAISE EXCEPTION 'financial policy scope: location_id % not found', NEW.location_id USING ERRCODE = '23503';
+        END IF;
+        IF loc_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'financial policy scope: location org mismatch' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+    IF NEW.service_id IS NOT NULL THEN
+        SELECT s.org_id INTO svc_org FROM public.financial_services s WHERE s.id = NEW.service_id;
+        IF svc_org IS NULL THEN
+            RAISE EXCEPTION 'financial policy scope: service_id % not found', NEW.service_id USING ERRCODE = '23503';
+        END IF;
+        IF svc_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'financial policy scope: service org mismatch' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+    IF NEW.rate_plan_id IS NOT NULL THEN
+        SELECT p.org_id INTO plan_org FROM public.childcare_rate_plans p WHERE p.id = NEW.rate_plan_id;
+        IF plan_org IS NULL THEN
+            RAISE EXCEPTION 'financial policy scope: rate_plan_id % not found', NEW.rate_plan_id USING ERRCODE = '23503';
+        END IF;
+        IF plan_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'financial policy scope: rate plan org mismatch' USING ERRCODE = '23514';
+        END IF;
     END IF;
     RETURN NEW;
 END;

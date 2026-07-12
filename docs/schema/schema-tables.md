@@ -10,9 +10,9 @@
 
 | Kind | Count |
 |------|------:|
-| Base tables (`public`) | 201 |
+| Base tables (`public`) | 230 |
 | Views (`public`) | 7 |
-| Tables with RLS enabled | 201 |
+| Tables with RLS enabled | 230 |
 
 ## Base tables
 
@@ -55,12 +55,24 @@
 | `cleaning_job_addons` | true | false | 1 |
 | `cleaning_job_details` | true | false | 1 |
 | `cleaning_service_types` | true | false | 1 |
+| `commercial_addons` | true | false | 5 |
+| `commercial_categories` | true | false | 5 |
+| `commercial_deposits` | true | false | 5 |
+| `commercial_fees` | true | false | 5 |
+| `commercial_policies` | true | false | 5 |
+| `commercial_products` | true | false | 5 |
+| `commercial_revenue_categories` | true | false | 5 |
+| `commercial_tuition_rates` | true | false | 5 |
 | `communication_delivery_events` | true | false | 2 |
+| `communication_identities` | true | false | 2 |
+| `communication_identity_grants` | true | false | 2 |
+| `communication_identity_location_bindings` | true | false | 2 |
 | `communication_message_reads` | true | false | 2 |
 | `communication_message_recipients` | true | false | 2 |
 | `communication_messages` | true | false | 2 |
 | `communication_preference_events` | true | false | 2 |
 | `communication_preferences` | true | false | 2 |
+| `communication_provider_accounts` | true | false | 2 |
 | `communication_provider_bindings` | true | false | 2 |
 | `communication_scheduled_sends` | true | false | 4 |
 | `communication_snippets` | true | false | 2 |
@@ -68,8 +80,10 @@
 | `communication_templates` | true | false | 2 |
 | `communication_threads` | true | false | 2 |
 | `config_layout_assist_proposals` | true | false | 4 |
+| `consumption_event_types` | true | false | 4 |
+| `consumption_events` | true | false | 4 |
 | `contact_tags` | true | false | 1 |
-| `contacts` | true | false | 4 |
+| `contacts` | true | false | 5 |
 | `conversation_assignment_events` | true | false | 2 |
 | `customer_member_contact_roles` | true | true | 3 |
 | `customer_member_contacts` | true | true | 3 |
@@ -81,7 +95,7 @@
 | `customer_subscriptions` | true | false | 5 |
 | `customer_tags` | true | false | 1 |
 | `customer_vertical_job_counters` | true | false | 0 |
-| `customers` | true | false | 1 |
+| `customers` | true | false | 5 |
 | `departments` | true | true | 5 |
 | `discount_applications` | true | false | 2 |
 | `discount_codes` | true | false | 1 |
@@ -102,6 +116,9 @@
 | `field_definitions` | true | false | 4 |
 | `field_section_definitions` | true | false | 4 |
 | `field_values` | true | false | 4 |
+| `financial_charge_templates` | true | false | 5 |
+| `financial_policies` | true | false | 5 |
+| `financial_services` | true | false | 5 |
 | `form_definition_versions` | true | false | 5 |
 | `form_definitions` | true | false | 5 |
 | `form_packet_definitions` | true | false | 5 |
@@ -137,10 +154,11 @@
 | `metric_rollups` | true | false | 2 |
 | `metric_snapshots` | true | false | 2 |
 | `metric_visualizations` | true | false | 2 |
+| `mutation_events` | true | false | 1 |
 | `operational_tasks` | true | false | 4 |
-| `opportunities` | true | false | 1 |
-| `opportunity_customer_members` | true | false | 1 |
-| `opportunity_persons` | true | false | 1 |
+| `opportunities` | true | false | 5 |
+| `opportunity_customer_members` | true | false | 5 |
+| `opportunity_persons` | true | false | 5 |
 | `opportunity_tags` | true | false | 1 |
 | `option_set_items` | true | false | 4 |
 | `option_sets` | true | false | 4 |
@@ -172,14 +190,25 @@
 | `pricing_recurring_prices` | true | false | 6 |
 | `pricing_services` | true | false | 6 |
 | `pricing_square_footage_tiers` | true | false | 6 |
+| `process_instances` | true | false | 2 |
+| `processing_approvals` | true | false | 2 |
 | `processing_case_sources` | true | false | 4 |
 | `processing_cases` | true | false | 4 |
+| `processing_commit_attempts` | true | false | 2 |
+| `processing_commit_plans` | true | false | 2 |
+| `processing_exceptions` | true | false | 2 |
+| `processing_facts` | true | false | 3 |
+| `processing_plan_operations` | true | false | 2 |
+| `processing_resolutions` | true | false | 4 |
+| `program_offering_variants` | true | false | 5 |
+| `program_offerings` | true | false | 5 |
 | `quotes` | true | false | 1 |
 | `record_actions` | true | false | 2 |
 | `record_drawer_layouts` | true | false | 5 |
 | `record_layouts` | true | false | 2 |
 | `record_overview_layouts` | true | false | 5 |
 | `recurrence_plans` | true | false | 1 |
+| `resolved_obligations` | true | false | 4 |
 | `role_definitions` | true | false | 3 |
 | `role_permission_grants` | true | true | 3 |
 | `schedule_assignments` | true | false | 3 |

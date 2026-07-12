@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **Index count:** 877
+**Generated:** 2026-07-12 · **Index count:** 1001
 
 | Table | Index | Unique | Definition |
 |-------|-------|--------|------------|
@@ -92,6 +92,8 @@
 | `charge_line_items` | `idx_charge_line_items_org_charge` | false | CREATE INDEX idx_charge_line_items_org_charge ON charge_line_items USING btree (org_id, charge_id) |
 | `charge_line_items` | `idx_charge_line_items_org_job_line_item_id_partial` | false | CREATE INDEX idx_charge_line_items_org_job_line_item_id_partial ON charge_line_items USING btree (org_id, job_line_item_ |
 | `charges` | `charges_pkey` | true | CREATE UNIQUE INDEX charges_pkey ON charges USING btree (id) |
+| `charges` | `idx_charges_charge_template` | false | CREATE INDEX idx_charges_charge_template ON charges USING btree (charge_template_id) WHERE charge_template_id IS NOT NUL |
+| `charges` | `idx_charges_org_billable_on` | false | CREATE INDEX idx_charges_org_billable_on ON charges USING btree (org_id, billable_on) WHERE billable_on IS NOT NULL |
 | `charges` | `idx_charges_org_billable_source_partial` | false | CREATE INDEX idx_charges_org_billable_source_partial ON charges USING btree (org_id, billable_source_type, billable_sour |
 | `charges` | `idx_charges_org_charge_category_partial` | false | CREATE INDEX idx_charges_org_charge_category_partial ON charges USING btree (org_id, charge_category) WHERE charge_categ |
 | `charges` | `idx_charges_org_charge_type` | false | CREATE INDEX idx_charges_org_charge_type ON charges USING btree (org_id, charge_type) |
@@ -99,6 +101,7 @@
 | `charges` | `idx_charges_org_job` | false | CREATE INDEX idx_charges_org_job ON charges USING btree (org_id, job_id) |
 | `charges` | `idx_charges_org_job_status` | false | CREATE INDEX idx_charges_org_job_status ON charges USING btree (org_id, job_id, status) |
 | `charges` | `idx_charges_org_schedule_id_partial` | false | CREATE INDEX idx_charges_org_schedule_id_partial ON charges USING btree (org_id, schedule_id) WHERE schedule_id IS NOT N |
+| `charges` | `idx_charges_org_service` | false | CREATE INDEX idx_charges_org_service ON charges USING btree (org_id, service_id) WHERE service_id IS NOT NULL |
 | `charges` | `idx_charges_org_source_charge_id_partial` | false | CREATE INDEX idx_charges_org_source_charge_id_partial ON charges USING btree (org_id, source_charge_id) WHERE source_cha |
 | `charges` | `idx_charges_org_status` | false | CREATE INDEX idx_charges_org_status ON charges USING btree (org_id, status) |
 | `charges` | `idx_charges_org_subscription_id_partial` | false | CREATE INDEX idx_charges_org_subscription_id_partial ON charges USING btree (org_id, subscription_id) WHERE subscription |
@@ -131,6 +134,7 @@
 | `childcare_rate_plans` | `idx_childcare_rate_plans_org_room` | false | CREATE INDEX idx_childcare_rate_plans_org_room ON childcare_rate_plans USING btree (org_id, room_location_id) WHERE room |
 | `childcare_rate_plans` | `idx_childcare_rate_plans_org_scope` | false | CREATE INDEX idx_childcare_rate_plans_org_scope ON childcare_rate_plans USING btree (org_id, scope_type) |
 | `childcare_rate_plans` | `idx_childcare_rate_plans_org_site` | false | CREATE INDEX idx_childcare_rate_plans_org_site ON childcare_rate_plans USING btree (org_id, site_location_id) WHERE site |
+| `childcare_rate_plans` | `idx_childcare_rate_plans_service` | false | CREATE INDEX idx_childcare_rate_plans_service ON childcare_rate_plans USING btree (service_id) WHERE service_id IS NOT N |
 | `childcare_rate_rules` | `childcare_rate_rules_pkey` | true | CREATE UNIQUE INDEX childcare_rate_rules_pkey ON childcare_rate_rules USING btree (id) |
 | `childcare_rate_rules` | `idx_childcare_rate_rules_org` | false | CREATE INDEX idx_childcare_rate_rules_org ON childcare_rate_rules USING btree (org_id) |
 | `childcare_rate_rules` | `idx_childcare_rate_rules_org_age_group` | false | CREATE INDEX idx_childcare_rate_rules_org_age_group ON childcare_rate_rules USING btree (org_id, age_group_key) WHERE ag |
@@ -147,11 +151,53 @@
 | `cleaning_job_details` | `cleaning_job_details_pkey` | true | CREATE UNIQUE INDEX cleaning_job_details_pkey ON cleaning_job_details USING btree (job_id) |
 | `cleaning_service_types` | `cleaning_service_types_key_key` | true | CREATE UNIQUE INDEX cleaning_service_types_key_key ON cleaning_service_types USING btree (key) |
 | `cleaning_service_types` | `cleaning_service_types_pkey` | true | CREATE UNIQUE INDEX cleaning_service_types_pkey ON cleaning_service_types USING btree (id) |
+| `commercial_addons` | `commercial_addons_org_id_idx` | false | CREATE INDEX commercial_addons_org_id_idx ON commercial_addons USING btree (org_id) |
+| `commercial_addons` | `commercial_addons_pkey` | true | CREATE UNIQUE INDEX commercial_addons_pkey ON commercial_addons USING btree (id) |
+| `commercial_categories` | `commercial_categories_org_key_unique` | true | CREATE UNIQUE INDEX commercial_categories_org_key_unique ON commercial_categories USING btree (org_id, key) |
+| `commercial_categories` | `commercial_categories_pkey` | true | CREATE UNIQUE INDEX commercial_categories_pkey ON commercial_categories USING btree (id) |
+| `commercial_categories` | `idx_commercial_categories_org` | false | CREATE INDEX idx_commercial_categories_org ON commercial_categories USING btree (org_id) |
+| `commercial_deposits` | `commercial_deposits_org_id_idx` | false | CREATE INDEX commercial_deposits_org_id_idx ON commercial_deposits USING btree (org_id) |
+| `commercial_deposits` | `commercial_deposits_pkey` | true | CREATE UNIQUE INDEX commercial_deposits_pkey ON commercial_deposits USING btree (id) |
+| `commercial_fees` | `commercial_fees_org_id_idx` | false | CREATE INDEX commercial_fees_org_id_idx ON commercial_fees USING btree (org_id) |
+| `commercial_fees` | `commercial_fees_org_id_program_key_idx` | false | CREATE INDEX commercial_fees_org_id_program_key_idx ON commercial_fees USING btree (org_id, program_key) WHERE program_k |
+| `commercial_fees` | `commercial_fees_pkey` | true | CREATE UNIQUE INDEX commercial_fees_pkey ON commercial_fees USING btree (id) |
+| `commercial_policies` | `commercial_policies_pkey` | true | CREATE UNIQUE INDEX commercial_policies_pkey ON commercial_policies USING btree (id) |
+| `commercial_policies` | `idx_commercial_policies_org_scope` | false | CREATE INDEX idx_commercial_policies_org_scope ON commercial_policies USING btree (org_id, scope_type) |
+| `commercial_policies` | `idx_commercial_policies_org_type` | false | CREATE INDEX idx_commercial_policies_org_type ON commercial_policies USING btree (org_id, policy_type) |
+| `commercial_products` | `commercial_products_pkey` | true | CREATE UNIQUE INDEX commercial_products_pkey ON commercial_products USING btree (id) |
+| `commercial_products` | `idx_commercial_products_org` | false | CREATE INDEX idx_commercial_products_org ON commercial_products USING btree (org_id) |
+| `commercial_products` | `idx_commercial_products_org_category` | false | CREATE INDEX idx_commercial_products_org_category ON commercial_products USING btree (org_id, category_id) WHERE categor |
+| `commercial_products` | `idx_commercial_products_org_program` | false | CREATE INDEX idx_commercial_products_org_program ON commercial_products USING btree (org_id, program_key) WHERE program_ |
+| `commercial_products` | `idx_commercial_products_org_type` | false | CREATE INDEX idx_commercial_products_org_type ON commercial_products USING btree (org_id, commercial_type) |
+| `commercial_products` | `idx_commercial_products_revenue_category` | false | CREATE INDEX idx_commercial_products_revenue_category ON commercial_products USING btree (revenue_category_id) WHERE rev |
+| `commercial_products` | `uq_commercial_products_source` | true | CREATE UNIQUE INDEX uq_commercial_products_source ON commercial_products USING btree (source_table, source_id) WHERE sou |
+| `commercial_revenue_categories` | `commercial_revenue_categories_org_label_unique` | true | CREATE UNIQUE INDEX commercial_revenue_categories_org_label_unique ON commercial_revenue_categories USING btree (org_id, |
+| `commercial_revenue_categories` | `commercial_revenue_categories_pkey` | true | CREATE UNIQUE INDEX commercial_revenue_categories_pkey ON commercial_revenue_categories USING btree (id) |
+| `commercial_revenue_categories` | `idx_commercial_revenue_categories_gl` | false | CREATE INDEX idx_commercial_revenue_categories_gl ON commercial_revenue_categories USING btree (mapped_gl_account_id) WH |
+| `commercial_revenue_categories` | `idx_commercial_revenue_categories_org` | false | CREATE INDEX idx_commercial_revenue_categories_org ON commercial_revenue_categories USING btree (org_id) |
+| `commercial_tuition_rates` | `commercial_tuition_rates_pkey` | true | CREATE UNIQUE INDEX commercial_tuition_rates_pkey ON commercial_tuition_rates USING btree (id) |
+| `commercial_tuition_rates` | `commercial_tuition_rates_unique` | true | CREATE UNIQUE INDEX commercial_tuition_rates_unique ON commercial_tuition_rates USING btree (org_id, location_id, varian |
+| `commercial_tuition_rates` | `idx_commercial_tuition_rates_org` | false | CREATE INDEX idx_commercial_tuition_rates_org ON commercial_tuition_rates USING btree (org_id) |
+| `commercial_tuition_rates` | `idx_commercial_tuition_rates_org_location` | false | CREATE INDEX idx_commercial_tuition_rates_org_location ON commercial_tuition_rates USING btree (org_id, location_id) WHE |
+| `commercial_tuition_rates` | `idx_commercial_tuition_rates_revenue_category` | false | CREATE INDEX idx_commercial_tuition_rates_revenue_category ON commercial_tuition_rates USING btree (revenue_category_id) |
+| `commercial_tuition_rates` | `idx_commercial_tuition_rates_variant` | false | CREATE INDEX idx_commercial_tuition_rates_variant ON commercial_tuition_rates USING btree (variant_id) |
 | `communication_delivery_events` | `communication_delivery_events_pkey` | true | CREATE UNIQUE INDEX communication_delivery_events_pkey ON communication_delivery_events USING btree (id) |
 | `communication_delivery_events` | `idx_comm_delivery_events_message` | false | CREATE INDEX idx_comm_delivery_events_message ON communication_delivery_events USING btree (message_id, occurred_at DESC |
 | `communication_delivery_events` | `idx_comm_delivery_events_org_type` | false | CREATE INDEX idx_comm_delivery_events_org_type ON communication_delivery_events USING btree (org_id, event_type, occurre |
 | `communication_delivery_events` | `idx_comm_delivery_events_provider_msg` | false | CREATE INDEX idx_comm_delivery_events_provider_msg ON communication_delivery_events USING btree (provider, provider_mess |
 | `communication_delivery_events` | `uq_comm_delivery_events_provider_event` | true | CREATE UNIQUE INDEX uq_comm_delivery_events_provider_event ON communication_delivery_events USING btree (provider, provi |
+| `communication_identities` | `communication_identities_legacy_binding_uq` | true | CREATE UNIQUE INDEX communication_identities_legacy_binding_uq ON communication_identities USING btree (legacy_binding_i |
+| `communication_identities` | `communication_identities_pkey` | true | CREATE UNIQUE INDEX communication_identities_pkey ON communication_identities USING btree (id) |
+| `communication_identities` | `idx_comm_identities_org_channel` | false | CREATE INDEX idx_comm_identities_org_channel ON communication_identities USING btree (org_id, channel, status) WHERE sta |
+| `communication_identities` | `idx_comm_identities_org_normalized` | false | CREATE INDEX idx_comm_identities_org_normalized ON communication_identities USING btree (org_id, channel, normalized_add |
+| `communication_identities` | `idx_comm_identities_provider_account` | false | CREATE INDEX idx_comm_identities_provider_account ON communication_identities USING btree (provider_account_id) |
+| `communication_identity_grants` | `communication_identity_grants_pkey` | true | CREATE UNIQUE INDEX communication_identity_grants_pkey ON communication_identity_grants USING btree (id) |
+| `communication_identity_grants` | `communication_identity_grants_user_uq` | true | CREATE UNIQUE INDEX communication_identity_grants_user_uq ON communication_identity_grants USING btree (org_id, identity |
+| `communication_identity_grants` | `idx_comm_identity_grants_user` | false | CREATE INDEX idx_comm_identity_grants_user ON communication_identity_grants USING btree (org_id, user_id, status) WHERE  |
+| `communication_identity_location_bindings` | `comm_identity_loc_binding_uq` | true | CREATE UNIQUE INDEX comm_identity_loc_binding_uq ON communication_identity_location_bindings USING btree (identity_id, l |
+| `communication_identity_location_bindings` | `comm_identity_loc_default_uq` | true | CREATE UNIQUE INDEX comm_identity_loc_default_uq ON communication_identity_location_bindings USING btree (org_id, locati |
+| `communication_identity_location_bindings` | `communication_identity_location_bindings_pkey` | true | CREATE UNIQUE INDEX communication_identity_location_bindings_pkey ON communication_identity_location_bindings USING btre |
+| `communication_identity_location_bindings` | `idx_comm_identity_loc_bindings_location` | false | CREATE INDEX idx_comm_identity_loc_bindings_location ON communication_identity_location_bindings USING btree (org_id, lo |
 | `communication_message_reads` | `communication_message_reads_pkey` | true | CREATE UNIQUE INDEX communication_message_reads_pkey ON communication_message_reads USING btree (message_id, user_id) |
 | `communication_message_reads` | `idx_comm_reads_org` | false | CREATE INDEX idx_comm_reads_org ON communication_message_reads USING btree (org_id) |
 | `communication_message_recipients` | `communication_message_recipients_pkey` | true | CREATE UNIQUE INDEX communication_message_recipients_pkey ON communication_message_recipients USING btree (id) |
@@ -159,6 +205,7 @@
 | `communication_message_recipients` | `idx_comm_msg_recipients_org_person` | false | CREATE INDEX idx_comm_msg_recipients_org_person ON communication_message_recipients USING btree (org_id, person_id, crea |
 | `communication_message_recipients` | `idx_comm_msg_recipients_provider_msg` | false | CREATE INDEX idx_comm_msg_recipients_provider_msg ON communication_message_recipients USING btree (org_id, provider_mess |
 | `communication_messages` | `communication_messages_pkey` | true | CREATE UNIQUE INDEX communication_messages_pkey ON communication_messages USING btree (id) |
+| `communication_messages` | `idx_comm_msgs_identity` | false | CREATE INDEX idx_comm_msgs_identity ON communication_messages USING btree (communication_identity_id) WHERE communicatio |
 | `communication_messages` | `idx_comm_msgs_org` | false | CREATE INDEX idx_comm_msgs_org ON communication_messages USING btree (org_id) |
 | `communication_messages` | `idx_comm_msgs_org_thread_created` | false | CREATE INDEX idx_comm_msgs_org_thread_created ON communication_messages USING btree (org_id, thread_id, created_at DESC) |
 | `communication_messages` | `idx_comm_msgs_queue` | false | CREATE INDEX idx_comm_msgs_queue ON communication_messages USING btree (org_id, status, channel, direction) WHERE direct |
@@ -169,6 +216,9 @@
 | `communication_preferences` | `communication_preferences_person_category_uq` | true | CREATE UNIQUE INDEX communication_preferences_person_category_uq ON communication_preferences USING btree (org_id, perso |
 | `communication_preferences` | `communication_preferences_pkey` | true | CREATE UNIQUE INDEX communication_preferences_pkey ON communication_preferences USING btree (id) |
 | `communication_preferences` | `idx_comm_prefs_org_person` | false | CREATE INDEX idx_comm_prefs_org_person ON communication_preferences USING btree (org_id, person_id) |
+| `communication_provider_accounts` | `communication_provider_accounts_legacy_binding_uq` | true | CREATE UNIQUE INDEX communication_provider_accounts_legacy_binding_uq ON communication_provider_accounts USING btree (le |
+| `communication_provider_accounts` | `communication_provider_accounts_pkey` | true | CREATE UNIQUE INDEX communication_provider_accounts_pkey ON communication_provider_accounts USING btree (id) |
+| `communication_provider_accounts` | `idx_comm_provider_accounts_org` | false | CREATE INDEX idx_comm_provider_accounts_org ON communication_provider_accounts USING btree (org_id, provider_type) WHERE |
 | `communication_provider_bindings` | `communication_bindings_org_inbound_to_uq` | true | CREATE UNIQUE INDEX communication_bindings_org_inbound_to_uq ON communication_provider_bindings USING btree (org_id, inb |
 | `communication_provider_bindings` | `communication_provider_bindings_pkey` | true | CREATE UNIQUE INDEX communication_provider_bindings_pkey ON communication_provider_bindings USING btree (id) |
 | `communication_provider_bindings` | `idx_comm_bindings_org_channel` | false | CREATE INDEX idx_comm_bindings_org_channel ON communication_provider_bindings USING btree (org_id, channel) WHERE status |
@@ -206,6 +256,14 @@
 | `config_layout_assist_proposals` | `idx_config_layout_assist_proposals_org_category_created` | false | CREATE INDEX idx_config_layout_assist_proposals_org_category_created ON config_layout_assist_proposals USING btree (org_ |
 | `config_layout_assist_proposals` | `idx_config_layout_assist_proposals_org_created` | false | CREATE INDEX idx_config_layout_assist_proposals_org_created ON config_layout_assist_proposals USING btree (org_id, creat |
 | `config_layout_assist_proposals` | `idx_config_layout_assist_proposals_org_state_created` | false | CREATE INDEX idx_config_layout_assist_proposals_org_state_created ON config_layout_assist_proposals USING btree (org_id, |
+| `consumption_event_types` | `consumption_event_types_pkey` | true | CREATE UNIQUE INDEX consumption_event_types_pkey ON consumption_event_types USING btree (id) |
+| `consumption_event_types` | `idx_consumption_event_types_global_key` | true | CREATE UNIQUE INDEX idx_consumption_event_types_global_key ON consumption_event_types USING btree (event_key) WHERE org_ |
+| `consumption_event_types` | `idx_consumption_event_types_org_key` | true | CREATE UNIQUE INDEX idx_consumption_event_types_org_key ON consumption_event_types USING btree (org_id, event_key) WHERE |
+| `consumption_events` | `consumption_events_pkey` | true | CREATE UNIQUE INDEX consumption_events_pkey ON consumption_events USING btree (id) |
+| `consumption_events` | `idx_consumption_events_org_event_key` | false | CREATE INDEX idx_consumption_events_org_event_key ON consumption_events USING btree (org_id, event_key) |
+| `consumption_events` | `idx_consumption_events_org_idempotency` | true | CREATE UNIQUE INDEX idx_consumption_events_org_idempotency ON consumption_events USING btree (org_id, idempotency_key) |
+| `consumption_events` | `idx_consumption_events_org_location` | false | CREATE INDEX idx_consumption_events_org_location ON consumption_events USING btree (org_id, location_id) WHERE location_ |
+| `consumption_events` | `idx_consumption_events_source` | false | CREATE INDEX idx_consumption_events_source ON consumption_events USING btree (org_id, source_entity_type, source_entity_ |
 | `contact_tags` | `contact_tags_pkey` | true | CREATE UNIQUE INDEX contact_tags_pkey ON contact_tags USING btree (contact_id, tag_id) |
 | `contacts` | `contacts_email_unique` | true | CREATE UNIQUE INDEX contacts_email_unique ON contacts USING btree (lower(TRIM(BOTH FROM email))) WHERE email IS NOT NULL |
 | `contacts` | `contacts_org_status_idx` | false | CREATE INDEX contacts_org_status_idx ON contacts USING btree (org_id, status_key) |
@@ -364,6 +422,18 @@
 | `field_values` | `idx_field_values_entity` | false | CREATE INDEX idx_field_values_entity ON field_values USING btree (entity_type, entity_id) |
 | `field_values` | `idx_field_values_org_entity` | false | CREATE INDEX idx_field_values_org_entity ON field_values USING btree (org_id, entity_type, entity_id) |
 | `field_values` | `ux_field_values_field_entity` | true | CREATE UNIQUE INDEX ux_field_values_field_entity ON field_values USING btree (field_definition_id, entity_id) |
+| `financial_charge_templates` | `financial_charge_templates_pkey` | true | CREATE UNIQUE INDEX financial_charge_templates_pkey ON financial_charge_templates USING btree (id) |
+| `financial_charge_templates` | `idx_financial_charge_templates_org_key` | false | CREATE INDEX idx_financial_charge_templates_org_key ON financial_charge_templates USING btree (org_id, template_key) |
+| `financial_charge_templates` | `idx_financial_charge_templates_service` | false | CREATE INDEX idx_financial_charge_templates_service ON financial_charge_templates USING btree (service_id) WHERE service |
+| `financial_policies` | `financial_policies_pkey` | true | CREATE UNIQUE INDEX financial_policies_pkey ON financial_policies USING btree (id) |
+| `financial_policies` | `idx_financial_policies_org_location` | false | CREATE INDEX idx_financial_policies_org_location ON financial_policies USING btree (org_id, location_id) WHERE location_ |
+| `financial_policies` | `idx_financial_policies_org_rate_plan` | false | CREATE INDEX idx_financial_policies_org_rate_plan ON financial_policies USING btree (org_id, rate_plan_id) WHERE rate_pl |
+| `financial_policies` | `idx_financial_policies_org_service` | false | CREATE INDEX idx_financial_policies_org_service ON financial_policies USING btree (org_id, service_id) WHERE service_id  |
+| `financial_policies` | `idx_financial_policies_org_type` | false | CREATE INDEX idx_financial_policies_org_type ON financial_policies USING btree (org_id, policy_type) |
+| `financial_services` | `financial_services_pkey` | true | CREATE UNIQUE INDEX financial_services_pkey ON financial_services USING btree (id) |
+| `financial_services` | `financial_services_unique_key` | true | CREATE UNIQUE INDEX financial_services_unique_key ON financial_services USING btree (org_id, service_key) |
+| `financial_services` | `idx_financial_services_org` | false | CREATE INDEX idx_financial_services_org ON financial_services USING btree (org_id, sort_order) |
+| `financial_services` | `idx_financial_services_org_active` | false | CREATE INDEX idx_financial_services_org_active ON financial_services USING btree (org_id) WHERE is_active |
 | `form_definition_versions` | `form_definition_versions_pkey` | true | CREATE UNIQUE INDEX form_definition_versions_pkey ON form_definition_versions USING btree (id) |
 | `form_definition_versions` | `idx_form_definition_versions_def_status` | false | CREATE INDEX idx_form_definition_versions_def_status ON form_definition_versions USING btree (form_definition_id, status |
 | `form_definition_versions` | `idx_form_definition_versions_def_version_desc` | false | CREATE INDEX idx_form_definition_versions_def_version_desc ON form_definition_versions USING btree (form_definition_id,  |
@@ -388,8 +458,10 @@
 | `form_packet_session_items` | `uq_form_packet_session_items_session_sequence` | true | CREATE UNIQUE INDEX uq_form_packet_session_items_session_sequence ON form_packet_session_items USING btree (packet_sessi |
 | `form_packet_sessions` | `form_packet_sessions_pkey` | true | CREATE UNIQUE INDEX form_packet_sessions_pkey ON form_packet_sessions USING btree (id) |
 | `form_packet_sessions` | `idx_form_packet_sessions_org_created` | false | CREATE INDEX idx_form_packet_sessions_org_created ON form_packet_sessions USING btree (org_id, created_at DESC) |
+| `form_packet_sessions` | `idx_form_packet_sessions_org_instance` | false | CREATE INDEX idx_form_packet_sessions_org_instance ON form_packet_sessions USING btree (org_id, packet_instance_id) WHER |
 | `form_packet_sessions` | `idx_form_packet_sessions_org_status` | false | CREATE INDEX idx_form_packet_sessions_org_status ON form_packet_sessions USING btree (org_id, status) |
 | `form_packet_sessions` | `uq_form_packet_sessions_one_link` | true | CREATE UNIQUE INDEX uq_form_packet_sessions_one_link ON form_packet_sessions USING btree (started_via_public_link_id) |
+| `form_packet_sessions` | `uq_form_packet_sessions_one_per_instance` | true | CREATE UNIQUE INDEX uq_form_packet_sessions_one_per_instance ON form_packet_sessions USING btree (org_id, packet_instanc |
 | `form_public_links` | `form_public_links_pkey` | true | CREATE UNIQUE INDEX form_public_links_pkey ON form_public_links USING btree (id) |
 | `form_public_links` | `idx_form_public_links_org_def` | false | CREATE INDEX idx_form_public_links_org_def ON form_public_links USING btree (org_id, form_definition_id) |
 | `form_public_links` | `uq_form_public_links_token_hash` | true | CREATE UNIQUE INDEX uq_form_public_links_token_hash ON form_public_links USING btree (token_hash) |
@@ -524,10 +596,14 @@
 | `metric_visualizations` | `idx_metric_visualizations_org_key` | true | CREATE UNIQUE INDEX idx_metric_visualizations_org_key ON metric_visualizations USING btree (org_id, key) WHERE org_id IS |
 | `metric_visualizations` | `idx_metric_visualizations_org_metric` | false | CREATE INDEX idx_metric_visualizations_org_metric ON metric_visualizations USING btree (org_id, metric_definition_id) |
 | `metric_visualizations` | `metric_visualizations_pkey` | true | CREATE UNIQUE INDEX metric_visualizations_pkey ON metric_visualizations USING btree (id) |
+| `mutation_events` | `mutation_events_domain` | false | CREATE INDEX mutation_events_domain ON mutation_events USING btree (org_id, domain, committed_at DESC) |
+| `mutation_events` | `mutation_events_org_subject` | false | CREATE INDEX mutation_events_org_subject ON mutation_events USING btree (org_id, subject_id, subject_type) |
+| `mutation_events` | `mutation_events_pkey` | true | CREATE UNIQUE INDEX mutation_events_pkey ON mutation_events USING btree (id) |
 | `operational_tasks` | `idx_operational_tasks_org_due_open` | false | CREATE INDEX idx_operational_tasks_org_due_open ON operational_tasks USING btree (org_id, due_at) WHERE status = 'open': |
 | `operational_tasks` | `idx_operational_tasks_org_entity_status` | false | CREATE INDEX idx_operational_tasks_org_entity_status ON operational_tasks USING btree (org_id, entity_type, entity_id, s |
 | `operational_tasks` | `operational_tasks_pkey` | true | CREATE UNIQUE INDEX operational_tasks_pkey ON operational_tasks USING btree (id) |
 | `opportunities` | `idx_opportunities_org_id` | false | CREATE INDEX idx_opportunities_org_id ON opportunities USING btree (org_id) |
+| `opportunities` | `idx_opportunities_org_stage` | false | CREATE INDEX idx_opportunities_org_stage ON opportunities USING btree (org_id, stage_key) WHERE stage_key IS NOT NULL |
 | `opportunities` | `idx_opportunities_org_work_unit_updated` | false | CREATE INDEX idx_opportunities_org_work_unit_updated ON opportunities USING btree (org_id, work_unit_id, updated_at DESC |
 | `opportunities` | `idx_opportunities_primary_person` | false | CREATE INDEX idx_opportunities_primary_person ON opportunities USING btree (primary_person_id) |
 | `opportunities` | `idx_opportunities_work_unit_id` | false | CREATE INDEX idx_opportunities_work_unit_id ON opportunities USING btree (work_unit_id) |
@@ -539,11 +615,12 @@
 | `opportunities` | `opportunities_org_status_idx` | false | CREATE INDEX opportunities_org_status_idx ON opportunities USING btree (org_id, status_key) |
 | `opportunities` | `opportunities_pkey` | true | CREATE UNIQUE INDEX opportunities_pkey ON opportunities USING btree (id) |
 | `opportunities` | `ux_opportunities_org_opportunity_number` | true | CREATE UNIQUE INDEX ux_opportunities_org_opportunity_number ON opportunities USING btree (org_id, opportunity_number) |
-| `opportunity_customer_members` | `idx_opportunity_customer_members_desired_program_category` | false | CREATE INDEX idx_opportunity_customer_members_desired_program_category ON opportunity_customer_members USING btree (org_ |
 | `opportunity_customer_members` | `idx_opportunity_customer_members_org_customer_member` | false | CREATE INDEX idx_opportunity_customer_members_org_customer_member ON opportunity_customer_members USING btree (org_id, c |
 | `opportunity_customer_members` | `idx_opportunity_customer_members_org_location` | false | CREATE INDEX idx_opportunity_customer_members_org_location ON opportunity_customer_members USING btree (org_id, location |
 | `opportunity_customer_members` | `idx_opportunity_customer_members_org_opportunity` | false | CREATE INDEX idx_opportunity_customer_members_org_opportunity ON opportunity_customer_members USING btree (org_id, oppor |
 | `opportunity_customer_members` | `idx_opportunity_customer_members_org_outcome_status` | false | CREATE INDEX idx_opportunity_customer_members_org_outcome_status ON opportunity_customer_members USING btree (org_id, ou |
+| `opportunity_customer_members` | `idx_opportunity_customer_members_org_stage` | false | CREATE INDEX idx_opportunity_customer_members_org_stage ON opportunity_customer_members USING btree (org_id, stage_key)  |
+| `opportunity_customer_members` | `idx_opportunity_customer_members_program_category` | false | CREATE INDEX idx_opportunity_customer_members_program_category ON opportunity_customer_members USING btree (org_id, prog |
 | `opportunity_customer_members` | `opportunity_customer_members_pkey` | true | CREATE UNIQUE INDEX opportunity_customer_members_pkey ON opportunity_customer_members USING btree (id) |
 | `opportunity_customer_members` | `uq_opportunity_customer_members_unique` | true | CREATE UNIQUE INDEX uq_opportunity_customer_members_unique ON opportunity_customer_members USING btree (org_id, opportun |
 | `opportunity_persons` | `idx_opportunity_persons_org_opportunity` | false | CREATE INDEX idx_opportunity_persons_org_opportunity ON opportunity_persons USING btree (org_id, opportunity_id) |
@@ -679,15 +756,55 @@
 | `pricing_services` | `pricing_services_unique_vertical_service` | true | CREATE UNIQUE INDEX pricing_services_unique_vertical_service ON pricing_services USING btree (vertical_id, service_key) |
 | `pricing_square_footage_tiers` | `idx_pricing_tier_unique` | true | CREATE UNIQUE INDEX idx_pricing_tier_unique ON pricing_square_footage_tiers USING btree (vertical_id, tier_key) |
 | `pricing_square_footage_tiers` | `pricing_square_footage_tiers_pkey` | true | CREATE UNIQUE INDEX pricing_square_footage_tiers_pkey ON pricing_square_footage_tiers USING btree (id) |
+| `process_instances` | `idx_process_instances_context` | false | CREATE INDEX idx_process_instances_context ON process_instances USING btree (org_id, context_id) WHERE context_id IS NOT |
+| `process_instances` | `idx_process_instances_stage` | false | CREATE INDEX idx_process_instances_stage ON process_instances USING btree (org_id, process_key, stage_key) WHERE stage_k |
+| `process_instances` | `idx_process_instances_state` | false | CREATE INDEX idx_process_instances_state ON process_instances USING btree (org_id, process_key, state) WHERE state IS NO |
+| `process_instances` | `idx_process_instances_subject` | false | CREATE INDEX idx_process_instances_subject ON process_instances USING btree (org_id, subject_id) |
+| `process_instances` | `process_instances_pkey` | true | CREATE UNIQUE INDEX process_instances_pkey ON process_instances USING btree (id) |
+| `process_instances` | `ux_process_instances_scope` | true | CREATE UNIQUE INDEX ux_process_instances_scope ON process_instances USING btree (org_id, process_key, subject_id, contex |
+| `processing_approvals` | `idx_processing_approvals_case` | false | CREATE INDEX idx_processing_approvals_case ON processing_approvals USING btree (org_id, case_id) |
+| `processing_approvals` | `idx_processing_approvals_plan` | false | CREATE INDEX idx_processing_approvals_plan ON processing_approvals USING btree (plan_id) |
+| `processing_approvals` | `processing_approvals_pkey` | true | CREATE UNIQUE INDEX processing_approvals_pkey ON processing_approvals USING btree (id) |
+| `processing_approvals` | `uq_processing_approvals_active_plan` | true | CREATE UNIQUE INDEX uq_processing_approvals_active_plan ON processing_approvals USING btree (plan_id) WHERE invalidated_ |
 | `processing_case_sources` | `idx_pcs_case` | false | CREATE INDEX idx_pcs_case ON processing_case_sources USING btree (processing_case_id) |
 | `processing_case_sources` | `idx_pcs_org_source` | false | CREATE INDEX idx_pcs_org_source ON processing_case_sources USING btree (org_id, source_kind, source_id) |
 | `processing_case_sources` | `processing_case_sources_pkey` | true | CREATE UNIQUE INDEX processing_case_sources_pkey ON processing_case_sources USING btree (id) |
 | `processing_case_sources` | `uq_pcs_one_primary_per_case` | true | CREATE UNIQUE INDEX uq_pcs_one_primary_per_case ON processing_case_sources USING btree (processing_case_id) WHERE role = |
+| `processing_case_sources` | `uq_pcs_org_idempotency_key` | true | CREATE UNIQUE INDEX uq_pcs_org_idempotency_key ON processing_case_sources USING btree (org_id, idempotency_key) WHERE id |
 | `processing_case_sources` | `uq_pcs_primary_source_once` | true | CREATE UNIQUE INDEX uq_pcs_primary_source_once ON processing_case_sources USING btree (org_id, source_kind, source_id) W |
 | `processing_cases` | `idx_processing_cases_org` | false | CREATE INDEX idx_processing_cases_org ON processing_cases USING btree (org_id) |
 | `processing_cases` | `idx_processing_cases_org_status` | false | CREATE INDEX idx_processing_cases_org_status ON processing_cases USING btree (org_id, status) |
 | `processing_cases` | `idx_processing_cases_org_status_created` | false | CREATE INDEX idx_processing_cases_org_status_created ON processing_cases USING btree (org_id, status, created_at DESC) |
 | `processing_cases` | `processing_cases_pkey` | true | CREATE UNIQUE INDEX processing_cases_pkey ON processing_cases USING btree (id) |
+| `processing_commit_attempts` | `idx_processing_commit_attempts_case` | false | CREATE INDEX idx_processing_commit_attempts_case ON processing_commit_attempts USING btree (org_id, case_id) |
+| `processing_commit_attempts` | `idx_processing_commit_attempts_idem` | false | CREATE INDEX idx_processing_commit_attempts_idem ON processing_commit_attempts USING btree (plan_id, execution_idempoten |
+| `processing_commit_attempts` | `processing_commit_attempts_pkey` | true | CREATE UNIQUE INDEX processing_commit_attempts_pkey ON processing_commit_attempts USING btree (id) |
+| `processing_commit_attempts` | `uq_processing_commit_attempts_plan_attempt` | true | CREATE UNIQUE INDEX uq_processing_commit_attempts_plan_attempt ON processing_commit_attempts USING btree (plan_id, attem |
+| `processing_commit_plans` | `idx_processing_commit_plans_case` | false | CREATE INDEX idx_processing_commit_plans_case ON processing_commit_plans USING btree (org_id, case_id) |
+| `processing_commit_plans` | `processing_commit_plans_pkey` | true | CREATE UNIQUE INDEX processing_commit_plans_pkey ON processing_commit_plans USING btree (id) |
+| `processing_commit_plans` | `uq_processing_commit_plans_case_version` | true | CREATE UNIQUE INDEX uq_processing_commit_plans_case_version ON processing_commit_plans USING btree (case_id, version) |
+| `processing_exceptions` | `idx_processing_exceptions_open` | false | CREATE INDEX idx_processing_exceptions_open ON processing_exceptions USING btree (org_id, exception_type, resolved_at) |
+| `processing_exceptions` | `processing_exceptions_pkey` | true | CREATE UNIQUE INDEX processing_exceptions_pkey ON processing_exceptions USING btree (id) |
+| `processing_facts` | `idx_processing_facts_case_generation` | false | CREATE INDEX idx_processing_facts_case_generation ON processing_facts USING btree (case_id, generation_id) |
+| `processing_facts` | `idx_processing_facts_org_case` | false | CREATE INDEX idx_processing_facts_org_case ON processing_facts USING btree (org_id, case_id) |
+| `processing_facts` | `idx_processing_facts_subject_ref` | false | CREATE INDEX idx_processing_facts_subject_ref ON processing_facts USING btree (case_id, subject_ref) WHERE subject_ref I |
+| `processing_facts` | `processing_facts_pkey` | true | CREATE UNIQUE INDEX processing_facts_pkey ON processing_facts USING btree (id) |
+| `processing_plan_operations` | `idx_processing_plan_operations_plan` | false | CREATE INDEX idx_processing_plan_operations_plan ON processing_plan_operations USING btree (plan_id, op_order) |
+| `processing_plan_operations` | `processing_plan_operations_pkey` | true | CREATE UNIQUE INDEX processing_plan_operations_pkey ON processing_plan_operations USING btree (id) |
+| `processing_plan_operations` | `uq_processing_plan_operations_plan_op` | true | CREATE UNIQUE INDEX uq_processing_plan_operations_plan_op ON processing_plan_operations USING btree (plan_id, op_id) |
+| `processing_resolutions` | `idx_processing_resolutions_case` | false | CREATE INDEX idx_processing_resolutions_case ON processing_resolutions USING btree (org_id, case_id) |
+| `processing_resolutions` | `idx_processing_resolutions_input_hash` | false | CREATE INDEX idx_processing_resolutions_input_hash ON processing_resolutions USING btree (case_id, input_facts_hash) |
+| `processing_resolutions` | `processing_resolutions_pkey` | true | CREATE UNIQUE INDEX processing_resolutions_pkey ON processing_resolutions USING btree (id) |
+| `processing_resolutions` | `uq_processing_resolutions_case_subject_generation` | true | CREATE UNIQUE INDEX uq_processing_resolutions_case_subject_generation ON processing_resolutions USING btree (case_id, su |
+| `program_offering_variants` | `idx_program_offering_variants_offering` | false | CREATE INDEX idx_program_offering_variants_offering ON program_offering_variants USING btree (offering_id) |
+| `program_offering_variants` | `idx_program_offering_variants_org` | false | CREATE INDEX idx_program_offering_variants_org ON program_offering_variants USING btree (org_id) |
+| `program_offering_variants` | `program_offering_variants_pkey` | true | CREATE UNIQUE INDEX program_offering_variants_pkey ON program_offering_variants USING btree (id) |
+| `program_offering_variants` | `program_offering_variants_unique` | true | CREATE UNIQUE INDEX program_offering_variants_unique ON program_offering_variants USING btree (org_id, offering_id, quan |
+| `program_offerings` | `idx_program_offerings_org` | false | CREATE INDEX idx_program_offerings_org ON program_offerings USING btree (org_id) |
+| `program_offerings` | `idx_program_offerings_org_active` | false | CREATE INDEX idx_program_offerings_org_active ON program_offerings USING btree (org_id, is_active) WHERE is_active = tru |
+| `program_offerings` | `idx_program_offerings_org_program` | false | CREATE INDEX idx_program_offerings_org_program ON program_offerings USING btree (org_id, program_key) |
+| `program_offerings` | `program_offerings_pkey` | true | CREATE UNIQUE INDEX program_offerings_pkey ON program_offerings USING btree (id) |
+| `program_offerings` | `program_offerings_unique` | true | CREATE UNIQUE INDEX program_offerings_unique ON program_offerings USING btree (org_id, program_key, attendance_type) |
 | `quotes` | `idx_quotes_job` | false | CREATE INDEX idx_quotes_job ON quotes USING btree (job_id) |
 | `quotes` | `idx_quotes_opp` | false | CREATE INDEX idx_quotes_opp ON quotes USING btree (opportunity_id) |
 | `quotes` | `idx_quotes_org_id` | false | CREATE INDEX idx_quotes_org_id ON quotes USING btree (org_id) |
@@ -707,6 +824,13 @@
 | `record_overview_layouts` | `ux_record_overview_layouts_org_entity_surface` | true | CREATE UNIQUE INDEX ux_record_overview_layouts_org_entity_surface ON record_overview_layouts USING btree (org_id, entity |
 | `recurrence_plans` | `recurrence_plans_job_id_key` | true | CREATE UNIQUE INDEX recurrence_plans_job_id_key ON recurrence_plans USING btree (job_id) |
 | `recurrence_plans` | `recurrence_plans_pkey` | true | CREATE UNIQUE INDEX recurrence_plans_pkey ON recurrence_plans USING btree (id) |
+| `resolved_obligations` | `idx_resolved_obligations_draft_charge` | false | CREATE INDEX idx_resolved_obligations_draft_charge ON resolved_obligations USING btree (draft_charge_id) WHERE draft_cha |
+| `resolved_obligations` | `idx_resolved_obligations_event` | false | CREATE INDEX idx_resolved_obligations_event ON resolved_obligations USING btree (consumption_event_id) |
+| `resolved_obligations` | `idx_resolved_obligations_org_kind` | false | CREATE INDEX idx_resolved_obligations_org_kind ON resolved_obligations USING btree (org_id, obligation_kind) WHERE oblig |
+| `resolved_obligations` | `idx_resolved_obligations_org_resolution` | true | CREATE UNIQUE INDEX idx_resolved_obligations_org_resolution ON resolved_obligations USING btree (org_id, resolution_key) |
+| `resolved_obligations` | `idx_resolved_obligations_org_review_status` | false | CREATE INDEX idx_resolved_obligations_org_review_status ON resolved_obligations USING btree (org_id, review_status) |
+| `resolved_obligations` | `idx_resolved_obligations_org_status` | false | CREATE INDEX idx_resolved_obligations_org_status ON resolved_obligations USING btree (org_id, status) |
+| `resolved_obligations` | `resolved_obligations_pkey` | true | CREATE UNIQUE INDEX resolved_obligations_pkey ON resolved_obligations USING btree (id) |
 | `role_definitions` | `role_definitions_org_role_key_uk` | true | CREATE UNIQUE INDEX role_definitions_org_role_key_uk ON role_definitions USING btree (org_id, role_key) |
 | `role_definitions` | `role_definitions_org_role_key_uq` | true | CREATE UNIQUE INDEX role_definitions_org_role_key_uq ON role_definitions USING btree (org_id, role_key) |
 | `role_definitions` | `role_definitions_pkey` | true | CREATE UNIQUE INDEX role_definitions_pkey ON role_definitions USING btree (id) |
