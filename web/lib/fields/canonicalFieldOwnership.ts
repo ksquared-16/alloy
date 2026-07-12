@@ -21,6 +21,7 @@ export const CANONICAL_FIELD_OWNER_ENTITIES = {
     customer_member: "Durable child profile facts (name, DOB, health config fields)",
     opportunity: "Enrollment case / family-level process facts",
     inquiry_child: "Child participation / enrollment facts on a case (OCM grain)",
+    person_child_relationship: "Person ↔ Child relationship instance facts (roles, kinship, edge attributes)",
     field_definitions: "Configurable field metadata (labels, types, options)",
     status_definitions: "Status vocabulary (not field values)",
 } as const;

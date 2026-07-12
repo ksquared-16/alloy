@@ -211,8 +211,20 @@ export function layoutRefKeyToCanonicalRef(refKey: string): CanonicalRegistryRef
  * Resolve any consumer provider ref (Forms emission, layout refKey, legacy id) to canonical registry ref.
  * Processing and other commit adapters must use this — not local alias maps.
  */
+
+/** person_child_relationship.* provider refs */
+function canonicalRefFromPersonChildRelationshipProviderRef(providerRef: string): CanonicalRegistryRef | null {
+    const prefix = "person_child_relationship.";
+    if (!providerRef.startsWith(prefix)) return null;
+    const fieldKey = providerRef.slice(prefix.length).trim();
+    if (!fieldKey) return null;
+    return { entity_type: "person_child_relationship", field_key: fieldKey };
+}
+
 export function providerRefToCanonicalRef(providerRef: string): CanonicalRegistryRef | null {
     const trimmed = providerRef.trim();
+    const pcr = canonicalRefFromPersonChildRelationshipProviderRef(trimmed);
+    if (pcr) return pcr;
     if (!trimmed) return null;
 
     if (trimmed.startsWith("customer_member.")) {
