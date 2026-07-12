@@ -3,6 +3,10 @@
 **Status: Frozen for V1 implementation** (architecture is implementation-authoritative; product-owner decisions incorporated). **Design baseline:** `origin/staging` @ `65afc8527…`; **promotion target:** latest `origin/staging`.
 **B1a status: implemented locally — awaiting full sprint validation and promotion** — Canonical Identity Normalization Primitives and Compatibility Adapters (`web/lib/identity`).
 **B0 status: implemented locally — awaiting full sprint validation and promotion** — Tenant security prerequisites (org-scoped identity RLS + `persons.org_id` FK). See migration `20260716120000_processing_identity_b0_tenant_security.sql`.
+**B1b status: implemented locally — awaiting full sprint validation and promotion** — Canonical candidate generation + 6-band classification (`web/lib/identity/*`, intake bridge). Flags: none (pure library). Tests: `web/tests/identity/candidateClassification.test.ts`.
+**B2 status: implemented locally — awaiting full sprint validation and promotion** — Durable `processing_facts` + case/source extensions. Migration `20260716130000_processing_identity_b2_facts.sql`. Runtime: `web/lib/pos/processingIdentity/processingFactsDb.ts`. Flag: `PROCESSING_PERSIST_FACTS` (default off). Tests: `web/tests/processing/processingIdentityB2Facts.test.ts`, migration shape in `processingIdentityB2B3Migrations.test.ts`.
+**B3 status: implemented locally — awaiting full sprint validation and promotion** — `processing_resolutions` persistence + canonical resolver engine. Migration `20260716140000_processing_identity_b3_resolutions.sql`. Seam: `web/lib/pos/recordResolution/recordResolverSeam.ts` (`createProcessingRecordResolver`). Flag: `PROCESSING_REAL_RESOLVER` (default off). Tests: `web/tests/processing/processingIdentityB3Resolver.test.ts`.
+**C1 status: implemented locally — awaiting full sprint validation and promotion** — Public form shadow mode (non-authoritative). Hook: public submit route + `web/lib/pos/processingIdentity/formIdentityShadow.ts`. Flag: `PROCESSING_SHADOW_FORMS` (default off). Tests: `web/tests/processing/processingIdentityC1Shadow.test.ts`.
 **Type:** Architecture RFC + frozen decision register + phased Cursor implementation plan.
 **Owner:** Platform / Processing. **Created:** 2026-07-10. **Decision + freeze pass:** 2026-07-10.
 
@@ -54,4 +58,12 @@ Everything entering Alloy through an inbound channel passes through **one canoni
 Decisions first: **9 (open-decisions)** → **3 (RFC)** → **4 (data-model)** → **5 (migration)** → **6 (implementation)**. Evidence base: **1 → 2**. Validation/impact: **7 → 8 → 10**. Every material claim cites exact repo paths; findings tagged **[C]** confirmed / **[I]** inferred / **[P]** proposed / **[D]** doctrine.
 
 ## Provenance
-Seven parallel read-only trace streams + firsthand reads of the load-bearing contracts + July 2026 Processing/Forms doctrine, followed by a decision-finalization pass (this revision). No runtime code, schema, or migration modified.
+Seven parallel read-only trace streams + firsthand reads of the load-bearing contracts + July 2026 Processing/Forms doctrine, followed by a decision-finalization pass (this revision). **B1a–C1 local implementation** on branch `claude/proc-identity-lib-normalization` (not promoted).
+
+## Local implementation notes (B1b–C1)
+| Phase | Commit(s) | Focused tests | Known limitations |
+|---|---|---|---|
+| B1b | see git log | `candidateClassification.test.ts`, B1a/B0 regressions | Booking/comms matchers not migrated; legacy `resolveIntakeRecordResolution` still assembles proposals |
+| B2 | see git log | `processingIdentityB2Facts.test.ts`, migration static | No live DB RLS integration; remote migration not applied |
+| B3 | see git log | `processingIdentityB3Resolver.test.ts` | Resolver persistence flag-gated; no record writes |
+| C1 | see git log | `processingIdentityC1Shadow.test.ts` | Shadow comparison stored in `processing_cases.metadata.identity_shadow`; legacy intake remains authoritative |
