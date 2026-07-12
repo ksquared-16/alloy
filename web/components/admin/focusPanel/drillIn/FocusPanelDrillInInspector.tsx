@@ -4,6 +4,7 @@ import clsx from "clsx";
 
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import IdentitySurfaceBuilderInspector from "@/components/adminV2/settings/surfaces/composer/IdentitySurfaceBuilderInspector";
+import IdentityComposerDiagnosticBanner from "@/components/admin/focusPanel/identity/IdentityComposerDiagnosticBanner";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import {
     CHILDREN_SURFACE_ID,
@@ -88,6 +89,16 @@ export default function FocusPanelDrillInInspector({
                         ? "Configure layout — drag fields, set width, and manage evidence collections."
                         : "Edit fields directly on the runtime surface. This panel is for card metadata only."}
                 </p>
+                {identitySurface ? (
+                    <IdentityComposerDiagnosticBanner
+                        composeCanvasMode={composer.composeCanvasMode}
+                        activePurpose={composer.activeConfigPurpose}
+                        surfaceId={surfaceId}
+                        selectedGroupKey={selectedGroupKey}
+                        config={composer.configFor(surfaceId)}
+                        composeCanvasMounted={composer.composeCanvasMode === "configure"}
+                    />
+                ) : null}
 
                 {identitySurface ? (
                     <div className="mt-3 flex gap-1 rounded-lg border border-alloy-stone/15 bg-alloy-stone/5 p-1" data-compose-canvas-mode-toggle="true">

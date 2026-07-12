@@ -427,6 +427,8 @@ export default function ChildrenCard({
                 activePurpose={purpose}
                 onSelectPurpose={composer.setActiveConfigPurpose}
                 composeCanvasMode={composer.composeCanvasMode}
+                surfaceId={CHILDREN_SURFACE_ID}
+                selectedGroupKey="roster"
                 groupLabel="Children roster"
                 onBack={() => composer.exitDrillIn()}
             >
