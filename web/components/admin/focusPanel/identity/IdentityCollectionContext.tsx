@@ -12,9 +12,14 @@ type Props = {
     onEditField?: (fieldRef: string) => void;
     /** When true, rows are selectable for Details depth. */
     selectable?: boolean;
+    /** Context collection shows Summary Fields only — not inspection-level detail rows. */
+    collectionSummaryOnly?: boolean;
 };
 
-/** Context collection — composed Summary + Context Facts via shared VM rows. */
+/**
+ * Context collection — one identity object per row using Summary Fields.
+ * Selecting an identity opens Details for that identity only.
+ */
 export default function IdentityCollectionContext({
     records,
     className,
@@ -22,6 +27,7 @@ export default function IdentityCollectionContext({
     onEditContact,
     onEditField,
     selectable = true,
+    collectionSummaryOnly = true,
 }: Props) {
     if (records.length === 0) return null;
 
@@ -31,7 +37,7 @@ export default function IdentityCollectionContext({
                 <IdentityRecordSummary
                     key={record.id}
                     record={record}
-                    depth="context"
+                    depth={collectionSummaryOnly ? "summary" : "context"}
                     onActivate={selectable && onSelectIdentity ? onSelectIdentity : undefined}
                     onEditContact={onEditContact}
                     onEditField={onEditField}

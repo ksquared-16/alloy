@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 /**
  * Nested Surface Composer — same interaction model as Queue Row and Focus Panel.
  *
@@ -23,6 +24,10 @@ import {
     moveFieldInNestedGroup,
     nestedSurfaceLabel,
     removeFieldFromNestedGroup,
+    setFieldLayoutWidthInNestedGroup,
+    fieldLayoutWidthForNestedGroup,
+    identityTierContainingField,
+    moveFieldToIdentityTierInNestedGroup,
     type NestedSurfaceConfig,
     type NestedSurfaceGroupConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -86,6 +91,13 @@ export default function NestedSurfaceEditor({
     const [activeConfigPurpose, setActiveConfigPurpose] = useState<IdentityConfigurationPurpose>("summary");
 
     const isIdentitySurface = surfaceId === HOUSEHOLD_SURFACE_ID || surfaceId === CHILDREN_SURFACE_ID;
+
+    const activeFieldTier = useMemo(() => {
+        if (!isIdentitySurface || activeConfigPurpose === "evidence") return undefined;
+        if (activeConfigPurpose === "context_facts") return "context_fact" as const;
+        if (activeConfigPurpose === "details") return "details" as const;
+        return "summary" as const;
+    }, [activeConfigPurpose, isIdentitySurface]);
 
     const [contactConfigState, setContactConfigState] = useState<NestedSurfaceConfig | null>(null);
 
@@ -321,6 +333,91 @@ export default function NestedSurfaceEditor({
                                 <p className="config-typo-sublabel mb-3">
                                     {groupDefs.find((g) => g.key === selectedPlacedField.groupKey)?.label}
                                 </p>
+                                {isIdentitySurface && activeConfigPurpose !== "evidence" ?
+                                    <>
+                                    <div className="mb-2">
+                                        <p className="config-typo-sublabel mb-1">Disclosure layer</p>
+                                        <div className="flex flex-wrap gap-1">
+                                            {([
+                                                ["summary", "Summary"],
+                                                ["context_fact", "Context"],
+                                                ["details", "Details"],
+                                            ] as const).map(([tier, label]) => (
+                                                <button
+                                                    key={tier}
+                                                    type="button"
+                                                    className={clsx(
+                                                        "rounded-md border px-2 py-1 text-[11px]",
+                                                        identityTierContainingField(
+                                                            config,
+                                                            selectedPlacedField.groupKey,
+                                                            selectedPlacedField.fieldKey,
+                                                        ) === tier
+                                                            ? "border-alloy-pine/30 bg-alloy-pine/10 text-alloy-pine"
+                                                            : "border-alloy-stone/20 text-alloy-midnight/60",
+                                                    )}
+                                                    onClick={() =>
+                                                        mutate(
+                                                            moveFieldToIdentityTierInNestedGroup(
+                                                                config,
+                                                                selectedPlacedField.groupKey,
+                                                                selectedPlacedField.fieldKey,
+                                                                tier,
+                                                            ),
+                                                        )
+                                                    }
+                                                >
+                                                    {label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="mb-3 flex gap-2">
+                                        <button
+                                            type="button"
+                                            className={clsx(
+                                                "rounded-md border px-2 py-1 text-[11px]",
+                                                fieldLayoutWidthForNestedGroup(config, selectedPlacedField.groupKey, selectedPlacedField.fieldKey) !== "half"
+                                                    ? "border-alloy-pine/30 bg-alloy-pine/10 text-alloy-pine"
+                                                    : "border-alloy-stone/20 text-alloy-midnight/60",
+                                            )}
+                                            onClick={() =>
+                                                mutate(
+                                                    setFieldLayoutWidthInNestedGroup(
+                                                        config,
+                                                        selectedPlacedField.groupKey,
+                                                        selectedPlacedField.fieldKey,
+                                                        "full",
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            Full width
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={clsx(
+                                                "rounded-md border px-2 py-1 text-[11px]",
+                                                fieldLayoutWidthForNestedGroup(config, selectedPlacedField.groupKey, selectedPlacedField.fieldKey) === "half"
+                                                    ? "border-alloy-pine/30 bg-alloy-pine/10 text-alloy-pine"
+                                                    : "border-alloy-stone/20 text-alloy-midnight/60",
+                                            )}
+                                            onClick={() =>
+                                                mutate(
+                                                    setFieldLayoutWidthInNestedGroup(
+                                                        config,
+                                                        selectedPlacedField.groupKey,
+                                                        selectedPlacedField.fieldKey,
+                                                        "half",
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            Half (50%)
+                                        </button>
+                                    </div>
+                                    </>
+                                :   null}
                                 <SurfaceFieldInspector
                                     variant="nested"
                                     field={toSurfaceComposerPlacedItemRef(selectedPlacedField)}
@@ -334,6 +431,7 @@ export default function NestedSurfaceEditor({
                                                 selectedPlacedField.groupKey,
                                                 selectedPlacedField.fieldKey,
                                                 -1,
+                                                { tier: activeFieldTier },
                                             ),
                                         );
                                     }}
@@ -344,6 +442,7 @@ export default function NestedSurfaceEditor({
                                                 selectedPlacedField.groupKey,
                                                 selectedPlacedField.fieldKey,
                                                 1,
+                                                { tier: activeFieldTier },
                                             ),
                                         );
                                     }}
@@ -353,6 +452,7 @@ export default function NestedSurfaceEditor({
                                                 config,
                                                 selectedPlacedField.groupKey,
                                                 selectedPlacedField.fieldKey,
+                                                { tier: activeFieldTier },
                                             ),
                                         );
                                         setSelectedFieldId(null);

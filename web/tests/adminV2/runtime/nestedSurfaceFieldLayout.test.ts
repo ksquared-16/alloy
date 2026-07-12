@@ -62,19 +62,19 @@ describe("nestedSurfaceFieldLayout", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.first_name", "half");
         config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.last_name", "half");
-        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.date_of_birth", "half");
-        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.dob_age", "half");
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.preferred_name", "half");
+        config = setFieldLayoutWidthInNestedGroup(config, "identity", "child.nickname", "half");
 
         const rows = childrenFocusRowsFromNestedConfig(reconcileNestedSurfaceConfig(CHILDREN_SURFACE_ID, config));
         const first = rows.find((row) => row.fieldKey === "child.first_name");
         const last = rows.find((row) => row.fieldKey === "child.last_name");
-        const dob = rows.find((row) => row.fieldKey === "child.date_of_birth");
-        const age = rows.find((row) => row.fieldKey === "child.dob_age");
+        const preferred = rows.find((row) => row.fieldKey === "child.preferred_name");
+        const nickname = rows.find((row) => row.fieldKey === "child.nickname");
 
         expect(first?.layoutWidth).toBe("half");
         expect(last?.layoutWidth).toBe("half");
-        expect(dob?.layoutWidth).toBe("half");
-        expect(age?.layoutWidth).toBe("half");
+        expect(preferred?.layoutWidth).toBe("half");
+        expect(nickname?.layoutWidth).toBe("half");
     });
 
     it("pairs fields when dragged beside each other", () => {
@@ -90,11 +90,11 @@ describe("nestedSurfaceFieldLayout", () => {
         expect(rows).toContainEqual(["child.last_name", "child.first_name"]);
     });
 
-    it("pairs DOB and age when dragged beside each other", () => {
+    it("pairs preferred name and nickname when dragged beside each other", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
-        config = applyNestedSurfaceFieldDrop(config, "identity", "child.dob_age", "child.date_of_birth", "beside");
-        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.date_of_birth")).toBe("half");
-        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.dob_age")).toBe("half");
+        config = applyNestedSurfaceFieldDrop(config, "identity", "child.nickname", "child.preferred_name", "beside");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.preferred_name")).toBe("half");
+        expect(fieldLayoutWidthForNestedGroup(config, "identity", "child.nickname")).toBe("half");
     });
 
     it("stacks a field on a new full row when dropped below", () => {
@@ -107,9 +107,9 @@ describe("nestedSurfaceFieldLayout", () => {
 
     it("removes a full-width field from a group", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
-        config = removeFieldFromNestedGroup(config, "identity", "child.date_of_birth");
+        config = removeFieldFromNestedGroup(config, "identity", "child.nickname");
         const keys = selectedFieldKeys(config, "identity");
-        expect(keys).not.toContain("child.date_of_birth");
+        expect(keys).not.toContain("child.nickname");
     });
 
     it("removes one half-row field and promotes the survivor to full width", () => {

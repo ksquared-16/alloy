@@ -93,7 +93,7 @@ describe("child_surface registration + runtime resolver", () => {
         const config = defaultNestedSurfaceConfig(CHILD_SURFACE_ID);
         expect(config.surfaceId).toBe(CHILD_SURFACE_ID);
         const placement = config.groups.find((g) => g.key === "placement")!;
-        expect(placement.selectedFieldKeys).toContain("inquiry_child.program");
+        expect(placement.expandedFieldKeys ?? []).toContain("inquiry_child.program");
     });
 
     it("maps published child_surface config to focus view", () => {

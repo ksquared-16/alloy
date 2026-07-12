@@ -14,6 +14,7 @@ import {
 import { buildHouseholdIdentityCardVM } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
 import IdentityRecordSummary from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
 import IdentityDisclosureSurface from "@/components/admin/focusPanel/identity/IdentityDisclosureSurface";
+import IdentityCollectionContext from "@/components/admin/focusPanel/identity/IdentityCollectionContext";
 import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity/IdentityDisclosureBackAction";
 import { useIdentityDisclosureState } from "@/lib/adminV2/runtime/focusPanel/identity/useIdentityDisclosureState";
 import type { IdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
@@ -424,10 +425,11 @@ function CollapsedBody({
 
     return (
         <div className="alloy-os-household__summary">
+            <div className="identity-summary-columns" data-identity-summary-columns="true">
             <ComposableRegionShell
                 surfaceId={HOUSEHOLD_SURFACE_ID}
                 groupKey="primary_contact"
-                className="alloy-os-household__summary-region"
+                className="alloy-os-household__summary-region identity-summary-columns__cell"
                 dataAttrs={{ "data-household-summary-region": "primary_contact" }}
             >
                 {primaryRecord ? (
@@ -480,7 +482,7 @@ function CollapsedBody({
                 <ComposableRegionShell
                     surfaceId={HOUSEHOLD_SURFACE_ID}
                     groupKey="other_parent_guardian"
-                    className="alloy-os-household__summary-region"
+                    className="alloy-os-household__summary-region identity-summary-columns__cell"
                     dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
                 >
                     {secondaryRecords.map((record) => (
@@ -505,13 +507,14 @@ function CollapsedBody({
                 <ComposableRegionShell
                     surfaceId={HOUSEHOLD_SURFACE_ID}
                     groupKey="other_parent_guardian"
-                    className="alloy-os-household__summary-region"
+                    className="alloy-os-household__summary-region identity-summary-columns__cell"
                     dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
                 >
                     <p className="alloy-os-household__row-detail">Add secondary parent fields when contacts exist</p>
                     <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="other_parent_guardian" />
                 </ComposableRegionShell>
             ) : null}
+            </div>
 
             {evidence.address ? <AddressLine address={evidence.address} /> : null}
 
@@ -706,31 +709,40 @@ function GroupRows({
                     Belonging only — open Children for enrollment detail
                 </p>
             ) : null}
-            {visible.map((record) => (
-                <IdentityRecordSummary
-                    key={record.id}
-                    record={record}
-                    depth="context"
-                    onActivate={
-                        group.contacts.length > 0 && onSelectIdentity && !composing
+            {group.contacts.length > 0 ? (
+                <IdentityCollectionContext
+                    records={visible}
+                    selectable={Boolean(onSelectIdentity && !composing)}
+                    onSelectIdentity={
+                        onSelectIdentity && !composing
                             ? (personId) => onSelectIdentity(personId, group.key)
-                            : group.children.length > 0
-                              ? onOpenChild
-                              : undefined
-                    }
-                    onEditContact={
-                        group.contacts.length > 0 && onEditContact && !composing && !masked
-                            ? onEditContact
                             : undefined
                     }
+                    onEditContact={onEditContact && !composing && !masked ? onEditContact : undefined}
                     onEditField={
-                        group.contacts.length > 0 && onEditContact && !composing && !masked
-                            ? () => onEditContact(record.id)
+                        onEditContact && !composing && !masked
+                            ? (fieldRef) => {
+                                  const record = visible.find((row) =>
+                                      [...row.summaryRows, ...row.contextRows].some((r) =>
+                                          r.cells.some((c) => c.fieldRef === fieldRef),
+                                      ),
+                                  );
+                                  if (record) onEditContact(record.id);
+                              }
                             : undefined
                     }
-                    dataAttr={record.id}
                 />
-            ))}
+            ) : (
+                visible.map((record) => (
+                    <IdentityRecordSummary
+                        key={record.id}
+                        record={record}
+                        depth="summary"
+                        onActivate={group.children.length > 0 ? onOpenChild : undefined}
+                        dataAttr={record.id}
+                    />
+                ))
+            )}
             {overflow > 0 ? (
                 <div className="alloy-os-household__overflow">+{overflow} more</div>
             ) : null}
