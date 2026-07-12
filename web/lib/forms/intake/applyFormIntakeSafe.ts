@@ -74,11 +74,6 @@ export type ApplyFormIntakeSafeInput = {
     existingCustomerId?: string | null;
     existingCustomerMemberId?: string | null;
     existingOpportunityId?: string | null;
-    /**
-     * E1 — historical replay/tests only. Active public-form routes must use
-     * `ingestPublicFormThroughProcessing`; this flag must never be set from production callers.
-     */
-    __legacyDirectWriteReplay?: boolean;
 };
 
 export type ApplyFormIntakeSafeResult = {
@@ -101,25 +96,20 @@ function outcomeBase(o: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
- * Card 8 safe intake — **E1 retired from active authority**.
- *
- * Production public-form submit routes use `ingestPublicFormThroughProcessing`.
- * Direct CRM identity writes remain only for explicit historical replay/tests
- * (`__legacyDirectWriteReplay: true`).
+ * Retired public-form direct-write authority (E1 / certification).
+ * Active routes use `ingestPublicFormThroughProcessing`. Legacy implementation
+ * lives in `applyFormIntakeDirectWriteLegacy.ts` for migration archaeology only.
  */
 export async function applyFormIntakeSafe(
-    supabase: SupabaseClient,
-    input: ApplyFormIntakeSafeInput
+    _supabase: SupabaseClient,
+    _input: ApplyFormIntakeSafeInput,
 ): Promise<ApplyFormIntakeSafeResult> {
-    if (!input.__legacyDirectWriteReplay) {
-        throw new Error(
-            "applyFormIntakeSafe direct-write authority retired (E1). Use ingestPublicFormThroughProcessing.",
-        );
-    }
-    return applyFormIntakeDirectWriteLegacy(supabase, input);
+    throw new Error(
+        "applyFormIntakeSafe direct-write authority retired (E1). Use ingestPublicFormThroughProcessing.",
+    );
 }
 
-/** @internal Legacy direct-write body — unreachable from active routes without replay flag. */
+/** @deprecated Unreachable from routes — see applyFormIntakeDirectWriteLegacy.ts */
 export async function applyFormIntakeDirectWriteLegacy(
     supabase: SupabaseClient,
     input: ApplyFormIntakeSafeInput
