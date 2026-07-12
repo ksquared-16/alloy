@@ -1,7 +1,8 @@
 # Processing Identity Resolution Engine V1 — Architecture & Implementation Sprint
 
 **Status: Frozen for V1 implementation** (architecture is implementation-authoritative; product-owner decisions incorporated). **Design baseline:** `origin/staging` @ `65afc8527…`; **promotion target:** latest `origin/staging`.
-**Type:** Architecture RFC + frozen decision register + phased Cursor implementation plan. **Documentation only — no runtime changes.**
+**B1a status: implemented (awaiting review)** — Canonical Identity Normalization Primitives and Compatibility Adapters (`web/lib/identity`). Do not start B1b until review.
+**Type:** Architecture RFC + frozen decision register + phased Cursor implementation plan.
 **Owner:** Platform / Processing. **Created:** 2026-07-10. **Decision + freeze pass:** 2026-07-10.
 
 > This is the sprint **named and explicitly deferred** by `docs/sprints/archive/07_2026/processing-form-workflow-finish-closeout.md`:

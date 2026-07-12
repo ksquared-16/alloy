@@ -1,5 +1,10 @@
+/**
+ * Person-name extraction helpers for intake text.
+ * Phone/email digit and token helpers already delegate to `lib/identity` via
+ * `intake/normalize/{email,phone}` (B1a). Matching/candidate generation is B1b.
+ */
 import { findEmailCandidate, INTAKE_EMAIL_EXTRACT_RE, INTAKE_LOOSE_EMAIL_EXTRACT_RE } from "@/lib/intake/normalize/email";
-import { findPhoneCandidate, isValidPhone, normalizePhoneDigits } from "@/lib/intake/normalize/phone";
+import { findPhoneCandidate, normalizePhoneDigits } from "@/lib/intake/normalize/phone";
 
 export const NAME_STOP_WORDS = new Set([
     "called",

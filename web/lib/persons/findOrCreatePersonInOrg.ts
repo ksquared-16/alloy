@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  normalizeEmailForFindOrCreate,
+  normalizePhoneForFindOrCreate,
+} from "@/lib/identity";
 
 type MinimalSupabase = Pick<SupabaseClient, "from">;
 
@@ -8,6 +12,8 @@ export type FindOrCreatePersonInOrgResult = { id: string; created: boolean };
  * Find or create a person scoped by org. Match email (ilike) first, then phone.
  * Mirrors quote-start behavior for consistent public flows.
  * `created` is true only when this call inserted the row (for transactional rollback).
+ * Normalization: email via canonical `lib/identity`; phone remains legacy trim-only
+ * (compat adapter) so B1a does not change stored/matched phone strings.
  */
 export async function findOrCreatePersonInOrgWithMeta(
   supabase: MinimalSupabase,
@@ -22,8 +28,8 @@ export async function findOrCreatePersonInOrgWithMeta(
   }
 ): Promise<FindOrCreatePersonInOrgResult | null> {
   const { email, phone, first_name, last_name, org_id } = params;
-  const emailNorm = email?.trim() ? email.trim().toLowerCase() : null;
-  const phoneNorm = phone?.trim() || null;
+  const emailNorm = normalizeEmailForFindOrCreate(email);
+  const phoneNorm = normalizePhoneForFindOrCreate(phone);
 
   if (!emailNorm && !phoneNorm) return null;
 

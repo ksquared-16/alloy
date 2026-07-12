@@ -1,3 +1,5 @@
+import { normalizeEmailAsIntakeString } from "@/lib/identity";
+
 /** Strict email-shaped token with TLD segment. */
 export const INTAKE_EMAIL_EXTRACT_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
@@ -7,7 +9,7 @@ export const INTAKE_LOOSE_EMAIL_EXTRACT_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+/i;
 export const INTAKE_VALID_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export function normalizeEmail(raw: string): string {
-    return raw.trim().toLowerCase();
+    return normalizeEmailAsIntakeString(raw);
 }
 
 export function isValidEmail(raw: string): boolean {

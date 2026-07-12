@@ -1,3 +1,8 @@
+/**
+ * Age extraction from free text (intake helpers).
+ * Not an identity-key normalizer (Decision C covers email/phone/name/DOB only).
+ * Left local in B1a — no `lib/identity` primitive to delegate to.
+ */
 export type ExtractedAge = {
     raw: string;
     years: number;
