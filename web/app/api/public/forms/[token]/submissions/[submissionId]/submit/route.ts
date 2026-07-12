@@ -16,7 +16,6 @@ import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
-import { applyFormIntakeSafe } from "@/lib/forms/intake/applyFormIntakeSafe";
 import { buildFormIntakeMetaFromPayload } from "@/lib/forms/intake/buildFormIntakeMetaFromPayload";
 import {
     buildLifecycleValidationBlockedMeta,
@@ -30,10 +29,7 @@ import {
 } from "@/lib/forms/workflow/formSubmissionEvents";
 import { emitIntakeCaseLifecycleEventsSafe } from "@/lib/forms/workflow/intakeCaseLifecycleEvents";
 import { maybeOpenProcessingCaseFromPacketCompletionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromPacketCompletionSafe";
-import { maybeOpenProcessingCaseFromFormSubmissionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromFormSubmissionSafe";
-import { maybeRunFormIdentityShadowSafe } from "@/lib/pos/processingIdentity/formIdentityShadow";
-import { formIntakeLocationId } from "@/lib/pos/processingIdentity/formIntakeShadowHelpers";
-import type { ApplyFormIntakeSafeResult } from "@/lib/forms/intake/applyFormIntakeSafe";
+import { ingestPublicFormThroughProcessing } from "@/lib/pos/processingIdentity/sources/formIntakeAdapter";
 import type { FormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
 import {
     emitOpportunityEnrollmentPacketCompletedProjectionSafe,
@@ -208,8 +204,8 @@ export async function POST(
     let customerId = sub.customer_id;
     let customerMemberId = sub.customer_member_id;
     let opportunityId = sub.opportunity_id;
-    let shadowIntakeMeta: FormIntakeMeta | null = null;
-    let shadowLegacyIntakeResult: ApplyFormIntakeSafeResult | null = null;
+    let processingCaseId: string | null = null;
+    let formIntakeMeta: FormIntakeMeta | null = null;
 
     const metaRecord = ctx.linkMetadata as Record<string, unknown> | undefined;
     const launchMode = typeof metaRecord?.form_context_mode === "string" ? metaRecord.form_context_mode.trim() : "";
@@ -279,35 +275,29 @@ export async function POST(
             }
 
             try {
-                const intakeResult = await applyFormIntakeSafe(supabase, {
+                // D5: Processing is authoritative — no direct CRM identity writes from public submit.
+                const intake = await ingestPublicFormThroughProcessing(supabase, {
                     orgId: ctx.orgId,
-                    linkMetadata: metaRecord,
-                    defaultVerticalId:
-                        typeof metaRecord?.default_vertical_id === "string" ? metaRecord.default_vertical_id : null,
-                    defaultOpportunityStatusKey:
-                        typeof metaRecord?.default_opportunity_status_key === "string"
-                            ? metaRecord.default_opportunity_status_key
-                            : null,
+                    submissionId,
+                    formDefinitionId: ctx.formDefinitionId,
+                    intakeMeta: built.intake,
                     payload: finalPayload,
-                    existingPersonId: personId,
-                    existingCustomerId: customerId,
-                    existingCustomerMemberId: customerMemberId,
-                    existingOpportunityId: opportunityId,
+                    linkMetadata: metaRecord,
                 });
-                personId = intakeResult.person_id;
-                customerId = intakeResult.customer_id;
-                customerMemberId = intakeResult.customer_member_id;
-                opportunityId = intakeResult.opportunity_id;
-                shadowIntakeMeta = built.intake;
-                shadowLegacyIntakeResult = intakeResult;
-                const cleanedMeta = {
-                    ...((finalPayload.meta ?? {}) as Record<string, unknown>),
-                    ...intakeResult.outcomeMeta,
+                if (!intake.ok) {
+                    throw new Error(intake.error);
+                }
+                processingCaseId = intake.processingCaseId;
+                formIntakeMeta = built.intake;
+                finalPayload = {
+                    ...finalPayload,
+                    meta: {
+                        ...((finalPayload.meta ?? {}) as Record<string, unknown>),
+                        intake_resolution_path: "processing_authoritative",
+                        processing_case_id: intake.processingCaseId,
+                        intake_needs_review: true,
+                    },
                 };
-                delete cleanedMeta.intake;
-                delete cleanedMeta.intake_error;
-                delete cleanedMeta.intake_skip_reason;
-                finalPayload = { ...finalPayload, meta: cleanedMeta };
             } catch (e) {
                 const msg = e instanceof Error ? e.message : "Intake failed";
                 const cleanedMeta = { ...((finalPayload.meta ?? {}) as Record<string, unknown>) };
@@ -420,27 +410,9 @@ export async function POST(
         await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
     }
 
-    // POS-FP5: best-effort, marker-gated. Processing-intake and POS-connected forms open
-    // one Processing Case (submission as primary source). Packet steps excluded. Never throws.
-    if (!ctx.packet) {
-        await maybeOpenProcessingCaseFromFormSubmissionSafe(supabase, {
-            orgId: ctx.orgId,
-            submissionId,
-            formDefinitionId: String((submittedRow as { form_definition_id?: string }).form_definition_id ?? ""),
-            versionMetadata: versionRow?.metadata,
-            linkMetadata: ctx.linkMetadata,
-        });
-
-        if (shadowIntakeMeta && shadowLegacyIntakeResult) {
-            await maybeRunFormIdentityShadowSafe(supabase, {
-                orgId: ctx.orgId,
-                submissionId,
-                intakeMeta: shadowIntakeMeta,
-                legacyResult: shadowLegacyIntakeResult,
-                locationId: formIntakeLocationId(shadowIntakeMeta),
-            });
-        }
-    }
+    // D5: Processing case is opened during authoritative intake above; no shadow dual-path.
+    void formIntakeMeta;
+    void processingCaseId;
 
     if (linkRequiresLeadCapture(metaRecord)) {
         await emitIntakeCaseLifecycleEventsSafe({
