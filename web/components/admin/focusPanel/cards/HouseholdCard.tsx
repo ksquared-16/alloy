@@ -247,6 +247,36 @@ export default function HouseholdCard({
         return null;
     }, [composeSelectedIdentityId, householdIdentityVm.sections]);
 
+    const householdComposeSections = useMemo(
+        () =>
+            householdIdentityVm.sections.filter(
+                (section) => section.key !== "children" && section.key !== "address",
+            ),
+        [householdIdentityVm.sections],
+    );
+
+    const householdSectionRecord = (sectionKey: string): IdentityRecordVM | null => {
+        const section = householdIdentityVm.sections.find((entry) => entry.key === sectionKey);
+        return section?.items[0] ?? null;
+    };
+
+    const householdSelectablePeople = useMemo(
+        () =>
+            householdIdentityVm.sections.flatMap((section) => {
+                if (section.key === "children") return [];
+                return section.items.map((item) => ({
+                    personId: item.id,
+                    sectionKey: section.key,
+                    name: item.title,
+                }));
+            }),
+        [householdIdentityVm.sections],
+    );
+
+    const selectHouseholdSectionForEvidence = (sectionKey: string) => {
+        composer?.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: sectionKey });
+    };
+
     // ANY open state elevates as a centered Focus Card — Household never expands
     // height inline (no row reflow). Edit is the deepest state OF Focus.
     const level: FocusPanelPerspectiveLevel =
@@ -277,14 +307,106 @@ export default function HouseholdCard({
     const statusTone = justSaved ? "ready" : hasWarning ? "at-risk" : "neutral";
     const statusChip = justSaved ? "✓ Saved" : hasWarning ? "Needs contact" : null;
 
+    const composeFooterAction =
+        showComposeCanvas && composer && !isEmpty && !editing ?
+            (() => {
+                const purpose = composePurpose ?? "summary";
+                if (purpose === "evidence") {
+                    return (
+                        <button
+                            type="button"
+                            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                            onClick={() => composer.setActiveConfigPurpose("details")}
+                            data-household-compose-action="back-to-details"
+                        >
+                            ← Detail Fields
+                        </button>
+                    );
+                }
+                if (purpose === "details" && composeSelectedRecord) {
+                    return (
+                        <div className="alloy-os-card-nav">
+                            <button
+                                type="button"
+                                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                                onClick={() => {
+                                    composer.setSelectedIdentityId(null);
+                                    composer.setActiveConfigPurpose("context_facts");
+                                }}
+                                data-household-compose-action="back-to-context"
+                            >
+                                ← All contacts
+                            </button>
+                            <button
+                                type="button"
+                                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                                onClick={() => composer.setActiveConfigPurpose("evidence")}
+                                data-household-compose-action="open-evidence"
+                            >
+                                Evidence collections →
+                            </button>
+                        </div>
+                    );
+                }
+                if (purpose === "details") {
+                    return (
+                        <button
+                            type="button"
+                            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                            onClick={() => composer.setActiveConfigPurpose("context_facts")}
+                            data-household-compose-action="back-to-context"
+                        >
+                            ← Context Facts
+                        </button>
+                    );
+                }
+                if (purpose === "context_facts") {
+                    return (
+                        <button
+                            type="button"
+                            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                            onClick={() => composer.setActiveConfigPurpose("summary")}
+                            data-household-compose-action="back-to-summary"
+                        >
+                            ← Summary Fields
+                        </button>
+                    );
+                }
+                if (evidence.groups.length > 0) {
+                    return (
+                        <button
+                            type="button"
+                            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                            onClick={() => composer.setActiveConfigPurpose("context_facts")}
+                            data-household-compose-action="open-context"
+                        >
+                            Context Facts →
+                        </button>
+                    );
+                }
+                return null;
+            })()
+        : null;
+
     const footerAction =
-        isEmpty || editing ? null :
+        composeFooterAction
+        ?? (isEmpty || editing ? null :
         disclosure.depth === "evidence" && selectedIdentityRecord ?
-            <IdentityDisclosureBackAction label="← Back to details" onBack={composingHouseholdSurface ? backWithComposerSync : backDisclosure} dataAction="back-to-details" />
+            <IdentityDisclosureBackAction label="← Back to details" onBack={backDisclosure} dataAction="back-to-details" />
         : disclosure.depth === "details" && selectedIdentityRecord ?
-            <IdentityDisclosureBackAction label="← View household" onBack={composingHouseholdSurface ? backWithComposerSync : backDisclosure} dataAction="back-to-context" />
+            <div className="alloy-os-card-nav">
+                <IdentityDisclosureBackAction label="← View household" onBack={backDisclosure} dataAction="back-to-context" />
+                <button
+                    type="button"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    onClick={() => enterEvidence(selectedIdentityRecord.id, disclosure.selectedSectionKey)}
+                    data-household-action="open-evidence"
+                >
+                    View evidence →
+                </button>
+            </div>
         : disclosure.depth === "context" ?
-            <IdentityDisclosureBackAction label="← Back to panel" onBack={composingHouseholdSurface ? backWithComposerSync : backDisclosure} dataAction="back-to-summary" />
+            <IdentityDisclosureBackAction label="← Back to panel" onBack={backDisclosure} dataAction="back-to-summary" />
         : evidence.groups.length > 0 ?
             <button
                 type="button"
@@ -294,7 +416,7 @@ export default function HouseholdCard({
             >
                 View household →
             </button>
-        : null;
+        : null);
 
     let body: React.ReactNode;
     let perspective: "collapsed" | "expanded" | "focused" | "edit" | "empty";
@@ -318,10 +440,6 @@ export default function HouseholdCard({
     } else if (showComposeCanvas && nestedConfig && composer) {
         const purpose = composePurpose ?? "summary";
         perspective = purpose === "summary" ? "collapsed" : "focused";
-        const primarySection = householdIdentityVm.sections.find((section) => section.key === "primary_contact");
-        const secondarySection = householdIdentityVm.sections.find((section) => section.key === "other_parent_guardian");
-        const primaryRecord = primarySection?.items[0] ?? null;
-        const secondaryRecords = secondarySection?.items ?? [];
         body = (
             <IdentityComposeCanvasShell
                 activePurpose={purpose}
@@ -331,46 +449,60 @@ export default function HouseholdCard({
                 onBack={() => composer.exitDrillIn()}
             >
                 {purpose === "evidence" ? (
-                    <IdentityEvidenceCollectionsPanel
-                        surfaceId={HOUSEHOLD_SURFACE_ID}
-                        groupKey={composeSelectedGroupKey}
-                        config={nestedConfig}
-                        onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
-                    />
-                ) : purpose === "details" ? (
-                    composeSelectedRecord ? (
-                        <IdentityComposeSectionCanvas
+                    <div className="space-y-3" data-household-compose-evidence="true">
+                        <HouseholdComposeSectionPicker
+                            sections={householdComposeSections}
+                            activeSectionKey={composeSelectedGroupKey}
+                            onSelectSection={selectHouseholdSectionForEvidence}
+                        />
+                        <IdentityEvidenceCollectionsPanel
                             surfaceId={HOUSEHOLD_SURFACE_ID}
                             groupKey={composeSelectedGroupKey}
+                            config={nestedConfig}
+                            onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
+                        />
+                    </div>
+                ) : purpose === "details" ? (
+                    composeSelectedRecord ? (
+                        <FocusedHouseholdPerson
                             record={composeSelectedRecord}
-                            purpose="details"
+                            groupKey={composeSelectedGroupKey}
                         />
                     ) : (
-                        <ExpandedBody
-                            groups={evidence.groups}
-                            masked={maskedChannels}
-                            onSelectIdentity={handleSelectIdentityForCompose}
-                            onOpenChild={openChild}
-                            onEditContact={undefined}
-                            onAddEmergencyContact={undefined}
-                            composing
-                            composePurpose={purpose}
-                            nestedConfig={nestedConfig}
-                            composePickerOnly
+                        <HouseholdComposePersonPicker
+                            people={householdSelectablePeople}
+                            selectedId={composeSelectedIdentityId}
+                            onSelect={handleSelectIdentityForCompose}
+                            hint="Select a contact to configure Detail Fields"
                         />
                     )
                 ) : purpose === "context_facts" ? (
-                    <ExpandedBody
-                        groups={evidence.groups}
-                        masked={maskedChannels}
-                        onSelectIdentity={handleSelectIdentityForCompose}
-                        onOpenChild={openChild}
-                        onEditContact={undefined}
-                        onAddEmergencyContact={undefined}
-                        composing
-                        composePurpose={purpose}
-                        nestedConfig={nestedConfig}
-                    />
+                    <div className="space-y-4" data-household-compose-context="true">
+                        {householdComposeSections.map((section) => (
+                            <ComposableRegionShell
+                                key={section.key}
+                                as="section"
+                                surfaceId={HOUSEHOLD_SURFACE_ID}
+                                groupKey={section.key}
+                                label={section.label}
+                                className="alloy-os-household__group"
+                                dataAttrs={{ "data-household-evidence-group": section.key }}
+                            >
+                                <IdentityComposeSectionCanvas
+                                    surfaceId={HOUSEHOLD_SURFACE_ID}
+                                    groupKey={section.key}
+                                    record={householdSectionRecord(section.key)}
+                                    purpose="context_facts"
+                                />
+                            </ComposableRegionShell>
+                        ))}
+                        <HouseholdComposePersonPicker
+                            people={householdSelectablePeople}
+                            selectedId={composeSelectedIdentityId}
+                            onSelect={handleSelectIdentityForCompose}
+                            hint="Select a contact to configure Detail Fields"
+                        />
+                    </div>
                 ) : (
                     <div className="alloy-os-household__summary">
                         <div className="identity-summary-columns" data-identity-summary-columns="true">
@@ -383,7 +515,7 @@ export default function HouseholdCard({
                                 <IdentityComposeSectionCanvas
                                     surfaceId={HOUSEHOLD_SURFACE_ID}
                                     groupKey="primary_contact"
-                                    record={primaryRecord}
+                                    record={householdSectionRecord("primary_contact")}
                                     purpose="summary"
                                 />
                             </ComposableRegionShell>
@@ -396,7 +528,7 @@ export default function HouseholdCard({
                                 <IdentityComposeSectionCanvas
                                     surfaceId={HOUSEHOLD_SURFACE_ID}
                                     groupKey="other_parent_guardian"
-                                    record={secondaryRecords[0] ?? null}
+                                    record={householdSectionRecord("other_parent_guardian")}
                                     purpose="summary"
                                 />
                             </ComposableRegionShell>
@@ -434,7 +566,7 @@ export default function HouseholdCard({
                 onAddEmergencyContact={
                     canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
                 }
-                composing={composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false}
+                composing={showComposeCanvas}
                 composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
             />
@@ -445,7 +577,7 @@ export default function HouseholdCard({
             <CollapsedBody
                 evidence={evidence}
                 masked={maskedChannels}
-                composing={composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false}
+                composing={showComposeCanvas}
                 composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
                 canEdit={canEdit}
@@ -663,7 +795,6 @@ function CollapsedBody({
                     className="alloy-os-household__summary-region identity-summary-columns__cell"
                     dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
                 >
-                    <p className="alloy-os-household__row-detail">Add secondary parent fields when contacts exist</p>
                     <p className="alloy-os-household__row-detail">Add secondary parent fields when contacts exist</p>
                 </ComposableRegionShell>
             ) : null}
@@ -929,6 +1060,99 @@ function GroupRows({
             {overflow > 0 ? (
                 <div className="alloy-os-household__overflow">+{overflow} more</div>
             ) : null}
+        </div>
+    );
+}
+
+type HouseholdComposePerson = {
+    personId: string;
+    sectionKey: string;
+    name: string;
+};
+
+function HouseholdComposePersonPicker({
+    people,
+    selectedId,
+    onSelect,
+    hint = "Select a contact to configure Detail Fields",
+}: {
+    people: HouseholdComposePerson[];
+    selectedId?: string | null;
+    onSelect: (personId: string, sectionKey: string) => void;
+    hint?: string;
+}) {
+    if (people.length === 0) return null;
+    return (
+        <div className="identity-compose-person-picker space-y-2" data-identity-compose-person-picker="true">
+            <p className="config-typo-sublabel">{hint}</p>
+            <ul className="space-y-1">
+                {people.map((person) => (
+                    <li key={`${person.sectionKey}:${person.personId}`}>
+                        <button
+                            type="button"
+                            className="w-full rounded-md border border-alloy-stone/15 px-3 py-2 text-left text-[12px] hover:border-alloy-pine/30 hover:bg-alloy-pine/5"
+                            data-identity-compose-person={person.personId}
+                            data-identity-compose-section={person.sectionKey}
+                            aria-current={selectedId === person.personId ? "true" : undefined}
+                            onClick={() => onSelect(person.personId, person.sectionKey)}
+                        >
+                            {person.name}
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+function HouseholdComposeSectionPicker({
+    sections,
+    activeSectionKey,
+    onSelectSection,
+}: {
+    sections: Array<{ key: string; label: string }>;
+    activeSectionKey: string;
+    onSelectSection: (sectionKey: string) => void;
+}) {
+    return (
+        <div className="identity-compose-section-picker flex flex-wrap gap-2" data-identity-compose-section-picker="true">
+            {sections.map((section) => (
+                <button
+                    key={section.key}
+                    type="button"
+                    className={clsx(
+                        "rounded-md border px-2 py-1 text-[11px]",
+                        activeSectionKey === section.key
+                            ? "border-alloy-pine/40 bg-alloy-pine/10 text-alloy-midnight"
+                            : "border-alloy-stone/15 text-alloy-midnight/55",
+                    )}
+                    data-identity-compose-section={section.key}
+                    aria-pressed={activeSectionKey === section.key}
+                    onClick={() => onSelectSection(section.key)}
+                >
+                    {section.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+function FocusedHouseholdPerson({
+    record,
+    groupKey,
+}: {
+    record: IdentityRecordVM;
+    groupKey: string;
+}) {
+    return (
+        <div className="alloy-os-household__focused" data-household-focused-person={record.id}>
+            <p className="alloy-os-household__group-title">{record.title}</p>
+            <IdentityComposeSectionCanvas
+                surfaceId={HOUSEHOLD_SURFACE_ID}
+                groupKey={groupKey}
+                record={record}
+                purpose="details"
+            />
         </div>
     );
 }

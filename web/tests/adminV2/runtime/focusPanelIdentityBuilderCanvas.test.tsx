@@ -179,6 +179,7 @@ function ComposerHarness({
     cardKey,
     purpose = "summary",
     childId,
+    householdPerson,
     previewMode = false,
     children,
 }: {
@@ -186,6 +187,7 @@ function ComposerHarness({
     cardKey: "household" | "children";
     purpose?: IdentityConfigurationPurpose;
     childId?: string;
+    householdPerson?: { personId: string; sectionKey: string };
     previewMode?: boolean;
     children: ReactNode;
 }) {
@@ -199,8 +201,86 @@ function ComposerHarness({
                 composer?.setDrillDepth({ kind: "child-focus", childId });
             }
         }
+        if (householdPerson) {
+            composer?.setSelectedIdentityId(householdPerson.personId);
+            composer?.select({ kind: "region", surfaceId, groupKey: householdPerson.sectionKey });
+        }
         if (previewMode) composer?.setComposeCanvasMode("preview");
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return children;
 }
+
+describe("Household composer parity with Children", () => {
+    it("Household Summary Primary Contact renders layout field instances with controls", () => {
+        const { context } = demoContext();
+        const model = { key: "household", title: "Household", tier: "context", span: 2, iconName: "users" } as FocusPanelCardModel;
+        act(() => {
+            root.render(
+                <FocusPanelComposerProvider initialNestedConfigs={{ [HOUSEHOLD_SURFACE_ID]: defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID) }}>
+                    <ComposerHarness surfaceId={HOUSEHOLD_SURFACE_ID} cardKey="household" purpose="summary">
+                        <HouseholdCard model={model} context={context} />
+                    </ComposerHarness>
+                </FocusPanelComposerProvider>,
+            );
+        });
+        act(() => {});
+        expect(document.querySelector('[data-nested-layout-surface="primary_contact"] .fp-layout-field__grip, [data-nested-layout-surface="primary_contact"] .fp-field-instance__toolbar')).toBeTruthy();
+        expect(document.querySelector('[data-identity-disclosure-surface="true"]')).toBeFalsy();
+    });
+
+    it("Household Details mounts focused person composer after selection", () => {
+        const { context } = demoContext();
+        const model = { key: "household", title: "Household", tier: "context", span: 2, iconName: "users" } as FocusPanelCardModel;
+        act(() => {
+            root.render(
+                <FocusPanelComposerProvider initialNestedConfigs={{ [HOUSEHOLD_SURFACE_ID]: defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID) }}>
+                    <ComposerHarness
+                        surfaceId={HOUSEHOLD_SURFACE_ID}
+                        cardKey="household"
+                        purpose="details"
+                        householdPerson={{ personId: "demo-p-1", sectionKey: "primary_contact" }}
+                    >
+                        <HouseholdCard model={model} context={context} />
+                    </ComposerHarness>
+                </FocusPanelComposerProvider>,
+            );
+        });
+        act(() => {});
+        expect(document.querySelector('[data-household-focused-person]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface="primary_contact"]')).toBeTruthy();
+    });
+
+    it("Household Evidence mounts collection editor with section picker", () => {
+        const { context } = demoContext();
+        const model = { key: "household", title: "Household", tier: "context", span: 2, iconName: "users" } as FocusPanelCardModel;
+        act(() => {
+            root.render(
+                <FocusPanelComposerProvider initialNestedConfigs={{ [HOUSEHOLD_SURFACE_ID]: defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID) }}>
+                    <ComposerHarness surfaceId={HOUSEHOLD_SURFACE_ID} cardKey="household" purpose="evidence">
+                        <HouseholdCard model={model} context={context} />
+                    </ComposerHarness>
+                </FocusPanelComposerProvider>,
+            );
+        });
+        act(() => {});
+        expect(document.querySelector('[data-identity-evidence-panel="true"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-compose-section-picker="true"]')).toBeTruthy();
+    });
+
+    it("Runtime View household opens context and person click reaches details", () => {
+        const { context } = demoContext();
+        const model = { key: "household", title: "Household", tier: "context", span: 2, iconName: "users" } as FocusPanelCardModel;
+        act(() => {
+            root.render(<HouseholdCard model={model} context={context} />);
+        });
+        const expand = document.querySelector('[data-household-action="expand"]') as HTMLButtonElement | null;
+        expect(expand).toBeTruthy();
+        act(() => expand?.click());
+        expect(document.querySelector('[data-identity-depth="context"]')).toBeTruthy();
+        const activate = document.querySelector(".identity-record-summary__activate") as HTMLButtonElement | null;
+        expect(activate).toBeTruthy();
+        act(() => activate?.click());
+        expect(document.querySelector('[data-identity-disclosure-surface="details"]')).toBeTruthy();
+    });
+});

@@ -97,8 +97,10 @@ export default function NestedSurfaceFieldLayoutSurface({
             ? identityConfigurationFieldKeys(config, groupKey, configurationPurposeFromTierArg(tier))
             : selectedFieldKeys(config, groupKey);
         const visible = configured.filter((key) => fieldMetaByKey.has(key));
-        return visible.length > 0 ? visible : fields.map((f) => f.fieldKey);
-    }, [config, groupKey, fields, fieldMetaByKey, tier]);
+        if (visible.length > 0) return visible;
+        if (composing && configured.length > 0) return configured;
+        return fields.map((f) => f.fieldKey);
+    }, [composing, config, groupKey, fields, fieldMetaByKey, tier]);
 
     const rowChunks = useMemo(() => {
         if (!config) return orderedKeys.map((key) => [key]);
@@ -156,7 +158,25 @@ export default function NestedSurfaceFieldLayoutSurface({
                     data-children-inline-row={chunk.length === 2 ? "pair" : "single"}
                 >
                     {chunk.map((fieldKey) => {
-                        const meta = fieldMetaByKey.get(fieldKey);
+                        const meta =
+                            fieldMetaByKey.get(fieldKey)
+                            ?? (composing && config
+                                ? {
+                                      fieldKey,
+                                      label: fieldPresentationLabel(
+                                          config,
+                                          groupKey,
+                                          fieldKey,
+                                          catalogLabelFor(
+                                              surfaceId,
+                                              groupKey,
+                                              fieldKey,
+                                              tenantFieldDefinitions,
+                                          ),
+                                      ),
+                                      value: null,
+                                  }
+                                : undefined);
                         if (!meta) return null;
 
                         if (meta.renderBlock) {
