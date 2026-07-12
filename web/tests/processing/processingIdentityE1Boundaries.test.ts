@@ -22,9 +22,10 @@ describe("E1 canonical intake commit boundaries", () => {
         expect(route).not.toMatch(/applyFormIntakeSafe\s*\(/);
     });
 
-    it("applyFormIntakeSafe always throws (no replay flag)", () => {
+    it("applyFormIntakeSafe always throws (no replay flag, no legacy export)", () => {
         const intake = read("lib/forms/intake/applyFormIntakeSafe.ts");
         expect(intake).not.toMatch(/__legacyDirectWriteReplay/);
+        expect(intake).not.toMatch(/applyFormIntakeDirectWriteLegacy/);
         expect(intake).toMatch(/retired \(E1\)/);
     });
 
