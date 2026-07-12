@@ -1,7 +1,6 @@
 "use client";
 
 import IdentityBuilderDrillIn from "@/components/adminV2/settings/surfaces/composer/IdentityBuilderDrillIn";
-import IdentityComposerDiagnosticBanner from "@/components/admin/focusPanel/identity/IdentityComposerDiagnosticBanner";
 import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
 type Props = {
@@ -31,15 +30,7 @@ export default function IdentityComposeCanvasShell({
             className="identity-compose-canvas space-y-3"
             data-identity-compose-canvas={activePurpose}
             data-compose-canvas-mode={composeCanvasMode}
-        >
-            <IdentityComposerDiagnosticBanner
-                composeCanvasMode={composeCanvasMode}
-                activePurpose={activePurpose}
-                surfaceId={surfaceId ?? "unknown"}
-                selectedGroupKey={selectedGroupKey}
-                composeCanvasMounted
-            />
-            <div className="flex items-center justify-between gap-2 border-b border-alloy-stone/10 pb-2">
+        >            <div className="flex items-center justify-between gap-2 border-b border-alloy-stone/10 pb-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-pine">
                     Configure layout
                 </p>

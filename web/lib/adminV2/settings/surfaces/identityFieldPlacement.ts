@@ -45,11 +45,12 @@ function seedPlacement(args: {
     existing?: IdentityFieldPlacement;
 }): IdentityFieldPlacement {
     const normalizedTier = normalizeIdentityStorageTier(args.tier);
+    const keepExistingLayout = args.existing?.width === args.width;
     return {
         fieldRef: args.fieldRef,
         tier: normalizedTier,
-        row: args.existing?.row ?? args.row,
-        column: args.existing?.column ?? args.column,
+        row: keepExistingLayout ? (args.existing?.row ?? args.row) : args.row,
+        column: keepExistingLayout ? (args.existing?.column ?? args.column) : args.column,
         width: args.width,
         icon: args.existing?.icon,
         labelMode: args.existing?.labelMode,

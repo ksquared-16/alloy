@@ -88,12 +88,15 @@ export function adaptHouseholdContactSurfaceToHouseholdSurface(
         HOUSEHOLD_SURFACE_CANONICAL_ID,
         householdSurface ?? defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_CANONICAL_ID),
     );
-    const legacyGroup = legacyContactSurface?.groups.find((group) => group.key === "contact_fields");
-    if (!legacyGroup) return canonical;
+    // Published canonical household_surface wins — legacy contact surface is migration input only.
+    if (!legacyContactSurface || householdSurface) return applyIdentityGroupReconcile(canonical);
+
+    const legacyGroup = legacyContactSurface.groups.find((group) => group.key === "contact_fields");
+    if (!legacyGroup) return applyIdentityGroupReconcile(canonical);
 
     const canonicalGroup = canonical.groups.find((group) => group.key === "contact_edit");
-    if (!canonicalGroup) return canonical;
-    const canonicalWasPublished = householdSurface?.groups.some((group) => group.key === "contact_edit") ?? false;
+    if (!canonicalGroup) return applyIdentityGroupReconcile(canonical);
+    const canonicalWasPublished = false;
 
     const selectedFieldKeys = legacyGroup.selectedFieldKeys
         .map((fieldRef) => LEGACY_CONTACT_TO_CANONICAL_FIELD[fieldRef])
@@ -150,14 +153,13 @@ export function migrateIdentityDisclosureGroup(group: NestedSurfaceGroupConfig):
     const reconciled = reconcileFieldModesToPolicies(group);
     const layers = identityLayerFieldKeysFromGroup(reconciled);
     const contextFactKeys = sanitizeContextFactKeys(layers.summary, reconciled.contextFieldKeys ?? layers.contextFacts);
-    const placements = normalizeIdentityFieldPlacements(
-        generateDefaultIdentityFieldPlacements({
-            ...reconciled,
-            selectedFieldKeys: layers.summary,
-            contextFieldKeys: contextFactKeys,
-            expandedFieldKeys: layers.details,
-        }),
-    );
+    const placementSeed = {
+        ...reconciled,
+        selectedFieldKeys: layers.summary,
+        contextFieldKeys: contextFactKeys,
+        expandedFieldKeys: layers.details,
+    };
+    const placements = normalizeIdentityFieldPlacements(generateDefaultIdentityFieldPlacements(placementSeed));
     return {
         ...reconciled,
         selectedFieldKeys: layers.summary,
@@ -172,11 +174,16 @@ export function adaptChildSurfaceToChildrenSurface(
     childSurface: NestedSurfaceConfig | null,
     childrenSurface: NestedSurfaceConfig | null,
 ): NestedSurfaceConfig {
+    if (childrenSurface) {
+        return applyIdentityGroupReconcile(
+            reconcileNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID, childrenSurface),
+        );
+    }
     const canonical = reconcileNestedSurfaceConfig(
         CHILDREN_SURFACE_CANONICAL_ID,
-        childrenSurface ?? defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
+        defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
     );
-    if (!childSurface) return canonical;
+    if (!childSurface) return applyIdentityGroupReconcile(canonical);
 
     const childByKey = new Map(childSurface.groups.map((group) => [group.key, group]));
     const mergedGroups = canonical.groups.map((group) => {
@@ -306,20 +313,17 @@ function reconcileIdentityNestedConfigImpl(input: ReconcileIdentityNestedConfigI
     } else if (surfaceKey === CHILDREN_SURFACE_CANONICAL_ID) {
         config = adaptChildSurfaceToChildrenSurface(
             legacyConfigs.childSurface ?? null,
-            reconcileNestedSurfaceConfig(
-                CHILDREN_SURFACE_CANONICAL_ID,
-                currentConfig ?? defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
-            ),
+            currentConfig,
         );
     } else if (surfaceKey === CHILD_SURFACE_COMPAT_ID) {
         config = adaptChildSurfaceToChildrenSurface(
             currentConfig,
-            defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
+            null,
         );
     } else if (surfaceKey === HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID) {
         config = adaptHouseholdContactSurfaceToHouseholdSurface(
             currentConfig,
-            defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_CANONICAL_ID),
+            null,
         );
     } else {
         config = reconcileNestedSurfaceConfig(surfaceKey, currentConfig);

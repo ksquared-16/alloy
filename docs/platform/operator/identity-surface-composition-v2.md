@@ -240,7 +240,9 @@ Existing published configs continue to load. Reconcile adapts tiers and strips d
 | VM projection | `web/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM.ts` |
 | Builder drill-in | `web/components/adminV2/settings/surfaces/composer/IdentityBuilderDrillIn.tsx` |
 | Context Facts panel | `web/components/adminV2/settings/surfaces/composer/IdentityContextFactsPanel.tsx` |
-| Tests | `web/tests/adminV2/runtime/identityDisclosureLayers.test.ts` |
+| Published config resolver | `web/lib/adminV2/runtime/focusPanel/identity/resolvePublishedIdentitySurfaceConfig.ts` |
+| Compatibility adapters | `web/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat.ts` |
+| Tests | `web/tests/adminV2/runtime/publishedIdentitySurfaceParity.test.ts`, `identityBuilderRuntimeParity.test.ts` |
 
 ---
 
@@ -251,5 +253,63 @@ Existing published configs continue to load. Reconcile adapts tiers and strips d
 | Card disclosure state machine | Wire Household/Children local expanded/focus to `IdentityDisclosureDepth` |
 | Evidence collection builder | Minimal UI; types persisted |
 | Nested identity builder drill | `nested-purpose` frames defined; full collection-surface drill pending |
-| Builder/runtime parity fixture | Automated cross-check test |
+| Builder/runtime parity fixture | **Done** — `publishedIdentitySurfaceParity.test.ts` |
 | `insightTemplate` on summary/context | Type hook reserved; not yet implemented |
+
+---
+
+## 11. Published configuration resolution (Builder ↔ runtime parity)
+
+**Invariant:** Builder **Published / Live** preview and `/work-unit` runtime must project through one canonical path:
+
+```
+published Focus Panel surface document
+  → resolvePublishedIdentitySurfaceConfigFromDoc
+  → reconcileIdentityNestedConfigFromDocMetadata
+  → shared Identity VM (buildHouseholdCardEvidence / buildChildIdentityRecordVM)
+```
+
+Publish serializes identity surfaces through `serializeIdentityNestedSurfacesForPublish`, which:
+
+- writes only canonical keys (`household_surface`, `children_surface`);
+- omits legacy adapter keys (`household_contact_surface`, `child_surface`);
+- preserves operator-authored `fieldPlacements` (row/column/width pairings).
+
+### Precedence
+
+| Source | When it applies |
+| --- | --- |
+| Explicit canonical published group config | Always wins when present |
+| Legacy compatible published config | Adapter input only when canonical config is absent |
+| Platform/default seed | Fallback only when no explicit published config exists |
+
+### Explicit empty vs undefined
+
+| Value | Meaning |
+| --- | --- |
+| `undefined` | Tier not authored — platform fallback may apply |
+| `[]` | Explicitly empty — no fallback fields injected |
+
+Applies to `selectedFieldKeys`, `contextFieldKeys`, `expandedFieldKeys`, `evidenceCollections`, and `fieldPlacements`.
+
+### Canonical surface and group keys
+
+| Surface | Canonical key | Legacy adapter key (read-only migration) |
+| --- | --- | --- |
+| Household | `household_surface` | `household_contact_surface` |
+| Children | `children_surface` | `child_surface` |
+
+Household relationship sections: `primary_contact`, `other_parent_guardian`, `household_members`, `emergency_contacts`, `children`, `billing_contact`, `authorized_pickups`. Children roster: `roster`, `medical`, etc.
+
+### Builder preview modes
+
+| Mode | Config source |
+| --- | --- |
+| Working Copy (Configure) | Composer session `configFor(surfaceId)` |
+| Published / Live (Preview) | `readHouseholdNestedConfigFromDoc` / `readChildrenNestedConfigFromDoc` |
+
+Representative Johnson data in Builder preview may differ from Kurzman runtime records; layout semantics (field selection, tier, order, pairing, labels, icons, policies) must match.
+
+### Post-publish refresh
+
+`usePublishedFocusPanelSummaryDoc` caches the published summary document per org/location. Publishing dispatches `FOCUS_PANEL_SUMMARY_PUBLISHED_EVENT` to invalidate the cache in-tab so `/work-unit` recomposes against the latest revision.

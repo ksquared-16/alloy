@@ -49,9 +49,7 @@ import {
     HOUSEHOLD_FIXED_GROUP_KEYS,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
 import {
-    HOUSEHOLD_SURFACE_ID,
     isNestedGroupEnabled,
-    reconcileNestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     formatFocusPanelDate,
@@ -377,9 +375,7 @@ export function buildHouseholdCardEvidence(
         }
     }
 
-    const nestedConfig = options.nestedConfig
-        ? reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, options.nestedConfig)
-        : null;
+    const nestedConfig = options.nestedConfig ?? null;
 
     // Children rows — belonging-first; optional operational facts only when configured.
     const childFieldKeys = nestedConfig ? householdGroupFieldKeys(nestedConfig, "children") : [];

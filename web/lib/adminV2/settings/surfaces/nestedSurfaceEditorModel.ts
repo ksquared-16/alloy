@@ -59,6 +59,7 @@ import {
 import {
     configurationPurposeFromTierArg,
     fieldKeysForConfigurationPurpose,
+    normalizeIdentityFieldPlacements,
     normalizeIdentityStorageTier,
     type IdentityConfigurationPurpose,
     type IdentityEvidenceCollectionConfig,

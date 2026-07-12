@@ -296,7 +296,7 @@ describe("children identity VM", () => {
                 },
             ],
         };
-        const adapted = adaptChildSurfaceToChildrenSurface(childSurface, defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID));
+        const adapted = adaptChildSurfaceToChildrenSurface(childSurface, null);
         const placement = adapted.groups.find((g) => g.key === "placement")!;
         expect(placement.selectedFieldKeys).toContain("child.start_date");
         expect(placement.fieldPolicies?.["child.start_date"]).toBe("editable");

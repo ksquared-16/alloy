@@ -18,7 +18,6 @@ import IdentityCollectionContext from "@/components/admin/focusPanel/identity/Id
 import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity/IdentityDisclosureBackAction";
 import { useIdentityDisclosureState } from "@/lib/adminV2/runtime/focusPanel/identity/useIdentityDisclosureState";
 import IdentityComposeCanvasShell from "@/components/admin/focusPanel/identity/IdentityComposeCanvasShell";
-import IdentityComposerDiagnosticBanner from "@/components/admin/focusPanel/identity/IdentityComposerDiagnosticBanner";
 import IdentityComposeSectionCanvas from "@/components/admin/focusPanel/identity/IdentityComposeSectionCanvas";
 import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
 import { shouldRenderIdentityComposeCanvas } from "@/lib/adminV2/runtime/focusPanel/identity/identityComposeMode";
@@ -102,11 +101,11 @@ export default function HouseholdCard({
 }: Props) {
     const composer = useFocusPanelComposer();
     const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
-    const nestedConfig = useMemo(() => {
-        if (composer?.enabled) return composer.configFor(HOUSEHOLD_SURFACE_ID);
-        return readHouseholdNestedConfigFromDoc(publishedDoc);
-    }, [composer, publishedDoc]);
     const composingHouseholdSurface = composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false;
+    const nestedConfig = useMemo(
+        () => (composingHouseholdSurface ? composer?.configFor(HOUSEHOLD_SURFACE_ID) ?? null : readHouseholdNestedConfigFromDoc(publishedDoc)),
+        [composer, composingHouseholdSurface, publishedDoc],
+    );
     const {
         state: disclosure,
         enterContext,
@@ -441,16 +440,7 @@ export default function HouseholdCard({
     } else if (composingHouseholdSurface && composer && process.env.NEXT_PUBLIC_VERCEL_ENV === "preview" && !showComposeCanvas) {
         perspective = "collapsed";
         body = (
-            <div className="space-y-3">
-                <IdentityComposerDiagnosticBanner
-                    composeCanvasMode={composer.composeCanvasMode}
-                    activePurpose={composePurpose ?? "summary"}
-                    surfaceId={HOUSEHOLD_SURFACE_ID}
-                    selectedGroupKey={composeSelectedGroupKey}
-                    config={nestedConfig}
-                    composeCanvasMounted={false}
-                />
-                <p className="text-[12px] text-amber-800">Compose canvas bypassed — check Preview vs Configure toggle.</p>
+            <div className="space-y-3">                <p className="text-[12px] text-amber-800">Compose canvas bypassed — check Preview vs Configure toggle.</p>
             </div>
         );
     } else if (showComposeCanvas && nestedConfig && composer) {

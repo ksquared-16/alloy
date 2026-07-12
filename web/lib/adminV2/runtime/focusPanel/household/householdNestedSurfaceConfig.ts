@@ -10,9 +10,7 @@ import {
     fieldVisibilityForNestedGroup,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import {
-    reconcileIdentityNestedConfigFromDocMetadata,
-} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { resolvePublishedIdentitySurfaceConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/identity/resolvePublishedIdentitySurfaceConfig";
 import type { SurfaceFieldVisibility } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import {
@@ -21,10 +19,7 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceSectionOrder";
 
 export function readHouseholdNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
-    if (!doc) return null;
-    return reconcileIdentityNestedConfigFromDocMetadata(HOUSEHOLD_SURFACE_ID, doc.metadata as {
-        nestedSurfaces?: Record<string, NestedSurfaceConfig | undefined>;
-    });
+    return resolvePublishedIdentitySurfaceConfigFromDoc(HOUSEHOLD_SURFACE_ID, doc);
 }
 
 export function householdGroupFieldKeys(

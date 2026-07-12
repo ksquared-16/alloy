@@ -13,8 +13,9 @@ import {
     setNestedGroupEnabled,
     applyNestedSurfaceFieldDrop,
     fieldLayoutWidthForNestedGroup,
-    reconcileNestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { serializeIdentityNestedSurfacesForPublish } from "@/lib/adminV2/runtime/focusPanel/identity/resolvePublishedIdentitySurfaceConfig";
+import { readHouseholdNestedConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
 import {
     buildChildIdentityRecordVM,
     buildHouseholdIdentityCardVM,
@@ -200,7 +201,11 @@ describe("identity builder/runtime parity fixture", () => {
             { tier: "details" },
         );
 
-        const published = reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, config);
+        const serialized = serializeIdentityNestedSurfacesForPublish({ [HOUSEHOLD_SURFACE_ID]: config });
+        const published = readHouseholdNestedConfigFromDoc({
+            surfaces: {},
+            metadata: { nestedSurfaces: serialized },
+        } as unknown as import("@/lib/layout/layoutV2").LayoutDoc)!;
         for (const purpose of ["summary", "context_facts", "details"] as const) {
             expect(identityConfigurationFieldKeys(published, "primary_contact", purpose)).toEqual(
                 identityConfigurationFieldKeys(config, "primary_contact", purpose),
