@@ -172,9 +172,10 @@ BEGIN
         ELSIF v_key = 'link_person_to_household' THEN
             v_person := public.processing_resolve_ref(v_pl ->> 'person_id', v_refs)::uuid;
             v_house  := public.processing_resolve_ref(v_pl ->> 'household_id', v_refs)::uuid;
+            v_role   := coalesce(v_pl ->> 'role_type', 'primary_contact');
             INSERT INTO customer_persons (org_id, customer_id, person_id, role_type)
-            VALUES (p_org_id, v_house, v_person, coalesce(v_pl ->> 'role_type', 'primary_contact'))
-            ON CONFLICT (org_id, customer_id, person_id) DO UPDATE SET role_type = EXCLUDED.role_type
+            VALUES (p_org_id, v_house, v_person, v_role)
+            ON CONFLICT (org_id, customer_id, person_id, role_type) DO UPDATE SET role_type = EXCLUDED.role_type
             RETURNING id INTO v_new_id;
 
         ELSIF v_key IN ('create_child', 'link_child_to_household') THEN
