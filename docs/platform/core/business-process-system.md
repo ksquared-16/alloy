@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Business Process System
 
 **Status:** Canonical (June 2026 freeze). Operator mental model and platform architecture for configurable processes.

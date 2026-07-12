@@ -138,7 +138,7 @@ status mutation actions.
 |--------|-------------------|--------|
 | **programs** | Location-scoped program categories, room cohorts | Partial via `location_program_categories` |
 | **rooms** | Physical/virtual cohort assignment | `child_placements.room_location_id` (durable); pre-materialization draft on `process_instances.metadata` |
-| **schedules** | Requested vs enrolled schedule | Draft on `process_instances.metadata.schedule_type`; enrolled (durable) via `schedule_assignments`. OCM `schedule_type` is legacy-only — see [enrollment-process-runtime](platform/runtime/enrollment-process-runtime.md) |
+| **schedules** | Requested vs enrolled schedule | Draft on `process_instances.metadata.schedule_type`; enrolled (durable) via `schedule_assignments`. OCM `schedule_type` is legacy-only — see [enrollment-process-runtime](../../runtime/enrollment-process-runtime.md) |
 | **attendance** | Daily presence records | `child_attendance_events` (consumes the enrollment agreement) |
 | **billing** | Invoices, payment methods | `customers` stripe refs; full billing TBD |
 | **tuition** | Rate plans, enrollment billing | Not implemented |

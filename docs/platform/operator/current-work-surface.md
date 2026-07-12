@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Current Work Surface
 
 **Status:** Canonical (July 2026) — merged to staging via PR #95  

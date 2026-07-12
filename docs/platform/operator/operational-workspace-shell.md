@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Workspace Shell
 
 **Status:** Canonical operator-UI doctrine (June 2026). Defines the one shell, header rhythm, and structural grammar every operational *module* surface inherits. Distinct from the [Drawer / Focus Panel](./drawer-system.md), which is record-detail; this doctrine governs **module workspaces** (Communications, Processing, Work Items, Analytics, and future Billing / Scheduling / Compliance).

@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operator flow: record linkage review (Forms V1.3)
 
 ## What operators see

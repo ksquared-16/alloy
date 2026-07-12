@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Runtime Perspective — Compatibility Layer (Interim)
 
 **Status:** Runtime compatibility layer (flag-gated, default off). Not a new schema, not a config UI.

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Workspace orchestration
 
 **Status:** Canonical development-machine doctrine (July 2026).

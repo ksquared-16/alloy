@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Interaction Grammar
 
 **Status:** Canonical doctrine (June 2026). The **laws** that bind the primitives defined in the [Canonical Interaction Model](./canonical-interaction-model.md). Where that doc names the parts, this doc states **which primitive owns what** and **how they are allowed to relate**.

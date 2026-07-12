@@ -1,3 +1,10 @@
+---
+owner: analytics
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Analytics V2 Metric Data Model
 
 ## Tables

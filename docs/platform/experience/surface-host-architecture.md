@@ -1,3 +1,10 @@
+---
+owner: experience
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Surface Host Architecture
 
 **Path:** `docs/platform/experience/surface-host-architecture.md`

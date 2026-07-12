@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Intelligence Platform
 
 **Status:** Canonical platform module doc (Phase 0 MVP + Phase 1 expansion).

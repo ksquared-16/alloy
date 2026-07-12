@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Calculations
 
 **Status:** Canonical (June 2026). Platform doctrine for the trusted, versioned definitions of measurable business facts.

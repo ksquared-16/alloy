@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Actions and workflows
 
 **Status:** Canonical platform module doc (updated June 2026 — unified actions + relationship framework).

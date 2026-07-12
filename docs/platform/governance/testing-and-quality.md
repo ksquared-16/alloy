@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Testing and quality
 
 **Status:** Canonical quality bar (June 2026 rebaseline).

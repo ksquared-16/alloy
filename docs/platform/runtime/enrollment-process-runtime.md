@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Enrollment Process Runtime — canonical architecture
 
 Status: **implemented + verified on staging (PR #72 + Enrollment Process V1).** This is the authoritative

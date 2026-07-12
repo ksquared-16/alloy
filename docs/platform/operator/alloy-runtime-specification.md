@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Runtime Specification — First Edition
 
 **Status:** Canonical synthesis (June 2026). **Implementation-ready runtime specification.**

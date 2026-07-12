@@ -1,8 +1,15 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Drawer Sunset & Focus Panel Convergence Roadmap
 
 **Status:** Canonical doctrine (July 2026 stabilization). Records post-elimination product position.
 **Source material:** Card System Discovery Audit + Drawer Sunset & Focus Panel Convergence Audit.
-**Companion code plan:** [`../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md`](../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md) (legacy monolith deletion — a **separate track** from card convergence).
+**Companion code plan:** `../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md` (historical: `../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md`) (legacy monolith deletion — a **separate track** from card convergence).
 
 This doc locks the product position: **the Focus Panel is the operator surface; the drawer is reveal/open-state infrastructure.** It exists so future implementation does not keep investing in legacy drawer / tab / LayoutDoc-overview behavior.
 
@@ -156,6 +163,6 @@ Search seeds today carry only `presentation_emphasis` (`child_lifecycle`, `guard
 - [`focus-panel-edit-information-doctrine.md`](./focus-panel-edit-information-doctrine.md) — edit law (cards summarize; expansions/drills edit)
 - [`universal-card-system.md`](./universal-card-system.md) — composition primitive
 - [`experience-builder-doctrine.md`](./experience-builder-doctrine.md) — surface authoring (LayoutDoc drawer authoring = transitional)
-- [`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) — unifying presentation umbrella
+- [`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) — unifying presentation umbrella
 - [`queue-system.md`](./queue-system.md) — queue opens Focus Panel contexts
-- [`../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md`](../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md) — legacy monolith deletion track
+- `../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md` (historical: `../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md`) — legacy monolith deletion track

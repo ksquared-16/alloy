@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Enrollment Process V1 — Implementation Handoff
 
 Status: **implemented + verified on staging; awaiting live browser Golden Path before freeze.**

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Design and operational doctrine
 
 **Status:** Canonical index for cross-cutting operational rules.

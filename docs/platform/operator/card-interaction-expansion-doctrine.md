@@ -1,8 +1,15 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — System 5B — Card Interaction & Expansion Doctrine
 
 **Revision:** 1  
 **Status:** Approved doctrine (June 2026) — **documented; runtime expansion not fully built**  
-**Extends:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md) (System 5A) · [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) (System 5C)
+**Extends:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`universal-card-archetypes.md`](./universal-card-archetypes.md) (System 5A) · [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) (System 5C)
 
 ---
 
@@ -436,5 +443,5 @@ The live Focus Panel already uses **Embedded Workspace** for Activity → Commun
 ## Cross-references
 
 - System 5C field inclusion: [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md)
-- Archetypes: [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md)
+- Archetypes: [`universal-card-archetypes.md`](./universal-card-archetypes.md)
 - Visual design: [`operational-surface-design-system.md`](./operational-surface-design-system.md)

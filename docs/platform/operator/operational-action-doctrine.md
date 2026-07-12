@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Action Doctrine
 
 **Status:** Approved / frozen (June 2026) — Manage/rail alignment implemented; rule engine deferred  

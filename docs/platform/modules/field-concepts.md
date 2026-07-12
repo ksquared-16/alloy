@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Field Concepts — Business Fields, Calculated Fields, Runtime Signals
 
 **Status:** Active — July 2026  

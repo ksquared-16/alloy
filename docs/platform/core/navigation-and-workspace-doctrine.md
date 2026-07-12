@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Navigation and workspace doctrine
 
 **Status:** Canonical (July 2026 stabilization).
@@ -53,7 +60,7 @@ Catalog source: `loadOperatorLifecycleLandingCards` (same as landing tiles).
 
 **Doctrine:** [`../operator/workspace-v3-command-center-doctrine.md`](../operator/workspace-v3-command-center-doctrine.md) (Rev 2)  
 **Operational Surfaces:** [`../operator/workspace-v3-operational-surface-doctrine.md`](../operator/workspace-v3-operational-surface-doctrine.md)  
-**Sprint packs:** [Sprint 1](../../sprints/archive/06_2026/workspace-v3-operational-command-center/README.md) · [Sprint 2](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md) · [Sprint 3 — Evolution Reset](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md)
+**Sprint packs:** Sprint 1 (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/README.md`) · Sprint 2 (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md`) · Sprint 3 — Evolution Reset (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md`)
 
 Four zones — **one question each**. Visual changes are **evolution inside existing chrome** — see Sprint 3.
 
@@ -122,7 +129,7 @@ Layout locked: `../../system/work-unit-layout-doctrine.md` (V3).
 | **Location operating surface** | `LocationsConfigurationPage` | Inline create panel; successful create selects new site; **no drawer** |
 | **Legacy drawer fallback** | **None** | `AdminEntityDrawerLegacy` deleted; unsupported entities fail closed |
 
-Authenticated verification: [`../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md`](../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md).
+Authenticated verification: `../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md` (historical: `../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md`).
 
 
 ## Drawer navigation (summary)

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Product roadmap
 
 **Status:** Canonical (July 2026 stabilization). Sequencing and gaps — not a commit log.

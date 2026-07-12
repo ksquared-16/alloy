@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Financial Platform — Canonical Domain (frozen)
 
 **Status:** Canonical domain doctrine (June 2026). **Frozen.** This document defines the **first-class financial entities** of the Alloy platform, their ownership, runtime, lifecycle, and configuration hierarchy — *before* further financial implementation continues. It is deliberately vertical-neutral: childcare is the first implementation, not the architecture.
@@ -321,4 +328,4 @@ This domain is frozen. Before financial implementation resumes, the following mu
 - Subsidy concepts are generalized to Third-Party Payer in code.
 - The lifecycle or period model changes.
 
-Cross-references: [`billing-financials-platform.md`](./billing-financials-platform.md) (L5 posting doctrine + as-built) · [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md) (L1–L5) · [`../../sprints/archive/06_2026/operational_configuration_v1.md`](../../sprints/archive/06_2026/operational_configuration_v1.md) (Financial Configuration Convergence as-built).
+Cross-references: [`billing-financials-platform.md`](./billing-financials-platform.md) (L5 posting doctrine + as-built) · [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md) (L1–L5) · `../../sprints/archive/06_2026/operational_configuration_v1.md` (historical: `../../sprints/archive/06_2026/operational_configuration_v1.md`) (Financial Configuration Convergence as-built).

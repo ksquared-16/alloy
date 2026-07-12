@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Consumption × Commercial Operating System — Integration Doctrine
 
 **Status:** Proposed core integration doctrine — **build-state verified against `origin/staging @ 9a2887287` (2026-06-30)**

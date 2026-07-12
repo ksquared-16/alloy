@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # System overview
 
 **Status:** Canonical platform entry point (July 2026 stabilization).
@@ -91,7 +98,7 @@ Milestone record: [`../milestones/stabilization-july-2026.md`](../milestones/sta
 ## Load order (onboarding)
 
 1. This file
-2. [`platform-manifesto.md`](./platform-manifesto.md) — **required reading**
+2. [`platform-manifesto.md`](../foundation/platform-manifesto.md) — **required reading**
 3. [`milestones/certification-july-2026.md`](../milestones/certification-july-2026.md)
 4. `../governance/glossary.md`
 5. `architecture.md`

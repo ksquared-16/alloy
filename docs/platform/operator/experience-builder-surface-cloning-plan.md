@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Experience Builder — surface cloning plan
 
 **Status:** Implementation plan (June 2026). **Do not start Person/Child/Queue cloning until Lead reference is signed off.**

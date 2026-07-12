@@ -1,3 +1,10 @@
+---
+owner: platform
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Platform Stabilization — July 2026
 
 **Status:** Canonical milestone record (July 2026).  
@@ -94,7 +101,7 @@ Detail: [`../governance/runtime-ownership-migration-map.md`](../governance/runti
 | Legacy drawer deletion | Removed ~1.3 MB monolith from production typecheck graph |
 | Perceived performance | Branded boot shell; Queue Hold; Surface Hold; no blank loading surfaces between holds |
 
-Doctrine: [`../../governance/typescript-performance.md`](../../governance/typescript-performance.md)
+Doctrine: [`../governance/typescript-performance.md`](../governance/typescript-performance.md)
 
 ---
 
@@ -117,7 +124,7 @@ Doctrine: [`../../governance/typescript-performance.md`](../../governance/typesc
 - **Processing + Communications** — certified Operational Workspace Doctrine V3 shells
 - **Progressive reveal** — coordinated above-fold commit; no partial skeleton sections
 
-Authenticated staging verification checklist: [`../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md`](../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md)
+Authenticated staging verification checklist: `../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md` (historical: `../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md`)
 
 ---
 
@@ -185,5 +192,5 @@ These are **product expansion** lanes — not runtime stabilization:
 | Operational UX | [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md) |
 | Release history | [`../foundation/release-history.md`](../foundation/release-history.md) |
 | Platform manifesto | [`../foundation/platform-manifesto.md`](../foundation/platform-manifesto.md) |
-| Platform certification | [`../foundation/milestones/certification-july-2026.md`](../foundation/milestones/certification-july-2026.md) |
-| TypeScript operating model | [`../../governance/typescript-performance.md`](../../governance/typescript-performance.md) |
+| Platform certification | [`./certification-july-2026.md`](./certification-july-2026.md) |
+| TypeScript operating model | [`../governance/typescript-performance.md`](../governance/typescript-performance.md) |

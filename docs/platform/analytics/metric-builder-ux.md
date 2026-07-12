@@ -1,3 +1,10 @@
+---
+owner: analytics
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Metric Builder UX
 
 ## Location

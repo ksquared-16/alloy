@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Communications Identity Platform
 
 **Status:** Phase 2 foundation implemented and certification-ready (August 2026).

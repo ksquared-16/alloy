@@ -1,3 +1,10 @@
+---
+owner: commercial
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Program Offerings — Platform Primitive
 
 ## What

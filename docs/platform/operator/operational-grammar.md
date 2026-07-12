@@ -1,7 +1,14 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Operational Grammar
 
 **Status:** Foundational platform doctrine (June 2026). Conceptual foundation for the Alloy Card System — precedes the Card Library.
-**Companions:** [`card-language.md`](./card-language.md) (how every card behaves) · [`universal-card-archetypes.md`](./universal-universal-card-archetypes.md) (reusable operational building blocks)
+**Companions:** [`card-language.md`](./card-language.md) (how every card behaves) · [`universal-card-archetypes.md`](./universal-card-archetypes.md) (reusable operational building blocks)
 **Related:** [`universal-card-system.md`](./universal-card-system.md) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) · [`focus-panel-architecture-vocabulary.md`](./focus-panel-architecture-vocabulary.md) · [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md)
 
 > This is **platform** doctrine, not Enrollment doctrine. Enrollment is the first implementation. The Card Library defines individual cards; this document defines **why cards exist at all** and the operational language every workflow, module, card, surface, and Experience Builder configuration must follow.

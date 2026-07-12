@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Commercial Execution Platform — Canonical Architecture
 
 **Status:** 🟡 **Proposed / in-build** (Phase 1 doctrine + Phase 2 core types). Verified against `origin/staging @ d2ba85afd`.

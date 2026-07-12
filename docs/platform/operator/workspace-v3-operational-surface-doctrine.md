@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — Workspace V3 — Operational Surface Doctrine
 
 **Revision:** 1  
@@ -5,7 +12,7 @@
 **Authority:** Launcher law for Zone 3 of `/workspace` — how operational domains invite operators into execution.
 
 **Parent:** [`workspace-v3-command-center-doctrine.md`](./workspace-v3-command-center-doctrine.md)  
-**Evolution constraint:** [`sprint-3-evolution-reset.md`](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md) — tile **shell** frozen; inner content evolves  
+**Evolution constraint:** `sprint-3-evolution-reset.md` (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md`) — tile **shell** frozen; inner content evolves  
 **Not to be confused with:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5 — Work Unit surfaces)
 
 ---
@@ -239,13 +246,13 @@ The Operational Surface is the **visual and informational cover page** of the Wo
 
 **Law:** Opening a Work Unit should **expand** the cover stack and **reveal the queue below** the operational-surface top — same pine rail, same title row, same shell. Sidebar, header, and BOS rail do not remount.
 
-Full audit: [`sprint-4-ux-continuity.md`](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md)
+Full audit: `sprint-4-ux-continuity.md` (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md`)
 
 ---
 
 ## 10. Configuration (design for — not implement)
 
-See [`sprint-2-evolution.md` § Configuration architecture](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md).
+See `sprint-2-evolution.md` § Configuration architecture (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md`).
 
 Operational Surfaces will become configurable. Platform must reserve:
 

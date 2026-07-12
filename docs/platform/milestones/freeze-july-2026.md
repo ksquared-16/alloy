@@ -18,7 +18,7 @@ This document certifies that Alloy's foundational platform architecture is **com
 
 The platform is now considered **stable**. Future engineering effort should improve operator experience and product capability rather than introduce additional foundational runtime systems.
 
-This is a **declaration** — not a roadmap, audit, or sprint log. For the certification record and merge evidence, see [`milestones/certification-july-2026.md`](../milestones/certification-july-2026.md). For engineering philosophy, see [`platform-manifesto.md`](./platform-manifesto.md).
+This is a **declaration** — not a roadmap, audit, or sprint log. For the certification record and merge evidence, see [`milestones/certification-july-2026.md`](../milestones/certification-july-2026.md). For engineering philosophy, see [`platform-manifesto.md`](../foundation/platform-manifesto.md).
 
 ---
 
@@ -77,7 +77,7 @@ The platform now follows these rules:
 6. **Every new abstraction must justify itself.** Name what gets deleted before adding.
 7. **Runtime expansion requires an RFC.** No silent parallel systems.
 
-Constitutional detail: [`platform-manifesto.md`](./platform-manifesto.md).
+Constitutional detail: [`platform-manifesto.md`](../foundation/platform-manifesto.md).
 
 ---
 
@@ -96,7 +96,7 @@ Future work focuses on **product evolution**, not platform construction:
 - **Partner APIs**
 - **Experience** (Parent Experience, Teacher Experience, operator UX polish)
 
-Perceived-performance continuity (Work View pills, queue hold, Focus Panel seed identity) is **complete** — see [`../../sprints/archive/07_2026/perceived-performance-sprint-closeout.md`](../../sprints/archive/07_2026/perceived-performance-sprint-closeout.md).
+Perceived-performance continuity (Work View pills, queue hold, Focus Panel seed identity) is **complete** — see `../../sprints/archive/07_2026/perceived-performance-sprint-closeout.md` (historical: `../../sprints/archive/07_2026/perceived-performance-sprint-closeout.md`).
 
 ---
 
@@ -147,6 +147,6 @@ Future work belongs to **product evolution** rather than platform construction. 
 Sprint and audit history remain in `docs/sprints/` and `docs/audits/` for archaeology only. A new engineer should start with:
 
 1. [`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md) (this document)
-2. [`platform-manifesto.md`](./platform-manifesto.md)
-3. [`system-overview.md`](./system-overview.md)
-4. [`platform-capabilities.md`](./platform-capabilities.md)
+2. [`platform-manifesto.md`](../foundation/platform-manifesto.md)
+3. [`system-overview.md`](../foundation/system-overview.md)
+4. [`platform-capabilities.md`](../foundation/platform-capabilities.md)

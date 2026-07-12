@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Implementation patterns
 
 **Status:** Canonical engineering patterns (June 2026 rebaseline).

@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Configuration Card Pattern
 
 > **Status**: Pattern documented. Reference implementation: Financial Configuration card (billing_preview key).

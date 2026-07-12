@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Platform capabilities
 
 **Status:** Canonical inventory (July 2026 stabilization). Answers: *What has Alloy actually built?*

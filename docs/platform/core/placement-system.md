@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Placement system
 
 **Status:** Canonical foundation (June 2026). Defines ownership boundaries for School → Program → Room → Schedule before scheduling/attendance runtime.

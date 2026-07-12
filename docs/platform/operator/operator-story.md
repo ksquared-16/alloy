@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operator Story
 
 **Status:** Canonical doctrine (June 2026). The **lived experience** of the [Canonical Interaction Model](./canonical-interaction-model.md) and [Interaction Grammar](./interaction-grammar.md). This is the narrative test: if a proposed surface or refactor breaks this story, it breaks the model.

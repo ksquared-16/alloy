@@ -1,3 +1,10 @@
+---
+owner: experience
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Editable Card Runtime (canonical)
 
 **Path:** `docs/platform/experience/editable-card-runtime.md`
@@ -44,7 +51,7 @@ const edit = useEditableCardRuntime({
 // edit.state.phase, editableCardStatusLabel(edit.state), edit.onFocus/onBlur/notifyChange/commit
 ```
 
-`applyOptimistic` present → optimistic mode (most UI). Omitted → authoritative-confirmed (money/legal/irreversible) per the [client/server + optimistic-vs-authoritative correction](../foundation/runtime-architecture-map.md#architecture-review-corrections-applied--june-2026).
+`applyOptimistic` present → optimistic mode (most UI). Omitted → authoritative-confirmed (money/legal/irreversible) per the [client/server + optimistic-vs-authoritative correction](../foundation/os-runtime-map.md#architecture-review-corrections-applied--june-2026).
 
 ---
 

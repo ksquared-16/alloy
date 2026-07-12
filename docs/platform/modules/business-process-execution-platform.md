@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Business Process Execution Platform
 
 **Status:** Canonical doctrine — Business Process Execution Platform (July 2026).

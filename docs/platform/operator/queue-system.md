@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Queue system
 
 **Status:** Canonical (June 2026 freeze). **Operational Mode default state:** [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md).

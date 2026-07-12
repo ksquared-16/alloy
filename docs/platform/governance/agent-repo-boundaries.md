@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Agent repo boundaries
 
 **Status:** Canonical governance (June 2026). Permanent repo/workspace separation for AI development agents.

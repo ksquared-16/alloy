@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Queue Row Platform
 
 > **Status**: V1.1 — Canvas builder with drag-to-reorder zones, evidence group inspector, condition inspector, action inspector. Focus Panel card conditions now evaluated at runtime (`visible_when` wired in `composeEffectiveCardModel`). Grain labels in Surface Library.

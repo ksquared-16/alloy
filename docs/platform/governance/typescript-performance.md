@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # TypeScript performance and typecheck operating doctrine
 
 **Status:** Canonical infrastructure guidance (July 2026).

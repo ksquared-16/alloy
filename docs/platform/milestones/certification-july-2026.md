@@ -1,3 +1,10 @@
+---
+owner: platform
+status: frozen
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Platform Certification — July 2026
 
 **Status:** Final certification record (July 2026).  
@@ -6,7 +13,7 @@
 
 Companion documents:
 
-- [`platform-manifesto.md`](./platform-manifesto.md) — constitutional engineering doctrine (required reading)
+- [`platform-manifesto.md`](../foundation/platform-manifesto.md) — constitutional engineering doctrine (required reading)
 - [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md) — milestone summary for onboarding
 
 ---
@@ -187,7 +194,7 @@ Everything else in the stabilization scope is **complete**.
 
 ## New engineering philosophy
 
-Read [`platform-manifesto.md`](./platform-manifesto.md). Summary:
+Read [`platform-manifesto.md`](../foundation/platform-manifesto.md). Summary:
 
 1. The platform is stable — extend, do not fork.
 2. Delete before duplicating.

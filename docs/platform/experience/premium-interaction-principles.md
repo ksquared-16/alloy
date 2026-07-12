@@ -1,3 +1,10 @@
+---
+owner: experience
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Premium Interaction Principles
 
 **Path:** `docs/platform/experience/premium-interaction-principles.md`

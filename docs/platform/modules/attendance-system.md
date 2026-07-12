@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Attendance system
 
 **Status:** Canonical module doctrine (June 2026). Defines Attendance as the keystone **Operational Fact (L4)** stream in the truth-flow axis. **P2 (June 2026) implements the backend foundation** (immutable fact table + service + expected-vs-actual diff); **P2.1 adds org-local service dates, an absence-reason vocabulary, and pure actual occupancy/staffing/compliance + child-drawer read models**. UI is not yet built. See [Implemented model (P2)](#implemented-model-p2) and [Hardening + actual compliance (P2.1)](#hardening--actual-compliance-p21) below.

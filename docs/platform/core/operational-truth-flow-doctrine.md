@@ -1,10 +1,17 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Truth-Flow doctrine
 
 **Status:** Canonical platform doctrine (June 2026). Defines the **truth-flow axis** of Alloy's operating model — what is operationally true, and how downstream truth derives from upstream truth — across Enrollment, Scheduling, Attendance, Capacity, Ratios, Billing, Subsidy, Payments, Financials, Forecasting, and Staffing.
 
 > **This doctrine is complementary, not a replacement.** It introduces a second axis over the existing operating model; it does **not** modify the frozen five-plane surface model in [`./operational-ux-doctrine.md`](./operational-ux-doctrine.md). The two axes compose. See "Two orthogonal axes" below.
 
-> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The frozen [`../rfcs/operational-expansion-phase1-architecture-rfc.md`](../rfcs/operational-expansion-phase1-architecture-rfc.md) ratifies the following additions to this doctrine; treat them as canonical alongside the five layers and four laws below:
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The frozen [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) ratifies the following additions to this doctrine; treat them as canonical alongside the five layers and four laws below:
 > - **No sixth layer (RFC D1).** L1–L5 is sufficient; Forecasting lives in the Planning **plane** consuming L3+L4, not as a truth-flow layer.
 > - **Operational Fact contract (RFC D2).** L4 fact streams conform to a domain-neutral contract (immutable/append-only, corrected-by-reference, event-emitting, provenance FK, versioned emitted event) — a contract + conformance test, not a base class or shared table.
 > - **Facts vs events / per-domain storage (RFC D3).** Canonical operational facts live in **domain-owned authoritative stores**; `workflow_events` is the universal **event** log that *communicates* fact lifecycle and is **never** an authoritative fact store. No universal `operational_facts` table. Cross-domain timelines are a subject-indexed read-model projection.
@@ -87,7 +94,7 @@ Canonical homes today: `locations` (`site` / `unit`), `location_program_categori
 
 **Immutable records of what actually happened.** Attendance events, room transfers, presence events, schedule overrides, capacity changes, communication events, payment events, operational history.
 
-- **Facts are immutable.** Never overwrite operational history. Corrections are **new effective-dated facts**, not edits-in-place. Effective-dated supersede is the universal mutation pattern (see [`../../web/lib/childcareOperational/effectiveDating.ts`](../../web/lib/childcareOperational/effectiveDating.ts)).
+- **Facts are immutable.** Never overwrite operational history. Corrections are **new effective-dated facts**, not edits-in-place. Effective-dated supersede is the universal mutation pattern (see [`../../web/lib/childcareOperational/effectiveDating.ts`](../../../web/lib/childcareOperational/effectiveDating.ts)).
 - Every meaningful fact emits an event on `workflow_events` (`emitEvent` → `workflow_events` → `workflowRun`).
 - Facts are recorded from the Operations plane and reviewed from the Records plane; they are authored by **Actions**, never by queue rows or projections.
 - Attendance is the **keystone fact stream**: billing, ratio compliance, and forecasting all derive from it. See [`../modules/attendance-system.md`](../modules/attendance-system.md).
@@ -126,7 +133,7 @@ Scope note: this records the canonical direction. The schema/runtime implementat
 
 - **Childcare builds only on the committed enrollment foundation:** `child_enrollment_agreements`, `child_placements`, `schedule_assignments`, and the OCM enrollment proposal. New childcare operational work references these, not ad-hoc fields.
 - **Job-vertical financial and schedule tables are off-limits to new childcare work:** `schedules`, `assignments`, `recurrence_plans`, `customer_subscriptions`, `placement_candidates` (waitlist grain), and job-anchored `charges` / `gl_*` are the cleaning/services vertical. Do not reuse them for childcare scheduling, attendance, or billing, and do not wrap an enrolled child in a `job`.
-- **Each future module follows the namespace decision** in [`../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6: durable child = `child.*` / `customer_member`; module data on the module's **own** participation entity via a `{module}-child context`; never extend `inquiry_child` beyond enrollment.
+- **Each future module follows the namespace decision** in [`../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6: durable child = `child.*` / `customer_member`; module data on the module's **own** participation entity via a `{module}-child context`; never extend `inquiry_child` beyond enrollment.
 
 ---
 
@@ -162,10 +169,10 @@ Every new operational capability supplies artifacts at each layer rather than a 
 |---------|----------|
 | Surface axis (five planes, Operations/Records, tabs vs actions) | [`./operational-ux-doctrine.md`](./operational-ux-doctrine.md) |
 | Committed enrollment foundation (Intent) | [`./placement-system.md`](./placement-system.md) |
-| Child namespace per module (Facts/Consequences modules) | [`../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) |
+| Child namespace per module (Facts/Consequences modules) | [`../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) |
 | Attendance facts (keystone L4) | [`../modules/attendance-system.md`](../modules/attendance-system.md) |
 | Billing generalization (L5) | [`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md) |
-| Billing maturity (supplemental, current state) | [`../product/billing-and-financials.md`](../product/billing-and-financials.md) |
+| Billing maturity (supplemental, current state) | [`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md) |
 | Actions / event spine (how facts are authored) | [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md) |
 | Planning / analytics measurement layer | [`../modules/operational-intelligence-platform.md`](../modules/operational-intelligence-platform.md) |
 | Effective-dated supersede pattern (code) | `web/lib/childcareOperational/effectiveDating.ts` |

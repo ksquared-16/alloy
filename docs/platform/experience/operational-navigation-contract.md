@@ -1,3 +1,10 @@
+---
+owner: experience
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Navigation Contract
 
 **Path:** `docs/platform/experience/operational-navigation-contract.md`

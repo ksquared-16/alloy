@@ -1,10 +1,17 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Experience Builder doctrine
 
 **Status:** Canonical (June 2026 — Lead/Opportunity drawer reference implementation).
 
 Visual layout authoring for record surfaces — drawers, queue row previews, and future workspace panels.
 
-**Unifying umbrella:** This doctrine is the reference implementation of the broader **Presentation Runtime** — see [`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) for the Design Surface product language, renderer-first model, three-axis framing (Perspective vs Viewpoint), Analytics-as-Dashboard, and ownership/lifecycle that this builder authors.
+**Unifying umbrella:** This doctrine is the reference implementation of the broader **Presentation Runtime** — see [`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) for the Design Surface product language, renderer-first model, three-axis framing (Perspective vs Viewpoint), Analytics-as-Dashboard, and ownership/lifecycle that this builder authors.
 
 ---
 

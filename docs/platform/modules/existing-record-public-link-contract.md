@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Existing-record form launch (contract sketch)
 
 This documents the **intended** behavior for Alloy Forms **V1.3+** when a form is launched from a known CRM row (child / household / opportunity), without building full prefill or navigation yet.

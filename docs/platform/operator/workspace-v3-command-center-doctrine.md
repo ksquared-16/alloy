@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — Workspace V3 — Operational Command Center
 
 **Revision:** 2.1  
@@ -6,11 +13,11 @@
 
 **Evolution constraint (Sprint 3):** Refine today's shipped Workspace — **do not replace** shell, sidebar, command rail, banner chrome, or tile shells.
 
-**Continuity objective (Sprint 4):** Workspace Operational Surface = **cover page** of Work Unit `adminv2-os-context` stack — same typography, KPI strip, and progressive reveal. See [`sprint-4-ux-continuity.md`](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md).
+**Continuity objective (Sprint 4):** Workspace Operational Surface = **cover page** of Work Unit `adminv2-os-context` stack — same typography, KPI strip, and progressive reveal. See `sprint-4-ux-continuity.md` (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md`).
 
 **Related:** [`navigation-and-workspace-doctrine.md`](../core/navigation-and-workspace-doctrine.md) · [`workspace-v3-operational-surface-doctrine.md`](./workspace-v3-operational-surface-doctrine.md) · [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md)
 
-**Sprint packs:** [Sprint 1](../../sprints/archive/06_2026/workspace-v3-operational-command-center/README.md) · [Sprint 2](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md) · [Sprint 3 — Evolution Reset](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md) · [Sprint 4 — UX Continuity](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md)
+**Sprint packs:** Sprint 1 (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/README.md`) · Sprint 2 (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md`) · Sprint 3 — Evolution Reset (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md`) · Sprint 4 — UX Continuity (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-4-ux-continuity.md`)
 
 ---
 
@@ -174,7 +181,7 @@ Not required for implementation now. Architecture must support:
 - Process visibility per org/role  
 - Fallback to all entitled surfaces when unconfigured  
 
-See Sprint 2 §4 — [`sprint-2-evolution.md`](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md).
+See Sprint 2 §4 — `sprint-2-evolution.md` (historical: `../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md`).
 
 ---
 

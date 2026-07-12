@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Documents and forms
 
 **Status:** Canonical platform module doc.
@@ -131,4 +138,4 @@ See `docs/sprints/archive/07_2026/processing-v1-lock-closeout.md`.
 ## Related
 
 - `../../platform/modules/documents-and-forms.md` (transitional expanded reference)
-- `../foundation/platform-capabilities.md`
+- `../../foundation/platform-capabilities.md`

@@ -148,7 +148,7 @@ Profile fields **must not** read/write on OCM. Guards: `canonicalFieldOwnership.
 | [./action-status-field-matrix.md](./action-status-field-matrix.md) | Action/write matrix |
 | [./runtime-data-alignment.md](./runtime-data-alignment.md) | Runtime consumer contract |
 | [./configuration-data-alignment.md](./configuration-data-alignment.md) | Config consumer contract |
-| [Data system audit](../../audits/archive/2026-06-data-system/canonical-data-system-audit.md) | Cross-reference audit |
+| [Data system audit](../../../audits/archive/2026-06-data-system/canonical-data-system-audit.md) | Cross-reference audit |
 
 Phase implementation logs: `docs/canonical-data-system-phase-1-reset.md` through `phase-4-schema-deprecation.md`.
 

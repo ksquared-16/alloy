@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Record Resolution (Intake)
 
 Canonical duplicate detection and record resolution for all intake sources.

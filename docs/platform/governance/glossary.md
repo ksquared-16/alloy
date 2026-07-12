@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Glossary
 
 **Status:** Canonical shared vocabulary (June 2026 rebaseline).
@@ -97,7 +104,7 @@ Canonical spine: **Workspace → Perspective → Queue → Row → Drawer → Co
 
 ## Expanded glossary
 
-Additional terms (packet rollup, queue selection, etc.): `../../platform/governance/glossary.md` (transitional — vertical-specific detail).
+Additional terms (packet rollup, queue selection, etc.): `../platform/governance/glossary.md` (transitional — vertical-specific detail).
 
 ---
 

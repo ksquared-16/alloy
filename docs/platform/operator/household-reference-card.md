@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy OS — Household Reference Card (Identity Archetype Design Freeze)
 
 **Status:** **Correction pass (June 2026) — pending re-approval.** v1 implementation exists; this pass fixes icon, Children focus routing, other-parent visibility, address group, and documents Subject Change + Experience Builder configurability.
@@ -9,14 +16,14 @@
 > - **Address:** distinct evidence group when real data exists.
 > - **Subject Change** documented as final interaction primitive ([`operational-grammar.md`](./operational-grammar.md), [`card-language.md`](./card-language.md)).
 > - **Experience Builder configurability** section added (§13).
-**Built on:** [`operational-context-boundary.md`](./operational-context-boundary.md) (runtime spine) · [`operational-grammar.md`](./operational-grammar.md) · [`card-language.md`](./card-language.md) · [`universal-card-archetypes.md`](./universal-universal-card-archetypes.md)
+**Built on:** [`operational-context-boundary.md`](./operational-context-boundary.md) (runtime spine) · [`operational-grammar.md`](./operational-grammar.md) · [`card-language.md`](./card-language.md) · [`universal-card-archetypes.md`](./universal-card-archetypes.md)
 **Interaction laws:** [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) · **Convergence:** [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md)
 
 > This is a **product architecture** document, not runtime. It freezes the Household card before code so every future Identity card (Children, Contacts, Assignment, Staff, Organization) inherits the same behavior. Wireframes are directional, not pixel specs.
 
 > **Cutover prerequisite (met):** this card builds on the **Operational Context** boundary, which is now the canonical card contract in code (Phase D0 — see [`focus-panel-runtime-cutover-report.md`](./focus-panel-runtime-cutover-report.md)). Implementation may proceed once this freeze is approved.
 
-> **Reviewable visual mock:** a static fixture mock of every state/density/transition lives at route `/dev/household-card-mock` (`web/app/dev/household-card-mock/`). Snapshots + how-to-view: [`docs/sprints/archive/06_2026/household-card-mock/`](../../sprints/archive/06_2026/household-card-mock/README.md). **Hard rule: do not implement the production card until this mock/spec is reviewed and approved.**
+> **Reviewable visual mock:** a static fixture mock of every state/density/transition lives at route `/dev/household-card-mock` (`web/app/dev/household-card-mock/`). Snapshots + how-to-view: `docs/sprints/archive/06_2026/household-card-mock/` (historical: `../../sprints/archive/06_2026/household-card-mock/README.md`). **Hard rule: do not implement the production card until this mock/spec is reviewed and approved.**
 
 ### Deliverable coverage (sprint freeze checklist → section)
 

@@ -1,8 +1,15 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Release history
 
 **Status:** Canonical platform milestones (July 2026 stabilization rebaseline). **Not** a commit or sprint task log.
 
-> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** This history predates the operational truth-flow backend. Recorded here for completeness: the **L1–L4 operational spine** (config rules; effective-dated agreements/placements/schedule assignments; immutable attendance facts; expected/actual occupancy & staffing read models) and the **L4→L5 Operational Consumption runtime** (Consumption Events → Resolved Obligations → draft Charges, Slices 1–4) shipped as flag-gated/simulator backend across June–July 2026. The frozen architecture governing their productization is [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md); its first delivery step is defined in [`../operational-expansion-wave1-implementation-spec.md`](../operational-expansion-wave1-implementation-spec.md).
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** This history predates the operational truth-flow backend. Recorded here for completeness: the **L1–L4 operational spine** (config rules; effective-dated agreements/placements/schedule assignments; immutable attendance facts; expected/actual occupancy & staffing read models) and the **L4→L5 Operational Consumption runtime** (Consumption Events → Resolved Obligations → draft Charges, Slices 1–4) shipped as flag-gated/simulator backend across June–July 2026. The frozen architecture governing their productization is [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md); its first delivery step is defined in `../../sprints/archive/06_2026/operational-expansion/wave1-implementation-spec.md` (historical: `../../sprints/archive/06_2026/operational-expansion/wave1-implementation-spec.md`).
 
 ---
 
@@ -10,7 +17,7 @@
 
 ### July 2026 — Platform Stabilization Complete
 
-**Initiative closed.** Foundational platform architecture is certified stable. Formal declaration: [`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md). Constitutional doctrine: [`platform-manifesto.md`](./platform-manifesto.md).
+**Initiative closed.** Foundational platform architecture is certified stable. Formal declaration: [`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md). Constitutional doctrine: [`platform-manifesto.md`](../foundation/platform-manifesto.md).
 
 - **Architecture completed** — Presentation, Surface Host, Focus Panel, VM, Business Process, Processing, Communications, Configuration, Current Work runtimes canonical
 - **Legacy eliminated** — `AdminEntityDrawerLegacy` deleted; unsupported entities fail closed; Settings locations replace legacy drawer create

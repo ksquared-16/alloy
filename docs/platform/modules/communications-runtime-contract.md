@@ -1,3 +1,10 @@
+---
+owner: modules
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Communications runtime contract
 
 **Status:** Canonical runtime doctrine (July 2026).

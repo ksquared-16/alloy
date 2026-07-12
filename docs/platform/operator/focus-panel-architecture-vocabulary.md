@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Focus Panel Architecture Vocabulary
 
 **Status:** Canonical (June 2026). Lexical layers for Alloy OS operational surfaces.

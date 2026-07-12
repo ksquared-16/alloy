@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Demo / Tenant Runtime Cleanup Workflow
 
 Reusable org-scoped cleanup scripts for staging and demo tenant resets. All modes are **explicit** — nothing runs unless the matching `DEMO_CLEANUP_MODE` is set (except default demo-metadata cleanup when mode is unset).

@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Presentation Runtime — Carry-Forward Handoff
 
 **Status:** Canonical handoff (July 2026). Written at the close of the /surfaces Presentation Runtime **authoring** work (PRs #61, #63, #64, #68). This is the single document the **Runtime Adoption** sprint should start from.
@@ -103,4 +110,4 @@ These are the exact seams Runtime Adoption must wire. Each is labeled *presentat
 | #64 | Experience Builder V3 — freeze doctrine + recursion proofs (Children + Financial Config) |
 | #68 | /surfaces completion — stacked queue row, grain/conditions, custom-field wiring, **Focus Panel nested-surface editing** |
 
-Sprint log: [`docs/sprints/archive/07_2026/surfaces-presentation-runtime-completion.md`](../../sprints/archive/07_2026/surfaces-presentation-runtime-completion.md).
+Sprint log: `docs/sprints/archive/07_2026/surfaces-presentation-runtime-completion.md` (historical: `../../sprints/archive/07_2026/surfaces-presentation-runtime-completion.md`).

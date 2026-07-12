@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Runtime ownership migration map
 
 **Status:** Canonical reference (July 2026 platform stabilization — frozen).  

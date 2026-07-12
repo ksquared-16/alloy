@@ -1,8 +1,15 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # RFC — Operational Expansion Phase 1 Architecture Reconciliation
 
 **Status:** FROZEN / APPROVED (2026-07). Architecture is frozen and governs the operational expansion (Implementation Wave 1 onward). **Not** implementation. Governs Scheduling, Attendance, Capacity, Staffing, Billing, Forecasting, Recommendations, and Actions.
 **Base:** `origin/staging` @ `a3fdc946f` (2026-07-10).
-**Predecessor evidence:** [`../audits/operational-expansion-architecture-audit-2026-07.md`](../audits/operational-expansion-architecture-audit-2026-07.md) (Phase A). Phase A recommendations are treated here as **proposals, not decisions** — several are challenged and refined below.
+**Predecessor evidence:** [`../../audits/active/operational-expansion-architecture-audit-2026-07.md`](../../audits/active/operational-expansion-architecture-audit-2026-07.md) (Phase A). Phase A recommendations are treated here as **proposals, not decisions** — several are challenged and refined below.
 **Governing principle:** Prove Alloy by composing existing capabilities. No parallel modules, no duplicate runtimes, no consumer-owned business logic, no childcare-specific platform abstractions.
 
 > **Approval gate — CLEARED (2026-07).** The operator approved the architecture and authorized the freeze. The four load-bearing decisions (D3, D7, D8, D12) are **accepted**; the §7.4 doctrine reconciliations are **applied**; the Exit-Criteria checklist (§7.5) is satisfied. Standing implementation constraint carried forward to Implementation Wave 1: **D12a must land before any D12b wiring touches drafts.**

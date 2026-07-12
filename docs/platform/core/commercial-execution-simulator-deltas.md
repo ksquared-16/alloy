@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Commercial Execution Simulator — expected deltas vs Substrate A
 
 **Status:** Phase 8. The Commercial Execution preview path (`POST /api/admin/commercial/execution/preview`) runs the platform pipeline `evaluate() → attribute()? → expand()` over **frozen Commercial V1**. The legacy consumption simulator (`POST /api/admin/financial/consumption/simulate`) runs the **Substrate-A** pipeline (`resolveConsumption` over `childcare_rate_*` + `financial_charge_templates` + `financial_policies`). Both are **preview-only** and create no financial truth. This document records where — and why — the two are expected to differ, so a "difference" is not mistaken for a regression.

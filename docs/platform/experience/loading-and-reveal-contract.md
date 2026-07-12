@@ -1,8 +1,15 @@
+---
+owner: experience
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Loading & Reveal Contract (canonical)
 
 **Path:** `docs/platform/experience/loading-and-reveal-contract.md`
 **Status:** **Canonical** (June 2026). The single definition of loading, reveal, departure, continuity, and cold-shell ownership across the platform. Derived directly from the approved doctrines; supersedes all historical implementations and tests.
-**Derived from:** [`operational-experience-doctrine.md`](./operational-experience-doctrine.md) (Laws 1–3) · [`operational-motion-doctrine.md`](./operational-motion-doctrine.md) (`reveal`/`recede`/`settle`) · [`navigation-runtime-doctrine.md`](./navigation-runtime-doctrine.md) · [`../foundation/runtime-architecture-map.md`](../foundation/runtime-architecture-map.md) (Experience/Reveal, Surface lifecycle).
+**Derived from:** [`operational-experience-doctrine.md`](./operational-experience-doctrine.md) (Laws 1–3) · [`operational-motion-doctrine.md`](./operational-motion-doctrine.md) (`reveal`/`recede`/`settle`) · [`navigation-runtime-doctrine.md`](./navigation-runtime-doctrine.md) · [`../foundation/os-runtime-map.md`](../foundation/os-runtime-map.md) (Experience/Reveal, Surface lifecycle).
 **Resolves:** C0 — the contradictory cold-shell test baseline. When implementation, tests, and doctrine disagreed, doctrine won; this is the result.
 
 ---
@@ -40,7 +47,7 @@ This is the model the doctrines require ("one branded surface", "one shell owner
 | page renders cold shell inside `WorkspaceChrome` while `!workUnitPageContentReady` (`loadingGeometry`, `revealGatePage`, Pass2/3, criticalPath) | **Still valid** — canonical | Kept |
 | `loading.tsx` returns `null` (`workUnitRouteShell`, `shellFirstLoading`) | **Still valid** — canonical | Kept |
 
-**Out of scope of C0 (separate convergence):** a large share of the AdminV2 loading suite consists of **brittle source-string assertions** (`expect(src).toContain("<internal symbol>")`) pinning *historical implementation strings and file locations* — e.g. `DeptOperationalRegionLoader`, `prefetchDepartmentOperationalBootstrap`, `operLaneLoading={…}`, the 34 `adminV2DrawerLoadingCoherence` symbol checks. Those symbols still exist but have **moved files** across ~1500 commits, so the assertions fail for reasons unrelated to the cold-shell contract. **These tests violate the doctrine's own principle that tests validate behavior, not implementation** — and retiring/replacing them must be done *alongside the implementation convergence* (Lane B), where the current behavior is in context, not blind. See the [Convergence Backlog](../../sprints/archive/06_2026/premium-operational-experience/convergence-backlog.md).
+**Out of scope of C0 (separate convergence):** a large share of the AdminV2 loading suite consists of **brittle source-string assertions** (`expect(src).toContain("<internal symbol>")`) pinning *historical implementation strings and file locations* — e.g. `DeptOperationalRegionLoader`, `prefetchDepartmentOperationalBootstrap`, `operLaneLoading={…}`, the 34 `adminV2DrawerLoadingCoherence` symbol checks. Those symbols still exist but have **moved files** across ~1500 commits, so the assertions fail for reasons unrelated to the cold-shell contract. **These tests violate the doctrine's own principle that tests validate behavior, not implementation** — and retiring/replacing them must be done *alongside the implementation convergence* (Lane B), where the current behavior is in context, not blind. See the Convergence Backlog (historical: `../../sprints/archive/06_2026/premium-operational-experience/convergence-backlog.md`).
 
 ---
 

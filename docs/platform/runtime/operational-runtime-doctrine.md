@@ -1,10 +1,17 @@
+---
+owner: runtime
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational Runtime Doctrine
 
-> **Implemented — Runtime Simplification sprint CLOSED (June 2026).** These laws are now realized in code for `/workspace` and `/workspace/work-unit/*`: reveal owned by the server Route VM, switching as navigation, context/perspective/queue ownership in canonical runtime modules. The canonical sprint record (completed/remaining domains, runtime score, lessons, **runtime principles**) is [`work-unit-runtime-simplification-closeout.md`](./work-unit-runtime-simplification-closeout.md). Future runtime work is ownership-driven and incremental — treat the runtime as infrastructure, not an area to rediscover.
+> **Implemented — Runtime Simplification sprint CLOSED (June 2026).** These laws are now realized in code for `/workspace` and `/workspace/work-unit/*`: reveal owned by the server Route VM, switching as navigation, context/perspective/queue ownership in canonical runtime modules. The canonical sprint record (completed/remaining domains, runtime score, lessons, **runtime principles**) is `work-unit-runtime-simplification-closeout.md` (historical: `../../sprints/completed/work-unit-runtime-simplification-closeout.md`). Future runtime work is ownership-driven and incremental — treat the runtime as infrastructure, not an area to rediscover.
 
 **Status:** Canonical doctrine (Track 2, Phase 1 — June 2026). **Doctrine lock only; no runtime code changes in this phase.**
 **Scope:** Primary operational routes — `/workspace`, `/workspace/work-unit/:slug` (+ `:recordId`), and the navigations between them.
-**Companion evidence:** [`../../sprints/archive/06_2026/operational-runtime-doctrine-phase-1.md`](../../sprints/archive/06_2026/operational-runtime-doctrine-phase-1.md) (current-behavior map + first implementation plan).
+**Companion evidence:** `../../sprints/archive/06_2026/operational-runtime-doctrine-phase-1.md` (historical: `../../sprints/archive/06_2026/operational-runtime-doctrine-phase-1.md`) (current-behavior map + first implementation plan).
 **Builds on (does not replace):** `docs/system/adminv2-runtime-performance-doctrine.md` (locked reveal/queue/drawer gates), `docs/platform/operator/surface-view-model-composition.md` (Surface VM law).
 
 > **North star.** Alloy is an **operating system**, not a web app assembling pages. The operator must **never visibly watch Alloy build itself**. The only acceptable transition for a primary operational route is: **BOS transition / intentional OS reveal → the complete final surface appears once.** The bar is not "data eventually loads" — it is "the operator never notices loading."

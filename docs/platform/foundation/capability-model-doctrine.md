@@ -1,9 +1,16 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Platform Capability Model (API-first doctrine)
 
 **Status:** Doctrine (Phase 3 API Platform closeout). Defines **how Alloy thinks about
 capabilities** as platform units, and the API-first expectation for new operational modules.
 
-> **Not** the same as [`foundation/platform-capabilities.md`](foundation/platform-capabilities.md),
+> **Not** the same as [`../foundation/platform-capabilities.md`](../foundation/platform-capabilities.md),
 > which is the canonical *inventory* of what Alloy has built. This document is the **doctrine**:
 > the model every capability is described with, and the rule that new modules are designed as
 > capabilities first. Read the two together — inventory answers "what exists?", this answers "how
@@ -59,9 +66,9 @@ screens:
 1. Canonical entities and ownership/authority boundaries.
 2. A canonical API on the normalized response contract (`apiOk` / `apiError`, correlation id).
 3. Freshness class, pagination model, bulk-access pattern, and the event model **up front**
-   (see [`../api/api-data-access-performance.md`](../api/api-data-access-performance.md)).
+   (see [`../../api/api-data-access-performance.md`](../../api/api-data-access-performance.md)).
 4. The path to OpenAPI admission + a generated client method (see
-   [`../api/api-platform-governance.md`](../api/api-platform-governance.md) — Definition of Done
+   [`../../api/api-platform-governance.md`](../../api/api-platform-governance.md) — Definition of Done
    and the API lifecycle).
 
 This is what "API-first" means here: the capability's boundary is a deliberate contract, not a
@@ -170,7 +177,7 @@ the readiness gate and Definition of Done. Designing them API-first is the expec
 - **Notes:** **posts nothing** — Posting/Invoicing/Payments/GL are downstream consumers. Idempotent by
   resolution key; duplicate facts never duplicate obligations. Review is pre-posting (suppression/recompute
   write only review state; recompute replays in preview). Doctrine:
-  [`./modules/operational-consumption-platform.md`](./modules/operational-consumption-platform.md).
+  [`../modules/operational-consumption-platform.md`](../modules/operational-consumption-platform.md).
 
 ### Processing
 
@@ -197,9 +204,9 @@ the readiness gate and Definition of Done. Designing them API-first is the expec
 
 ## Related
 
-- [`foundation/platform-capabilities.md`](foundation/platform-capabilities.md) — capability **inventory** (what exists).
-- [`../api/api-platform-completion.md`](../api/api-platform-completion.md) — API Platform foundation closeout.
-- [`../api/api-platform-governance.md`](../api/api-platform-governance.md) — Definition of Done + lifecycle.
-- [`../api/api-data-access-performance.md`](../api/api-data-access-performance.md) — freshness/pagination/sync/SLOs.
-- [`../api/internal-typescript-client.md`](../api/internal-typescript-client.md) — the generated client.
-- [`foundation/architecture.md`](foundation/architecture.md) — system context.
+- [`../foundation/platform-capabilities.md`](../foundation/platform-capabilities.md) — capability **inventory** (what exists).
+- [`../../api/api-platform-completion.md`](../../api/api-platform-completion.md) — API Platform foundation closeout.
+- [`../../api/api-platform-governance.md`](../../api/api-platform-governance.md) — Definition of Done + lifecycle.
+- [`../../api/api-data-access-performance.md`](../../api/api-data-access-performance.md) — freshness/pagination/sync/SLOs.
+- [`../../api/internal-typescript-client.md`](../../api/internal-typescript-client.md) — the generated client.
+- [`./architecture.md`](./architecture.md) — system context.

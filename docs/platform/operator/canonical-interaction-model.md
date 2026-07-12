@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Canonical Interaction Model
 
 **Status:** Canonical doctrine (June 2026). Defines the single interaction spine every operational domain inherits — Enrollment, Billing, Attendance, Scheduling, Staffing, Subsidy, Compliance, POS, Transportation, Meals, Health.
@@ -231,7 +238,7 @@ This doc is the **intended model**. Current implementation is partially aligned.
 | Relationship-scoped authority | Child/relationship scoped | **Doctrine + partial runtime** — scoped relationship contacts shipped (`layoutRuntimeScopedRelationshipContacts`) | Extend scope to billing/visibility/communication consistently |
 | Location-scoped operational context | Active location explicit | **Partial** — child site authority on OCM; operational enrollment (agreements/placements/schedules) flag-gated | Make active location/context a first-class drawer affordance |
 
-For per-domain maturity see `../foundation/platform-capabilities.md`. For sequencing see `../foundation/product-roadmap.md`.
+For per-domain maturity see `../../foundation/platform-capabilities.md`. For sequencing see `../foundation/product-roadmap.md`.
 
 ---
 

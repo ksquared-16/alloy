@@ -1,15 +1,22 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Experience Builder V3 — Universal Surface Composition
 
 **Status:** Canonical (July 2026). This doctrine **freezes the composition model that unifies every builder in Alloy.** Queue Row Builder is the **canonical Surface Composer implementation** — future surfaces (Focus Panel next, then Workspace, Documents, Forms, Cards) **extend its interaction model** rather than inventing new builder paradigms. See `docs/sprints/archive/07_2026/presentation-surfaces-settings-thread-closeout.md`.
 
 **Depends on / reconciles:**
-[`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) (Design Surface, Perspective, Viewpoint) ·
+[`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) (Design Surface, Perspective, Viewpoint) ·
 [`experience-builder-doctrine.md`](./experience-builder-doctrine.md) (canvas-first authoring, evidence groups) ·
 [`universal-card-lifecycle.md`](./universal-card-lifecycle.md) (Summary/Focus/Expanded/Workspace) ·
 [`operational-grain-doctrine.md`](./operational-grain-doctrine.md) (Case/Child/Candidate grain) ·
 [`queue-row-platform.md`](./queue-row-platform.md).
 
-**Audit that produced this doctrine:** [`docs/sprints/archive/07_2026/experience-builder-v3/part-1-platform-audit.md`](../../sprints/archive/07_2026/experience-builder-v3/part-1-platform-audit.md).
+**Audit that produced this doctrine:** `docs/sprints/archive/07_2026/experience-builder-v3/part-1-platform-audit.md` (historical: `../../sprints/archive/07_2026/experience-builder-v3/part-1-platform-audit.md`).
 
 ---
 

@@ -1,14 +1,21 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Operational UX Architecture doctrine
 
 **Status:** Canonical platform doctrine (July 2026 stabilization). Defines Alloy's operating model across all operational domains — Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance, and future workflows.
 
 This document is **doctrine, not implementation detail**. It explains *why* Alloy does not need a per-domain UX redesign: every operational domain plugs into the same five-plane model, the same Operations/Records split, and the same progressive-drawer rules. Enrollment is the proof case, not a special case.
 
-> **Platform stabilization (July 2026).** Where this doctrine says "drawer," the **runtime product surface is the Focus Panel** on a single operational subject. There is **no legacy entity drawer runtime**. Records-plane execution uses **condensed queue → Focus Panel** Operational Mode with Presentation Runtime + Surface Host continuity. Canonical: [`./milestones/platform-stabilization-july-2026.md`](./milestones/platform-stabilization-july-2026.md), [`./operator/queue-system.md`](./operator/queue-system.md). This doctrine's *planes/domains* framing is unchanged.
+> **Platform stabilization (July 2026).** Where this doctrine says "drawer," the **runtime product surface is the Focus Panel** on a single operational subject. There is **no legacy entity drawer runtime**. Records-plane execution uses **condensed queue → Focus Panel** Operational Mode with Presentation Runtime + Surface Host continuity. Canonical: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md), [`../operator/queue-system.md`](../operator/queue-system.md). This doctrine's *planes/domains* framing is unchanged.
 
 > **Orthogonal axis:** This doc defines the **surface axis** — *where* an operator stands when they act (the five planes). The complementary **truth-flow axis** — *what is true and what it derives from* (Configuration -> Intent -> Expectations -> Facts -> Consequences) — is defined in [`./operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md). The two axes compose; neither replaces the other. The Planning plane and "Expectations" are detailed there (Expectations are derived/non-authoritative).
 
-> **Companion doctrine:** This doc covers the **planes and domains** (why one architecture serves all domains). The **canonical interaction spine** an operator traverses — Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field, and the one universal drawer (Record of Truth / Record of Attention / Context Frame) — is defined in [`./operator/canonical-interaction-model.md`](./operator/canonical-interaction-model.md), with laws in [`./operator/interaction-grammar.md`](./operator/interaction-grammar.md) and the lived flow in [`./operator/operator-story.md`](./operator/operator-story.md). The progressive **tabs vs. actions** rules below are the current expression of what the interaction model frames as **Modes** (Summary / Work / Activity) and **Cards** (per-domain surfaces within Work); the Hidden / Startable / Active states carry forward unchanged.
+> **Companion doctrine:** This doc covers the **planes and domains** (why one architecture serves all domains). The **canonical interaction spine** an operator traverses — Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field, and the one universal drawer (Record of Truth / Record of Attention / Context Frame) — is defined in [`../operator/canonical-interaction-model.md`](../operator/canonical-interaction-model.md), with laws in [`../operator/interaction-grammar.md`](../operator/interaction-grammar.md) and the lived flow in [`../operator/operator-story.md`](../operator/operator-story.md). The progressive **tabs vs. actions** rules below are the current expression of what the interaction model frames as **Modes** (Summary / Work / Activity) and **Cards** (per-domain surfaces within Work); the Hidden / Startable / Active states carry forward unchanged.
 
 
 ## Perceived performance & shell continuity (July 2026 — frozen)
@@ -82,7 +89,7 @@ The two execution-facing planes are intentionally split by *where the operator s
 
 - **Operations begins with work.** Work units and perspectives show what needs action across a cohort of records.
 - **Records begin with a thing.** A drawer shows everything about one operational object at its current stage of life.
-- **Queues are preview/selection surfaces only** — authoritative detail comes from the entity GET / record responder, never from queue JSON (see `./record-system.md`, `./operator/queue-system.md`).
+- **Queues are preview/selection surfaces only** — authoritative detail comes from the entity GET / record responder, never from queue JSON (see `../../platform/core/record-system.md`, `../operator/queue-system.md`).
 - **Clicking a row opens a drawer while preserving workspace context.** The queue page does not remount; the drawer appends `:recordId` to the route. Operators should **never feel like they navigated to a separate "record module."** The drawer is detail *in place*, not a destination switch.
 
 This split is what lets a new domain (e.g. Attendance) appear as a *queue/perspective* in Operations **and** a *tab* on the relevant Records drawer, without any new navigation paradigm.
@@ -99,7 +106,7 @@ Drawers are **not static**. The set of tabs a drawer shows is **stage-aware and 
 - An **enrolled child** may show Placement, Schedule, Attendance, Billing, Payments, Documents, Communications, Tasks, and History.
 - The drawer is **the operational surface for a record at its current stage of life** — it grows as the record's operational reality grows.
 
-This is what makes the same drawer architecture serve a brand-new lead and a long-enrolled child without two different designs. Tabs are composed from layout configuration (Experience Builder) and gated by lifecycle stage and operational history — not hardcoded per entity type. See `./operator/experience-builder-doctrine.md` and `./operator/drawer-system.md`.
+This is what makes the same drawer architecture serve a brand-new lead and a long-enrolled child without two different designs. Tabs are composed from layout configuration (Experience Builder) and gated by lifecycle stage and operational history — not hardcoded per entity type. See `../operator/experience-builder-doctrine.md` and `../operator/drawer-system.md`.
 
 ---
 
@@ -209,19 +216,19 @@ None of these requires a new navigation spine, a new "record module," or a new d
 | Concern | Doctrine |
 |---------|----------|
 | Truth-flow axis (Configuration -> Intent -> Expectations -> Facts -> Consequences) | `./operational-truth-flow-doctrine.md` |
-| Canonical interaction spine / primitives | `./operator/canonical-interaction-model.md` |
-| Interaction laws / grammar | `./operator/interaction-grammar.md` |
-| Lived operator experience | `./operator/operator-story.md` |
-| Visual doctrine (look/feel; mockup bridge) | `./operator/alloy-visual-language.md` |
-| Runtime Specification (synthesis; implementation bridge) | `./operator/alloy-runtime-specification.md` |
+| Canonical interaction spine / primitives | `../operator/canonical-interaction-model.md` |
+| Interaction laws / grammar | `../operator/interaction-grammar.md` |
+| Lived operator experience | `../operator/operator-story.md` |
+| Visual doctrine (look/feel; mockup bridge) | `../operator/alloy-visual-language.md` |
+| Runtime Specification (synthesis; implementation bridge) | `../operator/alloy-runtime-specification.md` |
 | Configuration plane / settings control plane | `../modules/configuration-platform.md` |
-| Experience Builder / record layouts / drawer composition | `./operator/experience-builder-doctrine.md` |
+| Experience Builder / record layouts / drawer composition | `../operator/experience-builder-doctrine.md` |
 | Business processes, stages, work units | `./business-process-system.md` |
 | Navigation & workspace spine | `./navigation-and-workspace-doctrine.md` |
 | **Alloy Operational Workspace Doctrine V2** (module modal shell) | `./navigation-and-workspace-doctrine.md` — **frozen** (July 2026); certified: Processing, Communications, Work Items; barrel: `web/components/workspace/doctrine.ts` |
-| Drawer architecture & VM ownership | `./operator/drawer-system.md` |
-| Queue preview boundary | `./operator/queue-system.md` |
-| Record authority & resolution | `./record-system.md` |
+| Drawer architecture & VM ownership | `../operator/drawer-system.md` |
+| Queue preview boundary | `../operator/queue-system.md` |
+| Record authority & resolution | `../../platform/core/record-system.md` |
 | Status & lifecycle ownership | `./status-and-state-system.md` |
 | Record actions & workflow spine | `../modules/actions-and-workflows.md` |
 | BOS / AI agent foundation | `../modules/ai-platform.md` |

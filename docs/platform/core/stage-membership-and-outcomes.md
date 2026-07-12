@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Stage Membership & Outcomes — Platform Doctrine
 
 **Status:** Canonical (July 2026, Enrollment Alignment sprint)

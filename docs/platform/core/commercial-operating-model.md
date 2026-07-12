@@ -1,9 +1,16 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Commercial Operating Model — Core Doctrine
 
 **Status:** Proposed core doctrine — pending ratification (consolidates and elevates two sprint proposals into doctrine form)
 **Date:** 2026-06-30
 **Sits beside:** Business Process · Operational Truth · Entity Model · Record System
-**Consolidates:** [commercial-model-v2-reframing.md](../../sprints/active/commercial-model-v2-reframing.md) (structure) · [commercial-language-bible.md](../../sprints/active/commercial-language-bible.md) (language)
+**Consolidates:** commercial-model-v2-reframing.md (historical: `../../sprints/active/commercial-model-v2-reframing.md`) (structure) · commercial-language-bible.md (historical: `../../sprints/active/commercial-language-bible.md`) (language)
 **Mandate:** Define the business model, not the implementation. This becomes the foundation for Enrollment, Scheduling, Attendance, Operational Consumption, Billing, Posting, Payments, Third-Party Payers, Reporting, Parent Portal — and future industries.
 
 ---
