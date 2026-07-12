@@ -505,11 +505,13 @@ describe("Final Surface Composer doctrine — runtime sacred, composer overlay",
         expect(householdCard).not.toContain("data-household-compose-preview");
     });
 
-    it("scopes add-field controls to selected regions (one per region)", () => {
+    it("mounts canvas layout composer on Household summary and context configure paths", () => {
         const addField = readSrc("components/admin/focusPanel/drillIn/NestedSurfaceAddField.tsx");
         expect(addField).toContain("regionSelected");
         expect(addField).toContain("data-canvas-add-field");
-        expect(householdCard).toContain("NestedSurfaceAddField");
+        expect(householdCard).toContain("NestedSurfaceFieldLayoutSurface");
+        expect(householdCard).toContain('composePurpose === "summary"');
+        expect(householdCard).toContain('composePurpose === "context_facts"');
         expect(householdCard).not.toContain("InlineRuntimeFieldList");
     });
 
