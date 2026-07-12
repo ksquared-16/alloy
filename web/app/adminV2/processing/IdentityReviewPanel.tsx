@@ -13,7 +13,7 @@
  * an APPROVED plan. No intake source reaches these actions.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 type Readiness =
     | "needs_understanding_review"
@@ -73,7 +73,7 @@ type Attempt = {
     attemptId: string;
     outcome: "committed" | "partially_committed" | "failed" | "preflight_rejected";
     attemptNo: number;
-    operations: { opId: string; status: string; recordId: string | null; error: string | null }[];
+    operations: { opId: string; commandKey?: string; status: string; recordId: string | null; error: string | null }[];
     preflightFailures: string[];
 } | null;
 
@@ -127,12 +127,22 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data
     return { ok: res.ok, data: parsed.data, error: parsed.error };
 }
 
-export default function IdentityReviewPanel({ caseId }: { caseId: string }) {
+export default function IdentityReviewPanel({
+    caseId,
+    onCommitted,
+}: {
+    caseId: string;
+    onCommitted?: (payload: {
+        attemptId: string;
+        operations: { opId: string; commandKey: string; status: string; recordId: string | null }[];
+    }) => void;
+}) {
     const [state, setState] = useState<ReviewState | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
+    const committedNotifiedRef = useRef<string | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -155,6 +165,23 @@ export default function IdentityReviewPanel({ caseId }: { caseId: string }) {
     useEffect(() => {
         void load();
     }, [load]);
+
+    useEffect(() => {
+        const attempt = state?.latestAttempt;
+        if (!attempt || !onCommitted) return;
+        if (attempt.outcome !== "committed" && attempt.outcome !== "partially_committed") return;
+        if (committedNotifiedRef.current === attempt.attemptId) return;
+        committedNotifiedRef.current = attempt.attemptId;
+        onCommitted({
+            attemptId: attempt.attemptId,
+            operations: attempt.operations.map((o) => ({
+                opId: o.opId,
+                commandKey: o.commandKey ?? "",
+                status: o.status,
+                recordId: o.recordId,
+            })),
+        });
+    }, [onCommitted, state?.latestAttempt]);
 
     const run = useCallback(
         async (label: string, fn: () => Promise<{ ok: boolean; error?: string }>) => {

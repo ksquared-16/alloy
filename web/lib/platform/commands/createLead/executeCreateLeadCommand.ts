@@ -95,6 +95,9 @@ export async function executeCreateLeadCommand(
     }
 
     const detail = json.data?.execution_result ?? {};
+    const mode = detail.mode != null ? String(detail.mode).trim() : "";
+    const processingCaseId =
+        detail.processing_case_id != null ? String(detail.processing_case_id).trim() : "";
     const affectedId =
         (json.data?.affected_id != null ? String(json.data.affected_id).trim() : "") ||
         (detail.opportunity_id != null ? String(detail.opportunity_id).trim() : "") ||
@@ -106,9 +109,13 @@ export async function executeCreateLeadCommand(
         result: {
             actionKey: CREATE_LEAD_ACTION_KEY,
             entityType: "opportunity",
-            entityId: affectedId,
+            entityId: affectedId || processingCaseId,
             affectedId: affectedId || null,
-            detail,
+            detail: {
+                ...detail,
+                mode: mode || undefined,
+                processing_case_id: processingCaseId || undefined,
+            },
         },
     };
     return result;

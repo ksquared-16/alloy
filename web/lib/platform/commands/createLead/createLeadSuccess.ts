@@ -59,6 +59,16 @@ function trimmed(v: unknown): string {
  * Extract the created opportunity id from a registered-action success result. Falls back
  * across the affectedId and known detail shapes returned by `executeCreateLeadAction`.
  */
+export function isCreateLeadProcessingReview(result: ActionResultOk): boolean {
+    const detail = (result.result.detail ?? {}) as Record<string, unknown>;
+    return trimmed(detail.mode) === "processing_review" && Boolean(trimmed(detail.processing_case_id));
+}
+
+export function createLeadProcessingCaseId(result: ActionResultOk): string | null {
+    const detail = (result.result.detail ?? {}) as Record<string, unknown>;
+    return trimmed(detail.processing_case_id) || null;
+}
+
 export function createdLeadOpportunityId(result: ActionResultOk): string {
     const fromAffected = trimmed(result.result.affectedId);
     if (fromAffected) return fromAffected;

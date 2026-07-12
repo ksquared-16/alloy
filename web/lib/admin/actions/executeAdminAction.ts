@@ -331,52 +331,22 @@ export async function executeAdminAction(
             return { ok: false, correlation_id: correlationId, error: created.error, status: created.status };
         }
 
-        let workUnitKey: string | null = null;
-        let workViewId: string | null = null;
-        if (created.work_unit_id) {
-            invalidateWorkUnitQueueItemsServerCacheForWorkUnit(ctx.orgId, created.work_unit_id);
-            const { data: wuRow } = await supabase
-                .from("work_units")
-                .select("key, department_id")
-                .eq("id", created.work_unit_id)
-                .eq("org_id", ctx.orgId)
-                .maybeSingle();
-            workUnitKey = ((wuRow as { key?: string | null } | null)?.key ?? "").trim() || null;
-            const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(
-                supabase,
-                ctx.orgId,
-                created.work_unit_id,
-            );
-            const views = savedWorkViewsFromDepartmentMetadata(departmentMetadata);
-            const matchedView = firstMatchingVisibleWorkView(
-                {
-                    id: created.opportunity_id,
-                    stage_key: created.stage_key,
-                    status_key: created.status_key,
-                },
-                views,
-            );
-            workViewId = matchedView?.id?.trim() || null;
-        }
-
         return await withActionExecutedEmit(
             supabase,
             ctx,
             correlationId,
             actionKey,
             entityTypeRaw,
-            created.opportunity_id,
+            created.processing_case_id,
             {
-                kind: "create_lead",
-                opportunity_id: created.opportunity_id,
-                person_id: created.person_id,
-                customer_id: created.customer_id,
+                mode: created.mode,
+                processing_case_id: created.processing_case_id,
+                readiness: created.readiness,
+                idempotency_key: created.idempotency_key,
                 work_unit_id: created.work_unit_id,
-                work_unit_key: workUnitKey,
-                work_view_id: workViewId,
                 status_key: created.status_key,
                 stage_key: created.stage_key,
-            }
+            },
         );
     }
 

@@ -24,7 +24,8 @@ export type ProcessingCaseSourceKind =
     | "upload"
     | "email_attachment"
     | "import"
-    | "recreated_document";
+    | "recreated_document"
+    | "create_lead";
 
 export type ProcessingCaseSourceRole = "primary" | "related";
 
