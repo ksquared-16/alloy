@@ -63,13 +63,19 @@ async function ensureAuthUser(admin: SupabaseClient, id: string, email: string):
         password: CERT_PASSWORD,
         email_confirm: true,
     });
-    if (error && !/already|exists|registered/i.test(error.message)) {
-        throw new Error(`auth user ${email}: ${error.message}`);
-    }
+    if (!error) return;
+    if (/already|exists|registered/i.test(error.message)) return;
+    const retry = await admin.auth.admin.getUserById(id);
+    if (retry.data.user) return;
+    throw new Error(`auth user ${email}: ${error.message}`);
 }
 
 /** Seed org graph + identity fixtures for certification scenarios. */
 export async function seedProcessingIdentityCertFixtures(admin: SupabaseClient): Promise<{ verticalId: string }> {
+    return seedProcessingIdentityCertFixturesInner(admin);
+}
+
+async function seedProcessingIdentityCertFixturesInner(admin: SupabaseClient): Promise<{ verticalId: string }> {
     const { data: industry } = await admin.from("industries").select("id").eq("key", "childcare").maybeSingle();
     const industryId = (industry as { id?: string } | null)?.id;
     if (!industryId) throw new Error("childcare industry missing");
@@ -149,6 +155,7 @@ export async function seedProcessingIdentityCertFixtures(admin: SupabaseClient):
             last_name: "ChildA",
             dob: "2019-03-15",
             relationship: "child",
+            is_active: true,
         },
         {
             id: CERT_CHILD_B,
@@ -159,6 +166,7 @@ export async function seedProcessingIdentityCertFixtures(admin: SupabaseClient):
             last_name: "Cert",
             dob: "2020-01-01",
             relationship: "child",
+            is_active: true,
         },
     ]);
 
