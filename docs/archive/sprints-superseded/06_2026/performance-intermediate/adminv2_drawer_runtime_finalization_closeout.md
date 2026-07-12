@@ -1,6 +1,6 @@
 # AdminV2 Drawer Runtime Finalization — Sprint Closeout
 
-**Path:** `docs/sprints/06_2026/adminv2_drawer_runtime_finalization_closeout.md`  
+**Path:** `docs/sprints/archive/06_2026/adminv2_drawer_runtime_finalization_closeout.md`  
 **Status:** In progress (June 2026)  
 **Doctrine:** `docs/system/adminv2-runtime-performance-doctrine.md`  
 **Work Unit follow-on:** `docs/audits/work_unit_runtime_cutover_audit.md`
@@ -22,7 +22,7 @@ Finish Drawer Runtime to **production-grade (A-)** and establish Work Unit VM ar
 | 3 | Remove drawer swap loading UI | **Shipped** — shell-pinned swap guards on entity effect, chrome pending, opportunity reset |
 | 4 | Validate Opp ↔ Person ↔ Child Excel-tab nav | **Verify on staging** — search logs for `[drawer_vm_model_swap_apply]` without gate overlay |
 | 5 | Work Unit runtime audit | **Complete** — `docs/audits/work_unit_runtime_cutover_audit.md` |
-| 6 | Work Unit queue UX proposal | **Complete** — `docs/sprints/06_2026/work_unit_queue_ux_redesign_proposal.md` |
+| 6 | Work Unit queue UX proposal | **Complete** — `docs/sprints/archive/06_2026/work_unit_queue_ux_redesign_proposal.md` |
 | 7 | Work Unit VM cutover plan | **Complete** — Phase 2–4 in audit doc |
 | 8 | Remaining blockers for A- grade | **See below** |
 

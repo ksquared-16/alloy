@@ -46,7 +46,7 @@ export const CHARGE_CATEGORY_GL_MAPPING_KEY: Record<ChargeCategory, string> = {
  * code-owned invariants (the DB CHECK + billableSource.ts define them); they are
  * NOT tenant-editable. This metadata makes the vocabulary legible under Financials
  * as code-owned reference configuration. See the Charge Category review in
- * docs/sprints/06_2026/operational_configuration_v1.md.
+ * docs/sprints/archive/06_2026/operational_configuration_v1.md.
  */
 export const CHARGE_CATEGORY_REFERENCE: Record<ChargeCategory, { description: string; example: string }> = {
     tuition: { description: "Recurring care/service tuition.", example: "Monthly Full-Time Care" },

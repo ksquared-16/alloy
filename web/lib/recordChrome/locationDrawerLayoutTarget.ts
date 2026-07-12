@@ -7,7 +7,7 @@
  * **Runtime today:** `web/lib/entityPresentation.ts` (`locations.drawer`) + `field_definitions`
  * (`entity_type = location`). `AdminEntityDrawer` does not read `record_drawer_layouts` for locations.
  *
- * **Blockers to full convergence:** see `docs/sprints/05_2026/record_person_location_convergence_audit.md` § Card 1.
+ * **Blockers to full convergence:** see `docs/sprints/archive/05_2026/record_person_location_convergence_audit.md` § Card 1.
  */
 
 export type LocationDrawerFieldAvailability =

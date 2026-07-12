@@ -10,7 +10,7 @@
  * Read-only: this builds a descriptor from the execution result; it performs no navigation
  * or data fetching itself.
  *
- * @see docs/sprints/06_2026/create_lead_command_flow_audit.md
+ * @see docs/sprints/archive/06_2026/create_lead_command_flow_audit.md
  */
 
 import type { ActionResultOk } from "@/lib/adminV2/actions/actionTypes";

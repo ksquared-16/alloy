@@ -1,6 +1,6 @@
 /**
  * Active operational context — drawer/queue → Orchestrator (BOS UX coherence V1).
- * @see docs/sprints/05_2026/bos_ux_coherence_design.md §6
+ * @see docs/sprints/archive/05_2026/bos_ux_coherence_design.md §6
  */
 
 import type {

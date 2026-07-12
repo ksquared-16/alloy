@@ -5,7 +5,7 @@
  * Settings → Fields renders these as read-only Platform Field cards.
  * Does NOT duplicate field_definitions rows that already exist for the same key.
  *
- * @see docs/sprints/07_2026/field-runtime-unification.md
+ * @see docs/sprints/archive/07_2026/field-runtime-unification.md
  */
 
 import { PERSON_CANONICAL_IDENTITY_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";

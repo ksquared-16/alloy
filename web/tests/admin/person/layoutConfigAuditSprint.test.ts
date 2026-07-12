@@ -142,7 +142,7 @@ describe("layout config audit sprint", () => {
     describe("audit documentation", () => {
         it("documents audit + hardening scope and deferred Supabase migration work", () => {
             const doc = readFileSync(
-                join(root, "..", "docs/sprints/05_2026/layout_config_audit_hardening_sprint.md"),
+                join(root, "..", "docs/sprints/archive/05_2026/layout_config_audit_hardening_sprint.md"),
                 "utf8"
             );
             expect(doc).toContain("Audit + Hardening Pass");

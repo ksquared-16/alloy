@@ -1,7 +1,7 @@
 /**
  * POS Packet — canonical field dedupe plan (Sprint 2).
  *
- * Strategic model (see docs/sprints/06_2026/pos_packet_parent_submission_foundation.md):
+ * Strategic model (see docs/sprints/archive/06_2026/pos_packet_parent_submission_foundation.md):
  * a POS Packet is generated from one or more *Alloy form templates* — NOT from a PDF.
  * When several templates ask for the same underlying datum (e.g. Child's Name), the
  * parent should be asked **once**. This module is the pure planner that computes that

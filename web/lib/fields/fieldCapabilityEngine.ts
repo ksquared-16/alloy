@@ -6,7 +6,7 @@
  *
  * No manual badge lists. Badges derive from resolver registry + publish gates.
  *
- * @see docs/sprints/07_2026/field-runtime-unification.md
+ * @see docs/sprints/archive/07_2026/field-runtime-unification.md
  */
 
 import {

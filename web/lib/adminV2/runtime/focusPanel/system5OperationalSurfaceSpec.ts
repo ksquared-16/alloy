@@ -20,7 +20,7 @@ import type { FocusPanelCardSpan } from "@/lib/adminV2/runtime/focusPanel/focusP
  * widths (`1`, `2`, `"row"`). `narrow` and `medium` therefore both resolve to a
  * single column today. A future finer column base (a 6-unit grid) would let
  * `medium` sit visually between `narrow` and `wide`. See
- * docs/sprints/06_2026/focus-panel-composition-review for the full recommendation.
+ * docs/sprints/archive/06_2026/focus-panel-composition-review for the full recommendation.
  */
 export type FocusPanelCardFootprint = "narrow" | "medium" | "wide" | "full";
 

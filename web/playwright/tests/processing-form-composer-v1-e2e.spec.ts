@@ -13,8 +13,8 @@ import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
 const FIXTURE_PDF = path.join(process.cwd(), "tests/fixtures/processing/mo500-3313-school-age-child-health-report.pdf");
-const SCREENSHOT_DIR = path.join(process.cwd(), "docs/sprints/07_2026/processing-form-composer-v1-screenshots");
-const REPORT_PATH = path.join(process.cwd(), "docs/sprints/07_2026/processing-form-composer-v1-validation-report.md");
+const SCREENSHOT_DIR = path.join(process.cwd(), "docs/sprints/archive/07_2026/processing-form-composer-v1-screenshots");
+const REPORT_PATH = path.join(process.cwd(), "docs/sprints/archive/07_2026/processing-form-composer-v1-validation-report.md");
 
 type Report = {
     pdfUsed: string;
@@ -302,7 +302,7 @@ ${report.failed.map((x) => `- ${x}`).join("\n") || "- (none)"}
 - Child name first+last split: **${report.nameSplitVerified ? "pass" : "fail"}**
 
 ## Screenshots
-See \`docs/sprints/07_2026/processing-form-composer-v1-screenshots/\`
+See \`docs/sprints/archive/07_2026/processing-form-composer-v1-screenshots/\`
 
 ## Notes
 ${report.notes.map((x) => `- ${x}`).join("\n")}

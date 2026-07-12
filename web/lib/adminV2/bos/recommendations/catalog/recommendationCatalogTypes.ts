@@ -1,6 +1,6 @@
 /**
  * Deterministic recommendation catalog types (Phase 1 / Card 1.2).
- * @see docs/sprints/05_2026/bos_operational_recommendation_phase1_execution.md §7
+ * @see docs/sprints/archive/05_2026/bos_operational_recommendation_phase1_execution.md §7
  */
 
 import type { AttentionSuggestionActionFamily } from "@/lib/agent/needsAttentionSuggestion/types";

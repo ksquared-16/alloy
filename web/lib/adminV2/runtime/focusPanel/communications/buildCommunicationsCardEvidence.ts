@@ -8,7 +8,7 @@
  * and next follow-up timestamp, both projected from `subjectVm.summaries.reminders`
  * by the Operational Context adapter.
  *
- * @see docs/platform/operator/universal-card-archetypes.md (Summary)
+ * @see docs/platform/operator/universal-universal-card-archetypes.md (Summary)
  */
 
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";

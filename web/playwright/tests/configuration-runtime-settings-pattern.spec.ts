@@ -8,7 +8,7 @@ loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
 const screenshotDir = path.join(
     __dirname,
-    "../../../docs/sprints/06_2026/configuration-runtime-settings-pattern",
+    "../../../docs/sprints/archive/06_2026/configuration-runtime-settings-pattern",
 );
 
 function colorClose(actual: string): boolean {

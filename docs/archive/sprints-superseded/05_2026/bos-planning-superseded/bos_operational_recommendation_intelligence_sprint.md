@@ -1,6 +1,6 @@
 # BOS Operational Recommendation Intelligence Sprint
 
-**Path:** `docs/sprints/05_2026/bos_operational_recommendation_intelligence_sprint.md`  
+**Path:** `docs/sprints/archive/05_2026/bos_operational_recommendation_intelligence_sprint.md`  
 **Status:** Phase 1 **COMPLETE** (GATE 1 passed) — Phase 2 **COMPLETE** (GATE 2 passed); Phase 3 may begin  
 **Date:** 2026-05-21
 
@@ -29,8 +29,8 @@
 | `docs/execution/operating-doctrine.md` | Doc/code parity; no parallel AI authority |
 | `docs/product/bos-foundation.md` | Capability classes, lifecycle, hard prohibitions |
 | `docs/product/ai-system.md` | Stub → `bos-foundation.md` |
-| `docs/system/workspace-system.md` | Queue truth, operational attention overlay |
-| `docs/system/actions-and-workflows.md` | Workflow-native execution spine |
+| `docs/archive/2026-06-superseded-system/workspace-system.md` | Queue truth, operational attention overlay |
+| `docs/archive/2026-06-superseded-system/actions-and-workflows.md` | Workflow-native execution spine |
 | `docs/product/crm-system.md` | Attention resolver, buckets, enrollment overlay |
 | `docs/product/communications.md` | Canonical send path; Task Assist boundaries |
 | `docs/execution/roadmap-and-gaps.md` | BOS expansion paused; assistive-only lane |
@@ -691,7 +691,7 @@ AI plugs into BOS **through** existing operational cognition and governance laye
 | Permissions | Auth guards unchanged |
 | Lifecycle transitions | State machines + workflows own transitions |
 
-Phase 3 wires **deterministic** action sequencing into layers 4–5. Phase 4 adds **bounded enrich** on layers 1–3 with fallback to deterministic copy. See Phase 3/4 execution packs in `docs/sprints/06_2026/`.
+Phase 3 wires **deterministic** action sequencing into layers 4–5. Phase 4 adds **bounded enrich** on layers 1–3 with fallback to deterministic copy. See Phase 3/4 execution packs in `docs/sprints/archive/06_2026/`.
 
 ---
 

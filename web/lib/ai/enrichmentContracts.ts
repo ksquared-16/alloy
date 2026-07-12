@@ -1,7 +1,7 @@
 /**
  * Structured overlays for future AI enrichment (Phase 1 — Card 4).
  * Deterministic `AttentionSuggestionV1` remains authoritative for operational truth.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
@@ -47,7 +47,7 @@ export type OperationalSummaryQueuePreviewV1 = {
 
 /**
  * Derived, read-only operational narrative — never authoritative vs resolver / suggestion contracts.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md (Phase 2)
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md (Phase 2)
  */
 export type OperationalSummaryV1 = {
     version: 1;

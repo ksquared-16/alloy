@@ -2,7 +2,7 @@ import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 
 /**
  * Opportunity location display — child/member locations are canonical; opportunity.location_id is fallback.
- * @see docs/system/entity-model.md § Location semantics
+ * @see docs/archive/2026-06-superseded-system/entity-model.md § Location semantics
  */
 
 export const OPPORTUNITY_DISPLAY_MULTIPLE_LOCATIONS_LABEL = "Multiple locations";

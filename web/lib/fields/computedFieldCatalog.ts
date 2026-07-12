@@ -6,7 +6,7 @@
  *
  * Stack: Registry → Resolver → Renderer → Builder → Publish → Available
  *
- * @see docs/sprints/07_2026/computed-fields-and-fields-page-rebuild.md
+ * @see docs/sprints/archive/07_2026/computed-fields-and-fields-page-rebuild.md
  */
 
 import type { FieldConsumerSurface } from "@/lib/fields/fieldSurfaceAvailability";

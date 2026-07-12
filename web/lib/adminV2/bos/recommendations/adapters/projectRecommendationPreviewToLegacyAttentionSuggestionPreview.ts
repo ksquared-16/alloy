@@ -4,7 +4,7 @@
  * Queue rows remain preview/selection only. Full recommendation authority stays on entity GET.
  * Enables future replacement of inline `buildNeedsAttentionSuggestion` queue previews.
  *
- * @see docs/sprints/05_2026/bos_operational_recommendation_phase1_execution.md §8.7
+ * @see docs/sprints/archive/05_2026/bos_operational_recommendation_phase1_execution.md §8.7
  */
 
 import type { AttentionSuggestionQueuePreviewV1 } from "@/lib/agent/needsAttentionSuggestion/types";

@@ -23,7 +23,7 @@ const WORK_UNIT_SLUGS = (process.env.CANVAS_SLUGS || "lifecycle-lead,new-leads,l
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-const OUT = path.join(__dirname, "../../../docs/sprints/06_2026/focus-panel-composition-engine-v1");
+const OUT = path.join(__dirname, "../../../docs/sprints/archive/06_2026/focus-panel-composition-engine-v1");
 const ROW_SELECTOR = "[data-alloy-os-compressed-row='true']";
 
 async function widthOf(el: Locator): Promise<number> {

@@ -123,7 +123,7 @@ export function isElevatedLevel(level: FocusPanelPerspectiveLevel): boolean {
  * cards (Current Work) own completion interaction and may elevate to Focus. Truth cards
  * own entity fields. This is the canvas rule, not a new primitive.
  *
- * @see docs/sprints/06_2026/focus-panel-canvas-finalization
+ * @see docs/sprints/archive/06_2026/focus-panel-canvas-finalization
  */
 const OPERATIONAL_TRUTH_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPanelCardKey>([
     "household",

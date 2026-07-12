@@ -1,6 +1,6 @@
 # Readiness Phase 1 — Implementation Plan
 
-**Path:** `docs/sprints/06_2026/readiness_phase_1_implementation_plan.md`  
+**Path:** `docs/sprints/archive/06_2026/readiness_phase_1_implementation_plan.md`  
 **Date:** 2026-06-02  
 **Status:** **Build planning complete** — ready for coding after sign-off  
 **Scope:** Phase 1 implementation plan only. **No code in this sprint.**

@@ -1,6 +1,6 @@
 # Lifecycle runtime visibility — architecture decision review
 
-**Path:** `docs/sprints/06_2026/lifecycle_runtime_visibility_architecture_decision.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_runtime_visibility_architecture_decision.md`  
 **Status:** **Decision pending** — no implementation until approved  
 **Date:** 2026-06-02  
 **Related:** [lifecycle_runtime_visibility_model_review.md](./lifecycle_runtime_visibility_model_review.md) (operational audit)
@@ -403,11 +403,11 @@ Lifecycle → Ownership container → Only assigned records exist
 
 ## References
 
-- `docs/system/workspace-system.md` — queue truth boundary, enrollment pipeline doctrine
-- `docs/sprints/05_2026/work_unit_runtime_consolidation_audit.md` — cohort gate history
+- `docs/archive/2026-06-superseded-system/workspace-system.md` — queue truth boundary, enrollment pipeline doctrine
+- `docs/sprints/archive/05_2026/work_unit_runtime_consolidation_audit.md` — cohort gate history
 - `docs/product/bos-foundation.md` — BOS scope, queue non-authority
 - `web/lib/lifecycle/lifecycleOpportunityQueueScope.ts` — partial lifecycle_status scope
 - `web/lib/queues/QueueService.ts` — opportunity query paths
-- `docs/sprints/06_2026/lifecycle_runtime_visibility_model_review.md` — Lead Management data trace
+- `docs/sprints/archive/06_2026/lifecycle_runtime_visibility_model_review.md` — Lead Management data trace
 
 **No code, schema, or fixes in this document.** Approval of this decision record is the gate for the next implementation phase.

@@ -23,7 +23,7 @@
  *   DEMO_RESET_ORG_ID=<org> DEMO_SEED_PACKAGE=golden_path_enrollment_v1 npm run demo:cleanup:dry
  *   DEMO_RESET_ORG_ID=<org> DEMO_SEED_PACKAGE=golden_path_enrollment_v1 DEMO_CLEANUP_CONFIRM=DELETE_DEMO_RUNTIME_DATA npm run demo:cleanup:execute
  *
- * @see docs/governance/demo-runtime-cleanup-qa-checklist.md
+ * @see docs/platform/governance/demo-runtime-cleanup-qa-checklist.md
  */
 
 import { randomUUID } from "crypto";

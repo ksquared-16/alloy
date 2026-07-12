@@ -1,6 +1,6 @@
 # Person Drawer Hardening + Performance Sprint
 
-**Status:** Complete — see `docs/sprints/05_2026/completed/person_drawer_hardening_performance_closeout.md` (2026-05-30)  
+**Status:** Complete — see `docs/sprints/archive/05_2026/completed/person_drawer_hardening_performance_closeout.md` (2026-05-30)  
 **Scope:** Person drawer navigation performance, correct operating shells, global search open, explicit save, formatting, household layout, tab preload, config audit.  
 **Out of scope:** Child / Parent / Opportunity IA redesign — operating model is locked.
 
@@ -141,6 +141,6 @@ cd web && npm run test -- tests/admin/person/personDrawerHardeningPhase2.test.ts
 
 ## Related docs
 
-- `docs/sprints/05_2026/child_profile_person_drawer_doctrine.md`
-- `docs/sprints/05_2026/parent_operating_surface_person_drawer.md`
-- `docs/sprints/05_2026/person_drawer_primary_contact_location_doctrine.md`
+- `docs/sprints/archive/05_2026/child_profile_person_drawer_doctrine.md`
+- `docs/sprints/archive/05_2026/parent_operating_surface_person_drawer.md`
+- `docs/sprints/archive/05_2026/person_drawer_primary_contact_location_doctrine.md`

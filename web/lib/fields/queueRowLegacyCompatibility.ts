@@ -5,7 +5,7 @@
  * Compatibility entries are accepted at publish/load but not offered in new pickers.
  * Canonical relationship and collection providers must not be duplicated here.
  *
- * @see docs/sprints/08_2026/field-platform-consumer-convergence.md
+ * @see docs/sprints/archive/08_2026/field-platform-consumer-convergence.md
  */
 
 export type LegacyQueueRowCompatibilityEntry = {

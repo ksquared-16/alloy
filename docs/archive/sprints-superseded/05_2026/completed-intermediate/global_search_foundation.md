@@ -1,6 +1,6 @@
 # Global Search V1 — Foundation & Closeout
 
-**Path:** `docs/sprints/05_2026/global_search_foundation.md`  
+**Path:** `docs/sprints/archive/05_2026/global_search_foundation.md`  
 **Status:** **COMPLETE** (May 2026) — Global Search V1 is shipped and operational in AdminV2.  
 **Phase 2 candidates:** [global_search_phase2_candidates.md](./global_search_phase2_candidates.md)
 

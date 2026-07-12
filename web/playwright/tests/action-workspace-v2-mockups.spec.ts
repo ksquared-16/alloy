@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { test, expect } from "@playwright/test";
 
-const mockupDir = path.join(__dirname, "../../../docs/sprints/06_2026/assets/action-workspace-v2-mockups");
+const mockupDir = path.join(__dirname, "../../../docs/sprints/archive/06_2026/assets/action-workspace-v2-mockups");
 
 const shots: { id: string; filename: string }[] = [
     { id: "intake", filename: "01-intake.png" },

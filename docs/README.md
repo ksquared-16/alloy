@@ -9,15 +9,15 @@ supersedes: []
 
 **Purpose:** Authoritative navigation for engineers, implementers, and AI agents. Prefer these files over chat memory or archived sprint material.
 
-**July 2026 platform freeze:** Foundational architecture is **complete and stable**. Start here for "what platform exists today": **`platform/foundation/platform-freeze-july-2026.md`**, **`platform/foundation/platform-manifesto.md`**, **`platform/foundation/system-overview.md`**.
+**July 2026 platform freeze:** Foundational architecture is **complete and stable**. Start here for "what platform exists today": **`platform/milestones/freeze-july-2026.md`**, **`platform/foundation/platform-manifesto.md`**, **`platform/foundation/system-overview.md`**.
 
 **June 2026 rebaseline:** Canonical platform docs live under **`docs/platform/`**. Schema reference under **`docs/schema/`** (generated). Business Process → Stage → Record is the operator mental model; work units are documented as runtime constructs.
 
 For behavior-changing work, include **`docs/platform/governance/design-and-operational-doctrine.md`** in context.
 
-**Cross-cutting UX model:** How every operational domain (Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance) shares one architecture — five planes, Operations/Records split, progressive drawers, tabs-vs-actions — is defined in **`platform/operational-ux-doctrine.md`** (the **surface axis**).
+**Cross-cutting UX model:** How every operational domain (Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance) shares one architecture — five planes, Operations/Records split, progressive drawers, tabs-vs-actions — is defined in **`platform/core/operational-ux-doctrine.md`** (the **surface axis**).
 
-**Cross-cutting truth model:** The complementary **truth-flow axis** — Configuration → Operational Intent → Operational Expectations (derived) → Operational Facts (immutable) → Operational Consequences (financial) — is defined in **`platform/operational-truth-flow-doctrine.md`**. It locks: expectations are derived/non-authoritative; financials derive from facts (billing generalizes before childcare billing); facts are immutable + effective-dated; childcare builds only on the committed enrollment foundation; job-vertical schedule/financial tables are off-limits to childcare.
+**Cross-cutting truth model:** The complementary **truth-flow axis** — Configuration → Operational Intent → Operational Expectations (derived) → Operational Facts (immutable) → Operational Consequences (financial) — is defined in **`platform/core/operational-truth-flow-doctrine.md`**. It locks: expectations are derived/non-authoritative; financials derive from facts (billing generalizes before childcare billing); facts are immutable + effective-dated; childcare builds only on the committed enrollment foundation; job-vertical schedule/financial tables are off-limits to childcare.
 
 **Canonical interaction model:** The single operator spine every domain inherits — **Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field** — plus the one universal drawer (Record of Truth / Record of Attention / Context Frame) is defined in **`platform/operator/canonical-interaction-model.md`**, with laws in **`platform/operator/interaction-grammar.md`** and the lived flow in **`platform/operator/operator-story.md`**. How that model should **look and feel** (the bridge into mockups) is **`platform/operator/alloy-visual-language.md`**.
 
@@ -29,7 +29,7 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Alloy OS Runtime V1 (architecture complete — June 2026):** The operator runtime is architecturally finished. Surface ViewModels are the presentation ownership model, runtime ownership is consolidated (one authoritative renderer per region), **Queue → Focus Panel** is the canonical operating model, the **Focus Panel shell owns subject identity** (clicked-row seed commits synchronously; cards hydrate after shell commit). Remaining work is **product completion and polish** — final card implementations, KPI ownership completion, Experience Builder integration, embedded-workspace completion, and Runtime Polish V2 — **not** architectural redesign. Milestone notes: **`platform/operator/alloy-runtime-specification.md`** (Part 16).
 
-**Presentation Runtime (unifying presentation architecture):** How every operator surface — queue row, Focus Panel, dashboard, document, POS, portal — becomes one **Design Surface** authored in one **Experience Builder**, built renderer-first on three axes (composition: Design Surface → Zone → Card → Slot → Renderer; selection: Perspective; audience: Viewpoint), with Analytics as a Dashboard category, is defined in **`platform/operator/presentation-runtime-doctrine.md`** (design stage). Full sprint: `sprints/06_2026/presentation-runtime-architecture/`.
+**Presentation Runtime V2 (canonical, July 2026):** Shipped unifying presentation architecture — **`platform/experience/presentation-runtime-v2.md`**. Supersedes the June 2026 design-stage umbrella (archived at `archive/2026-06-presentation-runtime/`). Full sprint history: `sprints/archive/06_2026/presentation-runtime-architecture/`.
 
 **Experience Builder V3 — Universal Surface Composition (frozen, July 2026):** The composition model that unifies every builder — `Surface → Canvas → Component → Evidence Group → Composition Item` (a **Card is one Component type**), with **Expanded = Open Surface** (nested via `openSurfaceId`) — is frozen in **`platform/operator/experience-builder-v3-universal-surface-composition.md`**. The /surfaces builders now author real, persisted configuration for it (stacked queue rows, grain/conditions, custom fields by namespace, nested surface editing for Children + Financial Configuration). **Presentation Runtime adoption starts from `platform/operator/presentation-runtime-carry-forward.md`** — what the live runtime must consume, the deferral list, and what it must NOT redesign. PRs #61/#63/#64/#68.
 
@@ -64,11 +64,12 @@ Start here: **`platform/foundation/system-overview.md`**
 9. `platform/core/navigation-and-workspace-doctrine.md` — **Alloy Operational Workspace Doctrine V2** (frozen July 2026; reference: Processing; certified: Communications, Work Items; barrel: `web/components/workspace/doctrine.ts`)
 10. `platform/core/record-system.md`
 11. `platform/core/status-and-state-system.md`
+11a. `platform/core/data/README.md` — **canonical data-contract layer** (data system, field catalog, status architecture)
 
 ### 3. Operator experience
 
-11. `platform/operational-ux-doctrine.md` — **operational UX architecture / surface axis** (five planes, Operations/Records, progressive drawers, tabs vs actions)
-11b. `platform/operational-truth-flow-doctrine.md` — **truth-flow axis** (Configuration → Intent → Expectations → Facts → Consequences; complementary to the planes)
+11. `platform/core/operational-ux-doctrine.md` — **operational UX architecture / surface axis** (five planes, Operations/Records, progressive drawers, tabs vs actions)
+11b. `platform/core/operational-truth-flow-doctrine.md` — **truth-flow axis** (Configuration → Intent → Expectations → Facts → Consequences; complementary to the planes)
 12. `platform/operator/canonical-interaction-model.md` — **canonical interaction spine** (Workspace → … → Field; one universal drawer)
 13. `platform/operator/interaction-grammar.md` — **interaction laws** (records own truth, projections observe, cards talk through records)
 14. `platform/operator/operator-story.md` — **lived operator experience** (open → work → interrupt → return)
@@ -77,14 +78,14 @@ Start here: **`platform/foundation/system-overview.md`**
 17. `platform/operator/alloy-os-runtime-completion.md` — **Runtime Completion & Freeze** (✅ runtime complete; ownership matrix, config handoff, final verdict — start here for runtime status)
 16a. `platform/operator/operational-grammar.md` — **Alloy Operational Grammar** (foundation: operators answer operational questions; cards are answers; platform hierarchy)
 16b. `platform/operator/card-language.md` — **Alloy Card Language** (how every card behaves: anatomy, evidence hierarchy, density, interaction, color)
-16c. `platform/operator/card-archetypes.md` — **Alloy Card Archetypes** (reusable operational patterns; Identity = Household reference card)
+16c. `platform/operator/universal-universal-card-archetypes.md` — **Alloy Card Archetypes** (reusable operational patterns; Identity = Household reference card)
 16d. `platform/operator/operational-context-boundary.md` — **Operational Context Boundary** (runtime spine: Queue → Operational Context → Focus Panel → Cards; replaces "drawer" as the conceptual boundary)
 16e. `platform/operator/household-reference-card.md` — **Household Reference Card** (Identity archetype **design freeze**: all states/densities, interaction + performance models, visual hierarchy, mock challenges)
 16f. `platform/operator/focus-panel-runtime-cutover-report.md` — **Focus Panel Runtime Cutover** (migration report: one Focus Panel; drawer dependency ledger classified internal-compat vs needs-migration; staged removal D0→G)
 16g. `platform/operator/card-composition-system.md` — **Card Composition System** (the layer between cards and Experience Builder: operational weight Heavy/Medium/Light, preferred partners, surface-owned composition, the balancing layout engine, side-by-side/stacked/full-width rules)
 17. `platform/operator/universal-card-system.md` — **Universal Card System** (System 4 design freeze)
 18. `platform/operator/operational-surface-design-system.md` — **Operational Surface Design System** (System 5 — **approved/frozen** June 2026)
-19. `platform/operator/universal-card-archetypes.md` — **Universal Card Archetypes** (System 5A — implemented)
+19. `platform/operator/universal-universal-card-archetypes.md` — **Universal Card Archetypes** (System 5A — implemented)
 20. `platform/operator/card-interaction-expansion-doctrine.md` — **Card Interaction & Expansion** (System 5B — doctrine; expansion not fully built)
 21. `platform/operator/card-content-template-field-inclusion-doctrine.md` — **Content Templates & Field Inclusion** (System 5C — doctrine; templates not fully built)
 22. `platform/operator/focus-panel-edit-information-doctrine.md` — **Focus Panel** edit law + **implementation freeze**
@@ -100,7 +101,7 @@ Start here: **`platform/foundation/system-overview.md`**
 30b. `platform/operator/current-work-surface.md` — **Current Work Surface** (Summary/Focus operational progression; V1 merged staging)
 30c. `platform/operator/actions-current-work-alignment.md` — **Actions ↔ Current Work Alignment** (surface roles, V1/P2 plan)
 31. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
-32. `platform/operator/presentation-runtime-doctrine.md` — **Presentation Runtime** (unifying umbrella: Design Surfaces, Experience Builder, renderer-first model, three axes — composition/Perspective/Viewpoint, Analytics-as-Dashboard, ownership + lifecycle; design stage)
+32. `platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md` — **Presentation Runtime** (unifying umbrella: Design Surfaces, Experience Builder, renderer-first model, three axes — composition/Perspective/Viewpoint, Analytics-as-Dashboard, ownership + lifecycle; design stage)
 33. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
 
 ### 4. Platform modules (load when touching area)
@@ -124,7 +125,7 @@ Start here: **`platform/foundation/system-overview.md`**
 |-------|-----|
 | Design & operational doctrine | `platform/governance/design-and-operational-doctrine.md` |
 | Documentation rules | `platform/governance/documentation-governance.md` |
-| Agent repo boundaries | `governance/agent-repo-boundaries.md` |
+| Agent repo boundaries | `platform/governance/agent-repo-boundaries.md` |
 | API contracts | `platform/governance/api-contracts.md` |
 | **API documentation (full inventory)** | `api/README.md` — per-domain reference + generated route index + audit |
 | Roles & permissions | `platform/governance/roles-and-permissions.md` |
@@ -173,7 +174,7 @@ CSV source: `supabase/reference/*.csv` (8 files)
 | Configuration Runtime (Settings IA) | `system/configuration-runtime-design-alignment.md` |
 | Configuration Mode doctrine (frozen) | `system/configuration-mode-doctrine.md` |
 | Configuration Runtime V1 (frozen) | `system/configuration-runtime-v1.md` |
-| Configuration Runtime sprint closeout | `sprints/06_2026/configuration_runtime_sprint_completion.md` |
+| Configuration Runtime sprint closeout | `sprints/archive/06_2026/configuration_runtime_sprint_completion.md` |
 | Legacy inventory | `system/legacy-architecture-inventory.md` |
 
 ---
@@ -183,10 +184,25 @@ CSV source: `supabase/reference/*.csv` (8 files)
 | Doc | Use |
 |-----|-----|
 | `product/crm-system.md` | Enrollment pipeline grain detail (childcare) |
-| `product/billing-and-financials.md` | Billing maturity |
-| `system/*` (remaining) | **Locked runtime implementation detail** — authoritative; prefer `platform/` for operator model |
-| `core/system-overview.md` | Redirect — see platform foundation |
-| `execution/roadmap-and-gaps.md` | Transitional detailed gap list |
+| `system/README.md` | **Locked runtime tier index** — authoritative implementation detail |
+| `system/*` (remaining) | Locked runtime implementation detail |
+
+---
+
+## Documentation tiers
+
+| Tier | Path | Rule |
+|------|------|------|
+| Canonical doctrine | `platform/` | Current truth only |
+| Data contracts | `platform/core/data/` | SSOT for business facts |
+| Milestones | `platform/milestones/` | Certification / freeze records |
+| RFCs | `platform/rfcs/` | Ratified proposals |
+| Locked runtime | `system/` | Implementation contracts |
+| Generated | `schema/`, `api/` | Machine-produced |
+| Vertical | `product/` | Childcare reference only |
+| Execution | `sprints/{active,completed,archive}/` | Not doctrine |
+| Investigations | `audits/{active,archive}/` | Point-in-time |
+| Historical | `archive/` | Superseded material |
 
 ---
 
@@ -194,28 +210,22 @@ CSV source: `supabase/reference/*.csv` (8 files)
 
 | Location | Purpose |
 |----------|---------|
-| `sprints/active/` | In-flight initiatives (index) |
-| `sprints/active/documentation-rebaseline-v2/` | **Documentation Rebaseline V2** execution (Wave 1 governance + validation) |
-| `sprints/completed/` | Shipped closeout index |
-| `sprints/archive/` | Historical sprint artifacts |
-| `sprints/05_2026/`, `06_2026/`, `07_2026/`, `08_2026/` | **Transitional paths** — migrating to active/completed/archive |
-| `audits/` | Point-in-time investigations — **not current doctrine** |
+| `sprints/active/` | In-flight initiatives |
+| `sprints/completed/` | Shipped closeout summaries |
+| `sprints/archive/` | Historical sprint artifacts (`05_2026` … `08_2026` month folders) |
+| `audits/active/` | Living investigations |
+| `audits/archive/` | Closed audits |
 | `archive/` | Superseded docs — not current truth |
-| `export/` | Portable handoff packs (scheduled for retirement) |
 
-**July 2026 documentation architecture planning** (historical — not doctrine):
+**July 2026 documentation architecture planning** (historical):
 
-- `audits/documentation-initiative-handoff-2026-07.md` — engineer handoff
-- `audits/documentation-architecture-audit-2026-07.md` — current-state audit
-- `audits/documentation-migration-blueprint-2026-07.md` — migration blueprint
+- `audits/documentation-initiative-handoff-2026-07.md`
+- `audits/documentation-architecture-audit-2026-07.md`
+- `audits/documentation-migration-blueprint-2026-07.md`
 
-**June 2026 rebaseline audit (prior art):**
+**June 2026 rebaseline audit (prior art):** `audits/archive/2026-06-doc-rebaseline/`
 
-- `audits/documentation-audit.md`
-- `audits/documentation-governance-followup.md`
-- `audits/documentation-closeout-report.md`
-
-**Agent development:** [`governance/agent-repo-boundaries.md`](governance/agent-repo-boundaries.md) — Cursor vs Claude repo separation, branching, merge flow
+**Agent development:** [`platform/governance/agent-repo-boundaries.md`](platform/governance/agent-repo-boundaries.md)
 
 **Documentation validation:** `npm run docs:lint` from repository root — see `scripts/README-docs-lint.md`
 
@@ -229,9 +239,9 @@ Alloy is moving from "Enrollment CRM + configured drawers" toward a **universal 
 
 See `sprints/active/README.md` and `platform/foundation/product-roadmap.md`.
 
-**Experience Builder / unified actions (shipped to staging):** layout library + BP assignment, queue v3 composer, relationship action framework, OCM-first enrollment status, Create Lead lifecycle binding, New Leads legacy alias compatibility. Backlog status: `backlog/experience-builder-framework-backlog.md`.
+**Experience Builder backlog:** `sprints/active/experience-builder-framework-backlog.md`
 
-**Childcare operational enrollment V1 (flag-gated):** post-approval operational layer — `child_enrollment_agreements`, effective-dated `child_placements` and `schedule_assignments`, approve-handoff from enrollment proposals, and operator edit flows (placement/schedule supersede; agreement ending/ended/cancel). See `sprints/06_2026/childcare_operational_enrollment_batches.md` and `platform/core/placement-system.md`.
+**Childcare operational enrollment V1 (flag-gated):** post-approval operational layer — `child_enrollment_agreements`, effective-dated `child_placements` and `schedule_assignments`, approve-handoff from enrollment proposals, and operator edit flows (placement/schedule supersede; agreement ending/ended/cancel). See `sprints/archive/06_2026/childcare_operational_enrollment_batches.md` and `platform/core/placement-system.md`.
 
 ---
 

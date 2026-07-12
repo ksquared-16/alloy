@@ -97,7 +97,7 @@ describe("Configuration Mode doctrine cleanup", () => {
     });
 
     it("workflows documented as diagnostic/future automation surface", () => {
-        const doc = readDoc("docs/sprints/06_2026/configuration_runtime_settings_pattern_rollout.md");
+        const doc = readDoc("docs/sprints/archive/06_2026/configuration_runtime_settings_pattern_rollout.md");
         expect(doc).toMatch(/diagnostic|early automation/i);
         expect(doc).toMatch(/Automation|automation/i);
         expect(doc).not.toMatch(/Workflows.*polished Configuration Mode/i);

@@ -1,6 +1,6 @@
 # Operational Work Framework V1
 
-**Path:** `docs/sprints/06_2026/operational_work_framework_v1.md`  
+**Path:** `docs/sprints/archive/06_2026/operational_work_framework_v1.md`  
 **Date:** 2026-06-03  
 **Status:** **Operating model frozen — discovery only** (architecture only; no implementation)  
 **Scope:** Define Alloy's **domain-agnostic operational work model**. Not a UI sprint, schema sprint, workflow sprint, Tasks sprint, or Needs Attention sprint.

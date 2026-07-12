@@ -4,7 +4,7 @@ Alloy is a **configurable business operations platform** for service businesses.
 
 **Canonical documentation:** Start at [`docs/README.md`](docs/README.md) for platform doctrine, load order, and governance.
 
-**Platform status (July 2026):** Foundational runtime architecture is certified complete and frozen. See `docs/platform/foundation/platform-freeze-july-2026.md`.
+**Platform status (July 2026):** Foundational runtime architecture is certified complete and frozen. See `docs/platform/milestones/freeze-july-2026.md`.
 
 ---
 

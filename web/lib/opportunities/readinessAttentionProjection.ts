@@ -1,7 +1,7 @@
 /**
  * Pure ReadinessResult → attention reason projection (Phase 1).
  * Must not import readiness evaluators or field-rule catalogs.
- * @see docs/sprints/06_2026/needs_attention_v2_phase_0_implementation_plan.md
+ * @see docs/sprints/archive/06_2026/needs_attention_v2_phase_0_implementation_plan.md
  */
 
 import type { OpportunityAttentionSeverity } from "@/lib/opportunities/opportunityAttentionConfig";

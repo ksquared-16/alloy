@@ -18,7 +18,7 @@ export { formatRequirementValidationSummary } from "@/lib/completion/requirement
 /**
  * Completion Guardrails Foundation — primary evaluator (Sprint B).
  *
- * Bootstrap code rules only; not admin-configured. See docs/sprints/05_2026/required_fields_completion_guardrails_policy.md.
+ * Bootstrap code rules only; not admin-configured. See docs/sprints/archive/05_2026/required_fields_completion_guardrails_policy.md.
  */
 export function evaluateCompletionRequirements(
     ctx: CompletionEvaluationContext

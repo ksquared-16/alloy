@@ -104,7 +104,7 @@ describe("lifecycle actions matrix and validation cleanup", () => {
     it("desired start audit doc exists", () => {
         expect(
             readFileSync(
-                resolve(root, "../docs/sprints/06_2026/desired_start_field_audit.md"),
+                resolve(root, "../docs/sprints/archive/06_2026/desired_start_field_audit.md"),
                 "utf8"
             )
         ).toContain("child:start_date");

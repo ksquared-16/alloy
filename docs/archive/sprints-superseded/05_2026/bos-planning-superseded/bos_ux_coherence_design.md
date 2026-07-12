@@ -1,6 +1,6 @@
 # BOS UX Coherence — Step 1 Design
 
-**Path:** `docs/sprints/05_2026/bos_ux_coherence_design.md`  
+**Path:** `docs/sprints/archive/05_2026/bos_ux_coherence_design.md`  
 **Status:** Design complete — implementation tracked in **[`bos_ux_coherence_sprint.md`](./bos_ux_coherence_sprint.md)** (Step 2)  
 **Date:** 2026-05-20  
 **Prerequisite:** [`bos_ux_coherence_audit.md`](./bos_ux_coherence_audit.md) (Step 0)
@@ -12,9 +12,9 @@
 | `docs/execution/operating-doctrine.md` | Behavior changes update topic docs; no parallel UX systems |
 | `docs/product/bos-foundation.md` | Capability map, lifecycle invariants, permissions (canonical BOS) |
 | `docs/product/ai-system.md` | Stub → `bos-foundation.md` |
-| `docs/system/workspace-system.md` | Queue truth, attention lanes, count semantics |
+| `docs/archive/2026-06-superseded-system/workspace-system.md` | Queue truth, attention lanes, count semantics |
 | `docs/system/configuration-system.md` | Settings control plane; config-assist same PATCH paths |
-| `docs/system/actions-and-workflows.md` | Placements vs execution; workflow spine |
+| `docs/archive/2026-06-superseded-system/actions-and-workflows.md` | Placements vs execution; workflow spine |
 | `docs/execution/roadmap-and-gaps.md` | BOS expansion paused; operational-first program |
 
 **Preserved (non-negotiable):** proposal-first mutations; queue truth; AdminV2 workspace model; event/workflow architecture; permissions; `BosProposalEnvelopeV1` + adapters (`web/lib/bos/`); Orchestrator executes **no** side effects.

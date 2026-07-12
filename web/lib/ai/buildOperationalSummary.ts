@@ -1,6 +1,6 @@
 /**
  * Deterministic operational summaries (Phase 2) + optional stub overlay (no network).
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";

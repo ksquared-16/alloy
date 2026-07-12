@@ -1,19 +1,19 @@
 # Lifecycle Runtime Orchestration Audit
 
-**Path:** `docs/sprints/06_2026/lifecycle_runtime_orchestration_audit.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_runtime_orchestration_audit.md`  
 **Status:** Audit only — **do not implement** from this document  
 **Date:** 2026-05-31  
 **Principle:** Assume existing workflows, actions, events, statuses, tasks, and BOS compose into Lifecycle Builder. Do not replace them with a parallel rules engine.
 
 **Related active docs:**
 
-- `docs/system/actions-and-workflows.md`
-- `docs/system/entity-model.md`, `docs/product/crm-system.md`
-- `docs/system/configuration-system.md`, `docs/system/workspace-system.md`
+- `docs/archive/2026-06-superseded-system/actions-and-workflows.md`
+- `docs/archive/2026-06-superseded-system/entity-model.md`, `docs/product/crm-system.md`
+- `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/workspace-system.md`
 - `docs/product/bos-foundation.md`
-- `docs/sprints/06_2026/lifecycle_runtime_alignment_matrix_v1.md`
-- `docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`
-- `docs/sprints/05_2026/task_system_audit_v1.md`
+- `docs/sprints/archive/06_2026/lifecycle_runtime_alignment_matrix_v1.md`
+- `docs/sprints/archive/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`
+- `docs/sprints/archive/05_2026/task_system_audit_v1.md`
 
 ---
 
@@ -571,11 +571,11 @@ rg "outcome_status_key|buildOpportunityChildLifecycleSummary" web/lib --glob "*.
 | Area | Key paths |
 |------|-----------|
 | Workflows | `web/lib/emitEvent.ts`, `web/lib/workflowRun.ts`, `web/lib/admin/emitStatusChangedEvent.ts`, `web/lib/opportunities/emitChildLifecycleStatusChangedEvent.ts` |
-| Actions | `web/lib/admin/actions/executeAdminAction.ts`, `docs/system/actions-and-workflows.md` |
+| Actions | `web/lib/admin/actions/executeAdminAction.ts`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md` |
 | Status | `web/lib/lifecycle/enrollmentProcessStatusStageConfig.ts`, `web/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus.ts`, `web/lib/opportunities/buildOpportunityChildLifecycleSummary.ts` |
 | Requirements | `web/lib/completion/lifecycleActionRequirementCatalog.ts`, `web/lib/admin/actions/adminActionPreflight.ts` |
 | Builder | `web/lib/lifecycle/lifecycleBuilderConfig.ts`, `web/lib/lifecycle/lifecycleActivationConfig.ts`, `LifecycleActivationBoard.tsx` |
-| Queues / attention | `web/lib/queues/QueueService.ts`, `docs/system/workspace-system.md`, `docs/product/crm-system.md` |
+| Queues / attention | `web/lib/queues/QueueService.ts`, `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/product/crm-system.md` |
 | BOS | `docs/product/bos-foundation.md`, `web/lib/bos/bosCapabilityRegistry.ts` |
 | Schema | `docs/supabase/reference/supabase_tables.csv`, `supabase_schema_columns.csv` |
 

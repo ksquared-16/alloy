@@ -6,7 +6,7 @@ import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 
 loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
-const screenshotDir = path.join(__dirname, "../../../docs/sprints/06_2026/configuration-runtime-locations");
+const screenshotDir = path.join(__dirname, "../../../docs/sprints/archive/06_2026/configuration-runtime-locations");
 
 async function ensureSidebarExpanded(page: import("@playwright/test").Page) {
     const expand = page.getByRole("button", { name: "Expand sidebar" });

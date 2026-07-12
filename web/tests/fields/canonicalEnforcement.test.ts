@@ -25,13 +25,13 @@ const ENFORCEMENT_TEST_FILES = [
 ] as const;
 
 const DOCTRINE_DOCS = [
-    "docs/canonical-data-system.md",
-    "docs/canonical-entity-specification.md",
-    "docs/canonical-status-architecture.md",
-    "docs/canonical-field-catalog.md",
-    "docs/canonical-action-status-field-matrix.md",
-    "docs/canonical-runtime-data-alignment.md",
-    "docs/canonical-configuration-data-alignment.md",
+    "docs/platform/core/data/data-system.md",
+    "docs/platform/core/data/entity-specification.md",
+    "docs/platform/core/data/status-architecture.md",
+    "docs/platform/core/data/field-catalog.md",
+    "docs/platform/core/data/action-status-field-matrix.md",
+    "docs/platform/core/data/runtime-data-alignment.md",
+    "docs/platform/core/data/configuration-data-alignment.md",
 ] as const;
 
 describe("canonical enforcement index — Phase 5", () => {
@@ -84,7 +84,7 @@ describe("canonical enforcement index — Phase 5", () => {
     });
 
     it("canonical doctrine references enforcement tests", () => {
-        const src = readFileSync(join(process.cwd(), "../docs/canonical-data-system.md"), "utf8");
+        const src = readFileSync(join(process.cwd(), "../docs/platform/core/data/data-system.md"), "utf8");
         expect(src).toContain("canonicalEnforcement.test.ts");
         expect(src).toContain("tests/fields/canonical");
     });

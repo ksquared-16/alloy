@@ -2,7 +2,7 @@
  * Phase A — OCM enrollment-track queue row builder (Tour, Enrolling, Enrolled).
  * Legacy fallback when tracks_v1 is absent; builder routing handles configured processes.
  *
- * @see docs/sprints/06_2026/child_grain_queue_conversion_design.md
+ * @see docs/sprints/archive/06_2026/child_grain_queue_conversion_design.md
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";

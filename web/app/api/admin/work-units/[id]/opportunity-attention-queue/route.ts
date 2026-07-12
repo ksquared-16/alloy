@@ -10,7 +10,7 @@ import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 /**
  * GET — Needs Attention queue for opportunity work units.
  * Needs attention via canonical `resolveOpportunityAttention`; response includes `attention_evaluation`
- * (row window cap, saturation). See `docs/system/workspace-system.md`.
+ * (row window cap, saturation). See `docs/archive/2026-06-superseded-system/workspace-system.md`.
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();

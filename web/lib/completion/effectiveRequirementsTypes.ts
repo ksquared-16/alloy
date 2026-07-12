@@ -1,6 +1,6 @@
 /**
  * Unified lifecycle requirement evaluation types.
- * @see docs/sprints/05_2026/lifecycle_configuration_requirements_design_package_v1.md
+ * @see docs/sprints/archive/05_2026/lifecycle_configuration_requirements_design_package_v1.md
  */
 
 import type { CompletionEntityType } from "@/lib/completion/requirementValidationTypes";

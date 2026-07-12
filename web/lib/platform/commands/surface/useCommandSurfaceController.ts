@@ -14,7 +14,7 @@
  * Command-agnostic: `deriveSnapshot` produces a {@link GenericCommandSnapshot} from current
  * inputs/phase, so Create Lead (and later Update Status) reuse the same controller.
  *
- * @see docs/sprints/06_2026/command_surface_v2.md
+ * @see docs/sprints/archive/06_2026/command_surface_v2.md
  */
 
 import { useCallback, useMemo, useState } from "react";

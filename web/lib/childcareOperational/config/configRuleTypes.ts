@@ -3,7 +3,7 @@
  * (Phase 1). Keep aligned with
  * supabase/migrations/20260628120000_childcare_config_rules_phase1.sql
  *
- * Doctrine: L1 Configuration in docs/platform/operational-truth-flow-doctrine.md.
+ * Doctrine: L1 Configuration in docs/platform/core/operational-truth-flow-doctrine.md.
  * These tables are config truth; expectations derive from them and are never
  * persisted as system-of-record.
  */

@@ -1,6 +1,6 @@
 # Lifecycle runtime visibility model review
 
-**Path:** `docs/sprints/06_2026/lifecycle_runtime_visibility_model_review.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_runtime_visibility_model_review.md`  
 **Status:** Architecture review — **no code changes** until reviewed  
 **Date:** 2026-06-02  
 **Trigger:** Lead Management shows 0 `new_inquiry` rows while org has 17 on Enrollment `enrollment_pipeline`; recent queue/attach fixes may be solving the wrong problem.
@@ -46,7 +46,7 @@ The 17 existing `new_inquiry` records **do not satisfy Lead Management’s depar
 
 ### 1.1 Platform doctrine (pre-lifecycle)
 
-From `docs/system/workspace-system.md` and `docs/sprints/05_2026/work_unit_runtime_consolidation_audit.md`:
+From `docs/archive/2026-06-superseded-system/workspace-system.md` and `docs/sprints/archive/05_2026/work_unit_runtime_consolidation_audit.md`:
 
 - A **work unit** is an “operational queue/cohort within a department.”
 - **`opportunities.work_unit_id`** is the **cohort gate** for opportunity queue queries in `QueueService`.
@@ -312,11 +312,11 @@ The 17 records **satisfy the Lead stage status filter** but **fail the Lead Mana
 
 ## References
 
-- `docs/system/workspace-system.md` — queue truth boundary, enrollment pipeline doctrine
-- `docs/sprints/05_2026/work_unit_runtime_consolidation_audit.md` — `work_unit_id` cohort gate
-- `docs/sprints/06_2026/lifecycle_record_assignment_to_work_units.md` — status-derived scope + attach
-- `docs/sprints/06_2026/lifecycle_runtime_performance_guardrails.md` — no auto-migrate on navigation
-- `docs/sprints/06_2026/lifecycle_create_lead_entry_binding_fix.md` — Create Lead entry binding
+- `docs/archive/2026-06-superseded-system/workspace-system.md` — queue truth boundary, enrollment pipeline doctrine
+- `docs/sprints/archive/05_2026/work_unit_runtime_consolidation_audit.md` — `work_unit_id` cohort gate
+- `docs/sprints/archive/06_2026/lifecycle_record_assignment_to_work_units.md` — status-derived scope + attach
+- `docs/sprints/archive/06_2026/lifecycle_runtime_performance_guardrails.md` — no auto-migrate on navigation
+- `docs/sprints/archive/06_2026/lifecycle_create_lead_entry_binding_fix.md` — Create Lead entry binding
 - `web/lib/lifecycle/lifecycleOpportunityQueueScope.ts` — scope implementation
 
 **Next step:** Review this document with product/platform owners. **No further queue fixes** until visibility model (B + dept boundary + hybrid writes) is approved.

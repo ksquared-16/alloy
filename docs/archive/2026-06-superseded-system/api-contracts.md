@@ -7,7 +7,7 @@ High-level map of **server boundaries** for admin, public booking, and action li
 ## Current state
 
 - **Next.js route handlers** under `web/app/api/**` implement REST-ish JSON endpoints.
-- **Admin** routes generally require auth + org context via **`getAdminContextCached`** / **`loadAdminAccessBundleCached`** / `createAdminClient`. Capability vs visibility model: **`docs/system/roles-and-permissions.md`**. Full scope dimensions (departments/sites, permission union) resolve through **`getAdminAccessContextCached`** (`web/lib/admin/getAdminAccessContext.ts`); **list/read/mutation routes apply scope helpers** — restricted callers receive empty lists or **404** on out-of-scope single-record targets (deny-by-default).
+- **Admin** routes generally require auth + org context via **`getAdminContextCached`** / **`loadAdminAccessBundleCached`** / `createAdminClient`. Capability vs visibility model: **`docs/archive/2026-06-superseded-system/roles-and-permissions.md`**. Full scope dimensions (departments/sites, permission union) resolve through **`getAdminAccessContextCached`** (`web/lib/admin/getAdminAccessContext.ts`); **list/read/mutation routes apply scope helpers** — restricted callers receive empty lists or **404** on out-of-scope single-record targets (deny-by-default).
 - **Public/booking** routes use their own validation (e.g. book-v2 flow) and may reference `ALLOY_PUBLIC_ORG_ID` where applicable.
 
 ## How it works (representative)
@@ -16,7 +16,7 @@ High-level map of **server boundaries** for admin, public booking, and action li
 |---------|-----------|-------|
 | Entity drawer | `GET /api/admin/entity/[type]/[id]` | Many types; jobs/opportunities special surfaces |
 | Admin actions (runtime) | `GET /api/admin/actions` (resolve by surface), `POST /api/admin/actions/execute` | `resolveActionsForContext.ts` → `executeAdminAction.ts`; does not change execution semantics |
-| Action buttons (Settings) | `GET /api/admin/actions/inventory`, `GET /api/admin/actions/definition-catalog`, `POST /api/admin/action-placements`, `PATCH /api/admin/action-placements/[id]`, `PATCH /api/admin/action-definitions/[id]` | Org **admin**; placement create = catalog row only; see **`docs/system/actions-and-workflows.md`** |
+| Action buttons (Settings) | `GET /api/admin/actions/inventory`, `GET /api/admin/actions/definition-catalog`, `POST /api/admin/action-placements`, `PATCH /api/admin/action-placements/[id]`, `PATCH /api/admin/action-definitions/[id]` | Org **admin**; placement create = catalog row only; see **`docs/archive/2026-06-superseded-system/actions-and-workflows.md`** |
 | Workflows | `web/app/api/admin/workflows/[id]/run/route.ts` | Executes/runs workflows (admin) |
 | Action links | `web/app/api/action/[token]/consume/route.ts`, `action-links/*` | Emit events → workflows |
 | Communications (admin) | `web/app/api/admin/communications/*` | Threads, send, unread, bindings |
@@ -42,7 +42,7 @@ High-level map of **server boundaries** for admin, public booking, and action li
 | Forms (admin) | `/api/admin/forms`, `/api/admin/forms/[formId]/**`, submissions, packet sessions, **`GET …/packet-sessions/[id]/review-rollup`** | Definitions, versions, publish/archive, public links, submissions, **packet review rollup (P2-1)** — **partially implemented** product-wide |
 | Forms (public) | `/api/public/forms/[token]/**` | Token-scoped submit / capture |
 | Workspace / dept KPIs | e.g. **`GET /api/admin/departments/[departmentId]/opportunity-lifecycle-kpis`**, **`/api/admin/workspace-kpi-placements`** | **Partially implemented** — KPI strips and placements exist; full **reporting V1** **not implemented** |
-| Global record search | **`GET /api/admin/global-search?q=&limit=`** | Children, parents/guardians, leads, campuses; org + department + site scope — **`docs/sprints/05_2026/completed/global_search_v1_closeout.md`** |
+| Global record search | **`GET /api/admin/global-search?q=&limit=`** | Children, parents/guardians, leads, campuses; org + department + site scope — **`docs/sprints/archive/05_2026/completed/global_search_v1_closeout.md`** |
 
 ## Source of truth / key files
 

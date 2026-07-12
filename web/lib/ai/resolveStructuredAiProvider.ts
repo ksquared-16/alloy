@@ -1,6 +1,6 @@
 /**
  * Resolves structured AI provider from org policy + process env (stub / OpenAI-compatible / disabled).
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 import type { ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";

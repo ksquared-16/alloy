@@ -11,7 +11,7 @@
  *
  * Doctrine: supersede / change-later semantics (a new version row plus the prior
  * row's `effective_end` closed the day before) — never an in-place overwrite of
- * effective-dated truth. See docs/sprints/06_2026/operational_configuration_v1.md.
+ * effective-dated truth. See docs/sprints/archive/06_2026/operational_configuration_v1.md.
  *
  * Pure functions only — no DB, no IO. The authoritative "which row resolves"
  * remains the per-domain resolver (resolveConfigRule / resolveRate); this module

@@ -5,7 +5,7 @@
  * atomic fields, relationships, collections, calculated values, or runtime signals.
  *
  * @see docs/platform/modules/field-concepts.md
- * @see docs/sprints/08_2026/field-platform-consumer-audit.md
+ * @see docs/sprints/archive/08_2026/field-platform-consumer-audit.md
  */
 
 import type { FieldConsumerSurface } from "@/lib/fields/fieldSurfaceAvailability";

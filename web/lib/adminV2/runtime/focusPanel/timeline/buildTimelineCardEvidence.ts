@@ -7,7 +7,7 @@
  * activity from `resolveLeadActivityPreview` (notes, communication, tasks, activity
  * signals, created/updated metadata). Max 5 events, newest-first heuristic.
  *
- * @see docs/platform/operator/universal-card-archetypes.md (Timeline)
+ * @see docs/platform/operator/universal-universal-card-archetypes.md (Timeline)
  */
 
 import { resolveLeadActivityPreview } from "@/lib/layout/runtime/resolveLeadActivityPreview";

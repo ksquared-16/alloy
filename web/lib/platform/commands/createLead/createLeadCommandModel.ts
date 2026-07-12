@@ -17,7 +17,7 @@
  * the registered `create_lead` action via `POST /api/admin/actions/execute`. This module
  * never executes or mutates.
  *
- * @see docs/sprints/06_2026/create_lead_command_flow_audit.md
+ * @see docs/sprints/archive/06_2026/create_lead_command_flow_audit.md
  * @see web/lib/adminV2/actions/commandFlow.ts
  */
 

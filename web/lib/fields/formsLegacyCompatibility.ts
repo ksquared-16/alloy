@@ -4,7 +4,7 @@
  * Each OPERATIONAL_FORM_SYSTEM_FIELDS id is classified for picker, publish, and hydration.
  * Legacy aliases must not create duplicate picker entries.
  *
- * @see docs/sprints/08_2026/forms-documents-field-platform-adoption.md
+ * @see docs/sprints/archive/08_2026/forms-documents-field-platform-adoption.md
  */
 
 import { OPERATIONAL_FORM_SYSTEM_FIELDS } from "@/lib/forms/systemFieldRegistry";

@@ -14,7 +14,7 @@
  * This module is the operator-facing vocabulary; it does not execute. Execution still
  * flows through the one runtime (actionExecutor.ts) via the resolved capability.
  *
- * @see docs/sprints/06_2026/operational_command_runtime_v3.md
+ * @see docs/sprints/archive/06_2026/operational_command_runtime_v3.md
  * @see docs/platform/modules/actions-and-workflows.md § Operational Command Runtime
  */
 

@@ -1,6 +1,6 @@
 /**
  * Org policy pre-checks for AI enrichment HTTP routes (Phase 2.5 — Card 11.6).
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 import { parseAiPolicyFromMetadata, type ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
@@ -75,7 +75,7 @@ export function evaluateOrgPolicyForOpenAiAttentionDraftEnrichmentRoute(
 
 /**
  * Task Assist propose route (stub): org must enable AI, stub provider, and allow `task_assist_draft`.
- * @see docs/sprints/05_2026/task_assist_v1.md
+ * @see docs/sprints/archive/05_2026/task_assist_v1.md
  */
 export function evaluateOrgPolicyForStubTaskAssistProposeRoute(
     orgMetadata: unknown,

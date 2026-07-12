@@ -12,7 +12,7 @@ import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
-const SCREENSHOT_DIR = path.join(process.cwd(), "../docs/sprints/07_2026/digital-mailroom-identity-screenshots");
+const SCREENSHOT_DIR = path.join(process.cwd(), "../docs/sprints/archive/07_2026/digital-mailroom-identity-screenshots");
 
 async function snap(page: import("@playwright/test").Page, name: string) {
     fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });

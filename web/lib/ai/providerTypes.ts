@@ -1,7 +1,7 @@
 /**
  * Server-only AI provider contracts (Phase 1 — Cards 1 & 4).
  * No vendor SDKs; execution paths remain stub/disabled until Card 5+.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 /** Declarative provider identity — reserved keys must not perform network I/O until explicitly wired. */

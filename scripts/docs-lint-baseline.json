@@ -1,13 +1,12 @@
 {
-  "generatedAt": "2026-07-12T14:32:17.448Z",
+  "generatedAt": "2026-07-12T14:41:39.344Z",
   "summary": {
-    "invalid-root-placement": 22,
     "generated-boundary": 21,
-    "broken-link": 621,
-    "frontmatter-missing": 134,
+    "broken-link": 794,
+    "frontmatter-missing": 126,
     "orphan-canonical": 68,
-    "canonical-sprint-dependency": 53,
-    "duplicate-basename": 13
+    "canonical-sprint-dependency": 49,
+    "duplicate-basename": 9
   },
   "note": "Pre-existing documentation debt baseline for report-only CI enforcement"
 }

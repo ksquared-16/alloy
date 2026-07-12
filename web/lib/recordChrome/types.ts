@@ -61,13 +61,13 @@ export type RecordLayoutConfigJson = {
 
     /**
      * Opportunity workflow v1: per-field behavior overrides for layout surfaces (Card 0).
-     * @see docs/sprints/05_2026/layout_field_behavior_semantics_v1.md
+     * @see docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md
      */
     field_placements_v1?: FieldPlacementV1[];
 
     /**
      * Person drawer runtime v1 — profile-aware layout variants.
-     * @see docs/sprints/05_2026/person_drawer_runtime_layout_migration.md
+     * @see docs/sprints/archive/05_2026/person_drawer_runtime_layout_migration.md
      */
     person_drawer_mode?: "runtime_v1";
     person_layout_variants?: Record<

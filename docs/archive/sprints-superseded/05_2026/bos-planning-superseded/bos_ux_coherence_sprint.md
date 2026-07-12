@@ -1,6 +1,6 @@
 # BOS UX Coherence + Operational Intelligence Polish — Implementation Sprint
 
-**Path:** `docs/sprints/05_2026/bos_ux_coherence_sprint.md`  
+**Path:** `docs/sprints/archive/05_2026/bos_ux_coherence_sprint.md`  
 **Status:** Ready for implementation  
 **Date:** 2026-05-20
 
@@ -11,7 +11,7 @@
 | Step 0 — Audit  | [`bos_ux_coherence_audit.md`](./bos_ux_coherence_audit.md)   |
 | Step 1 — Design | [`bos_ux_coherence_design.md`](./bos_ux_coherence_design.md) |
 
-**Doctrine (unchanged):** `docs/product/bos-foundation.md`, `docs/system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/system/actions-and-workflows.md`, `docs/execution/roadmap-and-gaps.md`, `docs/execution/operating-doctrine.md`
+**Doctrine (unchanged):** `docs/product/bos-foundation.md`, `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/system/configuration-system.md`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, `docs/execution/roadmap-and-gaps.md`, `docs/execution/operating-doctrine.md`
 
 **Program stance:** BOS capability **expansion paused** — this sprint **unifies, hardens, and polishes** shipped assistive surfaces only.
 

@@ -8,7 +8,7 @@
  * Derives entirely from the Operational Context (`context.truth._inquiry_children`).
  * No drawer VM, no fetch, no fabricated values — fields render only when present.
  *
- * @see docs/platform/operator/card-archetypes.md (Collection)
+ * @see docs/platform/operator/universal-universal-card-archetypes.md (Collection)
  * @see docs/platform/operator/household-reference-card.md (Children vs Household)
  */
 

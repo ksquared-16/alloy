@@ -1,7 +1,7 @@
 /**
  * Permission keys and helpers for AI enrichment routes (Phase 2.5 — Card 11.5–11.6).
  * No DB writes; keys must exist in `permission_keys` + grants before strict mode can pass for non-legacy users.
- * @see docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";

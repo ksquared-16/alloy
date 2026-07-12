@@ -1,6 +1,6 @@
 # Admin authentication setup
 
-How **admin portal** auth works in `web/` today. Canonical product semantics: **`docs/system/roles-and-permissions.md`** (capabilities vs visibility, permission keys, scope).
+How **admin portal** auth works in `web/` today. Canonical product semantics: **`docs/archive/2026-06-superseded-system/roles-and-permissions.md`** (capabilities vs visibility, permission keys, scope).
 
 ---
 
@@ -29,7 +29,7 @@ Server code resolves **org**, **role keys**, **permission keys**, and **departme
 
 **Capabilities:** **`permissionKeys`** = union of **`role_permission_grants.permission_key`** where **`allowed = true`** for the user’s **`role_key`**s in the resolved org. Prefer checking **`permissionKeys`** (or helpers) for feature gates; do not assume a single role label encodes all behavior.
 
-**Visibility (CRM scope):** **`user_access_profiles`** (`department_scope`, `site_scope`). When **`restricted`**, allowed IDs come from **`user_department_access`** and **`user_site_access`** (sites reference **`locations`** with **`location_type = 'site'`**). **Missing profile** ⇒ both scopes behave as **`all`** (legacy transition). Enforcement is via **`getAdminAccessContextCached`** + **`web/lib/admin/accessScope.ts`** on routes that opt in — not every handler is scoped yet (**`docs/system/roles-and-permissions.md`**).
+**Visibility (CRM scope):** **`user_access_profiles`** (`department_scope`, `site_scope`). When **`restricted`**, allowed IDs come from **`user_department_access`** and **`user_site_access`** (sites reference **`locations`** with **`location_type = 'site'`**). **Missing profile** ⇒ both scopes behave as **`all`** (legacy transition). Enforcement is via **`getAdminAccessContextCached`** + **`web/lib/admin/accessScope.ts`** on routes that opt in — not every handler is scoped yet (**`docs/archive/2026-06-superseded-system/roles-and-permissions.md`**).
 
 ---
 
@@ -61,7 +61,7 @@ Layouts and **`adminAuth`** still expose one string **`role`** (**`admin`** or *
 | **`requireAdminOrOps()`** | **401** if **`getAdminAuth`** fails (no session / not **`portalEligible`**). If authenticated and portal-eligible, allows **both** admin and ops — it does **not** return **403** based on role; naming reflects “portal user allowed,” not “verify ops.” Prefer **`getAdminAccessContextCached`** + permission checks for new routes. |
 | **`getAdminContextCached`** | Org + compatibility **`role`** + **`userId`** for org-scoped admin APIs. |
 
-Many routes also use **`permissionKeys`** or dedicated RBAC checks (e.g. settings/users-roles). See **`docs/system/roles-and-permissions.md`** and route handlers.
+Many routes also use **`permissionKeys`** or dedicated RBAC checks (e.g. settings/users-roles). See **`docs/archive/2026-06-superseded-system/roles-and-permissions.md`** and route handlers.
 
 ---
 
@@ -119,5 +119,5 @@ Server may also read **`SUPABASE_URL`** / **`SUPABASE_ANON_KEY`** if set.
 
 ## Related docs
 
-- **`docs/system/roles-and-permissions.md`** — capabilities vs visibility, guardrails.
+- **`docs/archive/2026-06-superseded-system/roles-and-permissions.md`** — capabilities vs visibility, guardrails.
 - **`docs/system/configuration-system.md`** — settings/users-roles APIs and access tables.

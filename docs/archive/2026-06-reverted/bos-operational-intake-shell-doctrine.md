@@ -101,7 +101,7 @@ Silhouette exploration galleries are **closed**. Do not iterate shell shape with
 cd web && npm run screenshots:bos-operational-intake-shell-lock
 ```
 
-Assets: `docs/sprints/06_2026/assets/bos-operational-intake-shell-lock/`
+Assets: `docs/sprints/archive/06_2026/assets/bos-operational-intake-shell-lock/`
 
 ---
 

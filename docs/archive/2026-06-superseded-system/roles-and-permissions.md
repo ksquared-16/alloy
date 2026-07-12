@@ -54,7 +54,7 @@ Verified **2026-05** for Cards 1–6 (field policy, drawer validation, layout in
 
 ## Known gaps / risks
 
-- **Needs verification:** Exhaustive list of admin routes with vs without scope enforcement (grep-driven maintenance). Settings access audit: sprint **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** Card 7; control plane **`docs/system/configuration-system.md`**.
+- **Needs verification:** Exhaustive list of admin routes with vs without scope enforcement (grep-driven maintenance). Settings access audit: sprint **`docs/sprints/archive/05_2026/settings_record_ux_parity_sprint.md`** Card 7; control plane **`docs/system/configuration-system.md`**.
 
 ## AI enrichment + Agent specialists (Task Assist, Orchestrator)
 

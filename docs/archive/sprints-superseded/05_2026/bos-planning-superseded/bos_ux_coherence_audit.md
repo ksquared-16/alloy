@@ -1,6 +1,6 @@
 # BOS UX Coherence + Operational Intelligence Polish — Step 0 Audit
 
-**Path:** `docs/sprints/05_2026/bos_ux_coherence_audit.md`  
+**Path:** `docs/sprints/archive/05_2026/bos_ux_coherence_audit.md`  
 **Status:** Audit complete — superseded for execution by **[`bos_ux_coherence_sprint.md`](./bos_ux_coherence_sprint.md)** (Step 2)  
 **Date:** 2026-05-20  
 **Role:** Staff Product Designer · UX Systems Architect · Operational AI UX Auditor · AdminV2 Interaction Reviewer
@@ -11,9 +11,9 @@
 |-----|-------------------|
 | `docs/execution/operating-doctrine.md` | Doc/code parity, no parallel systems |
 | `docs/product/bos-foundation.md` | BOS capability map, lifecycle, permissions, session state |
-| `docs/system/workspace-system.md` | Queue truth, operational attention lanes, count semantics |
+| `docs/archive/2026-06-superseded-system/workspace-system.md` | Queue truth, operational attention lanes, count semantics |
 | `docs/system/configuration-system.md` | Four-plane settings, config-assist readiness |
-| `docs/system/actions-and-workflows.md` | Action placements vs execution; Workflow Assist spine |
+| `docs/archive/2026-06-superseded-system/actions-and-workflows.md` | Action placements vs execution; Workflow Assist spine |
 | `docs/execution/roadmap-and-gaps.md` | BOS expansion paused; demo vs production framing |
 
 **Prior BOS engineering audits (context, not duplicated):** `bos_standardization_audit.md`, `bos_standardization_migration.md`, `completed/bos_foundation_closeout_phase_3.md`, `agent_interaction_layer_v1.md`, `task_assist_v1_step0_audit.md`.
@@ -593,9 +593,9 @@ An informed operator can:
 ### Doctrine
 - `docs/execution/operating-doctrine.md`
 - `docs/product/bos-foundation.md`, `docs/product/ai-system.md` (stub)
-- `docs/system/workspace-system.md`, `configuration-system.md`, `actions-and-workflows.md`
+- `docs/archive/2026-06-superseded-system/workspace-system.md`, `configuration-system.md`, `actions-and-workflows.md`
 - `docs/execution/roadmap-and-gaps.md`
-- `docs/sprints/05_2026/agent_interaction_layer_v1.md`, `bos_standardization_audit.md`, `task_assist_v1_step0_audit.md`
+- `docs/sprints/archive/05_2026/agent_interaction_layer_v1.md`, `bos_standardization_audit.md`, `task_assist_v1_step0_audit.md`
 
 ### Orchestrator / thread
 - `web/app/adminV2/components/aiCommandSurface/*` (10 components)

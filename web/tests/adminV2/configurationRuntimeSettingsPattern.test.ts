@@ -82,7 +82,7 @@ describe("Configuration Runtime settings pattern rollout", () => {
     it("rollout doc and playwright settings-pattern spec exist", () => {
         expect(
             readFileSync(
-                resolve(root, "../docs/sprints/06_2026/configuration_runtime_settings_pattern_rollout.md"),
+                resolve(root, "../docs/sprints/archive/06_2026/configuration_runtime_settings_pattern_rollout.md"),
                 "utf8",
             ),
         ).toContain("Context → Queue → Workspace → BOS");

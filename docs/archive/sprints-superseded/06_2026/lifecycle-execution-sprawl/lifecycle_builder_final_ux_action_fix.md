@@ -1,6 +1,6 @@
 # Lifecycle Builder — Final UX Compression + Action Save Fix
 
-**Path:** `docs/sprints/06_2026/lifecycle_builder_final_ux_action_fix.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_builder_final_ux_action_fix.md`  
 **Date:** 2026-05-31  
 **Status:** Implemented
 

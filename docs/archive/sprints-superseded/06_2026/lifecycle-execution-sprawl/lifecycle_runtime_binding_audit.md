@@ -1,6 +1,6 @@
 # Lifecycle Runtime Binding Audit
 
-**Path:** `docs/sprints/06_2026/lifecycle_runtime_binding_audit.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_runtime_binding_audit.md`  
 **Status:** Audit only — **no fixes** in this document  
 **Date:** 2026-06-02  
 **Example under review:** Lifecycle **Lead Management**, stage **Lead**, status **New Lead**, work unit name **New Leads**
@@ -289,9 +289,9 @@ Use placeholders; resolve from DB for your org.
 
 ## 9. Related docs
 
-- `docs/sprints/06_2026/lifecycle_runtime_orchestration_audit.md` — workflows/actions (side effects), not queue binding
-- `docs/sprints/06_2026/lifecycle_actions_matrix_and_validation_cleanup.md` — builder actions + validation behavior
-- `docs/system/workspace-system.md` — workspace queue semantics (if present in repo)
+- `docs/sprints/archive/06_2026/lifecycle_runtime_orchestration_audit.md` — workflows/actions (side effects), not queue binding
+- `docs/sprints/archive/06_2026/lifecycle_actions_matrix_and_validation_cleanup.md` — builder actions + validation behavior
+- `docs/archive/2026-06-superseded-system/workspace-system.md` — workspace queue semantics (if present in repo)
 
 ---
 

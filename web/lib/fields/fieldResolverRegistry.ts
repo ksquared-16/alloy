@@ -6,7 +6,7 @@
  *
  * Stack: Registry → Resolver → Renderer → Builder → Publish → Available
  *
- * @see docs/sprints/07_2026/field-runtime-unification.md
+ * @see docs/sprints/archive/07_2026/field-runtime-unification.md
  */
 
 import { canonicalRefToRuleId, resolveRuleIdForCanonicalRef } from "@/lib/fields/fieldRegistryReferenceMatrix";

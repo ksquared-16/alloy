@@ -1,7 +1,7 @@
 /**
  * Readiness Engine — canonical evaluation entry (Phase 1 wrapper).
  * Wraps existing evaluateEffectiveRequirements without changing call sites yet.
- * @see docs/sprints/06_2026/readiness_engine_architecture_and_runtime_contract.md
+ * @see docs/sprints/archive/06_2026/readiness_engine_architecture_and_runtime_contract.md
  */
 
 import { evaluateEffectiveRequirements } from "@/lib/completion/evaluateEffectiveRequirements";

@@ -5,7 +5,7 @@
  * Relationship actions share the same actionKey / executor model; layout builder and BOS
  * read from this registry rather than maintaining parallel catalogs.
  *
- * @see docs/system/actions-and-workflows.md
+ * @see docs/archive/2026-06-superseded-system/actions-and-workflows.md
  */
 
 import type { ActionRegistryEntry } from "@/lib/admin/actions/actionDefinitionRegistry";

@@ -26,11 +26,11 @@ Alloy already ships a **multi-capability assistive layer** under AdminV2: an Orc
 | `docs/product/bos-foundation.md` | Route/env inventory (now stub → bos-foundation) |
 | `docs/product/bos-foundation.md` | **New** BOS canonical doc |
 | `docs/system/configuration-system.md` | BOS/config-agent readiness table |
-| `docs/system/actions-and-workflows.md` | Event/workflow guardrails |
-| `docs/system/api-contracts.md` | AI/agent route families |
-| `docs/system/workspace-system.md` | Queue ordering not AI-driven |
-| `docs/system/record-system.md` | Attention attach on entity GET |
-| `docs/system/roles-and-permissions.md` | `ai.enrichment.use`, workflow admin gates |
+| `docs/archive/2026-06-superseded-system/actions-and-workflows.md` | Event/workflow guardrails |
+| `docs/archive/2026-06-superseded-system/api-contracts.md` | AI/agent route families |
+| `docs/archive/2026-06-superseded-system/workspace-system.md` | Queue ordering not AI-driven |
+| `docs/archive/2026-06-superseded-system/record-system.md` | Attention attach on entity GET |
+| `docs/archive/2026-06-superseded-system/roles-and-permissions.md` | `ai.enrichment.use`, workflow admin gates |
 | `docs/execution/operating-doctrine.md` | Doc cap, behavior-change rules |
 | `docs/execution/roadmap-and-gaps.md` | AI pause / deprioritization |
 
@@ -46,13 +46,13 @@ Alloy already ships a **multi-capability assistive layer** under AdminV2: an Orc
 
 | File | Role |
 |------|------|
-| `docs/sprints/05_2026/ai_agents_v1.md` | Four-layer model, agent separation |
-| `docs/sprints/05_2026/ai_agents_v1_step0_audit.md` | Needs-attention resolver audit |
-| `docs/sprints/05_2026/agent_interaction_layer_v1.md` | Orchestrator shipped |
-| `docs/sprints/05_2026/task_assist_v1.md`, `task_assist_v1_1.md` | Task Assist scope |
-| `docs/sprints/05_2026/workflow_assist_v1.md` | Workflow Assist scope |
-| `docs/sprints/05_2026/configuration_layout_assist_v1.md` | Config proposals |
-| `docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md` | Enrichment foundation |
+| `docs/sprints/archive/05_2026/ai_agents_v1.md` | Four-layer model, agent separation |
+| `docs/sprints/archive/05_2026/ai_agents_v1_step0_audit.md` | Needs-attention resolver audit |
+| `docs/sprints/archive/05_2026/agent_interaction_layer_v1.md` | Orchestrator shipped |
+| `docs/sprints/archive/05_2026/task_assist_v1.md`, `task_assist_v1_1.md` | Task Assist scope |
+| `docs/sprints/archive/05_2026/workflow_assist_v1.md` | Workflow Assist scope |
+| `docs/sprints/archive/05_2026/configuration_layout_assist_v1.md` | Config proposals |
+| `docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md` | Enrichment foundation |
 
 ### Code (representative)
 

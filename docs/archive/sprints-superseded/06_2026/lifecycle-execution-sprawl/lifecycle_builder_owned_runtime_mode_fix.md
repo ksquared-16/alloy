@@ -1,6 +1,6 @@
 # Lifecycle Builder-Owned Runtime Mode Fix
 
-**Path:** `docs/sprints/06_2026/lifecycle_builder_owned_runtime_mode_fix.md`  
+**Path:** `docs/sprints/archive/06_2026/lifecycle_builder_owned_runtime_mode_fix.md`  
 **Status:** Implemented
 
 ## Problem

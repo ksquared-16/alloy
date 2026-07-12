@@ -14,7 +14,7 @@
  * These types describe normalized UI state derived from a command snapshot. The surface model
  * is read-only: it prepares UI state, it never executes mutations.
  *
- * @see docs/sprints/06_2026/command_surface_v1.md
+ * @see docs/sprints/archive/06_2026/command_surface_v1.md
  */
 
 import type { ActionBlocker, ActionPreview } from "@/lib/adminV2/actions/actionTypes";

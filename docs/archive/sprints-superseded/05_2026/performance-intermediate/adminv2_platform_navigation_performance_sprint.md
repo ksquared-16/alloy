@@ -14,7 +14,7 @@
 | [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md) | Locked `/dept` runtime reference |
 | [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md) | WU bootstrap parity plan |
 | [`adminv2_performance_scope_lock.md`](./adminv2_performance_scope_lock.md) | Premium UX north star |
-| [`docs/system/workspace-system.md`](../system/workspace-system.md) | Queue truth boundary |
+| [`docs/archive/2026-06-superseded-system/workspace-system.md`](../system/workspace-system.md) | Queue truth boundary |
 
 **Contract tests (must stay green):** `adminV2NavigationContracts`, `adminV2QueueRowClick`, `adminV2WorkUnitLaneLocalState`, `adminV2DrawerLoadingCoherence`, `adminV2LoadingGeometry`, `workUnitOperationalBootstrap`
 
@@ -338,7 +338,7 @@ Drawer continues to use `AdminV2DrawerLoadingState` — **do not merge** drawer 
 
 | Area | Paths |
 |------|-------|
-| Sprint doc | `docs/sprints/05_2026/adminv2_platform_navigation_performance_sprint.md` |
+| Sprint doc | `docs/sprints/archive/05_2026/adminv2_platform_navigation_performance_sprint.md` |
 | Transition helper | `web/lib/adminV2/navigationTransition.ts` (new), `web/lib/perf/markWorkUnitNavigationStart.ts`, `web/lib/perf/alloyPerfGlobal.ts` |
 | Route loading UI | `web/components/admin/workspace/AdminV2RouteLoadingState.tsx`, `workspaceRouteSkeletons.tsx`, `WorkspaceQuietLoadingReserve.tsx` |
 | Workspace | `web/app/adminV2/workspace/page.tsx`, `WorkspaceRootDepartmentGrid.tsx`, `WorkspaceRootColdShell.tsx`, `WorkspaceRootShell.tsx` |
@@ -371,7 +371,7 @@ Drawer continues to use `AdminV2DrawerLoadingState` — **do not merge** drawer 
 
 ## 8. References inspected
 
-**Docs:** `README.md`, `docs/README.md`, `docs/core/system-overview.md`, `docs/execution/operating-doctrine.md`, `adminv2_performance_phase1_navigation_and_interaction_contracts.md`, `adminv2_performance_phase2_load_path_architecture.md`, `adminv2_performance_phase5_visual_loading.md`, `completed/adminv2_dept_runtime_closeout_handoff.md`, `adminv2_work_unit_runtime_cards_1_3_plan.md`, `adminv2_performance_scope_lock.md`, `docs/system/workspace-system.md`
+**Docs:** `README.md`, `docs/README.md`, `docs/platform/foundation/system-overview.md`, `docs/execution/operating-doctrine.md`, `adminv2_performance_phase1_navigation_and_interaction_contracts.md`, `adminv2_performance_phase2_load_path_architecture.md`, `adminv2_performance_phase5_visual_loading.md`, `completed/adminv2_dept_runtime_closeout_handoff.md`, `adminv2_work_unit_runtime_cards_1_3_plan.md`, `adminv2_performance_scope_lock.md`, `docs/archive/2026-06-superseded-system/workspace-system.md`
 
 **Code:** `web/app/adminV2/workspace/**`, `web/components/admin/workspace/**`, `web/lib/adminV2/shellNavigation.ts`, `web/lib/workspace/loadDeptOperationalBootstrap.ts`, `web/lib/workspace/loadWorkUnitOperationalBootstrap.ts`, `web/lib/workspace/adminV2WorkspaceSessionCache.ts`, route `loading.tsx` files, `AdminV2RouteLoadingState.tsx` (unused on routes by design today)
 

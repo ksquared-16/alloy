@@ -1,6 +1,6 @@
 /**
  * Static catalog of shipped BOS capabilities (Phase 1 audit).
- * @see docs/sprints/05_2026/bos_standardization_audit.md
+ * @see docs/sprints/archive/05_2026/bos_standardization_audit.md
  */
 
 import type { BosCapabilityDefinition, BosCapabilityKey } from "@/lib/bos/bosCapability";

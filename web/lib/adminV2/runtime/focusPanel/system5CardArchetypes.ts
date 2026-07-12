@@ -1,6 +1,6 @@
 /**
  * System 5A — Universal Card Archetype registry.
- * @see docs/platform/operator/universal-card-archetypes.md
+ * @see docs/platform/operator/universal-universal-card-archetypes.md
  */
 
 import type { FocusPanelCardArchetype, FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";

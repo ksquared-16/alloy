@@ -20,7 +20,7 @@ const WORK_UNIT_SLUGS = (process.env.PARITY_SLUGS || "lifecycle-lead,new-leads,l
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-const OUT = path.join(__dirname, "../../../docs/sprints/06_2026/focus-panel-os-parity-pass");
+const OUT = path.join(__dirname, "../../../docs/sprints/archive/06_2026/focus-panel-os-parity-pass");
 const ROW_SELECTOR = "[data-alloy-os-compressed-row='true']";
 
 async function openFirstRecord(page: Page): Promise<string | null> {
