@@ -1,3 +1,10 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Alloy Visual Language
 
 **Status:** Canonical doctrine (June 2026). **Visual doctrine** — the bridge from the [Canonical Interaction Model](./canonical-interaction-model.md), [Interaction Grammar](./interaction-grammar.md), and [Operator Story](./operator-story.md) into the next design phase: **mockups**.
@@ -180,6 +187,21 @@ Enrollment, Billing, Attendance, Scheduling, Staffing, Subsidy, Compliance, POS,
 | Card / section / field authoring | [`./experience-builder-doctrine.md`](./experience-builder-doctrine.md) |
 | Typography & presentation (existing) | [`../../system/typography-and-presentation-doctrine.md`](../../system/typography-and-presentation-doctrine.md) |
 | Locked reveal / performance gates | [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md) |
+
+---
+
+## Executable token authority (code vs documentation)
+
+| Layer | Authority | Location |
+|-------|-----------|----------|
+| **Semantic visual doctrine** | This document and [`../../system/typography-and-presentation-doctrine.md`](../../system/typography-and-presentation-doctrine.md) | Meaning, hierarchy, color roles, metric philosophy |
+| **Workspace shell tokens** | Code | `web/components/workspace/doctrine.ts` barrel + workspace components |
+| **Motion tokens** | Code | `web/lib/motion/motionTokens.ts`, `:root` CSS vars in `globals.css` |
+| **Theme / Tailwind primitives** | Code | `@theme` and design tokens consumed by components |
+
+**Rule:** Documentation states *what* each visual role means and *when* to use it. Code owns literal token names, values, and exports. Do not duplicate full token tables in doctrine unless they are **generated** from a single source. When mockups or doctrine name a color role (e.g. Bend Pine for selection), implementation must map through the code-owned token surface — not ad-hoc hex in feature modules.
+
+`doctrine.ts` is the **executable workspace vocabulary** (layer names, frozen hierarchy, metric philosophy pointers). It links up to [`../core/navigation-and-workspace-doctrine.md`](../core/navigation-and-workspace-doctrine.md) for operational workspace doctrine; it does not replace this visual-language document.
 
 ---
 

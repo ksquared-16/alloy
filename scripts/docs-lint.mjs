@@ -33,7 +33,15 @@ const DOCS_ROOT_ALLOWED = new Set(["README.md"]);
 const GOVERNED_GLOBS = [
   /^docs\/README\.md$/,
   /^docs\/platform\//,
-  /^docs\/sprints\/active\/documentation-rebaseline-v2\//,
+  /^docs\/system\//,
+  /^docs\/product\//,
+];
+
+const ACTIVE_CANONICAL_PREFIXES = [
+  "docs/README.md",
+  "docs/platform/",
+  "docs/system/",
+  "docs/product/",
 ];
 
 const CANONICAL_LINK_SCOPES = [
@@ -146,9 +154,23 @@ export function resolveLink(fromFile, target, rootDir = ROOT) {
   if (!rawPath || rawPath === "#") return { kind: "anchor", exists: true, anchor };
   const fromDir = path.dirname(fromFile);
   let resolved = path.normalize(path.join(fromDir, rawPath)).split(path.sep).join("/");
-  if (resolved.endsWith("/")) resolved = `${resolved}README.md`;
+  if (resolved.endsWith("/")) {
+    const dirCandidates = [resolved, `${resolved}README.md`];
+    for (const candidate of dirCandidates) {
+      const abs = path.join(rootDir, candidate);
+      if (fs.existsSync(abs)) {
+        const stat = fs.statSync(abs);
+        if (stat.isDirectory() || (stat.isFile() && candidate.endsWith("README.md"))) {
+          return { kind: stat.isDirectory() ? "dir" : "file", exists: true, resolved: candidate, anchor };
+        }
+      }
+    }
+    resolved = `${resolved}README.md`;
+  }
   const candidates = [resolved];
-  if (!resolved.endsWith(".md")) candidates.push(`${resolved}.md`);
+  if (!resolved.endsWith(".md") && !resolved.endsWith(".ts") && !resolved.endsWith(".tsx")) {
+    candidates.push(`${resolved}.md`, `${resolved}.ts`, `${resolved}.tsx`);
+  }
   for (const candidate of candidates) {
     const abs = path.join(rootDir, candidate);
     if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
@@ -302,15 +324,15 @@ export function lintDocumentation(options = {}) {
   }
 
   for (const [base, paths] of basenameIndex.entries()) {
-    if (paths.length <= 1) continue;
-    const canonicalPaths = paths.filter((p) => p.startsWith("docs/platform/") || p.startsWith("docs/system/"));
-    if (canonicalPaths.length === 0) continue;
+    if (paths.length <= 1 || base === "README.md") continue;
+    const activePaths = paths.filter((p) => ACTIVE_CANONICAL_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix)));
+    if (activePaths.length < 2) continue;
     violations.push({
       type: "duplicate-basename",
-      file: canonicalPaths[0],
-      message: `Duplicate basename '${base}' in ${paths.length} files: ${paths.slice(0, 4).join(", ")}${paths.length > 4 ? "…" : ""}`,
+      file: activePaths[0],
+      message: `Duplicate basename '${base}' among active canonical docs: ${activePaths.join(", ")}`,
       blocking: false,
-      meta: { basename: base, paths },
+      meta: { basename: base, paths: activePaths },
     });
   }
 
