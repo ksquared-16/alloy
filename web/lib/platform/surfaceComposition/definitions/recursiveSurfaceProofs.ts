@@ -107,6 +107,9 @@ export const householdSurface: SurfaceSpec = {
                                     { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
                                     { key: "person.email", label: "Email", kind: "field", namespace: "person" },
                                     { key: "person.role_label", label: "Role", kind: "field", namespace: "person" },
+                                    { key: "person_child_relationship.relationship_type", label: "Relationship to Child", kind: "field", namespace: "person_child_relationship" },
+                                    { key: "person_child_relationship.priority", label: "Priority", kind: "field", namespace: "person_child_relationship" },
+                                    { key: "person_child_relationship.pickup_instructions", label: "Pickup Instructions", kind: "field", namespace: "person_child_relationship" },
                                 ],
                             },
                             {
@@ -272,6 +275,20 @@ export const childrenSurface: SurfaceSpec = {
                                 owner: "child_component",
                                 items: [
                                     { key: "child.documents_summary", label: "Documents", kind: "field", namespace: "child" },
+                                ],
+                            },
+                            {
+                                key: "emergency_contacts",
+                                label: "Emergency Contacts",
+                                purpose: "Emergency contacts for this child (canonical relationship instances).",
+                                owner: "child_component",
+                                items: [
+                                    { key: "person.primary_contact_name", label: "Name", kind: "field", namespace: "person" },
+                                    { key: "person.phone", label: "Phone", kind: "field", namespace: "person" },
+                                    { key: "person.email", label: "Email", kind: "field", namespace: "person" },
+                                    { key: "person_child_relationship.relationship_type", label: "Relationship to Child", kind: "field", namespace: "person_child_relationship" },
+                                    { key: "person_child_relationship.priority", label: "Priority", kind: "field", namespace: "person_child_relationship" },
+                                    { key: "person_child_relationship.pickup_instructions", label: "Pickup Instructions", kind: "field", namespace: "person_child_relationship" },
                                 ],
                             },
                             {

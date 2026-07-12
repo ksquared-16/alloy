@@ -44,7 +44,8 @@ export type SurfaceEntityNamespace =
     | "child"
     | "inquiry_child"
     | "queue_row"
-    | "concept";
+    | "concept"
+    | "person_child_relationship";
 
 /** A declarative condition gate (one grammar across every builder). */
 export type SurfaceConditionKind =

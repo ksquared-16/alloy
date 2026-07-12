@@ -88,6 +88,12 @@ const EVIDENCE_SECTION_CATALOG: Record<string, readonly PlatformSectionOption[]>
             description: "Medical information on file.",
         },
         {
+            groupKey: "emergency_contacts",
+            semantic: "emergency_contact",
+            label: "Emergency Contacts",
+            description: "Emergency contacts for this child.",
+        },
+        {
             groupKey: "pickup",
             semantic: "pickup",
             label: "Pickup",

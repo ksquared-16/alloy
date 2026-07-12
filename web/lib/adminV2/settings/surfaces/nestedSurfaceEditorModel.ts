@@ -83,6 +83,7 @@ export const OPTIONAL_NESTED_GROUP_KEYS: Partial<Record<string, readonly string[
         "custom_notes",
     ],
     [CHILDREN_SURFACE_ID]: [
+        "emergency_contacts",
         "medical",
         "documents",
         "pickup",
@@ -305,9 +306,11 @@ export function availableFieldsForNestedGroup(
         group ? fieldKeysForConfigurationPurpose(group, purpose) : selectedFieldKeys(config, groupKey),
     );
     const namespaces =
-        surfaceId === CHILDREN_SURFACE_ID && isEvidenceSection(surfaceId, groupKey)
-            ? (["child", "inquiry_child"] as const)
-            : def.acceptedNamespaces;
+        surfaceId === CHILDREN_SURFACE_ID && groupKey === "emergency_contacts"
+            ? (["person", "person_child_relationship"] as const)
+            : surfaceId === CHILDREN_SURFACE_ID && isEvidenceSection(surfaceId, groupKey)
+                ? (["child", "inquiry_child"] as const)
+                : def.acceptedNamespaces;
     return availableFieldsForNamespaces(namespaces, tenantFieldDefinitions).filter((f) => !selected.has(f.key));
 }
 
