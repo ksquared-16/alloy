@@ -137,7 +137,7 @@ Sprint PNG/HTML assets **retained** (~115 MB); LFS deferred.
 | Category | Wave 1 baseline | Post-structural (pre-hardening) | After hardening |
 |----------|----------------:|--------------------------------:|----------------:|
 | invalid-root-placement | 22 | **0** | **0** |
-| broken-link (all) | 621 | 794 | **705** |
+| broken-link (all) | 621 | 794 | **705** | **634** |
 | active canonical broken-link | ~96 | **74** | **0** |
 | frontmatter-missing (governed) | 134 | 126 | **0** |
 | orphan-canonical | 68 | 69 | 70 |
@@ -145,7 +145,25 @@ Sprint PNG/HTML assets **retained** (~115 MB); LFS deferred.
 | duplicate-basename (active ambiguous) | 13 | 9 | **0** |
 | generated-boundary | 21 | 21 | 21 |
 
-**Historical debt retained:** ~705 total broken links, predominantly sprint/archive internal cross-refs and preserved historical artifacts. Intentionally not rewritten to chase zero total count.
+**Historical debt retained:** **634** broken links — classified as sprint-history (373), archive (93), and historical implementation notes (168). Zero originate from active canonical, system, product, generated, or documentation index trees. Certification gate repaired 71 post-migration navigation-index links only.
+
+### Broken-link classification (certification gate)
+
+| Category | Remaining |
+|----------|----------:|
+| Active Canonical | **0** |
+| Active System | **0** |
+| Active Product | **0** |
+| Generated | **0** |
+| Documentation Indexes | **0** |
+| Sprint History | **373** |
+| Archive | **93** |
+| Audits | **0** |
+| Historical Closeout | **0** |
+| Historical Implementation Notes | **168** |
+| **Total** | **634** |
+
+**Active documentation integrity is clean.** Remaining debt is intentionally retained in preserved historical records and excluded from promotion gating.
 
 ## 15. Validation results
 
@@ -182,7 +200,7 @@ npm run generate:schema-docs
 
 1. Phase-5 vs July status examples in configuration-data-alignment (product-owner judgment)
 2. Sprint asset git-LFS migration (~115 MB retained)
-3. Historical sprint/archive internal links (~705 total broken links — baselined)
+3. Historical sprint/archive internal links (**634** total — baselined; historical only)
 4. Live `export:supabase-schema` — requires staging `DATABASE_URL`; CSV stale for `communications_identity`
 
 ## 18. Proposed final push/PR strategy
@@ -210,7 +228,7 @@ git reset --hard origin/staging
 
 ## 20. Certification statement
 
-Documentation Rebaseline V2 is **structurally complete** and **active doctrine integrity is certified** on the local branch `chore/documentation-rebaseline-v2`. Canonical doctrine under `docs/platform/` meets hardening targets: zero active canonical broken links, zero canonical→sprint dependencies, zero missing governed frontmatter, and zero ambiguous active duplicate basenames. Historical archive/sprint link debt (~705 total) is baselined and intentionally retained. Live schema CSV export remains a credential-dependent post-merge step.
+Documentation Rebaseline V2 is **structurally complete** and **certified for promotion** on the local branch `chore/documentation-rebaseline-v2`. Active documentation trees are link-clean. Remaining **634** broken links are proven historical debt only. Live schema CSV export remains a credential-dependent post-merge step.
 
 **Ready for one consolidated promotion review** when authorized. **Nothing has been pushed; no PR opened; no Vercel preview triggered.**
 

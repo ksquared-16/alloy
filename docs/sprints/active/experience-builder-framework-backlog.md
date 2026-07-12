@@ -179,6 +179,6 @@ Items below extend the drawer Experience Builder framework. They do **not** appl
 
 ## Related
 
-- [Experience Builder doctrine](../platform/operator/experience-builder-doctrine.md)
-- [Surface cloning plan](../platform/operator/experience-builder-surface-cloning-plan.md)
-- [Queue record doctrine](../system/queue-record-doctrine.md)
+- [Experience Builder doctrine](../../platform/operator/experience-builder-doctrine.md)
+- [Surface cloning plan](../../platform/operator/experience-builder-surface-cloning-plan.md)
+- [Queue record doctrine](../../system/queue-record-doctrine.md)

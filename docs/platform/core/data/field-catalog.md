@@ -1,3 +1,10 @@
+---
+owner: platform
+status: generated
+last_reviewed: 2026-07-12
+supersedes: []
+---
+
 # Canonical Field Catalog
 
 **Status:** Generated — do not hand-edit rows

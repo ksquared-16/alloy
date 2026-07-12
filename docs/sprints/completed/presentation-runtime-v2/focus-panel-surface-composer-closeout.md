@@ -3,8 +3,8 @@
 **Status:** Closeout (July 2026)  
 **Branch (ship):** `feat/focus-panel-surface-composer` (from `origin/staging` @ `c370469cd`)  
 **Companion doctrine:**
-[`../operator/focus-panel-composition-v2-and-editing.md`](../operator/focus-panel-composition-v2-and-editing.md) ·
-[`surface-composer.md`](./surface-composer.md)
+[`../../../platform/operator/focus-panel-composition-v2-and-editing.md`](../../../platform/operator/focus-panel-composition-v2-and-editing.md) ·
+[`../../../platform/experience/surface-composer.md`](../../../platform/experience/surface-composer.md)
 
 ---
 

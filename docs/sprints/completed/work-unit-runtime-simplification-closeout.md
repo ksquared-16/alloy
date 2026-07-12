@@ -3,8 +3,8 @@
 **Status: CLOSED — IMPLEMENTED, landed to `staging` (June 2026).** This is the single canonical record of the Runtime Simplification sprint: what landed, the runtime score, what remains, the lessons, and the runtime principles. The Runtime Architecture is now considered **stable** — treat the runtime as infrastructure, not an area requiring rediscovery. The next runtime sprint begins only when product experience identifies a concrete ownership domain that still needs simplification.
 
 Companion canonical docs (do not duplicate these — extend them):
-- [`operational-runtime-doctrine.md`](./operational-runtime-doctrine.md) — the 10 laws (governing constraints).
-- [`operational-runtime-topology.md`](./operational-runtime-topology.md) — how the runtime works today (descriptive map).
+- [`../../platform/runtime/operational-runtime-doctrine.md`](../../platform/runtime/operational-runtime-doctrine.md) — the 10 laws (governing constraints).
+- [`../../platform/foundation/os-runtime-map.md`](../../platform/foundation/os-runtime-map.md) — how the runtime works today (descriptive map).
 
 Governing principle (unchanged): **remove runtime.** Every batch left the runtime objectively smaller — fewer owners, providers, gates, compatibility paths — or moved ownership from the compat page to a canonical runtime module. Runtime flags are migration tools only (prove → merge → delete), never permanent product modes.
 

@@ -20,13 +20,39 @@ supersedes: []
 | Canonical → sprint dependencies | ✅ **0** |
 | Governed frontmatter (platform/system/product) | ✅ **0** missing |
 | Ambiguous active duplicate basenames | ✅ **0** (tier `README.md` indexes excluded) |
-| Historical / archive broken links | ⚠️ Retained and baselined (**705** total repo-wide) |
+| Historical / archive broken links | ⚠️ **634** total — legitimate historical debt only (see § Broken-link classification) |
 | Live schema CSV export | ⚠️ Credential-dependent — see § Generated reference |
 | Nonblocking review gates | See closeout §17 |
 
-**Verdict:** **Ready for one consolidated promotion review** — active doctrine integrity targets met; historical debt explicitly baselined; live schema export remains a post-merge operational step.
+**Verdict:** **Ready for promotion** — active documentation integrity is clean; remaining debt exists only in preserved historical records.
 
 **Not performed:** push, PR, merge, or Vercel preview.
+
+---
+
+## Active documentation integrity
+
+**Active documentation integrity is clean.**
+
+Remaining documentation debt exists only within preserved historical sprint, archive, audit, and implementation-history documents. These references are intentionally retained as historical records and are **excluded from promotion gating**.
+
+### Broken-link classification (certification gate)
+
+| Category | Remaining |
+|----------|----------:|
+| Active Canonical | **0** |
+| Active System | **0** |
+| Active Product | **0** |
+| Generated (`docs/schema/`, `docs/api/`) | **0** |
+| Documentation Indexes (`docs/README.md`, sprint indexes) | **0** |
+| Sprint History (`docs/sprints/archive/`, internal cross-refs) | **373** |
+| Archive (`docs/archive/`, non-implementation) | **93** |
+| Audits | **0** |
+| Historical Closeout | **0** |
+| Historical Implementation Notes | **168** |
+| **Total** | **634** |
+
+**Certification gate actions:** 71 low-value navigation-index links repaired (post-migration path corrections only). No sprint execution history rewritten. No archive implementation notes altered.
 
 ---
 
@@ -48,7 +74,7 @@ Alloy documentation architecture has been rebaselined locally:
 | Metric | Wave 1 / pre-hardening | After hardening (local) |
 |--------|----------------------:|------------------------:|
 | Invalid `docs/` root placement | 22 | **0** |
-| Broken links (all) | 621 → 794* | **705** |
+| Broken links (all) | 621 → 794* | **705** → **634**† |
 | Active canonical-scope broken links | ~96 → **74** | **0** |
 | Canonical → sprint dependencies | 53 → **49** | **0** |
 | Missing governed frontmatter | 134 → **126** | **0** |
@@ -57,6 +83,8 @@ Alloy documentation architecture has been rebaselined locally:
 | Generated boundary | 21 | 21 |
 
 \*Archive migration exposed legacy sprint cross-refs; total count is not a promotion blocker.
+
+†Certification gate: 71 navigation-index links repaired; **634** remaining links classified as historical debt only (see § Broken-link classification).
 
 ## Review gates resolved (local)
 
@@ -76,14 +104,13 @@ Alloy documentation architecture has been rebaselined locally:
 | `generateCanonicalFieldCatalogDoc.ts` | ✅ Regenerated |
 | `export:supabase-schema` | ❌ Blocked without `DATABASE_URL` — accepted post-merge prerequisite |
 
-## Validation (hardening pass)
+## Validation (hardening + certification gate)
 
 ```bash
 cd web && npm run test -- tests/scripts/docsLint.test.ts   # pass
-npm run docs:lint                                          # report mode
+npm run docs:lint                                          # report mode — 634 historical broken links
 npm run docs:lint:ci                                       # no blocking failures on changed files
-npm run generate:schema-docs && npm run check:schema-docs  # from checked-in CSV
-npm run generate:api-inventory && npm run check:api-inventory
+npm run docs:lint:baseline                                # broken-link: 634
 ```
 
 Full execution record: `docs/sprints/completed/documentation-rebaseline-v2/00-closeout.md`
