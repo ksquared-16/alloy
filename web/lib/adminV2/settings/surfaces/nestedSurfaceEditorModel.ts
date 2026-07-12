@@ -295,10 +295,15 @@ export function availableFieldsForNestedGroup(
     groupKey: string,
     config: NestedSurfaceConfig,
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+    options?: { tier?: IdentityFieldTier },
 ): AvailableField[] {
     const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
     if (!def) return [];
-    const selected = new Set(selectedFieldKeys(config, groupKey));
+    const group = config.groups.find((g) => g.key === groupKey);
+    const purpose = purposeFromTierArg(options?.tier);
+    const selected = new Set(
+        group ? fieldKeysForConfigurationPurpose(group, purpose) : selectedFieldKeys(config, groupKey),
+    );
     const namespaces =
         surfaceId === CHILDREN_SURFACE_ID && isEvidenceSection(surfaceId, groupKey)
             ? (["child", "inquiry_child"] as const)
@@ -667,14 +672,21 @@ function unpairOrphanedHalfFieldsForPurpose(
     purpose: Exclude<IdentityConfigurationPurpose, "evidence">,
     keys: readonly string[],
 ): NestedSurfaceConfig {
-    if (purpose !== "summary") return config;
+    void purpose;
     return unpairOrphanedHalfFields(config, groupKey, keys);
 }
 
 /**
- * Apply a visual drag-drop onto the layout surface.
+ * Apply a visual drag-drop onto the layout surface for one disclosure tier.
+ * Active Builder purpose maps to targetTier:
+ *   Summary Fields → summary
+ *   Context Facts → context_fact
+ *   Detail Fields → details
+ *
  * - `beside` — pair dragged field with target on the same row (both half).
  * - `below` — move dragged field to a new full row after target's row.
+ *
+ * Evidence Collections do not use this path.
  */
 export function applyNestedSurfaceFieldDrop(
     config: NestedSurfaceConfig,
@@ -682,9 +694,13 @@ export function applyNestedSurfaceFieldDrop(
     draggedKey: string,
     targetKey: string,
     zone: NestedSurfaceFieldDropZone,
+    options?: { tier?: IdentityFieldTier },
 ): NestedSurfaceConfig {
     if (draggedKey === targetKey) return config;
-    const keys = selectedFieldKeys(config, groupKey);
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return config;
+    const purpose = purposeFromTierArg(options?.tier);
+    const keys = fieldKeysForConfigurationPurpose(group, purpose);
     if (keys.indexOf(draggedKey) < 0 || keys.indexOf(targetKey) < 0) return config;
 
     if (zone === "beside") {
@@ -696,10 +712,10 @@ export function applyNestedSurfaceFieldDrop(
         if (targetPos < 0) return config;
         const reordered = [...withoutDragged];
         reordered.splice(targetPos + 1, 0, draggedKey);
-        let next = patchGroupFieldKeys(config, groupKey, reordered);
+        let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, reordered);
         next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "half");
         next = setFieldLayoutWidthInNestedGroup(next, groupKey, targetKey, "half");
-        return unpairOrphanedHalfFields(next, groupKey, reordered);
+        return unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
     }
 
     const layoutFor = (fieldKey: string) => fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey);
@@ -714,9 +730,9 @@ export function applyNestedSurfaceFieldDrop(
     const reordered = [...withoutDragged];
     reordered.splice(insertAfter + 1, 0, draggedKey);
 
-    let next = patchGroupFieldKeys(config, groupKey, reordered);
+    let next = patchGroupFieldKeysForPurpose(config, groupKey, purpose, reordered);
     next = setFieldLayoutWidthInNestedGroup(next, groupKey, draggedKey, "full");
-    return unpairOrphanedHalfFields(next, groupKey, reordered);
+    return unpairOrphanedHalfFieldsForPurpose(next, groupKey, purpose, reordered);
 }
 
 export function fieldShowLabelForNestedGroup(

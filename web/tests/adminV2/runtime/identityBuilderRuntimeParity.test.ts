@@ -11,6 +11,9 @@ import {
     CHILDREN_SURFACE_ID,
     identityConfigurationFieldKeys,
     setNestedGroupEnabled,
+    applyNestedSurfaceFieldDrop,
+    fieldLayoutWidthForNestedGroup,
+    reconcileNestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     buildChildIdentityRecordVM,
@@ -173,5 +176,41 @@ describe("identity builder/runtime parity fixture", () => {
             builderPreview.flatMap((row) => row.cells).map((cell) => cell.fieldRef),
         );
         expect(vm.evidenceCollections?.[0]?.key).toBe("medical");
+    });
+    it("Builder and runtime layout match for every tier after drop + reconcile", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.employer", { tier: "context_fact" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.role_label", { tier: "context_fact" });
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "primary_contact",
+            "person.role_label",
+            "person.employer",
+            "beside",
+            { tier: "context_fact" },
+        );
+        config = addFieldToNestedGroup(config, "primary_contact", "person.notes", { tier: "details" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line1", { tier: "details" });
+        config = applyNestedSurfaceFieldDrop(
+            config,
+            "primary_contact",
+            "person.address_line1",
+            "person.notes",
+            "beside",
+            { tier: "details" },
+        );
+
+        const published = reconcileNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID, config);
+        for (const purpose of ["summary", "context_facts", "details"] as const) {
+            expect(identityConfigurationFieldKeys(published, "primary_contact", purpose)).toEqual(
+                identityConfigurationFieldKeys(config, "primary_contact", purpose),
+            );
+        }
+        expect(fieldLayoutWidthForNestedGroup(published, "primary_contact", "person.employer")).toBe(
+            fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.employer"),
+        );
+        expect(fieldLayoutWidthForNestedGroup(published, "primary_contact", "person.notes")).toBe(
+            fieldLayoutWidthForNestedGroup(config, "primary_contact", "person.notes"),
+        );
     });
 });

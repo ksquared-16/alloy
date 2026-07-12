@@ -9,17 +9,20 @@ import {
     availableFieldsForNestedGroup,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 
 type Props = {
     surfaceId: string;
     groupKey: string;
+    /** Active disclosure tier for identity layers. */
+    tier?: IdentityFieldTier;
     className?: string;
 };
 
 /** One Add field control per editable region — shared by layout surface and household groups. */
-export default function NestedSurfaceAddField({ surfaceId, groupKey, className = "" }: Props) {
+export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, className = "" }: Props) {
     const composer = useFocusPanelComposer();
     const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
     const [addOpen, setAddOpen] = useState(false);
@@ -35,9 +38,9 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, className =
     const available = useMemo(
         () =>
             config && composing
-                ? availableFieldsForNestedGroup(surfaceId, groupKey, config, tenantFieldDefinitions)
+                ? availableFieldsForNestedGroup(surfaceId, groupKey, config, tenantFieldDefinitions, { tier })
                 : [],
-        [config, composing, surfaceId, groupKey, tenantFieldDefinitions],
+        [config, composing, surfaceId, groupKey, tenantFieldDefinitions, tier],
     );
 
     const mutate = useCallback(
@@ -78,7 +81,7 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, className =
                             className="fp-inline-field-library__item"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                mutate(addFieldToNestedGroup(config, groupKey, f.key));
+                                mutate(addFieldToNestedGroup(config, groupKey, f.key, { tier }));
                                 setAddOpen(false);
                             }}
                         >

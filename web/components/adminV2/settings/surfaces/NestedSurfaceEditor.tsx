@@ -31,10 +31,18 @@ import {
     type NestedSurfaceConfig,
     type NestedSurfaceGroupConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import {
+    buildIdentityBuilderBreadcrumb,
+    initialIdentityBuilderNavigation,
+    identityBuilderPushPurpose,
+    navigateIdentityBuilderBreadcrumb,
+    type IdentityConfigurationPurpose,
+} from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import IdentityBuilderDrillIn from "@/components/adminV2/settings/surfaces/composer/IdentityBuilderDrillIn";
+import IdentityBuilderBreadcrumb from "@/components/adminV2/settings/surfaces/composer/IdentityBuilderBreadcrumb";
 import IdentityContextFactsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityContextFactsPanel";
 import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
+import IdentityNestedFieldLayoutPanel from "@/components/adminV2/settings/surfaces/composer/IdentityNestedFieldLayoutPanel";
 import {
     HOUSEHOLD_CONTACT_SURFACE_ID,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
@@ -98,6 +106,59 @@ export default function NestedSurfaceEditor({
         if (activeConfigPurpose === "details") return "details" as const;
         return "summary" as const;
     }, [activeConfigPurpose, isIdentitySurface]);
+
+    const builderNavigation = useMemo(() => {
+        let state = initialIdentityBuilderNavigation(surfaceId, nestedSurfaceLabel(surfaceId));
+        if (!isIdentitySurface || !selectedGroupKey) return state;
+        const groupLabel = groupDefsFor(surfaceId).find((g) => g.key === selectedGroupKey)?.label;
+        return identityBuilderPushPurpose(state, {
+            kind: "purpose",
+            surfaceId,
+            groupKey: selectedGroupKey,
+            purpose: activeConfigPurpose,
+            groupLabel,
+        });
+    }, [activeConfigPurpose, isIdentitySurface, selectedGroupKey, surfaceId]);
+
+    const breadcrumbSegments = useMemo(
+        () => (isIdentitySurface ? buildIdentityBuilderBreadcrumb(builderNavigation) : []),
+        [builderNavigation, isIdentitySurface],
+    );
+
+    const handleBreadcrumbNavigate = useCallback(
+        (frameIndex: number) => {
+            const next = navigateIdentityBuilderBreadcrumb(builderNavigation, frameIndex);
+            const frame = next.stack[next.stack.length - 1];
+            setSelectedFieldId(null);
+            if (!frame || frame.kind === "surface") {
+                setSelectedGroupKey(null);
+                setActiveConfigPurpose("summary");
+                return;
+            }
+            setSelectedGroupKey(frame.groupKey);
+            setActiveConfigPurpose(frame.purpose);
+        },
+        [builderNavigation],
+    );
+
+    const handleIdentityBack = useCallback(() => {
+        setSelectedFieldId(null);
+        if (activeConfigPurpose !== "summary") {
+            const order: IdentityConfigurationPurpose[] = [
+                "summary",
+                "context_facts",
+                "details",
+                "evidence",
+            ];
+            const idx = order.indexOf(activeConfigPurpose);
+            if (idx > 0) {
+                setActiveConfigPurpose(order[idx - 1]!);
+                return;
+            }
+        }
+        setSelectedGroupKey(null);
+        setActiveConfigPurpose("summary");
+    }, [activeConfigPurpose]);
 
     const [contactConfigState, setContactConfigState] = useState<NestedSurfaceConfig | null>(null);
 
@@ -330,6 +391,13 @@ export default function NestedSurfaceEditor({
                     >
                         {selectedPlacedField ?
                             <div className="process-config-setup-card p-4">
+                                {isIdentitySurface ?
+                                    <IdentityBuilderBreadcrumb
+                                        className="mb-3"
+                                        segments={breadcrumbSegments}
+                                        onNavigate={handleBreadcrumbNavigate}
+                                    />
+                                :   null}
                                 <p className="config-typo-sublabel mb-3">
                                     {groupDefs.find((g) => g.key === selectedPlacedField.groupKey)?.label}
                                 </p>
@@ -462,25 +530,32 @@ export default function NestedSurfaceEditor({
                         : selectedGroupKey && selectedGroupConfig ?
                             <div className="space-y-3">
                                 {isIdentitySurface ?
-                                    <IdentityBuilderDrillIn
-                                        activePurpose={activeConfigPurpose}
-                                        onSelectPurpose={setActiveConfigPurpose}
-                                        onBack={
-                                            activeConfigPurpose !== "summary"
-                                                ? () => {
-                                                      const order: IdentityConfigurationPurpose[] = [
-                                                          "summary",
-                                                          "context_facts",
-                                                          "details",
-                                                          "evidence",
-                                                      ];
-                                                      const idx = order.indexOf(activeConfigPurpose);
-                                                      if (idx > 0) setActiveConfigPurpose(order[idx - 1]!);
-                                                  }
-                                                : undefined
-                                        }
-                                        groupLabel={
-                                            groupDefs.find((g) => g.key === selectedGroupKey)?.label ?? selectedGroupKey
+                                    <>
+                                        <IdentityBuilderBreadcrumb
+                                            segments={breadcrumbSegments}
+                                            onNavigate={handleBreadcrumbNavigate}
+                                        />
+                                        <IdentityBuilderDrillIn
+                                            activePurpose={activeConfigPurpose}
+                                            onSelectPurpose={setActiveConfigPurpose}
+                                            onBack={handleIdentityBack}
+                                            groupLabel={
+                                                groupDefs.find((g) => g.key === selectedGroupKey)?.label
+                                                ?? selectedGroupKey
+                                            }
+                                        />
+                                    </>
+                                :   null}
+                                {isIdentitySurface && activeConfigPurpose === "summary" ?
+                                    <IdentityNestedFieldLayoutPanel
+                                        surfaceId={surfaceId}
+                                        groupKey={selectedGroupKey}
+                                        config={config}
+                                        purpose="summary"
+                                        onChange={mutate}
+                                        onOpenLibrary={() => openLibrary(selectedGroupKey)}
+                                        onSelectField={(fieldKey) =>
+                                            setSelectedFieldId(`${selectedGroupKey}:${fieldKey}`)
                                         }
                                     />
                                 :   null}
@@ -489,7 +564,24 @@ export default function NestedSurfaceEditor({
                                         surfaceId={surfaceId}
                                         groupKey={selectedGroupKey}
                                         config={config}
+                                        onChange={mutate}
                                         onOpenLibrary={() => openLibrary(selectedGroupKey)}
+                                        onSelectField={(fieldKey) =>
+                                            setSelectedFieldId(`${selectedGroupKey}:${fieldKey}`)
+                                        }
+                                    />
+                                :   null}
+                                {isIdentitySurface && activeConfigPurpose === "details" ?
+                                    <IdentityNestedFieldLayoutPanel
+                                        surfaceId={surfaceId}
+                                        groupKey={selectedGroupKey}
+                                        config={config}
+                                        purpose="details"
+                                        onChange={mutate}
+                                        onOpenLibrary={() => openLibrary(selectedGroupKey)}
+                                        onSelectField={(fieldKey) =>
+                                            setSelectedFieldId(`${selectedGroupKey}:${fieldKey}`)
+                                        }
                                     />
                                 :   null}
                                 {isIdentitySurface && activeConfigPurpose === "evidence" ?
@@ -500,7 +592,7 @@ export default function NestedSurfaceEditor({
                                         onChange={mutate}
                                     />
                                 :   null}
-                                {!(isIdentitySurface && (activeConfigPurpose === "context_facts" || activeConfigPurpose === "evidence")) ?
+                                {!isIdentitySurface ?
                                     <NestedSurfaceGroupInspector
                                         surfaceId={surfaceId}
                                         groupDef={groupDefs.find((g) => g.key === selectedGroupKey)!}

@@ -192,7 +192,7 @@ export function identityBuilderFrameTitle(frame: IdentityBuilderFrame): string {
     }
 }
 
-function purposeLabel(purpose: IdentityConfigurationPurpose): string {
+export function identityConfigurationPurposeLabel(purpose: IdentityConfigurationPurpose): string {
     switch (purpose) {
         case "summary":
             return "Summary Fields";
@@ -203,6 +203,74 @@ function purposeLabel(purpose: IdentityConfigurationPurpose): string {
         case "evidence":
             return "Evidence Collections";
     }
+}
+
+/** @deprecated Use identityConfigurationPurposeLabel. */
+function purposeLabel(purpose: IdentityConfigurationPurpose): string {
+    return identityConfigurationPurposeLabel(purpose);
+}
+
+export type IdentityBuilderBreadcrumbSegment = {
+    id: string;
+    label: string;
+    /** Frame index to navigate to; null = current (not clickable). */
+    frameIndex: number | null;
+};
+
+/**
+ * Operator-facing drill breadcrumb derived from IdentityBuilderNavigationState.
+ * Shape: Surface → Purpose → Section
+ */
+export function buildIdentityBuilderBreadcrumb(
+    state: IdentityBuilderNavigationState,
+): IdentityBuilderBreadcrumbSegment[] {
+    const surface = state.stack.find((frame) => frame.kind === "surface");
+    const purposeFrame = [...state.stack].reverse().find(
+        (frame) => frame.kind === "purpose" || frame.kind === "nested-purpose",
+    );
+    const segments: IdentityBuilderBreadcrumbSegment[] = [];
+    const surfaceIndex = state.stack.findIndex((frame) => frame.kind === "surface");
+    segments.push({
+        id: "surface",
+        label: surface?.kind === "surface" ? (surface.label ?? "Identity") : "Identity",
+        frameIndex: surfaceIndex >= 0 ? surfaceIndex : 0,
+    });
+    if (!purposeFrame) {
+        segments[segments.length - 1]!.frameIndex = null;
+        return segments;
+    }
+    const purposeIndex = state.stack.findIndex((frame) => frame === purposeFrame);
+    segments.push({
+        id: `purpose:${purposeFrame.purpose}`,
+        label: identityConfigurationPurposeLabel(purposeFrame.purpose),
+        frameIndex: purposeIndex,
+    });
+    const groupLabel =
+        purposeFrame.kind === "nested-purpose"
+            ? (purposeFrame.nestedGroupLabel ?? purposeFrame.nestedGroupKey)
+            : (purposeFrame.groupLabel ?? purposeFrame.groupKey);
+    const looksLikeKey = /^[a-z0-9_]+$/.test(groupLabel) && groupLabel.includes("_");
+    segments.push({
+        id: "section",
+        label: looksLikeKey
+            ? groupLabel.replace(/_/g, " ").replace(/\w/g, (c) => c.toUpperCase())
+            : groupLabel,
+        frameIndex: null,
+    });
+    // Only the current (last) segment is non-navigable; earlier ones stay navigable.
+    for (let i = 0; i < segments.length - 1; i++) {
+        if (segments[i]!.frameIndex == null) segments[i]!.frameIndex = i === 0 ? surfaceIndex : purposeIndex;
+    }
+    return segments;
+}
+
+/** Truncate navigation stack to a breadcrumb frame index. */
+export function navigateIdentityBuilderBreadcrumb(
+    state: IdentityBuilderNavigationState,
+    frameIndex: number,
+): IdentityBuilderNavigationState {
+    if (frameIndex < 0 || frameIndex >= state.stack.length) return state;
+    return { stack: state.stack.slice(0, frameIndex + 1) };
 }
 
 /** Normalize persisted placements — rewrite legacy tiers. */

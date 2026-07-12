@@ -48,7 +48,7 @@ export default function IdentityBuilderDrillIn({
                         {PURPOSE_LABELS[activePurpose]}
                     </p>
                 </div>
-                {onBack && prevPurpose ?
+                {onBack ?
                     <button type="button" className="text-[11px] font-medium text-alloy-pine hover:underline" onClick={onBack}>
                         ← Back
                     </button>

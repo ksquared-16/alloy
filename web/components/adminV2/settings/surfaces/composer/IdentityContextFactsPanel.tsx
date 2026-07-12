@@ -9,12 +9,15 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { composeSummaryAndContextFacts } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import type { IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import IdentityNestedFieldLayoutPanel from "@/components/adminV2/settings/surfaces/composer/IdentityNestedFieldLayoutPanel";
 
 type Props = {
     surfaceId: string;
     groupKey: string;
     config: NestedSurfaceConfig;
+    onChange: (next: NestedSurfaceConfig) => void;
     onOpenLibrary: () => void;
+    onSelectField?: (fieldKey: string) => void;
     className?: string;
 };
 
@@ -40,12 +43,14 @@ function stubRows(config: NestedSurfaceConfig, surfaceId: string, groupKey: stri
     }));
 }
 
-/** Context Facts editor — inherited Summary read-only + incremental facts + composed preview. */
+/** Context Facts editor — inherited Summary read-only + incremental facts layout + composed preview. */
 export default function IdentityContextFactsPanel({
     surfaceId,
     groupKey,
     config,
+    onChange,
     onOpenLibrary,
+    onSelectField,
     className,
 }: Props) {
     const summaryKeys = identityConfigurationFieldKeys(config, groupKey, "summary");
@@ -64,9 +69,9 @@ export default function IdentityContextFactsPanel({
                 <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
                     Inherited from Summary
                 </h4>
-                {summaryKeys.length === 0 ?
+                {summaryKeys.length === 0 ? (
                     <p className="config-typo-sublabel">No summary fields configured yet.</p>
-                :   (
+                ) : (
                     <ul className="space-y-1 rounded-lg border border-dashed border-alloy-stone/20 bg-alloy-stone/5 p-3">
                         {summaryKeys.map((fieldRef) => (
                             <li key={fieldRef} className="text-[12px] text-alloy-midnight/55">
@@ -78,25 +83,18 @@ export default function IdentityContextFactsPanel({
             </section>
 
             <section>
-                <div className="mb-2 flex items-center justify-between gap-2">
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight">
-                        Context Facts
-                    </h4>
-                    <button type="button" className="text-[11px] font-medium text-alloy-pine hover:underline" onClick={onOpenLibrary}>
-                        + Add fact
-                    </button>
-                </div>
-                {factKeys.length === 0 ?
-                    <p className="config-typo-sublabel">No incremental context facts yet.</p>
-                :   (
-                    <ul className="space-y-1">
-                        {factKeys.map((fieldRef) => (
-                            <li key={fieldRef} className="text-[12px] text-alloy-midnight">
-                                {labelForField(surfaceId, groupKey, fieldRef, config)}
-                            </li>
-                        ))}
-                    </ul>
-                )}
+                <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight">
+                    Context Facts
+                </h4>
+                <IdentityNestedFieldLayoutPanel
+                    surfaceId={surfaceId}
+                    groupKey={groupKey}
+                    config={config}
+                    purpose="context_facts"
+                    onChange={onChange}
+                    onSelectField={onSelectField}
+                    onOpenLibrary={onOpenLibrary}
+                />
             </section>
 
             <section>
