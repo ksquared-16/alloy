@@ -31,6 +31,10 @@ import {
 import { emitIntakeCaseLifecycleEventsSafe } from "@/lib/forms/workflow/intakeCaseLifecycleEvents";
 import { maybeOpenProcessingCaseFromPacketCompletionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromPacketCompletionSafe";
 import { maybeOpenProcessingCaseFromFormSubmissionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromFormSubmissionSafe";
+import { maybeRunFormIdentityShadowSafe } from "@/lib/pos/processingIdentity/formIdentityShadow";
+import { formIntakeLocationId } from "@/lib/pos/processingIdentity/formIntakeShadowHelpers";
+import type { ApplyFormIntakeSafeResult } from "@/lib/forms/intake/applyFormIntakeSafe";
+import type { FormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
 import {
     emitOpportunityEnrollmentPacketCompletedProjectionSafe,
     emitOpportunityEnrollmentPacketOpenedSafe,
@@ -204,6 +208,8 @@ export async function POST(
     let customerId = sub.customer_id;
     let customerMemberId = sub.customer_member_id;
     let opportunityId = sub.opportunity_id;
+    let shadowIntakeMeta: FormIntakeMeta | null = null;
+    let shadowLegacyIntakeResult: ApplyFormIntakeSafeResult | null = null;
 
     const metaRecord = ctx.linkMetadata as Record<string, unknown> | undefined;
     const launchMode = typeof metaRecord?.form_context_mode === "string" ? metaRecord.form_context_mode.trim() : "";
@@ -292,6 +298,8 @@ export async function POST(
                 customerId = intakeResult.customer_id;
                 customerMemberId = intakeResult.customer_member_id;
                 opportunityId = intakeResult.opportunity_id;
+                shadowIntakeMeta = built.intake;
+                shadowLegacyIntakeResult = intakeResult;
                 const cleanedMeta = {
                     ...((finalPayload.meta ?? {}) as Record<string, unknown>),
                     ...intakeResult.outcomeMeta,
@@ -422,6 +430,16 @@ export async function POST(
             versionMetadata: versionRow?.metadata,
             linkMetadata: ctx.linkMetadata,
         });
+
+        if (shadowIntakeMeta && shadowLegacyIntakeResult) {
+            await maybeRunFormIdentityShadowSafe(supabase, {
+                orgId: ctx.orgId,
+                submissionId,
+                intakeMeta: shadowIntakeMeta,
+                legacyResult: shadowLegacyIntakeResult,
+                locationId: formIntakeLocationId(shadowIntakeMeta),
+            });
+        }
     }
 
     if (linkRequiresLeadCapture(metaRecord)) {
