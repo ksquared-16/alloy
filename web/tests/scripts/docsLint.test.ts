@@ -19,8 +19,9 @@ last_reviewed: 2026-07-12
 supersedes: []
 ---
 # Title`);
-        expect(parsed.data?.owner).toBe("platform");
-        expect(parsed.data?.status).toBe("canonical");
+        const data = parsed.data as Record<string, unknown> | null;
+        expect(data?.owner).toBe("platform");
+        expect(data?.status).toBe("canonical");
         expect(parsed.error).toBeNull();
     });
 
@@ -31,8 +32,9 @@ status: superseded
 last_reviewed: 2026-07-12
 ---
 # Title`);
-        expect(parsed.data?.status).toBe("superseded");
-        expect(parsed.data?.superseded_by).toBeUndefined();
+        const data = parsed.data as Record<string, unknown> | null;
+        expect(data?.status).toBe("superseded");
+        expect(data?.superseded_by).toBeUndefined();
     });
 
     it("resolves relative markdown links", () => {
