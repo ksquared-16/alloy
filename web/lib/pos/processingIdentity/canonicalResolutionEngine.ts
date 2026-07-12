@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 import { generateHouseholdGraphCandidates } from "@/lib/identity";
+import type { IdentityCandidate } from "@/lib/identity";
+import { IDENTITY_RESOLVER_VERSION } from "@/lib/identity";
 import { resolveIntakeRecordResolution } from "@/lib/intake/resolve/resolveIntakeRecordResolution";
 import { defaultActionForConfidence } from "@/lib/intake/resolve/buildProposals";
 import type { IntakeRecordMatchConfidence } from "@/lib/intake/resolve/types";
@@ -48,6 +50,145 @@ export type CanonicalResolutionRunResult = {
     factsPersisted: boolean;
     resolutionsPersisted: boolean;
 };
+
+function guardiansFromHousehold(household: IntakeHouseholdCandidate) {
+    return household.parents_guardians?.length ? household.parents_guardians : household.parents;
+}
+
+function noMatchCandidate(input: {
+    subjectRef: string;
+    entityType: IdentityCandidate["entityType"];
+    displayName?: string;
+}): IdentityCandidate {
+    return {
+        subjectRef: input.subjectRef,
+        entityType: input.entityType,
+        recordId: "none",
+        confidenceBand: "excluded",
+        signals: [],
+        blockingConflicts: [],
+        explanation: "No existing record matched intake subject.",
+        resolverVersion: IDENTITY_RESOLVER_VERSION,
+        displayName: input.displayName ?? input.subjectRef,
+    };
+}
+
+function provisionalForSubject(
+    household: IntakeHouseholdCandidate,
+    subjectRef: string,
+    role: string,
+): Record<string, unknown> {
+    const guardians = guardiansFromHousehold(household);
+    if (role === "parent") {
+        const parent = guardians.find((p) => p.candidate_id === subjectRef);
+        if (!parent) return {};
+        return {
+            first_name: parent.first_name,
+            last_name: parent.last_name,
+            email: parent.emails?.[0] ?? null,
+            phone: parent.phones?.[0] ?? null,
+        };
+    }
+    if (role === "child") {
+        const child = household.children.find((c) => c.candidate_id === subjectRef);
+        if (!child) return {};
+        return {
+            display_name: [child.first_name, child.last_name].filter(Boolean).join(" ").trim() || "Child",
+            dob: child.dob ?? null,
+            first_name: child.first_name,
+            last_name: child.last_name,
+        };
+    }
+    if (role === "household") {
+        const primary = guardians[0];
+        const householdName =
+            primary ?
+                `${primary.last_name ?? "Household"}`.trim() || "Household"
+            :   "Household";
+        return { household_name: householdName };
+    }
+    if (role === "lead") {
+        const primary = guardians[0];
+        const name =
+            primary ?
+                `${primary.first_name ?? ""} ${primary.last_name ?? ""}`.trim() || "Lead"
+            :   "Lead";
+        return { name };
+    }
+    return {};
+}
+
+/** Ensure every intake subject gets a resolution row, even when candidate discovery returns no_match. */
+function buildResolutionSubjects(
+    household: IntakeHouseholdCandidate,
+    graph: Awaited<ReturnType<typeof generateHouseholdGraphCandidates>>,
+): Array<{ ref: string; role: string; candidates: IdentityCandidate[] }> {
+    const subjects: Array<{ ref: string; role: string; candidates: IdentityCandidate[] }> = [];
+    const guardians = guardiansFromHousehold(household);
+
+    for (const parent of guardians) {
+        const matches = graph.parents.filter((c) => c.subjectRef === parent.candidate_id);
+        subjects.push({
+            ref: parent.candidate_id,
+            role: "parent",
+            candidates:
+                matches.length > 0 ?
+                    matches
+                :   [
+                        noMatchCandidate({
+                            subjectRef: parent.candidate_id,
+                            entityType: "person",
+                            displayName: [parent.first_name, parent.last_name].filter(Boolean).join(" "),
+                        }),
+                    ],
+        });
+    }
+
+    for (const child of household.children) {
+        const matches = graph.children.filter((c) => c.subjectRef === child.candidate_id);
+        subjects.push({
+            ref: child.candidate_id,
+            role: "child",
+            candidates:
+                matches.length > 0 ?
+                    matches
+                :   [
+                        noMatchCandidate({
+                            subjectRef: child.candidate_id,
+                            entityType: "child",
+                            displayName: [child.first_name, child.last_name].filter(Boolean).join(" "),
+                        }),
+                    ],
+        });
+    }
+
+    subjects.push({
+        ref: household.household_id,
+        role: "household",
+        candidates:
+            graph.household.length > 0 ?
+                graph.household
+            :   [
+                    noMatchCandidate({
+                        subjectRef: household.household_id,
+                        entityType: "household",
+                        displayName: "Household",
+                    }),
+                ],
+    });
+
+    const leadRef = `${household.household_id}:lead`;
+    subjects.push({
+        ref: leadRef,
+        role: "lead",
+        candidates:
+            graph.leads.length > 0 ?
+                graph.leads
+            :   [noMatchCandidate({ subjectRef: leadRef, entityType: "lead", displayName: "Lead" })],
+    });
+
+    return subjects;
+}
 
 export async function runCanonicalIdentityResolution(input: {
     supabase: SupabaseClient;
@@ -102,21 +243,7 @@ export async function runCanonicalIdentityResolution(input: {
 
     const resolutionRows: ProcessingResolutionRow[] = [];
 
-    const subjects: Array<{ ref: string; role: string; candidates: typeof graph.parents }> = [
-        ...graph.parents.map((c) => ({ ref: c.subjectRef, role: "parent", candidates: [c] })),
-        ...graph.children.map((c) => ({ ref: c.subjectRef, role: "child", candidates: [c] })),
-    ];
-
-    if (graph.household[0]) {
-        subjects.push({
-            ref: graph.household[0].subjectRef,
-            role: "household",
-            candidates: graph.household,
-        });
-    }
-    for (const lead of graph.leads) {
-        subjects.push({ ref: lead.subjectRef, role: "lead", candidates: [lead] });
-    }
+    const subjects = buildResolutionSubjects(input.household, graph);
 
     for (const subject of subjects) {
         const top = subject.candidates[0];
@@ -128,9 +255,10 @@ export async function runCanonicalIdentityResolution(input: {
             inputFactsHash,
             subjectRef: subject.ref,
             subjectRole: subject.role,
+            provisional: provisionalForSubject(input.household, subject.ref, subject.role),
             candidates: subject.candidates,
             decisionAction: defaultActionForConfidence(legacyConfidence),
-            selectedCandidateId: top?.recordId ?? null,
+            selectedCandidateId: top?.recordId && top.recordId !== "none" ? top.recordId : null,
         });
 
         if (persistResolutions) {

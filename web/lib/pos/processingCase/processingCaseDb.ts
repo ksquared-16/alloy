@@ -53,6 +53,23 @@ export function makeProcessingCaseDbDeps(supabase: SupabaseClient): ProcessingCa
     };
 }
 
+/** Primary source row id for processing_facts.source_id FK (not the polymorphic source_id string). */
+export async function dbFindPrimaryCaseSourceRowId(
+    supabase: SupabaseClient,
+    args: { orgId: string; sourceKind: ProcessingCaseSourceKind; sourceId: string },
+): Promise<string | null> {
+    const { data, error } = await supabase
+        .from("processing_case_sources")
+        .select("id")
+        .eq("org_id", args.orgId)
+        .eq("source_kind", args.sourceKind)
+        .eq("source_id", args.sourceId)
+        .eq("role", "primary")
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    return (data as { id?: string } | null)?.id ?? null;
+}
+
 /**
  * POS-FP5 — complete a Processing Case with a recorded Operational Result.
  *

@@ -16,9 +16,15 @@ function assertValidSupabaseHttpUrl(supabaseUrl: string): void {
         );
     }
     if (u.protocol !== "https:") {
-        throw new Error(
-            "NEXT_PUBLIC_SUPABASE_URL must use https. Fix your .env.local and restart `next dev`."
-        );
+        const allowLocalCert =
+            process.env.PROCESSING_LOCAL_CERT_ALLOW_HTTP === "true" &&
+            (u.hostname === "127.0.0.1" || u.hostname === "localhost") &&
+            u.port === "55321";
+        if (!allowLocalCert) {
+            throw new Error(
+                "NEXT_PUBLIC_SUPABASE_URL must use https. Fix your .env.local and restart `next dev`."
+            );
+        }
     }
     if (!u.hostname || u.hostname.includes(" ")) {
         throw new Error(
@@ -50,8 +56,9 @@ export function createClient() {
     assertValidSupabaseHttpUrl(supabaseUrl);
 
     const looksLikeSupabaseJwt = supabaseAnonKey.startsWith("eyJ");
+    const looksLikeLocalPublishable = supabaseAnonKey.startsWith("sb_publishable_");
     const keyLooksPlaceholder =
-        !looksLikeSupabaseJwt ||
+        (!looksLikeSupabaseJwt && !looksLikeLocalPublishable) ||
         supabaseAnonKey.length < 80 ||
         /^your_/i.test(supabaseAnonKey) ||
         /anon_public_key/i.test(supabaseAnonKey);

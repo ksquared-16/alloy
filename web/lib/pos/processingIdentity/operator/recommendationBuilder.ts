@@ -130,6 +130,15 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
             case "household":
                 if (sub.decision === "create") {
                     operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createHousehold, payload: { household_name: String(sub.values?.household_name ?? "Household") }, after: { name: sub.values?.household_name }, reason: "new household" });
+                } else if (sub.decision === "link" && sub.selectedRecordId) {
+                    operations.push({
+                        ...common,
+                        opKind: "no_op",
+                        commandKey: IDENTITY_COMMAND_KEYS.createHousehold,
+                        targetId: sub.selectedRecordId,
+                        payload: { household_id: sub.selectedRecordId },
+                        reason: "reuse existing household",
+                    });
                 }
                 break;
             case "parent":
@@ -137,6 +146,15 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                     operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createPerson, payload: personPayload(sub), after: personPayload(sub), reason: "no candidate matched" });
                 } else if (sub.decision === "update") {
                     operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updatePerson, targetId: sub.selectedRecordId ?? null, payload: { person_id: sub.selectedRecordId, ...personPayload(sub) }, before: {}, after: personPayload(sub), preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update matched person" });
+                } else if (sub.decision === "link" && sub.selectedRecordId) {
+                    operations.push({
+                        ...common,
+                        opKind: "no_op",
+                        commandKey: IDENTITY_COMMAND_KEYS.updatePerson,
+                        targetId: sub.selectedRecordId,
+                        payload: { person_id: sub.selectedRecordId, ...personPayload(sub) },
+                        reason: "reuse matched person",
+                    });
                 }
                 if (sub.householdRef) {
                     const personRef = sub.decision === "link" && sub.selectedRecordId ? sub.selectedRecordId : `@${sub.ref}`;
@@ -248,6 +266,18 @@ function roleFromSubjectRole(role: string): SubjectRole {
     }
 }
 
+export function pickLatestResolutionPerSubject(rows: ProcessingResolutionRow[]): ProcessingResolutionRow[] {
+    const byRef = new Map<string, ProcessingResolutionRow>();
+    for (const row of rows) {
+        if (row.superseded_by) continue;
+        const existing = byRef.get(row.subject_ref);
+        if (!existing || row.created_at > existing.created_at) {
+            byRef.set(row.subject_ref, row);
+        }
+    }
+    return Array.from(byRef.values());
+}
+
 /**
  * Deterministically derive the recommendation input from durable resolution rows
  * (D3 §34). Household is linked to parents/children; the lead depends on the
@@ -257,13 +287,14 @@ function roleFromSubjectRole(role: string): SubjectRole {
 export function deriveResolutionSetFromResolutions(
     rows: ProcessingResolutionRow[],
 ): IdentityResolutionSet {
-    const householdRow = rows.find((r) => roleFromSubjectRole(r.subject_role) === "household");
+    const activeRows = pickLatestResolutionPerSubject(rows);
+    const householdRow = activeRows.find((r) => roleFromSubjectRole(r.subject_role) === "household");
     const householdRef = householdRow?.subject_ref;
-    const parentRows = rows.filter((r) => roleFromSubjectRole(r.subject_role) === "parent");
+    const parentRows = activeRows.filter((r) => roleFromSubjectRole(r.subject_role) === "parent");
     const firstParentRef = parentRows[0]?.subject_ref;
 
     const subjects: ResolvedSubject[] = [];
-    for (const row of rows) {
+    for (const row of activeRows) {
         const role = roleFromSubjectRole(row.subject_role);
         const decision = decisionForAction(row.decision_action);
         if (!decision) continue;

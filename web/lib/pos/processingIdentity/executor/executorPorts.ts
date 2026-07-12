@@ -23,7 +23,11 @@ export function createAtomicGroupRunner(supabase: SupabaseClient): AtomicGroupRu
                 p_org_id: input.orgId,
                 p_actor: input.actorId,
                 p_idempotency_key: input.idempotencyKey,
-                p_operations: input.operations,
+                p_operations: input.operations.map((op) => ({
+                    op_id: op.opId,
+                    command_key: op.commandKey,
+                    payload: op.payload,
+                })),
             });
             if (error) return { ok: false, error: error.message };
             const payload = (data ?? {}) as { ok?: boolean; refs?: Record<string, string>; error?: string };

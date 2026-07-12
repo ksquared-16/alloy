@@ -98,12 +98,19 @@ export async function executeApprovedPlan(
     // ---- 1. Atomic identity group (one transaction) ----
     const atomicOps = includedOps.filter((o) => o.atomicGroup === "identity_core");
     const pendingAtomic = atomicOps.filter((o) => !priorCommitted.has(o.opId));
-    if (pendingAtomic.length > 0) {
+    const seedAtomic = pendingAtomic.filter((o) => o.opKind === "no_op");
+    const rpcAtomic = pendingAtomic.filter((o) => o.opKind !== "no_op");
+    for (const o of seedAtomic) {
+        const recordId = o.targetId ?? null;
+        if (recordId) refs[o.opId] = recordId;
+        results.push(opResult(o, "committed", recordId, false, null));
+    }
+    if (rpcAtomic.length > 0) {
         const groupResult = await ports.atomicGroup.run({
             orgId: context.orgId,
             actorId: context.actorId,
             idempotencyKey: `${input.executionIdempotencyKey}:identity_core`,
-            operations: pendingAtomic.map((o) => ({
+            operations: rpcAtomic.map((o) => ({
                 opId: o.opId,
                 commandKey: o.commandKey,
                 payload: resolvePayload(o.payload, refs),
@@ -116,7 +123,7 @@ export async function executeApprovedPlan(
             }
             return finalize(base, "failed", results, compensation, events, now());
         }
-        for (const o of pendingAtomic) {
+        for (const o of rpcAtomic) {
             const recordId = groupResult.refs[o.opId] ?? null;
             refs[o.opId] = recordId ?? "";
             results.push(opResult(o, "committed", recordId, false, null));

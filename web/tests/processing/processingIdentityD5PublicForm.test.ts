@@ -14,6 +14,7 @@ vi.mock("@/lib/pos/processingIdentity/canonicalResolutionEngine", () => ({
 
 vi.mock("@/lib/pos/processingCase/processingCaseDb", () => ({
     makeProcessingCaseDbDeps: vi.fn().mockReturnValue({}),
+    dbFindPrimaryCaseSourceRowId: vi.fn().mockResolvedValue("source-row-1"),
 }));
 
 const ORG = "11111111-1111-4111-8111-111111111111";

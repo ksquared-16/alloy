@@ -8,7 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { FormIntakeMeta } from "@/lib/forms/intake/formLeadCaptureTypes";
-import { makeProcessingCaseDbDeps } from "@/lib/pos/processingCase/processingCaseDb";
+import { makeProcessingCaseDbDeps, dbFindPrimaryCaseSourceRowId } from "@/lib/pos/processingCase/processingCaseDb";
 import { openProcessingCaseFromSource } from "@/lib/pos/processingCase/openProcessingCaseFromSource";
 import { runCanonicalIdentityResolution } from "../canonicalResolutionEngine";
 import {
@@ -48,6 +48,15 @@ export async function ingestPublicFormThroughProcessing(
         const facts = extractFactsFromFormIntakeMeta(input.intakeMeta, input.submissionId);
         const locationId = formIntakeLocationId(input.intakeMeta);
 
+        const caseSourceRowId = await dbFindPrimaryCaseSourceRowId(supabase, {
+            orgId: input.orgId,
+            sourceKind: "form_submission",
+            sourceId: input.submissionId,
+        });
+        if (!caseSourceRowId) {
+            return { ok: false, error: "form_submission processing source row missing" };
+        }
+
         await supabase
             .from("processing_cases")
             .update({
@@ -70,7 +79,7 @@ export async function ingestPublicFormThroughProcessing(
             supabase,
             orgId: input.orgId,
             caseId: opened.processingCaseId,
-            sourceId: input.submissionId,
+            sourceId: caseSourceRowId,
             sourceKind: "form_submission",
             sourceRefId: input.submissionId,
             household,

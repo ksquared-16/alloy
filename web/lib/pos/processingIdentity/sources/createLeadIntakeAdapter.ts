@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { readCreateLeadCommitSelectionFromPayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
 import type { IntakeFact, IntakeHouseholdCandidate } from "@/lib/intake/types";
-import { makeProcessingCaseDbDeps } from "@/lib/pos/processingCase/processingCaseDb";
+import { makeProcessingCaseDbDeps, dbFindPrimaryCaseSourceRowId } from "@/lib/pos/processingCase/processingCaseDb";
 import { openProcessingCaseFromSource } from "@/lib/pos/processingCase/openProcessingCaseFromSource";
 import { runCanonicalIdentityResolution } from "../canonicalResolutionEngine";
 import { loadCaseReview } from "../operator/operatorReviewService";
@@ -158,11 +158,20 @@ export async function ingestCreateLeadThroughProcessing(
 
     const facts: IntakeFact[] = extractFactsFromCreateLeadHousehold(household, idempotencyKey.slice(0, 16));
 
+    const caseSourceRowId = await dbFindPrimaryCaseSourceRowId(supabase, {
+        orgId: input.orgId,
+        sourceKind: "create_lead",
+        sourceId,
+    });
+    if (!caseSourceRowId) {
+        return { ok: false, error: "Create Lead processing source row missing.", status: 500 };
+    }
+
     await runCanonicalIdentityResolution({
         supabase,
         orgId: input.orgId,
         caseId: opened.processingCaseId,
-        sourceId,
+        sourceId: caseSourceRowId,
         sourceKind: "create_lead",
         sourceRefId: idempotencyKey,
         household,
