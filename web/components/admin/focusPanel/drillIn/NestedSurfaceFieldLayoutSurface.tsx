@@ -12,6 +12,7 @@ import {
     fieldShowLabelForNestedGroup,
     fieldVisibilityForNestedGroup,
     groupDefsFor,
+    identityConfigurationFieldKeys,
     removeFieldFromNestedGroup,
     selectedFieldKeys,
     setFieldPresentationLabel,
@@ -19,6 +20,8 @@ import {
     setFieldVisibilityInNestedGroup,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import { configurationPurposeFromTierArg } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import type { NestedSurfaceFieldDropZone } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import { chunkNestedSurfaceFieldsForHalfRowLayout } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import {
@@ -46,6 +49,8 @@ type Props = {
     className?: string;
     /** When false, parent region owns the single Add field affordance. */
     showAddField?: boolean;
+    /** Active disclosure tier — Summary / Context Facts / Details. */
+    tier?: IdentityFieldTier;
 };
 
 function catalogLabelFor(
@@ -70,6 +75,7 @@ export default function NestedSurfaceFieldLayoutSurface({
     fields,
     className = "",
     showAddField = true,
+    tier,
 }: Props) {
     const composer = useFocusPanelComposer();
     const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
@@ -87,10 +93,12 @@ export default function NestedSurfaceFieldLayoutSurface({
 
     const orderedKeys = useMemo(() => {
         if (!config) return fields.map((f) => f.fieldKey);
-        const configured = selectedFieldKeys(config, groupKey);
+        const configured = tier
+            ? identityConfigurationFieldKeys(config, groupKey, configurationPurposeFromTierArg(tier))
+            : selectedFieldKeys(config, groupKey);
         const visible = configured.filter((key) => fieldMetaByKey.has(key));
         return visible.length > 0 ? visible : fields.map((f) => f.fieldKey);
-    }, [config, groupKey, fields, fieldMetaByKey]);
+    }, [config, groupKey, fields, fieldMetaByKey, tier]);
 
     const rowChunks = useMemo(() => {
         if (!config) return orderedKeys.map((key) => [key]);
@@ -107,11 +115,11 @@ export default function NestedSurfaceFieldLayoutSurface({
     const handleDrop = useCallback(
         (targetKey: string, zone: NestedSurfaceFieldDropZone) => {
             if (!config || !draggingKey || draggingKey === targetKey) return;
-            mutate(applyNestedSurfaceFieldDrop(config, groupKey, draggingKey, targetKey, zone));
+            mutate(applyNestedSurfaceFieldDrop(config, groupKey, draggingKey, targetKey, zone, { tier }));
             setDraggingKey(null);
             setDropHint(null);
         },
-        [config, draggingKey, groupKey, mutate],
+        [config, draggingKey, groupKey, mutate, tier],
     );
 
     if (!config && !composing) {
@@ -191,6 +199,7 @@ export default function NestedSurfaceFieldLayoutSurface({
                                     onAfterRemove={() =>
                                         composer?.select({ kind: "region", surfaceId, groupKey })
                                     }
+                                    tier={tier}
                                     className="fp-layout-field--block"
                                 >
                                     {meta.renderBlock()}
@@ -236,6 +245,7 @@ export default function NestedSurfaceFieldLayoutSurface({
                                 onAfterRemove={() =>
                                     composer?.select({ kind: "region", surfaceId, groupKey })
                                 }
+                                tier={tier}
                             >
                                 <RuntimeFieldRow
                                     field={{ ...meta, label }}
@@ -249,7 +259,7 @@ export default function NestedSurfaceFieldLayoutSurface({
             ))}
 
             {composing && showAddField ? (
-                <NestedSurfaceAddField surfaceId={surfaceId} groupKey={groupKey} />
+                <NestedSurfaceAddField surfaceId={surfaceId} groupKey={groupKey} tier={tier} />
             ) : null}
         </div>
     );
@@ -302,6 +312,7 @@ function FieldInstance({
     onDropZone,
     onDropHint,
     onAfterRemove,
+    tier,
     className = "",
     children,
 }: {
@@ -324,6 +335,7 @@ function FieldInstance({
     onDropZone: (zone: NestedSurfaceFieldDropZone) => void;
     onDropHint: (zone: NestedSurfaceFieldDropZone | null) => void;
     onAfterRemove: () => void;
+    tier?: IdentityFieldTier;
     className?: string;
     children: React.ReactNode;
 }) {
@@ -488,7 +500,7 @@ function FieldInstance({
                             aria-label={`Remove ${label}`}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onMutate(removeFieldFromNestedGroup(config, groupKey, fieldKey));
+                                onMutate(removeFieldFromNestedGroup(config, groupKey, fieldKey, { tier }));
                                 onAfterRemove();
                             }}
                         >

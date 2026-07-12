@@ -22,6 +22,8 @@ import IdentityRecordSummary from "@/components/admin/focusPanel/identity/Identi
 import IdentityFieldGrid from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
 import IdentityExpandedDetails from "@/components/admin/focusPanel/identity/IdentityExpandedDetails";
 import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity/IdentityDisclosureBackAction";
+import IdentityDisclosureSurface from "@/components/admin/focusPanel/identity/IdentityDisclosureSurface";
+import IdentityCollectionContext from "@/components/admin/focusPanel/identity/IdentityCollectionContext";
 import { useIdentityDisclosureState } from "@/lib/adminV2/runtime/focusPanel/identity/useIdentityDisclosureState";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
 import NestedSurfaceFieldLayoutSurface, {
@@ -170,7 +172,7 @@ export default function ChildrenCard({
     useEffect(() => {
         if (request?.card !== "children") return;
         enterContext();
-        if (request.focus) selectIdentity(String(request.focus));
+        if (request.focus) selectIdentity(String(request.focus), "roster");
         setEditing(false);
         setRelatedViewId(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
@@ -192,14 +194,10 @@ export default function ChildrenCard({
 
     useEffect(() => {
         if (!composingChildrenSurface) return;
-        if (disclosure.selectedIdentityId) return;
-        const first = evidence.children[0];
-        if (!first) return;
+        if (disclosure.depth !== "summary") return;
+        if (evidence.children.length === 0) return;
         enterContext();
-        selectIdentity(first.id);
-        composer?.setDrillDepth({ kind: "child-focus", childId: first.id });
-        composer?.select({ kind: "region", surfaceId: CHILDREN_SURFACE_ID, groupKey: "identity" });
-    }, [composingChildrenSurface, disclosure.selectedIdentityId, evidence.children, enterContext, selectIdentity, composer]);
+    }, [composingChildrenSurface, disclosure.depth, evidence.children.length, enterContext]);
 
     const isEmpty = evidence.count === 0;
     const focused =
@@ -211,13 +209,12 @@ export default function ChildrenCard({
         [editing, focused, context.truth],
     );
 
-    const focusChild = (id: string) => {
+    const selectChildIdentity = (id: string) => {
         if (composerPreview?.onSelectChild) {
             composerPreview.onSelectChild();
             return;
         }
-        enterContext();
-        selectIdentity(id);
+        selectIdentity(id, "roster");
         setEditing(false);
         setRelatedViewId(null);
         if (composingChildrenSurface) {
@@ -335,6 +332,32 @@ export default function ChildrenCard({
         );
     }
 
+
+    const focusedIdentityRecord = useMemo(() => {
+        if (!focused || !childrenSurfaceConfig) return null;
+        return buildChildIdentityRecordVM({
+            config: childrenSurfaceConfig,
+            child: focused,
+            groupKey: "identity",
+            canMutate: canEditChild,
+            isFieldSaveSupported: (fieldRef) =>
+                isChildFocusFieldSaveSupported(fieldRef as ChildFocusFieldKey),
+        });
+    }, [focused, childrenSurfaceConfig, canEditChild]);
+
+    const contextRosterRecords = useMemo(
+        () =>
+            evidence.children.map((child) => ({
+                ...buildChildIdentityRecordVM({
+                    config: childrenSurfaceConfig,
+                    child,
+                    groupKey: "roster",
+                }),
+                badge: child.status,
+            })),
+        [evidence.children, childrenSurfaceConfig],
+    );
+
     let lifecycle: "empty" | "summary" | "focus" | "edit" | "expanded" | "related";
     let body: React.ReactNode;
     if (isEmpty) {
@@ -344,25 +367,45 @@ export default function ChildrenCard({
                 <p className="alloy-os-household__row-detail">No children linked to this record yet</p>
             </div>
         );
-    } else if (focused && disclosure.depth === "evidence") {
-        lifecycle = "expanded";
+    } else if (focused && editing && editSeed && disclosure.depth === "details") {
+        lifecycle = "edit";
         body = (
-            <ChildExpandedEvidence
-                child={focused}
-                sections={evidenceSections}
-                childrenSurfaceConfig={childrenSurfaceConfig}
-                onRequestEdit={canEditChild ? () => setEditing(true) : undefined}
+            <ChildFocusEdit
+                seed={editSeed}
+                childName={focused.name}
+                childSurfaceConfig={childrenSurfaceConfig}
+                opportunityStartDate={opportunityStartDate}
+                save={mutation!.saveInquiryChild}
+                onClose={() => setEditing(false)}
+                onSaved={() => setEditing(false)}
             />
         );
-    } else if (focused && disclosure.depth === "details") {
-        lifecycle = editing ? "edit" : relatedViewId ? "related" : "focus";
+    } else if (focused && relatedViewId && disclosure.depth === "details") {
+        lifecycle = "related";
+        body = <ChildRelatedReport child={focused} viewId={relatedViewId} />;
+    } else if (focused && focusedIdentityRecord && (disclosure.depth === "evidence" || disclosure.depth === "details")) {
+        lifecycle = disclosure.depth === "evidence" ? "expanded" : "focus";
+        body = (
+            <IdentityDisclosureSurface
+                record={{ ...focusedIdentityRecord, badge: focused.status }}
+                depth={disclosure.depth}
+                onEnterEvidence={
+                    disclosure.depth === "details" && evidenceSections.length > 0
+                        ? () => enterEvidence(focused.id, "roster")
+                        : undefined
+                }
+                onEditField={canEditChild ? () => setEditing(true) : undefined}
+            />
+        );
+    } else if (focused && disclosure.depth === "details" && composingChildrenSurface) {
+        lifecycle = "focus";
         body = (
             <FocusedChild
                 child={focused}
-                editing={editing}
-                editSeed={editSeed}
+                editing={false}
+                editSeed={null}
                 expandedOpen={false}
-                relatedViewId={relatedViewId}
+                relatedViewId={null}
                 childFocusView={childFocusView}
                 focusRows={focusRows}
                 evidenceSections={evidenceSections}
@@ -378,23 +421,42 @@ export default function ChildrenCard({
                 onEditClose={() => setEditing(false)}
             />
         );
-    } else {
-        lifecycle = disclosure.depth === "context" ? "summary" : "summary";
+    } else if (disclosure.depth === "context") {
+        lifecycle = "summary";
         body = (
             <ComposableRegionShell
                 surfaceId={CHILDREN_SURFACE_ID}
                 groupKey="roster"
                 label="Roster rows"
                 className="alloy-os-children__composer-region"
-                dataAttrs={{ "data-children-roster-region": "true", "data-identity-depth": disclosure.depth }}
+                dataAttrs={{ "data-children-roster-region": "true", "data-identity-depth": "context" }}
+            >
+                <IdentityCollectionContext
+                    records={contextRosterRecords}
+                    selectable={!composingChildrenSurface}
+                    onSelectIdentity={selectChildIdentity}
+                />
+                {composingChildrenSurface ?
+                    <NestedSurfaceAddField surfaceId={CHILDREN_SURFACE_ID} groupKey="roster" />
+                :   null}
+            </ComposableRegionShell>
+        );
+    } else {
+        lifecycle = "summary";
+        body = (
+            <ComposableRegionShell
+                surfaceId={CHILDREN_SURFACE_ID}
+                groupKey="roster"
+                label="Roster rows"
+                className="alloy-os-children__composer-region"
+                dataAttrs={{ "data-children-roster-region": "true", "data-identity-depth": "summary" }}
             >
                 <div className="alloy-os-children__roster" data-children-roster>
                     {evidence.children.map((child) => (
                         <ChildSummaryRow
                             key={child.id}
                             child={child}
-                            depth={disclosure.depth === "context" ? "context" : "summary"}
-                            onFocus={() => focusChild(child.id)}
+                            depth="summary"
                             childrenSurfaceConfig={childrenSurfaceConfig}
                         />
                     ))}
@@ -481,12 +543,10 @@ function TruthRow({
 /** Summary: a scannable per-child mini-profile — details stack under the name. */
 function ChildSummaryRow({
     child,
-    onFocus,
     childrenSurfaceConfig,
     depth = "summary",
 }: {
     child: ChildrenEvidenceChild;
-    onFocus: () => void;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
     depth?: "summary" | "context";
 }) {
@@ -500,7 +560,6 @@ function ChildSummaryRow({
             <IdentityRecordSummary
                 record={{ ...record, badge: child.status }}
                 depth={depth}
-                onActivate={() => onFocus()}
             />
             {child.missingLine ? (
                 <span className="alloy-os-children__summary-line alloy-os-card-detail--risk" data-children-missing={child.id}>

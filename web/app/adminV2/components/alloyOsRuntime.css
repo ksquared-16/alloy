@@ -6275,6 +6275,31 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   min-width: 0;
 }
 
+
+/* Identity summary — side-by-side identity objects when space allows */
+.identity-summary-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+  align-items: start;
+}
+
+.identity-summary-columns__cell {
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .identity-summary-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.identity-collection-context {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .identity-field-grid__row--pair {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

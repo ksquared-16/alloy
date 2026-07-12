@@ -22,6 +22,9 @@ import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/hou
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import {
     addFieldToNestedGroup,
+    removeFieldFromNestedGroup,
+    moveFieldToIdentityTierInNestedGroup,
+    identityTierContainingField,
     defaultNestedSurfaceConfig,
     HOUSEHOLD_SURFACE_ID,
     CHILDREN_SURFACE_ID,
@@ -314,5 +317,29 @@ describe("identityLayerFieldKeysFromGroup", () => {
                 "context_facts",
             ),
         ).toEqual(["b"]);
+    });
+
+    it("removeFieldFromNestedGroup removes from the active configuration tier only", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "primary_contact", "person.secondary_phone", { tier: "summary" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.employer", { tier: "context_fact" });
+        config = addFieldToNestedGroup(config, "primary_contact", "person.notes", { tier: "details" });
+
+        const afterSummary = removeFieldFromNestedGroup(config, "primary_contact", "person.secondary_phone", { tier: "summary" });
+        expect(identityConfigurationFieldKeys(afterSummary, "primary_contact", "summary")).not.toContain("person.secondary_phone");
+        expect(identityConfigurationFieldKeys(afterSummary, "primary_contact", "context_facts")).toContain("person.employer");
+        expect(identityConfigurationFieldKeys(afterSummary, "primary_contact", "details")).toContain("person.notes");
+
+        const afterContext = removeFieldFromNestedGroup(afterSummary, "primary_contact", "person.employer", { tier: "context_fact" });
+        expect(identityConfigurationFieldKeys(afterContext, "primary_contact", "context_facts")).not.toContain("person.employer");
+        expect(identityConfigurationFieldKeys(afterContext, "primary_contact", "summary")).not.toContain("person.secondary_phone");
+    });
+
+    it("moveFieldToIdentityTierInNestedGroup moves fields between disclosure tiers", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = moveFieldToIdentityTierInNestedGroup(config, "primary_contact", "person.phone", "details");
+        expect(identityTierContainingField(config, "primary_contact", "person.phone")).toBe("details");
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "summary")).not.toContain("person.phone");
+        expect(identityConfigurationFieldKeys(config, "primary_contact", "details")).toContain("person.phone");
     });
 });

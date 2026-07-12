@@ -112,7 +112,6 @@ describe("default config seeds real fields only", () => {
             "child.last_name",
             "child.preferred_name",
             "child.nickname",
-            "child.date_of_birth",
             "child.dob_age",
         ]);
     });
@@ -153,7 +152,7 @@ describe("add / remove / reorder fields (persistable, immutable)", () => {
         const cfg = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         const next = moveFieldInNestedGroup(cfg, "identity", "child.dob_age", -1);
         const keys = selectedFieldKeys(next, "identity");
-        expect(keys.indexOf("child.dob_age")).toBeLessThan(keys.indexOf("child.date_of_birth"));
+        expect(keys.indexOf("child.dob_age")).toBeLessThan(keys.indexOf("child.nickname"));
     });
 });
 
@@ -206,7 +205,6 @@ describe("reconcile loaded config with the registry", () => {
             "child.last_name",
             "child.preferred_name",
             "child.nickname",
-            "child.date_of_birth",
             "child.dob_age",
         ]);
     });

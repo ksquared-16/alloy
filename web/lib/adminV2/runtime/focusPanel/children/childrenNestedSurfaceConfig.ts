@@ -18,6 +18,7 @@ import {
 import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import { fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { resolveIdentityFieldPolicy } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { identityLayerFieldKeysFromGroup } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import {
     CHILD_FOCUS_FIELD_DEFS,
     isChildFocusFieldSaveSupported,
@@ -77,7 +78,10 @@ export function childrenFocusRowsFromNestedConfig(config: NestedSurfaceConfig | 
 
     for (const groupKey of CHILDREN_FOCUS_GROUP_KEYS) {
         const group = config.groups.find((g) => g.key === groupKey);
-        for (const fieldKey of selectedFieldKeys(config, groupKey)) {
+        if (!group) continue;
+        const layers = identityLayerFieldKeysFromGroup(group);
+        const fieldKeys = [...layers.summary, ...layers.contextFacts, ...layers.details];
+        for (const fieldKey of fieldKeys) {
             if (seen.has(fieldKey)) continue;
             if (
                 !fieldShouldRender(

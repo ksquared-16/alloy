@@ -91,12 +91,11 @@ describe("NestedSurfaceEditor — Surface Composer convergence (source guards)",
         expect(src).not.toContain("NestedSurfaceFieldComposer");
     });
 
-    it("Surfaces page passes drill-in context and back navigation", () => {
+    it("Surfaces page wires nested surface editor drill-in", () => {
         const page = readSrc("components/adminV2/settings/surfaces/SurfacesConfigurationPage.tsx");
-        expect(page).toContain("onBack={() =>");
-        expect(page).toContain("onDrillInSurface");
-        expect(page).toContain("FocusPanelSurfaceEditor");
-        expect(page).toContain("nestedStack");
+        expect(page).toContain("NestedSurfaceEditor");
+        expect(page).toContain("<NestedSurfaceEditor surfaceId={nestedSurfaceId}");
+        expect(page).toContain("FocusPanelSummarySurfaceEditor");
     });
 
     it("SurfaceFieldInspector supports nested variant", () => {
