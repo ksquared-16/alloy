@@ -1,8 +1,11 @@
 # Presentation Runtime V2
 
-**Status:** Canonical (July 2026). Supersedes all prior Workspace / Work Unit presentation cleanup.
+**Status:** **COMPLETE** (July 2026). Supersedes all prior Workspace / Work Unit presentation cleanup.  
+**Closeout:** [`../presentation-runtime-v2-closeout.md`](../presentation-runtime-v2-closeout.md) · **Retrospective:** [`../presentation-runtime-v2-retrospective.md`](../presentation-runtime-v2-retrospective.md)
 
 **Completion (July 2026):** All surfaces render through one Presentation Runtime — Workspace, Work Unit, Focus Panel, Left Nav, and the **Right Rail** (the last slice: `RightRailSurface` now consumes the resolved `right_rail_actions` lane and executes through the existing action runtime — see [`docs/handoffs/work-unit-right-rail-presentation-v2-handoff.md`](../../handoffs/work-unit-right-rail-presentation-v2-handoff.md)). Motion, warm-loading, and transition continuity are unified on the operational motion tokens. Legacy retirement is underway: the Work Unit shadow-VM path is removed; the remaining orphaned `routeShellPipeline` render adapter is scoped for a follow-up (it shares a symbol with a still-live perf-trace module — see the handoff §6).
+
+**Focus Panel Surface Composer (July 2026):** Runtime-first edit overlay, nested surfaces (household, children, child, evidence), and drill-in elevation shipped on staging `9fb042a71`. Presentation Runtime V2 foundation is **frozen** — extend Surface Composer for operational domains; do not reopen architecture.
 
 **Thread closeout (July 2026):** Queue Row Builder, Workspace/Work Unit surfaces, and Settings legacy cleanup are frozen complete on `origin/staging` `c99e381f3`. Canonical handoff: [`docs/sprints/07_2026/presentation-surfaces-settings-thread-closeout.md`](../../sprints/07_2026/presentation-surfaces-settings-thread-closeout.md).
 
