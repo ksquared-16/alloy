@@ -53,7 +53,6 @@ case "$cmd" in
     supabase status
     ;;
   reset)
-    check_ports
     echo "Resetting isolated cert database (full migration replay)..."
     supabase db reset --no-seed
     ;;

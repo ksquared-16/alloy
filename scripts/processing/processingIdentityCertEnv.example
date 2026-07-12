@@ -1,0 +1,11 @@
+# Copy to web/.env.local for isolated certification (do not commit).
+# Values from: supabase status (project alloy-processing-identity-cert)
+
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
+SUPABASE_URL=http://127.0.0.1:55321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<from supabase status Publishable>
+SUPABASE_SERVICE_ROLE_KEY=<from supabase status Secret>
+PROCESSING_LOCAL_CERT_ENABLED=true
+PROCESSING_LOCAL_CERT_ALLOW_HTTP=true
+PROCESSING_LOCAL_CERT_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55322/postgres
+NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
