@@ -25,7 +25,7 @@ Alloy's operator experience prioritizes **continuity over page transitions**. Th
 | **Operator continuity** | Work View deep links, drawer client-URL swap (`replaceState`), warm VM cache on row intent |
 | **No blank loading surfaces** | Between holds, operators see prior content or branded shell — not empty white frames |
 
-Doctrine: [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md), [`../experience/loading-and-reveal-contract.md`](../experience/loading-and-reveal-contract.md), [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md).
+Doctrine: [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md), [`../experience/loading-and-reveal-contract.md`](../experience/loading-and-reveal-contract.md), [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md).
 
 ---
 
@@ -51,7 +51,7 @@ Alloy's operating model is organized into five planes. Every domain participates
 | **Records** | Executes against *individual operational objects* | Drawers (record detail surfaces) |
 | **Intelligence / BOS** | Recommends, explains, and assists under approval | Woven across all planes — not a standalone module |
 
-> **Note on "planes":** This is the **operational** plane model (Configuration / Planning / Operations / Records / Intelligence). It is distinct from the Configuration platform's internal "four-plane settings model" (Fields / Field grouping / Layouts / Actions), which is a sub-structure *inside* the Configuration plane. See `./modules/configuration-platform.md`.
+> **Note on "planes":** This is the **operational** plane model (Configuration / Planning / Operations / Records / Intelligence). It is distinct from the Configuration platform's internal "four-plane settings model" (Fields / Field grouping / Layouts / Actions), which is a sub-structure *inside* the Configuration plane. See `../modules/configuration-platform.md`.
 
 ### Plane purposes
 
@@ -63,7 +63,7 @@ Alloy's operating model is organized into five planes. Every domain participates
 
 **Records** are drawer-based execution surfaces for individual operational objects. A record begins with *a thing* — this child, this invoice, this shift, this enrollment. The drawer is where an operator executes against that one object across every domain relevant to it.
 
-**Intelligence / BOS** provides recommendations, explanations, and approval-gated assistance across the platform. BOS is a **woven layer**, present in queues, drawers, configuration, and planning — never a destination operators "go to." It **proposes; humans approve** (see `./modules/ai-platform.md`).
+**Intelligence / BOS** provides recommendations, explanations, and approval-gated assistance across the platform. BOS is a **woven layer**, present in queues, drawers, configuration, and planning — never a destination operators "go to." It **proposes; humans approve** (see `../modules/ai-platform.md`).
 
 ---
 
@@ -82,12 +82,12 @@ The two execution-facing planes are intentionally split by *where the operator s
 
 - **Operations begins with work.** Work units and perspectives show what needs action across a cohort of records.
 - **Records begin with a thing.** A drawer shows everything about one operational object at its current stage of life.
-- **Queues are preview/selection surfaces only** — authoritative detail comes from the entity GET / record responder, never from queue JSON (see `./core/record-system.md`, `./operator/queue-system.md`).
+- **Queues are preview/selection surfaces only** — authoritative detail comes from the entity GET / record responder, never from queue JSON (see `./record-system.md`, `./operator/queue-system.md`).
 - **Clicking a row opens a drawer while preserving workspace context.** The queue page does not remount; the drawer appends `:recordId` to the route. Operators should **never feel like they navigated to a separate "record module."** The drawer is detail *in place*, not a destination switch.
 
 This split is what lets a new domain (e.g. Attendance) appear as a *queue/perspective* in Operations **and** a *tab* on the relevant Records drawer, without any new navigation paradigm.
 
-See `./core/business-process-system.md` and `./core/navigation-and-workspace-doctrine.md` for the operator hierarchy (Business Process → Stage → Record).
+See `./business-process-system.md` and `./navigation-and-workspace-doctrine.md` for the operator hierarchy (Business Process → Stage → Record).
 
 ---
 
@@ -127,7 +127,7 @@ Tabs and actions are **separate mechanisms**:
 | No attendance history yet, child eligible | Attendance tab **hidden** | Actions expose **"Record attendance" / "Mark present" / "Add first attendance"** |
 | History now exists | Tab becomes **visible** as the record's operational surface | Actions continue to offer ongoing operations |
 
-Once the first operational fact is written, the tab appears and becomes the record's surface for that domain. The action created the history; the tab now reflects it. Actions route through the canonical action/workflow path (`./modules/actions-and-workflows.md`).
+Once the first operational fact is written, the tab appears and becomes the record's surface for that domain. The action created the history; the tab now reflects it. Actions route through the canonical action/workflow path (`../modules/actions-and-workflows.md`).
 
 ---
 
@@ -164,7 +164,7 @@ Journey: **Lead → Proposal → Agreement → Placement → Schedule → Attend
 
 Reading the table top-to-bottom shows the progressive drawer in action: tabs accrete as history accrues, and each stage's **Startable** action is the bridge that creates the next stage's history — so an operator is never blocked from beginning valid work.
 
-Enrollment grain detail (childcare reference implementation) lives in `../product/crm-system.md` and `./core/placement-system.md` — supplemental, not platform identity.
+Enrollment grain detail (childcare reference implementation) lives in `../product/crm-system.md` and `./placement-system.md` — supplemental, not platform identity.
 
 ---
 
@@ -214,19 +214,19 @@ None of these requires a new navigation spine, a new "record module," or a new d
 | Lived operator experience | `./operator/operator-story.md` |
 | Visual doctrine (look/feel; mockup bridge) | `./operator/alloy-visual-language.md` |
 | Runtime Specification (synthesis; implementation bridge) | `./operator/alloy-runtime-specification.md` |
-| Configuration plane / settings control plane | `./modules/configuration-platform.md` |
+| Configuration plane / settings control plane | `../modules/configuration-platform.md` |
 | Experience Builder / record layouts / drawer composition | `./operator/experience-builder-doctrine.md` |
-| Business processes, stages, work units | `./core/business-process-system.md` |
-| Navigation & workspace spine | `./core/navigation-and-workspace-doctrine.md` |
-| **Alloy Operational Workspace Doctrine V2** (module modal shell) | `./core/navigation-and-workspace-doctrine.md` — **frozen** (July 2026); certified: Processing, Communications, Work Items; barrel: `web/components/workspace/doctrine.ts` |
+| Business processes, stages, work units | `./business-process-system.md` |
+| Navigation & workspace spine | `./navigation-and-workspace-doctrine.md` |
+| **Alloy Operational Workspace Doctrine V2** (module modal shell) | `./navigation-and-workspace-doctrine.md` — **frozen** (July 2026); certified: Processing, Communications, Work Items; barrel: `web/components/workspace/doctrine.ts` |
 | Drawer architecture & VM ownership | `./operator/drawer-system.md` |
 | Queue preview boundary | `./operator/queue-system.md` |
-| Record authority & resolution | `./core/record-system.md` |
-| Status & lifecycle ownership | `./core/status-and-state-system.md` |
-| Record actions & workflow spine | `./modules/actions-and-workflows.md` |
-| BOS / AI agent foundation | `./modules/ai-platform.md` |
-| Planning / analytics measurement layer | `./modules/operational-intelligence-platform.md`, `./analytics/analytics-v2-roadmap.md` |
-| Placement priority & capacity | `./core/placement-system.md` |
+| Record authority & resolution | `./record-system.md` |
+| Status & lifecycle ownership | `./status-and-state-system.md` |
+| Record actions & workflow spine | `../modules/actions-and-workflows.md` |
+| BOS / AI agent foundation | `../modules/ai-platform.md` |
+| Planning / analytics measurement layer | `../modules/operational-intelligence-platform.md`, `./analytics/analytics-v2-roadmap.md` |
+| Placement priority & capacity | `./placement-system.md` |
 | Documentation governance | `./governance/documentation-governance.md` |
 | Enrollment vertical reference (supplemental) | `../product/crm-system.md` |
 

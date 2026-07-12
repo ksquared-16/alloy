@@ -1,6 +1,6 @@
 # Premium Operational Experience Sprint
 
-**Path:** `docs/sprints/06_2026/premium-operational-experience/`
+**Path:** `docs/sprints/archive/06_2026/premium-operational-experience/`
 **Status:** Doctrine + audit complete (June 2026). Implementation sequenced, not yet started.
 **Mandate:** Make Alloy feel like a premium operating system. Not a redesign — a disappearance. The software should vanish; the work should remain.
 

@@ -187,7 +187,7 @@ Open Record (config-resolved Work Unit route — not legacy drawer)
 - **Form-intake** still writes OCM and does not create `process_instances` (admin Create Lead path does).
 - **OCM fallback reads** remain for legacy rows without process instances (flag-gated where noted above).
 - **Work View filter fetch cap** (500 base rows) — extremely large lanes may need server-side predicate pushdown later.
-- **Legacy pipeline queue definitions** that filter on collapsed `status_key` rather than `stage_key` are documented in `docs/sprints/07_2026/platform_reset_runbook.md` Part 5/6; stage-based doctrine path is correct.
+- **Legacy pipeline queue definitions** that filter on collapsed `status_key` rather than `stage_key` are documented in `docs/sprints/archive/07_2026/platform_reset_runbook.md` Part 5/6; stage-based doctrine path is correct.
 - **Stage movement, Work Unit Header, Actions/Comms/Waitlist operator flows** — next sprint; not part of this stabilization closeout.
 
-Handoff record: [`docs/handoffs/process-runtime-stabilization.md`](../../handoffs/process-runtime-stabilization.md).
+Handoff record: [`docs/archive/2026-06-handoffs/handoffs/process-runtime-stabilization.md`](../../archive/2026-06-handoffs/handoffs/process-runtime-stabilization.md).

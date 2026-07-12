@@ -97,7 +97,7 @@ Canonical spine: **Workspace → Perspective → Queue → Row → Drawer → Co
 
 ## Expanded glossary
 
-Additional terms (packet rollup, queue selection, etc.): `../../core/glossary.md` (transitional — vertical-specific detail).
+Additional terms (packet rollup, queue selection, etc.): `../../platform/governance/glossary.md` (transitional — vertical-specific detail).
 
 ---
 

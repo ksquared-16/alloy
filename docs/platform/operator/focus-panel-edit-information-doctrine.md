@@ -2,7 +2,7 @@
 
 **Status:** Approved / frozen (June 2026) — Phase 1 complete; edit mutations deferred to Phase 2  
 **Scope:** Alloy OS Focus Panel (System 5 Universal Cards)  
-**Related:** [card-interaction-expansion-doctrine.md](./card-interaction-expansion-doctrine.md), [universal-card-archetypes.md](./universal-card-archetypes.md), [card-content-template-field-inclusion-doctrine.md](./card-content-template-field-inclusion-doctrine.md), [operational-action-doctrine.md](./operational-action-doctrine.md)
+**Related:** [card-interaction-expansion-doctrine.md](./card-interaction-expansion-doctrine.md), [universal-universal-card-archetypes.md](./universal-universal-card-archetypes.md), [card-content-template-field-inclusion-doctrine.md](./card-content-template-field-inclusion-doctrine.md), [operational-action-doctrine.md](./operational-action-doctrine.md)
 
 ---
 

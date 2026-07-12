@@ -18,7 +18,7 @@ Full strict graph (tests + scripts + Playwright):
 cd web && npm run typecheck:tests
 ```
 
-Required when changing test files, scripts, Playwright specs, or shared types that tests import. CI runs both jobs on every `web/**` PR. See `docs/governance/typescript-performance.md`.
+Required when changing test files, scripts, Playwright specs, or shared types that tests import. CI runs both jobs on every `web/**` PR. See `docs/platform/governance/typescript-performance.md`.
 
 Build-only alias (identical to `typecheck`):
 

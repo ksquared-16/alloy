@@ -1,6 +1,6 @@
 # Editable Card — Bulk Convergence Plan
 
-**Path:** `docs/sprints/06_2026/premium-operational-experience/editable-card-convergence-plan.md`
+**Path:** `docs/sprints/archive/06_2026/premium-operational-experience/editable-card-convergence-plan.md`
 **Status:** Plan (June 2026). Pattern-family convergence onto the canonical Editable Card Runtime.
 **Companion:** [`editable-card-runtime.md`](../../../platform/experience/editable-card-runtime.md) (the runtime) · `web/tests/experience/editing/editableCardContractHarness.tsx` (the reusable behavioral harness).
 

@@ -1,6 +1,6 @@
 # Premium Operational Experience — Sprint Roadmap
 
-**Path:** `docs/sprints/06_2026/premium-operational-experience/sprint-roadmap.md`
+**Path:** `docs/sprints/archive/06_2026/premium-operational-experience/sprint-roadmap.md`
 **Status:** Roadmap (June 2026). Sequencing for closing the [Experience Audit](./experience-audit.md) under the two new doctrines.
 **Ranked by:** operator impact × foundational value, balanced against implementation effort and architectural risk.
 

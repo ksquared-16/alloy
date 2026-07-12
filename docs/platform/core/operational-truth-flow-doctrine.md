@@ -4,7 +4,7 @@
 
 > **This doctrine is complementary, not a replacement.** It introduces a second axis over the existing operating model; it does **not** modify the frozen five-plane surface model in [`./operational-ux-doctrine.md`](./operational-ux-doctrine.md). The two axes compose. See "Two orthogonal axes" below.
 
-> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The frozen [`./operational-expansion-phase1-architecture-rfc.md`](./operational-expansion-phase1-architecture-rfc.md) ratifies the following additions to this doctrine; treat them as canonical alongside the five layers and four laws below:
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The frozen [`../rfcs/operational-expansion-phase1-architecture-rfc.md`](../rfcs/operational-expansion-phase1-architecture-rfc.md) ratifies the following additions to this doctrine; treat them as canonical alongside the five layers and four laws below:
 > - **No sixth layer (RFC D1).** L1–L5 is sufficient; Forecasting lives in the Planning **plane** consuming L3+L4, not as a truth-flow layer.
 > - **Operational Fact contract (RFC D2).** L4 fact streams conform to a domain-neutral contract (immutable/append-only, corrected-by-reference, event-emitting, provenance FK, versioned emitted event) — a contract + conformance test, not a base class or shared table.
 > - **Facts vs events / per-domain storage (RFC D3).** Canonical operational facts live in **domain-owned authoritative stores**; `workflow_events` is the universal **event** log that *communicates* fact lifecycle and is **never** an authoritative fact store. No universal `operational_facts` table. Cross-domain timelines are a subject-indexed read-model projection.
@@ -70,7 +70,7 @@ Canonical homes today: `locations` (`site` / `unit`), `location_program_categori
 **Records commitments.** What the organization has agreed to do: Lead, Enrollment proposal, Agreement, Placement, Schedule Assignment.
 
 - Intent is **committed truth** — a system of record — distinct from a proposal/forecast.
-- Intent already has its canonical, complete implementation for enrollment: `child_enrollment_agreements` → `child_placements` → `schedule_assignments`, created via the `approve_enrollment` handoff from the OCM enrollment proposal. See [`./core/placement-system.md`](./core/placement-system.md).
+- Intent already has its canonical, complete implementation for enrollment: `child_enrollment_agreements` → `child_placements` → `schedule_assignments`, created via the `approve_enrollment` handoff from the OCM enrollment proposal. See [`./placement-system.md`](./placement-system.md).
 - **Proposal (intent-to-be) and committed Intent stay separate.** The OCM enrollment proposal is pre-commitment; the agreement/placement/schedule rows are the commitment. Do not collapse them.
 - Every future commitment domain copies this template (own participation entity, effective-dated, provenance FKs back to its source).
 
@@ -90,16 +90,16 @@ Canonical homes today: `locations` (`site` / `unit`), `location_program_categori
 - **Facts are immutable.** Never overwrite operational history. Corrections are **new effective-dated facts**, not edits-in-place. Effective-dated supersede is the universal mutation pattern (see [`../../web/lib/childcareOperational/effectiveDating.ts`](../../web/lib/childcareOperational/effectiveDating.ts)).
 - Every meaningful fact emits an event on `workflow_events` (`emitEvent` → `workflow_events` → `workflowRun`).
 - Facts are recorded from the Operations plane and reviewed from the Records plane; they are authored by **Actions**, never by queue rows or projections.
-- Attendance is the **keystone fact stream**: billing, ratio compliance, and forecasting all derive from it. See [`./modules/attendance-system.md`](./modules/attendance-system.md).
+- Attendance is the **keystone fact stream**: billing, ratio compliance, and forecasting all derive from it. See [`../modules/attendance-system.md`](../modules/attendance-system.md).
 
 ### L5 — Operational Consequences
 
 **Financial and reporting outcomes derived from Facts.** Charges, Invoices, Payments, Ledger, GL, Compliance, Forecasting, Reporting.
 
 - **Financials derive from operational facts, not from enrollment/intent directly, and not from the jobs vertical.** A child being enrolled does not create a charge; a recorded operational fact (attendance against an agreement, a scheduled service delivered) does.
-- Billing must be **generalized before childcare billing is built** — charges/ledger/GL reference a billable source (enrollment agreement + attendance facts), not `job_id`. See [`./modules/billing-financials-platform.md`](./modules/billing-financials-platform.md).
+- Billing must be **generalized before childcare billing is built** — charges/ledger/GL reference a billable source (enrollment agreement + attendance facts), not `job_id`. See [`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md).
 - Consequences are append-oriented and auditable; corrections follow the same immutability discipline as Facts.
-- **The L4 → L5 bridge is its own layer: Operational Consumption.** Facts do not become Consequences by magic. The interpretation step — *given this fact, what commercial meaning should exist?* — is named and recorded as a first-class runtime object: a **Consumption Event** resolving to zero-or-more **Resolved Obligations**, which (only when drafted) link to a draft Charge. Consumption **consumes** the Commercial Model resolver; it posts nothing and never mutates authoritative money. The trigger fact stays in `workflow_events`; the Consumption Event is the canonical runtime *contract* on which Resolution builds. See [`./modules/operational-consumption-platform.md`](./modules/operational-consumption-platform.md).
+- **The L4 → L5 bridge is its own layer: Operational Consumption.** Facts do not become Consequences by magic. The interpretation step — *given this fact, what commercial meaning should exist?* — is named and recorded as a first-class runtime object: a **Consumption Event** resolving to zero-or-more **Resolved Obligations**, which (only when drafted) link to a draft Charge. Consumption **consumes** the Commercial Model resolver; it posts nothing and never mutates authoritative money. The trigger fact stays in `workflow_events`; the Consumption Event is the canonical runtime *contract* on which Resolution builds. See [`../modules/operational-consumption-platform.md`](../modules/operational-consumption-platform.md).
 
 ---
 
@@ -126,7 +126,7 @@ Scope note: this records the canonical direction. The schema/runtime implementat
 
 - **Childcare builds only on the committed enrollment foundation:** `child_enrollment_agreements`, `child_placements`, `schedule_assignments`, and the OCM enrollment proposal. New childcare operational work references these, not ad-hoc fields.
 - **Job-vertical financial and schedule tables are off-limits to new childcare work:** `schedules`, `assignments`, `recurrence_plans`, `customer_subscriptions`, `placement_candidates` (waitlist grain), and job-anchored `charges` / `gl_*` are the cleaning/services vertical. Do not reuse them for childcare scheduling, attendance, or billing, and do not wrap an enrolled child in a `job`.
-- **Each future module follows the namespace decision** in [`../platform_convergence/child_namespace_decision.md`](../platform_convergence/child_namespace_decision.md) §6: durable child = `child.*` / `customer_member`; module data on the module's **own** participation entity via a `{module}-child context`; never extend `inquiry_child` beyond enrollment.
+- **Each future module follows the namespace decision** in [`../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6: durable child = `child.*` / `customer_member`; module data on the module's **own** participation entity via a `{module}-child context`; never extend `inquiry_child` beyond enrollment.
 
 ---
 
@@ -161,13 +161,13 @@ Every new operational capability supplies artifacts at each layer rather than a 
 | Concern | Doctrine |
 |---------|----------|
 | Surface axis (five planes, Operations/Records, tabs vs actions) | [`./operational-ux-doctrine.md`](./operational-ux-doctrine.md) |
-| Committed enrollment foundation (Intent) | [`./core/placement-system.md`](./core/placement-system.md) |
-| Child namespace per module (Facts/Consequences modules) | [`../platform_convergence/child_namespace_decision.md`](../platform_convergence/child_namespace_decision.md) |
-| Attendance facts (keystone L4) | [`./modules/attendance-system.md`](./modules/attendance-system.md) |
-| Billing generalization (L5) | [`./modules/billing-financials-platform.md`](./modules/billing-financials-platform.md) |
+| Committed enrollment foundation (Intent) | [`./placement-system.md`](./placement-system.md) |
+| Child namespace per module (Facts/Consequences modules) | [`../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) |
+| Attendance facts (keystone L4) | [`../modules/attendance-system.md`](../modules/attendance-system.md) |
+| Billing generalization (L5) | [`../modules/billing-financials-platform.md`](../modules/billing-financials-platform.md) |
 | Billing maturity (supplemental, current state) | [`../product/billing-and-financials.md`](../product/billing-and-financials.md) |
-| Actions / event spine (how facts are authored) | [`./modules/actions-and-workflows.md`](./modules/actions-and-workflows.md) |
-| Planning / analytics measurement layer | [`./modules/operational-intelligence-platform.md`](./modules/operational-intelligence-platform.md) |
+| Actions / event spine (how facts are authored) | [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md) |
+| Planning / analytics measurement layer | [`../modules/operational-intelligence-platform.md`](../modules/operational-intelligence-platform.md) |
 | Effective-dated supersede pattern (code) | `web/lib/childcareOperational/effectiveDating.ts` |
 
 ---

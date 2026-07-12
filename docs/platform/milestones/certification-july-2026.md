@@ -7,7 +7,7 @@
 Companion documents:
 
 - [`platform-manifesto.md`](./platform-manifesto.md) — constitutional engineering doctrine (required reading)
-- [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md) — milestone summary for onboarding
+- [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md) — milestone summary for onboarding
 
 ---
 

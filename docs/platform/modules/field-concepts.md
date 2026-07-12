@@ -104,7 +104,7 @@ Consumers should read business fields and choice options from:
 | **Configuration Workspace Doctrine** | **REFERENCE IMPLEMENTATION** |
 | **Field Platform** | **ACTIVE** |
 
-Next phase: **Field Platform Consumer Convergence** (Queue Rows reference adoption complete — see `docs/sprints/08_2026/field-platform-consumer-convergence.md`).
+Next phase: **Field Platform Consumer Convergence** (Queue Rows reference adoption complete — see `docs/sprints/archive/08_2026/field-platform-consumer-convergence.md`).
 
 ---
 

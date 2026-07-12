@@ -16,7 +16,7 @@ This is **not** another doctrine document. It is the **synthesis** that converts
 | [Interaction Grammar](./interaction-grammar.md) | Laws (ownership + movement) |
 | [Operator Story](./operator-story.md) | Lived experience |
 | [Alloy Visual Language](./alloy-visual-language.md) | Look & feel (mockup bridge) |
-| [Operational UX Architecture](../operational-ux-doctrine.md) | Planes / domains share one architecture |
+| [Operational UX Architecture](../core/operational-ux-doctrine.md) | Planes / domains share one architecture |
 
 > **Vocabulary note:** **Subject** and **Mission** are the operator-facing names for what the Canonical Interaction Model calls **Record of Attention** and **Context Frame** (both now in the glossary). **Summary / Work / Activity** are the **canonical runtime vocabulary** for the three drawer **Modes** (earlier drafts used Overview / Operations / Activity). The concepts are identical across docs. See [Part 2](#part-2--runtime-spine).
 
@@ -82,7 +82,7 @@ The **same Subject** can be reused across **different Missions** — the Wright 
 | **Work** | Active operational surfaces (cards) for the work in play |
 | **Activity** | History / timeline of facts |
 
-Per-domain operational surfaces (Billing, Attendance, Schedule, Placement) appear as **cards within Work** — never as separate drawer products. Progressive Hidden / Startable / Active states carry forward unchanged from `../operational-ux-doctrine.md`.
+Per-domain operational surfaces (Billing, Attendance, Schedule, Placement) appear as **cards within Work** — never as separate drawer products. Progressive Hidden / Startable / Active states carry forward unchanged from `../core/operational-ux-doctrine.md`.
 
 ### Work Unit entry (Operational Mode — default state)
 
@@ -435,7 +435,7 @@ reopen the architecture.
 | Interaction laws | [`./interaction-grammar.md`](./interaction-grammar.md) |
 | Lived operator experience | [`./operator-story.md`](./operator-story.md) |
 | Visual doctrine | [`./alloy-visual-language.md`](./alloy-visual-language.md) |
-| Planes / domains | [`../operational-ux-doctrine.md`](../operational-ux-doctrine.md) |
+| Planes / domains | [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md) |
 | Drawer / queue / record | [`./drawer-system.md`](./drawer-system.md), [`./queue-system.md`](./queue-system.md), [`../core/record-system.md`](../core/record-system.md) |
 | Card / section / field authoring | [`./experience-builder-doctrine.md`](./experience-builder-doctrine.md) |
 | Platform vs configuration | [`../modules/configuration-platform.md`](../modules/configuration-platform.md) |

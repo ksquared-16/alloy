@@ -4,7 +4,7 @@
 
 Consolidates routing, navigation, and workspace landing rules. Implementation detail for work units lives in `business-process-system.md`.
 
-> **Platform stabilization (July 2026).** Record selection (`:recordId` segment) is served by **Focus Panel + VM Runtime** — not legacy drawer products. Surface Host + Presentation Runtime own warm navigation between Workspace and Work Unit. **No legacy drawer fallback** exists for unsupported entities. Canonical: [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md).
+> **Platform stabilization (July 2026).** Record selection (`:recordId` segment) is served by **Focus Panel + VM Runtime** — not legacy drawer products. Surface Host + Presentation Runtime own warm navigation between Workspace and Work Unit. **No legacy drawer fallback** exists for unsupported entities. Canonical: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md).
 
 ---
 
@@ -53,7 +53,7 @@ Catalog source: `loadOperatorLifecycleLandingCards` (same as landing tiles).
 
 **Doctrine:** [`../operator/workspace-v3-command-center-doctrine.md`](../operator/workspace-v3-command-center-doctrine.md) (Rev 2)  
 **Operational Surfaces:** [`../operator/workspace-v3-operational-surface-doctrine.md`](../operator/workspace-v3-operational-surface-doctrine.md)  
-**Sprint packs:** [Sprint 1](../../sprints/06_2026/workspace-v3-operational-command-center/README.md) · [Sprint 2](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md) · [Sprint 3 — Evolution Reset](../../sprints/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md)
+**Sprint packs:** [Sprint 1](../../sprints/archive/06_2026/workspace-v3-operational-command-center/README.md) · [Sprint 2](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-2-evolution.md) · [Sprint 3 — Evolution Reset](../../sprints/archive/06_2026/workspace-v3-operational-command-center/sprint-3-evolution-reset.md)
 
 Four zones — **one question each**. Visual changes are **evolution inside existing chrome** — see Sprint 3.
 
@@ -122,7 +122,7 @@ Layout locked: `../../system/work-unit-layout-doctrine.md` (V3).
 | **Location operating surface** | `LocationsConfigurationPage` | Inline create panel; successful create selects new site; **no drawer** |
 | **Legacy drawer fallback** | **None** | `AdminEntityDrawerLegacy` deleted; unsupported entities fail closed |
 
-Authenticated verification: [`../../sprints/07_2026/platform-simplification-staging-qa-checklist.md`](../../sprints/07_2026/platform-simplification-staging-qa-checklist.md).
+Authenticated verification: [`../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md`](../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md).
 
 
 ## Drawer navigation (summary)

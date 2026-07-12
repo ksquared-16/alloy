@@ -16,7 +16,7 @@
 | [`interaction-grammar.md`](./interaction-grammar.md) | Laws (ownership + movement) |
 | [`universal-card-system.md`](./universal-card-system.md) | System 4 card design freeze |
 | [`runtime-perspective-compatibility-layer.md`](./runtime-perspective-compatibility-layer.md) | Interim perspective derivation |
-| [`../../sprints/06_2026/alloy_os_operational_workflow_validation.md`](../../sprints/06_2026/alloy_os_operational_workflow_validation.md) | Final design pressure test |
+| [`../../sprints/archive/06_2026/alloy_os_operational_workflow_validation.md`](../../sprints/archive/06_2026/alloy_os_operational_workflow_validation.md) | Final design pressure test |
 
 ---
 

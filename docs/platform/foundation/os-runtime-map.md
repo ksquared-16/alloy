@@ -7,7 +7,7 @@ side effects** live. Companion to the implemented doctrine:
 [`universal-card-lifecycle.md`](../operator/universal-card-lifecycle.md) ·
 [`focus-panel-composition-v2-and-editing.md`](../operator/focus-panel-composition-v2-and-editing.md) ·
 [`experience-builder-doctrine.md`](../operator/experience-builder-doctrine.md) ·
-[`presentation-runtime-doctrine.md`](../operator/presentation-runtime-doctrine.md) ·
+[`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../archive/2026-06-presentation-runtime/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) ·
 [`operational-runtime-topology.md`](../runtime/operational-runtime-topology.md) (the literal L0–L7 layer stack).
 
 > **Provenance + honest scope.** This map began as a *client-experience* OS model (derived

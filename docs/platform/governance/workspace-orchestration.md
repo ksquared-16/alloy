@@ -4,7 +4,7 @@
 
 This document defines how Alloy **Cursor windows, git worktrees, agents, language servers, dev servers, and validation commands** should coexist on a developer machine. It is infrastructure only — no product runtime behavior.
 
-Related: `docs/governance/typescript-performance.md` (typecheck memory and scripts).
+Related: `docs/platform/governance/typescript-performance.md` (typecheck memory and scripts).
 
 ---
 

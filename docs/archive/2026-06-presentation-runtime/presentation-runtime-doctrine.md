@@ -7,12 +7,12 @@ superseded_by: ../experience/presentation-runtime-v2.md
 
 # Presentation Runtime Doctrine
 
-> **Superseded (July 2026).** Shipped Presentation Runtime V2 is canonical at [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md). This operator-folder copy records the June 2026 design-stage umbrella only. See also [`platform/foundation/platform-freeze-july-2026.md`](../foundation/platform-freeze-july-2026.md).
+> **Superseded (July 2026).** Shipped Presentation Runtime V2 is canonical at [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md). This operator-folder copy records the June 2026 design-stage umbrella only. See also [`platform/milestones/freeze-july-2026.md`](../foundation/milestones/freeze-july-2026.md).
 
 **Status:** Superseded architecture doctrine (June 2026 design stage).
 **Scope:** The unifying doctrine for how Alloy presents record truth to operators across every surface, and how administrators author that presentation.
 **Supersedes:** "Layout" as **product language** (storage terms unchanged — see §8).
-**Source sprint:** [`docs/sprints/06_2026/presentation-runtime-architecture/`](../../sprints/06_2026/presentation-runtime-architecture/) (full deliverables, mockups, surface inventory, reuse map, decision log).
+**Source sprint:** [`docs/sprints/archive/06_2026/presentation-runtime-architecture/`](../../sprints/archive/06_2026/presentation-runtime-architecture/) (full deliverables, mockups, surface inventory, reuse map, decision log).
 
 > This doc is the distilled, durable subset. It does **not** restate the whole sprint. It records only the approved decisions other platform work must respect. For rationale, alternatives, and the migration phasing, read the sprint.
 
@@ -27,7 +27,7 @@ The Presentation Runtime is the **umbrella** over the already-frozen presentatio
 | **Presentation Runtime** (this doc) | The universal presentation layer + three-axis model + ownership + lifecycle | Approved doctrine, design stage |
 | `experience-builder-doctrine.md` | LayoutDoc authoring, builder, queue v3, actions/widgets | Reference implementation (Lead/Opportunity) |
 | `universal-card-system.md` (System 4) | Card primitive — anatomy, tiers, density, grid | Design freeze |
-| `universal-card-archetypes.md` (5A) | 8 card archetypes | Approved / implemented in Focus Panel |
+| `universal-universal-card-archetypes.md` (5A) | 8 card archetypes | Approved / implemented in Focus Panel |
 | `card-interaction-expansion-doctrine.md` (5B) | 5 interaction/expansion models | Doctrine; runtime not fully built |
 | `card-content-template-field-inclusion-doctrine.md` (5C) | Field inclusion at compact/expanded/drill/workspace | Doctrine; not fully built |
 | `canonical-interaction-model.md` | The interaction spine | Canonical |
@@ -192,9 +192,9 @@ Schema for a generalized Design Surface document, grid-engine internals, Viewpoi
 
 | Concern | Doc |
 |---|---|
-| Full sprint (rationale, mockups, inventory, phasing) | [`../../sprints/06_2026/presentation-runtime-architecture/`](../../sprints/06_2026/presentation-runtime-architecture/) |
+| Full sprint (rationale, mockups, inventory, phasing) | [`../../sprints/archive/06_2026/presentation-runtime-architecture/`](../../sprints/archive/06_2026/presentation-runtime-architecture/) |
 | Interaction spine | [`canonical-interaction-model.md`](./canonical-interaction-model.md) |
-| Card primitive / archetypes / interaction / templates | [`universal-card-system.md`](./universal-card-system.md), [`universal-card-archetypes.md`](./universal-card-archetypes.md), [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md), [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) |
+| Card primitive / archetypes / interaction / templates | [`universal-card-system.md`](./universal-card-system.md), [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md), [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md), [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) |
 | LayoutDoc authoring (reference implementation; **drawer authoring is transitional legacy**) | [`experience-builder-doctrine.md`](./experience-builder-doctrine.md) |
 | Drawer sunset / Focus Panel convergence (sunset matrix + freeze rule + editing gap) | [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md) |
 | Analytics / metrics | [`../modules/operational-intelligence-platform.md`](../modules/operational-intelligence-platform.md) |

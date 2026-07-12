@@ -103,4 +103,4 @@ These are the exact seams Runtime Adoption must wire. Each is labeled *presentat
 | #64 | Experience Builder V3 — freeze doctrine + recursion proofs (Children + Financial Config) |
 | #68 | /surfaces completion — stacked queue row, grain/conditions, custom-field wiring, **Focus Panel nested-surface editing** |
 
-Sprint log: [`docs/sprints/07_2026/surfaces-presentation-runtime-completion.md`](../../sprints/07_2026/surfaces-presentation-runtime-completion.md).
+Sprint log: [`docs/sprints/archive/07_2026/surfaces-presentation-runtime-completion.md`](../../sprints/archive/07_2026/surfaces-presentation-runtime-completion.md).

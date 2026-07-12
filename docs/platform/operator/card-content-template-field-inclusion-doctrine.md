@@ -2,7 +2,7 @@
 
 **Revision:** 1  
 **Status:** Approved doctrine (June 2026) — **documented; template authoring not fully built**  
-**Extends:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`universal-card-archetypes.md`](./universal-card-archetypes.md) (System 5A) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) (System 5B)
+**Extends:** [`operational-surface-design-system.md`](./operational-surface-design-system.md) (System 5) · [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md) (System 5A) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) (System 5B)
 
 ---
 
@@ -416,6 +416,6 @@ type FocusPanelContentTemplate = {
 ## Cross-references
 
 - Interaction models: [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md)
-- Archetypes: [`universal-card-archetypes.md`](./universal-card-archetypes.md)
+- Archetypes: [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md)
 - Visual design: [`operational-surface-design-system.md`](./operational-surface-design-system.md)
 - Field / config platform: [`../modules/configuration-platform.md`](../modules/configuration-platform.md)

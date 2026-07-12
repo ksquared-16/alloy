@@ -1,6 +1,6 @@
 # Experience Audit — Premium Operational Experience Sprint
 
-**Path:** `docs/sprints/06_2026/premium-operational-experience/experience-audit.md`
+**Path:** `docs/sprints/archive/06_2026/premium-operational-experience/experience-audit.md`
 **Status:** Audit (June 2026). Evidence base for the Operational Experience Doctrine and Operational Motion Doctrine.
 **Method:** Six parallel subsystem investigations grounded in code (workspace, work-unit/queue, drawers, cards, navigation/runtime, motion), cross-read against the locked performance/reveal doctrines.
 

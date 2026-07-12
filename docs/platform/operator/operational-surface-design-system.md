@@ -18,14 +18,14 @@
 | **System 3** | Focus Panel shell — header chrome, mode control, scroll contract | Runtime Spec Part 5 |
 | **System 4** | Universal Card primitive — anatomy, tiers, density, grid engine | [`universal-card-system.md`](./universal-card-system.md) |
 | **System 5** | **Operational Surface Design** — how cards, headers, modes, color, density, and embedded workspaces **look and compose** | **This document** |
-| **System 5A** | Universal Card Archetypes | [`universal-card-archetypes.md`](./universal-card-archetypes.md) |
+| **System 5A** | Universal Card Archetypes | [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md) |
 | **System 5B** | Card interaction & expansion | [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) |
 | **System 5C** | Content templates & field inclusion | [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) |
 | **Operational Mode** | Default Work Unit state — subject resolution, Browse retirement | [`operational-mode-default-state-doctrine.md`](./operational-mode-default-state-doctrine.md) |
 
 **System 5 does not replace Systems 1–4.** It is the missing layer between runtime doctrine and pixels. After System 5, engineers implement — they do not invent UI.
 
-**System 5A** extends System 5 with purpose-specific **Universal Card Archetypes** — see [`universal-card-archetypes.md`](./universal-card-archetypes.md).
+**System 5A** extends System 5 with purpose-specific **Universal Card Archetypes** — see [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md).
 
 **System 5B** defines **card interaction models** (Expand, Embedded Workspace, Drill View, Change Subject, External) — see [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md).
 

@@ -4,7 +4,7 @@
 
 **Status:** Canonical doctrine (Track 2, Phase 1 — June 2026). **Doctrine lock only; no runtime code changes in this phase.**
 **Scope:** Primary operational routes — `/workspace`, `/workspace/work-unit/:slug` (+ `:recordId`), and the navigations between them.
-**Companion evidence:** [`../../sprints/06_2026/operational-runtime-doctrine-phase-1.md`](../../sprints/06_2026/operational-runtime-doctrine-phase-1.md) (current-behavior map + first implementation plan).
+**Companion evidence:** [`../../sprints/archive/06_2026/operational-runtime-doctrine-phase-1.md`](../../sprints/archive/06_2026/operational-runtime-doctrine-phase-1.md) (current-behavior map + first implementation plan).
 **Builds on (does not replace):** `docs/system/adminv2-runtime-performance-doctrine.md` (locked reveal/queue/drawer gates), `docs/platform/operator/surface-view-model-composition.md` (Surface VM law).
 
 > **North star.** Alloy is an **operating system**, not a web app assembling pages. The operator must **never visibly watch Alloy build itself**. The only acceptable transition for a primary operational route is: **BOS transition / intentional OS reveal → the complete final surface appears once.** The bar is not "data eventually loads" — it is "the operator never notices loading."

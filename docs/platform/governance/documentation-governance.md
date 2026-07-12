@@ -90,7 +90,7 @@ Remaining repository docs are **baselined** for metadata adoption in later waves
 | **Sprints** | `docs/sprints/` | Execution history — not primary doctrine |
 | **Audits** | `docs/audits/` | Point-in-time investigations and planning artifacts |
 | **Archive** | `docs/archive/` | Superseded material — not current truth |
-| **Export packs** | `docs/export/` | Portable handoff bundles (scheduled for retirement) |
+| **Export packs** | `docs/archive/2026-06-handoff-packs/` | Portable handoff bundles (scheduled for retirement) |
 
 Navigation hub: `docs/README.md`
 
@@ -155,7 +155,7 @@ AI/Cursor load order uses:
 - Generated schema docs under `docs/schema/`
 - Supabase CSV reference
 - Locked runtime doctrines in `docs/system/` (performance, queue record, BOS identity)
-- Agent repo boundaries: `docs/governance/agent-repo-boundaries.md`
+- Agent repo boundaries: `docs/platform/governance/agent-repo-boundaries.md`
 
 Sprints, audits, and archive **excluded** from default source pack unless explicitly needed for the task.
 
@@ -171,7 +171,7 @@ Current frozen (July 2026):
 - Queue preview boundary
 - AdminV2 reveal gates
 - BOS human-in-the-loop
-- Platform architecture freeze (`platform/foundation/platform-freeze-july-2026.md`)
+- Platform architecture freeze (`platform/milestones/freeze-july-2026.md`)
 
 ---
 

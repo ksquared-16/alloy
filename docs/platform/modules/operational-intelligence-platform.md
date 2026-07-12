@@ -295,7 +295,7 @@ V1 settings expose active playbooks with **Edit targets** and **Experience place
 
 ## Analytics workspace (Phase 3 — deferred)
 
-Design plan: `docs/sprints/06_2026/analytics_workspace_shell_plan.md` — dedicated route nav (beyond modal). Modal + admin config delivered in Phase 3A.
+Design plan: `docs/sprints/archive/06_2026/analytics_workspace_shell_plan.md` — dedicated route nav (beyond modal). Modal + admin config delivered in Phase 3A.
 
 ---
 

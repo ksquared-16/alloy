@@ -252,5 +252,5 @@ Tests live under `web/tests/analytics/`. Existing OIP/metric tests remain author
 | OIP metric types | `web/lib/metrics/types.ts` |
 | Metric platform types | `web/lib/metrics/platform/types.ts` |
 | Render pipeline | `web/lib/metrics/platform/renderMetricPlacements.ts` |
-| Runtime convergence analysis | `docs/sprints/06_2026/analytics-operational-intelligence-platform/04-runtime-convergence.md` |
+| Runtime convergence analysis | `docs/sprints/archive/06_2026/analytics-operational-intelligence-platform/04-runtime-convergence.md` |
 </invoke>

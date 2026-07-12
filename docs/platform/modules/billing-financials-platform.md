@@ -2,9 +2,9 @@
 
 **Status:** Canonical module doctrine (June 2026). Defines how **Operational Consequences (L5)** — charges, invoices, payments, ledger, GL — derive from operational facts, and locks the decision to **generalize billing before building childcare billing**. **The five P3.1 implementation gates are ratified and built, P3.2 rate configuration + Rate Resolution is built, and P3.3 draft Charge Resolution + a minimum responsibility shape + a read-only preview API (P3.3.1) are built (June 2026)** — see "P3.3 as-built", "P3.2 as-built", "Ratified P3.1 implementation gates", and "P3.1 as-built" below. Posting (invoices, AR, payments, ledger/GL writes), split/subsidy responsibility, cadence/proration, and subsidy remain deferred.
 
-> **Layer:** Billing is **L5 Operational Consequences** in [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md). It derives from **L4 Operational Facts** (attendance, delivered service), targets **L3 Expectations** (expected tuition/revenue) for variance, and reads **L1 Configuration** (rate rules). It never derives directly from enrollment/intent.
+> **Layer:** Billing is **L5 Operational Consequences** in [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md). It derives from **L4 Operational Facts** (attendance, delivered service), targets **L3 Expectations** (expected tuition/revenue) for variance, and reads **L1 Configuration** (rate rules). It never derives directly from enrollment/intent.
 
-> **Companion (current state, supplemental):** [`../../product/billing-and-financials.md`](../../product/billing-and-financials.md) documents the billing/payments/GL stack **as wired today**. This doc is the forward platform doctrine. Where they differ, this doc is the canonical direction and the supplemental is the as-built record.
+> **Companion (current state, supplemental):** [`../../archive/2026-06-product/billing-and-financials.md`](../../archive/2026-06-product/billing-and-financials.md) documents the billing/payments/GL stack **as wired today**. This doc is the forward platform doctrine. Where they differ, this doc is the canonical direction and the supplemental is the as-built record.
 
 > **Commercial Model as-built (June 2026):** **Slice A** promoted **Service** to the first-class `financial_services` table (+ `childcare_rate_plans.service_id`); **Slice B** added **Charge Templates** (`financial_charge_templates`, `20260703120000`); **Slice C** added **Financial Policies** (`financial_policies`, `20260704120000`) — scoped (org/location/service/rate_plan), effective-dated, most-specific-wins — and kept **Charge Categories** code-owned (surfaced as reference under Accounting). **Slice D** promoted the **Charge lifecycle** (`charges` additive columns `occurs_on`/`billable_on`/`charge_template_id`/`service_id`, `20260705120000`) and wired **template-driven draft Charge Resolution** — a configured Charge Template resolves into an idempotent draft/scheduled charge (consuming Services, Templates, and the posting-review Policy), testable via a Charge Template Simulator. A/B/C are configuration; D produces **non-authoritative drafts** (recomputable, no AR/ledger/invoices). Posting, Payments, and Subsidy remain deferred and authoritative-write-only.
 
@@ -63,7 +63,7 @@ flowchart TB
 
 ## Expected vs actual revenue (L3 ↔ L5)
 
-- **Expected tuition / subsidy / revenue** are **L3 derived** projections of commitments and rate rules — never stored as authoritative rows. See [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md) (L3).
+- **Expected tuition / subsidy / revenue** are **L3 derived** projections of commitments and rate rules — never stored as authoritative rows. See [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md) (L3).
 - **Actual revenue** is the L5 consequence derived from facts.
 - Variance (expected vs actual) is an observational read model over L3 and L5; BOS may explain balances and predict delinquency, **proposing**; humans approve.
 
@@ -74,7 +74,7 @@ flowchart TB
 - Childcare billing references the **committed enrollment foundation** (`child_enrollment_agreements`, `child_placements`, `schedule_assignments`) and **attendance facts** — never the OCM proposal alone, never `opportunities.location_id`.
 - **Do not** wrap an enrolled child in a `job` to reuse job billing.
 - **Do not** introduce a parallel childcare ledger/GL or a second charges model.
-- Per [`../../platform_convergence/child_namespace_decision.md`](../../platform_convergence/child_namespace_decision.md) §6, billing data lives on its **own** billing/charge participation entity via a **billing-child context**; never extend `inquiry_child`.
+- Per [`../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6, billing data lives on its **own** billing/charge participation entity via a **billing-child context**; never extend `inquiry_child`.
 
 ---
 
@@ -91,7 +91,7 @@ Recorded for the phased plan; no schema/runtime here:
 
 ## Ratified P3.1 implementation gates (June 2026)
 
-These five decisions are **locked**. They gate **P3.1 — generalize the financial core** (the migration that makes childcare a first-class billable source). They constrain the *posting substrate* (`charges`, `ledger_transactions`, `gl_journal_lines`); everything above the substrate stays deferred (see "Explicitly deferred" below). Full rationale, alternatives, migration/back-compat analysis, and decision language: [`../../sprints/06_2026/operational_execution_p3_financial_resolution_planning.md`](../../sprints/06_2026/operational_execution_p3_financial_resolution_planning.md) §11.
+These five decisions are **locked**. They gate **P3.1 — generalize the financial core** (the migration that makes childcare a first-class billable source). They constrain the *posting substrate* (`charges`, `ledger_transactions`, `gl_journal_lines`); everything above the substrate stays deferred (see "Explicitly deferred" below). Full rationale, alternatives, migration/back-compat analysis, and decision language: [`../../sprints/archive/06_2026/operational_execution_p3_financial_resolution_planning.md`](../../sprints/archive/06_2026/operational_execution_p3_financial_resolution_planning.md) §11.
 
 **Hard rule across all five: no job-vertical regression.** Each gate is additive (nullable columns) or scoped to the childcare path; existing job-billing schema, RLS, and write flows are unchanged in P3.1. A job-vertical cutover (immutability, RLS tightening) is a separate, later, explicit decision — never an accidental side effect.
 
@@ -146,7 +146,7 @@ Boundaries held: no invoices, AR, ledger, payments, subsidy/expected-subsidy AR,
 
 ### Configuration exposure (Operational Configuration V1, Batch 0 — read-only)
 
-The financial model is now **visible** in the Configuration Runtime under a first-class **Financials** domain (`/settings/financials`) — read-only. It exposes Rate Plans + nested Rate Rules, the Financial Charge Preview inspector (over the P3.3.1 API), and **GL configuration**: **GL Codes** (`gl_accounts`) and **GL Mappings** (`gl_account_mappings`) render read-only via `loadGlConfigBundle` (`glConfigService`, admin/ops gated, no write verbs). GL belongs under Financials because GL Codes/Mappings are the accounting targets posting will map charge categories, payments, credits, deposits, subsidy, and adjustments to — even though authoring and posting are deferred. No posting, payments, subsidy, schema changes, or write flows were introduced. See [`../../sprints/06_2026/operational_configuration_v1.md`](../../sprints/06_2026/operational_configuration_v1.md) (Batch 0).
+The financial model is now **visible** in the Configuration Runtime under a first-class **Financials** domain (`/settings/financials`) — read-only. It exposes Rate Plans + nested Rate Rules, the Financial Charge Preview inspector (over the P3.3.1 API), and **GL configuration**: **GL Codes** (`gl_accounts`) and **GL Mappings** (`gl_account_mappings`) render read-only via `loadGlConfigBundle` (`glConfigService`, admin/ops gated, no write verbs). GL belongs under Financials because GL Codes/Mappings are the accounting targets posting will map charge categories, payments, credits, deposits, subsidy, and adjustments to — even though authoring and posting are deferred. No posting, payments, subsidy, schema changes, or write flows were introduced. See [`../../sprints/archive/06_2026/operational_configuration_v1.md`](../../sprints/archive/06_2026/operational_configuration_v1.md) (Batch 0).
 
 ### Rate authoring + versioning (Operational Configuration V1, Batch 1 — writable)
 
@@ -154,7 +154,7 @@ Rate Plans and Rate Rules are now **authored with effective-dated versioning** �
 
 - **Supersede / change-later, never overwrite.** "Edit" = create a new version effective on a chosen date; the prior row's `effective_end` is closed the day before (`rateAuthoringService.ts`, mirroring `supersedeChildPlacement`). The rate tables have no `status`/`supersedes_id` column, so the prior-version link lives in `metadata.supersedes_id` / `metadata.lineage_origin_id`; lifecycle status (Current / Scheduled / Superseded / Retired) is **derived** by the pure, domain-generic `lib/adminV2/operationalConfig/effectiveDatedVersioning.ts`, not stored.
 - **Operations** (role-gated POST `/api/admin/financial/rate-plans` and `/rate-rules`, dispatching `create | version | retire | void`): plan supersede **carries the prior version's currently-effective rules forward** so Rate Resolution never falls into `no_rule`; retire closes the window (non-destructive); void hard-deletes a **not-yet-started** version and **reopens its predecessor** (rollback) but is refused once a version was ever effective.
-- **One shared editor primitive** (`EffectiveDatedConfigurationEditor`) renders the version timeline + inline authoring + a **resolved-rate preview** (authoritative `resolveRate`); it is domain-generic and slated to power capacity/ratio/operating-window/schedule authoring in Batch 2. Doctrine boundary holds: nothing here writes `charges`/`ledger_transactions`/`gl_journal_lines`/invoices/AR. See [`../../sprints/06_2026/operational_configuration_v1.md`](../../sprints/06_2026/operational_configuration_v1.md) (Batch 1).
+- **One shared editor primitive** (`EffectiveDatedConfigurationEditor`) renders the version timeline + inline authoring + a **resolved-rate preview** (authoritative `resolveRate`); it is domain-generic and slated to power capacity/ratio/operating-window/schedule authoring in Batch 2. Doctrine boundary holds: nothing here writes `charges`/`ledger_transactions`/`gl_journal_lines`/invoices/AR. See [`../../sprints/archive/06_2026/operational_configuration_v1.md`](../../sprints/archive/06_2026/operational_configuration_v1.md) (Batch 1).
 
 ---
 
@@ -200,12 +200,12 @@ Code surface: vocabularies/types in `web/lib/financials/billableSource.ts`; the 
 
 | Concern | Doctrine |
 |---------|----------|
-| Truth-flow layers (Billing = L5) | [`../operational-truth-flow-doctrine.md`](../operational-truth-flow-doctrine.md) |
+| Truth-flow layers (Billing = L5) | [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md) |
 | Attendance facts (what billing derives from) | [`./attendance-system.md`](./attendance-system.md) |
 | Committed enrollment foundation | [`../core/placement-system.md`](../core/placement-system.md) |
-| Child namespace per module (billing-child context) | [`../../platform_convergence/child_namespace_decision.md`](../../platform_convergence/child_namespace_decision.md) |
+| Child namespace per module (billing-child context) | [`../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) |
 | Action / event spine (posting path) | [`./actions-and-workflows.md`](./actions-and-workflows.md) |
-| Billing as wired today (supplemental) | [`../../product/billing-and-financials.md`](../../product/billing-and-financials.md) |
+| Billing as wired today (supplemental) | [`../../archive/2026-06-product/billing-and-financials.md`](../../archive/2026-06-product/billing-and-financials.md) |
 | Financial RLS / payment-method security | [`../../audits/supabase-schema-alignment-audit.md`](../../audits/supabase-schema-alignment-audit.md) |
 
 ---

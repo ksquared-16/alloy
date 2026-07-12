@@ -184,7 +184,7 @@ Queue row API latency (~800ms–1s) is known backend debt — not a reveal regre
 - Assignment / Mine semantics follow authoritative domain assignment — not sender/recipient inference.
 - Unified **operational refresh** coordinates domain cache invalidation after authoritative mutations.
 
-See `../core/navigation-and-workspace-doctrine.md` and `../../sprints/08_2026/work-items-v3-platform/`.
+See `../core/navigation-and-workspace-doctrine.md` and `../../sprints/archive/08_2026/work-items-v3-platform/`.
 
 
 ## Related

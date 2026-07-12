@@ -1,6 +1,6 @@
 # Runtime Convergence — Executable Backlog
 
-**Path:** `docs/sprints/06_2026/premium-operational-experience/convergence-backlog.md`
+**Path:** `docs/sprints/archive/06_2026/premium-operational-experience/convergence-backlog.md`
 **Status:** Execution plan (June 2026). Turns "adopt the Experience Layer everywhere" into ordered, verifiable increments.
 **Principle:** *Converge, don't construct.* Every increment **elevates a proven subsystem** and **reduces duplication**. No new runtimes; no rewrites.
 

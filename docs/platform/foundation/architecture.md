@@ -2,7 +2,7 @@
 
 **Status:** Canonical (July 2026 stabilization). Describes **current** platform architecture — not sprint history.
 
-> **Platform stabilization (July 2026).** Alloy's operator plane consists of **nine foundational runtimes** — Presentation Runtime, Surface Host, Focus Panel Runtime, VM Runtime, Business Process Runtime, Processing Runtime, Communications Runtime, Configuration Runtime, and Current Work Runtime. There is **no legacy entity drawer runtime**. The composed drawer payload stack is **reveal/payload infrastructure behind the Focus Panel** — not a competing product surface. Canonical: [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md), [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md), [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md).
+> **Platform stabilization (July 2026).** Alloy's operator plane consists of **nine foundational runtimes** — Presentation Runtime, Surface Host, Focus Panel Runtime, VM Runtime, Business Process Runtime, Processing Runtime, Communications Runtime, Configuration Runtime, and Current Work Runtime. There is **no legacy entity drawer runtime**. The composed drawer payload stack is **reveal/payload infrastructure behind the Focus Panel** — not a competing product surface. Canonical: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md), [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md), [`../experience/surface-host-architecture.md`](../experience/surface-host-architecture.md), [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md).
 
 ---
 
@@ -41,7 +41,7 @@
 | **Processing Runtime** | Digital Mailroom operational workspace | [`../modules/documents-and-forms.md`](../modules/documents-and-forms.md) |
 | **Communications Runtime** | Command Center + Activity embed | [`../modules/communications-platform.md`](../modules/communications-platform.md) |
 | **Configuration Runtime** | Settings control plane (`/settings/*`) | [`../modules/configuration-platform.md`](../modules/configuration-platform.md) |
-| **Current Work Runtime** | Stage work completion inside Focus Panel | [`../../sprints/07_2026/alloy-operator-workspace/implementation-closeout.md`](../../sprints/07_2026/alloy-operator-workspace/implementation-closeout.md) |
+| **Current Work Runtime** | Stage work completion inside Focus Panel | [`../../sprints/archive/07_2026/alloy-operator-workspace/implementation-closeout.md`](../../sprints/archive/07_2026/alloy-operator-workspace/implementation-closeout.md) |
 
 Unsupported historical entities **fail closed** — `AdminEntityDrawer` returns `null`. Rollback is deployment/Git-based only.
 
@@ -160,7 +160,7 @@ See `../governance/deployment-and-environments.md`.
 - `../../api/api-platform-completion.md` (internal API Platform foundation complete; future API work is expansion)
 - `../platform-capabilities.md` (capability model — new operational modules are designed API-first)
 - `platform-manifesto.md` (constitutional doctrine)
-- `platform-certification-july-2026.md` (July 2026 certification)
-- `../milestones/platform-stabilization-july-2026.md` (July 2026 stabilization milestone)
+- `milestones/certification-july-2026.md` (July 2026 certification)
+- `../milestones/stabilization-july-2026.md` (July 2026 stabilization milestone)
 - `../../system/repository-state-2026-06.md` (point-in-time snapshot)
 - `docs/schema/` (generated schema reference)

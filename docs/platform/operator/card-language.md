@@ -2,7 +2,7 @@
 
 **Status:** Foundational platform doctrine (June 2026). Defines how every operational answer behaves.
 **Precedes:** the Card Library. **Follows:** [`operational-grammar.md`](./operational-grammar.md).
-**Companions:** [`card-archetypes.md`](./card-archetypes.md) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) · [`focus-panel-edit-information-doctrine.md`](./focus-panel-edit-information-doctrine.md)
+**Companions:** [`universal-card-archetypes.md`](./universal-universal-card-archetypes.md) · [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md) · [`focus-panel-edit-information-doctrine.md`](./focus-panel-edit-information-doctrine.md)
 
 > The Operational Grammar defines **why** Alloy works. The Card Language defines **how** every operational answer behaves. This is the design language every card, surface, module, and future workflow follows. Individual cards are not defined here — only the language they all speak.
 
@@ -158,4 +158,4 @@ Experiences are composed from cards. Cards are composed from operational answers
 
 ## Outcome
 
-This language governs every card in Alloy. The next document, [`card-archetypes.md`](./card-archetypes.md), defines the Card Archetypes that speak this language.
+This language governs every card in Alloy. The next document, [`universal-card-archetypes.md`](./universal-universal-card-archetypes.md), defines the Card Archetypes that speak this language.

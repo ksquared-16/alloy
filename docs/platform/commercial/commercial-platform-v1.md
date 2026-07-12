@@ -2,7 +2,7 @@
 
 **Status:** ✅ **SHIPPED & FROZEN** (V1 complete, 2026-07-03) — merged to `staging` via PR #65 (`06e5ad917`).
 **Scope:** The commercial configuration platform an operator uses to define *what their childcare business sells and charges for*.
-**Canonical:** This is the single source of truth for Commercial Platform architecture. It supersedes the pre-primitive [commercial-configuration.md](commercial-configuration.md) and consolidates the shipped state of the sprint proposals ([model-v2-reframing](../../sprints/active/commercial-model-v2-reframing.md), [language-bible](../../sprints/active/commercial-language-bible.md), [experience-01](../../sprints/active/commercial-configuration-experience-01-programs-tuition.md)).
+**Canonical:** This is the single source of truth for Commercial Platform architecture. It supersedes the pre-primitive [commercial-configuration.md](../modules/commercial-configuration.md) and consolidates the shipped state of the sprint proposals ([model-v2-reframing](../../sprints/active/commercial-model-v2-reframing.md), [language-bible](../../sprints/active/commercial-language-bible.md), [experience-01](../../sprints/active/commercial-configuration-experience-01-programs-tuition.md)).
 **Detailed reference:** [ownership-model.md](ownership-model.md) holds the exhaustive per-table/API detail; this doc is the architectural overview and entry point.
 
 > **Freeze notice.** Commercial Platform V1 is frozen. Future phases (Billing, Policies, Funding, Simulator) **consume these primitives — they do not redesign them.** Changing an entity's shape or ownership requires an explicit new sprint and a superseding doc, not an in-place edit.

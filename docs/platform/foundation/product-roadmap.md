@@ -2,7 +2,7 @@
 
 **Status:** Canonical (July 2026 stabilization). Sequencing and gaps — not a commit log.
 
-> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The "Future" framing of **Attendance/labor** and **Billing/payments** below is stale for the *backend truth-flow*: the L1–L4 operational spine (config rules, agreements/placements/schedule assignments, immutable attendance facts, expected/actual occupancy & staffing read models) and the L4→L5 Operational Consumption runtime (Slices 1–4, draft obligations) are **built** — see [`../operational-expansion-phase1-architecture-rfc.md`](../operational-expansion-phase1-architecture-rfc.md) §1 and the module docs (`../modules/attendance-system.md`, `../modules/billing-financials-platform.md`, `../modules/operational-consumption-platform.md`). What remains *future* is the operator-facing product (surfaces, Posting/authoritative money, staffing supply, forecasting) — the Implementation Waves in the RFC §6. Treat the RFC as canonical for expansion sequencing.
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The "Future" framing of **Attendance/labor** and **Billing/payments** below is stale for the *backend truth-flow*: the L1–L4 operational spine (config rules, agreements/placements/schedule assignments, immutable attendance facts, expected/actual occupancy & staffing read models) and the L4→L5 Operational Consumption runtime (Slices 1–4, draft obligations) are **built** — see [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) §1 and the module docs (`../modules/attendance-system.md`, `../modules/billing-financials-platform.md`, `../modules/operational-consumption-platform.md`). What remains *future* is the operator-facing product (surfaces, Posting/authoritative money, staffing supply, forecasting) — the Implementation Waves in the RFC §6. Treat the RFC as canonical for expansion sequencing.
 
 For capability inventory see `platform-capabilities.md`. For shipped milestones see `release-history.md`.
 
@@ -12,7 +12,7 @@ For capability inventory see `platform-capabilities.md`. For shipped milestones 
 
 Alloy is a **stable operational platform** built on finalized foundational runtimes (Presentation, Surface Host, Focus Panel, VM, Business Process, Processing, Communications, Configuration, Current Work). The canonical interaction spine is Workspace → Perspective → Queue → Row → Focus Panel → Context Frame → Mode → Card → Section → Field — see `../operator/canonical-interaction-model.md`.
 
-**Enrollment** remains the reference implementation; **Billing** is the validation case; **Attendance / Scheduling** should fit with no new paradigm. New work extends **domain surfaces and automation** atop existing runtimes — not parallel drawer or page products. Milestone: [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md).
+**Enrollment** remains the reference implementation; **Billing** is the validation case; **Attendance / Scheduling** should fit with no new paradigm. New work extends **domain surfaces and automation** atop existing runtimes — not parallel drawer or page products. Milestone: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md).
 
 ---
 
@@ -75,7 +75,7 @@ Near-term after in-progress core:
 
 ## Future — product evolution (post-freeze)
 
-Platform construction is complete ([`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md)). New execution lanes extend domain capability atop existing runtimes:
+Platform construction is complete ([`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md)). New execution lanes extend domain capability atop existing runtimes:
 
 1. **Scheduling**
 2. **Attendance**
@@ -119,13 +119,13 @@ Track in audits and close before declaring customer-ready:
 
 ## Doctrine freeze requirement
 
-Foundational platform architecture is **frozen** (July 2026). See [`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md). New canonical **runtime** behavior requires an RFC. Product documentation for Scheduling, Attendance, Billing, and related modules may evolve without reopening Platform Stabilization.
+Foundational platform architecture is **frozen** (July 2026). See [`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md). New canonical **runtime** behavior requires an RFC. Product documentation for Scheduling, Attendance, Billing, and related modules may evolve without reopening Platform Stabilization.
 
 ---
 
 ## Related
 
-- [`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md)
+- [`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md)
 - `platform-capabilities.md`
 - `release-history.md`
 - `docs/sprints/active/` — current execution

@@ -117,7 +117,7 @@ Doctrine: [`../../governance/typescript-performance.md`](../../governance/typesc
 - **Processing + Communications** — certified Operational Workspace Doctrine V3 shells
 - **Progressive reveal** — coordinated above-fold commit; no partial skeleton sections
 
-Authenticated staging verification checklist: [`../../sprints/07_2026/platform-simplification-staging-qa-checklist.md`](../../sprints/07_2026/platform-simplification-staging-qa-checklist.md)
+Authenticated staging verification checklist: [`../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md`](../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md)
 
 ---
 
@@ -182,8 +182,8 @@ These are **product expansion** lanes — not runtime stabilization:
 | Platform capabilities | [`../foundation/platform-capabilities.md`](../foundation/platform-capabilities.md) |
 | Drawer infrastructure | [`../operator/drawer-system.md`](../operator/drawer-system.md) |
 | Navigation | [`../core/navigation-and-workspace-doctrine.md`](../core/navigation-and-workspace-doctrine.md) |
-| Operational UX | [`../operational-ux-doctrine.md`](../operational-ux-doctrine.md) |
+| Operational UX | [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md) |
 | Release history | [`../foundation/release-history.md`](../foundation/release-history.md) |
 | Platform manifesto | [`../foundation/platform-manifesto.md`](../foundation/platform-manifesto.md) |
-| Platform certification | [`../foundation/platform-certification-july-2026.md`](../foundation/platform-certification-july-2026.md) |
+| Platform certification | [`../foundation/milestones/certification-july-2026.md`](../foundation/milestones/certification-july-2026.md) |
 | TypeScript operating model | [`../../governance/typescript-performance.md`](../../governance/typescript-performance.md) |

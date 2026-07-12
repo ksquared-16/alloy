@@ -60,7 +60,7 @@ In-drawer `Previous`/`Next` traverses the **operator's current view** — the ac
 
 ### 9. Actions are explicit operator intent
 
-State changes happen through **actions** — explicit operator intent routed through the canonical action/workflow path (`../modules/actions-and-workflows.md`). Display surfaces never silently mutate truth. A hidden tab/card must never hide the path to begin valid work: surfaces show *history*, actions *start* work (see `../operational-ux-doctrine.md` § tabs vs actions).
+State changes happen through **actions** — explicit operator intent routed through the canonical action/workflow path (`../modules/actions-and-workflows.md`). Display surfaces never silently mutate truth. A hidden tab/card must never hide the path to begin valid work: surfaces show *history*, actions *start* work (see `../core/operational-ux-doctrine.md` § tabs vs actions).
 
 ---
 
@@ -121,7 +121,7 @@ A change in **configuration** changes *expression*, never recorded operational t
 | Runtime Specification (synthesis; implementation bridge) | [`./alloy-runtime-specification.md`](./alloy-runtime-specification.md) |
 | Queue preview boundary | [`./queue-system.md`](./queue-system.md) |
 | Record authority | [`../core/record-system.md`](../core/record-system.md) |
-| Tabs vs. actions / progressive drawer | [`../operational-ux-doctrine.md`](../operational-ux-doctrine.md) |
+| Tabs vs. actions / progressive drawer | [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md) |
 | Actions & workflows | [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md) |
 | BOS boundary | [`../modules/ai-platform.md`](../modules/ai-platform.md) |
 | Configuration steers / code owns | [`../modules/configuration-platform.md`](../modules/configuration-platform.md) |

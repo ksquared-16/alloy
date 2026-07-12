@@ -1,6 +1,6 @@
 # Moments of Broken Illusion
 
-**Path:** `docs/sprints/06_2026/premium-operational-experience/moments-of-broken-illusion.md`
+**Path:** `docs/sprints/archive/06_2026/premium-operational-experience/moments-of-broken-illusion.md`
 **Status:** Punch list (June 2026). Companion to the [Experience Audit](./experience-audit.md).
 **Purpose:** Every place the operator is reminded they are using software, scored for triage.
 

@@ -4,7 +4,7 @@
 
 > **Platform stabilization (July 2026):** Alloy has **no supported legacy entity drawer runtime**. Canonical operator experiences use VM Runtime, Focus Panel, Settings, Processing, Communications, or explicit operating surfaces. Unsupported historical entities **fail closed** (`AdminEntityDrawer` returns `null`). Rollback is **deployment/Git-based**, not permanent dual-runtime code.
 >
-> The **Focus Panel is the canonical operator surface.** Drawer shell modules are **reveal / open-state infrastructure** only. See [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md) and [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
+> The **Focus Panel is the canonical operator surface.** Drawer shell modules are **reveal / open-state infrastructure** only. See [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md) and [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
 
 Entity detail architecture, VM ownership, and navigation semantics.
 

@@ -2,7 +2,7 @@
 
 **Status:** Canonical platform milestones (July 2026 stabilization rebaseline). **Not** a commit or sprint task log.
 
-> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** This history predates the operational truth-flow backend. Recorded here for completeness: the **L1–L4 operational spine** (config rules; effective-dated agreements/placements/schedule assignments; immutable attendance facts; expected/actual occupancy & staffing read models) and the **L4→L5 Operational Consumption runtime** (Consumption Events → Resolved Obligations → draft Charges, Slices 1–4) shipped as flag-gated/simulator backend across June–July 2026. The frozen architecture governing their productization is [`../operational-expansion-phase1-architecture-rfc.md`](../operational-expansion-phase1-architecture-rfc.md); its first delivery step is defined in [`../operational-expansion-wave1-implementation-spec.md`](../operational-expansion-wave1-implementation-spec.md).
+> **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** This history predates the operational truth-flow backend. Recorded here for completeness: the **L1–L4 operational spine** (config rules; effective-dated agreements/placements/schedule assignments; immutable attendance facts; expected/actual occupancy & staffing read models) and the **L4→L5 Operational Consumption runtime** (Consumption Events → Resolved Obligations → draft Charges, Slices 1–4) shipped as flag-gated/simulator backend across June–July 2026. The frozen architecture governing their productization is [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md); its first delivery step is defined in [`../operational-expansion-wave1-implementation-spec.md`](../operational-expansion-wave1-implementation-spec.md).
 
 ---
 
@@ -10,7 +10,7 @@
 
 ### July 2026 — Platform Stabilization Complete
 
-**Initiative closed.** Foundational platform architecture is certified stable. Formal declaration: [`platform-freeze-july-2026.md`](./platform-freeze-july-2026.md). Constitutional doctrine: [`platform-manifesto.md`](./platform-manifesto.md).
+**Initiative closed.** Foundational platform architecture is certified stable. Formal declaration: [`milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md). Constitutional doctrine: [`platform-manifesto.md`](./platform-manifesto.md).
 
 - **Architecture completed** — Presentation, Surface Host, Focus Panel, VM, Business Process, Processing, Communications, Configuration, Current Work runtimes canonical
 - **Legacy eliminated** — `AdminEntityDrawerLegacy` deleted; unsupported entities fail closed; Settings locations replace legacy drawer create
@@ -26,7 +26,7 @@
 
 ### July 2026 — Runtime Simplification & Platform Stabilization (detail)
 
-**Major platform milestone.** Foundational runtimes are complete; duplicate legacy paths removed. See [`../milestones/platform-stabilization-july-2026.md`](../milestones/platform-stabilization-july-2026.md).
+**Major platform milestone.** Foundational runtimes are complete; duplicate legacy paths removed. See [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md).
 
 #### Architecture
 
@@ -51,7 +51,7 @@
 - **TypeScript OOM eliminated** — 8 GB heap + split graphs (PR #90 `a5b8f66d8`, `ca965606c`)
 - **Canonical typecheck** — `npm run typecheck` (build) + `typecheck:tests` (full); CI both jobs
 - **Workspace orchestration** — repo dev entry coordination (PR #143 `00cee4183`)
-- **Development operating model** — `docs/governance/typescript-performance.md` canonical
+- **Development operating model** — `docs/platform/governance/typescript-performance.md` canonical
 
 #### Operator experience
 
@@ -60,7 +60,7 @@
 - **Work View continuity** — `?work_view=` deep links on work-unit routes
 - **Canonical location experience** — Settings Configuration Mode; no legacy location drawer
 
-**Staging certification base:** `61aefff37` (includes floor `e94811914`). Final certification: [`platform-certification-july-2026.md`](./platform-certification-july-2026.md).
+**Staging certification base:** `61aefff37` (includes floor `e94811914`). Final certification: [`milestones/certification-july-2026.md`](../milestones/certification-july-2026.md).
 
 ### June 2026
 

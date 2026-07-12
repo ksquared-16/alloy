@@ -2,7 +2,7 @@
 
 **Status:** Foundational platform doctrine (June 2026). Defines the reusable operational building blocks used throughout the platform.
 **Follows:** [`operational-grammar.md`](./operational-grammar.md) (why Alloy exists) · [`card-language.md`](./card-language.md) (how cards behave).
-**Code-anchored companion:** [`universal-card-archetypes.md`](./universal-card-archetypes.md) (System 5A composition primitives in `web/lib/adminV2/runtime/focusPanel/`).
+**Code-anchored companion:** [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md) (System 5A composition primitives in `web/lib/adminV2/runtime/focusPanel/`).
 
 > An archetype is **not a visual template** — it is an **operational pattern**. Every card belongs to exactly one archetype and inherits its behavior automatically.
 

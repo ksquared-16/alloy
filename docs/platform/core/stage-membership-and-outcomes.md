@@ -3,7 +3,7 @@
 **Status:** Canonical (July 2026, Enrollment Alignment sprint)
 **Companions:** `business-process-system.md`, `status-and-state-system.md`,
 `../modules/business-process-execution-platform.md`,
-`../../canonical-status-architecture.md`
+`../../platform/core/data/status-architecture.md`
 
 This doc resolves the ownership questions the earlier docs left open: how records belong to
 stages, what outcomes do, and where readiness sits. The Enrollment Process is the reference

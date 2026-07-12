@@ -16,7 +16,7 @@ An earlier draft of this doctrine carried a caveat that it was authored in a sta
 
 **Headline:** Fact → Candidate → Event → Obligation → Draft Charge is **built and integrated** across childcare enrollment, schedule, and attendance facts, including **multi-obligation fan-out per event** and a **per-obligation draft charge** write. The resolver is a pure function over a **data-driven rule registry** (`consumption_event_types`), exactly as doctrine intends. **Posting / Finalize is *partially* built** (a draft→posted status-flip primitive exists; the authoritative ledger/GL write for enrollment charges and the review→approve gate do not). The remaining frontier is the review→approve bridge + generalized Posting, **multi-*payer* split (confirmed absent)**, the BOS layer beyond the review gate, and operator-facing commercial config (the Tuition Grid). See §11 for the verified matrix and the real next batch.
 
-> Note: there is prior OC doctrine on staging — `docs/sprints/06_2026/operational_consumption_v1..v4.md` and `docs/platform/operational-truth-flow-doctrine.md`. This integration doctrine is consistent with them and the shipped slices; it is the *bridge* layer, not a competing design.
+> Note: there is prior OC doctrine on staging — `docs/sprints/archive/06_2026/operational_consumption_v1..v4.md` and `docs/platform/core/operational-truth-flow-doctrine.md`. This integration doctrine is consistent with them and the shipped slices; it is the *bridge* layer, not a competing design.
 
 ---
 

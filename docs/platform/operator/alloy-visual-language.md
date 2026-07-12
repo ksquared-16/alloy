@@ -176,7 +176,7 @@ Enrollment, Billing, Attendance, Scheduling, Staffing, Subsidy, Compliance, POS,
 | Interaction laws | [`./interaction-grammar.md`](./interaction-grammar.md) |
 | Lived operator experience | [`./operator-story.md`](./operator-story.md) |
 | Runtime Specification (synthesis; implementation bridge) | [`./alloy-runtime-specification.md`](./alloy-runtime-specification.md) |
-| Planes / domains share one architecture | [`../operational-ux-doctrine.md`](../operational-ux-doctrine.md) |
+| Planes / domains share one architecture | [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md) |
 | Card / section / field authoring | [`./experience-builder-doctrine.md`](./experience-builder-doctrine.md) |
 | Typography & presentation (existing) | [`../../system/typography-and-presentation-doctrine.md`](../../system/typography-and-presentation-doctrine.md) |
 | Locked reveal / performance gates | [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md) |

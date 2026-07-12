@@ -1,8 +1,8 @@
 # Cursor Execution Packet — Operational Expansion Implementation Wave 1
 
 **Prepared against verified `origin/staging` commit `79eff4b52b8e9c00aafe4b9a048150f12df5985a`.**
-**Authoritative implementation contract:** `docs/platform/operational-expansion-wave1-implementation-spec.md` (the "spec").
-**Frozen architecture contract:** `docs/platform/operational-expansion-phase1-architecture-rfc.md` (the "RFC").
+**Authoritative implementation contract:** `docs/sprints/archive/06_2026/operational-expansion/wave1-implementation-spec.md` (the "spec").
+**Frozen architecture contract:** `docs/platform/rfcs/operational-expansion-phase1.md` (the "RFC").
 **Ground-truth note:** every Wave 1 target file and referenced migration was re-verified present on this commit. Staging advanced 7 commits since the spec's determinism-pass baseline (`de9e44617`); **none touched any Wave 1 target** (`web/lib/operationalConsumption/**`, `web/lib/childcareOperational/attendance/**`, `web/lib/financials/**`, `web/app/api/admin/financial/consumption/**`, `supabase/migrations/**`, `web/lib/mutations/domains/**`). One mechanical reconciliation: the migration tip is now `20260715000002_entity_layouts_workspace_surface.sql`, so the Wave 1 migration timestamp must be **strictly later than `20260715000002`** (see §7). No material contradiction was found.
 
 > **Everything below is the prompt to hand to Cursor.** It is self-contained and executable without referring any decision back to Cursor. It derives entirely from the frozen RFC and the spec; it does not reproduce the spec verbatim — Cursor must open and follow the spec for full detail while treating this packet as the execution order and gates.
@@ -46,7 +46,7 @@ No behavior wired from real fact writes (that is D12b, out of scope). The consum
    - **Branch:** `feat/operational-expansion-wave1-fact-consumption-contract`.
    - Use a fresh worktree (do not work in a shared checkout). Solo agent only — no parallel writers (git race risk).
 3. Confirm a clean working tree. Record `HEAD` and `git merge-base HEAD origin/staging`.
-4. Verify the authoritative docs exist on this baseline: `docs/platform/operational-expansion-wave1-implementation-spec.md` and `docs/platform/operational-expansion-phase1-architecture-rfc.md`.
+4. Verify the authoritative docs exist on this baseline: `docs/sprints/archive/06_2026/operational-expansion/wave1-implementation-spec.md` and `docs/platform/rfcs/operational-expansion-phase1.md`.
 5. Inspect the existing migration sequence; confirm the tip is `20260715000002_entity_layouts_workspace_surface.sql` and that these referenced migrations exist: `20260629120000_childcare_attendance_facts_p2.sql`, `20260706120050_operational_consumption_foundation.sql`, `20260707120000_operational_consumption_schedule_slice2.sql`, `20260708120000_operational_consumption_attendance_slice3.sql`, `20260709120000_draft_obligation_review_slice4.sql`, `20260331120000_charges_receivables_foundation.sql`, `20260630120000_financial_substrate_generalization_p3_1.sql`.
 6. **Record baseline test state BEFORE changing code.** Run `typecheck:build` and the targeted suites (`web/tests/operationalConsumption/**`, `web/tests/childcareOperational/attendance/**`, financial lifecycle tests). The wider `web/` suite is known to carry pre-existing failures; capture the exact baseline so post-change gates compare against it, not against absolute green. Any failure you did not introduce must be shown to be pre-existing and unchanged.
 7. Re-read every implementation target named in the spec §3 and §11 before editing. If any target's current content contradicts the spec's stated behavior (e.g., attendance no longer append-only, charge status vocabulary lacks `void`), **stop** (§10).

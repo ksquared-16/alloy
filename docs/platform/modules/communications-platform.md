@@ -61,11 +61,11 @@ Communications composes `@/components/workspace/doctrine` — same primitive sta
 
 Default Work tab on open: **Overview**. Header action: **Compose New** (Overview + Inbox).
 
-Implementation: `CommunicationsWorkspaceShell`, `CommunicationsModalTabPanel`, `InboxModal`. Sprint closeout: [`../../sprints/07_2026/communications-product-shell-translation/README.md`](../../sprints/07_2026/communications-product-shell-translation/README.md).
+Implementation: `CommunicationsWorkspaceShell`, `CommunicationsModalTabPanel`, `InboxModal`. Sprint closeout: [`../../sprints/archive/07_2026/communications-product-shell-translation/README.md`](../../sprints/archive/07_2026/communications-product-shell-translation/README.md).
 
 **Operational health (Doctrine V3):** Work → Inbox, Announcements, and Scheduled (and Studio → Templates) render a flat `WorkspaceOperationalHealth` nav band via `CommunicationsWorkspaceKpiStrip` — same primitive and adapter pattern as Processing and Work Items. Overview omits the nav band. Metrics are operational only (no inventory totals such as Categories or Sent 7d). Each metric reserves a trend placeholder line.
 
-Templates and Announcements inside the modal do not require separate feature flags beyond command center. See `../../sprints/06_2026/communications-v2/operator-surface-consolidation.md`.
+Templates and Announcements inside the modal do not require separate feature flags beyond command center. See `../../sprints/archive/06_2026/communications-v2/operator-surface-consolidation.md`.
 
 
 ### Work Items convergence (Needs Reply — July 2026)
@@ -77,7 +77,7 @@ Communications **Needs Reply** threads (`attention_state` ∈ `needs_response`, 
 - **View in Work Items** / **Open in Communications** use shared navigation events and command-center pending selection.
 - Authoritative resolution or reply through Communications removes the projection after operational refresh.
 
-QA: `../../sprints/08_2026/work-items-v3-platform/qa/slice-6/`.
+QA: `../../sprints/archive/08_2026/work-items-v3-platform/qa/slice-6/`.
 
 ### Canonical communications runtime (Phase 2, July 2026)
 
@@ -156,9 +156,9 @@ Sprint closeout: [`../../sprints/2026-07/communications-activity-sprint-closeout
 
 ## Related
 
-- `../../product/communications.md` (transitional expanded reference)
+- `../../archive/2026-06-product/communications.md` (transitional expanded reference)
 - `../operator/operational-workspace-shell.md` — modal workspace shell + Doctrine V2 primitives
-- `../../sprints/06_2026/communications-v2/operator-surface-consolidation.md`
-- `../../sprints/07_2026/communications-product-shell-translation/README.md` — Communications Doctrine V2 adoption closeout
+- `../../sprints/archive/06_2026/communications-v2/operator-surface-consolidation.md`
+- `../../sprints/archive/07_2026/communications-product-shell-translation/README.md` — Communications Doctrine V2 adoption closeout
 - `docs/schema/schema-policies-and-security.md`
 - `docs/audits/supabase-schema-alignment-audit.md`

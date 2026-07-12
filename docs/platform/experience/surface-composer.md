@@ -127,5 +127,5 @@ Canonical Focus Panel Surface Composer rules (see also
 
 - [`presentation-runtime-v2.md`](./presentation-runtime-v2.md) — runtime tree and surfaces
 - [`../operator/universal-nested-surface-drill-in.md`](../operator/universal-nested-surface-drill-in.md) — nested drill-in persistence and runtime
-- [`../../sprints/07_2026/queue-row-builder-runtime-vocabulary-handoff.md`](../../sprints/07_2026/queue-row-builder-runtime-vocabulary-handoff.md) — Queue Row freeze
-- [`../../sprints/07_2026/focus-panel-composer-handoff.md`](../../sprints/07_2026/focus-panel-composer-handoff.md) — Focus Panel composer sprint
+- [`../../sprints/archive/07_2026/queue-row-builder-runtime-vocabulary-handoff.md`](../../sprints/archive/07_2026/queue-row-builder-runtime-vocabulary-handoff.md) — Queue Row freeze
+- [`../../sprints/archive/07_2026/focus-panel-composer-handoff.md`](../../sprints/archive/07_2026/focus-panel-composer-handoff.md) — Focus Panel composer sprint
