@@ -184,6 +184,20 @@ export function evaluateChildPersonMatch(input: {
     const dob = normalizeDob(input.dob);
 
     for (const member of input.householdMembers) {
+        const memberFirst = normalizePersonNamePart(member.first_name);
+        const memberLast = normalizePersonNamePart(member.last_name);
+        const nameMatches = memberFirst === first && memberLast === last;
+        if (nameMatches && dob && member.dob && normalizeDob(member.dob) !== dob) {
+            return {
+                confidence: "conflict",
+                customerMemberId: member.customer_member_id ?? undefined,
+                reasons: ["Child name matches household member but date of birth differs."],
+                blocking_conflicts: ["child_dob_mismatch"],
+            };
+        }
+    }
+
+    for (const member of input.householdMembers) {
         if (
             childIdentityMatches({
                 firstName: input.firstName,

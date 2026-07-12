@@ -49,6 +49,7 @@ import {
 import {
     buildRecommendations,
     deriveResolutionSetFromResolutions,
+    pickLatestResolutionPerSubject,
     type Escalation,
     type IdentityResolutionSet,
 } from "./recommendationBuilder";
@@ -120,6 +121,12 @@ export async function loadCaseReview(
         latestAttempt = await loadLatestAttemptForPlan(deps.supabase, { orgId: deps.orgId, planId: plan.planId });
     }
 
+    const { count: openExceptionCount } = await deps.supabase
+        .from("processing_exceptions")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", deps.orgId)
+        .eq("case_id", caseId);
+
     const blockingConflictCount = countBlockingConflicts(resolutions);
     const undecided = resolutions.filter((r) => !r.decision_action).length;
     const readiness = projectIdentityReadiness({
@@ -132,7 +139,7 @@ export async function loadCaseReview(
         hasValidApproval: Boolean(approval),
         latestAttemptOutcome:
             latestAttempt?.outcome === "preflight_rejected" ? "failed" : latestAttempt?.outcome ?? null,
-        hasOpenException: false,
+        hasOpenException: (openExceptionCount ?? 0) > 0,
     });
 
     return {
@@ -206,6 +213,14 @@ export async function buildPlan(
     let sourceResolutionVersions = input.sourceResolutionVersions;
     if (!resolutionSet) {
         const rows = await listProcessingResolutionsByCase(deps.supabase, deps.orgId, input.caseId);
+        const active = pickLatestResolutionPerSubject(rows);
+        const rejected = active.filter((r) => r.decision_action === "reject");
+        if (rejected.length > 0) {
+            throw new OperatorServiceError(
+                "resolution_rejected",
+                `Cannot build commit plan while ${rejected.length} subject(s) are rejected`,
+            );
+        }
         resolutionSet = deriveResolutionSetFromResolutions(rows);
         // Bind the plan to the resolution generations it was built from.
         sourceResolutionVersions =

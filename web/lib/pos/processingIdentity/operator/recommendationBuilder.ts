@@ -291,7 +291,6 @@ export function deriveResolutionSetFromResolutions(
     const householdRow = activeRows.find((r) => roleFromSubjectRole(r.subject_role) === "household");
     const householdRef = householdRow?.subject_ref;
     const parentRows = activeRows.filter((r) => roleFromSubjectRole(r.subject_role) === "parent");
-    const firstParentRef = parentRows[0]?.subject_ref;
 
     const subjects: ResolvedSubject[] = [];
     for (const row of activeRows) {
@@ -311,11 +310,15 @@ export function deriveResolutionSetFromResolutions(
         if (role === "parent" || role === "child") {
             base.householdRef = householdRef;
         }
-        if (role === "lead") {
-            base.householdRef = householdRef;
-            base.dependsOn = dedupeRefs([firstParentRef]);
-        }
         subjects.push(base);
+    }
+
+    const actionableParentRef = subjects.find((s) => s.role === "parent")?.ref;
+    for (const sub of subjects) {
+        if (sub.role === "lead") {
+            sub.householdRef = householdRef;
+            sub.dependsOn = dedupeRefs([actionableParentRef, householdRef]);
+        }
     }
     return { subjects };
 }

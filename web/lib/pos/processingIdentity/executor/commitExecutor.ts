@@ -146,6 +146,7 @@ export async function executeApprovedPlan(
             continue;
         }
         if (op.opKind === "no_op") {
+            if (op.targetId) refs[op.opId] = op.targetId;
             results.push(opResult(op, "committed", op.targetId, false, null));
             continue;
         }
