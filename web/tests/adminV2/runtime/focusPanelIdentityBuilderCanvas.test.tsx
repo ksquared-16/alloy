@@ -9,8 +9,13 @@ import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
 import { FocusPanelComposerProvider } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { buildDemoFocusPanelSummaryViewModel } from "@/lib/adminV2/runtime/focusPanel/demoFocusPanelSummaryViewModel";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
-import { defaultNestedSurfaceConfig, HOUSEHOLD_SURFACE_ID, CHILDREN_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    defaultNestedSurfaceConfig,
+    HOUSEHOLD_SURFACE_ID,
+    CHILDREN_SURFACE_ID,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
 vi.mock("@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions", () => ({
     useTenantFieldDefinitions: () => ({ tenantFieldDefinitions: [], loading: false }),
@@ -51,53 +56,150 @@ function demoContext() {
 }
 
 describe("Focus Panel identity builder canvas composer", () => {
-    it("Household Summary Primary Contact mounts canvas drag layout surface", () => {
-        const { context } = demoContext();
-        const model = { key: "household", title: "Household", tier: "context", span: 2, iconName: "users" } as FocusPanelCardModel;
-        act(() => {
-            root.render(
-                <FocusPanelComposerProvider initialNestedConfigs={{ [HOUSEHOLD_SURFACE_ID]: defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID) }}>
-                    <ComposerHarness surfaceId={HOUSEHOLD_SURFACE_ID} cardKey="household">
-                        <HouseholdCard model={model} context={context} />
-                    </ComposerHarness>
-                </FocusPanelComposerProvider>,
-            );
-        });
-        expect(document.querySelector('[data-nested-layout-surface="primary_contact"]')).toBeTruthy();
-        expect(document.querySelector(".fp-layout-surface--composing")).toBeTruthy();
-        expect(document.querySelector(".fp-field-instance__toolbar")).toBeTruthy();
-    });
-
-    it("Children Summary roster mounts canvas drag layout surface", () => {
+    it("Children Summary mounts canvas composer before runtime disclosure", () => {
         const { context } = demoContext();
         const model = { key: "children", title: "Children", tier: "context", span: 2, iconName: "baby" } as FocusPanelCardModel;
         act(() => {
             root.render(
                 <FocusPanelComposerProvider initialNestedConfigs={{ [CHILDREN_SURFACE_ID]: defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID) }}>
-                    <ComposerHarness surfaceId={CHILDREN_SURFACE_ID} cardKey="children">
+                    <ComposerHarness surfaceId={CHILDREN_SURFACE_ID} cardKey="children" purpose="summary">
                         <ChildrenCard model={model} context={context} />
                     </ComposerHarness>
                 </FocusPanelComposerProvider>,
             );
         });
+        expect(document.querySelector('[data-identity-compose-canvas="summary"]')).toBeTruthy();
         expect(document.querySelector('[data-nested-layout-surface="roster"]')).toBeTruthy();
         expect(document.querySelector(".fp-layout-surface--composing")).toBeTruthy();
+        expect(document.querySelector('[data-identity-disclosure-surface="true"]')).toBeFalsy();
+    });
+
+    it("Children Context Facts mounts canvas composer", () => {
+        const { context } = demoContext();
+        const model = { key: "children", title: "Children", tier: "context", span: 2, iconName: "baby" } as FocusPanelCardModel;
+        act(() => {
+            root.render(
+                <FocusPanelComposerProvider initialNestedConfigs={{ [CHILDREN_SURFACE_ID]: defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID) }}>
+                    <ComposerHarness surfaceId={CHILDREN_SURFACE_ID} cardKey="children" purpose="context_facts">
+                        <ChildrenCard model={model} context={context} />
+                    </ComposerHarness>
+                </FocusPanelComposerProvider>,
+            );
+        });
+        expect(document.querySelector('[data-identity-compose-canvas="context_facts"]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface="roster"]')).toBeTruthy();
+    });
+
+    it("Children Details mounts FocusedChild composition after child pick", () => {
+        const { context } = demoContext();
+        const model = { key: "children", title: "Children", tier: "context", span: 2, iconName: "baby" } as FocusPanelCardModel;
+        act(() => {
+            root.render(
+                <FocusPanelComposerProvider initialNestedConfigs={{ [CHILDREN_SURFACE_ID]: defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID) }}>
+                    <ComposerHarness surfaceId={CHILDREN_SURFACE_ID} cardKey="children" purpose="details" childId="demo-c-1">
+                        <ChildrenCard model={model} context={context} />
+                    </ComposerHarness>
+                </FocusPanelComposerProvider>,
+            );
+        });
+        expect(document.querySelector('[data-identity-compose-canvas="details"]')).toBeTruthy();
+        expect(document.querySelector('[data-children-focused-child]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface="identity"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-disclosure-surface="true"]')).toBeFalsy();
+    });
+
+    it("Children Evidence mounts collection editor", () => {
+        const { context } = demoContext();
+        const model = { key: "children", title: "Children", tier: "context", span: 2, iconName: "baby" } as FocusPanelCardModel;
+        act(() => {
+            root.render(
+                <FocusPanelComposerProvider initialNestedConfigs={{ [CHILDREN_SURFACE_ID]: defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID) }}>
+                    <ComposerHarness surfaceId={CHILDREN_SURFACE_ID} cardKey="children" purpose="evidence">
+                        <ChildrenCard model={model} context={context} />
+                    </ComposerHarness>
+                </FocusPanelComposerProvider>,
+            );
+        });
+        expect(document.querySelector('[data-identity-evidence-panel="true"]')).toBeTruthy();
+    });
+
+    it("Household Primary Contact Summary mounts canvas composer", () => {
+        const { context } = demoContext();
+        const model = { key: "household", title: "Household", tier: "context", span: 2, iconName: "users" } as FocusPanelCardModel;
+        act(() => {
+            root.render(
+                <FocusPanelComposerProvider initialNestedConfigs={{ [HOUSEHOLD_SURFACE_ID]: defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID) }}>
+                    <ComposerHarness surfaceId={HOUSEHOLD_SURFACE_ID} cardKey="household" purpose="summary">
+                        <HouseholdCard model={model} context={context} />
+                    </ComposerHarness>
+                </FocusPanelComposerProvider>,
+            );
+        });
+        expect(document.querySelector('[data-identity-compose-canvas="summary"]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface="primary_contact"]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface="other_parent_guardian"]')).toBeTruthy();
+    });
+
+    it("Household Context Facts mounts canvas composer", () => {
+        const { context } = demoContext();
+        const model = { key: "household", title: "Household", tier: "context", span: 2, iconName: "users" } as FocusPanelCardModel;
+        act(() => {
+            root.render(
+                <FocusPanelComposerProvider initialNestedConfigs={{ [HOUSEHOLD_SURFACE_ID]: defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID) }}>
+                    <ComposerHarness surfaceId={HOUSEHOLD_SURFACE_ID} cardKey="household" purpose="context_facts">
+                        <HouseholdCard model={model} context={context} />
+                    </ComposerHarness>
+                </FocusPanelComposerProvider>,
+            );
+        });
+        expect(document.querySelector('[data-identity-compose-canvas="context_facts"]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface]')).toBeTruthy();
+    });
+
+    it("Preview mode bypasses compose canvas", () => {
+        const { context } = demoContext();
+        const model = { key: "children", title: "Children", tier: "context", span: 2, iconName: "baby" } as FocusPanelCardModel;
+        act(() => {
+            root.render(
+                <FocusPanelComposerProvider initialNestedConfigs={{ [CHILDREN_SURFACE_ID]: defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID) }}>
+                    <ComposerHarness surfaceId={CHILDREN_SURFACE_ID} cardKey="children" purpose="summary" previewMode>
+                        <ChildrenCard model={model} context={context} />
+                    </ComposerHarness>
+                </FocusPanelComposerProvider>,
+            );
+        });
+        act(() => {});
+        expect(document.querySelector('[data-identity-compose-canvas]')).toBeFalsy();
+        expect(document.querySelector('[data-children-roster]')).toBeTruthy();
     });
 });
 
 function ComposerHarness({
     surfaceId,
     cardKey,
+    purpose = "summary",
+    childId,
+    previewMode = false,
     children,
 }: {
     surfaceId: string;
     cardKey: "household" | "children";
+    purpose?: IdentityConfigurationPurpose;
+    childId?: string;
+    previewMode?: boolean;
     children: ReactNode;
 }) {
     const composer = useFocusPanelComposer();
     useEffect(() => {
         composer?.enterDrillIn(cardKey, surfaceId);
-        composer?.setActiveConfigPurpose("summary");
+        composer?.setActiveConfigPurpose(purpose);
+        if (childId) {
+            composer?.setSelectedIdentityId(childId);
+            if (cardKey === "children") {
+                composer?.setDrillDepth({ kind: "child-focus", childId });
+            }
+        }
+        if (previewMode) composer?.setComposeCanvasMode("preview");
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return children;

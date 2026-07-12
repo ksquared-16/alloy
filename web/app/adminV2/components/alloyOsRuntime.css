@@ -6376,3 +6376,21 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Identity canvas composer — always-visible layout controls in Configure mode. */
+.identity-compose-canvas[data-compose-canvas-mode="configure"] .fp-layout-surface--composing .fp-field-instance__toolbar,
+.identity-compose-canvas[data-compose-canvas-mode="configure"] .fp-layout-surface--composing .fp-field-instance__remove,
+.identity-compose-canvas[data-compose-canvas-mode="configure"] .fp-layout-surface--composing .fp-layout-field__grip {
+  opacity: 1;
+  pointer-events: auto;
+}
+.identity-compose-canvas[data-compose-canvas-mode="configure"] .fp-layout-surface--composing .fp-layout-drop-zone {
+  min-height: 8px;
+  opacity: 0.65;
+}
+.identity-compose-canvas[data-compose-canvas-mode="configure"] {
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 28%, transparent);
+  border-radius: 12px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 2%, #fff);
+}

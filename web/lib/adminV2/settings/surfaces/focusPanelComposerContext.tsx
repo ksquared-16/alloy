@@ -61,6 +61,9 @@ type FocusPanelComposerContextValue = {
     /** Shared builder disclosure purpose — Summary / Context Facts / Details / Evidence. */
     activeConfigPurpose: IdentityConfigurationPurpose;
     setActiveConfigPurpose: (purpose: IdentityConfigurationPurpose) => void;
+    /** Configure shows the layout composer; Preview shows runtime disclosure projection. */
+    composeCanvasMode: "configure" | "preview";
+    setComposeCanvasMode: (mode: "configure" | "preview") => void;
     /** Selected person/child when configuring Details or Evidence. */
     selectedIdentityId: string | null;
     setSelectedIdentityId: (identityId: string | null) => void;
@@ -110,6 +113,7 @@ export function FocusPanelComposerProvider({
     const [childAvatarPreviewUrls, setChildAvatarPreviewUrls] = useState<Record<string, string>>({});
     const [activeConfigPurpose, setActiveConfigPurpose] = useState<IdentityConfigurationPurpose>("summary");
     const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null);
+    const [composeCanvasMode, setComposeCanvasMode] = useState<"configure" | "preview">("configure");
 
     const configFor = useCallback(
         (surfaceId: string) => {
@@ -147,6 +151,7 @@ export function FocusPanelComposerProvider({
         setSelection({ kind: "region", surfaceId, groupKey: defaultGroupForSurface(surfaceId) });
         setActiveConfigPurpose("summary");
         setSelectedIdentityId(null);
+        setComposeCanvasMode("configure");
     }, []);
 
     const setDrillDepth = useCallback((depth: FocusPanelComposerDrillDepth) => {
@@ -158,6 +163,7 @@ export function FocusPanelComposerProvider({
         setSelection(null);
         setActiveConfigPurpose("summary");
         setSelectedIdentityId(null);
+        setComposeCanvasMode("configure");
     }, []);
 
     const isComposingSurface = useCallback(
@@ -205,6 +211,8 @@ export function FocusPanelComposerProvider({
             setActiveConfigPurpose,
             selectedIdentityId,
             setSelectedIdentityId,
+            composeCanvasMode,
+            setComposeCanvasMode,
             enterDrillIn,
             setDrillDepth,
             exitDrillIn,
@@ -226,6 +234,8 @@ export function FocusPanelComposerProvider({
             setActiveConfigPurpose,
             selectedIdentityId,
             setSelectedIdentityId,
+            composeCanvasMode,
+            setComposeCanvasMode,
             enterDrillIn,
             setDrillDepth,
             exitDrillIn,
