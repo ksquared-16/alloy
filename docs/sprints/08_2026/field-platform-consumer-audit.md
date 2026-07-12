@@ -1055,3 +1055,12 @@ Parents/Guardians migration, concept-ref migration, Current Work, Operational Co
 ### Next
 
 Phase 2: `feat/focus-panel-provider-convergence-phase-2`
+
+
+---
+
+## Relationship-owned fields — platform foundation (July 2026)
+
+See **`family-relationship-projection-audit.md`** and **`relationship-edge-field-platform.md`**.
+
+`person_child_relationship` is the canonical edge grain for Person ↔ Child relationship instances. Focus Panel Parents/Guardians product migration remains **paused** until relationship-instance providers are reviewed and adopted.

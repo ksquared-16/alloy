@@ -97,3 +97,16 @@ Canonical registry owns provider identity. Consumers apply capability filtering 
 ## Next branch
 
 `feat/focus-panel-provider-convergence-phase-2` — Focus Panel Provider Convergence: Relationships, Collections, and Configuration
+---
+
+## Parents/Guardians migration — PAUSED (July 2026)
+
+Focus Panel Parents/Guardians canonical collection migration is **paused** pending `family-relationship-projection-audit.md`.
+
+**Reason:** `person.contact_role.parents` resolves to **Person-grain** and cannot preserve child-scoped relationship attributes (e.g. “Relationship to Child”). Operational roles must not be modeled as Person entity types.
+
+**Do not implement** Parents/Guardians consumer adoption until relationship-instance grain and relationship-owned field platform are explicit.
+
+## Relationship Edge Field Platform (July 2026)
+
+Parents/Guardians Focus Panel migration remains **paused**. Canonical relationship platform foundation promoted separately on `feat/relationship-edge-field-platform`.
