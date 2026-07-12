@@ -22,6 +22,7 @@ export const ADMIN_FIELD_ENTITY_TYPE_TO_LABELS_KEY: Record<string, string> = {
 const STATIC_FIELD_ENTITY_SINGULAR_LABELS: Record<string, string> = {
     customer_member: "Child",
     inquiry_child: "Child",
+    person_child_relationship: "Person ↔ Child Relationship",
     opportunity: "Lead",
     job: "Lead",
 };

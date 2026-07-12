@@ -29,6 +29,7 @@ export const CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES = [
     "inquiry_child",
     "opportunity",
     "location",
+    "person_child_relationship",
 ] as const;
 
 /** Unfinished operational entities — hidden from operator configuration paths (not deleted). */
@@ -65,6 +66,7 @@ export const CHILDCARE_FIELD_ENTITY_SINGULAR_LABELS: Readonly<Record<string, str
     opportunity: "Lead / Enrollment Record",
     inquiry_child: "Child",
     location: "Location / Site",
+    person_child_relationship: "Person ↔ Child Relationship",
     vendor: "Provider",
     schedule: "Schedule",
 };

@@ -31,7 +31,8 @@ export type FieldEntityKey =
     | "location"
     | "customer"
     | "opportunity"
-    | "inquiry_child";
+    | "inquiry_child"
+    | "person_child_relationship";
 
 const ENTITY_SELECT_ORDER: FieldEntityKey[] = [...CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES];
 const ALLOWED_ENTITY_KEYS = new Set<string>(ENTITY_SELECT_ORDER);
