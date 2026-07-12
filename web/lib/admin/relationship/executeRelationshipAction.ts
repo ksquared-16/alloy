@@ -6,6 +6,7 @@ import {
     type ChildScopedContactAssignment,
 } from "@/lib/admin/actions/createLeadChildScopedContactPersistence";
 import { applyCanonicalChildScopedRelationships } from "@/lib/admin/actions/createLeadPersonChildRelationshipPersistence";
+import { shouldWriteChildScopedRelationshipsToPcr } from "@/lib/admin/actions/childScopedContactRoleMapping";
 import { attachPersonChildRelationshipsToEntityRecord } from "@/lib/fields/personChildRelationship/attachPersonChildRelationshipsToEntityRecord";
 import {
     applyCreateLeadChildParticipationFromIdentity,
@@ -436,17 +437,22 @@ export async function executeRelationshipAction(
             affectedPreview.push({ label: "Opportunity contact role", table: "opportunity_persons" });
         }
 
-        if (entry.writeTargets.includes("customer_member_contacts") && roleKey && memberIds.length > 0) {
-            if (!roleKey) {
-                throw new Error(relationshipRoleConfigError(actionKey, entry.defaultRoleKey ?? "role"));
-            }
+        const writeChildMemberRoles =
+            Boolean(roleKey)
+            && memberIds.length > 0
+            && (
+                shouldWriteChildScopedRelationshipsToPcr({ executorKind: entry.executorKind, roleKey })
+                || entry.writeTargets.includes("customer_member_contacts")
+            );
+
+        if (writeChildMemberRoles) {
             const assignments: ChildScopedContactAssignment[] = memberIds.map((id) => ({
                 customer_member_id: id,
                 person_id: personId!,
-                role_key: roleKey,
+                role_key: roleKey!,
                 source: "explicit_child",
             }));
-            if (entry.executorKind === "child_scoped_contact") {
+            if (shouldWriteChildScopedRelationshipsToPcr({ executorKind: entry.executorKind, roleKey })) {
                 const pcrWrite = await applyCanonicalChildScopedRelationships(supabase, {
                     orgId,
                     customerId,
@@ -479,12 +485,6 @@ export async function executeRelationshipAction(
                     record_ids: memberIds,
                 });
             }
-        } else if (
-            entry.executorKind === "link_person"
-            && !entry.writeTargets.includes("customer_member_contacts")
-            && roleKey
-        ) {
-            linksWritten += 1;
         }
     }
 

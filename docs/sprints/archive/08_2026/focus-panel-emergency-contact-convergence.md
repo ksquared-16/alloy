@@ -72,3 +72,9 @@ Focus Panel Household / Children
 - **Role lifecycle:** `removePersonChildRelationshipRole` deactivates edge when no active roles remain; Focus Panel truth merge preserves other roles on the same edge.
 - **Legacy dedupe:** canonical `_person_child_relationships_by_member` bag wins over `_customer_member_contacts` projection per member.
 - **Alex / Mia / Noah:** covered by `buildEmergencyContactsEvidence.test.ts` (Mia shows Alex emergency; Noah excludes without role).
+
+## Gap closure
+
+- Choice fields use canonical SelectFieldControl + option sets.
+- link_existing_person writes PCR, not legacy contacts.
+- Staging certification script: web/scripts/certifyPersonChildRelationshipStagingApi.ts.

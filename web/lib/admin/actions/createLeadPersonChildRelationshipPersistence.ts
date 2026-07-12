@@ -10,26 +10,7 @@ import {
 } from "@/lib/fields/personChildRelationship/personChildRelationshipService";
 import { addPersonChildRelationshipRole } from "@/lib/fields/personChildRelationship/personChildRelationshipService";
 
-const MEMBER_ROLE_TO_OPERATIONAL: Record<string, string> = {
-    guardian: "guardian",
-    primary_contact: "parent",
-    parent: "parent",
-    secondary_guardian: "guardian",
-    secondary: "guardian",
-    emergency_contact: "emergency_contact",
-    emergency: "emergency_contact",
-    authorized_pickup: "authorized_pickup",
-    pickup: "authorized_pickup",
-    billing_contact: "billing_contact",
-    payer: "billing_contact",
-    billing: "billing_contact",
-    billing_responsible: "billing_contact",
-};
-
-function mapMemberContactRoleToOperational(roleKey: string): string | null {
-    const key = roleKey.trim().toLowerCase();
-    return MEMBER_ROLE_TO_OPERATIONAL[key] ?? null;
-}
+import { mapMemberContactRoleToOperational } from "@/lib/admin/actions/childScopedContactRoleMapping";
 
 export async function applyCanonicalChildScopedRelationships(
     supabase: SupabaseClient,

@@ -77,6 +77,25 @@ vi.mock("@/lib/admin/person/fetchChildScopedContactLinks", () => ({
     attachChildScopedContactLinksToRecord: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/admin/actions/createLeadPersonChildRelationshipPersistence", () => ({
+    applyCanonicalChildScopedRelationships: vi.fn().mockResolvedValue({
+        relationships_written: 1,
+        roles_written: 1,
+        skipped: 0,
+    }),
+}));
+
+vi.mock("@/lib/fields/personChildRelationship/attachPersonChildRelationshipsToEntityRecord", () => ({
+    attachPersonChildRelationshipsToEntityRecord: vi.fn().mockResolvedValue([
+        {
+            customer_member_id: "member-a",
+            customer_id: "cust-fixture",
+            child_id: null,
+            items: [],
+        },
+    ]),
+}));
+
 const householdChildren = [
     {
         customer_member_id: SIBLING_SCOPED_CONTACTS_FIXTURE.memberA,
@@ -374,6 +393,25 @@ describe("executeRelationshipAction", () => {
         expect(result.role_key).toBe("emergency_contact");
     });
 
+
+    it("link_existing_person uses PCR for child-scoped emergency contact", async () => {
+        const result = await executeRelationshipAction(mockSupabaseForEmergencyContact() as never, {
+            actionKey: "link_existing_person",
+            sourceSurface: "child_drawer",
+            sourceRecordId: SIBLING_SCOPED_CONTACTS_FIXTURE.childPersonA,
+            sourceEntityType: "child",
+            sourceChildPersonId: SIBLING_SCOPED_CONTACTS_FIXTURE.childPersonA,
+            sourceCustomerId: "cust-fixture",
+            anchorCustomerMemberId: SIBLING_SCOPED_CONTACTS_FIXTURE.memberA,
+            selectedPersonId: "person-grandma",
+            roleKey: "emergency_contact",
+            scope: "this_child",
+            orgId: "org-1",
+        });
+        expect(result.ok).toBe(true);
+        expect(result.affected_record_preview.some((row) => row.table === "person_child_relationships")).toBe(true);
+        expect(result.affected_record_preview.some((row) => row.table === "customer_member_contacts")).toBe(false);
+    });
     it("rejects invalid scope for action", async () => {
         await expect(
             executeRelationshipAction(mockSupabaseForEmergencyContact() as never, {
