@@ -1,15 +1,16 @@
 # Processing Identity Resolution V1 — Promotion Checklist
 
-**Current status:** Locally certified; awaiting staging reconciliation; not promoted; not deployed.
+**Status:** Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.
 
 ## Before rebase
 
 - [ ] Confirm branch is `claude/proc-identity-lib-normalization`.
-- [ ] Confirm expected closeout HEAD and clean working tree.
-- [ ] Preserve the local certification report and commit inventory.
+- [ ] Confirm closeout HEAD matches this report and working tree is clean.
+- [ ] Preserve the local certification report, commit inventory, and cert cleanup log.
 - [ ] Confirm no local secrets, `.env.local`, credentials, database volumes, or test artifacts are tracked.
 - [ ] Record current staging SHA only when the staging-reconciliation engagement begins.
 - [ ] Confirm rollback owner, migration operator, staging tester, and production approver.
+- [ ] Confirm `IdentityResolutionEligibility` remains fail-closed (no flag bypass restored).
 
 ## Rebase onto latest staging
 

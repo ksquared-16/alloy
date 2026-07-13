@@ -66,7 +66,7 @@ The executor:
 
 ## Operator review
 
-The existing Digital Mailroom case detail owns evidence review, fact correction, resolution decisions, plan build/revision, approval, explicit execution, attempts, and exceptions. Rejected/blocking resolutions prevent plan construction. Merge remains escalation-only.
+The existing Digital Mailroom case detail owns evidence review, fact correction, resolution decisions, plan build/revision, approval, explicit execution, attempts, and exceptions. The canonical **identity-review gate** (`IdentityResolutionEligibility`) fails closed on plan build, approval, and execute when subjects are `needs_review`, `conflicted`, or `unresolved`. Same-household same-name children with incomplete DOB stay review-required; create-new despite plausible matches requires an explicit operator override reason with rejected-candidate audit. Merge remains escalation-only.
 
 ## Source cutovers
 

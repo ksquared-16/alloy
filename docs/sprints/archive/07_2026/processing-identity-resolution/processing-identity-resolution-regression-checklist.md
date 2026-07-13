@@ -1,5 +1,7 @@
 # Processing Identity Resolution V1 — Consolidated Regression Checklist
 
+**Status:** Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.
+
 **Use:** Final staging reconciliation and promotion verification. No checklist item authorizes implementation or scope expansion.
 
 ## Processing
@@ -9,6 +11,9 @@
 - [ ] Resolution rerun creates a new generation without erasing prior evidence.
 - [ ] Review readiness derives correctly from case/facts/resolutions/plan/approval/attempt state.
 - [ ] Rejected/blocking subjects prevent plan build.
+- [ ] Identity-review gate: same-household same-name child with incomplete DOB → `needs_review`; plan/approve/execute blocked until confirmed.
+- [ ] Create-new despite plausible match requires explicit override reason and rejected-candidate audit.
+- [ ] Source adapters cannot stamp ambiguous identities as confirmed new.
 
 ## Create Lead
 

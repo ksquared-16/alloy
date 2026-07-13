@@ -1,8 +1,10 @@
 # Processing Identity Resolution V1 — Staging Rollback Plan
 
+**Status:** Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.
+
 **Assumption:** The sprint has been promoted to staging, but not production.
 
-**Principle:** Prefer deployment/Git rollback while preserving additive Processing data. Do not restore two simultaneous identity writers. Schema reversal is appropriate only for a disposable/no-traffic staging database or after an explicit data-retention decision.
+**Principle:** Prefer deployment/Git rollback while preserving additive Processing data. Do not restore two simultaneous identity writers. Schema reversal is appropriate only for a disposable/no-traffic staging database or after an explicit data-retention decision. The identity-review eligibility gate is structural application code (not a feature flag); rolling back the app build removes the new gate along with the rest of V1 runtime.
 
 ## Trigger conditions
 
