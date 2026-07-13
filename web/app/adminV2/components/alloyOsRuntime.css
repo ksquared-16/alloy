@@ -5582,6 +5582,290 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
 }
 
+.alloy-os-currentwork__readiness-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alloy-os-currentwork__readiness-reason,
+.alloy-os-currentwork__readiness-count {
+  margin: 0;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+
+.alloy-os-currentwork__guidance {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 4%, #fff);
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+
+.alloy-os-currentwork__guidance-disclosure {
+  margin: 0;
+}
+
+.alloy-os-currentwork__guidance-disclosure > summary {
+  list-style: none;
+}
+
+.alloy-os-currentwork__guidance-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.alloy-os-currentwork__disclosure-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 78%, #64748b);
+  text-align: left;
+}
+
+.alloy-os-currentwork__disclosure-meta {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 48%, #64748b);
+}
+
+.alloy-os-currentwork__disclosure-overflow {
+  margin: 0;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+.alloy-os-currentwork__progress-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, #64748b);
+}
+
+.alloy-os-currentwork__primary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.alloy-os-currentwork__open-work {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__record-outcome--strong {
+  font-weight: 600;
+}
+
+.alloy-os-currentwork__quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alloy-os-currentwork__quick-action-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.alloy-os-currentwork__quick-chip {
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+}
+
+.alloy-os-currentwork__quick-chip:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__quick-more {
+  position: relative;
+}
+
+.alloy-os-currentwork__quick-more-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 10rem;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+.alloy-os-currentwork__quick-more-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-currentwork__quick-more-item:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+}
+
+.alloy-os-currentwork__linked-work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.alloy-os-currentwork__linked-work-copy {
+  margin: 0;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+.alloy-os-currentwork__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alloy-os-currentwork__guidance-label {
+  margin: 0 0 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, #64748b);
+}
+
+.alloy-os-currentwork__guidance-text {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, #64748b);
+  white-space: pre-wrap;
+}
+
+.alloy-os-card-pill--blocked {
+  background: color-mix(in srgb, #b45309 12%, #fff);
+  color: #b45309;
+}
+
+.alloy-os-currentwork__requirements-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alloy-os-currentwork__requirements-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  cursor: pointer;
+  text-align: left;
+}
+
+.alloy-os-currentwork__requirements-meta {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-currentwork__focus--scroll {
+  max-height: min(72vh, 42rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alloy-os-currentwork__record-outcome--summary {
+  align-self: flex-start;
+}
+
+.alloy-os-currentwork__activity-meta {
+  margin-left: 6px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-currentwork__path-action {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, #fff);
+  border-radius: 6px;
+  background: #fff;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.76rem;
+  color: var(--alloy-os-midnight, #273f52);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.alloy-os-currentwork__path-action:hover:not(:disabled),
+.alloy-os-currentwork__path-action:focus-visible {
+  border-color: var(--alloy-os-bend-pine, #00a283);
+  outline: none;
+}
+
+.alloy-os-currentwork__path-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.alloy-os-currentwork__activity-preview-portal {
+  z-index: 60;
+}
+
+.alloy-os-currentwork__activity-preview {
+  max-height: min(40vh, 18rem);
+  overflow-y: auto;
+}
+
 .alloy-os-currentwork__stepper {
   display: flex;
   flex-wrap: wrap;
@@ -6691,4 +6975,200 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   background: var(--alloy-os-bend-pine, #00a283) !important;
   border-color: var(--alloy-os-bend-pine, #00a283) !important;
   color: #fff !important;
+}
+
+/* Current Work Focus workspace (full Focus Panel canvas replace) */
+.alloy-os-currentwork-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 0.75rem 1rem 1rem;
+  background: var(--alloy-os-surface, #fff);
+}
+.alloy-os-currentwork-workspace__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: inherit;
+  padding-bottom: 0.25rem;
+}
+.alloy-os-currentwork-workspace__back {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: var(--alloy-os-accent, #0f766e);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.15rem 0;
+}
+.alloy-os-currentwork-workspace__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--alloy-os-ink, #111827);
+}
+.alloy-os-currentwork-workspace__title:focus {
+  outline: 2px solid var(--alloy-os-accent, #0f766e);
+  outline-offset: 2px;
+}
+.alloy-os-currentwork-workspace__meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--alloy-os-muted, #4b5563);
+}
+.alloy-os-currentwork-workspace__progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+.alloy-os-currentwork-workspace__waiting ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+.alloy-os-currentwork-workspace__waiting-item,
+.alloy-os-currentwork-workspace__req-item,
+.alloy-os-currentwork-workspace__action-row {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 0.35rem 0;
+  font: inherit;
+}
+.alloy-os-currentwork-workspace__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.alloy-os-currentwork-workspace__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.alloy-os-currentwork-workspace__section-title {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-muted, #6b7280);
+}
+.alloy-os-currentwork-workspace__guidance {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--alloy-os-ink, #1f2937);
+  line-height: 1.45;
+}
+.alloy-os-currentwork-workspace__outcome-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.alloy-os-currentwork-workspace__outcome-pill {
+  border: 1px solid var(--alloy-os-border, #d1d5db);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.alloy-os-currentwork-workspace__req-list,
+.alloy-os-currentwork-workspace__action-list,
+.alloy-os-currentwork-workspace__activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.alloy-os-currentwork-workspace__req-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  border-bottom: 1px solid var(--alloy-os-border, #e5e7eb);
+}
+.alloy-os-currentwork-workspace__req-badge {
+  color: #b91c1c;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.alloy-os-currentwork-workspace__action-row {
+  width: 100%;
+  border-bottom: 1px solid var(--alloy-os-border, #e5e7eb);
+}
+.alloy-os-currentwork-workspace__action-row:hover {
+  color: var(--alloy-os-accent, #0f766e);
+}
+.alloy-os-currentwork-workspace__activity-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--alloy-os-border, #e5e7eb);
+}
+.alloy-os-currentwork-workspace__activity-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.alloy-os-currentwork-workspace__activity-detail,
+.alloy-os-currentwork-workspace__activity-time {
+  font-size: 0.75rem;
+  color: var(--alloy-os-muted, #6b7280);
+}
+.alloy-os-currentwork-workspace__activity-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+.alloy-os-currentwork-workspace__link {
+  border: 0;
+  background: transparent;
+  color: var(--alloy-os-accent, #0f766e);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.alloy-os-currentwork-workspace__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--alloy-os-border, #e5e7eb);
+  font-size: 0.75rem;
+  color: var(--alloy-os-muted, #6b7280);
+}
+.alloy-os-currentwork__summary-open-region {
+  cursor: pointer;
+  border-radius: 0.5rem;
+}
+.alloy-os-currentwork__summary-open-region:hover,
+.alloy-os-currentwork__summary-open-region:focus-visible {
+  outline: 2px solid var(--alloy-os-accent, #0f766e);
+  outline-offset: 2px;
+}
+.alloy-os-currentwork__more-launcher {
+  position: relative;
+}
+@media (max-width: 900px) {
+  .alloy-os-currentwork-workspace__progress-row,
+  .alloy-os-currentwork-workspace__columns {
+    grid-template-columns: 1fr;
+  }
 }

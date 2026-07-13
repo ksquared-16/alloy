@@ -8,6 +8,8 @@ import type {
 import { workIntentProjectionForStageWorkItem } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import { completionOutcomesForPicker } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
+import { resolveOutgoingProcessTransitions } from "@/lib/lifecycle/resolveOutgoingProcessTransitions";
 import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 
 import {
@@ -17,7 +19,6 @@ import {
 import { inferWorkItemOwner } from "./inferWorkItemOwner";
 import { CURRENT_WORK_RECORD_OUTCOME_CTA } from "./currentWorkCopy";
 import {
-    actionFromRef,
     resolvedHelpfulActionRefs,
     type CurrentWorkActionRefLookup,
     type CurrentWorkTemplateConfigOverlay,
@@ -29,13 +30,14 @@ import type {
     CurrentWorkSurfaceStatus,
     CurrentWorkSurfaceVM,
     CurrentWorkActionVM,
+    CurrentWorkReadinessItemVM,
+    CurrentWorkReadinessVM,
 } from "./currentWorkSurfaceTypes";
 import { resolveCurrentWorkChecklistTruthFromPublishedRules, type ChecklistTruthResult } from "./resolveCurrentWorkChecklistTruthFromPublishedRules";
 import { resolveCurrentWorkTemplateFromPublishedPlan } from "./resolveCurrentWorkTemplateFromPublishedPlan";
 import { resolveCurrentWorkTemplateAction } from "./resolveCurrentWorkTemplateAction";
 import { resolveStageWorkOutcomeCompletionState } from "./resolveStageWorkOutcomeCompletionState";
 import { isGenericUmbrellaLifecycleAction } from "./currentWorkActionSurfacePolicy";
-import type { CurrentWorkTemplateAlternatePathConfig } from "./currentWorkTemplateConfig";
 
 export type BuildCurrentWorkSurfaceVMInput = {
     context: OperationalContext;
@@ -78,6 +80,91 @@ function statusLabelFor(status: CurrentWorkSurfaceStatus, hasOpenWork: boolean):
         case "in_progress":
             return hasOpenWork ? "Open" : "In progress";
     }
+}
+
+function classifyChecklistItems(checklist: CurrentWorkChecklistItemVM[]): {
+    requirements: CurrentWorkReadinessItemVM[];
+    workItems: CurrentWorkReadinessItemVM[];
+} {
+    const requirements: CurrentWorkReadinessItemVM[] = [];
+    const workItems: CurrentWorkReadinessItemVM[] = [];
+    for (const item of checklist) {
+        const row: CurrentWorkReadinessItemVM = {
+            key: item.key,
+            label: item.label,
+            status: item.status,
+            scope: item.scope,
+            targetLabel: item.targetLabel,
+        };
+        if (item.kind === "stage_work") {
+            workItems.push(row);
+        } else {
+            requirements.push(row);
+        }
+    }
+    return { requirements, workItems };
+}
+
+function buildReadinessVM(args: {
+    status: CurrentWorkSurfaceStatus;
+    statusLabel: string;
+    checklist: CurrentWorkChecklistItemVM[];
+    blocked: boolean;
+    attentionReason: string | null;
+    hasOpenWork: boolean;
+    hasOverdue: boolean;
+    dueLabel?: string | null;
+}): CurrentWorkReadinessVM {
+    const { requirements, workItems } = classifyChecklistItems(args.checklist);
+    const reqComplete = requirements.filter((i) => i.status === "complete").length;
+    const reqTotal = requirements.length;
+    const workComplete = workItems.filter((i) => i.status === "complete").length;
+    const workTotal = workItems.length;
+
+    const reasonCodes: string[] = [];
+    let reasonLabel: string | null = null;
+
+    if (args.status === "blocked") {
+        if (args.attentionReason) {
+            reasonCodes.push("attention");
+            reasonLabel = args.attentionReason;
+        } else if (reqTotal > 0 && reqComplete < reqTotal) {
+            reasonCodes.push("requirements_remaining");
+            const remaining = reqTotal - reqComplete;
+            reasonLabel = `${remaining} requirement${remaining === 1 ? "" : "s"} remaining`;
+        } else {
+            reasonCodes.push("blocked");
+            reasonLabel = "Waiting for a required action";
+        }
+    } else if (args.hasOverdue && args.dueLabel) {
+        reasonCodes.push("overdue");
+        reasonLabel = args.dueLabel;
+    } else if (reqTotal > 0 && reqComplete < reqTotal) {
+        reasonCodes.push("requirements_remaining");
+        const remaining = reqTotal - reqComplete;
+        reasonLabel = `${remaining} requirement${remaining === 1 ? "" : "s"} remaining`;
+    }
+
+    return {
+        state: args.status,
+        reasonCodes,
+        reasonLabel,
+        ...(reqTotal > 0 ? {
+            requirements: {
+                complete: reqComplete,
+                total: reqTotal,
+                remaining: reqTotal - reqComplete,
+                items: requirements,
+            },
+        } : {}),
+        ...(workTotal > 0 ? {
+            workItems: {
+                complete: workComplete,
+                total: workTotal,
+                remaining: workTotal - workComplete,
+            },
+        } : {}),
+    };
 }
 
 function resolveSurfaceStatus(args: {
@@ -127,6 +214,7 @@ function checklistFromStageRuntime(runtime: StageWorkRuntimeProjection | null): 
             key: item.template_key,
             label: item.label,
             status,
+            kind: "stage_work",
             scope: "record",
             targetLabel,
             actionRef: null,
@@ -150,6 +238,7 @@ function checklistFromConfig(
             key: row.key,
             label: row.label,
             status,
+            kind: row.kind ?? "requirement",
             scope: row.scope,
             targetLabel:
                 truth?.targetLabel
@@ -182,6 +271,7 @@ function checklistFromReadiness(readiness: ReadinessResult | null | undefined): 
         key: gap.requirement_id,
         label: gap.label,
         status: gap.blocking ? ("blocked" as const) : ("missing" as const),
+        kind: "requirement" as const,
         scope:
             gap.entity_type === "child" ? ("child" as const)
             : gap.entity_type === "person" ? ("person" as const)
@@ -341,17 +431,41 @@ function resolveHelpfulActions(args: {
     return args.fromRegistry.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
 }
 
-function resolveAlternatePaths(args: {
-    explicitConfigured: boolean;
-    fromConfig: CurrentWorkActionVM[];
-    fromRegistry: CurrentWorkActionVM[];
-}): CurrentWorkActionVM[] {
-    if (args.explicitConfigured) {
-        return args.fromConfig.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
+/**
+ * Other Transitions — process-owned outgoing configured edges only.
+ * Deduplicate by destination stage so outcome-driven edges do not inflate the
+ * manual bypass list. Labels use destination stage metadata.
+ * Legacy Work Template `alternate_paths` are intentionally ignored at runtime.
+ */
+function otherTransitionsFromProcess(context: OperationalContext): CurrentWorkActionVM[] {
+    const published = context.publishedStageInputs;
+    if (!published?.operatingPlan) return [];
+
+    const outgoing = resolveOutgoingProcessTransitions({
+        currentStageKey: published.stageKey,
+        stageOperatingPlan: published.operatingPlan,
+        processTracks: published.processTracks ?? null,
+        processStages: published.processStages,
+    });
+
+    const byTarget = new Map<string, (typeof outgoing)[number]>();
+    for (const row of outgoing) {
+        if (!byTarget.has(row.target_stage_key)) {
+            byTarget.set(row.target_stage_key, row);
+        }
     }
-    return mergeActionVms(args.fromConfig, args.fromRegistry).filter(
-        (action) => !isGenericUmbrellaLifecycleAction(action.key),
-    );
+
+    return [...byTarget.values()].map((row) => ({
+        key: row.transition_ref,
+        label: `Move to ${row.target_stage_label}`,
+        description: `Transition to ${row.target_stage_label}`,
+        category: "alternate_path" as const,
+        placement: "current_work_alternate_paths" as const,
+        handlerKey: "process_stage_transition",
+        /** Destination stage/status key for canonical transition preflight + PATCH. */
+        actionRef: row.target_stage_key,
+        resolved: null,
+    }));
 }
 
 function filterOutcomesByTemplateRefs(
@@ -366,59 +480,33 @@ function filterOutcomesByTemplateRefs(
     return order.map((key) => byKey.get(key)).filter((row): row is StageCompletionOutcomeV1 => row != null);
 }
 
-function alternatePathsFromConfigRefs(
-    refs: CurrentWorkTemplateAlternatePathConfig[] | null | undefined,
-    lookup: CurrentWorkActionRefLookup,
-    intentContext: ActionIntentResolutionContext,
-): CurrentWorkActionVM[] {
-    if (!refs?.length) return [];
-    const out: CurrentWorkActionVM[] = [];
-    const seen = new Set<string>();
-    for (const row of refs) {
-        if ("transition_ref" in row && row.transition_ref?.trim()) {
-            const ref = row.transition_ref.trim();
-            if (seen.has(ref)) continue;
-            seen.add(ref);
-            const resolved = actionFromRef(lookup, ref, row.override_label ?? null);
-            if (!resolved) continue;
-            out.push({
-                key: resolved.key,
-                label: resolved.label,
-                description: resolved.description ?? null,
-                category: "alternate_path",
-                placement: "current_work_alternate_paths",
-                handlerKey: resolved.key,
-                actionRef: ref,
-                resolved: null,
-            });
-            continue;
-        }
-        const actionRef = "action_ref" in row ? row.action_ref?.trim() : "";
-        if (!actionRef) continue;
-        const intentKey = normalizeActionRefToIntentKey(actionRef);
-        if (seen.has(intentKey)) continue;
-        seen.add(intentKey);
-        const resolved = resolveCurrentWorkTemplateAction({
-            actionRef,
-            overrideLabel: row.override_label ?? null,
-            lookup,
-            processDefinition: intentContext.processDefinition,
-            stageDefinition: intentContext.stageDefinition,
-            truth: intentContext.truth,
-        });
-        if (!resolved) continue;
-        out.push({
-            key: resolved.handlerKey,
-            label: resolved.label,
-            description: resolved.description ?? null,
-            category: "alternate_path",
-            placement: "current_work_alternate_paths",
-            handlerKey: resolved.handlerKey,
-            actionRef: resolved.actionRef,
-            resolved: null,
-        });
+function contextAllowedActionKeys(args: {
+    actionCatalog: StageActionCatalogV1 | null | undefined;
+    templateConfig: CurrentWorkTemplateConfigOverlay | null | undefined;
+}): ReadonlySet<string> {
+    const keys = new Set<string>();
+    for (const candidate of args.actionCatalog?.candidate_actions ?? []) {
+        const key = candidate.action_key.trim();
+        if (!key) continue;
+        keys.add(key);
+        keys.add(normalizeActionRefToIntentKey(key));
     }
-    return out;
+    const template = args.templateConfig;
+    const refs = [
+        template?.primary_action?.action_ref,
+        ...(template?.helpful_actions ?? []).map((row) => row.action_ref),
+        ...(template?.alternate_paths ?? []).flatMap((row) =>
+            "action_ref" in row ? [row.action_ref] : [],
+        ),
+        ...(template?.communication_actions ?? []).map((row) => row.action_ref),
+    ];
+    for (const ref of refs) {
+        const key = ref?.trim();
+        if (!key) continue;
+        keys.add(key);
+        keys.add(normalizeActionRefToIntentKey(key));
+    }
+    return keys;
 }
 
 /**
@@ -485,6 +573,10 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         recordHeaderSlots: context.recordHeaderActions ?? null,
         showOutcomeCompletion,
         primaryActionLabel,
+        allowedActionKeys: contextAllowedActionKeys({
+            actionCatalog: context.publishedStageInputs?.actionCatalog ?? null,
+            templateConfig,
+        }),
     });
 
     const configCompletedKeys = new Set(completedChecklistKeys ?? []);
@@ -514,12 +606,14 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
               ? readinessChecklist
               : stageChecklist;
 
-    const completed = checklist.filter((item) => item.status === "complete").length;
-    const total = checklist.length;
+    // Requirement progress only — work items must not inflate the denominator.
+    const requirementItems = checklist.filter((item) => item.kind !== "stage_work");
+    const reqCompleted = requirementItems.filter((item) => item.status === "complete").length;
+    const reqTotal = requirementItems.length;
     const progress: CurrentWorkSurfaceProgress = {
-        completed,
-        total,
-        percent: total > 0 ? Math.round((completed / total) * 100) : 0,
+        completed: reqCompleted,
+        total: reqTotal,
+        percent: reqTotal > 0 ? Math.round((reqCompleted / reqTotal) * 100) : 0,
     };
 
     const isEmpty =
@@ -528,14 +622,36 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         && !templateConfig
         && classified.supporting.length === 0
         && classified.alternatePaths.length === 0;
-    const blocked = attention.needsAttention && Boolean(attention.primaryReason);
+    const blocked =
+        (attention.needsAttention && Boolean(attention.primaryReason))
+        || (checklist.some((item) => item.status === "blocked"));
     const hasOpenWork = Boolean(actionableWorkItem?.state === "open");
-    const status = resolveSurfaceStatus({ isEmpty, blocked, completed, total, hasOpenWork });
+    const hasOverdue = context.signals.work.overdueCount > 0;
+    // Status uses full checklist truth + open work; percent remains requirements-only.
+    const statusCompleted = checklist.filter((item) => item.status === "complete").length;
+    const statusTotal = checklist.length;
+    const status = resolveSurfaceStatus({
+        isEmpty,
+        blocked,
+        completed: statusCompleted,
+        total: statusTotal,
+        hasOpenWork,
+    });
+    const readiness = buildReadinessVM({
+        status,
+        statusLabel: statusLabelFor(status, hasOpenWork),
+        checklist,
+        blocked,
+        attentionReason: attention.primaryReason,
+        hasOpenWork,
+        hasOverdue,
+        dueLabel: context.signals.work.primary?.dueLabel ?? null,
+    });
 
     const title =
         templateConfig?.title?.trim()
         ?? primaryWorkItem?.label?.trim()
-        ?? (runtime && total > 0 ? runtime.stage_label?.trim() : null)
+        ?? (runtime && checklist.length > 0 ? runtime.stage_label?.trim() : null)
         ?? "No current work configured";
 
     const description =
@@ -543,6 +659,8 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         ?? actionableWorkItem?.description?.trim()
         ?? runtime?.purpose?.trim()
         ?? null;
+
+    const operatorGuidance = context.publishedStageInputs?.operatorGuidance?.trim() ?? null;
 
     const intentCtx = actionIntentContext(context);
 
@@ -583,16 +701,8 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         fromRegistry: classified.supporting,
     });
 
-    const alternateExplicit = templateConfig?.alternate_paths_explicit === true;
-    const alternateFromConfig =
-        templateConfig?.alternate_paths !== undefined
-            ? alternatePathsFromConfigRefs(templateConfig.alternate_paths, actionRegistry ?? new Map(), intentCtx)
-            : [];
-    const alternatePaths = resolveAlternatePaths({
-        explicitConfigured: alternateExplicit,
-        fromConfig: alternateFromConfig,
-        fromRegistry: classified.alternatePaths,
-    });
+    // Process-owned Other Transitions — ignore Work Template alternate_paths at runtime.
+    const alternatePaths = otherTransitionsFromProcess(context);
 
     const communicationActions =
         templateConfig?.communication_actions?.length
@@ -618,8 +728,10 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         workKey,
         title: isEmpty ? "No current work configured" : title,
         description,
+        operatorGuidance,
         status,
         statusLabel: statusLabelFor(status, hasOpenWork),
+        readiness,
         progress,
         checklist,
         primaryAction,

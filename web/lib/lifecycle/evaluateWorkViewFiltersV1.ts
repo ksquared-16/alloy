@@ -9,6 +9,9 @@ import {
     canonicalWorkViewConditionFieldKey,
     WORK_VIEW_CONDITION_FIELD_DEFS,
 } from "@/lib/lifecycle/workViewConditionFieldRegistry";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import { isCanonicalWorkViewConditionFieldKey } from "@/lib/lifecycle/workViewCanonicalOperands";
+import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 
 export type WorkViewFilterEvaluationNote = {
     field_key: string;
@@ -23,9 +26,17 @@ export type WorkViewFilterEvaluationResult = {
 };
 
 /** Canonical runtime keys the evaluator can apply (legacy keys canonicalize into these). */
-const SUPPORTED_FIELD_KEYS = new Set<string>(
+const OPERATIONAL_SUPPORTED_FIELD_KEYS = new Set<string>(
     WORK_VIEW_CONDITION_FIELD_DEFS.filter((def) => def.runtimeSupported).map((def) => def.runtimeField),
 );
+
+function isSupportedWorkViewFieldKey(
+    fieldKey: string,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): boolean {
+    if (OPERATIONAL_SUPPORTED_FIELD_KEYS.has(fieldKey)) return true;
+    return isCanonicalWorkViewConditionFieldKey(fieldKey, tenantFieldDefinitions);
+}
 
 function norm(value: unknown): string {
     return String(value ?? "")
@@ -39,8 +50,37 @@ function readRowString(row: Record<string, unknown>, key: string): string | null
     return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+function canonicalRefKeyRowValue(row: Record<string, unknown>, refKey: string): string | null {
+    if (row[refKey] != null) {
+        const direct = readRowString(row, refKey);
+        if (direct) return direct;
+    }
+    const resolved = resolveItemValue(row, { id: refKey, kind: "field", refKey });
+    if (resolved.raw != null && String(resolved.raw).trim()) return String(resolved.raw).trim();
+    if (resolved.display && resolved.display !== "—") return resolved.display.trim();
+
+    const fieldKey = refKey.includes(".") ? refKey.slice(refKey.indexOf(".") + 1) : refKey;
+    const directField = readRowString(row, fieldKey);
+    if (directField) return directField;
+
+    const md = row.metadata;
+    if (md && typeof md === "object" && !Array.isArray(md)) {
+        const fieldValues = (md as Record<string, unknown>).field_values;
+        if (fieldValues && typeof fieldValues === "object" && !Array.isArray(fieldValues)) {
+            const value = (fieldValues as Record<string, unknown>)[fieldKey];
+            if (typeof value === "string" && value.trim()) return value.trim();
+            if (value != null && typeof value !== "object") return String(value);
+        }
+    }
+    return null;
+}
+
 /** Resolve a row value for a canonical runtime field key (legacy keys are canonicalized by callers). */
-function fieldValue(row: Record<string, unknown>, fieldKey: string): string | null {
+function fieldValue(
+    row: Record<string, unknown>,
+    fieldKey: string,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): string | null {
     const enrichment = buildQueueRowLayoutRuntimeEnrichment(row);
     switch (fieldKey) {
         case "opportunity_status":
@@ -112,6 +152,9 @@ function fieldValue(row: Record<string, unknown>, fieldKey: string): string | nu
             if (enrichment.attentionReason) return "true";
             return "false";
         default:
+            if (isCanonicalWorkViewConditionFieldKey(fieldKey, tenantFieldDefinitions)) {
+                return canonicalRefKeyRowValue(row, fieldKey);
+            }
             return null;
     }
 }
@@ -266,11 +309,12 @@ function sameUtcDay(a: Date, b: Date): boolean {
 function evaluateOneFilter(
     row: Record<string, unknown>,
     filter: WorkViewFilterV1,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): WorkViewFilterEvaluationResult {
     // Canonicalize legacy keys (`stage`/`status`/`location`) so runtime resolves them identically to
     // the typed keys, even if a saved view has not yet been re-persisted with canonical keys.
     const fieldKey = canonicalWorkViewConditionFieldKey(filter.field_key.trim());
-    if (!SUPPORTED_FIELD_KEYS.has(fieldKey)) {
+    if (!isSupportedWorkViewFieldKey(fieldKey, tenantFieldDefinitions)) {
         return {
             pass: true,
             notes: [{ field_key: fieldKey, operator: filter.operator, supported: false, reason: "unsupported_field" }],
@@ -284,7 +328,7 @@ function evaluateOneFilter(
         };
     }
 
-    const actual = fieldValue(row, fieldKey);
+    const actual = fieldValue(row, fieldKey, tenantFieldDefinitions);
     const expectedParts = parseFilterValues(filter.value);
 
     if (isDateFieldKey(fieldKey) && (filter.operator === "equals" || filter.operator === "not_equals" || filter.operator === "date_is")) {
@@ -368,6 +412,7 @@ export function evaluateWorkViewFiltersForRow(
     row: Record<string, unknown>,
     filters: readonly WorkViewFilterV1[] | null | undefined,
     match: WorkViewFilterMatch = "all",
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): WorkViewFilterEvaluationResult {
     if (!filters?.length) return { pass: true, notes: [] };
     const notes: WorkViewFilterEvaluationNote[] = [];
@@ -375,7 +420,7 @@ export function evaluateWorkViewFiltersForRow(
     if (match === "any") {
         let anySupported = false;
         for (const filter of filters) {
-            const result = evaluateOneFilter(row, filter);
+            const result = evaluateOneFilter(row, filter, tenantFieldDefinitions);
             notes.push(...result.notes);
             const supported = result.notes.every((n) => n.supported);
             if (supported) {
@@ -388,7 +433,7 @@ export function evaluateWorkViewFiltersForRow(
     }
 
     for (const filter of filters) {
-        const result = evaluateOneFilter(row, filter);
+        const result = evaluateOneFilter(row, filter, tenantFieldDefinitions);
         notes.push(...result.notes);
         if (!result.pass) return { pass: false, notes };
     }
@@ -399,7 +444,8 @@ export function filterQueueRowsByWorkViewFilters<T extends Record<string, unknow
     rows: readonly T[],
     filters: readonly WorkViewFilterV1[] | null | undefined,
     match: WorkViewFilterMatch = "all",
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): T[] {
     if (!filters?.length) return [...rows];
-    return rows.filter((row) => evaluateWorkViewFiltersForRow(row, filters, match).pass);
+    return rows.filter((row) => evaluateWorkViewFiltersForRow(row, filters, match, tenantFieldDefinitions).pass);
 }

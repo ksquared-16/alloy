@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
@@ -17,7 +17,7 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Cross-cutting UX model:** How every operational domain (Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance) shares one architecture — five planes, Operations/Records split, progressive drawers, tabs-vs-actions — is defined in **`platform/core/operational-ux-doctrine.md`** (the **surface axis**).
 
-**Cross-cutting truth model:** The complementary **truth-flow axis** — Configuration → Operational Intent → Operational Expectations (derived) → Operational Facts (immutable) → Operational Consequences (financial) — is defined in **`platform/core/operational-truth-flow-doctrine.md`**. It locks: expectations are derived/non-authoritative; financials derive from facts (billing generalizes before childcare billing); facts are immutable + effective-dated; childcare builds only on the committed enrollment foundation; job-vertical schedule/financial tables are off-limits to childcare.
+**Cross-cutting truth model:** The complementary **truth-flow axis** — Configuration → Operational Intent → Operational Projections → Operational Facts (immutable) → Operational Consequences (financial) — is defined in **`platform/core/operational-truth-flow-doctrine.md`**. It locks: **Operational Projections are derived/non-authoritative** read models, while the **two authored ledgers — Operational Facts (observed, "what IS") and Operational Expectations (intended, "what SHOULD / WILL be") — are authoritative and neither is derived from the other** (the Operational Expectations two-ledger freeze; see **`platform/operational-expectations-system-design.md`**); financials derive from facts (billing generalizes before childcare billing); facts are immutable + effective-dated; childcare builds only on the committed enrollment foundation; job-vertical schedule/financial tables are off-limits to childcare.
 
 **Canonical interaction model:** The single operator spine every domain inherits — **Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field** — plus the one universal drawer (Record of Truth / Record of Attention / Context Frame) is defined in **`platform/operator/canonical-interaction-model.md`**, with laws in **`platform/operator/interaction-grammar.md`** and the lived flow in **`platform/operator/operator-story.md`**. How that model should **look and feel** (the bridge into mockups) is **`platform/operator/alloy-visual-language.md`**.
 
@@ -32,6 +32,8 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 **Presentation Runtime V2 (canonical, July 2026):** Shipped unifying presentation architecture — **`platform/experience/presentation-runtime-v2.md`**. Supersedes the June 2026 design-stage umbrella (archived at `archive/2026-06-presentation-runtime/`). Full sprint history: `sprints/archive/06_2026/presentation-runtime-architecture/`.
 
 **Experience Builder V3 — Universal Surface Composition (frozen, July 2026):** The composition model that unifies every builder — `Surface → Canvas → Component → Evidence Group → Composition Item` (a **Card is one Component type**), with **Expanded = Open Surface** (nested via `openSurfaceId`) — is frozen in **`platform/operator/experience-builder-v3-universal-surface-composition.md`**. The /surfaces builders now author real, persisted configuration for it (stacked queue rows, grain/conditions, custom fields by namespace, nested surface editing for Children + Financial Configuration). **Presentation Runtime adoption starts from `platform/operator/presentation-runtime-carry-forward.md`** — what the live runtime must consume, the deferral list, and what it must NOT redesign. PRs #61/#63/#64/#68.
+
+**Operational Expectations — two-ledger architecture (frozen, July 2026):** The platform's authored operational truth is **two ledgers** — **Operational Facts** (observed) and **Operational Expectations** (intended) — with everything else (Judgment, Gap, Projection, Scheduling, Forecasting, Billing) **derived**. Architecture is frozen; implementation is sequenced P0–P8. Frozen corpus: **`platform/operational-expectations-system-design.md`** (system design + §0.5 reconciliation), **`platform/milestones/operational-expectations-architecture-closeout.md`** (freeze), **`platform/milestones/operational-expectations-doctrine-convergence.md`** (terminology sweep), **`platform/milestones/operational-expectations-engineering-realization.md`** (the implementation contract), **`platform/milestones/operational-expectations-implementation-program.md`** (execution index), and **`platform/milestones/operational-expectations-p0-substrate-reconciliation.md`** (P0 / G-Reconciliation certification).
 
 ---
 
@@ -69,7 +71,7 @@ Start here: **`platform/foundation/system-overview.md`**
 ### 3. Operator experience
 
 11. `platform/core/operational-ux-doctrine.md` — **operational UX architecture / surface axis** (five planes, Operations/Records, progressive drawers, tabs vs actions)
-11b. `platform/core/operational-truth-flow-doctrine.md` — **truth-flow axis** (Configuration → Intent → Expectations → Facts → Consequences; complementary to the planes)
+11b. `platform/core/operational-truth-flow-doctrine.md` — **truth-flow axis** (Configuration → Intent → Projections → Facts → Consequences; complementary to the planes)
 12. `platform/operator/canonical-interaction-model.md` — **canonical interaction spine** (Workspace → … → Field; one universal drawer)
 13. `platform/operator/interaction-grammar.md` — **interaction laws** (records own truth, projections observe, cards talk through records)
 14. `platform/operator/operator-story.md` — **lived operator experience** (open → work → interrupt → return)

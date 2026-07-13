@@ -1,15 +1,17 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
 # Operational Truth-Flow doctrine
 
-**Status:** Canonical platform doctrine (June 2026). Defines the **truth-flow axis** of Alloy's operating model — what is operationally true, and how downstream truth derives from upstream truth — across Enrollment, Scheduling, Attendance, Capacity, Ratios, Billing, Subsidy, Payments, Financials, Forecasting, and Staffing.
+**Status:** Canonical platform doctrine (June 2026; **terminology converged onto the frozen Operational Expectations two-ledger ontology, 2026-07-13**). Defines the **truth-flow axis** of Alloy's operating model — what is operationally true, and how downstream truth derives from upstream truth — across Enrollment, Scheduling, Attendance, Capacity, Ratios, Billing, Subsidy, Payments, Financials, Forecasting, and Staffing.
 
 > **This doctrine is complementary, not a replacement.** It introduces a second axis over the existing operating model; it does **not** modify the frozen five-plane surface model in [`./operational-ux-doctrine.md`](./operational-ux-doctrine.md). The two axes compose. See "Two orthogonal axes" below.
+
+> **Reconciliation note (2026-07-13, Operational Expectations two-ledger freeze).** The frozen Operational Expectations architecture ([`../operational-expectations-system-design.md`](../operational-expectations-system-design.md)) establishes **two authored ledgers** — **Operational Facts** (observed truth, "what IS") and **Operational Expectations** (authored/intended truth, "what SHOULD / WILL be") — neither derivable from the other; **everything else is derived**. To keep one ontology, the word **"Expectation" is reserved for that authored ledger.** The derived truth-flow layer this doctrine formerly called **"L3 Operational Expectations"** is therefore renamed **"L3 Operational Projections"** (a derived read model, unchanged in behavior). **Law 2 is rewritten accordingly** (see "The four ratified laws"). Where legacy code symbols still carry `Expectation` names (e.g. `scheduleExpectationCore.ts`, `fetchScheduleExpectations`), those are implementation identifiers and out of scope for this documentation pass; they denote L3 **Projections**.
 
 > **Reconciliation note (2026-07, Operational Expansion Wave 1 freeze).** The frozen [`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) ratifies the following additions to this doctrine; treat them as canonical alongside the five layers and four laws below:
 > - **No sixth layer (RFC D1).** L1–L5 is sufficient; Forecasting lives in the Planning **plane** consuming L3+L4, not as a truth-flow layer.
@@ -36,7 +38,7 @@ Alloy's operating model has **two** canonical axes. Neither replaces the other; 
 | Axis | Question it answers | Canonical doc |
 |------|---------------------|---------------|
 | **Surface axis (planes)** | *Where does the operator stand when they act?* | [`./operational-ux-doctrine.md`](./operational-ux-doctrine.md) — Configuration / Planning / Operations / Records / Intelligence-BOS |
-| **Truth-flow axis (layers)** | *What is true, and what does it derive from?* | **This doc** — Configuration → Intent → Expectations → Facts → Consequences |
+| **Truth-flow axis (layers)** | *What is true, and what does it derive from?* | **This doc** — Configuration → Intent → Projections → Facts → Consequences |
 
 ```mermaid
 flowchart TB
@@ -44,7 +46,7 @@ flowchart TB
     direction TB
     L1[L1 Configuration]
     L2[L2 Operational Intent]
-    L3[L3 Operational Expectations - derived]
+    L3[L3 Operational Projections - derived]
     L4[L4 Operational Facts - immutable]
     L5[L5 Operational Consequences - financial]
     L1 --> L2
@@ -81,14 +83,14 @@ Canonical homes today: `locations` (`site` / `unit`), `location_program_categori
 - **Proposal (intent-to-be) and committed Intent stay separate.** The OCM enrollment proposal is pre-commitment; the agreement/placement/schedule rows are the commitment. Do not collapse them.
 - Every future commitment domain copies this template (own participation entity, effective-dated, provenance FKs back to its source).
 
-### L3 — Operational Expectations
+### L3 — Operational Projections
 
-**Derived projections of Intent (and Configuration).** What *should* happen if commitments hold: Expected Attendance, Expected Occupancy, Expected Staffing, Expected Ratios, Expected Tuition, Expected Subsidy, Expected Revenue.
+**Derived projections of Intent (and Configuration).** What *should* happen if commitments hold: Expected Attendance, Expected Occupancy, Expected Staffing, Expected Ratios, Expected Tuition, Expected Subsidy, Expected Revenue. *(These "Expected X" quantities are the projected values L3 produces; the layer noun is **Projection**. Do not confuse them with the authored **Operational Expectations** ledger — see the reconciliation note above.)*
 
-- **Expectations are derived, not stored as a system of record.** They are deterministic functions of L1 + L2. They MUST NOT become authoritative tables that can silently disagree with Intent or Facts.
+- **Projections are derived, not stored as a system of record.** They are deterministic functions of L1 + L2. They MUST NOT become authoritative tables that can silently disagree with Intent or Facts.
 - **Materialization is allowed only as a non-authoritative cache** for forecasting/performance, computed from L1+L2 (and, for forecasting, L4), clearly marked non-authoritative, and always reproducible by recomputation. A materialized snapshot is never the source of truth and is never edited in place to change a projection.
-- Expectations consume **Intent** (you can project expected occupancy before a single attendance fact exists). Forecasting additionally consumes **Facts** to project further forward. This refines the Planning plane's "consumes operational facts" framing: Expectations project commitments; forecasting projects commitments plus history.
-- Expectations are the **target that Facts are compared against** (e.g. expected vs actual attendance, expected vs actual ratio).
+- Projections consume **Intent** (you can project expected occupancy before a single attendance fact exists). Forecasting additionally consumes **Facts** to project further forward. This refines the Planning plane's "consumes operational facts" framing: Projections project commitments; forecasting projects commitments plus history.
+- Projections are the **target that Facts are compared against** (e.g. expected vs actual attendance, expected vs actual ratio).
 
 ### L4 — Operational Facts
 
@@ -113,7 +115,7 @@ Canonical homes today: `locations` (`site` / `unit`), `location_program_categori
 ## The four ratified laws
 
 1. **Complementary axes.** The truth-flow layers are orthogonal to the five planes and do not replace them. Locate every operational object on both axes.
-2. **Expectations are derived / non-authoritative.** L3 is computed from L1+L2 (and L4 for forecasting). Materialized snapshots are permitted only as a clearly non-authoritative, recomputable cache — never a system of record.
+2. **Projections are derived / non-authoritative — Expectations are authored.** L3 **Projections** are computed from L1+L2 (and L4 for forecasting); materialized snapshots are permitted only as a clearly non-authoritative, recomputable cache — never a system of record. The word **"Expectation" is reserved for the authored Operational Expectations ledger** (intended truth, "what SHOULD / WILL be"), which — like the Operational Facts ledger — **is authoritative and is not derived from any other layer** (see [`../operational-expectations-system-design.md`](../operational-expectations-system-design.md)). Never treat an L3 Projection as an Expectation, and never treat the Expectations ledger as a derived projection.
 3. **Financials derive from Facts.** L5 derives from L4, never directly from enrollment/intent. Billing is generalized off the jobs vertical before any childcare billing is built.
 4. **Facts are immutable + effective-dated.** L4 (and L5) never overwrite history; corrections are new effective-dated rows via the supersede pattern.
 
@@ -141,7 +143,7 @@ Scope note: this records the canonical direction. The schema/runtime implementat
 
 Every new operational capability supplies artifacts at each layer rather than a parallel application:
 
-| Capability | L1 Config | L2 Intent | L3 Expectations (derived) | L4 Facts (immutable) | L5 Consequences |
+| Capability | L1 Config | L2 Intent | L3 Projections (derived) | L4 Facts (immutable) | L5 Consequences |
 |------------|-----------|-----------|---------------------------|----------------------|-----------------|
 | **Scheduling** | schedule rules | `schedule_assignments` | expected occupancy / ratio | schedule overrides | (feeds billing) |
 | **Attendance** | attendance policy | (uses schedule intent) | expected attendance | attendance / presence / transfer facts | billable attendance |
@@ -155,7 +157,7 @@ Every new operational capability supplies artifacts at each layer rather than a 
 ## What not to do
 
 - Do not introduce the five layers as a *replacement* for the five planes, or refactor the plane doctrine.
-- Do not give Expectations a system-of-record table, or edit a materialized expectation snapshot to change a projection.
+- Do not give L3 Projections a system-of-record table, or edit a materialized projection snapshot to change a projection. (The authored **Operational Expectations** ledger is a separate, authoritative capability — do not conflate it with an L3 Projection.)
 - Do not derive financial consequences directly from enrollment/intent, or anchor childcare billing on `job_id`.
 - Do not overwrite operational facts in place; always supersede with a new effective-dated row.
 - Do not reuse job-vertical schedule/financial tables for childcare, or extend `inquiry_child` to non-enrollment modules.
@@ -183,5 +185,5 @@ Every new operational capability supplies artifacts at each layer rather than a 
 
 - A new operational layer is introduced or the truth-flow ordering changes.
 - The relationship between the truth-flow axis and the surface axis changes.
-- The four ratified laws change (compose, expectations-derived, financials-from-facts, facts-immutable).
+- The four ratified laws change (compose, projections-derived / expectations-authored, financials-from-facts, facts-immutable).
 - The config-as-first-class decision is extended or revised.

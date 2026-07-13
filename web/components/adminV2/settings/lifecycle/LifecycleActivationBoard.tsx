@@ -93,6 +93,7 @@ import {
 } from "@/lib/lifecycle/lifecycleStatusDraftReducer";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { defaultWorkUnitQueueNameForStageKey } from "@/lib/lifecycle/lifecycleRuntimeBinding";
+import { effectiveLifecycleStageStatusKeys } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { derivePerspectiveLanesFromPipeline } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
 
 type DeptRow = {
@@ -653,17 +654,18 @@ export default function LifecycleActivationBoard({
             }),
             availableStatusCount: collectAllOpportunityStatusRows(statusesPayload).length,
         });
-        if (!runtimeDepartmentId || !sk || selectedKeys.length < 1) {
+        if (!runtimeDepartmentId || !sk || effectiveLifecycleStageStatusKeys(sk, selectedKeys).length < 1) {
             setStatusesError("Select at least one status for this stage.");
             return false;
         }
         setStatusesSaving(true);
         setStatusesError(null);
+        const effectiveKeys = effectiveLifecycleStageStatusKeys(sk, selectedKeys);
         const contractBody = {
             department_id: runtimeDepartmentId,
             process_id: processId,
             stage_key: sk,
-            selected_status_keys: selectedKeys,
+            selected_status_keys: effectiveKeys,
             ...(workUnitName?.trim() ? { work_unit_name: workUnitName.trim() } : {}),
         };
         logLifecycleStatusStepDebug("save-contract-request", { body: contractBody });
@@ -692,7 +694,7 @@ export default function LifecycleActivationBoard({
             const keys =
                 j.snapshot?.selectedStatusKeys?.length
                     ? j.snapshot.selectedStatusKeys
-                    : selectedKeys;
+                    : effectiveKeys;
             if (keys.length < 1) {
                 throw new Error(
                     `Statuses were not assigned to stage "${sk}". Check that this stage exists on the lifecycle department.`
@@ -759,15 +761,23 @@ export default function LifecycleActivationBoard({
     const saveStageUnified = useCallback(async () => {
         const sk = normalizeLifecycleBuilderStageKey(stageKeyRef.current || stageKey);
         const selectedKeys = statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk);
+        const effectiveKeys = effectiveLifecycleStageStatusKeys(sk, selectedKeys);
         if (!runtimeDepartmentId || !sk) {
             setStageSaveError("Select a stage first.");
             setStageSaveState("error");
             return;
         }
-        if (selectedKeys.length < 1) {
-            setStageSaveError("Select at least one status for this stage.");
+        if (effectiveKeys.length < 1) {
+            const message = "Select at least one status for this stage.";
+            setStageSaveError(message);
             setStageSaveState("error");
-            setStatusesError("Select at least one status for this stage.");
+            setStatusesError(null);
+            const statusSection = document.querySelector('[data-testid="lifecycle-stage-statuses-section"]');
+            if (statusSection instanceof HTMLElement) {
+                statusSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                const details = statusSection.querySelector("details");
+                if (details && !details.open) details.open = true;
+            }
             return;
         }
 
@@ -787,7 +797,7 @@ export default function LifecycleActivationBoard({
         const queueMembership = queueMembershipWithSyncedStatusKeys(
             membershipBase,
             sk,
-            selectedKeys,
+            effectiveKeys,
         );
         const stageOperatingPlan =
             handle?.isStageOperatingPlanDirty() ? handle.getStageOperatingPlanDraft() : null;
@@ -802,7 +812,7 @@ export default function LifecycleActivationBoard({
             department_id: runtimeDepartmentId,
             process_id: processId,
             stage_key: sk,
-            selected_status_keys: selectedKeys,
+            selected_status_keys: effectiveKeys,
             work_unit_name: queueName,
             ...(fieldRules ? { field_rules: fieldRules } : {}),
             queue_membership_v1: queueMembership,
@@ -827,7 +837,7 @@ export default function LifecycleActivationBoard({
             if (!res.ok) throw new Error(j.error ?? "Save failed");
 
             const keys =
-                j.snapshot?.selectedStatusKeys?.length ? j.snapshot.selectedStatusKeys : selectedKeys;
+                j.snapshot?.selectedStatusKeys?.length ? j.snapshot.selectedStatusKeys : effectiveKeys;
             const statusPayload = j.status_stages ?? null;
             if (statusPayload) setStatusesPayload(statusPayload);
             const labels = labelsForKeys(
@@ -1772,6 +1782,7 @@ export default function LifecycleActivationBoard({
                                     lifecycleName={lifecycleName}
                                     stageRecord={builderStages.find((s) => s.key === stageKey) ?? null}
                                     allStages={builderStages}
+                                    processTracks={builderProcess?.tracks_v1 ?? null}
                                     bootstrap={stageBootstrap}
                                     bootstrapLoading={stageBootstrapLoading}
                                     statusesError={statusesError}

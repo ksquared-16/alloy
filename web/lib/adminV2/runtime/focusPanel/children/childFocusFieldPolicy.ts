@@ -1,6 +1,6 @@
 /**
  * Child focus edit field policy — maps published `children_surface` config to runtime
- * edit rows (displayed / editable / saveable).
+ * edit rows using canonical field metadata and mutation bindings.
  */
 
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -10,10 +10,7 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { resolveIdentityFieldPolicy } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import {
-    CHILD_FOCUS_FIELD_DEFS,
     CHILD_SURFACE_ID,
-    CHILD_UNSUPPORTED_SAVE_FIELD_KEYS,
-    type ChildFocusFieldKey,
     childFocusViewFromConfig,
     isChildFocusFieldSaveSupported,
     orderedChildEditFieldKeys,
@@ -24,8 +21,12 @@ import {
     CHILDREN_SURFACE_CANONICAL_ID,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import { defaultNestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-
-export { CHILD_UNSUPPORTED_SAVE_FIELD_KEYS };
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
+import {
+    childFocusMutationValueKeyForRef,
+    inputTypeForIdentityFieldRef,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
 /** Editable child focus values sent through the inquiry-child save path. */
 export type ChildFocusEditValues = {
@@ -38,16 +39,8 @@ export type ChildFocusEditValues = {
 
 export type ChildFocusEditValueKey = keyof ChildFocusEditValues;
 
-const SAVE_FIELD_MAP: Partial<Record<ChildFocusFieldKey, ChildFocusEditValueKey>> = {
-    "inquiry_child.program": "program_category_id",
-    "child.room": "program_room_cohort_key",
-    "inquiry_child.schedule_type": "schedule_type",
-    "child.start_date": "start_date",
-    "child.date_of_birth": "dob",
-};
-
 export type ChildFocusEditFieldRow = {
-    configKey: ChildFocusFieldKey;
+    configKey: string;
     valueKey?: ChildFocusEditValueKey;
     label: string;
     inputType: "text" | "date";
@@ -57,7 +50,7 @@ export type ChildFocusEditFieldRow = {
     unsupported?: boolean;
 };
 
-function groupKeyForField(config: NestedSurfaceConfig, fieldKey: ChildFocusFieldKey): string | null {
+function groupKeyForField(config: NestedSurfaceConfig, fieldKey: string): string | null {
     const childEdit = config.groups.find((g) => g.key === "child_edit");
     if (childEdit?.selectedFieldKeys.includes(fieldKey)) return "child_edit";
     for (const group of config.groups) {
@@ -76,12 +69,14 @@ function canonicalChildConfig(config: NestedSurfaceConfig | null): NestedSurface
 }
 
 /** Resolve child edit rows from published children_surface config (fieldPolicies parity). */
-export function resolveChildFocusEditPolicy(config: NestedSurfaceConfig | null): ChildFocusEditFieldRow[] {
+export function resolveChildFocusEditPolicy(
+    config: NestedSurfaceConfig | null,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): ChildFocusEditFieldRow[] {
     config = canonicalChildConfig(config);
     if (!config) return [];
     return orderedChildEditFieldKeys(config).flatMap((fieldKey) => {
-        const def = CHILD_FOCUS_FIELD_DEFS[fieldKey];
-        const valueKey = SAVE_FIELD_MAP[fieldKey];
+        const valueKey = childFocusMutationValueKeyForRef(fieldKey);
         const saveSupported = isChildFocusFieldSaveSupported(fieldKey);
         const groupKey = groupKeyForField(config, fieldKey);
         const visibility = resolveIdentityFieldPolicy({
@@ -93,13 +88,13 @@ export function resolveChildFocusEditPolicy(config: NestedSurfaceConfig | null):
         const displayed = fieldShouldRender(visibility);
         const editable = displayed && saveSupported && fieldIsSaveable(visibility);
         const unsupported = displayed && !saveSupported;
+        const inputType = inputTypeForIdentityFieldRef(fieldKey);
         return [
             {
                 configKey: fieldKey,
                 valueKey,
-                label: def?.label ?? fieldKey,
-                inputType:
-                    valueKey === "start_date" || valueKey === "dob" ? ("date" as const) : ("text" as const),
+                label: resolveCanonicalIdentityFieldLabel(fieldKey, tenantFieldDefinitions),
+                inputType: inputType === "date" ? "date" : "text",
                 displayed,
                 editable,
                 unsupported,

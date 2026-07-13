@@ -11,8 +11,7 @@ import { formatDisplayDate } from "@/lib/adminFormatters";
 import { inquiryChildAgeLabelFromDob } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
-import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
-import type { RelatedSubjectSummary } from "@/lib/workUnits/lifecycleSubjectContracts";
+import type { QueueRowContext, RelatedSubjectSummary } from "@/lib/workUnits/lifecycleSubjectContracts";
 
 export type CollectionFieldKey = "children";
 

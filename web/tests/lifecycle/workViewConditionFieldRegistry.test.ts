@@ -24,8 +24,8 @@ describe("workViewConditionFieldRegistry", () => {
         expect(labelByKey.opportunity_stage).toBe("Stage");
         expect(labelByKey.opportunity_status).toBe("Lead Status");
         expect(labelByKey.site).toBe("Campus");
-        // Renamed from "Child Enrollment Status" → "Enrollment Status".
-        expect(labelByKey.child_enrollment_status).toBe("Enrollment Status");
+        // Renamed from "Child Enrollment Status" → operator label in typed registry.
+        expect(labelByKey.child_enrollment_status).toBe("Enrollment Participation");
         expect(labelByKey.program).toBe("Program");
         expect(labelByKey.room).toBe("Room");
         expect(labelByKey.start_date).toBe("Start date");

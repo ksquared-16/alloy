@@ -3,30 +3,26 @@
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 
 import AlloyConfigPicker, { type AlloyConfigPickerOption } from "@/components/adminV2/settings/shared/AlloyConfigPicker";
-import type { StageCompletionOutcomeV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
+import type { StageCompletionOutcomeV1, StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     addWorkTemplateHelpfulAction,
-    markWorkTemplateAlternatePathsEmpty,
     markWorkTemplateHelpfulActionsEmpty,
     markWorkTemplateOutcomeRefsEmpty,
     removeWorkTemplateHelpfulAction,
     reorderWorkTemplateHelpfulActions,
     reorderWorkTemplateOutcomeRefs,
-    setWorkTemplateAlternatePathDraftRefs,
     setWorkTemplateOutcomeRefs,
     setWorkTemplatePrimaryActionRef,
-    workTemplateAlternatePathDraftRefs,
     workTemplateHelpfulActionRefs,
     workTemplateOutcomeRefs,
     workTemplatePrimaryActionRef,
-    type StageWorkTemplateAlternatePathDraftRef,
 } from "@/lib/lifecycle/stageWorkTemplateActionRefs";
 import {
     resolveWorkTemplateActionOptions,
     type WorkTemplateActionOption,
 } from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
 import {
-    alternatePathsConfigSource,
     availableResultsConfigSource,
     helpfulActionsConfigSource,
     primaryActionConfigSource,
@@ -38,10 +34,13 @@ import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConf
 type Props = {
     work: StageWorkTemplateV1;
     stageKey: string;
+    stageLabel?: string;
     stageOutcomes: StageCompletionOutcomeV1[];
     actionCatalog: StageActionCatalogV1 | null;
     configuredActions: LifecycleConfiguredActionRow[];
     processStages: Array<{ key: string; label: string }>;
+    stageOperatingPlan?: StageOperatingPlanV1 | null;
+    processTracks?: ProcessTracksV1 | null;
     stageDefinition?: { journey_segment?: string } | null;
     processDefinition?: { primary_entity?: string } | null;
     onChange: (work: StageWorkTemplateV1) => void;
@@ -169,10 +168,13 @@ function OrderedActionRows({
 export default function LifecycleStageWorkTemplateActionsEditor({
     work,
     stageKey,
+    stageLabel,
     stageOutcomes,
     actionCatalog,
     configuredActions,
     processStages,
+    stageOperatingPlan,
+    processTracks,
     stageDefinition,
     processDefinition,
     onChange,
@@ -180,8 +182,11 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     const options = resolveWorkTemplateActionOptions({
         actionRegistry: configuredActions,
         stageActionCatalog: actionCatalog,
-        processTransitions: processStages,
+        stageOperatingPlan: stageOperatingPlan ?? null,
+        processTracks: processTracks ?? null,
+        processStages,
         stageKey,
+        stageLabel,
         stageOutcomes,
         workTemplateKey: work.template_key,
         stageDefinition,
@@ -190,7 +195,6 @@ export default function LifecycleStageWorkTemplateActionsEditor({
 
     const primaryRef = workTemplatePrimaryActionRef(work) ?? "";
     const helpfulRefs = workTemplateHelpfulActionRefs(work);
-    const alternateDraftRefs = workTemplateAlternatePathDraftRefs(work);
     const outcomeRefsList = workTemplateOutcomeRefs(work);
 
     const primaryOptions = toPickerOptions(options.primaryActionOptions.filter((row) => row.supported));
@@ -199,18 +203,9 @@ export default function LifecycleStageWorkTemplateActionsEditor({
             (row) => row.supported && !helpfulRefs.includes(row.ref) && row.ref !== primaryRef,
         ),
     );
-    const alternateAddOptions = toPickerOptions(
-        options.alternatePathOptions.filter(
-            (row) => row.supported && !alternateDraftRefs.some((existing) => existing.ref === row.ref),
-        ),
-    );
     const outcomeAddOptions: AlloyConfigPickerOption[] = options.outcomeOptions
         .filter((row) => !outcomeRefsList.includes(row.ref))
         .map((row) => ({ value: row.ref, label: row.label, group: "Recommended" }));
-
-    function updateAlternateRefs(next: StageWorkTemplateAlternatePathDraftRef[]) {
-        onChange(setWorkTemplateAlternatePathDraftRefs(work, next));
-    }
 
     return (
         <div className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3" data-testid={`work-template-actions-${work.template_key}`}>
@@ -232,7 +227,10 @@ export default function LifecycleStageWorkTemplateActionsEditor({
             <section data-testid={`work-template-helpful-actions-${work.template_key}`}>
                 <div className="mb-1 space-y-0.5">
                     <h4 className="text-[11px] font-semibold text-alloy-midnight">Helpful Actions</h4>
-                    <p className="text-[10px] text-alloy-midnight/50">Supporting capabilities available while doing this work.</p>
+                    <p className="text-[10px] text-alloy-midnight/50">
+                        Helpful Actions support this work. Stage transitions are configured by the process and
+                        appear automatically when valid.
+                    </p>
                     <ConfigSourceBadge
                         source={helpfulActionsConfigSource(work)}
                         fallbackHint="Configure this section to take explicit control."
@@ -291,82 +289,13 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                 />
             </section>
 
-            <section data-testid={`work-template-alternate-paths-${work.template_key}`}>
-                <div className="mb-1 space-y-0.5">
-                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Alternate Paths</h4>
-                    <p className="text-[10px] text-alloy-midnight/50">Intentional progression choices outside the normal result flow.</p>
-                    <ConfigSourceBadge
-                        source={alternatePathsConfigSource(work)}
-                        fallbackHint="Configure this section to take explicit control."
-                    />
-                </div>
-                <div className="mb-2 flex items-center justify-end gap-2">
-                    <button
-                        type="button"
-                        className="text-[10px] text-alloy-midnight/50 hover:text-alloy-bend-pine"
-                        onClick={() => onChange(markWorkTemplateAlternatePathsEmpty(work))}
-                    >
-                        Clear all
-                    </button>
-                    <div className="w-44">
-                        <AlloyConfigPicker
-                            label="Add alternate path"
-                            value=""
-                            options={alternateAddOptions}
-                            onChange={(ref) => {
-                                if (!ref) return;
-                                const isTransition = ref.startsWith("move_to_stage:");
-                                const next: StageWorkTemplateAlternatePathDraftRef = {
-                                    kind: isTransition ? "transition" : "action",
-                                    ref,
-                                };
-                                updateAlternateRefs([...alternateDraftRefs, next]);
-                            }}
-                            compact
-                            clearable={false}
-                            searchable={alternateAddOptions.length > 6}
-                            testId={`work-template-alternate-add-${work.template_key}`}
-                            placeholder="+ Add"
-                        />
-                    </div>
-                </div>
-                <OrderedActionRows
-                    title="Alternate Paths"
-                    refs={alternateDraftRefs.map((row) => row.ref)}
-                    resolveLabel={(ref) => {
-                        const transition = options.transitionOptions.find((row) => row.ref === ref);
-                        if (transition) return transition.label;
-                        return optionByRef(options.alternatePathOptions, ref)?.label ?? ref.replace(/_/g, " ");
-                    }}
-                    resolveDescription={(ref) => optionByRef(options.alternatePathOptions, ref)?.description ?? null}
-                    resolveInvalid={(ref) => {
-                        if (ref.startsWith("move_to_stage:")) {
-                            const row = options.transitionOptions.find((item) => item.ref === ref);
-                            if (!row) return "Unknown transition";
-                            if (!row.supported) return row.disabledReason ?? "Unsupported";
-                            return null;
-                        }
-                        const row = optionByRef(options.alternatePathOptions, ref);
-                        if (!row) return "Unknown action";
-                        if (!row.supported) return row.disabledReason ?? "Unsupported";
-                        return null;
-                    }}
-                    onRemove={(ref) => updateAlternateRefs(alternateDraftRefs.filter((row) => row.ref !== ref))}
-                    onMoveUp={(index) => {
-                        const next = [...alternateDraftRefs];
-                        if (index <= 0) return;
-                        [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
-                        updateAlternateRefs(next);
-                    }}
-                    onMoveDown={(index) => {
-                        const next = [...alternateDraftRefs];
-                        if (index >= next.length - 1) return;
-                        [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
-                        updateAlternateRefs(next);
-                    }}
-                    testIdPrefix={`work-template-alternate-${work.template_key}`}
-                />
-            </section>
+            <p
+                className="rounded border border-alloy-forge/10 bg-alloy-midnight/[0.02] px-2 py-1.5 text-[10px] text-alloy-midnight/55"
+                data-testid={`work-template-transitions-note-${work.template_key}`}
+            >
+                Other transitions are owned by the process stage configuration and appear on Current Work when
+                outgoing transitions are configured. They are not authored on this Work Template.
+            </p>
 
             <section data-testid={`work-template-outcome-refs-${work.template_key}`}>
                 <div className="mb-1 space-y-0.5">

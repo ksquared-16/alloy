@@ -3,6 +3,8 @@
 **Status:** Architectural audit (Phase A). Read-only. **Not** an implementation sprint or a redesign.
 **Audit base:** `origin/staging` @ `a3fdc946f` (latest staging at time of audit).
 **Date:** 2026-07-10.
+
+> **Reconciliation note (2026-07-13, Operational Expectations two-ledger freeze).** Under the frozen two-ledger ontology, "Expectation" is reserved for the authored Operational Expectations ledger; the derived truth-flow layer this audit calls **"L3 Projections (derived)"** is renamed **"L3 Projections (derived)"** (behavior unchanged). References below are updated to the new label; see [`../../platform/core/operational-truth-flow-doctrine.md`](../../platform/core/operational-truth-flow-doctrine.md).
 **Mission:** Determine whether the next operational expansion — **Enrollment → Scheduling → Attendance → Capacity → Staffing → Billing → Forecasting → Recommendations** — can be implemented primarily by **consuming** the existing platform, thereby proving Alloy's architecture rather than replacing it.
 
 **Method:** Full read of platform doctrine under `/docs` (foundation, core, runtime, modules, operator, experience, analytics), then three independent code-verification passes (process engine boundary; operational-spine implementation inventory; UI/interaction reuse map). Where doctrine and implementation diverge, both are recorded.
@@ -16,7 +18,7 @@
 Alloy is not "an enrollment CRM about to grow features." It is already an **Operational Execution Platform** organized on two ratified, orthogonal axes:
 
 - **Surface axis (five planes):** Configuration / Planning / Operations / Records / Intelligence-BOS — *where an operator stands when they act* (`operational-ux-doctrine.md`).
-- **Truth-flow axis (five layers):** L1 Configuration → L2 Intent → L3 Expectations (derived) → L4 Facts (immutable) → L5 Consequences (financial) — *what is true and what it derives from* (`operational-truth-flow-doctrine.md`).
+- **Truth-flow axis (five layers):** L1 Configuration → L2 Intent → L3 Projections (derived) → L4 Facts (immutable) → L5 Consequences (financial) — *what is true and what it derives from* (`operational-truth-flow-doctrine.md`).
 
 Every item in the expansion chain is already a named coordinate on both axes. The doctrine's own tables enumerate Scheduling, Attendance, Capacity, Staffing, Billing, Subsidy, and Forecasting as *consumers* of the existing primitives, with their Operations surface, drawer tab, Startable actions, Planning input, and BOS role pre-specified.
 
@@ -26,7 +28,7 @@ Every item in the expansion chain is already a named coordinate on both axes. Th
 |---|---|---|
 | **L1 Config** | ratio / capacity / schedule / operating-window rules + one most-specific-wins effective-dated resolver | **Implemented** (`web/lib/childcareOperational/config/*`) |
 | **L2 Intent** | agreements, effective-dated placements & schedule assignments, provenance FKs, supersede-not-patch | **Implemented** (`childPlacementService.ts`, `scheduleAssignmentService.ts`, migration `…enrollment_slice1.sql`) |
-| **L3 Expectations** | expected attendance / occupancy / **staffing demand** — pure, derived, never persisted | **Implemented** (`expectations/scheduleExpectationCore.ts`) |
+| **L3 Projections** | expected attendance / occupancy / **staffing demand** — pure, derived, never persisted | **Implemented** (`expectations/scheduleExpectationCore.ts`) |
 | **L4 Facts** | attendance fact stream — DB-enforced immutable/append-only, event-emitting, expected-vs-actual + actual compliance | **Implemented** (`attendance/*`, `child_attendance_events`) |
 | **L5 Consumption** | Fact → Consumption Event → Resolved Obligation → draft Charge, incl. attendance & schedule interpreters + Draft Obligation Review | **Implemented as a library** (`operationalConsumption/*`, Slices 1–4) |
 | **Commercial resolver** | subject-neutral pricing `evaluate()` (child/prospect/cohort/projected_seat — **not `job_id`**) + rate plans/rules | **Implemented** |
@@ -133,8 +135,10 @@ Genuine gaps (code-verified), separated from doctrine that merely awaits a consu
 | G7 | **Two commercial substrates coexist** — neutral `evaluate()` and older childcare tuition resolver. | **Convergence debt** | `commercial/execution/*` vs `resolveEnrollmentTuitionRate.ts` |
 | G8 | **Focus Panel edit substrate incomplete.** Focus Panel is read-only for most operational data until the edit stack lands (Household → Children first). Write-capable cards (billing responsibility, schedule edits) are gated behind it. | **UI substrate** | `universal-card-system.md` editing gap |
 | G9 | **V3 runtime adoption deferred.** Recursion/stacking/`visibleWhen` authored & persisted but not rendered live; Default Operational Subject Strategy is doctrine-only. | **UI runtime** | `presentation-runtime-carry-forward.md` |
+| G10 | **Consumption lineage uniqueness unenforced (Wave 1 D12a follow-up — F4).** `consumption_events.source_entity_id` is not unique; correction reconciliation resolves the prior event via an ordered `LIMIT 1` lookup, relying on an unenforced "one authoritative source fact → one relevant consumption event per consumer context" assumption. Future decision: determine the canonical uniqueness scope and whether it is enforced by constraint, consumer key, or guarded lookup — and never silently select one event when multiple candidates exist. **No schema or runtime change this sprint.** | **Invariant / lineage** | `20260716000000_consumption_correction_lineage_and_reconcile_rpc.sql` prior-event lookup; non-unique `idx_consumption_events_source` |
+| G11 | **Superseded obligation review visibility (Wave 1 D12a follow-up — F5).** Superseded obligations are excluded from posting eligibility but may still appear in the default obligation-review queue when no status filter is supplied. Future decision: determine whether default review surfaces should exclude superseded obligations while preserving explicit historical/audit access — a focused operational-UX decision. **No review-route change this sprint.** | **Read visibility / UX** | `.../consumption/obligations/route.ts` optional status filter; `obligationReviewService.isPostingEligible` already excludes superseded |
 
-**Gaps that are wiring or definitions (G1–G5) dwarf gaps that are new platforms (only G6).** That is the architectural proof.
+**Gaps that are wiring or definitions (G1–G5) dwarf gaps that are new platforms (only G6).** That is the architectural proof. **G10–G11** are Wave 1 D12a correction-contract hardening follow-ups recorded as deferred (approved non-blocking; see the Wave 1 PR): decisions only, no implementation this sprint.
 
 ---
 
@@ -200,7 +204,7 @@ flowchart TB
     SCH[Schedule Assignment]
     SHIFT[Shift Assignment — NOT BUILT]
   end
-  subgraph L3[L3 Expectations — derived, never stored]
+  subgraph L3[L3 Projections — derived, never stored]
     EXA[Expected Attendance]
     EXO[Expected Occupancy]
     EXS[Expected Staffing Demand]

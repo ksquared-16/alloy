@@ -1,21 +1,10 @@
 /**
- * Business-concept catalog + value resolver (Presentation Data doctrine).
+ * Legacy business-concept catalog + value resolver.
  *
- * The Experience Builder never exposes raw database columns. Administrators bind
- * to BUSINESS CONCEPTS expressed as a path:
- *
- *   Enrollment → Primary Contact → Phone
- *   Enrollment → Children → Name
- *   Enrollment → Assigned Employee → Employee ID
- *
- * This module owns:
- *   - the concept TREE that drives the cascading picker, and
- *   - a `resolveConceptValue` that maps a concept path to a display string from a
- *     record (Household is the complete reference; other branches resolve where the
- *     demo/record provides data, else a clean empty state).
- *
- * The same resolver runs in the editor canvas and the operator runtime, so a bound
- * field renders identically in both.
+ * @deprecated Field binding must use canonical refKeys from the Field Platform.
+ * `CONCEPT_TREE` remains for legacy condition authoring and read-time concept
+ * resolution only — never as an active field picker catalog. See
+ * `focusPanelConceptCompat.ts` for legacy → refKey reconciliation.
  */
 
 export const CONCEPT_ROOT = "Enrollment" as const;

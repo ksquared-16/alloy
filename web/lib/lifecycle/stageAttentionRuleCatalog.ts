@@ -11,6 +11,9 @@ export type StageAttentionRuleCatalogEntry = {
     supportsThreshold: boolean;
     defaultThreshold: number;
     defaultSeverity: StageAttentionSeverity;
+    /** When false, rule may be saved but is not evaluated by stage-plan attention runtime. */
+    evaluatorSupported?: boolean;
+    unsupportedReason?: string;
 };
 
 /** Canonical editor kinds — legacy kinds normalize to these on display. */
@@ -32,9 +35,9 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         defaultSeverity: "medium",
     },
     {
-        kind: "missing_required_fields",
-        label: "Missing required fields",
-        description: "Stage requirements are incomplete.",
+        kind: "missing_requirements",
+        label: "Missing requirements",
+        description: "Active stage requirements (fields, facts, or work) are incomplete.",
         supportsThreshold: false,
         defaultThreshold: 0,
         defaultSeverity: "high",
@@ -54,6 +57,9 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         supportsThreshold: true,
         defaultThreshold: 3,
         defaultSeverity: "low",
+        evaluatorSupported: false,
+        unsupportedReason:
+            "Requires enrollment_operational.wait_bucket — configure via outcome automation or org-wide attention until stage-plan evaluation is wired.",
     },
     {
         kind: "waiting_on_provider",
@@ -62,6 +68,9 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         supportsThreshold: true,
         defaultThreshold: 2,
         defaultSeverity: "low",
+        evaluatorSupported: false,
+        unsupportedReason:
+            "Maps to waiting_on_staff wait bucket — not yet evaluated from stage attention rules. Use org-wide attention or outcome automation.",
     },
 ];
 
@@ -69,6 +78,7 @@ const LEGACY_KIND_MAP: Partial<Record<StageAttentionRuleKind, StageAttentionRule
     tasks_without_success: "no_contact_attempt",
     days_without_success: "stage_age_exceeded",
     required_work_overdue: "work_overdue",
+    missing_required_fields: "missing_requirements",
 };
 
 export function normalizeAttentionRuleKind(kind: StageAttentionRuleKind): StageAttentionRuleKind {
@@ -84,6 +94,17 @@ export function catalogEntryForAttentionKind(
 
 export function defaultAttentionRuleLabel(kind: StageAttentionRuleKind): string {
     return catalogEntryForAttentionKind(kind)?.label ?? kind.replace(/_/g, " ");
+}
+
+export function isStageAttentionRuleEvaluatorSupported(kind: StageAttentionRuleKind): boolean {
+    const entry = catalogEntryForAttentionKind(kind);
+    return entry?.evaluatorSupported !== false;
+}
+
+export function stageAttentionRuleUnsupportedReason(kind: StageAttentionRuleKind): string | null {
+    const entry = catalogEntryForAttentionKind(kind);
+    if (!entry || entry.evaluatorSupported !== false) return null;
+    return entry.unsupportedReason ?? "Not evaluated at runtime for this stage context.";
 }
 
 export function newAttentionRuleDraft(index: number, kind: StageAttentionRuleKind = "work_overdue"): StageAttentionRuleV1 {

@@ -65,6 +65,23 @@ last_reviewed: 2026-07-12
         expect(violations.some((v) => v.type === "invalid-root-placement")).toBe(true);
     });
 
+    it("flags retired Operational Expectations doctrine in governed docs (G-Reconciliation guard)", () => {
+        const violations = lintDocumentation({
+            rootDir: fixtureRoot("retired-doctrine"),
+        });
+        const retired = violations.filter((v) => v.type === "retired-doctrine-term");
+        expect(retired.length).toBeGreaterThan(0);
+        expect(retired.every((v) => v.file === "docs/platform/stale.md")).toBe(true);
+        expect(retired.every((v) => v.blocking === true)).toBe(true);
+    });
+
+    it("does not flag retired doctrine in the clean canonical fixture", () => {
+        const violations = lintDocumentation({
+            rootDir: fixtureRoot("valid-canonical"),
+        });
+        expect(violations.some((v) => v.type === "retired-doctrine-term")).toBe(false);
+    });
+
     it("repository baseline file exists with expected debt categories", () => {
         const baselinePath = path.join(repoRoot, "scripts/docs-lint-baseline.json");
         const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));

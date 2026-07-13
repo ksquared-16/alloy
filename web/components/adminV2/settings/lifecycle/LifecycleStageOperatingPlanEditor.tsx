@@ -18,6 +18,7 @@ import {
     resolveEffectivePrimaryWorkTemplate,
     setPrimaryWorkTemplate,
 } from "@/lib/lifecycle/stageOperatingPlanConvergence";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { STAGE_JOURNEY_SEGMENT_LABELS } from "@/lib/lifecycle/stageOperatingPlanUiLabels";
 import LifecycleStageAttentionRulesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionRulesEditor";
@@ -41,6 +42,7 @@ type Props = {
     actionCatalog?: StageActionCatalogV1 | null;
     configuredActions?: LifecycleConfiguredActionRow[];
     processStages?: Array<{ key: string; label: string }>;
+    processTracks?: ProcessTracksV1 | null;
 };
 
 function dueDaysFromPolicy(work: StageOperatingPlanEditorDraft["work_templates"][number]): number {
@@ -51,7 +53,7 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     LifecycleStageOperatingPlanEditorHandle,
     Props
 >(function LifecycleStageOperatingPlanEditor(
-    { stageKey, stageLabel, savedPlan, onDirtyChange, actionCatalog, configuredActions, processStages },
+    { stageKey, stageLabel, savedPlan, onDirtyChange, actionCatalog, configuredActions, processStages, processTracks },
     ref,
 ) {
     const [draft, setDraft] = useState<StageOperatingPlanEditorDraft>(() =>
@@ -92,6 +94,18 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     );
 
     const primaryWork = resolveEffectivePrimaryWorkTemplate({ work_templates: draft.work_templates });
+    const stageOperatingPlanForResolver: StageOperatingPlanV1 =
+        stageOperatingPlanDraftToPersisted(draft, stageKey, undefined, { validate: false })
+        ?? {
+            version: 1,
+            lifecycle_key: stageKey,
+            stage_key: stageKey,
+            journey_segment: draft.journey_segment,
+            work_templates: draft.work_templates,
+            outcomes: draft.outcomes,
+            outcome_rules: draft.outcome_rules,
+            attention_rules: draft.attention_rules,
+        };
 
     return (
         <div className="space-y-4" data-testid="lifecycle-stage-operating-plan-editor">
@@ -335,10 +349,13 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                 <LifecycleStageWorkTemplateActionsEditor
                                     work={work}
                                     stageKey={stageKey}
+                                    stageLabel={stageLabel}
                                     stageOutcomes={draft.outcomes}
                                     actionCatalog={actionCatalog ?? null}
                                     configuredActions={configuredActions ?? []}
                                     processStages={processStages ?? []}
+                                    stageOperatingPlan={stageOperatingPlanForResolver}
+                                    processTracks={processTracks ?? null}
                                     stageDefinition={{ journey_segment: draft.journey_segment }}
                                     onChange={(nextWork) =>
                                         setDraft((prev) => {
@@ -353,7 +370,7 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                     <details className="group" data-testid={`stage-operating-plan-outcomes-${work.template_key}`}>
                                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-1 [&::-webkit-details-marker]:hidden">
                                             <span className="text-[10px] font-semibold text-alloy-midnight/70">
-                                                Result Definitions ({workOutcomes.length})
+                                                Outcomes available to operators ({workOutcomes.length})
                                             </span>
                                             <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
                                         </summary>
@@ -409,19 +426,24 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                                         <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">
                                                             <input
                                                                 type="checkbox"
-                                                                checked={Boolean(outcome.successful)}
+                                                                checked={Boolean(outcome.completes_work ?? outcome.successful)}
                                                                 onChange={(e) =>
                                                                     setDraft((prev) => {
                                                                         const outcomes = [...prev.outcomes];
                                                                         const next = { ...outcome };
-                                                                        if (e.target.checked) next.successful = true;
-                                                                        else delete next.successful;
+                                                                        if (e.target.checked) {
+                                                                            next.successful = true;
+                                                                            next.completes_work = true;
+                                                                        } else {
+                                                                            delete next.successful;
+                                                                            delete next.completes_work;
+                                                                        }
                                                                         outcomes[outcomeIndex] = next;
                                                                         return { ...prev, outcomes };
                                                                     })
                                                                 }
                                                             />
-                                                            Success
+                                                            Completes this work
                                                         </label>
                                                         <button
                                                             type="button"
@@ -446,7 +468,13 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                                         outcomeLabel={outcome.label}
                                                         rules={draft.outcome_rules}
                                                         workTemplates={draft.work_templates}
+                                                        stageKey={stageKey}
+                                                        stageLabel={stageLabel}
+                                                        processStages={processStages ?? []}
+                                                        stageOperatingPlan={stageOperatingPlanForResolver}
+                                                        processTracks={processTracks ?? null}
                                                         defaultRepeatTemplateKey={work.template_key}
+                                                        completesWork={Boolean(outcome.completes_work ?? outcome.successful)}
                                                         onRulesChange={(outcome_rules) =>
                                                             setDraft((prev) => ({ ...prev, outcome_rules }))
                                                         }

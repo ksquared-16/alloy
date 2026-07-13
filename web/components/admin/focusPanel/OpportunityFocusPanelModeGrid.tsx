@@ -25,6 +25,8 @@ import {
     resolveElevatedCellKey,
     type FocusPanelActiveDepth,
     type FocusPanelCoordination,
+    type FocusPanelCurrentWorkWorkspaceIntent,
+    type FocusPanelCurrentWorkWorkspaceState,
     type FocusPanelDepthEntry,
     type FocusPanelDismissSignal,
     type FocusPanelFocusRequest,
@@ -38,6 +40,7 @@ import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriv
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { resolveCommunicationsComposerAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCommunicationsComposerAction";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
+import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 
 /** Reverse-zoom dismiss window — matches CSS `--alloy-os-fp-depth-ms` (240ms). */
 const FOCUS_PANEL_DEPTH_MS = 240;
@@ -160,6 +163,38 @@ export default function OpportunityFocusPanelModeGrid({
     // pushes its source; Back pops and returns to the prior card/focus.
     const depthHistoryRef = useRef<FocusPanelDepthEntry[]>([]);
     const [previousFocus, setPreviousFocus] = useState<FocusPanelDepthEntry | null>(null);
+
+    /**
+     * Current Work operational workspace — replaces the summary card grid for the
+     * active record (not a centered modal / elevated card). Closed restores cards.
+     */
+    const [currentWorkWorkspace, setCurrentWorkWorkspace] = useState<FocusPanelCurrentWorkWorkspaceState>({
+        open: false,
+        intent: null,
+    });
+    const openCurrentWorkWorkspace = useCallback(
+        (intent: FocusPanelCurrentWorkWorkspaceIntent | null = { kind: "drill_in" }) => {
+            setCurrentWorkWorkspace({ open: true, intent: intent ?? { kind: "drill_in" } });
+        },
+        [],
+    );
+    const closeCurrentWorkWorkspace = useCallback(() => {
+        setCurrentWorkWorkspace({ open: false, intent: null });
+    }, []);
+    const clearCurrentWorkWorkspaceIntent = useCallback(() => {
+        setCurrentWorkWorkspace((prev) => (prev.intent ? { ...prev, intent: null } : prev));
+    }, []);
+    useEffect(() => {
+        // Leaving Work/summary for Activity must restore identity-card composition later.
+        if (mode !== "summary" && mode !== "work") {
+            setCurrentWorkWorkspace({ open: false, intent: null });
+        }
+    }, [mode]);
+    useEffect(() => {
+        // Record swap resets workspace so the operator returns to that record's summary.
+        setCurrentWorkWorkspace({ open: false, intent: null });
+    }, [drawerId]);
+
     const emitFocus = useCallback((card: FocusPanelCardKey, focus: string | null) => {
         focusNonceRef.current += 1;
         setFocusRequest({ card, focus, nonce: focusNonceRef.current });
@@ -178,18 +213,35 @@ export default function OpportunityFocusPanelModeGrid({
                 depthHistoryRef.current = [...depthHistoryRef.current, source];
                 setPreviousFocus(source);
             }
+            // Current Work is a full Focus Panel workspace, not a centered elevated card.
+            if (card === "current_work") {
+                openCurrentWorkWorkspace({ kind: "drill_in" });
+                return;
+            }
+            if (currentWorkWorkspace.open) {
+                closeCurrentWorkWorkspace();
+            }
             emitFocus(card, focus);
         },
-        [emitFocus],
+        [closeCurrentWorkWorkspace, currentWorkWorkspace.open, emitFocus, openCurrentWorkWorkspace],
     );
     const back = useCallback(() => {
+        if (currentWorkWorkspace.open) {
+            closeCurrentWorkWorkspace();
+            return;
+        }
         const stack = depthHistoryRef.current;
         const prev = stack[stack.length - 1];
         if (!prev) return;
         depthHistoryRef.current = stack.slice(0, -1);
         setPreviousFocus(depthHistoryRef.current[depthHistoryRef.current.length - 1] ?? null);
+        if (prev.card === "current_work") {
+            openCurrentWorkWorkspace({ kind: "drill_in" });
+            return;
+        }
         emitFocus(prev.card, prev.focus);
-    }, [emitFocus]);
+    }, [closeCurrentWorkWorkspace, currentWorkWorkspace.open, emitFocus, openCurrentWorkWorkspace]);
+
     // In-panel depth layer: a card reports when it opens deep (focused / edit). The
     // host raises that card and recedes the rest — no route, no drawer, no modal.
     const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
@@ -238,21 +290,24 @@ export default function OpportunityFocusPanelModeGrid({
         [canMutate, drawerId, record],
     );
 
-    // ESC returns the focused/edit card to its base Work surface. Captured before the
-    // drawer's own ESC-to-close handler and stopped, so ESC dismisses the depth layer
-    // FIRST and does not also close the whole record. Only active while a card is deep.
+    // ESC: Current Work workspace closes first; else return focused/edit card to base.
+    // Captured before the drawer's ESC-to-close so depth dismisses without closing the record.
     useEffect(() => {
-        if (!activeDepth) return;
+        if (!currentWorkWorkspace.open && !activeDepth) return;
         const onKey = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
-            dismiss(activeDepth.card);
+            if (currentWorkWorkspace.open) {
+                closeCurrentWorkWorkspace();
+                return;
+            }
+            if (activeDepth) dismiss(activeDepth.card);
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-    }, [activeDepth, dismiss]);
+    }, [activeDepth, closeCurrentWorkWorkspace, currentWorkWorkspace.open, dismiss]);
 
     const workflowActive = Boolean(
         displayVm.workspace.work_intent_runtime?.state === "open" ||
@@ -329,6 +384,10 @@ export default function OpportunityFocusPanelModeGrid({
             openFocusPanelMode: onModeChange,
             invokeHeaderAction: onHeaderAction,
             resolveCommunicationsComposerAction: resolveCommsAction,
+            currentWorkWorkspace,
+            openCurrentWorkWorkspace,
+            closeCurrentWorkWorkspace,
+            clearCurrentWorkWorkspaceIntent,
             request: focusRequest,
             requestFocus,
             activeDepth,
@@ -343,6 +402,10 @@ export default function OpportunityFocusPanelModeGrid({
             onModeChange,
             onHeaderAction,
             resolveCommsAction,
+            currentWorkWorkspace,
+            openCurrentWorkWorkspace,
+            closeCurrentWorkWorkspace,
+            clearCurrentWorkWorkspaceIntent,
             focusRequest,
             requestFocus,
             activeDepth,
@@ -374,6 +437,38 @@ export default function OpportunityFocusPanelModeGrid({
                 onSelectTab={onSelectTab}
             />
         );
+    }
+
+    if (currentWorkWorkspace.open) {
+        const baseModel = cards.get("current_work");
+        const resolution =
+            [...cellResolution.entries()].find(([, value]) => value.typeKey === "current_work")?.[1]
+            ?? null;
+        const model = baseModel
+            ? composeEffectiveCardModel(baseModel, resolution?.config ?? null, record)
+            : null;
+        if (model) {
+            return (
+                <div
+                    ref={gridContainerRef}
+                    id={`focus-panel-mode-${mode}`}
+                    role="tabpanel"
+                    aria-labelledby={`focus-panel-mode-tab-${mode}`}
+                    data-focus-panel-mode={mode}
+                    data-focus-panel-workspace="current_work"
+                    data-focus-panel-work-state={mode === "work" && workflowActive ? "active" : undefined}
+                    {...alloySectionDomAttrs(mode === "work" ? "WU-10" : "WU-09")}
+                >
+                    <CurrentWorkCard
+                        model={model}
+                        context={operationalContext}
+                        coordination={coordination}
+                        mutation={mutation}
+                        presentation="workspace"
+                    />
+                </div>
+            );
+        }
     }
 
     return (

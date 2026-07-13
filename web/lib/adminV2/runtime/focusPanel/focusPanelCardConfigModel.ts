@@ -35,6 +35,11 @@ import type {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import { isOperationalTruthCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import { resolveConceptValue } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCatalog";
+import {
+    effectiveCardFieldRefKey,
+    legacyConceptToRefKey,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCompat";
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
 
 /** Field renderers (presentation, not data). */
 export const FOCUS_PANEL_FIELD_RENDERERS = [
@@ -79,7 +84,9 @@ export type FocusPanelFieldPlacement = "collapsed" | "expanded";
 export type FocusPanelCardField = {
     id: string;
     label: string;
-    /** Business-concept path, e.g. "Enrollment → Primary Contact → Email". */
+    /** Canonical refKey — preferred persistence for field binding. */
+    refKey?: string;
+    /** Legacy business-concept path (read compat only when refKey absent). */
     concept: string;
     renderer: FocusPanelFieldRenderer;
     placement: FocusPanelFieldPlacement;
@@ -241,8 +248,16 @@ export type FocusPanelCardConfig = {
     >;
 };
 
-function evField(id: string, label: string, concept: string): FocusPanelCardField {
-    return { id, label, concept, renderer: "text", placement: "collapsed", kind: "field" };
+function evField(id: string, label: string, refKey: string, concept?: string): FocusPanelCardField {
+    return {
+        id,
+        label,
+        refKey,
+        concept: concept ?? refKey,
+        renderer: "text",
+        placement: "collapsed",
+        kind: "field",
+    };
 }
 
 /**
@@ -265,9 +280,9 @@ export function defaultEvidenceGroupsForCard(
                 showInSummary: true,
                 showInFocus: true,
                 fields: [
-                    evField("hh_name", "Name", "Enrollment → Primary Contact → Name"),
-                    evField("hh_phone", "Phone", "Enrollment → Primary Contact → Phone"),
-                    evField("hh_email", "Email", "Enrollment → Primary Contact → Email"),
+                    evField("hh_name", "Name", "person.primary_contact_name", "Enrollment → Primary Contact → Name"),
+                    evField("hh_phone", "Phone", "person.primary_phone", "Enrollment → Primary Contact → Phone"),
+                    evField("hh_email", "Email", "person.primary_email", "Enrollment → Primary Contact → Email"),
                 ],
             },
             {
@@ -278,16 +293,16 @@ export function defaultEvidenceGroupsForCard(
                 showInFocus: true,
                 includeInExpanded: true,
                 fields: [
-                    evField("secondary_contact_name", "Secondary Contact", "Enrollment → Secondary Contact → Name"),
-                    evField("secondary_contact_phone", "Secondary Phone", "Enrollment → Secondary Contact → Phone"),
+                    evField("secondary_contact_name", "Secondary Contact", "person.secondary_contact_name", "Enrollment → Secondary Contact → Name"),
+                    evField("secondary_contact_phone", "Secondary Phone", "person.secondary_phone", "Enrollment → Secondary Contact → Phone"),
                 ],
             },
         ];
     }
     if (key === "children") {
         return [
-            { id: "identity", label: "Identity", purpose: "Who is this child?", owner: "children", showInSummary: true, showInFocus: true, fields: [evField("child_name", "Name", "Enrollment → Children → Name"), evField("child_dob", "DOB / Age", "Enrollment → Children → DOB")] },
-            { id: "placement", label: "Placement", purpose: "Where is this child placed?", owner: "children", showInFocus: true, includeInExpanded: true, fields: [evField("program", "Program", "Enrollment → Children → Program"), evField("room", "Room", "Enrollment → Children → Room"), evField("schedule", "Schedule", "Enrollment → Children → Schedule"), evField("teacher", "Teacher", "Enrollment → Children → Teacher"), evField("desired_start", "Desired Start", "Enrollment → Children → Desired Start")] },
+            { id: "identity", label: "Identity", purpose: "Who is this child?", owner: "children", showInSummary: true, showInFocus: true, fields: [evField("child_name", "Name", "child.first_name", "Enrollment → Children → Name"), evField("child_dob", "DOB / Age", "child.date_of_birth", "Enrollment → Children → Age")] },
+            { id: "placement", label: "Placement", purpose: "Where is this child placed?", owner: "children", showInFocus: true, includeInExpanded: true, fields: [evField("program", "Program", "inquiry_child.program", "Enrollment → Children → Program"), evField("room", "Room", "child.room", "Enrollment → Children → Room"), evField("schedule", "Schedule", "inquiry_child.schedule_type", "Enrollment → Children → Schedule"), evField("teacher", "Teacher", "child.room", "Enrollment → Children → Teacher"), evField("desired_start", "Desired Start", "child.start_date", "Enrollment → Children → Desired Start")] },
             { id: "medical", label: "Medical", purpose: "What should we know medically?", owner: "children", includeInExpanded: true, fields: [] },
             { id: "documents", label: "Documents", purpose: "What documents are required?", owner: "children", includeInExpanded: true, fields: [] },
             { id: "readiness", label: "Readiness", purpose: "Is this child ready to enroll?", owner: "children", includeInExpanded: true, fields: [] },
@@ -397,8 +412,8 @@ export function validateFocusPanelCardConfig(
             issues.push({ scope: "field", ref: field.id, message: `Duplicate field "${field.label || field.id}".` });
         }
         seen.add(field.id);
-        if (!field.concept || field.concept.trim() === "") {
-            issues.push({ scope: "field", ref: field.id, message: `"${field.label || field.id}" is not bound to a business concept.` });
+        if (!field.concept?.trim() && !field.refKey?.trim()) {
+            issues.push({ scope: "field", ref: field.id, message: `"${field.label || field.id}" is not bound to a canonical field.` });
         }
         if (!FOCUS_PANEL_FIELD_RENDERERS.includes(field.renderer)) {
             issues.push({ scope: "field", ref: field.id, message: `"${field.label || field.id}" uses an unknown renderer.` });
@@ -500,6 +515,10 @@ function resolveFieldValue(
     record: Record<string, unknown>,
     state: FocusPanelFieldPlacement,
 ): string | null {
+    const refKey = effectiveCardFieldRefKey(field);
+    if (refKey && record[refKey] != null && String(record[refKey]).trim() !== "") {
+        return String(record[refKey]).trim();
+    }
     if (field.kind === "collection") {
         const value = resolveConceptValue(field.concept, record, {
             expanded: state === "expanded",
@@ -507,7 +526,19 @@ function resolveFieldValue(
         });
         return value ?? field.emptyText ?? null;
     }
+    if (refKey && legacyConceptToRefKey(field.concept) === refKey) {
+        return resolveConceptValue(field.concept, record);
+    }
     return resolveConceptValue(field.concept, record);
+}
+
+/** Canonical display label for a configured card field (Settings label wins). */
+export function canonicalCardFieldLabel(field: FocusPanelCardField): string {
+    const refKey = effectiveCardFieldRefKey(field);
+    if (refKey) {
+        return resolveCanonicalIdentityFieldLabel(refKey);
+    }
+    return field.label;
 }
 
 /** The fields visible for a given expansion state (expanded shows all). */

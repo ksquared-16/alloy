@@ -6,9 +6,12 @@
 
 import type { WorkViewFilterOperatorV1, WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
 import {
-    getWorkViewConditionField,
-    type WorkViewConditionValueKind,
-} from "@/lib/lifecycle/workViewConditionFieldRegistry";
+    getWorkViewConditionFieldDef,
+    choiceOptionsForWorkViewField,
+    operatorsForWorkViewField,
+} from "@/lib/lifecycle/workViewCanonicalOperands";
+import { getWorkViewConditionField, type WorkViewConditionValueKind } from "@/lib/lifecycle/workViewConditionFieldRegistry";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
 export type WorkViewFilterValueControlKind =
     | "date_preset"
@@ -19,6 +22,8 @@ export type WorkViewFilterValueControlKind =
     | "room_select"
     | "boolean"
     | "text"
+    | "number"
+    | "choice_select"
     | "none";
 
 /** Select-style controls render an option dropdown sourced per-field by the editor. */
@@ -28,6 +33,7 @@ export const WORK_VIEW_SELECT_CONTROL_KINDS: ReadonlySet<WorkViewFilterValueCont
     "location_select",
     "program_select",
     "room_select",
+    "choice_select",
 ]);
 
 export type WorkViewFilterOption = { value: string; label: string };
@@ -74,8 +80,12 @@ const LEGACY_PRESETS = new Set(["today", "tomorrow", "this_week", "next_week", "
 const VALUELESS_OPERATORS = new Set<WorkViewFilterOperatorV1>(["is_empty", "is_not_empty"]);
 
 /** Registry-backed value-kind for a (possibly legacy) field key; null for unknown keys. */
-function valueKindForField(fieldKey: string): WorkViewConditionValueKind | null {
-    return getWorkViewConditionField(fieldKey)?.valueKind ?? null;
+function valueKindForField(fieldKey: string, tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[]): WorkViewConditionValueKind | null {
+    return (
+        getWorkViewConditionFieldDef(fieldKey, tenantFieldDefinitions)?.valueKind
+        ?? getWorkViewConditionField(fieldKey)?.valueKind
+        ?? null
+    );
 }
 
 function isDateField(fieldKey: string): boolean {
@@ -123,14 +133,17 @@ export function isLegacyDatePreset(value: unknown): boolean {
     return LEGACY_PRESETS.has(String(value ?? "").trim());
 }
 
-export function operatorsForWorkViewFilterField(fieldKey: string): WorkViewFilterOperatorV1[] {
-    const def = getWorkViewConditionField(fieldKey);
-    if (def) return [...def.operators];
-    // Unknown / legacy-unmapped key — generic select operators.
-    return ["equals", "not_equals", "is_any_of", "is_empty", "is_not_empty"];
+export function operatorsForWorkViewFilterField(
+    fieldKey: string,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): WorkViewFilterOperatorV1[] {
+    return operatorsForWorkViewField(fieldKey, tenantFieldDefinitions);
 }
 
-export function operatorLabelsForField(fieldKey: string): ReadonlyArray<{ value: WorkViewFilterOperatorV1; label: string }> {
+export function operatorLabelsForField(
+    fieldKey: string,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): ReadonlyArray<{ value: WorkViewFilterOperatorV1; label: string }> {
     const labels: Record<WorkViewFilterOperatorV1, string> = {
         equals: "equals",
         not_equals: "does not equal",
@@ -140,15 +153,16 @@ export function operatorLabelsForField(fieldKey: string): ReadonlyArray<{ value:
         date_is: "date is",
         date_between: "date between",
     };
-    return operatorsForWorkViewFilterField(fieldKey).map((value) => ({ value, label: labels[value] }));
+    return operatorsForWorkViewFilterField(fieldKey, tenantFieldDefinitions).map((value) => ({ value, label: labels[value] }));
 }
 
 export function resolveWorkViewFilterValueControlKind(
     fieldKey: string,
     operator: WorkViewFilterOperatorV1,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): WorkViewFilterValueControlKind {
     if (VALUELESS_OPERATORS.has(operator)) return "none";
-    const valueKind = valueKindForField(fieldKey);
+    const valueKind = valueKindForField(fieldKey, tenantFieldDefinitions);
     if (!valueKind || valueKind === "none") return "text";
     // Registry value-kinds map 1:1 to control kinds (none handled above).
     return valueKind;

@@ -13,6 +13,7 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { requireLifecycleStageQueueStatusKeys } from "@/lib/lifecycle/lifecycleStageQueueFilters";
+import { effectiveLifecycleStageStatusKeys } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import type {
     LifecycleStageRuntimeConfigSnapshot,
     LifecycleStageSetupDebugTrace,
@@ -179,7 +180,7 @@ export async function saveLifecycleStageRuntimeConfig(
 
     const selectedStatusKeys = requireLifecycleStageQueueStatusKeys(
         stageKey,
-        input.selectedStatusKeys
+        effectiveLifecycleStageStatusKeys(stageKey, input.selectedStatusKeys),
     );
 
     const { data: dept, error: deptErr } = await supabase

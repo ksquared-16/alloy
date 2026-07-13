@@ -5,8 +5,10 @@ import {
     STAGE_ATTENTION_RULE_CATALOG,
     catalogEntryForAttentionKind,
     defaultAttentionRuleLabel,
+    isStageAttentionRuleEvaluatorSupported,
     newAttentionRuleDraft,
     normalizeAttentionRuleKind,
+    stageAttentionRuleUnsupportedReason,
 } from "@/lib/lifecycle/stageAttentionRuleCatalog";
 import type {
     StageAttentionRuleV1,
@@ -44,6 +46,7 @@ function AttentionRuleForm({
 }) {
     const kind = normalizeAttentionRuleKind(rule.kind);
     const entry = catalogEntryForAttentionKind(kind);
+    const unsupportedReason = stageAttentionRuleUnsupportedReason(kind);
 
     if (readOnly) {
         const displayLabel = rule.label?.trim() || defaultAttentionRuleLabel(kind);
@@ -148,6 +151,11 @@ function AttentionRuleForm({
             </div>
             {entry?.description ?
                 <p className="mt-1.5 text-[10px] text-alloy-midnight/45">{entry.description}</p>
+            :   null}
+            {unsupportedReason ?
+                <p className="mt-1 text-[10px] text-alloy-ember/90" data-attention-rule-unsupported="true">
+                    Unsupported at runtime: {unsupportedReason}
+                </p>
             :   null}
             <button
                 type="button"

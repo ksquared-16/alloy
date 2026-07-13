@@ -5,30 +5,12 @@ import type { NestedSurfaceGroupDef } from "@/lib/adminV2/settings/surfaces/nest
 import { HOUSEHOLD_CONTACT_SURFACE_ID, HOUSEHOLD_SURFACE_ID, CHILD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceDefinitionModel";
 import { defaultContactFieldModes } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
 import { defaultChildFieldModes } from "@/lib/adminV2/runtime/focusPanel/children/childNestedSurfaceRuntime";
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
+import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 
-const CONTACT_FIELD_LABELS: Record<string, string> = {
-    "person.first_name": "First Name",
-    "person.last_name": "Last Name",
-    "person.phone": "Phone",
-    "person.email": "Email",
-    "person.date_of_birth": "Date of Birth",
-    "person.address": "Address",
-};
-
-const CHILD_FIELD_LABELS: Record<string, string> = {
-    "child.display_name": "Name",
-    "child.date_of_birth": "Date of Birth",
-    "child.age": "Age",
-    "inquiry_child.program": "Program",
-    "child.room": "Room",
-    "inquiry_child.schedule_type": "Schedule",
-    "child.start_date": "Start date",
-    "child.readiness_summary": "Readiness",
-};
-
-function fieldLabel(surfaceId: string, key: string): string {
-    if (surfaceId === CHILD_SURFACE_ID) return CHILD_FIELD_LABELS[key] ?? key;
-    return CONTACT_FIELD_LABELS[key] ?? key;
+function fieldLabel(surfaceId: string, key: string, tenantFieldDefinitions: ReturnType<typeof useTenantFieldDefinitions>["tenantFieldDefinitions"]): string {
+    void surfaceId;
+    return resolveCanonicalIdentityFieldLabel(key, tenantFieldDefinitions);
 }
 
 type Props = {
@@ -46,6 +28,7 @@ export default function NestedSurfaceGroupInspector({
     onChange,
     onOpenLibrary,
 }: Props) {
+    const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
     const opts = groupConfig.displayOptions ?? {};
 
     function patchDisplayOptions(patch: Partial<NonNullable<NestedSurfaceGroupConfig["displayOptions"]>>) {
@@ -167,7 +150,7 @@ export default function NestedSurfaceGroupInspector({
                         const mode = groupConfig.fieldModes?.[key] ?? defaultModes[key];
                         return (
                             <div key={key} className="rounded-lg border border-alloy-stone/12 px-2 py-2">
-                                <p className="text-xs font-medium text-alloy-midnight">{fieldLabel(surfaceId, key)}</p>
+                                <p className="text-xs font-medium text-alloy-midnight">{fieldLabel(surfaceId, key, tenantFieldDefinitions)}</p>
                                 <label className="mt-1 flex items-center gap-2 text-[11px] text-alloy-midnight/65">
                                     <input
                                         type="checkbox"

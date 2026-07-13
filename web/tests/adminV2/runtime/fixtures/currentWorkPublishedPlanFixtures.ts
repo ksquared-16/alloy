@@ -34,7 +34,6 @@ export function applyEnrollmentLeadWorkTemplateActions(plan: StageOperatingPlanV
                     { action_ref: "add_child" },
                     { action_ref: "send_form" },
                 ],
-                alternate_paths: [{ action_ref: "close_lead" }],
                 outcome_refs: [
                     { outcome_ref: "reached_qualified" },
                     { outcome_ref: "left_message" },
@@ -171,10 +170,6 @@ function billingOperatingPlan(): StageOperatingPlanV1 {
                     { action_ref: "payment_plan" },
                     { action_ref: "send_email" },
                     { action_ref: "adjust_invoice" },
-                ],
-                alternate_paths: [
-                    { action_ref: "waive_fee" },
-                    { action_ref: "escalate_to_director" },
                 ],
                 outcome_refs: [
                     { outcome_ref: "payment_received" },

@@ -9,6 +9,19 @@ import type {
     StageWorkTemplateV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { outcomeAutomationSummaries } from "@/lib/lifecycle/stageOperatingPlanConvergence";
+import {
+    effectiveFollowUpDuePolicy,
+    formatFollowUpDuePolicySummary,
+    type StageFollowUpDueAnchor,
+    type StageFollowUpWorkDuePolicyV1,
+} from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
+import {
+    readTransitionRefFromTarget,
+    resolveLegacyStageKeyToTransitionRef,
+    resolveStageOutcomeTransitionOptions,
+    stageKeyFromTransitionRef,
+    type StageOutcomeTransitionOption,
+} from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
 
 export type OutcomeAutomationKind =
     | "none"
@@ -20,12 +33,17 @@ export type OutcomeAutomationKind =
 
 export type OutcomeAutomationDraft = {
     kind: OutcomeAutomationKind;
+    /** Canonical transition ref for move_to_stage — preferred over stage_key. */
+    transition_ref?: string;
     stage_key?: string;
     status_key?: string;
     repeat_template_key?: string;
     repeat_due_days?: number;
+    follow_up_due_policy?: StageFollowUpWorkDuePolicyV1;
     attention_reason?: string;
     attention_severity?: "low" | "medium" | "high";
+    /** When true, recording this outcome completes the active work item. */
+    completes_work?: boolean;
     /** Optional attempt gate for repeat vs attention branching. */
     when_attempt_count_lt?: number;
     when_attempt_count_gte?: number;
@@ -75,10 +93,21 @@ function detectAutomationKind(targets: StageOutcomeRuleTargetV1[]): OutcomeAutom
     return "none";
 }
 
+function readFollowUpTarget(targets: StageOutcomeRuleTargetV1[]): StageOutcomeRuleTargetV1 | null {
+    return (
+        targets.find((t) => t.kind === "create_next_work")
+        ?? targets.find((t) => t.kind === "reopen_work")
+        ?? null
+    );
+}
+
 export function readOutcomeAutomationDraft(
     outcomeKey: string,
     rules: StageOutcomeRuleV1[],
-    options?: { preferAttemptGte?: boolean },
+    options?: {
+        preferAttemptGte?: boolean;
+        transitionOptions?: StageOutcomeTransitionOption[];
+    },
 ): OutcomeAutomationDraft {
     const matching = rulesForOutcome(rules, outcomeKey);
     if (!matching.length) return { kind: "none" };
@@ -86,9 +115,9 @@ export function readOutcomeAutomationDraft(
     let rule = matching[0]!;
     if (options?.preferAttemptGte) {
         rule =
-            matching.find((r) => r.when_attempt_count_gte != null) ??
-            matching.find((r) => r.when_attempt_count_lt != null) ??
-            rule;
+            matching.find((r) => r.when_attempt_count_gte != null)
+            ?? matching.find((r) => r.when_attempt_count_lt != null)
+            ?? rule;
     }
 
     const kind = detectAutomationKind(rule.targets);
@@ -97,27 +126,46 @@ export function readOutcomeAutomationDraft(
     if (rule.when_attempt_count_lt != null) draft.when_attempt_count_lt = rule.when_attempt_count_lt;
     if (rule.when_attempt_count_gte != null) draft.when_attempt_count_gte = rule.when_attempt_count_gte;
 
+    const transitionOptions = options?.transitionOptions ?? [];
+
     for (const target of rule.targets) {
-        if (target.kind === "move_to_stage" && target.stage_key) draft.stage_key = target.stage_key;
+        if (target.kind === "move_to_stage") {
+            const transitionRef = readTransitionRefFromTarget(target, transitionOptions);
+            if (transitionRef) draft.transition_ref = transitionRef;
+            if (target.stage_key) draft.stage_key = target.stage_key;
+        }
         if (target.kind === "update_family_case_status" && target.status_key) {
             draft.status_key = target.status_key;
         }
-        if ((target.kind === "reopen_work" || target.kind === "create_next_work") && target.template_key) {
-            draft.repeat_template_key = target.template_key;
-        }
-        if (
-            (target.kind === "reopen_work" || target.kind === "create_next_work") &&
-            typeof target.due_days === "number"
-        ) {
-            draft.repeat_due_days = target.due_days;
+        const followUp = readFollowUpTarget(rule.targets);
+        if (followUp && (target.kind === "reopen_work" || target.kind === "create_next_work")) {
+            if (target.template_key) draft.repeat_template_key = target.template_key;
+            if (target.follow_up_due_policy) draft.follow_up_due_policy = target.follow_up_due_policy;
+            if (typeof target.due_days === "number") draft.repeat_due_days = target.due_days;
         }
         if (target.kind === "create_needs_attention") {
             draft.attention_reason = target.attention_reason ?? undefined;
         }
+        if (target.kind === "mark_stage_work_complete") {
+            draft.completes_work = true;
+        }
     }
 
-    if (kind === "move_to_stage" && !draft.status_key && draft.stage_key) {
-        draft.status_key = defaultStatusKeyForStage(draft.stage_key);
+    if (kind === "move_to_stage") {
+        if (!draft.transition_ref && draft.stage_key) {
+            const legacy = resolveLegacyStageKeyToTransitionRef(draft.stage_key, transitionOptions);
+            if (legacy.transition_ref) draft.transition_ref = legacy.transition_ref;
+        }
+        if (!draft.status_key) {
+            const stageKey =
+                stageKeyFromTransitionRef(draft.transition_ref, transitionOptions)
+                ?? draft.stage_key;
+            if (stageKey) draft.status_key = defaultStatusKeyForStage(stageKey);
+        }
+    }
+
+    if (kind === "repeat_work" && !draft.follow_up_due_policy && draft.repeat_due_days != null) {
+        draft.follow_up_due_policy = effectiveFollowUpDuePolicy(null, draft.repeat_due_days);
     }
 
     return draft;
@@ -127,33 +175,61 @@ export function outcomeAutomationSummaryForOutcome(
     outcomeKey: string,
     outcomeLabel: string,
     rules: StageOutcomeRuleV1[],
-    options?: { workTemplateLabelByKey?: Record<string, string> },
+    options?: {
+        workTemplateLabelByKey?: Record<string, string>;
+        transitionOptions?: StageOutcomeTransitionOption[];
+        transitionLabelByRef?: Record<string, string>;
+        completesWork?: boolean;
+    },
 ): string {
-    const lines = outcomeAutomationSummaries(outcomeKey, rules, options);
-    if (!lines.length) return "No action configured";
-    return `${outcomeLabel} → ${lines.join(" · ")}`;
+    const transitionLabelByRef =
+        options?.transitionLabelByRef
+        ?? Object.fromEntries(
+            (options?.transitionOptions ?? []).map((opt) => [opt.transition_ref, opt.label]),
+        );
+    const lines = outcomeAutomationSummaries(outcomeKey, rules, {
+        workTemplateLabelByKey: options?.workTemplateLabelByKey,
+        transitionLabelByRef,
+    });
+    if (!lines.length) return "No outcome behavior configured";
+    const prefix = `${outcomeLabel} →`;
+    const suffix =
+        options?.completesWork === true ? " · Complete current work"
+        : options?.completesWork === false ? ""
+        : "";
+    return `${prefix} ${lines.join(" · ")}${suffix}`;
 }
 
 export function buildOutcomeRuleFromAutomation(
     outcomeKey: string,
     draft: OutcomeAutomationDraft,
     index: number,
+    options?: { transitionOptions?: StageOutcomeTransitionOption[] },
 ): StageOutcomeRuleV1 | null {
     if (draft.kind === "none") return null;
 
     const rule_key = `${outcomeKey}_automation_${index + 1}`;
     const targets: StageOutcomeRuleTargetV1[] = [];
+    const transitionOptions = options?.transitionOptions ?? [];
 
     switch (draft.kind) {
         case "stay_in_stage":
             targets.push({ kind: "no_movement" });
+            if (draft.completes_work) targets.push({ kind: "mark_stage_work_complete" });
             break;
         case "move_to_stage": {
-            const stageKey = trimKey(draft.stage_key);
-            if (!stageKey) return null;
-            const statusKey = trimKey(draft.status_key) ?? defaultStatusKeyForStage(stageKey);
+            const transitionRef = trimKey(draft.transition_ref);
+            const stageKey =
+                stageKeyFromTransitionRef(transitionRef, transitionOptions)
+                ?? trimKey(draft.stage_key);
+            if (!stageKey && !transitionRef) return null;
+            const statusKey = trimKey(draft.status_key) ?? defaultStatusKeyForStage(stageKey ?? "");
             targets.push({ kind: "update_family_case_status", status_key: statusKey });
-            targets.push({ kind: "move_to_stage", stage_key: stageKey });
+            targets.push({
+                kind: "move_to_stage",
+                stage_key: stageKey,
+                ...(transitionRef ? { transition_ref: transitionRef } : {}),
+            });
             targets.push({ kind: "mark_stage_work_complete" });
             break;
         }
@@ -166,11 +242,22 @@ export function buildOutcomeRuleFromAutomation(
         case "repeat_work": {
             const templateKey = trimKey(draft.repeat_template_key);
             if (!templateKey) return null;
-            const dueDays =
-                typeof draft.repeat_due_days === "number" && Number.isFinite(draft.repeat_due_days) ?
-                    Math.max(0, Math.floor(draft.repeat_due_days))
-                :   1;
-            targets.push({ kind: "reopen_work", template_key: templateKey, due_days: dueDays });
+            const duePolicy = effectiveFollowUpDuePolicy(
+                draft.follow_up_due_policy,
+                draft.repeat_due_days,
+            );
+            const legacyDays =
+                duePolicy.anchor === "outcome_recorded_at"
+                && duePolicy.direction !== "before"
+                && (duePolicy.offset_unit ?? "days") === "days"
+                    ? duePolicy.offset_value ?? 0
+                    : undefined;
+            targets.push({
+                kind: "create_next_work",
+                template_key: templateKey,
+                ...(legacyDays != null ? { due_days: legacyDays } : {}),
+                follow_up_due_policy: duePolicy,
+            });
             break;
         }
         case "mark_needs_attention":
@@ -194,9 +281,10 @@ export function upsertOutcomeAutomationRule(
     rules: StageOutcomeRuleV1[],
     outcomeKey: string,
     draft: OutcomeAutomationDraft,
+    options?: { transitionOptions?: StageOutcomeTransitionOption[] },
 ): StageOutcomeRuleV1[] {
     const without = rules.filter((r) => r.when_outcome_key !== outcomeKey);
-    const built = buildOutcomeRuleFromAutomation(outcomeKey, draft, without.length);
+    const built = buildOutcomeRuleFromAutomation(outcomeKey, draft, without.length, options);
     if (!built) return without;
     return [...without, built];
 }
@@ -207,6 +295,7 @@ export function upsertAttemptConditionalOutcomeRules(
     belowMax: OutcomeAutomationDraft,
     atOrAboveMax: OutcomeAutomationDraft,
     maxAttempts: number,
+    options?: { transitionOptions?: StageOutcomeTransitionOption[] },
 ): StageOutcomeRuleV1[] {
     const without = rules.filter((r) => r.when_outcome_key !== outcomeKey);
     const next = [...without];
@@ -215,6 +304,7 @@ export function upsertAttemptConditionalOutcomeRules(
         outcomeKey,
         { ...belowMax, when_attempt_count_lt: maxAttempts },
         next.length,
+        options,
     );
     if (repeatRule) next.push(repeatRule);
 
@@ -222,12 +312,14 @@ export function upsertAttemptConditionalOutcomeRules(
         outcomeKey,
         { ...atOrAboveMax, when_attempt_count_gte: maxAttempts },
         next.length,
+        options,
     );
     if (terminalRule) next.push(terminalRule);
 
     return next;
 }
 
+/** @deprecated Use resolveStageOutcomeTransitionOptions with processStages instead. */
 export function enrollmentStageOptions(): Array<{ key: string; label: string }> {
     return [
         { key: "lead", label: "Lead" },
@@ -250,10 +342,10 @@ export type OutcomeAutomationEditorOption = {
 };
 
 export const OUTCOME_AUTOMATION_OPTIONS: OutcomeAutomationEditorOption[] = [
-    { value: "none", label: "No action" },
-    { value: "stay_in_stage", label: "Stay in stage" },
-    { value: "move_to_stage", label: "Move to stage" },
-    { value: "close_record", label: "Close lead" },
+    { value: "none", label: "No outcome behavior" },
+    { value: "stay_in_stage", label: "Remain in current stage" },
+    { value: "move_to_stage", label: "Move through transition" },
+    { value: "close_record", label: "Close record" },
     { value: "repeat_work", label: "Create follow-up work" },
     { value: "mark_needs_attention", label: "Create attention" },
 ];
@@ -265,8 +357,32 @@ export function normalizeOutcomeRulesOnPersist(
     const outcomeKeys = new Set(outcomes.map((o) => o.outcome_key));
     return rules.filter(
         (r) =>
-            Boolean((r.when_enter_status_key ?? "").trim()) ||
-            Boolean(r.when_domain_signal?.domain && r.when_domain_signal?.signal) ||
-            outcomeKeys.has((r.when_outcome_key ?? "").trim()),
+            Boolean((r.when_enter_status_key ?? "").trim())
+            || Boolean(r.when_domain_signal?.domain && r.when_domain_signal?.signal)
+            || outcomeKeys.has((r.when_outcome_key ?? "").trim()),
     );
 }
+
+export function defaultFollowUpDuePolicy(anchor: StageFollowUpDueAnchor = "outcome_recorded_at"): StageFollowUpWorkDuePolicyV1 {
+    return {
+        anchor,
+        offset_value: anchor === "outcome_recorded_at" ? 0 : 1,
+        offset_unit: "days",
+        direction: anchor === "scheduled_event_start" ? "before" : "after",
+        missing_anchor_behavior: "use_outcome_recorded_at",
+    };
+}
+
+export function summarizeRepeatWorkDraft(
+    draft: OutcomeAutomationDraft,
+    workTemplateLabelByKey: Record<string, string>,
+): string | null {
+    if (draft.kind !== "repeat_work") return null;
+    const templateKey = draft.repeat_template_key?.trim();
+    if (!templateKey) return null;
+    const label = workTemplateLabelByKey[templateKey] ?? templateKey.replace(/_/g, " ");
+    const policy = effectiveFollowUpDuePolicy(draft.follow_up_due_policy, draft.repeat_due_days);
+    return formatFollowUpDuePolicySummary(policy, label);
+}
+
+export { resolveStageOutcomeTransitionOptions };

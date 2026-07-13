@@ -75,12 +75,20 @@ function tenantProviders(
                 config: def?.config ?? undefined,
             });
         })
-        .map((field) => ({
+        .map((field) => {
+            const def = defs.find(
+                (d) =>
+                    `${d.entity_type}.${d.field_key}` === field.refKey
+                    || (d.entity_type === "customer_member" && `child.${d.field_key}` === field.refKey),
+            );
+            const categoryKey = def?.section_key?.trim() || undefined;
+            return {
             refKey: field.refKey,
             label: field.fieldLabel,
             kind: "business_field" as const,
             outputShape: "scalar" as const,
             entityNamespace: namespaceFromRefKey(field.refKey),
+            categoryKey,
             fieldType: field.fieldType,
             isSystem: false,
             availability: { pipeline: true, waitlist: true },
@@ -89,7 +97,8 @@ function tenantProviders(
                 sourceModule: "web/lib/layout/tenantLayoutFieldPickerCatalog.ts",
             },
             resolverOwner: "web/lib/layout/tenantLayoutFieldPickerCatalog.ts",
-        }));
+        };
+        });
     return [...relationshipTenant, ...layoutFields] as CanonicalDataProvider[];
 }
 

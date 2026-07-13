@@ -2,6 +2,7 @@ import type {
     EnrollmentStatusStageRow,
     EnrollmentStatusStagesPayload,
 } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
+import { stageRequiresManualStatusSelection } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 
 export function statusKeySetsEqual(a: Set<string>, b: Set<string>): boolean {
     if (a.size !== b.size) return false;
@@ -90,14 +91,18 @@ export function shouldSyncStatusDraftFromServer(opts: {
     return !opts.statusDraftDirty;
 }
 
-/** Statuses step — Save & continue enabled when user has selected at least one status. */
+/** Statuses step — Save & continue enabled when user has selected at least one status or stage is platform-managed. */
 export function canConfirmStatusesStep(opts: {
     statusesLoading: boolean;
     statusesSaving: boolean;
     draftCount: number;
+    stageKey?: string;
 }): boolean {
     if (opts.statusesLoading || opts.statusesSaving) return false;
-    return opts.draftCount >= 1;
+    if (opts.draftCount >= 1) return true;
+    const sk = opts.stageKey?.trim();
+    if (!sk) return false;
+    return !stageRequiresManualStatusSelection(sk);
 }
 
 export const LIFECYCLE_ACTIVATION_STATUS_STAGES_PATH = "/api/admin/enrollment-process/status-stages";

@@ -11,6 +11,7 @@ import {
     groupDefsFor,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { categoryDisplayLabel } from "@/lib/fields/fieldCatalogForSettings";
 import {
     groupSurfaceComposerLibrary,
     type SurfaceComposerLibraryCategory,
@@ -23,6 +24,7 @@ export type NestedSurfaceLibraryItem = {
     groupLabel: string;
     fieldKey: string;
     label: string;
+    categoryKey: string;
     isSystemField: boolean;
 };
 
@@ -45,6 +47,7 @@ export function buildNestedSurfaceLibraryForGroup(
         groupLabel: groupDef?.label ?? groupKey,
         fieldKey: field.key,
         label: field.label,
+        categoryKey: field.categoryKey ?? "general",
         isSystemField: field.isSystemField,
     }));
 }
@@ -52,6 +55,17 @@ export function buildNestedSurfaceLibraryForGroup(
 export function nestedSurfaceLibraryCategories(
     items: readonly NestedSurfaceLibraryItem[],
 ): SurfaceComposerLibraryCategory<NestedSurfaceLibraryItem>[] {
+    const categoryKeys = [...new Set(items.map((item) => item.categoryKey))].sort((a, b) =>
+        categoryDisplayLabel(a).localeCompare(categoryDisplayLabel(b)),
+    );
+    if (categoryKeys.length > 0) {
+        return groupSurfaceComposerLibrary(
+            items,
+            categoryKeys,
+            (key) => categoryDisplayLabel(key),
+            (item) => item.categoryKey,
+        );
+    }
     return groupSurfaceComposerLibrary(
         items,
         [...new Set(items.map((i) => i.groupKey))],

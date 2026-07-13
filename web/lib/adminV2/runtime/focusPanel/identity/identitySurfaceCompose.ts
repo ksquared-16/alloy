@@ -10,6 +10,7 @@ import type {
 import type { HouseholdEvidenceChildExtended } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { fieldPresentationLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
 
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 
@@ -179,7 +180,7 @@ export function composedIdentityLines(args: {
         if (skipNameFields && NAME_FIELD_REFS.has(fieldRef)) continue;
         const value = resolveIdentityFieldValue(subject, fieldRef);
         if (!value) continue;
-        const catalog = fieldRef.replace(/^[a-z_]+\./, "").replace(/_/g, " ");
+        const catalog = resolveCanonicalIdentityFieldLabel(fieldRef);
         const label = config
             ? fieldPresentationLabel(config, groupKey, fieldRef, catalog)
             : catalog;

@@ -60,6 +60,20 @@ export type FocusPanelDepthEntry = {
     focus: string | null;
 };
 
+/**
+ * Intent applied when the Focus Panel canvas becomes the Current Work workspace.
+ * Cleared after the workspace host consumes it once.
+ */
+export type FocusPanelCurrentWorkWorkspaceIntent =
+    | { kind: "drill_in" }
+    | { kind: "record_outcome" }
+    | { kind: "action"; actionKey: string };
+
+export type FocusPanelCurrentWorkWorkspaceState = {
+    open: boolean;
+    intent: FocusPanelCurrentWorkWorkspaceIntent | null;
+};
+
 export type FocusPanelCoordination = {
     /** Card types mounted and visible in the active mode grid (handoff guard). */
     focusTargets?: ReadonlySet<FocusPanelCardKey>;
@@ -69,6 +83,17 @@ export type FocusPanelCoordination = {
     invokeHeaderAction?: (action: ResolvedActionForClient) => void;
     /** Resolve a send/composer action for outreach handoff fallback. */
     resolveCommunicationsComposerAction?: () => ResolvedActionForClient | null;
+    /**
+     * Current Work operational workspace replaces the summary card grid (not a modal).
+     * @see OpportunityFocusPanelModeGrid
+     */
+    currentWorkWorkspace?: FocusPanelCurrentWorkWorkspaceState;
+    /** Open the full Current Work Focus workspace for the active record. */
+    openCurrentWorkWorkspace?: (intent?: FocusPanelCurrentWorkWorkspaceIntent | null) => void;
+    /** Restore the configured summary card workspace. */
+    closeCurrentWorkWorkspace?: () => void;
+    /** Clear a one-shot workspace open intent after the workspace host consumes it. */
+    clearCurrentWorkWorkspaceIntent?: () => void;
     /** The current handoff request, or null. */
     request: FocusPanelFocusRequest | null;
     /**
@@ -133,7 +158,10 @@ const OPERATIONAL_TRUTH_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPan
     "communications",
 ]);
 
-/** Work-owning cards reach Focus to run completion — not because they store entity truth. */
+/**
+ * Work-owning cards own stage-work completion. Current Work no longer elevates as a
+ * centered Focus Card — operators drill into a full Focus Panel workspace instead.
+ */
 const WORK_OWNING_CARDS: ReadonlySet<FocusPanelCardKey> = new Set<FocusPanelCardKey>(["current_work"]);
 
 /** True when this card may elevate into a centered Focus Card. */
@@ -146,9 +174,12 @@ export function isWorkOwningCard(card: FocusPanelCardKey): boolean {
     return WORK_OWNING_CARDS.has(card);
 }
 
-/** True when a card may report focused/edit depth (centered Focus Card). */
+/**
+ * True when a card may report focused/edit depth (centered Focus Card).
+ * Current Work is excluded — it uses `openCurrentWorkWorkspace` canvas replace.
+ */
 export function isFocusElevatingCard(card: FocusPanelCardKey): boolean {
-    return isOperationalTruthCard(card) || isWorkOwningCard(card);
+    return isOperationalTruthCard(card);
 }
 
 /**

@@ -21,7 +21,7 @@
 
 import type { WorkViewFilterOperatorV1 } from "@/lib/lifecycle/workViewsConfigV1";
 
-export type WorkViewConditionFieldGroup = "lead" | "child" | "household" | "operational";
+export type WorkViewConditionFieldGroup = "lead" | "child" | "household" | "operational" | "custom";
 
 export type WorkViewConditionSubject = "opportunity" | "child" | "person" | "record";
 
@@ -34,6 +34,8 @@ export type WorkViewConditionValueKind =
     | "boolean"
     | "date_preset"
     | "text"
+    | "number"
+    | "choice_select"
     | "none";
 
 /** Where the value dropdown sources its options. */
@@ -45,6 +47,8 @@ export type WorkViewConditionOptionSource =
     | { kind: "programs" }
     | { kind: "boolean" }
     | { kind: "date" }
+    | { kind: "inline_choice"; refKey: string }
+    | { kind: "canonical_choice"; optionSetRef: string }
     | { kind: "none" };
 
 export type WorkViewConditionFieldDef = {
@@ -59,6 +63,8 @@ export type WorkViewConditionFieldDef = {
     runtimeField: string;
     /** Whether the runtime evaluator can apply this field. UI hides runtime-unsupported fields. */
     runtimeSupported: boolean;
+    /** Operational predicates vs canonical provider-backed operands. */
+    source?: "operational" | "canonical";
 };
 
 const SELECT_OPERATORS: readonly WorkViewFilterOperatorV1[] = [
@@ -91,6 +97,7 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         operators: SELECT_OPERATORS,
         runtimeField: "opportunity_stage",
         runtimeSupported: true,
+        source: "operational",
     },
     {
         key: "opportunity_status",
@@ -267,6 +274,7 @@ const GROUP_LABELS: Record<WorkViewConditionFieldGroup, string> = {
     child: "Child",
     household: "Household",
     operational: "Operational",
+    custom: "Custom fields",
 };
 
 const GROUP_ORDER: readonly WorkViewConditionFieldGroup[] = ["lead", "child", "household", "operational"];

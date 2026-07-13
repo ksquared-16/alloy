@@ -80,6 +80,9 @@ function factFrom(body: Record<string, unknown>): OperationalFactDto {
         lateThresholdTime: str(body.late_threshold_time),
         hours: num(body.hours),
         vacationEligible: body.vacation_eligible === true || body.vacation_eligible === "true",
+        // --- correction identity (D12a) ---
+        entryType: (str(body.entry_type) as OperationalFactDto["entryType"]) ?? "original",
+        correctsFactId: str(body.corrects_fact_id),
     };
 }
 

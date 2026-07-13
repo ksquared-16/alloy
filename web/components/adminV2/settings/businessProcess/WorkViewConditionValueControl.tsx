@@ -143,11 +143,12 @@ export default function WorkViewConditionValueControl({
         );
     }
 
-    if (kind === "status_select" || kind === "stage_select" || kind === "program_select" || kind === "room_select") {
+    if (kind === "status_select" || kind === "stage_select" || kind === "program_select" || kind === "room_select" || kind === "choice_select") {
         const placeholder =
             kind === "stage_select" ? "Select stage…"
             : kind === "program_select" ? "Select program…"
             : kind === "room_select" ? "Select room…"
+            : kind === "choice_select" ? "Select option…"
             : "Select status…";
         return (
             <select

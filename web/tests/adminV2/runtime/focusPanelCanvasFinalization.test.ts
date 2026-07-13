@@ -32,16 +32,17 @@ describe("Focus Panel canvas rule — operational-truth vs diagnostic", () => {
         expect(isOperationalTruthCard("children")).toBe(true);
     });
 
-    it("classifies Current Work as work-owning (may elevate to Focus)", () => {
+    it("classifies Current Work as work-owning (workspace, not centered elevate)", () => {
         expect(isWorkOwningCard("current_work")).toBe(true);
         expect(isOperationalTruthCard("current_work")).toBe(false);
     });
 
-    it("passes truth-card and work-owning depth through unchanged", () => {
+    it("passes truth-card depth through unchanged; Current Work does not elevate", () => {
         expect(clampPerspectiveForCard("children", "focused")).toBe("focused");
         expect(clampPerspectiveForCard("children", "edit")).toBe("edit");
         expect(clampPerspectiveForCard("household", "focused")).toBe("focused");
-        expect(clampPerspectiveForCard("current_work", "focused")).toBe("focused");
+        // Current Work opens a Focus Panel workspace instead of a centered Focus Card.
+        expect(clampPerspectiveForCard("current_work", "focused")).toBe("evidence");
     });
 
     it("clamps diagnostic-card depth to Evidence (no Focus Card workspace)", () => {
