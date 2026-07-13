@@ -56,6 +56,8 @@ export function isWorkTemplateTransitionRef(
     return typeof (ref as StageWorkTemplateTransitionRefV1).transition_ref === "string";
 }
 
+export type StageWorkTemplateExecutionModeV1 = "direct_action" | "outcome_led";
+
 export type StageWorkTemplateV1 = {
     template_key: string;
     label: string;
@@ -68,7 +70,14 @@ export type StageWorkTemplateV1 = {
     /** Optional link to platform work definition catalog key. */
     work_definition_key?: string | null;
     completion_policy?: StageWorkCompletionPolicyV1;
-    /** Operator primary execution affordance for this work template. */
+    /**
+     * Explicit work execution mode. Prefer setting with primary_action:
+     * - direct_action: Primary Action is the leading CTA
+     * - outcome_led: no Primary Action; Record Outcome leads
+     * When omitted, runtime derives from primary_action presence.
+     */
+    execution_mode?: StageWorkTemplateExecutionModeV1;
+    /** Operator primary execution affordance for this work template. Absence is valid for outcome-led work. */
     primary_action?: StageWorkTemplateActionRefV1;
     /** Ordered helpful actions shown on Current Work summary. Empty array = explicitly none. */
     helpful_actions?: StageWorkTemplateActionRefV1[];
@@ -186,6 +195,7 @@ export type StageOperatingPlanV1 = {
 
 const JOURNEY_SEGMENTS = new Set<StageJourneySegment>(["family", "child"]);
 const OWNER_STRATEGIES = new Set<StageWorkOwnerStrategy>(["record_owner", "creator", "unassigned"]);
+const EXECUTION_MODES = new Set<StageWorkTemplateExecutionModeV1>(["direct_action", "outcome_led"]);
 const TARGET_KINDS = new Set<StageOutcomeRuleTargetKind>([
     "update_family_case_status",
     "update_child_enrollment_status",
@@ -291,6 +301,11 @@ function parseWorkTemplate(raw: unknown): StageWorkTemplateV1 | null {
         o.completion_policy as StageWorkCompletionPolicyV1 | undefined,
     );
     if (completion_policy) tpl.completion_policy = completion_policy;
+
+    const executionModeRaw = trimNonEmpty(o.execution_mode);
+    if (executionModeRaw && EXECUTION_MODES.has(executionModeRaw as StageWorkTemplateExecutionModeV1)) {
+        tpl.execution_mode = executionModeRaw as StageWorkTemplateExecutionModeV1;
+    }
 
     const primary_action = parseActionRef(o.primary_action);
     if (primary_action) tpl.primary_action = primary_action;

@@ -219,6 +219,13 @@ export default function CurrentWorkWorkspace({
         surface.recordOutcomeAction && isCurrentWorkActionExecutable(surface.recordOutcomeAction)
             ? surface.recordOutcomeAction
             : null;
+    const outcomeLed =
+        surface.execution?.executionMode === "outcome_led"
+        || surface.execution?.prominentCta === "record_outcome";
+    const showPrimaryAsLeading = Boolean(primaryExecutable) && !outcomeLed;
+    const promoteRecordOutcome = Boolean(recordOutcome || surface.completionOutcomes.length > 0) && (
+        outcomeLed || !primaryExecutable
+    );
 
     return (
         <section
@@ -311,25 +318,32 @@ export default function CurrentWorkWorkspace({
 
             <div className="alloy-os-currentwork-workspace__columns">
                 <div className="alloy-os-currentwork-workspace__main">
-                    <section className="alloy-os-currentwork-workspace__section" data-work-section="next-action">
-                        <p className="alloy-os-currentwork-workspace__section-title">Next action</p>
+                    <section
+                        className="alloy-os-currentwork-workspace__section"
+                        data-work-section="next-action"
+                        data-execution-mode={surface.execution?.executionMode ?? "unknown"}
+                        data-prominent-cta={surface.execution?.prominentCta ?? "none"}
+                    >
+                        <p className="alloy-os-currentwork-workspace__section-title">
+                            {promoteRecordOutcome && !showPrimaryAsLeading ? "Record outcome" : "Next action"}
+                        </p>
                         {surface.operatorGuidance?.trim() ?
                             <p className="alloy-os-currentwork-workspace__guidance">{surface.operatorGuidance}</p>
                         : surface.description?.trim() ?
                             <p className="alloy-os-currentwork-workspace__guidance">{surface.description}</p>
                         :   null}
-                        {primaryExecutable ?
+                        {showPrimaryAsLeading ?
                             <button
                                 type="button"
                                 className="alloy-os-currentwork__work-primary"
-                                data-work-primary-action={primaryExecutable.key}
-                                onClick={() => onAction(primaryExecutable)}
+                                data-work-primary-action={primaryExecutable!.key}
+                                onClick={() => onAction(primaryExecutable!)}
                             >
                                 <span className="alloy-os-currentwork__work-primary-label">
-                                    {primaryExecutable.label}
+                                    {primaryExecutable!.label}
                                 </span>
                             </button>
-                        : surface.primaryAction && !primaryExecutable ?
+                        : surface.primaryAction && !primaryExecutable && !outcomeLed ?
                             <p className="alloy-os-currentwork__handoff-notice" role="status">
                                 {surface.primaryAction.disabledReason
                                     ?? "Primary action is not available for this record."}
@@ -341,8 +355,11 @@ export default function CurrentWorkWorkspace({
                         <section
                             className="alloy-os-currentwork-workspace__section"
                             data-work-section="record-outcome"
+                            data-outcome-prominence={promoteRecordOutcome ? "primary" : "secondary"}
                         >
-                            <p className="alloy-os-currentwork-workspace__section-title">Record outcome</p>
+                            {!promoteRecordOutcome || showPrimaryAsLeading ?
+                                <p className="alloy-os-currentwork-workspace__section-title">Record outcome</p>
+                            :   null}
                             {surface.showOutcomeCompletion && surface.completionOutcomes.length > 0
                                 && surface.completionOutcomes.length <= 4 ?
                                 <div className="alloy-os-currentwork-workspace__outcome-pills">
@@ -350,7 +367,11 @@ export default function CurrentWorkWorkspace({
                                         <button
                                             key={outcome.outcome_key}
                                             type="button"
-                                            className="alloy-os-currentwork-workspace__outcome-pill"
+                                            className={
+                                                promoteRecordOutcome && !showPrimaryAsLeading
+                                                    ? "alloy-os-currentwork__work-primary"
+                                                    : "alloy-os-currentwork-workspace__outcome-pill"
+                                            }
                                             data-work-outcome={outcome.outcome_key}
                                             onClick={() => onSelectOutcome(outcome.outcome_key)}
                                         >
@@ -361,7 +382,11 @@ export default function CurrentWorkWorkspace({
                             : recordOutcome ?
                                 <button
                                     type="button"
-                                    className="alloy-os-currentwork__record-outcome"
+                                    className={
+                                        promoteRecordOutcome && !showPrimaryAsLeading
+                                            ? "alloy-os-currentwork__work-primary"
+                                            : "alloy-os-currentwork__record-outcome"
+                                    }
                                     data-work-action="record-outcome"
                                     onClick={() => onAction(recordOutcome)}
                                 >

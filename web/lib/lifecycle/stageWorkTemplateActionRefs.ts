@@ -6,8 +6,10 @@
 import type {
     StageWorkTemplateActionRefV1,
     StageWorkTemplateAlternatePathRefV1,
+    StageWorkTemplateExecutionModeV1,
     StageWorkTemplateV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { setWorkTemplateExecutionMode } from "@/lib/lifecycle/resolveWorkTemplateExecutionMode";
 
 export type StageWorkTemplateAlternatePathDraftRef = {
     kind: "transition" | "action";
@@ -25,11 +27,37 @@ export function setWorkTemplatePrimaryActionRef(
 ): StageWorkTemplateV1 {
     const ref = actionRef?.trim();
     if (!ref) {
+        // Clearing the action while in direct_action mode keeps the mode so validation can prompt.
         const next = { ...work };
         delete next.primary_action;
+        if (!next.execution_mode) next.execution_mode = "direct_action";
         return next;
     }
-    return { ...work, primary_action: { action_ref: ref } };
+    return {
+        ...work,
+        execution_mode: "direct_action",
+        primary_action: { action_ref: ref },
+    };
+}
+
+/** Explicitly choose No direct action (outcome-led). */
+export function setWorkTemplateNoDirectAction(work: StageWorkTemplateV1): StageWorkTemplateV1 {
+    return setWorkTemplateExecutionMode(work, "outcome_led");
+}
+
+/** Explicitly choose Select an action (direct_action), optionally seeding the ref. */
+export function setWorkTemplateSelectDirectAction(
+    work: StageWorkTemplateV1,
+    actionRef?: string | null,
+): StageWorkTemplateV1 {
+    return setWorkTemplateExecutionMode(work, "direct_action", actionRef);
+}
+
+export function workTemplateExecutionMode(
+    work: StageWorkTemplateV1,
+): StageWorkTemplateExecutionModeV1 {
+    return work.execution_mode
+        ?? (work.primary_action?.action_ref?.trim() ? "direct_action" : "outcome_led");
 }
 
 export function workTemplateHelpfulActionRefs(work: StageWorkTemplateV1): string[] {

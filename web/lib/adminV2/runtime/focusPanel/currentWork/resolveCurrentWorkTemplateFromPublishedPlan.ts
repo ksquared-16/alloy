@@ -348,6 +348,10 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
         checklist,
     };
 
+    if (activeTemplate?.execution_mode === "direct_action" || activeTemplate?.execution_mode === "outcome_led") {
+        templateConfig.execution_mode = activeTemplate.execution_mode;
+    }
+
     if (activeTemplate?.primary_action?.action_ref?.trim()) {
         templateConfig.primary_action = {
             action_ref: activeTemplate.primary_action.action_ref.trim(),
