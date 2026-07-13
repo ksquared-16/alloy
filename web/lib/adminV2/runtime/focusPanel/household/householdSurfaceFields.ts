@@ -141,4 +141,7 @@ export const CONTACT_EDIT_FIELD_MAP: Record<string, keyof import("@/lib/adminV2/
     "contact.last_name": "last_name",
     "contact.email": "email",
     "contact.phone": "phone",
+    // Builder may place person.* refs on the Parent/Guardian edit map — bind to the same values.
+    "person.email": "email",
+    "person.phone": "phone",
 };

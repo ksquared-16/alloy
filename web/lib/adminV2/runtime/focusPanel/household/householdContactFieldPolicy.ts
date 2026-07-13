@@ -46,7 +46,8 @@ function canonicalConfig(contactConfig: NestedSurfaceConfig | null): NestedSurfa
 export function resolveContactEditFieldPolicy(contactConfig: NestedSurfaceConfig | null): ContactEditFieldRow[] {
     const config = canonicalConfig(contactConfig);
     const group = config.groups.find((row) => row.key === "contact_edit");
-    const keys = group?.selectedFieldKeys.length ? group.selectedFieldKeys : DEFAULT_CONFIG_KEYS;
+    // Explicit `[]` stays empty; defaults only when the contact_edit group is absent.
+    const keys = group ? group.selectedFieldKeys : DEFAULT_CONFIG_KEYS;
     const keySet = new Set(keys);
     return FIELD_DEFS.filter((def) => keySet.has(def.configKey)).map((def) => {
         const policy = resolveIdentityFieldPolicy({

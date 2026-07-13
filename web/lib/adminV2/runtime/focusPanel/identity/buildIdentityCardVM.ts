@@ -350,7 +350,21 @@ export function buildHouseholdContactEditFieldRows(args: {
         editGroupKey: "contact_edit",
         isFieldSaveSupported: (fieldRef) => fieldRef in CONTACT_EDIT_FIELD_MAP,
     });
-    return [...summaryRows, ...detailRows];
+    // Alias-normalize by mutation value key so contact.phone and person.phone do not double-render.
+    const seenValueKeys = new Set<string>();
+    const deduped: IdentityFieldRowVM[] = [];
+    for (const row of [...summaryRows, ...detailRows]) {
+        const cells = row.cells.filter((cell) => {
+            const valueKey = CONTACT_EDIT_FIELD_MAP[cell.fieldRef];
+            if (!valueKey) return false;
+            if (seenValueKeys.has(valueKey)) return false;
+            seenValueKeys.add(valueKey);
+            return true;
+        });
+        if (cells.length === 0) continue;
+        deduped.push({ ...row, cells });
+    }
+    return deduped;
 }
 
 /** Build children identity VM for one child record. */
