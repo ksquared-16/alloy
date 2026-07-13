@@ -765,9 +765,16 @@ export default function LifecycleActivationBoard({
             return;
         }
         if (selectedKeys.length < 1) {
-            setStageSaveError("Select at least one status for this stage.");
+            const message = "Select at least one status for this stage.";
+            setStageSaveError(message);
             setStageSaveState("error");
-            setStatusesError("Select at least one status for this stage.");
+            setStatusesError(null);
+            const statusSection = document.querySelector('[data-testid="lifecycle-stage-statuses-section"]');
+            if (statusSection instanceof HTMLElement) {
+                statusSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                const details = statusSection.querySelector("details");
+                if (details && !details.open) details.open = true;
+            }
             return;
         }
 

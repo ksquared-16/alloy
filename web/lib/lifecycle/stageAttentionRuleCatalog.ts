@@ -32,9 +32,9 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         defaultSeverity: "medium",
     },
     {
-        kind: "missing_required_fields",
-        label: "Missing required fields",
-        description: "Stage requirements are incomplete.",
+        kind: "missing_requirements",
+        label: "Missing requirements",
+        description: "Active stage requirements (fields, facts, or work) are incomplete.",
         supportsThreshold: false,
         defaultThreshold: 0,
         defaultSeverity: "high",
@@ -69,6 +69,7 @@ const LEGACY_KIND_MAP: Partial<Record<StageAttentionRuleKind, StageAttentionRule
     tasks_without_success: "no_contact_attempt",
     days_without_success: "stage_age_exceeded",
     required_work_overdue: "work_overdue",
+    missing_required_fields: "missing_requirements",
 };
 
 export function normalizeAttentionRuleKind(kind: StageAttentionRuleKind): StageAttentionRuleKind {
