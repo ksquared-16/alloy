@@ -9,6 +9,15 @@ import {
     type ResolvableConfigRule,
 } from "@/lib/childcareOperational/config/resolveConfigRule";
 import type { ChildcareCapacityRuleRow } from "@/lib/childcareOperational/config/configRuleTypes";
+import {
+    createCapacityRule,
+    createCapacityRuleVersion,
+} from "@/lib/childcareOperational/config/configRuleAuthoringService";
+import {
+    createOperationalEnrollmentMockStore,
+    createOperationalEnrollmentMockSupabase,
+    ORG_ID,
+} from "../mockOperationalEnrollmentSupabase";
 
 const SITE = "site-1";
 const ROOM = "room-1";
@@ -150,5 +159,93 @@ describe("resolveConfigRule — deterministic final tiebreak", () => {
         const a = r("a", { id: "a-id", created_at: "2026-01-01T00:00:00Z" });
         const b = r("b", { id: "b-id", created_at: "2026-01-01T00:00:00Z" });
         expect(resolveConfigRule([b, a], ctx, "2026-06-01")?.marker).toBe("a");
+    });
+});
+
+describe("author-time licensing guard (wired into the authoring service)", () => {
+    function seedOrgLicensed(capacity: number) {
+        return createOperationalEnrollmentMockSupabase(
+            createOperationalEnrollmentMockStore({
+                childcare_capacity_rules: [
+                    {
+                        id: "org-lic",
+                        org_id: ORG_ID,
+                        scope_type: "org",
+                        site_location_id: null,
+                        program_category_id: null,
+                        room_location_id: null,
+                        age_group_key: null,
+                        capacity_kind: "licensed",
+                        capacity,
+                        effective_start: "2026-01-01",
+                        effective_end: null,
+                        source_key: "licensing",
+                        metadata: {},
+                        created_at: "2026-01-01T00:00:00Z",
+                        updated_at: "2026-01-01T00:00:00Z",
+                    },
+                ],
+            }),
+        );
+    }
+
+    it("rejects creating a room-scope licensed rule that weakens the org ceiling", async () => {
+        const supabase = seedOrgLicensed(10);
+        await expect(
+            createCapacityRule(supabase, {
+                orgId: ORG_ID,
+                scopeType: "room",
+                roomLocationId: ROOM,
+                capacityKind: "licensed",
+                capacity: 20,
+                effectiveStart: "2026-06-01",
+            }),
+        ).rejects.toThrow(/licensing ceiling|only tighten/i);
+    });
+
+    it("allows a tightening (lower) room-scope licensed rule", async () => {
+        const supabase = seedOrgLicensed(10);
+        const rule = await createCapacityRule(supabase, {
+            orgId: ORG_ID,
+            scopeType: "room",
+            roomLocationId: ROOM,
+            capacityKind: "licensed",
+            capacity: 8,
+            effectiveStart: "2026-06-01",
+        });
+        expect(rule.capacity).toBe(8);
+    });
+
+    it("does not gate a non-licensed (operational) rule", async () => {
+        const supabase = seedOrgLicensed(10);
+        const rule = await createCapacityRule(supabase, {
+            orgId: ORG_ID,
+            scopeType: "site",
+            siteLocationId: SITE,
+            capacityKind: "operational",
+            capacity: 99,
+            effectiveStart: "2026-06-01",
+        });
+        expect(rule.capacity).toBe(99);
+    });
+
+    it("blocks a version that weakens the licensed ceiling (excludes its own prior)", async () => {
+        const supabase = seedOrgLicensed(10);
+        const seeded = await createCapacityRule(supabase, {
+            orgId: ORG_ID,
+            scopeType: "site",
+            siteLocationId: SITE,
+            capacityKind: "licensed",
+            capacity: 9,
+            effectiveStart: "2026-02-01",
+        });
+        await expect(
+            createCapacityRuleVersion(supabase, {
+                orgId: ORG_ID,
+                priorId: seeded.id,
+                capacity: 15,
+                effectiveStart: "2026-07-01",
+            }),
+        ).rejects.toThrow(/licensing ceiling|only tighten/i);
     });
 });
