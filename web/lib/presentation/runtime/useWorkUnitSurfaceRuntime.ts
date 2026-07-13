@@ -183,13 +183,12 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         [orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint],
     );
 
-    // Read-through seed, computed exactly once per surface mount. On a return navigation (the surface
-    // remounts) this holds the prior config + rows for instant first paint; on cold entry it is empty.
-    const seedRef = useRef<WorkUnitSurfaceInitialSeed | null>(null);
-    if (seedRef.current === null) {
-        seedRef.current = computeWorkUnitSurfaceInitialSeed({ cacheContext, slugRoute, selectedSiteId });
-    }
-    const seed = seedRef.current;
+    // Read-through seed, computed exactly once per surface mount (lazy initializer). On a return
+    // navigation (the surface remounts) this holds the prior config + rows for instant first paint;
+    // on cold entry it is the empty seed. Stable for the mount's life — never re-set.
+    const [seed] = useState<WorkUnitSurfaceInitialSeed>(() =>
+        computeWorkUnitSurfaceInitialSeed({ cacheContext, slugRoute, selectedSiteId }),
+    );
     // Current cache scope for the once-subscribed mutation listener (which cannot close over it).
     const cacheContextRef = useRef(cacheContext);
     cacheContextRef.current = cacheContext;
