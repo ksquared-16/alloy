@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import {
     backIdentityDisclosure,
+    identityDisclosureCoordinationLevel,
+    identityDisclosureRuntimeOwnsNavigation,
     INITIAL_IDENTITY_DISCLOSURE_STATE,
     transitionIdentityDisclosure,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
@@ -94,5 +96,33 @@ describe("identityDisclosureState", () => {
 
         const summary = backIdentityDisclosure(context);
         expect(summary).toEqual({ depth: "summary" });
+    });
+});
+
+describe("identityDisclosureCoordinationLevel", () => {
+    it("keeps context at base grid level (in-card expansion only)", () => {
+        expect(identityDisclosureCoordinationLevel({ depth: "summary" })).toBe("base");
+        expect(identityDisclosureCoordinationLevel({ depth: "context" })).toBe("base");
+    });
+
+    it("elevates details and evidence to focused grid level", () => {
+        expect(identityDisclosureCoordinationLevel({ depth: "details" })).toBe("focused");
+        expect(identityDisclosureCoordinationLevel({ depth: "evidence" })).toBe("focused");
+    });
+
+    it("prefers edit when editing", () => {
+        expect(identityDisclosureCoordinationLevel({ depth: "context", editing: true })).toBe("edit");
+    });
+});
+
+describe("identityDisclosureRuntimeOwnsNavigation", () => {
+    it("runtime owns navigation outside compose and in preview mode", () => {
+        expect(identityDisclosureRuntimeOwnsNavigation({ composing: false })).toBe(true);
+        expect(
+            identityDisclosureRuntimeOwnsNavigation({ composing: true, composeCanvasMode: "preview" }),
+        ).toBe(true);
+        expect(
+            identityDisclosureRuntimeOwnsNavigation({ composing: true, composeCanvasMode: "configure" }),
+        ).toBe(false);
     });
 });

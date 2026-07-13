@@ -22,6 +22,7 @@ import IdentityComposeSectionCanvas from "@/components/admin/focusPanel/identity
 import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
 import { shouldRenderIdentityComposeCanvas } from "@/lib/adminV2/runtime/focusPanel/identity/identityComposeMode";
 import { builderPurposeForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/useSyncBuilderDisclosure";
+import { identityDisclosureCoordinationLevel } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import { backIdentityDisclosure } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import type { IdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
@@ -141,9 +142,9 @@ export default function HouseholdCard({
     };
 
     useEffect(() => {
-        if (!composingHouseholdSurface) return;
+        if (!composingHouseholdSurface || composer?.composeCanvasMode === "preview") return;
         resetDisclosure();
-    }, [composingHouseholdSurface, resetDisclosure]);
+    }, [composingHouseholdSurface, composer?.composeCanvasMode, resetDisclosure]);
 
 
     useEffect(() => {
@@ -279,8 +280,10 @@ export default function HouseholdCard({
 
     // ANY open state elevates as a centered Focus Card — Household never expands
     // height inline (no row reflow). Edit is the deepest state OF Focus.
-    const level: FocusPanelPerspectiveLevel =
-        editing ? "edit" : disclosure.depth !== "summary" ? "focused" : "base";
+    const level: FocusPanelPerspectiveLevel = identityDisclosureCoordinationLevel({
+        depth: disclosure.depth,
+        editing,
+    });
     useReportPerspective(coordination, "household", level);
     useDismissSignal(coordination, "household", () => {
         setEditingPersonId(null);

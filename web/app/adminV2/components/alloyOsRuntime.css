@@ -3410,6 +3410,9 @@ html[data-alloy-os-runtime-split="true"]
   flex-direction: column;
   gap: 0;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .fp-layout-surface--composing .fp-layout-field {
   position: relative;
@@ -4526,10 +4529,16 @@ html[data-alloy-os-runtime-split="true"]
   grid-template-columns: 1fr;
   gap: 0;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.alloy-os-child-truth__inline-row--pair {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
 }
 @media (min-width: 480px) {
   .alloy-os-child-truth__inline-row--pair {
-    grid-template-columns: 1fr 1fr;
     gap: 12px;
   }
 }
@@ -6225,6 +6234,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: grid;
   flex: 1 1 auto;
   gap: 4px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .identity-record-summary__title {
@@ -6274,6 +6285,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: grid;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .identity-field-grid__row {
@@ -6294,6 +6307,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-summary-columns__cell {
   min-width: 0;
+  max-width: 100%;
+  overflow: clip;
 }
 
 @media (max-width: 520px) {
@@ -6310,6 +6325,12 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-field-grid__row--pair {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 100%;
+}
+
+.identity-field-grid__cell--half {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .identity-field-value {

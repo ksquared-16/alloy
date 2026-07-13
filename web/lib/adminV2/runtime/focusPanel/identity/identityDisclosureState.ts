@@ -5,6 +5,7 @@
  */
 
 import type { IdentityDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import type { FocusPanelPerspectiveLevel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 
 export type IdentityDisclosureState = {
     depth: IdentityDisclosureDepth;
@@ -90,4 +91,28 @@ export function identityDisclosureDepthLabel(depth: IdentityDisclosureDepth): st
         case "evidence":
             return "Evidence";
     }
+}
+
+
+/**
+ * Map identity disclosure depth to Focus Panel grid coordination level.
+ *
+ * Context expands inside the card (Summary → Context) without grid elevation.
+ * Details and Evidence elevate into the centered Focus Card layer.
+ */
+export function identityDisclosureCoordinationLevel(args: {
+    depth: IdentityDisclosureDepth;
+    editing?: boolean;
+}): FocusPanelPerspectiveLevel {
+    if (args.editing) return "edit";
+    if (args.depth === "details" || args.depth === "evidence") return "focused";
+    return "base";
+}
+
+/** True when runtime disclosure (not compose canvas) owns in-card navigation. */
+export function identityDisclosureRuntimeOwnsNavigation(args: {
+    composing: boolean;
+    composeCanvasMode?: "configure" | "preview";
+}): boolean {
+    return !args.composing || args.composeCanvasMode === "preview";
 }

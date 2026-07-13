@@ -82,6 +82,7 @@ import IdentityComposeSectionCanvas from "@/components/admin/focusPanel/identity
 import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
 import { shouldRenderIdentityComposeCanvas } from "@/lib/adminV2/runtime/focusPanel/identity/identityComposeMode";
 import { builderPurposeForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/useSyncBuilderDisclosure";
+import { identityDisclosureCoordinationLevel } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import { backIdentityDisclosure } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
@@ -230,9 +231,9 @@ export default function ChildrenCard({
     };
 
     useEffect(() => {
-        if (!composingChildrenSurface) return;
+        if (!composingChildrenSurface || composer?.composeCanvasMode === "preview") return;
         resetDisclosure();
-    }, [composingChildrenSurface, resetDisclosure]);
+    }, [composingChildrenSurface, composer?.composeCanvasMode, resetDisclosure]);
 
 
     const backWithComposerSync = () => {
@@ -275,8 +276,10 @@ export default function ChildrenCard({
         }
     };
 
-    const level: FocusPanelPerspectiveLevel =
-        editing && focused ? "edit" : disclosure.depth !== "summary" ? "focused" : "base";
+    const level: FocusPanelPerspectiveLevel = identityDisclosureCoordinationLevel({
+        depth: disclosure.depth,
+        editing: Boolean(editing && focused),
+    });
     useReportPerspective(coordination, "children", level);
     useDismissSignal(coordination, "children", () => {
         setEditing(false);
