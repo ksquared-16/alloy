@@ -1,10 +1,11 @@
 /**
  * Process-derived transition options for outcome automation editor.
  *
- * Derives outgoing transitions from the current builder stage — never hardcoded stage lists.
+ * Derives outgoing transitions from configured edges — never hardcoded stage lists.
  */
 
-import { resolveCanonicalTransitionOptions } from "@/lib/lifecycle/resolveCanonicalWorkTemplateActionOptions";
+import { resolveOutgoingProcessTransitions } from "@/lib/lifecycle/resolveOutgoingProcessTransitions";
+import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 export type StageOutcomeTransitionOption = {
@@ -15,25 +16,30 @@ export type StageOutcomeTransitionOption = {
 };
 
 export function resolveStageOutcomeTransitionOptions(input: {
-    processStages: unknown;
     currentStageKey: string;
+    currentStageLabel?: string;
+    stageOperatingPlan?: StageOperatingPlanV1 | null;
+    processTracks?: unknown;
+    processStages?: ReadonlyArray<{ key: string; label: string }>;
+    /** @deprecated Legacy callers pass all process stages — ignored except for label lookup. */
+    processStagesLegacy?: unknown;
 }): StageOutcomeTransitionOption[] {
-    const canonical = resolveCanonicalTransitionOptions({
-        processTransitions: input.processStages,
-        stageKey: input.currentStageKey,
-    });
+    const processStages = input.processStages
+        ?? (Array.isArray(input.processStagesLegacy)
+            ? (input.processStagesLegacy as Array<{ key: string; label: string }>)
+            : []);
 
-    return canonical.map((row) => {
-        const targetStageKey = row.ref.startsWith("move_to_stage:")
-            ? row.ref.slice("move_to_stage:".length)
-            : row.ref;
-        return {
-            transition_ref: row.ref,
-            label: row.label,
-            target_stage_key: targetStageKey,
-            target_stage_label: row.label.replace(/^Move to /i, ""),
-        };
-    });
+    return resolveOutgoingProcessTransitions({
+        currentStageKey: input.currentStageKey,
+        stageOperatingPlan: input.stageOperatingPlan ?? null,
+        processTracks: input.processTracks ?? null,
+        processStages,
+    }).map((row) => ({
+        transition_ref: row.transition_ref,
+        label: row.label,
+        target_stage_key: row.target_stage_key,
+        target_stage_label: row.target_stage_label,
+    }));
 }
 
 /** Resolve legacy stage_key-only targets to a transition_ref when unambiguous. */
@@ -47,7 +53,7 @@ export function resolveLegacyStageKeyToTransitionRef(
     const matches = options.filter((opt) => opt.target_stage_key === key);
     if (matches.length === 1) return { transition_ref: matches[0]!.transition_ref, ambiguous: false };
     if (matches.length > 1) return { transition_ref: null, ambiguous: true };
-    return { transition_ref: `move_to_stage:${key}`, ambiguous: false };
+    return { transition_ref: null, ambiguous: false };
 }
 
 export function readTransitionRefFromTarget(
@@ -71,6 +77,13 @@ export function stageKeyFromTransitionRef(
     const match = options.find((opt) => opt.transition_ref === ref);
     if (match) return match.target_stage_key;
 
-    if (ref.startsWith("move_to_stage:")) return ref.slice("move_to_stage:".length).trim() || null;
+    if (ref.startsWith("move_to_stage:")) {
+        const parts = ref.slice("move_to_stage:".length).split(":");
+        return parts[0]?.trim() || null;
+    }
+    if (ref.startsWith("outcome_transition:")) {
+        const parts = ref.split(":");
+        return parts[2]?.trim() || null;
+    }
     return null;
 }

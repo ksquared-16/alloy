@@ -345,7 +345,7 @@ export const OUTCOME_AUTOMATION_OPTIONS: OutcomeAutomationEditorOption[] = [
     { value: "none", label: "No outcome behavior" },
     { value: "stay_in_stage", label: "Remain in current stage" },
     { value: "move_to_stage", label: "Move through transition" },
-    { value: "close_record", label: "Close lead" },
+    { value: "close_record", label: "Close record" },
     { value: "repeat_work", label: "Create follow-up work" },
     { value: "mark_needs_attention", label: "Create attention" },
 ];

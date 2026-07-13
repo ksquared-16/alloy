@@ -108,15 +108,51 @@ describe("outcome automation — work template and transitions", () => {
         { template_key: "collect_payment", label: "Collect Payment", required: true, due_policy: { kind: "same_day" }, owner_strategy: "record_owner" as const },
     ];
 
+    const billingPlan: ReturnType<typeof parseStageOperatingPlanV1> = parseStageOperatingPlanV1({
+        version: 1,
+        lifecycle_key: "billing",
+        stage_key: "payment_follow_up",
+        journey_segment: "family",
+        work_templates: workTemplates,
+        outcomes: [
+            { outcome_key: "unable_to_collect", label: "Escalate Review" },
+            { outcome_key: "promise_to_pay", label: "Promise to Pay" },
+        ],
+        outcome_rules: [
+            {
+                rule_key: "escalate",
+                when_outcome_key: "unable_to_collect",
+                targets: [
+                    {
+                        kind: "move_to_stage",
+                        stage_key: "escalated_review",
+                        transition_ref: "outcome_transition:unable_to_collect:escalated_review",
+                    },
+                ],
+            },
+        ],
+        attention_rules: [],
+    })!;
+
     const transitionOptions = resolveStageOutcomeTransitionOptions({
-        processStages: BILLING_STAGES,
         currentStageKey: "payment_follow_up",
+        stageOperatingPlan: billingPlan,
+        processStages: BILLING_STAGES,
     });
 
-    it("transition options derive from outgoing process stages", () => {
+    it("transition options derive from configured outgoing edges", () => {
         expect(transitionOptions.some((t) => t.target_stage_key === "escalated_review")).toBe(true);
-        expect(transitionOptions.every((t) => t.transition_ref.startsWith("move_to_stage:"))).toBe(true);
-        expect(transitionOptions.some((t) => t.label.includes("Escalated"))).toBe(true);
+        expect(transitionOptions.some((t) => t.label === "Escalate Review")).toBe(true);
+        expect(transitionOptions.every((t) => !t.label.toLowerCase().includes("waitlist"))).toBe(true);
+    });
+
+    it("no transitions when plan has no outgoing edges", () => {
+        const none = resolveStageOutcomeTransitionOptions({
+            currentStageKey: "payment_follow_up",
+            stageOperatingPlan: { ...billingPlan, outcome_rules: [] },
+            processStages: BILLING_STAGES,
+        });
+        expect(none).toHaveLength(0);
     });
 
     it("follow-up outcome selects stable work template ref", () => {
@@ -170,7 +206,7 @@ describe("outcome automation — work template and transitions", () => {
             )!,
         ];
         const draft = readOutcomeAutomationDraft("legacy_outcome", rules, { transitionOptions });
-        expect(draft.transition_ref).toBe("move_to_stage:escalated_review");
+        expect(draft.transition_ref).toBe("outcome_transition:unable_to_collect:escalated_review");
     });
 
     it("outcome summary reflects persisted behavior", () => {
@@ -229,8 +265,15 @@ describe("anti-hardcoding", () => {
 
     it("generic transition resolver has no enrollment process key", () => {
         const source = readFileSync(resolve(root, "lib/lifecycle/resolveStageOutcomeTransitionOptions.ts"), "utf8");
+        const outgoing = readFileSync(resolve(root, "lib/lifecycle/resolveOutgoingProcessTransitions.ts"), "utf8");
         expect(source).not.toContain("ENROLLMENT_PROCESS_KEY");
-        expect(source).not.toContain('"waitlist"');
+        expect(outgoing).not.toContain('"waitlist"');
+        expect(source).toContain("resolveOutgoingProcessTransitions");
+    });
+
+    it("canonical action resolver does not scan global action library", () => {
+        const source = readFileSync(resolve(root, "lib/lifecycle/resolveCanonicalWorkTemplateActionOptions.ts"), "utf8");
+        expect(source).not.toContain("ACTION_BUTTON_LIBRARY");
     });
 
     it("outcome automation uses process-derived transitions", () => {

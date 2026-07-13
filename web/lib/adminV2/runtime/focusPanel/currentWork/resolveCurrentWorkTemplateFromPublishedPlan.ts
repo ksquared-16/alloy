@@ -133,6 +133,7 @@ function checklistFromWorkTemplates(plan: StageOperatingPlanV1): CurrentWorkTemp
         label: template.label,
         required: template.required,
         scope: "record",
+        kind: "stage_work",
     }));
 }
 
@@ -152,6 +153,7 @@ function checklistFromFieldRules(fieldRules: LifecycleStageFieldRules | null): C
             label: resolveCurrentWorkFieldRuleDisplayLabel(ruleId),
             required: required.has(ruleId),
             scope: entityScope(binding?.entity ?? catalog?.entity),
+            kind: "requirement",
         });
     }
 
@@ -185,6 +187,9 @@ function buildActionRegistry(args: {
     recordHeaderActions?: ResolvedActionsBySlot | null;
     activeTemplate: StageWorkTemplateV1 | null;
     processStages?: Array<{ key: string; label: string }> | null;
+    stageKey?: string;
+    stageOperatingPlan?: StageOperatingPlanV1 | null;
+    processTracks?: unknown;
 }): CurrentWorkActionRefLookup {
     const registry = new Map<string, { key: string; label: string; description?: string | null }>();
 
@@ -224,7 +229,12 @@ function buildActionRegistry(args: {
             register(
                 row.transition_ref,
                 row.override_label?.trim()
-                    ?? transitionRefLabel(row.transition_ref, args.processStages ?? []),
+                    ?? transitionRefLabel(row.transition_ref, {
+                        currentStageKey: args.stageKey ?? "",
+                        stageOperatingPlan: args.stageOperatingPlan ?? null,
+                        processTracks: args.processTracks ?? null,
+                        processStages: args.processStages ?? [],
+                    }),
             );
         } else {
             register(row.action_ref, actionLabel(row.action_ref, row.override_label));
@@ -305,6 +315,8 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
         stageWorkRuntime,
         recordHeaderActions,
         processStages,
+        processTracks,
+        stageKey: publishedStageKey,
     } = input;
     const activeTemplate = activeWorkTemplate(operatingPlan, stageWorkRuntime);
     const workKey = activeTemplate?.template_key ?? stageWorkRuntime?.primary?.template_key ?? "unknown";
@@ -320,6 +332,9 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
         recordHeaderActions,
         activeTemplate,
         processStages,
+        stageKey: publishedStageKey,
+        stageOperatingPlan: operatingPlan,
+        processTracks: processTracks ?? null,
     });
 
     const templateConfig: CurrentWorkTemplateConfigOverlay = {

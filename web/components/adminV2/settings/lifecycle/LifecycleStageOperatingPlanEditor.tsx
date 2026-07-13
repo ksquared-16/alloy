@@ -18,6 +18,7 @@ import {
     resolveEffectivePrimaryWorkTemplate,
     setPrimaryWorkTemplate,
 } from "@/lib/lifecycle/stageOperatingPlanConvergence";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { STAGE_JOURNEY_SEGMENT_LABELS } from "@/lib/lifecycle/stageOperatingPlanUiLabels";
 import LifecycleStageAttentionRulesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionRulesEditor";
@@ -41,6 +42,7 @@ type Props = {
     actionCatalog?: StageActionCatalogV1 | null;
     configuredActions?: LifecycleConfiguredActionRow[];
     processStages?: Array<{ key: string; label: string }>;
+    processTracks?: ProcessTracksV1 | null;
 };
 
 function dueDaysFromPolicy(work: StageOperatingPlanEditorDraft["work_templates"][number]): number {
@@ -51,7 +53,7 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     LifecycleStageOperatingPlanEditorHandle,
     Props
 >(function LifecycleStageOperatingPlanEditor(
-    { stageKey, stageLabel, savedPlan, onDirtyChange, actionCatalog, configuredActions, processStages },
+    { stageKey, stageLabel, savedPlan, onDirtyChange, actionCatalog, configuredActions, processStages, processTracks },
     ref,
 ) {
     const [draft, setDraft] = useState<StageOperatingPlanEditorDraft>(() =>
@@ -92,6 +94,18 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     );
 
     const primaryWork = resolveEffectivePrimaryWorkTemplate({ work_templates: draft.work_templates });
+    const stageOperatingPlanForResolver: StageOperatingPlanV1 =
+        stageOperatingPlanDraftToPersisted(draft, stageKey, undefined, { validate: false })
+        ?? {
+            version: 1,
+            lifecycle_key: stageKey,
+            stage_key: stageKey,
+            journey_segment: draft.journey_segment,
+            work_templates: draft.work_templates,
+            outcomes: draft.outcomes,
+            outcome_rules: draft.outcome_rules,
+            attention_rules: draft.attention_rules,
+        };
 
     return (
         <div className="space-y-4" data-testid="lifecycle-stage-operating-plan-editor">
@@ -335,10 +349,13 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                 <LifecycleStageWorkTemplateActionsEditor
                                     work={work}
                                     stageKey={stageKey}
+                                    stageLabel={stageLabel}
                                     stageOutcomes={draft.outcomes}
                                     actionCatalog={actionCatalog ?? null}
                                     configuredActions={configuredActions ?? []}
                                     processStages={processStages ?? []}
+                                    stageOperatingPlan={stageOperatingPlanForResolver}
+                                    processTracks={processTracks ?? null}
                                     stageDefinition={{ journey_segment: draft.journey_segment }}
                                     onChange={(nextWork) =>
                                         setDraft((prev) => {
@@ -452,7 +469,10 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                                         rules={draft.outcome_rules}
                                                         workTemplates={draft.work_templates}
                                                         stageKey={stageKey}
+                                                        stageLabel={stageLabel}
                                                         processStages={processStages ?? []}
+                                                        stageOperatingPlan={stageOperatingPlanForResolver}
+                                                        processTracks={processTracks ?? null}
                                                         defaultRepeatTemplateKey={work.template_key}
                                                         completesWork={Boolean(outcome.completes_work ?? outcome.successful)}
                                                         onRulesChange={(outcome_rules) =>

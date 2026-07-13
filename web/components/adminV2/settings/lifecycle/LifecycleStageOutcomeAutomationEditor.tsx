@@ -1,6 +1,7 @@
 "use client";
 
-import type { StageOutcomeRuleV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
+import type { StageOutcomeRuleV1, StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     FOLLOW_UP_DUE_ANCHOR_OPTIONS,
     type StageFollowUpDueAnchor,
@@ -23,7 +24,10 @@ type Props = {
     rules: StageOutcomeRuleV1[];
     workTemplates: StageWorkTemplateV1[];
     stageKey: string;
+    stageLabel?: string;
     processStages?: Array<{ key: string; label: string }>;
+    stageOperatingPlan?: StageOperatingPlanV1 | null;
+    processTracks?: ProcessTracksV1 | null;
     defaultRepeatTemplateKey?: string | null;
     completesWork?: boolean;
     onRulesChange: (rules: StageOutcomeRuleV1[]) => void;
@@ -35,14 +39,20 @@ export default function LifecycleStageOutcomeAutomationEditor({
     rules,
     workTemplates,
     stageKey,
+    stageLabel,
     processStages = [],
+    stageOperatingPlan,
+    processTracks,
     defaultRepeatTemplateKey,
     completesWork,
     onRulesChange,
 }: Props) {
     const transitionOptions = resolveStageOutcomeTransitionOptions({
-        processStages,
         currentStageKey: stageKey,
+        currentStageLabel: stageLabel,
+        stageOperatingPlan: stageOperatingPlan ?? null,
+        processTracks: processTracks ?? null,
+        processStages,
     });
     const transitionLabelByRef = Object.fromEntries(
         transitionOptions.map((opt) => [opt.transition_ref, opt.label]),
