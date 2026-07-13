@@ -254,7 +254,8 @@ describe("household identity VM", () => {
         const secondary = vm.sections.find((s) => s.key === "other_parent_guardian");
         expect(secondary?.items.map((item) => item.title)).toEqual(["Michael Johnson"]);
         const members = vm.sections.find((s) => s.key === "household_members");
-        expect(members?.items.some((item) => item.title === "Sarah Johnson")).toBe(false);
+        // Additional Contacts may be disabled by default; primary must not appear there when present.
+        expect(members?.items.some((item) => item.title === "Sarah Johnson") ?? false).toBe(false);
     });
 
     it("children section renders configured child rows", () => {

@@ -38,6 +38,7 @@ import {
     enabledEvidenceSections,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM, IdentityEvidenceCollectionVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import { inferAvatarRoleFromSectionKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelIdentityAvatar";
 
 function initialsFor(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -210,6 +211,7 @@ function buildContactRecordVM(args: {
             imageUrl: args.contact.imageUrl ?? null,
             initials: args.contact.initials || initialsFor(args.contact.name),
             visible: showAvatar,
+            role: inferAvatarRoleFromSectionKey(args.groupKey),
         },
         badge: args.contact.roleLabel,
         summaryRows,
@@ -263,6 +265,7 @@ function buildChildRecordVM(args: {
             imageUrl: "imageUrl" in args.child ? args.child.imageUrl ?? null : null,
             initials: initialsFor(name),
             visible: showAvatar,
+            role: "child",
         },
         badge: args.groupKey === "children" ? "Child" : null,
         summaryRows,
@@ -415,6 +418,7 @@ export function buildEmployeeIdentityRecordVM(args: {
             imageUrl: args.employee.imageUrl ?? null,
             initials: initialsFor(args.employee.name),
             visible: true,
+            role: "contact",
         },
         badge: args.employee.badge ?? args.employee.title ?? "Employee",
         summaryRows,

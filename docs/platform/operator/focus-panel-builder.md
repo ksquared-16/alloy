@@ -121,3 +121,26 @@ Canonical field refs never render raw (`contact.first_name`). Labels resolve thr
 ### Opaque drill-in
 
 Shared elevated identity drill-in is fully opaque; non-elevated cards are obscured during composer edit mode.
+
+
+## Elevated compose containment and field picker
+
+When a card is elevated for composition:
+
+- Every nested composer layer uses a solid Alloy surface background (opaque).
+- The active surface owns its stacking context; dimmed canvas content stays behind.
+- Add Field pickers render in a body portal with collision-aware above/below
+  placement, viewport-clamped max-height, and internal scroll — so cards near the
+  bottom of the canvas do not clip the picker.
+
+## Builder / runtime placement
+
+Published Focus Panel layouts share one projection:
+
+- same column · same order · same width · same vertical gap token (`--alloy-os-fp-gap-y`)
+- same-column cards normalize into an ordered stack (column-range overlap aware)
+- `/work-unit` Summary projects published grids as column lanes when partitionable
+  so vertical rhythm matches content flow rather than empty CSS-grid tracks
+
+Builder continues to author on the grid track model (76px); runtime Preview on
+`/work-unit` uses the shared lanes resolver for flush stack parity.

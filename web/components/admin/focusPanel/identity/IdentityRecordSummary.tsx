@@ -4,6 +4,7 @@ import clsx from "clsx";
 import type { IdentityRecordVM, IdentityDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import { identityRowsForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityDisclosureVM";
 import IdentityAvatar from "@/components/admin/focusPanel/identity/IdentityAvatar";
+import type { IdentityAvatarSemanticRole } from "@/lib/adminV2/runtime/focusPanel/focusPanelIdentityAvatar";
 import IdentityFieldGrid from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
 import IdentityRecordDetails from "@/components/admin/focusPanel/identity/IdentityRecordDetails";
 
@@ -43,6 +44,8 @@ export default function IdentityRecordSummary({
                     name={record.title}
                     imageUrl={record.avatar?.imageUrl}
                     visible={record.avatar?.visible !== false}
+                    role={record.avatar?.role as IdentityAvatarSemanticRole | undefined}
+                    recordId={record.id}
                 />
                 <div className="identity-record-summary__title-block min-w-0">
                     <span className="identity-record-summary__title">
