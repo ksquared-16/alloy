@@ -5435,6 +5435,169 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
 }
 
+.alloy-os-currentwork__guidance-disclosure {
+  margin: 0;
+}
+
+.alloy-os-currentwork__guidance-disclosure > summary {
+  list-style: none;
+}
+
+.alloy-os-currentwork__guidance-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.alloy-os-currentwork__disclosure-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 78%, #64748b);
+  text-align: left;
+}
+
+.alloy-os-currentwork__disclosure-meta {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 48%, #64748b);
+}
+
+.alloy-os-currentwork__disclosure-overflow {
+  margin: 0;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+.alloy-os-currentwork__progress-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, #64748b);
+}
+
+.alloy-os-currentwork__primary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.alloy-os-currentwork__open-work {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__record-outcome--strong {
+  font-weight: 600;
+}
+
+.alloy-os-currentwork__quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alloy-os-currentwork__quick-action-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.alloy-os-currentwork__quick-chip {
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+}
+
+.alloy-os-currentwork__quick-chip:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__quick-more {
+  position: relative;
+}
+
+.alloy-os-currentwork__quick-more-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 10rem;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+
+.alloy-os-currentwork__quick-more-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-currentwork__quick-more-item:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+}
+
+.alloy-os-currentwork__linked-work {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.alloy-os-currentwork__linked-work-copy {
+  margin: 0;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+.alloy-os-currentwork__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .alloy-os-currentwork__guidance-label {
   margin: 0 0 4px;
   font-size: 0.65rem;
@@ -5445,7 +5608,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .alloy-os-currentwork__guidance-text {
-  margin: 0;
+  margin: 4px 0 0;
   font-size: 0.78rem;
   line-height: 1.45;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, #64748b);
