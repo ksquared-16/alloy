@@ -8,7 +8,7 @@
 
 **Merge-base vs origin/staging:** `1a4a85c98539289d3dc21a23465f9b5bc7f7c681`
 
-**Commit count (sprint range):** 68
+**Commit count (sprint range):** 69
 
 Grouped by phase (heuristic from commit messages; each commit listed once).
 
@@ -104,9 +104,11 @@ Grouped by phase (heuristic from commit messages; each commit listed once).
 - `5e84f2630 fix(identity): require operator resolution for plausible child matches`
 - `f64ca7693 feat(processing): integrate identity review and commit planning (D3)`
 
-## Closeout/docs (17)
+## Closeout/docs (19)
 
-- `743612fe3 docs(processing): refresh certified HEAD in commit inventory`
+- `1f86a0418 docs(processing): correct closeout entries in commit inventory`
+- `1e4e74288 docs(processing): pin certified HEAD to closeout commit`
+- `532bf2a65 docs(processing): refresh certified HEAD in commit inventory`
 - `e9cb694ed chore(processing): complete sprint closeout`
 - `6d8851f1c docs(processing): prepare promotion and rollback artifacts`
 - `95aab1853 docs(processing): finalize identity resolution sprint documentation`
