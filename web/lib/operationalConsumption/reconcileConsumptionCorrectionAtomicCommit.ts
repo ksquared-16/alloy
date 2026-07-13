@@ -69,10 +69,9 @@ export function toPlanJson(plan: ReconcileConsumptionPlan): Record<string, unkno
             explanation: o.explanation ?? {},
             charge: o.charge
                 ? {
-                      op: o.charge.op,
-                      draft_charge_id: o.charge.draftChargeId ?? null,
+                      billable_source_type: o.charge.billableSourceType,
                       billable_source_id: o.charge.billableSourceId,
-                      charge_type: o.charge.chargeType ?? "fee",
+                      charge_type: o.charge.chargeType,
                       charge_category: o.charge.chargeCategory,
                       currency_code: o.charge.currencyCode,
                       amount_cents: o.charge.amountCents,

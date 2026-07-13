@@ -9,8 +9,6 @@
  * invalid descriptor/probe.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
     assertFactStreamConforms,
@@ -19,6 +17,7 @@ import {
 import { ATTENDANCE_FACT_DESCRIPTOR } from "@/lib/childcareOperational/attendance/attendanceFactDescriptor";
 import { ATTENDANCE_ENTRY_TYPES } from "@/lib/childcareOperational/attendance/attendanceVocabulary";
 import type { OperationalFactEventEnvelope } from "@/lib/operationalFacts/factContract";
+import { readAttendanceMigrationsOrdered, scanAttendanceSchema } from "./attendanceSchemaScan";
 
 // Capture the envelope handed to emitEvent instead of writing workflow_events.
 const emitted: Record<string, unknown>[] = [];
@@ -31,11 +30,6 @@ vi.mock("@/lib/emitEvent", () => ({
 
 // Imported AFTER the mock so emitAttendanceEvent uses the mocked emitEvent.
 import { emitAttendanceEvent } from "@/lib/childcareOperational/attendance/attendanceEvents";
-
-const MIGRATION_PATH = join(
-    __dirname,
-    "../../../supabase/migrations/20260629120000_childcare_attendance_facts_p2.sql",
-);
 
 async function captureEnvelope(entryType: "original" | "correction" | "reversal"): Promise<OperationalFactEventEnvelope> {
     emitted.length = 0;
@@ -57,35 +51,30 @@ async function captureEnvelope(entryType: "original" | "correction" | "reversal"
 }
 
 describe("D2 — attendance fact stream conformance (reference conformer)", () => {
-    let migrationSql = "";
+    let attendanceMigrationFiles: string[] = [];
     let probes: FactStreamProbes;
 
     beforeAll(async () => {
-        migrationSql = readFileSync(MIGRATION_PATH, "utf8");
-
-        // Storage-half observations proven against the migration DDL.
-        const appendOnlyTrigger =
-            /prevent_child_attendance_events_mutation/.test(migrationSql) &&
-            /BEFORE UPDATE OR DELETE ON public\.child_attendance_events/.test(migrationSql);
-        const entryTypeCheck = /child_attendance_events_entry_type_check/.test(migrationSql);
-        const correctsSelfFk =
-            /corrects_event_id uuid REFERENCES public\.child_attendance_events/.test(migrationSql);
-        const noSelfRef = /child_attendance_events_no_self_reference/.test(migrationSql);
-        const orgSelectPolicy = /child_attendance_events_select_org/.test(migrationSql);
-        // No updated_at column (append-only): the DDL comment says created_* only.
-        const hasUpdatedAt = /\bupdated_at\b/.test(migrationSql);
+        // Storage-half observations resolved against the CUMULATIVE migration history
+        // (every migration touching child_attendance_events, chronological), not a
+        // single frozen file — so a LATER migration that weakens the invariants (drops
+        // the append-only trigger, adds updated_at) flips these facts and fails
+        // conformance. (Audit F3.)
+        const { concatenated, files } = readAttendanceMigrationsOrdered();
+        attendanceMigrationFiles = files;
+        const facts = scanAttendanceSchema(concatenated);
 
         probes = {
             attemptMutation: (op) => ({
-                rejected: appendOnlyTrigger,
+                rejected: facts.appendOnlyTrigger,
                 message: `${op} blocked by prevent_child_attendance_events_mutation`,
             }),
-            entryTypeVocabulary: entryTypeCheck ? ATTENDANCE_ENTRY_TYPES : [],
-            correctsSelfReference: correctsSelfFk,
-            noSelfReferenceGuard: noSelfRef,
-            orgScopedRls: orgSelectPolicy,
-            hasUpdatedAt,
-            hasSchemaVersionColumn: /\bschema_version\b/.test(migrationSql), // false — carried on the event
+            entryTypeVocabulary: facts.entryTypeCheck ? ATTENDANCE_ENTRY_TYPES : [],
+            correctsSelfReference: facts.correctsSelfFk,
+            noSelfReferenceGuard: facts.noSelfRef,
+            orgScopedRls: facts.orgSelectPolicy,
+            hasUpdatedAt: facts.hasUpdatedAt,
+            hasSchemaVersionColumn: false, // attendance carries schema_version on the event envelope
             emittedEvents: {
                 original: await captureEnvelope("original"),
                 correction: await captureEnvelope("correction"),
@@ -101,11 +90,15 @@ describe("D2 — attendance fact stream conformance (reference conformer)", () =
         expect(report.conforms).toBe(true);
     });
 
-    it("proves the storage half from the real migration DDL", () => {
-        expect(migrationSql).toContain("child_attendance_events is append-only");
-        expect(migrationSql).toContain("child_attendance_events_no_self_reference");
-        // Append-only stream has no updated_at column.
-        expect(/\bupdated_at\b/.test(migrationSql)).toBe(false);
+    it("proves the storage half from the CUMULATIVE migration history (not one file)", () => {
+        expect(attendanceMigrationFiles.length).toBeGreaterThan(0);
+        const facts = scanAttendanceSchema(readAttendanceMigrationsOrdered().concatenated);
+        expect(facts.appendOnlyTrigger).toBe(true);
+        expect(facts.noSelfRef).toBe(true);
+        expect(facts.entryTypeCheck).toBe(true);
+        expect(facts.correctsSelfFk).toBe(true);
+        // Append-only stream must have NO updated_at column anywhere in its history.
+        expect(facts.hasUpdatedAt).toBe(false);
     });
 
     it("emits a DISTINCT event type per entry type, each with correction identity", async () => {
@@ -203,5 +196,67 @@ describe("D2 — the harness has teeth (rejects a non-conforming stream)", () =>
         const report = await assertFactStreamConforms(ATTENDANCE_FACT_DESCRIPTOR, probes);
         expect(report.conforms).toBe(false);
         expect(report.checks.find((c) => c.property === "distinct_event_types")?.passed).toBe(false);
+    });
+});
+
+describe("F3 — cumulative-schema drift detection (a LATER migration that weakens attendance is caught)", () => {
+    // A faithful stand-in for the real p2 migration's invariant-creating statements.
+    const baseMigration = `-- 20260629120000_childcare_attendance_facts_p2.sql
+        CREATE TABLE public.child_attendance_events (
+            id uuid PRIMARY KEY,
+            corrects_event_id uuid REFERENCES public.child_attendance_events (id) ON DELETE RESTRICT,
+            CONSTRAINT child_attendance_events_entry_type_check CHECK (entry_type = ANY (ARRAY['original','correction','reversal'])),
+            CONSTRAINT child_attendance_events_no_self_reference CHECK (corrects_event_id <> id)
+        );
+        CREATE POLICY child_attendance_events_select_org ON public.child_attendance_events FOR SELECT USING (true);
+        DROP TRIGGER IF EXISTS trg_prevent_child_attendance_events_mutation ON public.child_attendance_events;
+        CREATE TRIGGER trg_prevent_child_attendance_events_mutation
+            BEFORE UPDATE OR DELETE ON public.child_attendance_events FOR EACH ROW EXECUTE FUNCTION public.prevent_child_attendance_events_mutation();`;
+
+    it("the current cumulative history is clean (baseline)", () => {
+        const facts = scanAttendanceSchema(baseMigration);
+        expect(facts.appendOnlyTrigger).toBe(true);
+        expect(facts.hasUpdatedAt).toBe(false);
+        expect(facts.noSelfRef).toBe(true);
+    });
+
+    it("detects a LATER migration that DROPS the append-only trigger", () => {
+        const drift = `${baseMigration}
+        -- 20260901000000_oops_make_attendance_mutable.sql
+        DROP TRIGGER trg_prevent_child_attendance_events_mutation ON public.child_attendance_events;`;
+        const facts = scanAttendanceSchema(drift);
+        expect(facts.appendOnlyTrigger).toBe(false);
+        // and conformance therefore fails
+        const probes: FactStreamProbes = {
+            attemptMutation: (op) => ({ rejected: facts.appendOnlyTrigger, message: op }),
+            entryTypeVocabulary: facts.entryTypeCheck ? ["original", "correction", "reversal"] : [],
+            correctsSelfReference: facts.correctsSelfFk,
+            noSelfReferenceGuard: facts.noSelfRef,
+            orgScopedRls: facts.orgSelectPolicy,
+            hasUpdatedAt: facts.hasUpdatedAt,
+            hasSchemaVersionColumn: false,
+            emittedEvents: {
+                original: { org_id: "o", event_type: "attendance_event_recorded", entity_type: "t", entity_id: "e", action_type: "a", payload: { schema_version: 1, entry_type: "original", corrects_event_id: null, customer_member_id: "m", service_date: "d" } },
+                correction: { org_id: "o", event_type: "attendance_event_corrected", entity_type: "t", entity_id: "e", action_type: "a", payload: { schema_version: 1, entry_type: "correction", corrects_event_id: null, customer_member_id: "m", service_date: "d" } },
+                reversal: { org_id: "o", event_type: "attendance_event_reversed", entity_type: "t", entity_id: "e", action_type: "a", payload: { schema_version: 1, entry_type: "reversal", corrects_event_id: null, customer_member_id: "m", service_date: "d" } },
+            },
+        };
+        return assertFactStreamConforms(ATTENDANCE_FACT_DESCRIPTOR, probes).then((report) => {
+            expect(report.conforms).toBe(false);
+            expect(report.checks.find((c) => c.property === "append_only")?.passed).toBe(false);
+        });
+    });
+
+    it("detects a LATER migration that ADDS updated_at (makes the stream mutable)", () => {
+        const drift = `${baseMigration}
+        -- 20260901000000_oops_add_updated_at.sql
+        ALTER TABLE public.child_attendance_events ADD COLUMN updated_at timestamptz;`;
+        const facts = scanAttendanceSchema(drift);
+        expect(facts.hasUpdatedAt).toBe(true);
+    });
+
+    it("a same-migration DROP-then-CREATE (re-create) is NOT drift", () => {
+        // The base itself uses DROP TRIGGER IF EXISTS ... ; CREATE TRIGGER ... — must read as present.
+        expect(scanAttendanceSchema(baseMigration).appendOnlyTrigger).toBe(true);
     });
 });

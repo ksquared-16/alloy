@@ -254,34 +254,36 @@ function emulateReconcileConsumptionCorrection(
                 (o) => o.org_id === orgId && o.resolution_key === reso,
             );
             const prevEvent = existingObl?.consumption_event_id ?? null;
+            // prevCharge is the LOCKED obligation's own draft charge — the create-vs-recalc
+            // anchor (mirrors the RPC's FOR UPDATE read; never a pre-lock plan hint). F1.
             const prevCharge = (existingObl?.draft_charge_id as string | null) ?? null;
             let newChargeId: string | null = prevCharge;
 
-            if (charge && typeof charge === "object") {
-                if (charge.op === "recalc") {
-                    newChargeId = (charge.draft_charge_id as string | null) ?? prevCharge;
-                    if (newChargeId) {
-                        const c = store.charges.find(
-                            (x) => x.id === newChargeId && x.org_id === orgId && x.status === "draft",
-                        );
-                        if (c) {
-                            c.amount_cents = charge.amount_cents ?? null;
-                            c.occurs_on = charge.occurs_on ?? null;
-                            c.billable_on = charge.billable_on ?? null;
-                            c.service_date = charge.service_date ?? null;
-                            c.metadata = (charge.metadata as Record<string, unknown>) ?? c.metadata;
-                            c.updated_by = actorUserId;
-                            c.updated_at = now;
-                        }
+            if (charge && typeof charge === "object" && charge.amount_cents != null) {
+                newChargeId = null;
+                // Recalc the obligation's live DRAFT charge in place; else create one.
+                if (prevCharge) {
+                    const c = store.charges.find(
+                        (x) => x.id === prevCharge && x.org_id === orgId && x.status === "draft",
+                    );
+                    if (c) {
+                        c.amount_cents = charge.amount_cents ?? null;
+                        c.occurs_on = charge.occurs_on ?? null;
+                        c.billable_on = charge.billable_on ?? null;
+                        c.service_date = charge.service_date ?? null;
+                        c.metadata = (charge.metadata as Record<string, unknown>) ?? c.metadata;
+                        c.updated_at = now;
+                        newChargeId = prevCharge;
                     }
-                } else if (charge.op === "create") {
+                }
+                if (newChargeId == null) {
                     counters.charges = (counters.charges ?? 0) + 1;
                     const cid = `charges-${counters.charges}`;
                     store.charges.push({
                         id: cid,
                         org_id: orgId,
                         job_id: null,
-                        billable_source_type: "enrollment_agreement",
+                        billable_source_type: (charge.billable_source_type as string) ?? "enrollment_agreement",
                         billable_source_id: charge.billable_source_id ?? null,
                         charge_type: charge.charge_type ?? "fee",
                         charge_category: charge.charge_category ?? null,

@@ -175,27 +175,39 @@ BEGIN
         WHERE org_id = p_org_id AND resolution_key = v_reso
         FOR UPDATE;
 
-        -- Charge op (pre-resolved; the RPC does no pricing).
-        IF v_charge IS NOT NULL AND jsonb_typeof(v_charge) = 'object' THEN
-            IF (v_charge->>'op') = 'recalc' THEN
-                v_new_charge_id := COALESCE(NULLIF(v_charge->>'draft_charge_id','')::uuid, v_prev_charge);
-                IF v_new_charge_id IS NOT NULL THEN
-                    UPDATE charges SET
-                        amount_cents = (v_charge->>'amount_cents')::bigint,
-                        occurs_on    = NULLIF(v_charge->>'occurs_on','')::date,
-                        billable_on  = NULLIF(v_charge->>'billable_on','')::date,
-                        service_date = NULLIF(v_charge->>'service_date','')::date,
-                        metadata     = COALESCE(v_charge->'metadata', metadata)
-                    WHERE id = v_new_charge_id AND org_id = p_org_id AND status = 'draft';
+        -- Charge reconciliation is decided UNDER LOCK from the obligation's OWN
+        -- draft charge (v_prev_charge, read via the FOR UPDATE above) — never from a
+        -- pre-lock plan hint. This is the idempotency parity fix: recalc the live
+        -- DRAFT in place, else create one; concurrent same-lineage corrections
+        -- therefore converge (the 2nd sees the 1st's draft_charge_id and recalcs it)
+        -- and cannot orphan a duplicate draft. The plan carries only PRICED fields
+        -- (financials-owned via childcareChargeService); the RPC owns which charge
+        -- the reconciliation touches. No pricing here. (Audit F1/F2.)
+        IF v_charge IS NOT NULL AND jsonb_typeof(v_charge) = 'object'
+           AND NULLIF(v_charge->>'amount_cents','') IS NOT NULL THEN
+            v_new_charge_id := NULL;
+            IF v_prev_charge IS NOT NULL THEN
+                UPDATE charges SET
+                    amount_cents = (v_charge->>'amount_cents')::bigint,
+                    occurs_on    = NULLIF(v_charge->>'occurs_on','')::date,
+                    billable_on  = NULLIF(v_charge->>'billable_on','')::date,
+                    service_date = NULLIF(v_charge->>'service_date','')::date,
+                    metadata     = COALESCE(v_charge->'metadata', metadata)
+                WHERE id = v_prev_charge AND org_id = p_org_id AND status = 'draft';
+                IF FOUND THEN
+                    v_new_charge_id := v_prev_charge;
                 END IF;
-            ELSIF (v_charge->>'op') = 'create' THEN
+            END IF;
+            IF v_new_charge_id IS NULL THEN
                 INSERT INTO charges (
                     org_id, job_id, billable_source_type, billable_source_id,
                     charge_type, charge_category, status, currency_code, amount_cents,
                     service_date, occurs_on, billable_on, charge_template_id, service_id,
                     description, metadata
                 ) VALUES (
-                    p_org_id, NULL, 'enrollment_agreement', NULLIF(v_charge->>'billable_source_id','')::uuid,
+                    p_org_id, NULL,
+                    COALESCE(v_charge->>'billable_source_type','enrollment_agreement'),
+                    NULLIF(v_charge->>'billable_source_id','')::uuid,
                     COALESCE(v_charge->>'charge_type','fee'), v_charge->>'charge_category', 'draft',
                     COALESCE(v_charge->>'currency_code','USD'), (v_charge->>'amount_cents')::bigint,
                     NULLIF(v_charge->>'service_date','')::date, NULLIF(v_charge->>'occurs_on','')::date,

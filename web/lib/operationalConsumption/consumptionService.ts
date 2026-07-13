@@ -51,7 +51,7 @@ import { factAnchorSuffix, correctionLineageContext } from "@/lib/operationalCon
 import {
     reconcileConsumptionCorrection,
 } from "@/lib/operationalConsumption/reconcileConsumptionCorrectionAtomicCommit";
-import { buildDraftChargeRetirementIntent } from "@/lib/financials/childcareChargeService";
+import { buildDraftChargeRetirementIntent, buildChildcareDraftChargeFields } from "@/lib/financials/childcareChargeService";
 import type {
     ConsumptionCandidate,
     ConsumptionEventIntent,
@@ -1093,12 +1093,17 @@ async function loadObligationByResolutionKey(
     return (((data ?? []) as { draft_charge_id: string | null; amount_cents: number | null; billable_on: string | null }[])[0]) ?? null;
 }
 
-/** Build the pre-resolved draft-charge plan for one obligation (create vs recalc). No write. */
+/**
+ * Build the PRICED draft-charge fields for one obligation (financials-owned shape).
+ * No write, no create-vs-recalc decision here: which charge the reconciliation touches
+ * is decided by the RPC UNDER LOCK from the obligation's own draft_charge_id (audit F1).
+ * Charge semantics (the billable-source dimension, category, provenance metadata) are
+ * owned by childcareChargeService.buildChildcareDraftChargeFields (audit F2).
+ */
 async function buildChargePlanForObligation(
     supabase: SupabaseClient,
     orgId: string,
     obligation: ResolvedObligationIntent,
-    priorDraftChargeId: string | null,
     agreementId: string | null,
     today: string,
 ): Promise<ReconcileChargePlan | null> {
@@ -1124,31 +1129,7 @@ async function buildChargePlanForObligation(
     });
     const intent = cp.intent;
     if (!intent.eligible || intent.amountCents == null || intent.amountCents <= 0) return null;
-    const metadata = {
-        resolution_key: intent.resolutionKey,
-        charge_template_key: intent.templateKey,
-        gl_mapping_key: intent.glMappingKey,
-        responsibility_key: intent.responsibilityKey,
-        review_required: intent.reviewRequired,
-        lifecycle_status: intent.lifecycleStatus,
-        source: "charge_template",
-    };
-    return {
-        op: priorDraftChargeId ? "recalc" : "create",
-        draftChargeId: priorDraftChargeId ?? null,
-        billableSourceId: agreementId,
-        chargeType: "fee",
-        chargeCategory: intent.chargeCategory,
-        currencyCode: intent.currencyCode,
-        amountCents: intent.amountCents,
-        serviceDate: intent.occursOn,
-        occursOn: intent.occursOn,
-        billableOn: intent.billableOn,
-        chargeTemplateId: intent.templateId,
-        serviceId: intent.serviceId,
-        description: intent.templateKey,
-        metadata,
-    };
+    return buildChildcareDraftChargeFields(intent, agreementId);
 }
 
 /** Build the full reconciliation plan (correction event + reparent/supersede/retire). No write. */
@@ -1165,9 +1146,9 @@ async function buildReconcilePlan(
     const newKeys = new Set<string>();
     for (const o of preview.resolution.obligations) {
         if (o.resolutionKey) newKeys.add(o.resolutionKey);
-        // Decide create-vs-recalc + drift against the LIVE obligation (global by key).
+        // Drift flag only (create-vs-recalc is decided by the RPC under lock, F1).
         const existing = o.resolutionKey ? await loadObligationByResolutionKey(supabase, orgId, o.resolutionKey) : null;
-        const charge = await buildChargePlanForObligation(supabase, orgId, o, existing?.draft_charge_id ?? null, agreementId, today);
+        const charge = await buildChargePlanForObligation(supabase, orgId, o, agreementId, today);
         const stale = existing != null && (existing.amount_cents !== o.amountCents || existing.billable_on !== o.billableOn);
         newObligations.push({
             resolutionKey: o.resolutionKey,

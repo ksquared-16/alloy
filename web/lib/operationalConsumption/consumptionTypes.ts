@@ -319,12 +319,18 @@ export type ConsumptionSupersededResult = {
     priorConsumptionEventId: string | null;
 };
 
-/** Pre-resolved draft-charge intent carried in the reconciliation plan (no pricing in the RPC). */
+/**
+ * The priced childcare draft-charge FIELDS carried in the reconciliation plan.
+ * Financials-owned (built by childcareChargeService.buildChildcareDraftChargeFields
+ * from the charge-template preview). Deliberately carries NO create/recalc `op` and
+ * NO `draftChargeId`: which charge the reconciliation touches (recalc the live draft
+ * vs create) is decided by the RPC UNDER LOCK from the obligation's own
+ * draft_charge_id — never from a pre-lock plan hint (audit F1/F2). No pricing in the RPC.
+ */
 export type ReconcileChargePlan = {
-    op: "create" | "recalc";
-    draftChargeId?: string | null;
+    billableSourceType: string;
     billableSourceId: string | null;
-    chargeType?: string;
+    chargeType: string;
     chargeCategory: string | null;
     currencyCode: string;
     amountCents: number | null;
