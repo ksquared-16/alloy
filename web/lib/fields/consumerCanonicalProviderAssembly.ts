@@ -11,6 +11,7 @@ import {
     publishableQueueRowRefKeys,
 } from "@/lib/fields/canonicalDataProviderRegistry";
 import type { CanonicalDataConsumerSurface, CanonicalDataProvider, CanonicalDataProviderFilter } from "@/lib/fields/canonicalDataProviderModel";
+import { filterProvidersByConsumerCapability } from "@/lib/fields/capabilityProviderParity";
 import { consumerSupportsProviderInPicker } from "@/lib/fields/consumerProviderCapabilities";
 import { dedupeCanonicalPickerProviders } from "@/lib/fields/canonicalProviderDedup";
 import {
@@ -97,9 +98,14 @@ function assembleConsumerProviders(
         isWaitlist: filter.isWaitlist ?? false,
         includeLegacyOnly: filter.includeLegacyOnly ?? consumer !== "focus_panel",
     });
-    return dedupeCanonicalPickerProviders(
+    const assembled = dedupeCanonicalPickerProviders(
         mergePlatformCatalogProviders(base, filter, consumer),
         consumer,
+    );
+    return filterProvidersByConsumerCapability(
+        assembled,
+        consumer,
+        filter.tenantFieldDefinitions,
     );
 }
 

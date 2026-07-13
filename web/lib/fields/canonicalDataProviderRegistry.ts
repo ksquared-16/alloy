@@ -32,12 +32,11 @@ import {
     legacyQueueRowCompatibilityEntry,
 } from "@/lib/fields/queueRowLegacyCompatibility";
 import {
-    buildTenantLayoutCatalogFields,
+    isTenantLayoutFieldRenderable,
+    tenantFieldDefinitionToLayoutCatalogField,
     type TenantFieldDefinitionRow,
-    type TenantLayoutFieldSurface,
 } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { isChildcareOperatorPickerVisible } from "@/lib/fields/childcareFieldCatalogDoctrine";
-import { isWaitlistOnlyFieldKey } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 import {
     mergePersonChildRelationshipProviders,
     tenantPersonChildRelationshipProviders,
@@ -46,60 +45,53 @@ import {
 let cachedSeeds: CanonicalDataProvider[] | null = null;
 let cachedFormsSeeds: CanonicalDataProvider[] | null = null;
 
-function queueLayoutSurface(isWaitlist: boolean): TenantLayoutFieldSurface {
-    return isWaitlist ? "waitlist_queue_row" : "pipeline_queue_row";
-}
-
 function namespaceFromRefKey(refKey: string): string {
     const dot = refKey.indexOf(".");
     return dot >= 0 ? refKey.slice(0, dot) : "opportunity";
 }
 
-function tenantProviders(
-    defs: readonly TenantFieldDefinitionRow[],
-    isWaitlist: boolean,
-): CanonicalDataProvider[] {
+/**
+ * Tenant field_definitions → canonical providers.
+ * Catalog membership is renderability (not queue-surface allow). Consumer/surface
+ * capability filters decide Focus Panel vs Queue Row exposure later.
+ */
+function tenantProviders(defs: readonly TenantFieldDefinitionRow[]): CanonicalDataProvider[] {
     const relationshipTenant = tenantPersonChildRelationshipProviders(defs);
-    const surface = queueLayoutSurface(isWaitlist);
-    const layoutFields = buildTenantLayoutCatalogFields(defs, surface)
-        .filter((field) => {
-            const entity = namespaceFromRefKey(field.refKey);
-            const fieldKey = field.refKey.includes(".") ? field.refKey.slice(field.refKey.indexOf(".") + 1) : field.refKey;
-            const def = defs.find(
-                (d) =>
-                    `${d.entity_type}.${d.field_key}` === field.refKey
-                    || (d.entity_type === "customer_member" && `child.${d.field_key}` === field.refKey),
-            );
-            return isChildcareOperatorPickerVisible(entity === "child" ? "inquiry_child" : entity, fieldKey, {
-                is_system: def?.is_system,
-                config: def?.config ?? undefined,
-            });
-        })
-        .map((field) => {
-            const def = defs.find(
-                (d) =>
-                    `${d.entity_type}.${d.field_key}` === field.refKey
-                    || (d.entity_type === "customer_member" && `child.${d.field_key}` === field.refKey),
-            );
-            const categoryKey = def?.section_key?.trim() || undefined;
-            return {
+    const layoutFields: CanonicalDataProvider[] = [];
+    const seen = new Set<string>();
+    for (const def of defs) {
+        if (!isTenantLayoutFieldRenderable(def)) continue;
+        const field = tenantFieldDefinitionToLayoutCatalogField(def);
+        if (!field || seen.has(field.refKey)) continue;
+        const entity = namespaceFromRefKey(field.refKey);
+        const fieldKey = field.refKey.includes(".")
+            ? field.refKey.slice(field.refKey.indexOf(".") + 1)
+            : field.refKey;
+        if (!isChildcareOperatorPickerVisible(entity === "child" ? "inquiry_child" : entity, fieldKey, {
+            is_system: def.is_system,
+            config: def.config ?? undefined,
+        })) {
+            continue;
+        }
+        seen.add(field.refKey);
+        layoutFields.push({
             refKey: field.refKey,
             label: field.fieldLabel,
-            kind: "business_field" as const,
-            outputShape: "scalar" as const,
-            entityNamespace: namespaceFromRefKey(field.refKey),
-            categoryKey,
+            kind: "business_field",
+            outputShape: "scalar",
+            entityNamespace: entity,
+            categoryKey: def.section_key?.trim() || undefined,
             fieldType: field.fieldType,
-            isSystem: false,
+            isSystem: def.is_system === true,
             availability: { pipeline: true, waitlist: true },
             source: {
                 source: "field_definitions",
                 sourceModule: "web/lib/layout/tenantLayoutFieldPickerCatalog.ts",
             },
             resolverOwner: "web/lib/layout/tenantLayoutFieldPickerCatalog.ts",
-        };
         });
-    return [...relationshipTenant, ...layoutFields] as CanonicalDataProvider[];
+    }
+    return [...relationshipTenant, ...layoutFields];
 }
 
 function allSeedProviders(): CanonicalDataProvider[] {
@@ -179,11 +171,8 @@ export function buildCanonicalDataProviderCatalog(options?: {
         seen.set(provider.refKey, provider);
     }
     if (options?.tenantFieldDefinitions?.length) {
-        for (const provider of tenantProviders(options.tenantFieldDefinitions, isWaitlist)) {
+        for (const provider of tenantProviders(options.tenantFieldDefinitions)) {
             seen.set(provider.refKey, provider);
-        }
-        for (const provider of tenantProviders(options.tenantFieldDefinitions, !isWaitlist)) {
-            if (!seen.has(provider.refKey)) seen.set(provider.refKey, provider);
         }
     }
     return mergePersonChildRelationshipProviders([...seen.values()], options?.tenantFieldDefinitions).sort((a, b) => a.label.localeCompare(b.label));

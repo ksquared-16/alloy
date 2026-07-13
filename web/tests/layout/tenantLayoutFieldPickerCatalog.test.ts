@@ -128,6 +128,21 @@ describe("tenant layout field picker catalog", () => {
         expect(fields[0]?.fieldLabel).toBe("Dietary notes");
     });
 
+    it("FC-CM-1 gender seed is renderable but not a duplicate of native column blocking", () => {
+        const gender: TenantFieldDefinitionRow = {
+            entity_type: "customer_member",
+            field_key: "gender",
+            field_type: "select",
+            label: "Gender",
+            is_system: true,
+            is_active: true,
+            is_visible_in_drawer: true,
+            config: { option_set_key: "person_gender" },
+        };
+        expect(isTenantLayoutFieldRenderable(gender)).toBe(true);
+        expect(isTenantLayoutFieldAllowedOnSurface(gender, "child_drawer")).toBe(true);
+    });
+
     it("tenant custom queue field validates when added to layout", () => {
         const config = normalizeQueueRecordLayoutConfig(defaultLeadQueueLayoutV3());
         const col = config.columns[0]!;
