@@ -41,6 +41,9 @@ The freeze means:
 - **Implementation evidence may update certification and rollout records** (§5, §8, §19, §20) without
   silently modifying architectural meaning.
 
+The governing execution program derived from this plan (Platform Realization) is the
+[implementation program](./operational-expectations-implementation-program.md).
+
 > **Authority chain.** The [architecture closeout](./operational-expectations-architecture-closeout.md)
 > froze the capability; the [system design](../operational-expectations-system-design.md) resolved the
 > three open implementation questions at the design level (§A) and defined packages **P0–P8** (§14),
