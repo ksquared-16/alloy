@@ -16,6 +16,7 @@ import type {
     HouseholdEvidenceGroup,
 } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
 import type { ChildrenEvidenceChild } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { withHouseholdRoleMergedGroups } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
 import {
     generateDefaultPlacementsForGroup,
     identitySurfaceFromNestedConfig,
@@ -101,6 +102,7 @@ function buildRecordRows(args: {
             groupKey: args.groupKey,
             fieldRef: placement.fieldRef,
             editGroupKey: args.editGroupKey,
+            tier: args.purpose,
         });
         if (!fieldShouldRender(policy)) continue;
         const isMaskedChannel =
@@ -277,7 +279,9 @@ export function buildHouseholdIdentityCardVM(args: {
     canMutate?: boolean;
     maskedChannels?: boolean;
 }): IdentityCardVM {
-    const config = reconcileIdentityNestedConfig("household_surface", args.config);
+    const config = withHouseholdRoleMergedGroups(
+        reconcileIdentityNestedConfig("household_surface", args.config),
+    );
     const surfaceKey = "household_surface";
     const identityConfig = identitySurfaceFromNestedConfig(config);
     const sections = identityConfig.sections.flatMap((section) => {

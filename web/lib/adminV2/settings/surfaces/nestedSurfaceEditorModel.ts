@@ -57,6 +57,11 @@ import {
     type IdentityFieldTier,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 import {
+    fieldVisibilityForIdentityTier,
+    setFieldVisibilityForIdentityTier,
+    type IdentityFieldPolicyTier,
+} from "@/lib/adminV2/settings/surfaces/identityFieldPolicy";
+import {
     configurationPurposeFromTierArg,
     fieldKeysForConfigurationPurpose,
     normalizeIdentityFieldPlacements,
@@ -148,6 +153,8 @@ export type NestedSurfaceGroupConfig = {
     sectionSemantic?: string;
     /** Operator-chosen section label (custom sections); overrides the registry label. */
     sectionLabel?: string;
+    /** When true, Parent / Guardian template inheritance is disabled for this section. */
+    roleOverride?: boolean;
 };
 
 export type NestedSurfaceConfig = {
@@ -517,7 +524,11 @@ export function setFieldVisibilityInNestedGroup(
     groupKey: string,
     fieldKey: string,
     visibility: SurfaceFieldVisibility,
+    options?: { tier?: IdentityFieldPolicyTier },
 ): NestedSurfaceConfig {
+    if (options?.tier) {
+        return setFieldVisibilityForIdentityTier(config, groupKey, fieldKey, options.tier, visibility);
+    }
     return {
         ...config,
         groups: config.groups.map((g) =>
@@ -535,7 +546,13 @@ export function fieldVisibilityForNestedGroup(
     config: NestedSurfaceConfig,
     groupKey: string,
     fieldKey: string,
+    options?: { tier?: IdentityFieldPolicyTier },
 ): SurfaceFieldVisibility {
+    if (options?.tier) {
+        return fieldVisibilityForIdentityTier(config, groupKey, fieldKey, options.tier, () =>
+            defaultFieldVisibility(config.surfaceId, groupKey),
+        );
+    }
     const group = config.groups.find((g) => g.key === groupKey);
     const stored = group?.fieldPolicies?.[fieldKey];
     if (stored) return normalizeFieldVisibility(stored);
@@ -855,6 +872,20 @@ export function setNestedGroupEnabled(
     };
 }
 
+
+export function setNestedGroupSectionLabel(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    sectionLabel: string,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey ? { ...g, sectionLabel: sectionLabel.trim() || undefined } : g,
+        ),
+    };
+}
+
 /** Operator-facing label for a section group (custom section label wins over registry). */
 export function nestedGroupLabel(config: NestedSurfaceConfig, groupKey: string): string | null {
     const group = config.groups.find((g) => g.key === groupKey);
@@ -906,6 +937,7 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
             fieldModes: found.fieldModes ?? g.fieldModes,
             fieldPolicies,
             fieldLabels: found.fieldLabels ? { ...found.fieldLabels } : undefined,
+            roleOverride: found.roleOverride,
             fieldLayoutWidths: found.fieldLayoutWidths ? { ...found.fieldLayoutWidths } : undefined,
             fieldPlacements: found.fieldPlacements ? [...found.fieldPlacements] : undefined,
             fieldIcons: found.fieldIcons ? { ...found.fieldIcons } : undefined,

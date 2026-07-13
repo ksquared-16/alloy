@@ -420,11 +420,26 @@ export function resolveIdentityFieldPolicy(args: {
     groupKey: string;
     fieldRef: string;
     editGroupKey?: string;
+    tier?: "summary" | "context_facts" | "details";
+    skipGlobalPolicy?: boolean;
+    skipPlacementPolicy?: boolean;
 }): SurfaceFieldVisibility {
-    const { config, groupKey, fieldRef, editGroupKey } = args;
+    const { config, groupKey, fieldRef, editGroupKey, tier, skipGlobalPolicy, skipPlacementPolicy } = args;
     const group = config.groups.find((g) => g.key === groupKey);
-    const stored = group?.fieldPolicies?.[fieldRef];
-    if (stored) return normalizeFieldVisibility(stored);
+
+    if (tier && !skipPlacementPolicy) {
+        const tierPlacement = (group?.fieldPlacements ?? []).find(
+            (row) =>
+                row.fieldRef === fieldRef
+                && storageTierMatchesPurpose(normalizeIdentityStorageTier(row.tier), tier),
+        );
+        if (tierPlacement?.policy) return normalizeFieldVisibility(tierPlacement.policy);
+    }
+
+    if (!skipGlobalPolicy) {
+        const stored = group?.fieldPolicies?.[fieldRef];
+        if (stored) return normalizeFieldVisibility(stored);
+    }
 
     if (editGroupKey) {
         const editGroup = config.groups.find((g) => g.key === editGroupKey);
@@ -435,6 +450,14 @@ export function resolveIdentityFieldPolicy(args: {
                 || editLayers.details.includes(fieldRef)
             : false;
         if (editContainsField) {
+            if (tier && !skipPlacementPolicy) {
+                const editTierPlacement = (editGroup?.fieldPlacements ?? []).find(
+                    (row) =>
+                        row.fieldRef === fieldRef
+                        && storageTierMatchesPurpose(normalizeIdentityStorageTier(row.tier), tier),
+                );
+                if (editTierPlacement?.policy) return normalizeFieldVisibility(editTierPlacement.policy);
+            }
             const editPolicy = editGroup?.fieldPolicies?.[fieldRef];
             if (editPolicy) return normalizeFieldVisibility(editPolicy);
             if (config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID && editGroupKey === "contact_edit") {
@@ -450,8 +473,10 @@ export function resolveIdentityFieldPolicy(args: {
     const fromMode = fieldModeToPolicy(legacyMode);
     if (fromMode) return fromMode;
 
-    const placement = group?.fieldPlacements?.find((row) => row.fieldRef === fieldRef);
-    if (placement?.policy) return placement.policy;
+    if (!tier && !skipPlacementPolicy) {
+        const placement = group?.fieldPlacements?.find((row) => row.fieldRef === fieldRef);
+        if (placement?.policy) return placement.policy;
+    }
 
     if (config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID && groupKey === "contact_edit") return "editable";
     if (config.surfaceId === CHILDREN_SURFACE_CANONICAL_ID && groupKey === "child_edit") return "editable";

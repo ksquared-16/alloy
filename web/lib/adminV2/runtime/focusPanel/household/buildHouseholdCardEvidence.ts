@@ -267,6 +267,7 @@ function appendSecondaryParentFromRecord(
     if (primaryContact?.name && secondary.displayName === primaryContact.name) return;
 
     const personId = secondary.personId ?? `secondary:${secondary.displayName}`;
+    if (otherParentGuardianRows.some((row) => row.personId === personId)) return;
     otherParentGuardianRows.push({
         personId,
         name: secondary.displayName,
@@ -318,23 +319,13 @@ export function buildHouseholdCardEvidence(
     const pickupRows: HouseholdEvidenceContact[] = [];
     const billingRows: HouseholdEvidenceContact[] = [];
 
-    for (const row of familyRows) {
-        // Never duplicate the resolved primary person in any other group.
-        if (primaryPersonId && row.person_id === primaryPersonId) continue;
+    const assignedPersonIds = new Set<string>();
+    if (primaryPersonId) assignedPersonIds.add(primaryPersonId);
 
-        const drawerRow: DrawerHouseholdContactRow = {
-            person_id: row.person_id,
-            display_name: trimOrNull(row.name) ?? "Unnamed",
-            role_type: row.role_type,
-            role_label: formatDrawerHouseholdContactRoleLabel(row.role_type),
-            is_primary: false,
-            phone: trimOrNull(row.phone),
-            email: trimOrNull(row.email),
-            initials: personDrawerHouseholdInitials(trimOrNull(row.name) ?? "Unnamed"),
-        };
-        const evidence = toEvidenceContact(drawerRow);
-
-        switch (classifyContactBucket(row.role_type)) {
+    const assignContact = (evidence: HouseholdEvidenceContact, bucket: ContactBucket) => {
+        if (assignedPersonIds.has(evidence.personId)) return;
+        assignedPersonIds.add(evidence.personId);
+        switch (bucket) {
             case "emergency":
                 emergencyRows.push(evidence);
                 break;
@@ -351,9 +342,35 @@ export function buildHouseholdCardEvidence(
                 additionalRows.push(evidence);
                 break;
         }
+    };
+
+    for (const row of familyRows) {
+        // Never duplicate the resolved primary person in any other group.
+        if (primaryPersonId && row.person_id === primaryPersonId) continue;
+        if (assignedPersonIds.has(row.person_id)) continue;
+
+        const drawerRow: DrawerHouseholdContactRow = {
+            person_id: row.person_id,
+            display_name: trimOrNull(row.name) ?? "Unnamed",
+            role_type: row.role_type,
+            role_label: formatDrawerHouseholdContactRoleLabel(row.role_type),
+            is_primary: false,
+            phone: trimOrNull(row.phone),
+            email: trimOrNull(row.email),
+            initials: personDrawerHouseholdInitials(trimOrNull(row.name) ?? "Unnamed"),
+        };
+        const evidence = toEvidenceContact(drawerRow);
+
+        assignContact(evidence, classifyContactBucket(row.role_type));
     }
 
     appendSecondaryParentFromRecord(record, primaryPersonId, primaryContact, otherParentGuardianRows);
+    for (const contact of otherParentGuardianRows) assignedPersonIds.add(contact.personId);
+    additionalRows.splice(
+        0,
+        additionalRows.length,
+        ...additionalRows.filter((contact) => !assignedPersonIds.has(contact.personId)),
+    );
 
     const canonicalEmergency = buildEmergencyContactsEvidence({ context });
     if (canonicalEmergency.count > 0) {

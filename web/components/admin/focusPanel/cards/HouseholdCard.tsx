@@ -30,6 +30,11 @@ import {
     readHouseholdNestedConfigFromDoc,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
 import {
+    householdAuthoringGroupKey,
+    HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP,
+    isHouseholdParentGuardianRuntimeGroup,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
+import {
     applyHouseholdDisplayView,
     type HouseholdNestedDisplayView,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
@@ -256,6 +261,28 @@ export default function HouseholdCard({
         [householdIdentityVm.sections],
     );
 
+    const householdAuthoringSections = useMemo(
+        () => {
+            const runtimeSections = householdIdentityVm.sections.filter(
+                (section) =>
+                    !isHouseholdParentGuardianRuntimeGroup(section.key)
+                    && section.key !== "address",
+            );
+            return [
+                { key: HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP, label: "Parent / Guardian" },
+                ...runtimeSections.map((section) => ({ key: section.key, label: section.label })),
+            ];
+        },
+        [householdIdentityVm.sections],
+    );
+
+    const composeAuthoringGroupKey = householdAuthoringGroupKey(composeSelectedGroupKey);
+
+    const householdPreviewSectionKey =
+        composeAuthoringGroupKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
+            ? "primary_contact"
+            : composeSelectedGroupKey;
+
     const householdSectionRecord = (sectionKey: string): IdentityRecordVM | null => {
         const section = householdIdentityVm.sections.find((entry) => entry.key === sectionKey);
         return section?.items[0] ?? null;
@@ -326,19 +353,16 @@ export default function HouseholdCard({
                         </button>
                     );
                 }
-                if (purpose === "details" && composeSelectedRecord) {
+                if (purpose === "details") {
                     return (
                         <div className="alloy-os-card-nav">
                             <button
                                 type="button"
                                 className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                                onClick={() => {
-                                    composer.setSelectedIdentityId(null);
-                                    composer.setActiveConfigPurpose("context_facts");
-                                }}
+                                onClick={() => composer.setActiveConfigPurpose("context_facts")}
                                 data-household-compose-action="back-to-context"
                             >
-                                ← All contacts
+                                ← Context Facts
                             </button>
                             <button
                                 type="button"
@@ -349,18 +373,6 @@ export default function HouseholdCard({
                                 Evidence collections →
                             </button>
                         </div>
-                    );
-                }
-                if (purpose === "details") {
-                    return (
-                        <button
-                            type="button"
-                            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                            onClick={() => composer.setActiveConfigPurpose("context_facts")}
-                            data-household-compose-action="back-to-context"
-                        >
-                            ← Context Facts
-                        </button>
                     );
                 }
                 if (purpose === "context_facts") {
@@ -462,9 +474,15 @@ export default function HouseholdCard({
                 {purpose === "evidence" ? (
                     <div className="space-y-3" data-household-compose-evidence="true">
                         <HouseholdComposeSectionPicker
-                            sections={householdComposeSections}
-                            activeSectionKey={composeSelectedGroupKey}
-                            onSelectSection={selectHouseholdSectionForEvidence}
+                            sections={householdAuthoringSections}
+                            activeSectionKey={composeAuthoringGroupKey}
+                            onSelectSection={(sectionKey) => {
+                                const runtimeKey =
+                                    sectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
+                                        ? "primary_contact"
+                                        : sectionKey;
+                                selectHouseholdSectionForEvidence(runtimeKey);
+                            }}
                         />
                         <IdentityEvidenceCollectionsPanel
                             surfaceId={HOUSEHOLD_SURFACE_ID}
@@ -474,44 +492,43 @@ export default function HouseholdCard({
                         />
                     </div>
                 ) : purpose === "details" ? (
-                    composeSelectedRecord ? (
-                        <FocusedHouseholdPerson
-                            record={composeSelectedRecord}
-                            groupKey={composeSelectedGroupKey}
+                    <div className="space-y-4" data-household-compose-details="true">
+                        <HouseholdComposeSectionPicker
+                            sections={householdAuthoringSections}
+                            activeSectionKey={composeAuthoringGroupKey}
+                            onSelectSection={(sectionKey) => {
+                                const runtimeKey =
+                                    sectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
+                                        ? "primary_contact"
+                                        : sectionKey;
+                                selectHouseholdSectionForEvidence(runtimeKey);
+                            }}
                         />
-                    ) : (
-                        <HouseholdComposePersonPicker
-                            people={householdSelectablePeople}
-                            selectedId={composeSelectedIdentityId}
-                            onSelect={handleSelectIdentityForCompose}
-                            hint="Select a contact to configure Detail Fields"
+                        <IdentityComposeSectionCanvas
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={composeAuthoringGroupKey}
+                            record={householdSectionRecord(householdPreviewSectionKey)}
+                            purpose="details"
                         />
-                    )
+                    </div>
                 ) : purpose === "context_facts" ? (
                     <div className="space-y-4" data-household-compose-context="true">
-                        {householdComposeSections.map((section) => (
-                            <ComposableRegionShell
-                                key={section.key}
-                                as="section"
-                                surfaceId={HOUSEHOLD_SURFACE_ID}
-                                groupKey={section.key}
-                                label={section.label}
-                                className="alloy-os-household__group"
-                                dataAttrs={{ "data-household-evidence-group": section.key }}
-                            >
-                                <IdentityComposeSectionCanvas
-                                    surfaceId={HOUSEHOLD_SURFACE_ID}
-                                    groupKey={section.key}
-                                    record={householdSectionRecord(section.key)}
-                                    purpose="context_facts"
-                                />
-                            </ComposableRegionShell>
-                        ))}
-                        <HouseholdComposePersonPicker
-                            people={householdSelectablePeople}
-                            selectedId={composeSelectedIdentityId}
-                            onSelect={handleSelectIdentityForCompose}
-                            hint="Select a contact to configure Detail Fields"
+                        <HouseholdComposeSectionPicker
+                            sections={householdAuthoringSections}
+                            activeSectionKey={composeAuthoringGroupKey}
+                            onSelectSection={(sectionKey) => {
+                                const runtimeKey =
+                                    sectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
+                                        ? "primary_contact"
+                                        : sectionKey;
+                                selectHouseholdSectionForEvidence(runtimeKey);
+                            }}
+                        />
+                        <IdentityComposeSectionCanvas
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={composeAuthoringGroupKey}
+                            record={householdSectionRecord(householdPreviewSectionKey)}
+                            purpose="context_facts"
                         />
                     </div>
                 ) : (
