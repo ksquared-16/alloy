@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
@@ -29,6 +29,17 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | TypeScript canonical typecheck | **Complete** | Split build/full graphs; 8 GB heap; CI both jobs | `typescript-performance.md` |
 | Workspace orchestration | **Complete** | Repo dev entry coordination | PR #143 |
 | Platform simplification (legacy drawer) | **Complete** | Legacy drawer deleted; canonical surfaces | PR #144–#148 |
+
+---
+
+## Operational truth (two-ledger ontology)
+
+The frozen [Operational Expectations architecture](../operational-expectations-system-design.md) establishes **two authored ledgers** — the platform's authoritative operational truth. Both are append-only, actor-attributed, and **neither is derived from the other**; that non-derivability is precisely why each is a *capability* rather than a projection. Everything downstream (Judgment, Gap, Projection, Scheduling, Forecasting, Current Work, Billing, Communications) is **derived** and is therefore intentionally **not** listed here as a capability. Terminology is locked in the [glossary two-ledger map](../governance/glossary.md); Law 2 is in the [truth-flow doctrine](../core/operational-truth-flow-doctrine.md).
+
+| Capability | Status | Description | Notes |
+|------------|--------|-------------|-------|
+| Operational Facts (authored ledger — observed) | **Complete** | The **observed** operational truth ledger ("what IS"): append-only, effective-dated, corrected-by-reference facts. Realized today by the event→workflow spine (`workflow_events`, `emitEvent`, SELECT-only JWT). | Converged, not rebuilt — see [`operational-expectations-architecture-closeout.md` §3](../milestones/operational-expectations-architecture-closeout.md). Read seam = the correction-carrying Fact Contract |
+| Operational Expectations (authored ledger — intended) | **Planned** | The **intended** operational truth ledger ("what SHOULD / WILL be"): tuple ⟨Authority · Modality · Subject · Condition · Temporal Frame · [Beneficiary]⟩; closed five-modality set (required/prohibited/intended/committed/predicted). Twin substrate of Facts (bitemporal/lineage/replay). | Architecture **frozen**; implementation sequenced P1+ per the [engineering realization](../milestones/operational-expectations-engineering-realization.md). Not yet built — no runtime authoring path exists |
 
 ---
 

@@ -61,7 +61,58 @@ const BLOCKING_ON_CHANGED = new Set([
   "frontmatter-malformed",
   "frontmatter-missing",
   "superseded-missing-successor",
+  "retired-doctrine-term",
 ]);
+
+// --- Operational Expectations doctrine reconciliation guard (P0 / G-Reconciliation) ---
+// The frozen two-ledger ontology reserves "Expectation" for the AUTHORED Operational
+// Expectations ledger; the former derived "L3 Operational Expectations" layer is renamed
+// "Projection", and Law 2 reads "Projections are derived / Expectations are authored".
+// This guard is the standing CI form of G-Reconciliation's acceptance grep: no governed doc
+// may (re)assert the retired derived-Expectation doctrine. See
+// docs/platform/milestones/operational-expectations-doctrine-convergence.md (§4 retired usages).
+const RETIRED_DOCTRINE_PATTERNS = [
+  { re: /expectations are derived/i, label: '"Expectations are derived" (retired Law 2 wording)' },
+  { re: /L3 (Operational )?Expectations/, label: '"L3 (Operational) Expectations" (retired derived-layer label)' },
+  { re: /Operational Expectations \(derived\)/i, label: '"Operational Expectations (derived)" (retired label)' },
+  { re: /Intent\s*(?:→|->)\s*(?:Operational\s+)?Expectations/i, label: '"Intent → Expectations" (retired truth-flow axis)' },
+];
+
+// Frozen corpus + governance docs whose purpose is to RECORD the reconciliation (they quote the
+// retired terms as before-text, retired-usage warnings, or historical notes). They are exempt from
+// the guard; every other governed doc is scanned. Keep this list minimal and evidence-backed.
+const RECONCILIATION_RECORD_ALLOWLIST = new Set([
+  "docs/platform/operational-expectations-system-design.md",
+  "docs/platform/milestones/operational-expectations-doctrine-convergence.md",
+  "docs/platform/milestones/operational-expectations-architecture-closeout.md",
+  "docs/platform/milestones/operational-expectations-engineering-realization.md",
+  "docs/platform/milestones/operational-expectations-implementation-program.md",
+  "docs/platform/milestones/operational-expectations-p0-substrate-reconciliation.md",
+  "docs/platform/core/operational-truth-flow-doctrine.md",
+  "docs/platform/governance/glossary.md",
+]);
+
+export function scanRetiredDoctrine(relPath, text) {
+  if (!isGovernedPath(relPath)) return [];
+  if (RECONCILIATION_RECORD_ALLOWLIST.has(relPath)) return [];
+  const out = [];
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    for (const { re, label } of RETIRED_DOCTRINE_PATTERNS) {
+      if (re.test(lines[i])) {
+        out.push({
+          type: "retired-doctrine-term",
+          file: relPath,
+          message: `Retired Operational Expectations doctrine at line ${i + 1}: ${label}. Use "Projection" for derived state; "Expectation" is reserved for the authored ledger.`,
+          blocking: true,
+          meta: { line: i + 1 },
+        });
+        break;
+      }
+    }
+  }
+  return out;
+}
 
 const LINK_RE = /(?<!!)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -297,6 +348,8 @@ export function lintDocumentation(options = {}) {
         blocking: false,
       });
     }
+
+    violations.push(...scanRetiredDoctrine(relPath, text));
 
     for (const link of extractMarkdownLinks(text)) {
       const resolved = resolveLink(relPath, link.target, rootDir);
