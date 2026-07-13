@@ -39,12 +39,12 @@ describe.skipIf(!certSupabaseConfigured())("processing identity cert — Manual 
             orgId: CERT_ORG_A,
             actorId: CERT_USER_A_ADMIN,
             merged: {
-                first_name: "Brand",
-                last_name: "New",
+                first_name: `Brand${tag}`,
+                last_name: `New${tag}`,
                 email: `brand.new.${tag}@test.local`,
-                phone: "+15555550101",
-                child_first_name: "Baby",
-                child_last_name: "New",
+                phone: `+1555${String(tag).slice(-7)}`,
+                child_first_name: `Baby${tag}`,
+                child_last_name: `New${tag}`,
                 child_dob: "2022-05-05",
             },
             workUnitId: CERT_WU_A,
@@ -118,8 +118,8 @@ describe.skipIf(!certSupabaseConfigured())("processing identity cert — Manual 
                 first_name: "Existing",
                 last_name: "ParentA",
                 email: SHARED_EMAIL,
-                child_first_name: "NewChild",
-                child_last_name: "Cert",
+                child_first_name: `UniqueChild${tag}`,
+                child_last_name: `Cert${tag}`,
                 child_dob: "2021-01-01",
             },
             workUnitId: CERT_WU_A,
@@ -229,11 +229,11 @@ describe.skipIf(!certSupabaseConfigured())("processing identity cert — Manual 
             orgId: CERT_ORG_A,
             actorId: CERT_USER_A_ADMIN,
             merged: {
-                first_name: "Replay",
-                last_name: "Exec",
+                first_name: `Replay${tag}`,
+                last_name: `Exec${tag}`,
                 email: `replay.exec.${tag}@test.local`,
-                child_first_name: "Replay",
-                child_last_name: "Child",
+                child_first_name: `Replay${tag}`,
+                child_last_name: `Child${tag}`,
                 child_dob: "2018-01-01",
             },
             workUnitId: CERT_WU_A,
@@ -328,14 +328,15 @@ describe.skipIf(!certSupabaseConfigured())("processing identity cert — Public 
         const admin = createCertAdminClient();
         const before = await countOrgIdentityRecords(admin, CERT_ORG_A);
         const submissionId = crypto.randomUUID();
-        const uniqueEmail = `public.new.${Date.now()}@test.local`;
+        const tag = Date.now();
+        const uniqueEmail = `public.new.${tag}@test.local`;
         const intake = await ingestPublicFormThroughProcessing(admin, {
             orgId: CERT_ORG_A,
             submissionId,
             formDefinitionId: crypto.randomUUID(),
             intakeMeta: {
-                guardian: { first_name: "Public", last_name: "House", email: uniqueEmail },
-                child: { first_name: "Public", last_name: "Child", dob: "2020-02-02" },
+                guardian: { first_name: `Public${tag}`, last_name: `House${tag}`, email: uniqueEmail },
+                child: { first_name: `Public${tag}`, last_name: `Child${tag}`, dob: "2020-02-02" },
                 vertical_id: verticalId,
             },
             payload: { meta: { intake: {} }, values: { attachment_ref: "doc-123" } },

@@ -373,14 +373,60 @@ describe("D3 operator workflow (service)", () => {
         seedNewFamily(db);
         const { plan: v1 } = await buildPlan(d, { caseId: CASE });
         await approvePlan(d, { caseId: CASE, planId: v1.planId });
-        // change a decision so the derived plan differs materially, then rebuild
-        await recordResolutionDecision(d, { caseId: CASE, resolutionId: "res-l", decisionAction: "review_required" });
+        // Eligible revision: reuse an existing household id instead of creating — still plan-eligible.
+        await recordResolutionDecision(d, {
+            caseId: CASE,
+            resolutionId: "res-hh",
+            decisionAction: "link_existing",
+            selectedCandidateId: "existing-household-1",
+        });
         const { plan: v2 } = await buildPlan(d, { caseId: CASE });
         expect(v2.version).toBe(2);
         expect(v2.contentHash).not.toBe(v1.contentHash);
         // v1 approval invalidated by supersession
         const v1Approval = db.tables["processing_approvals"].find((a) => a.plan_id === v1.planId)!;
         expect(v1Approval.invalidated_at).not.toBeNull();
+    });
+
+    it("refuses to build a plan when no decision is actionable", async () => {
+        const db = new FakeSupabase();
+        db.seed("processing_resolutions", [
+            { id: "r1", org_id: ORG, case_id: CASE, generation_id: "g", subject_ref: "parent:0", subject_role: "parent", decision_action: "review_required", selected_candidate_id: null, candidates: [], provisional: {}, decided_by: "engine" },
+        ]);
+        await expect(buildPlan(deps(db, new Counter()), { caseId: CASE })).rejects.toMatchObject({ code: "identity_review_required" });
+    });
+
+    it("blocks create_new when a plausible child candidate exists without override", async () => {
+        const db = new FakeSupabase();
+        seedNewFamily(db);
+        const child = db.tables["processing_resolutions"].find((r) => r.id === "res-c")!;
+        child.candidates = [
+            {
+                subjectRef: "child:0",
+                entityType: "child",
+                recordId: "existing-child-1",
+                confidenceBand: "possible",
+                signals: [],
+                blockingConflicts: [],
+                explanation: "Same name in household",
+                resolverVersion: "test",
+            },
+        ];
+        child.decision_action = "create_new";
+        child.decided_by = "engine";
+        await expect(buildPlan(deps(db, new Counter()), { caseId: CASE })).rejects.toMatchObject({
+            code: "identity_review_required",
+        });
+        await recordResolutionDecision(deps(db, new Counter()), {
+            caseId: CASE,
+            resolutionId: "res-c",
+            decisionAction: "create_new",
+            createNewOverrideReason: "Confirmed sibling with same first name is a different child",
+        });
+        const { plan } = await buildPlan(deps(db, new Counter()), { caseId: CASE });
+        expect(plan.version).toBe(1);
+        const updated = db.tables["processing_resolutions"].find((r) => r.id === "res-c")!;
+        expect((updated.provisional as { create_new_override?: { reason: string } }).create_new_override?.reason).toContain("Confirmed sibling");
     });
 
     it("is idempotent: repeating execution with the same key does not double-commit", async () => {
@@ -397,13 +443,5 @@ describe("D3 operator workflow (service)", () => {
         expect(a2.attemptNo).toBe(a1.attemptNo); // replay of the same attempt, not a new one
         expect(counter.count("persons")).toBe(personsAfter); // no double-commit
         expect(db.tables["processing_commit_attempts"]).toHaveLength(1); // replay not re-persisted
-    });
-
-    it("refuses to build a plan when no decision is actionable", async () => {
-        const db = new FakeSupabase();
-        db.seed("processing_resolutions", [
-            { id: "r1", org_id: ORG, case_id: CASE, generation_id: "g", subject_ref: "parent:0", subject_role: "parent", decision_action: "review_required", selected_candidate_id: null, candidates: [], provisional: {} },
-        ]);
-        await expect(buildPlan(deps(db, new Counter()), { caseId: CASE })).rejects.toMatchObject({ code: "no_executable_operations" });
     });
 });

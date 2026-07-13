@@ -141,7 +141,8 @@ describe("B1b child classification", () => {
                 },
             ],
         });
-        expect(evaluation.confidence).toBe("no_match");
+        expect(evaluation.confidence).toBe("conflict");
+        expect(evaluation.blocking_conflicts).toContain("child_dob_mismatch");
     });
 });
 

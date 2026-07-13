@@ -47,13 +47,48 @@ export async function resolveUndecidedResolutions(deps: OperatorReviewDeps, case
         await listProcessingResolutionsByCase(deps.supabase, deps.orgId, caseId),
     );
     for (const r of resolutions) {
-        if (r.decision_action && r.decision_action !== "review_required") continue;
-        const action = r.selected_candidate_id && r.selected_candidate_id !== "none" ? "link_existing" : "create_new";
+        const plausible = (r.candidates ?? []).filter(
+            (c) => c.recordId && c.recordId !== "none" && c.recordId !== "ambiguous",
+        );
+        const conflicted =
+            r.decision_action === "reject" ||
+            (r.candidates ?? []).some(
+                (c) => c.confidenceBand === "conflicted" || (c.blockingConflicts?.length ?? 0) > 0,
+            );
+        // Cert harness never silently clears identity conflicts — operator (or a dedicated
+        // scenario) must resolve them. Product gate remains: conflicted ≠ auto-commit.
+        if (conflicted && r.decided_by !== "operator") continue;
+
+        const engineCreateWithMatch =
+            r.decision_action === "create_new" && r.decided_by !== "operator" && plausible.length > 0;
+        const engineAmbiguousLink =
+            (r.decision_action === "link_existing" || r.decision_action === "update_existing") &&
+            r.decided_by !== "operator" &&
+            plausible.some((c) => c.confidenceBand === "possible" || c.confidenceBand === "weak");
+        const undecided =
+            !r.decision_action ||
+            r.decision_action === "review_required" ||
+            engineCreateWithMatch ||
+            engineAmbiguousLink;
+
+        if (!undecided) continue;
+
+        const trustedSelected =
+            r.selected_candidate_id &&
+            r.selected_candidate_id !== "none" &&
+            r.selected_candidate_id !== "ambiguous";
+        const action = trustedSelected ? "link_existing" : "create_new";
         await recordResolutionDecision(deps, {
             resolutionId: r.id,
             caseId,
             decisionAction: action,
-            selectedCandidateId: r.selected_candidate_id,
+            selectedCandidateId: trustedSelected ? r.selected_candidate_id : null,
+            createNewOverrideReason:
+                action === "create_new" && plausible.length > 0
+                    ? "certification_harness_create_new_override"
+                    : null,
+            createNewOverrideReasonCode:
+                action === "create_new" && plausible.length > 0 ? "cert_harness_override" : null,
         });
     }
 }
