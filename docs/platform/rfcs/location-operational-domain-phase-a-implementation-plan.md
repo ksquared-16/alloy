@@ -424,3 +424,41 @@ Each PR: gate on `typecheck:build` + isolated-worktree regression diff; no schem
 ## 15. Non-goals (this planning phase)
 
 No production code, no schema, no migrations, no pushes. Documentation only. This plan sequences Phase A; Phases B–E are scoped in the RFC and will get their own plans after Phase A lands.
+
+---
+
+## 16. Implementation record (Phase A executed)
+
+**Status:** IMPLEMENTED and reconciled onto latest `origin/staging` `7f8c545e8`. Behavior-neutral except the two ratified A7 safety fixes + the two post-rebase review corrections below. No schema, no migrations, no UI, no consumer migration, no deletions.
+
+**Branch:** `phase-a/location-canonical-contracts` (rebased onto `7f8c545e8`; nine-workstream commit structure preserved + 3 post-rebase correction commits). Local only — not pushed.
+
+### Delivered contracts (actual paths)
+
+| WS | Public contract | Path |
+|----|-----------------|------|
+| A8 | `OperationalResolutionStatus`, warnings, `AppliedOperationalRule`, `mergeResolutionStatus`/`sortWarnings`/`sortAppliedRules` | `web/lib/location/operationalResolutionContracts.ts` |
+| A8 | `CanonicalLocation`/`CanonicalRoom`/`SiteScopeFilter`; `CanonicalProgram`(+availability); `TimezoneResolution`/`OperationalTimeContext`; capacity/ratio contract types | `web/lib/location/canonicalLocationModel.ts`, `web/lib/location/timezoneResolutionModel.ts`, `web/lib/programs/canonicalProgramModel.ts`, `web/lib/childcareOperational/capacity/capacityContractTypes.ts` |
+| A7 | deterministic tiebreak; `resolveLicensedCeiling`; `validateLicensedOverrideNotWeaker`; author-time guard | `web/lib/childcareOperational/config/resolveConfigRule.ts` (edit), `regulatoryCeiling.ts` (new), `capacityRules.ts` (edit), `configRuleAuthoringService.ts` (edit) |
+| A1 | `resolveLocationsForOrganization`/`resolveLocationsForUser`/`resolveSiteLocations`/`resolveLocationById`/`resolveLocationHierarchy`/`canonicalLocationDisplay`/`normalizeLocationRow` | `web/lib/location/canonicalLocationProvider.ts` |
+| A2 | `resolveProgramsForOrganization`/`resolveProgramsForLocation`/`resolveProgramByKey`/`findOrphanOfferingProgramKeys`; `loadProgramVocabulary` | `web/lib/programs/canonicalProgramProvider.ts`, `web/lib/programs/programLegacyCompatibility.ts` |
+| A3 | `resolveRoomsForLocation`/`resolveRoomById`/`resolveRoomsForProgram`/`toCanonicalRoom`; `KNOWN_ROOM_DIRECT_QUERY_OFFENDERS` | `web/lib/location/canonicalRoomProvider.ts`, `web/lib/location/roomConsumerConvergence.ts` |
+| A4 | `resolveLocationTimezone`/`resolveViewerTimezone`/`resolveRecipientTimezone`/`formatInLocationTz`/`dualTimeLabel`/`buildOperationalTimeContext` | `web/lib/location/timezoneResolution.ts` |
+| A6 | `resolveRatio`/`resolveMixedAgeRatio`/`resolveApplicableRatioRules` | `web/lib/childcareOperational/capacity/resolveRatio.ts` |
+| A5 | `resolveOperationalCapacity` | `web/lib/childcareOperational/capacity/resolveOperationalCapacity.ts` |
+
+### Deviations / decisions during implementation
+- **Providers are server-side** (accept a `SupabaseClient`) rather than wrapping the client-side `fetch()` readers (`fetchLocationProgramCategories`, `fetchOptionSetItemsBySetKey`) — they read the underlying tables directly, matching A1's shape.
+- **Program provider reads the `childcare_program_type` option set server-side** (via `programLegacyCompatibility.loadProgramVocabulary`) with a centralized `classroom_age_group` fallback; the client `fetch` readers converge in Phase C.
+- **DB query layer uses only mock-supported methods** (no `.or`); `is_active`/hierarchy applied in memory. **Post-rebase correction (A1):** the site-scope allow-list is now pushed into the query (`id ∈ sites`) for `resolveSiteLocations` so a scoped operator never fetches other sites into memory; `isInSiteScope` remains defense-in-depth. Org boundary is always at the query; room-inclusive callers narrow rooms by parent in memory (within-org, `locations` RLS is org/role-scoped; site-scope is app-layer by design, §21-4).
+- **Post-rebase correction (A5):** `availableNow = max(0, binding − committed − offered)` (ratified §8 formula). Offered subtracted when known; when unknown it is not invented — the result is the committed-only upper bound with an explicit `offered_occupancy_unknown` warning.
+- **Capacity/ratio explainability:** `resolveCapacityBreakdown` gained an additive `licensedBoundByRuleId`; the capacity resolver surfaces `limitingFactor` + `appliedRules`.
+
+### Compatibility behavior
+- Everything additive except the two A7 in-place safety fixes (deterministic tiebreak — engages only on exact ties; licensing clamp — changes results only where an override currently weakens a licensing limit) and the two post-rebase corrections. `resolveConfigRule` signature preserved (financials `resolveRate.ts` co-consumer green). Legacy readers untouched; no consumer migrated.
+
+### Test coverage & exit gate
+- Dedicated tests per workstream (contracts 12; A7 config incl. author-time licensing 14; A1 20; A2 10; A3 9; A4 12 incl. DST; A6 10; A5 10; A9 cross-provider cert). **Focused certification suite: 222 tests green across 22 files** (providers + config/capacity/expectations/attendance + financials + timezone regressions). `typecheck:build` exits 0.
+- Pre-existing baseline-red `operationalConfigurationV1Batch0.test.ts` (1 failure) is **byte-identical to staging and reads only `settings/locations/*.tsx` sources** — Phase A touched no components/app source; classified pre-existing, unchanged by staging, unaffected by Phase A.
+
+**Exit status: Phase A IMPLEMENTED and CERTIFIED on `origin/staging` `7f8c545e8`** (post-rebase gate green; scope confirmed contracts-only).

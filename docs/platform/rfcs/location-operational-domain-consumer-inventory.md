@@ -348,3 +348,27 @@ Every consumer must eventually certify **all five**:
 ## 13. Non-goals (this phase)
 
 No implementation, no runtime code, no migrations, no schema, no pushes. Documentation only. This inventory freezes the surface; Phases B–E consumer migration executes against it after Phase A lands the contracts.
+
+---
+
+## 14. Phase A implementation update (canonical providers now available)
+
+Phase A (Canonical Contracts) is implemented on `origin/staging` `7f8c545e8` (branch `phase-a/location-canonical-contracts`, local). The migration targets referenced throughout §2–§9 now EXIST as concrete modules. **No consumer was migrated** — the read matrix (§3) is unchanged; every consumer migration remains assigned to Phase C (bulk) / D (capacity) / E (legacy removal).
+
+**Canonical provider paths now available (Phase C/D migration targets):**
+
+| Provider | Module | Entry points |
+|---|---|---|
+| Location | `web/lib/location/canonicalLocationProvider.ts` | `resolveLocationsForOrganization` · `resolveLocationsForUser` · `resolveSiteLocations` · `resolveLocationById` · `resolveLocationHierarchy` · `canonicalLocationDisplay` |
+| Room | `web/lib/location/canonicalRoomProvider.ts` | `resolveRoomsForLocation` · `resolveRoomById` · `resolveRoomsForProgram` |
+| Program | `web/lib/programs/canonicalProgramProvider.ts` | `resolveProgramsForOrganization` · `resolveProgramsForLocation` · `resolveProgramByKey` · `findOrphanOfferingProgramKeys` |
+| Timezone | `web/lib/location/timezoneResolution.ts` | `resolveLocationTimezone` · `resolveViewerTimezone` · `resolveRecipientTimezone` · `formatInLocationTz` · `dualTimeLabel` |
+| Capacity | `web/lib/childcareOperational/capacity/resolveOperationalCapacity.ts` | `resolveOperationalCapacity` |
+| Ratio | `web/lib/childcareOperational/capacity/resolveRatio.ts` | `resolveRatio` / `resolveMixedAgeRatio` |
+| Config (hardened) | `web/lib/childcareOperational/config/{resolveConfigRule,regulatoryCeiling}.ts` | deterministic tiebreak + licensing clamp/guard |
+
+**Room offender ledger** — the frozen Class-B burn-down list now lives in code at `web/lib/location/roomConsumerConvergence.ts` (`KNOWN_ROOM_DIRECT_QUERY_OFFENDERS`, **12 files**, matching §6 Class B). Deletion criterion unchanged: the list shrinks to zero as Phase C migrates each site; Phase E removes the direct reads.
+
+**Offender counts:** unchanged from §6. No new consumers were discovered during implementation. Program legacy dual-key handling is centralized in `web/lib/programs/programLegacyCompatibility.ts` (Class D — `classroom_age_group`, 4 sites, retire Phase E). The two post-rebase corrections (site-scope query push; `availableNow` offered subtraction) are provider-internal and add no consumer obligations.
+
+**Phase C/D/E assignments remain exactly as in §8.** No broad consumer migration entered Phase A.
