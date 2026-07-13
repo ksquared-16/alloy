@@ -42,6 +42,7 @@ import { resolveOpportunitySecondaryContactPerson } from "@/lib/layout/runtime/r
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { resolveHouseholdContactSectionKey } from "@/lib/adminV2/runtime/focusPanel/household/identityRelationshipSections";
 import {
     householdEmergencySectionEnabled,
     householdDrillInGroups,
@@ -319,6 +320,7 @@ export function buildHouseholdCardEvidence(
     const pickupRows: HouseholdEvidenceContact[] = [];
     const billingRows: HouseholdEvidenceContact[] = [];
 
+    const nestedConfig = options.nestedConfig ?? null;
     const assignedPersonIds = new Set<string>();
     if (primaryPersonId) assignedPersonIds.add(primaryPersonId);
 
@@ -361,7 +363,28 @@ export function buildHouseholdCardEvidence(
         };
         const evidence = toEvidenceContact(drawerRow);
 
-        assignContact(evidence, classifyContactBucket(row.role_type));
+        const sectionKey = nestedConfig
+            ? resolveHouseholdContactSectionKey({
+                  config: nestedConfig,
+                  roleType: row.role_type,
+                  isPrimary: false,
+                  assignedPersonIds,
+                  personId: row.person_id,
+              })
+            : "";
+        const bucket: ContactBucket = sectionKey === "other_parent_guardian"
+            ? "other_parent_guardian"
+            : sectionKey === "emergency_contacts"
+                ? "emergency"
+                : sectionKey === "authorized_pickups"
+                    ? "pickup"
+                    : sectionKey === "billing_contact"
+                        ? "billing"
+                        : sectionKey === "household_members"
+                            ? "additional"
+                            : classifyContactBucket(row.role_type);
+        if (nestedConfig && !sectionKey) continue;
+        assignContact(evidence, bucket);
     }
 
     appendSecondaryParentFromRecord(record, primaryPersonId, primaryContact, otherParentGuardianRows);
@@ -391,8 +414,6 @@ export function buildHouseholdCardEvidence(
             });
         }
     }
-
-    const nestedConfig = options.nestedConfig ?? null;
 
     // Children rows — belonging-first; optional operational facts only when configured.
     const childFieldKeys = nestedConfig ? householdGroupFieldKeys(nestedConfig, "children") : [];

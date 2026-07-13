@@ -38,7 +38,7 @@ import {
     applyHouseholdDisplayView,
     type HouseholdNestedDisplayView,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
-import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { CHILDREN_SURFACE_ID, HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
 import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
@@ -301,6 +301,22 @@ export default function HouseholdCard({
         [householdIdentityVm.sections],
     );
 
+
+    const openChildrenSurfaceConfiguration = () => {
+        composer?.enterDrillIn("children", CHILDREN_SURFACE_ID);
+        composer?.setActiveConfigPurpose(composePurpose ?? "summary");
+    };
+
+    const handleAuthoringSectionSelect = (sectionKey: string) => {
+        if (sectionKey === "children" && (composePurpose ?? "summary") !== "summary") {
+            openChildrenSurfaceConfiguration();
+            return;
+        }
+        const runtimeKey =
+            sectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP ? "primary_contact" : sectionKey;
+        selectHouseholdSectionForEvidence(runtimeKey);
+    };
+
     const selectHouseholdSectionForEvidence = (sectionKey: string) => {
         composer?.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: sectionKey });
     };
@@ -476,13 +492,7 @@ export default function HouseholdCard({
                         <HouseholdComposeSectionPicker
                             sections={householdAuthoringSections}
                             activeSectionKey={composeAuthoringGroupKey}
-                            onSelectSection={(sectionKey) => {
-                                const runtimeKey =
-                                    sectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
-                                        ? "primary_contact"
-                                        : sectionKey;
-                                selectHouseholdSectionForEvidence(runtimeKey);
-                            }}
+                            onSelectSection={handleAuthoringSectionSelect}
                         />
                         <IdentityEvidenceCollectionsPanel
                             surfaceId={HOUSEHOLD_SURFACE_ID}
@@ -496,13 +506,7 @@ export default function HouseholdCard({
                         <HouseholdComposeSectionPicker
                             sections={householdAuthoringSections}
                             activeSectionKey={composeAuthoringGroupKey}
-                            onSelectSection={(sectionKey) => {
-                                const runtimeKey =
-                                    sectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
-                                        ? "primary_contact"
-                                        : sectionKey;
-                                selectHouseholdSectionForEvidence(runtimeKey);
-                            }}
+                            onSelectSection={handleAuthoringSectionSelect}
                         />
                         <IdentityComposeSectionCanvas
                             surfaceId={HOUSEHOLD_SURFACE_ID}
@@ -516,13 +520,7 @@ export default function HouseholdCard({
                         <HouseholdComposeSectionPicker
                             sections={householdAuthoringSections}
                             activeSectionKey={composeAuthoringGroupKey}
-                            onSelectSection={(sectionKey) => {
-                                const runtimeKey =
-                                    sectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
-                                        ? "primary_contact"
-                                        : sectionKey;
-                                selectHouseholdSectionForEvidence(runtimeKey);
-                            }}
+                            onSelectSection={handleAuthoringSectionSelect}
                         />
                         <IdentityComposeSectionCanvas
                             surfaceId={HOUSEHOLD_SURFACE_ID}
