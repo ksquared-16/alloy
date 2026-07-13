@@ -220,7 +220,12 @@ describe("Current Work operational surface", () => {
             "add_child",
             "send_form",
         ]);
-        expect(vm.surface.alternatePaths.map((a) => a.key)).toEqual(["close_lead"]);
+        // Other Transitions are process-owned outgoing edges (not WT alternate_paths).
+        expect(vm.surface.alternatePaths.length).toBeGreaterThan(0);
+        expect(vm.surface.alternatePaths.every((a) => a.handlerKey === "process_stage_transition")).toBe(
+            true,
+        );
+        expect(vm.surface.alternatePaths.map((a) => a.key)).not.toContain("close_lead");
     });
 
     it("builds billing current work from published operating plan configuration", () => {
@@ -242,7 +247,10 @@ describe("Current Work operational surface", () => {
             "send_email",
             "adjust_invoice",
         ]);
-        expect(vm.surface.alternatePaths.map((a) => a.key)).toEqual(["waive_fee", "escalate_to_director"]);
+        // Billing fixtures without process edges expose no Other Transitions from WT alternate_paths.
+        expect(vm.surface.alternatePaths).toEqual([]);
+        expect(vm.surface.supportingActions.map((a) => a.key)).not.toContain("schedule_tour");
+        expect(vm.surface.supportingActions.map((a) => a.key)).not.toContain("add_child");
     });
 
     it("preserves stage runtime checklist fallback when no published overlay exists", () => {
@@ -268,11 +276,8 @@ describe("Current Work operational surface", () => {
             "adjust_invoice",
         ]);
         expect(resolved.templateConfig.helpful_actions_explicit).toBe(true);
-        expect(
-            resolved.templateConfig.alternate_paths?.map((a) =>
-                "action_ref" in a ? a.action_ref : a.transition_ref,
-            ),
-        ).toEqual(["waive_fee", "escalate_to_director"]);
+        // Runtime Other Transitions come from process edges; WT alternate_paths are not the source.
+        expect(resolved.templateConfig.alternate_paths ?? []).toEqual([]);
     });
 
     it("supports explicit template overlay for fixture-only billing checklist extensions", () => {
@@ -427,6 +432,7 @@ describe("Current Work operational surface", () => {
             }),
             showOutcomeCompletion: true,
             primaryActionLabel: "Record outcome",
+            allowedActionKeys: new Set(["close_lead", "schedule_tour"]),
         });
 
         expect(classified.alternatePaths.map((a) => a.key)).toEqual(["close_lead"]);
@@ -563,7 +569,10 @@ describe("Current Work operational surface", () => {
             }),
         });
 
-        expect(vm.alternatePaths.map((action) => action.key)).toEqual(["close_lead"]);
+        expect(vm.alternatePaths.every((action) => action.handlerKey === "process_stage_transition")).toBe(
+            true,
+        );
+        expect(vm.alternatePaths.map((a) => a.key)).not.toContain("close_lead");
         expect(vm.supportingActions.map((a) => a.key)).not.toContain("update_enrollment_status");
     });
 
@@ -602,7 +611,8 @@ describe("Current Work operational surface", () => {
         expect(cardSource).not.toMatch(/\bclose_lead\b/);
         expect(cardSource).not.toMatch(/\bschedule_tour\b/);
         expect(cardSource).not.toMatch(/\bcontact_family\b/);
-        expect(cardSource).not.toMatch(/Open work/);
+        expect(cardSource).not.toMatch(/Open work →/);
+        expect(cardSource).toMatch(/Open workspace/);
     });
 
     it("does not hardcode helpful actions or alternate paths in the surface builder", () => {

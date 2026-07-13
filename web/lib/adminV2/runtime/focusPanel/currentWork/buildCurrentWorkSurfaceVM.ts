@@ -458,11 +458,12 @@ function otherTransitionsFromProcess(context: OperationalContext): CurrentWorkAc
     return [...byTarget.values()].map((row) => ({
         key: row.transition_ref,
         label: `Move to ${row.target_stage_label}`,
-        description: null,
+        description: `Transition to ${row.target_stage_label}`,
         category: "alternate_path" as const,
         placement: "current_work_alternate_paths" as const,
-        handlerKey: row.transition_ref,
-        actionRef: row.transition_ref,
+        handlerKey: "process_stage_transition",
+        /** Destination stage/status key for canonical transition preflight + PATCH. */
+        actionRef: row.target_stage_key,
         resolved: null,
     }));
 }

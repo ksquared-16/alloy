@@ -6660,3 +6660,199 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Current Work Focus workspace (full Focus Panel canvas replace) */
+.alloy-os-currentwork-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 0.75rem 1rem 1rem;
+  background: var(--alloy-os-surface, #fff);
+}
+.alloy-os-currentwork-workspace__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: inherit;
+  padding-bottom: 0.25rem;
+}
+.alloy-os-currentwork-workspace__back {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: var(--alloy-os-accent, #0f766e);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.15rem 0;
+}
+.alloy-os-currentwork-workspace__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--alloy-os-ink, #111827);
+}
+.alloy-os-currentwork-workspace__title:focus {
+  outline: 2px solid var(--alloy-os-accent, #0f766e);
+  outline-offset: 2px;
+}
+.alloy-os-currentwork-workspace__meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--alloy-os-muted, #4b5563);
+}
+.alloy-os-currentwork-workspace__progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+.alloy-os-currentwork-workspace__waiting ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+.alloy-os-currentwork-workspace__waiting-item,
+.alloy-os-currentwork-workspace__req-item,
+.alloy-os-currentwork-workspace__action-row {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 0.35rem 0;
+  font: inherit;
+}
+.alloy-os-currentwork-workspace__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.alloy-os-currentwork-workspace__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.alloy-os-currentwork-workspace__section-title {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-muted, #6b7280);
+}
+.alloy-os-currentwork-workspace__guidance {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--alloy-os-ink, #1f2937);
+  line-height: 1.45;
+}
+.alloy-os-currentwork-workspace__outcome-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.alloy-os-currentwork-workspace__outcome-pill {
+  border: 1px solid var(--alloy-os-border, #d1d5db);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.alloy-os-currentwork-workspace__req-list,
+.alloy-os-currentwork-workspace__action-list,
+.alloy-os-currentwork-workspace__activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.alloy-os-currentwork-workspace__req-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  border-bottom: 1px solid var(--alloy-os-border, #e5e7eb);
+}
+.alloy-os-currentwork-workspace__req-badge {
+  color: #b91c1c;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.alloy-os-currentwork-workspace__action-row {
+  width: 100%;
+  border-bottom: 1px solid var(--alloy-os-border, #e5e7eb);
+}
+.alloy-os-currentwork-workspace__action-row:hover {
+  color: var(--alloy-os-accent, #0f766e);
+}
+.alloy-os-currentwork-workspace__activity-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--alloy-os-border, #e5e7eb);
+}
+.alloy-os-currentwork-workspace__activity-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.alloy-os-currentwork-workspace__activity-detail,
+.alloy-os-currentwork-workspace__activity-time {
+  font-size: 0.75rem;
+  color: var(--alloy-os-muted, #6b7280);
+}
+.alloy-os-currentwork-workspace__activity-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+.alloy-os-currentwork-workspace__link {
+  border: 0;
+  background: transparent;
+  color: var(--alloy-os-accent, #0f766e);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.alloy-os-currentwork-workspace__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--alloy-os-border, #e5e7eb);
+  font-size: 0.75rem;
+  color: var(--alloy-os-muted, #6b7280);
+}
+.alloy-os-currentwork__summary-open-region {
+  cursor: pointer;
+  border-radius: 0.5rem;
+}
+.alloy-os-currentwork__summary-open-region:hover,
+.alloy-os-currentwork__summary-open-region:focus-visible {
+  outline: 2px solid var(--alloy-os-accent, #0f766e);
+  outline-offset: 2px;
+}
+.alloy-os-currentwork__more-launcher {
+  position: relative;
+}
+@media (max-width: 900px) {
+  .alloy-os-currentwork-workspace__progress-row,
+  .alloy-os-currentwork-workspace__columns {
+    grid-template-columns: 1fr;
+  }
+}
