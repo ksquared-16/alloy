@@ -41,9 +41,6 @@ import {
 } from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
 import { QUEUE_ROW_SURFACE_PUBLISHED_EVENT } from "@/lib/adminV2/settings/surfaces/queueRowSurfaceService";
 import { isLegacyArtifactProcessName } from "@/lib/admin/buildOperatorLifecycleLanding";
-import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
-import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
-import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
 import {
     resolveWorkViewCanonicalLocation,
     type WorkViewCanonicalLocation,
@@ -79,17 +76,19 @@ import {
     type WorkspaceNavMode,
 } from "@/lib/perf/workspaceNavGraph";
 import {
-    peekWorkUnitSurfaceConfigCache,
     putWorkUnitSurfaceConfigCache,
-    peekWorkUnitSurfaceQueueCache,
     putWorkUnitSurfaceQueueCache,
-    peekWorkUnitSurfaceSummariesCache,
     putWorkUnitSurfaceSummariesCache,
     invalidateWorkUnitSurfaceCachesForWorkUnit,
-    type WorkUnitSurfaceConfigCacheEntry,
     type WorkUnitViewModelCacheContext,
-    type WorkUnitViewModelCacheLaneState,
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
+import {
+    computeWorkUnitSurfaceInitialSeed,
+    resolveWorkUnitReadiness,
+    validatedBaseQueueKeyForUnit,
+    workUnitSurfaceQueueLane,
+    type WorkUnitSurfaceInitialSeed,
+} from "./workUnitSurfaceSeed";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
 import {
@@ -115,6 +114,7 @@ import {
     type QueueRowModel,
     type WorkUnitSurfaceIntents,
     type WorkUnitSurfaceModel,
+    type WorkUnitReadiness,
 } from "./types";
 import { mapQueueRowSurfaceToCompactConfig } from "./queueRowSurfaceConfig";
 import {
@@ -139,72 +139,6 @@ function classifyWorkspaceNavMode(slug: string): WorkspaceNavMode {
     return firstWorkspaceNavSincePageLoad ? "cold" : "warm";
 }
 
-// ── Trust Closure session cache (Commit 2): read-through seed + write-back ────────────────────
-// The queue-rows cache lane must key identically at read (mount seed) and write (rows effect):
-// base lane key + active Work View + selected site. `limit` is intentionally excluded — it is a
-// fetch-sizing detail, not a content dimension (a wider limit is a superset the SWR pass corrects).
-function workUnitSurfaceQueueLane(
-    fetchQueueKey: string | null,
-    workViewId: string | null | undefined,
-    selectedSiteId: string | null,
-): WorkUnitViewModelCacheLaneState {
-    return {
-        selectedQueueKey: fetchQueueKey,
-        recordFilterFingerprint: `view:${workViewId ?? "_"}|site:${selectedSiteId ?? "_"}`,
-    };
-}
-
-type WorkUnitSurfaceInitialSeed = {
-    config: WorkUnitSurfaceConfigCacheEntry | null;
-    configFresh: boolean;
-    summaries: QueueSummary[] | null;
-    queueResult: QueueItemsResult | null;
-};
-
-const EMPTY_SEED: WorkUnitSurfaceInitialSeed = {
-    config: null,
-    configFresh: false,
-    summaries: null,
-    queueResult: null,
-};
-
-/**
- * Synchronous mount seed for the PRV2 surface — the read side of the session cache. Runs once per
- * surface mount (guarded by a ref) so a return navigation renders the prior config + rows instantly
- * instead of re-running the config→layout→summaries→rows waterfall. Cold entry (no cached config)
- * returns the empty seed and the normal fetch path runs unchanged.
- */
-function computeWorkUnitSurfaceInitialSeed(args: {
-    cacheContext: WorkUnitViewModelCacheContext;
-    slugRoute: WorkUnitSlugRouteValue | null;
-    selectedSiteId: string | null;
-}): WorkUnitSurfaceInitialSeed {
-    const { cacheContext, slugRoute, selectedSiteId } = args;
-    if (!cacheContext.workUnitId || !cacheContext.departmentId) return EMPTY_SEED;
-
-    const configRead = peekWorkUnitSurfaceConfigCache(cacheContext);
-    const summaries = peekWorkUnitSurfaceSummariesCache(cacheContext, selectedSiteId)?.entry.summaries ?? null;
-    if (!configRead) return { ...EMPTY_SEED, summaries };
-
-    const cfg = configRead.entry;
-    const routeWorkViewId = slugRoute?.initialWorkViewId ?? null;
-    const runtimeCtx = resolveActiveWorkViewRuntimeContext({
-        departmentMetadata: cfg.deptMetadata,
-        workViewId: routeWorkViewId,
-        queueKey: routeWorkViewId ? null : slugRoute?.initialQueueKey ?? null,
-        queueDefinition: cfg.queueDefinition,
-    });
-    const fetchQueueKey = validatedBaseQueueKeyForUnit(runtimeCtx.queueKey, cfg.queueDefinition);
-    const queueResult = fetchQueueKey
-        ? peekWorkUnitSurfaceQueueCache({
-              context: cacheContext,
-              lane: workUnitSurfaceQueueLane(fetchQueueKey, runtimeCtx.workViewId, selectedSiteId),
-          })?.entry.queueResult ?? null
-        : null;
-
-    return { config: cfg, configFresh: configRead.fresh, summaries, queueResult };
-}
-
 /**
  * Resolve published Queue Row surface id from department lifecycle process.
  * Falls back to legacy pipeline id when catalog id cannot be derived.
@@ -216,19 +150,6 @@ function queueRowSurfaceIdForDepartment(departmentId: string | null, deptMetadat
         return queueRowSurfaceId(`${departmentId}:${process.id}`);
     }
     return "pipeline-queue-row";
-}
-
-/**
- * Validate a Work View's base lane against THIS work unit's queue definition. A department's
- * Work Views can bind lanes that exist on sibling work units; when the lane is absent here,
- * fall back to this unit's all-records lane — the server still applies the view's predicates
- * via `work_view_id`.
- */
-function validatedBaseQueueKeyForUnit(base: string | null, queueDefinition: unknown): string | null {
-    const bundle = queueDefinition != null ? tryLoadWorkUnitQueueDefinitionBundle(queueDefinition) : null;
-    if (!bundle) return base;
-    if (base && bundle.def.queues.some((q) => q.key === base)) return base;
-    return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def)) ?? base;
 }
 
 export type WorkUnitSurfaceRuntime = {
@@ -307,7 +228,8 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         }
         let cancelled = false;
         // Seeded-stale keeps the established surface visible during the silent revalidate (SWR); only
-        // a genuine cold establish drops the gate so the surface shows its establish state.
+        // a genuine cold establish (or a cross-host switch within a live mount) drops the gate so the
+        // new unit shows its establish state. The queue reveal gate is re-armed separately (below).
         if (!useSeed) {
             setConfigSettled(false);
             const surfaceId = queueRowSurfaceIdForDepartment(departmentId, null);
@@ -476,6 +398,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const [queueResult, setQueueResult] = useState<QueueItemsResult | null>(() => seed.queueResult);
     const [queueLoading, setQueueLoading] = useState(false);
     const [queueError, setQueueError] = useState<string | null>(null);
+    // "The first queue request for this surface has resolved (rows or error)." Seeded true on a
+    // return so the atomic-reveal gate is satisfied immediately; a background revalidate never
+    // clears it (it keys on settled-once, not `queueLoading`), so SWR cannot re-blank the surface.
+    const [queueSettledOnce, setQueueSettledOnce] = useState(() => seed.queueResult != null);
     const queueRequestSeq = useRef(0);
 
     const fetchQueueKey = useMemo(
@@ -529,7 +455,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 }
             })
             .finally(() => {
-                if (seq === queueRequestSeq.current) setQueueLoading(false);
+                if (seq === queueRequestSeq.current) {
+                    setQueueLoading(false);
+                    setQueueSettledOnce(true);
+                }
             });
     }, [
         workUnitId,
@@ -541,6 +470,22 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         queueRefreshNonce,
         cacheContext,
     ]);
+
+    // Cross-host switch within a live mount: re-arm the queue reveal gate so the destination unit
+    // reveals only once its OWN rows are present. A fresh mount / return navigation is seeded (the
+    // gate starts satisfied), never re-armed — the ref starts equal to the mount's work unit.
+    const queueGateWorkUnitRef = useRef(workUnitId);
+    useEffect(() => {
+        if (queueGateWorkUnitRef.current === workUnitId) return;
+        queueGateWorkUnitRef.current = workUnitId;
+        setQueueSettledOnce(false);
+    }, [workUnitId]);
+
+    // No resolvable queue lane (config settled but the unit exposes no queue key): nothing to wait
+    // for — satisfy the gate so the surface reveals its (empty) composition instead of hanging.
+    useEffect(() => {
+        if (configSettled && !fetchQueueKey) setQueueSettledOnce(true);
+    }, [configSettled, fetchQueueKey]);
 
     const rows = useMemo(() => {
         const base = queueResult ? queueRowModelsFromQueueItemsResult(queueResult) : [];
@@ -960,6 +905,36 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         [rightRailActions, displayVm?.workspace.stage_work_runtime, authCanMutate],
     );
 
+    // ── Atomic-reveal readiness (Trust Closure) ─────────────────────────────────────────────
+    // The primary composition includes the queue rows: `coldCompositionReady` requires the queue to
+    // have settled once, so cold entry holds ONE skeleton until header + pills + counts + rows are
+    // ready together (no region-by-region reveal), while a seeded return is ready on first render
+    // (queue seeded → `queueSettledOnce` true). A background SWR revalidate keeps `queueSettledOnce`
+    // true and `queueResult` non-null, so it never returns the surface to a loading boundary.
+    const readiness = useMemo<WorkUnitReadiness>(
+        () =>
+            resolveWorkUnitReadiness({
+                hasIdentity: slugRoute != null,
+                configSettled,
+                headerConfigLoaded,
+                hasHeaderPresentation: Boolean(headerPresentation),
+                queueSettledOnce,
+                rightRailSettled,
+                queueLoading,
+                openedFromCache: seed.config != null && seed.queueResult != null,
+            }),
+        [
+            slugRoute,
+            configSettled,
+            headerConfigLoaded,
+            headerPresentation,
+            queueSettledOnce,
+            rightRailSettled,
+            queueLoading,
+            seed,
+        ],
+    );
+
     // ── Resolved model ───────────────────────────────────────────────────────────────────
     const model = useMemo<WorkUnitSurfaceModel>(
         () => ({
@@ -981,20 +956,16 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             rightRailActions: filteredRightRailActions,
             departmentId,
             workUnitId,
-            // Above-fold identity + configured views resolved; queue carries its own state.
-            ready:
-                slugRoute != null &&
-                configSettled &&
-                headerConfigLoaded &&
-                Boolean(headerPresentation),
+            // Atomic reveal: the surface is ready only when its primary composition (incl. queue
+            // rows) is established. `ready` mirrors `readiness.coldCompositionReady` for the render mode.
+            ready: readiness.coldCompositionReady,
+            readiness,
         }),
         [
-            slugRoute,
             headerPresentation,
             headerConfig,
             processLabel,
             workViewLabel,
-            headerConfigLoaded,
             workViews,
             rows,
             totalCount,
@@ -1006,7 +977,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             filteredRightRailActions,
             departmentId,
             workUnitId,
-            configSettled,
+            readiness,
         ],
     );
 
@@ -1033,16 +1004,13 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     }, [slugRoute]);
 
     useEffect(() => {
-        if (model.ready && !queueLoading && queueResult != null) {
-            markWorkspaceNavSignal("coherent_content");
-        }
-    }, [model.ready, queueLoading, queueResult]);
+        // The atomic-reveal point: header + pills + counts + primary rows composed as one.
+        if (readiness.coldCompositionReady) markWorkspaceNavSignal("coherent_content");
+    }, [readiness.coldCompositionReady]);
 
     useEffect(() => {
-        if (model.ready && !queueLoading && queueResult != null && rightRailSettled) {
-            markWorkspaceNavSignal("interaction_ready");
-        }
-    }, [model.ready, queueLoading, queueResult, rightRailSettled]);
+        if (readiness.interactionReady) markWorkspaceNavSignal("interaction_ready");
+    }, [readiness.interactionReady]);
 
     const intents = useMemo<WorkUnitSurfaceIntents>(
         () => ({ selectWorkView, prefetchWorkView, openRecord, prefetchRecord }),
