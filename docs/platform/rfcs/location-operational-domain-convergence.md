@@ -25,11 +25,12 @@ supersedes: []
 2. **Program** has exactly one canonical **identity** = the org-level **`program_key` vocabulary** (canonicalize the existing `childcare_program_type` option set). `location_program_categories` is its **per-site availability + operational-scope layer**; `program_offerings`/`variants` is the **distinct Offering (attendance product) child**, not a duplicate; `program_room_cohort_key` is a **projection**. No fifth model.
 3. **Room** stays a **typed Location node** (`location_type='unit'`, `parent_location_id` = site). The existing model is proven capable; do **not** create a `rooms` table. Converge room age-band/program-eligibility out of EAV into structured, scoped config.
 4. **Capacity** is resolved by the **existing multi-dimensional engine** (`web/lib/childcareOperational/config/*`). Formalize one `resolveOperationalCapacity` contract that returns the **distinct** capacity kinds — never one ambiguous number. Add the missing **positive available-seats** derivation.
-5. **Ratio** is modeled as **stepped tiers**, which **already exist natively** (`childcare_ratio_rule_tiers`). Confirm and harden; never reduce to a decimal.
+5. **Ratio** is modeled as **stepped tiers**, which **already exist natively** (`childcare_ratio_rule_tiers`). Confirm and harden; never reduce to a decimal. Mixed-age resolution is **`most_restrictive`** by default under an extensible policy contract; regulatory (`licensing`) rules are a **binding ceiling that overrides may only tighten** (§9, §12).
 6. **Timezone** is owned by the **Location** (exactly one, IANA). Promote it from free-text `locations.metadata.timezone` to a first-class column with a canonical control; tours/schedules/availability **resolve through** it. Distinguish storage / viewer / recipient timezones.
-7. **Settings** reuses the **Configuration Runtime V1** shell + primitives (`ConfigurationModeLayout`, `ScopePicker`, `EffectiveDatedConfigurationEditor`, `ConfigEditorPrimitives`) — which Location Settings **already** partly consumes. Operational config stays in its **purpose-built tables**, never forced into generic field storage; the Settings *UI* reuses shared shell/interaction doctrine.
+7. **Settings.** **Configuration Runtime V1 remains the canonical Settings shell** (`ConfigurationModeLayout`), which Location Settings already uses. Fields and Locations must **converge on shared Settings interaction primitives**, with the successful **Fields-proven behaviors extracted into shared primitives** where they are not already shared (lifecycle, delete-safety, ownership/source visibility, invalid-reference handling, dirty-state protection, canonical control resolution). This is *not* forcing Location config into Field Platform storage, *not* cloning the `/settings/fields` page layout, and *not* replacing Configuration Runtime — it is raising Location Settings to the interaction quality Fields proved. Operational config stays in its **purpose-built tables** (§11).
+8. **Program identity** = the canonical **`program_key` vocabulary** (existing `childcare_program_type` option set) exposed **only through a canonical Program provider** so consumers never query option-set internals — preserving the option to promote to a first-class `programs` entity later without a consumer rewrite. No new `programs` table this initiative (§6).
 
-**Sequencing principle:** de-duplicate and contract-freeze **before** net-new build; make already-built value visible cheaply; add the four genuinely-missing primitives (closures, branding, transfer action, capacity-aware routing) last, each on an existing pattern.
+**Sequencing principle:** de-duplicate and contract-freeze **before** net-new build; make already-built value visible cheaply; add the four genuinely-missing primitives (closures, branding, transfer action, capacity-aware routing) last, each on an existing pattern. **Phase A is no longer gated by mixed-age policy or Program-identity storage — both are ratified here (§9, §6).**
 
 ---
 
@@ -54,7 +55,7 @@ This RFC **builds on**, and does not rewrite, `location-operational-platform-cer
 | Capacity engine headless (empty metric packs) | `metrics/packs.ts` capacity/attendance/staffing still `coming_soon` | **Confirmed** |
 | Location Settings on shared shell, consumes ScopePicker + EffectiveDatedEditor | Verified in `LocationOperationalRulesPanel`, `ConfigRuleAuthoringGroup`, `RatioTierFields` | **Confirmed (stronger than audit stated)** |
 
-**New precision this RFC adds** (from targeted verification): exact resolver precedence + three gaps (mixed-age room collapse, effective-start tie non-determinism, no positive available-seats); the Program/Offering distinction; the Settings-shell reality (Locations already ~70% converged; `/settings/fields` is the *outlier*, not the target).
+**New precision this RFC adds** (from targeted verification): exact resolver precedence + three gaps (mixed-age room collapse, effective-start tie non-determinism, no positive available-seats); a fourth verified gap — regulatory (`licensing`) values can be weakened by a more-specific override today (§9/§12); the Program/Offering distinction; the Settings-shell reality (Locations already ~70% on the shared Configuration Runtime shell; `/settings/fields` uses a different shell but proved interaction behaviors that must be **extracted into shared primitives** — §11).
 
 ---
 
@@ -107,12 +108,12 @@ WAITLIST GRAIN:  placement_candidates (+ overrides, link groups)
 | Programs offered | `location_program_categories` (availability) → `program_key` identity | org→site | **availability** | §6 |
 | Rooms available | `locations` unit rows (`parent_location_id`) | site | — | §7 |
 | Business hours | `childcare_operating_windows` | org→site→program→room | value | |
-| **Closures / holidays** | **NEW table, same scoped/effective-dated family** | org→site(→program→room) | value | §8, §20-gap |
+| **Closures / holidays** | **NEW table, same scoped/effective-dated family** | org→site(→program→room) | value | genuinely missing; §19 Phase C |
 | Capacity | `childcare_capacity_rules` (physical/licensed/operational) | org→site→program→room ×age | value | §8 |
 | Ratios | `childcare_ratio_rules` → `_tiers` | org→site→program→room ×age | value | §9 |
 | Staffing constraints | derived (`requiredStaff`); supply = future (G3) | — | derived | not this RFC's build |
 | Communication identity | `communication_identity_location_bindings` | platform→org→site | value+availability | |
-| **Local branding overrides** | **NEW per-location config (extends identity/location)** | org→site | value | §20-gap |
+| **Local branding overrides** | **NEW per-location config (extends identity/location)** | org→site | value | genuinely missing; §19 Phase C · open depth §21 |
 | Operator access | `user_site_access` (N:N) + `user_department_access` (orthogonal) | org + site assignment | availability | |
 | Public scheduling availability | `tour_availability_rules` | location (or org fallback) | value | converge scope shape §12 |
 | Placement configuration scope | `metadata.placement_priority_v1` (dept→work-unit merge) + rules | org→work-unit | value | §13 |
@@ -143,7 +144,35 @@ Classification of the four representations the audit found:
 
 **User-facing rule satisfied:** *Select Location → resolve `location_program_categories` where `location_id = L and is_active` → those programs (and only those) appear.* Cross-location leakage is impossible because availability rows are per-site.
 
-**Ownership shift (already anticipated by `configuration-ownership-and-inheritance.md` §3):** Program *identity* is org-level; *availability* is per-site. A dedicated `programs` catalog table is **optional future hardening** (Phase E, open decision §23), **not required** — the `program_key` vocabulary already serves as org-level identity. **Do not build it in this initiative unless the option-set-as-identity proves insufficient.**
+**DECISION CLOSED — Program identity storage (was open decision; now ratified; removed from Phase A gating).** For this initiative, **retain the `program_key` vocabulary backed by the `childcare_program_type` option set; do NOT create a `programs` table.** But **no consumer may depend on the option-set implementation directly** — all reads go through a **canonical Program provider** so the identity can later be promoted to a first-class entity without a consumer rewrite. This is the least-migration answer that still decouples identity from storage.
+
+**Canonical Program provider contract** (home: `web/lib/programs/*` provider layer; Phase A). May currently read from the option-set identity + `location_program_categories` for per-location availability; consumers must never query option-set internals or `childcare_program_type` rows directly.
+
+```ts
+type CanonicalProgram = {
+  key: string;              // program_key vocabulary
+  label: string;
+  description?: string;
+  status: "active" | "inactive";
+};
+
+resolveProgramsForOrganization(orgId): CanonicalProgram[];        // identity catalog (org-level)
+resolveProgramsForLocation(orgId, locationId): CanonicalProgram[]; // availability at a site (location_program_categories)
+resolveProgramByKey(orgId, key): CanonicalProgram | null;         // single identity resolution
+```
+
+**The four layers, disambiguated (canonical language):**
+
+```
+Program identity          → canonical Program provider over the program_key vocabulary
+Program availability at a  → location_program_categories (is_active per site)
+  Location
+Offering / attendance      → program_offerings → program_offering_variants
+  product                     (a DISTINCT concept, not a duplicate Program)
+Room/program cohort        → derived projection (program_category_id + room_location_id)
+```
+
+**Ownership-shift note (informational, `configuration-ownership-and-inheritance.md` §3):** Program *identity* is org-level; *availability* is per-site. Because the canonical provider now hides storage, promoting identity to a first-class `programs` table later is an internal provider change, not a consumer migration — so it is **explicitly out of scope for this initiative and no longer an open decision.**
 
 **Program facet ownership:** identity/label/code → vocabulary + `location_program_categories.label`; age eligibility → `age_group_key` on scoped rules (converge from EAV, §7); operating schedule → `childcare_schedule_rules` + `schedule_patterns`; eligible rooms → resolved via room age/program config; enrollment availability → `location_program_categories.is_active`; pricing → offering→variant→tuition; capacity participation → `program_category_id` scope on capacity/ratio rules; forms/documents → generic (program-scoped is future); placement rules → placement config scoped by program.
 
@@ -151,13 +180,13 @@ Classification of the four representations the audit found:
 
 ## 7. Room convergence decision
 
-**Room remains a typed Location node — `locations` where `location_type='unit'`, `parent_location_id` = site.** The existing model is **proven structurally capable**: unit rows already anchor capacity (`room_location_id` scope), ratios, operating windows, schedule rules, committed placement (`child_placements.room_location_id`), and attendance (`child_attendance_events` incl. `room_transfer`). Per the constraint in §18, a new `rooms` table is **rejected** — no behavior requires it.
+**Room remains a typed Location node — `locations` where `location_type='unit'`, `parent_location_id` = site.** The existing model is **proven structurally capable**: unit rows already anchor capacity (`room_location_id` scope), ratios, operating windows, schedule rules, committed placement (`child_placements.room_location_id`), and attendance (`child_attendance_events` incl. `room_transfer`). Per the non-goals in §20, a new `rooms` table is **rejected** — no behavior requires it.
 
 **"Room" is a canonical platform concept *projected* from the Location hierarchy**, exposed through one resolver `resolveRoomsForLocation(locationId)` (today: `web/lib/admin/location/*` + `adminV2/locationsHierarchyTablePresentation.ts` `isRoom = type==='unit'`). All consumers use that resolver; none re-query `location_type='unit'` ad hoc.
 
 **Convergence required — retire the EAV duplication.** Room capacity/ratio/age-band/program-eligibility are currently written **both** to `locations.metadata` (via `LocationRoomDetailPanel`) **and** to the `childcare_*` config tables (audit finding; `20260529160000`). Decision: **the `childcare_*` scoped config tables are the sole owner of operational values; `locations.metadata` room fields become read-through/deprecated.**
 
-**Room facet ownership:** identity/parent → `locations`; licensing capacity → `childcare_capacity_rules capacity_kind='licensed'`; physical capacity → `capacity_kind='physical'`; configured operating capacity → `capacity_kind='operational'`; age eligibility → room-scoped `age_group_key` (promote from `classroom_age_group` EAV to a structured room attribute — open decision §23: typed column on `locations` vs a room-scoped config row in the same family); program eligibility → room↔program config; active/inactive → `locations.is_active`; schedule availability → operating windows + schedule patterns; staffing assignments → future (G3, not this RFC); capacity limits → capacity rules; ratio rules → ratio rules + tiers.
+**Room facet ownership:** identity/parent → `locations`; licensing capacity → `childcare_capacity_rules capacity_kind='licensed'`; physical capacity → `capacity_kind='physical'`; configured operating capacity → `capacity_kind='operational'`; age eligibility → room-scoped `age_group_key` (promote from `classroom_age_group` EAV to a structured room attribute — storage shape is open decision §21-5); program eligibility → room↔program config; active/inactive → `locations.is_active`; schedule availability → operating windows + schedule patterns; staffing assignments → future (G3, not this RFC); capacity limits → capacity rules; ratio rules → ratio rules + tiers. *(age-band storage shape — typed column vs room-scoped config row — is open decision §21-5, a Phase B implementation choice.)*
 
 **Known limitation to resolve (§9):** the current resolver collapses a physically **mixed-age** room to a single age group (first placement wins, `roomConfigResolvers.ts:59-65`). This is a Room+Ratio modeling decision, not a table problem — see §9.
 
@@ -186,24 +215,37 @@ Classification of the four representations the audit found:
 **Canonical resolver contract (`resolveOperationalCapacity`)** — formalize over the existing functions; home = `web/lib/childcareOperational/` (Capacity subsystem). Consumed by Placement, Tours, Waitlist, Processing, metrics — **one resolver, no per-UI math.**
 
 ```ts
+type CapacityResolutionStatus =
+  | "resolved"       // binding computed from ≥1 authored rule; occupancy known
+  | "incomplete"     // relevant inputs partially missing (e.g. unknown child age group, missing occupancy)
+  | "not_configured" // no applicable capacity/ratio rule at any scope for this context
+  | "conflicted";    // contradictory rules that cannot be reconciled (e.g. same-scope duplicate before tiebreak, or a mixed-age set with no safe binding)
+
 resolveOperationalCapacity({
-  orgId, locationId, programId?, roomId?, ageGroupKey?, scheduleId?,
+  orgId, locationId, programId?, roomId?, ageGroupKey?, ageGroupContext?, scheduleId?,
   effectiveAt /* YYYY-MM-DD */, occupancyContext /* committed/offered/attended */, staffingContext?,
+  mixedAgePolicy /* default "most_restrictive" */,
 }) => {
+  status,            // CapacityResolutionStatus — NEVER silently 0 or unlimited
   licensedCapacity, physicalCapacity, configuredCapacity, ratioConstrainedCapacity,
   staffedCapacity /* null until G3 */, bindingCapacity,
   committedOccupancy, offeredOccupancy, attendedOccupancy,
-  availableNow /* max(0, binding − committed) */, forecastedAvailability,
-  limitingFactor /* which kind set the binding */, appliedRules /* rule ids + scope, for explainability */,
+  availableNow /* max(0, binding − committed) when status="resolved"; else null */, forecastedAvailability,
+  limitingFactor /* which kind/rule set the binding */,
+  appliedRules /* every rule CONSIDERED + which is binding — explainability */,
+  warnings /* e.g. unknown_age_group, missing_occupancy, licensing_absent, mixed_age_unreconciled */,
 }
 ```
 
-- **Inputs authoritative:** scoped rules (most-specific-wins), effective date, occupancy read models.
-- **Precedence:** §11 (room>program>site>org; age-specific>null; latest effective_start; +tiebreak).
-- **Missing-data behavior:** null kind ⇒ excluded from `min` (never treated as 0). All-null binding ⇒ `null` (unknown, not zero).
-- **Explainability:** return `limitingFactor` + `appliedRules` so the UI can say *"Room binding 11 — limited by 2:11 ratio (effective Sep 1)."*
+- **Inputs authoritative:** scoped rules (most-specific-wins), effective date, occupancy read models, canonical Location/Program/Room resolution (never ad-hoc `location_type='unit'` queries).
+- **Precedence:** §12 (room>program>site>org; age-specific>null; latest effective_start; +deterministic `id` tiebreak). Regulatory (`licensing`) handling per §12.
+- **Mixed-age:** apply `mixedAgePolicy` (§9); `most_restrictive` is the default and the only Phase-A-supported policy.
+- **Incomplete-data semantics (safe, not optimistic):** unknown data is **never** treated as `0` (falsely no-capacity) **nor** unlimited (falsely available). Instead: a null *kind* is excluded from the `min` (a genuinely absent constraint), but a null *required input* (unknown child age group, missing occupancy) yields `status:"incomplete"` with `availableNow:null` and a `warnings[]` entry. No applicable rule at all ⇒ `status:"not_configured"`. Unreconcilable rules ⇒ `status:"conflicted"`. Consumers (Placement/Tours/UI) must branch on `status` and must not coerce a non-`resolved` result into a number.
+- **Explainability:** `limitingFactor` + `appliedRules` (all considered, one binding) so the UI can say *"Room binding 11 — limited by 2:11 ratio (effective Sep 1); licensing 15, physical 14 also considered."*
 - **Caching:** projections may be **marked recomputable caches only** (truth-flow Law 2); no authoritative capacity entity.
 - **Home decision:** Capacity resolution belongs to the **Capacity subsystem**, consumed by Placement/Processing — **not** owned by Processing (§13).
+
+**Phase A completeness requirement:** this single contract must ship with **all** of — distinct capacity kinds · stepped ratio evaluation · `mixed_age_policy` · regulatory-constraint handling (§12) · deterministic config tiebreak · positive `availableNow` · explainability · the `status` incomplete-data model · canonical Location/Program/Room resolution — so that **no UI surface or Placement path ever computes capacity independently.** Anything less leaves a seam a consumer will fill with its own math.
 
 ---
 
@@ -234,14 +276,35 @@ The ten required answers:
 2. **Effective-dated:** **Yes** — `effective_start`/`effective_end`, supersede-not-overwrite. Tiers version **with** the parent rule (no independent tier dates).
 3. **Scoped by location/program/room/age:** **Yes** — `scope_type ∈ {org,site,program,room}` + `age_group_key`.
 4. **Stepped tiers supported:** **Yes** — `requiredStaffForChildren` returns the smallest tier whose `max_children ≥ childCount`; it does **not** linear-scale. Over the top tier ⇒ `exceedsDefinedTiers=true`.
-5. **Multiple applicable rules reconciled:** single-winner via most-specific-wins (§11) — **not** blended. Capacity binding then takes `min` across kinds.
-6. **Most restrictive:** for capacity, `ratioConstrainedCapacity` enters `binding = min(...)`, so the tightest limit wins at the capacity layer even though rule *selection* is specificity-based.
+5. **Multiple applicable rules reconciled:** two distinct layers, do not conflate (see the sequence below). Rule *selection* per (scope, age-group) context is single-winner **most-specific-wins** (§12). Reconciliation *across* age groups in one room is governed by the **mixed-age policy** (item 8). Capacity binding then takes `min` **across kinds** (physical/licensed/operational/ratio).
+6. **Precedence vs. restrictiveness — the exact sequence (these are different layers):**
+   ```
+   1. Resolve the applicable authored rule for each relevant (scope, age-group) context
+      using canonical configuration precedence (§12): room>program>site>org, age-specific>null,
+      latest effective_start, deterministic id tiebreak.  → selection is by SPECIFICITY, not by value.
+   2. Evaluate the stepped tiers of each resolved rule (requiredStaffForChildren / ratioLimitedCapacity).
+   3. Reconcile across mixed-age / multiple constraints using the mixed-age policy (default most_restrictive)
+      and the capacity MINIMUM across kinds.  → binding is by RESTRICTIVENESS.
+   ```
+   A **less-specific rule does NOT override a more-specific rule merely because it is numerically stricter** — selection is specificity-based (step 1). Restrictiveness only decides the *binding* among already-selected constraints (step 3). The one exception is regulatory rules (item 9), which are a binding ceiling by policy.
 7. **Staffing counts → available capacity:** `maxChildrenForStaff(tiers, staffCount)` gives the child ceiling for a given staff count; `requiredStaffForChildren` gives staff demand for a child count. Staffed-capacity binding needs a staff-supply fact (G3, out of scope).
-8. **Mixed-age rooms:** **Current limitation** — resolver collapses a room to one `ageGroupKey` (first placement wins, `roomConfigResolvers.ts:59-65`); it does **not** blend or take most-restrictive across multiple age-group ratio rules. **Open product decision (§23):** define mixed-age policy — (a) most-restrictive tier across applicable age groups, (b) weighted/points-based licensing math, or (c) explicit room age-group designation. Recommend (a) as the deterministic default; escalate if jurisdictions require (b).
-9. **Overrides governed:** via the scope ladder + effective dating; `source='location_override'` distinguishes local overrides from `licensing`/`organization`. Rendered through the Inheritance Control (§11/§7-UI).
-10. **Settings presentation:** the **tier-row editor** (`RatioTierFields`, already built) inside `EffectiveDatedConfigurationEditor` + `ScopePicker` — add tier / remove tier / numeric validation / duplicate-`max_children` prevention (writer enforces) / effective dates / scope + resolved-rule preview. **Never a decimal control.**
+8. **DECISION CLOSED — Mixed-age policy = `most_restrictive` (default; removed from Phase A gating).** Today's resolver collapses a room to one `ageGroupKey` (first placement wins, `roomConfigResolvers.ts:59-65`) — a **hardening gap**. Ratified resolution: introduce an **extensible policy contract**, ship only `most_restrictive` in the first phase:
+   ```ts
+   type MixedAgeRatioPolicy = "most_restrictive" | "weighted" | "explicit_room_designation";
+   // Phase A supports "most_restrictive" ONLY. "weighted" is a future jurisdiction adapter (NOT Phase A).
+   ```
+   `most_restrictive` semantics: (a) resolve every ratio rule applicable to the age groups **actually represented among the children in the room**; (b) compute the staffing requirement / capacity ceiling under each; (c) the room binds to the **most restrictive** resulting requirement/ceiling; (d) return explainability listing **every considered rule** and the **binding** one. The engine is **not** hardcoded to one policy — `weighted` (points-based licensing math) and `explicit_room_designation` are future adapters behind the same contract.
+   **Unknown/uncovered age groups (safe, not optimistic):** a child whose age group has no applicable ratio rule **must not silently disappear** from the calculation. The resolver returns `status:"incomplete"` (§8) with `availableNow:null` + a `unknown_age_group` warning, rather than optimistically ignoring the child. Production behavior is conservative: unknown ⇒ unresolved, never "fits."
+9. **DECISION — Regulatory (`licensing`) precedence is a binding ceiling that overrides may only TIGHTEN (hardening gap today).** Verified: `source_key` is **not** special-cased — it defaults to `"config"` and is a mere label; within the `licensed` capacity kind, resolution is plain most-specific-wins, so **a room/location licensed rule with a *higher* number today silently weakens the licensing ceiling** (`capacityRules.ts:19-29`, no floor enforcement). Ratified answers:
+   - *Can a Location override weaken a licensing rule?* **No — it must not** (current code allows it = **hardening gap**).
+   - *Immutable lower bound or upper constraint?* Licensing is an **upper constraint (ceiling)**; overrides may only make it **stricter (lower)**, never higher.
+   - *Does scope precedence apply equally to licensing and org rules?* Scope selection still applies, **but** the effective licensing ceiling is clamped to `min(all applicable licensing rules in scope)` so a more-specific override cannot exceed a broader regulatory limit. Operator/organization value rules remain plain most-specific-wins.
+   - *Should operator config only make it stricter?* **Yes for `licensing` kind** — enforce stricter-only at author time (writer validation) **and** at resolve time (clamp). Non-regulatory kinds keep normal override semantics.
+   This is recorded as a **regulatory-precedence hardening item**, resolved by policy here and implemented in Phase A's capacity contract; it is **not** left ambiguous.
+10. **Overrides governed:** via the scope ladder + effective dating; `source='location_override'` distinguishes local overrides from `licensing`/`organization`. Rendered through the Inheritance Control (§11/§7-UI). Regulatory overrides are stricter-only (item 9).
+11. **Settings presentation:** the **tier-row editor** (`RatioTierFields`, already built) inside `EffectiveDatedConfigurationEditor` + `ScopePicker` — add tier / remove tier / numeric validation / duplicate-`max_children` prevention (writer enforces) / effective dates / scope + resolved-rule preview. **Never a decimal control.**
 
-**Two hardening items (verified gaps):** (i) exact-`effective_start` ties have **no DB-deterministic winner** (no ORDER BY; relies on V8 sort stability) — add a final tiebreak (`id`/`created_at`) to the resolver contract; (ii) writer does not enforce tier monotonicity beyond `max_children` uniqueness — readers re-sort defensively, acceptable, but document the invariant.
+**Two additional hardening items (verified gaps):** (i) exact-`effective_start` ties have **no DB-deterministic winner** (no ORDER BY; relies on V8 sort stability) — add a final tiebreak (`id`/`created_at`) to the resolver contract; (ii) writer does not enforce tier monotonicity beyond `max_children` uniqueness — readers re-sort defensively, acceptable, but document the invariant.
 
 ---
 
@@ -272,7 +335,11 @@ The ten required answers:
 
 **Hard boundary (per the prompt and `configuration-platform.md`):** operational configuration (Location/Program/Room/Capacity/Ratio/Tour/Placement) keeps its **purpose-built tables** — it is **not** forced into generic `field_definitions`/`field_values` to claim reuse. Reuse is at the **UI / interaction / runtime-primitive** layer.
 
-**Decisive finding — Location Settings is already the *canonical* pattern, not the outlier.** The shared Settings system is **Configuration Runtime V1** (`ConfigurationModeLayout`: 260px section queue + 320px object queue + detail workspace), which powers **Locations, Financials, and the Settings hub**. `/settings/fields` runs a **bespoke** entity-nav + tabs + inline-row workspace and is the *divergent* surface. Therefore "make Location Settings feel like the Settings system operators know" resolves to: **standardize on Configuration Runtime V1 (Locations already uses it) and pull in the field-editing niceties Fields demonstrates** — not "rebuild Locations to look like Fields."
+**Corrected decision (supersedes the earlier "Fields is an outlier" framing).** The **shell** conclusion stands — **Configuration Runtime V1 remains the canonical Settings shell** (`ConfigurationModeLayout`: 260px section queue + 320px object queue + detail workspace; powers Locations, Financials, the Settings hub) and Location Settings must **not** be rebuilt to clone the `/settings/fields` page layout, nor forced into Field Platform storage, nor have Configuration Runtime replaced by the Fields shell. But the shell fact does **not** capture the product requirement, and **Fields is not irrelevant merely because its shell differs.** The requirement is:
+
+> **Location Settings retains the canonical Configuration Runtime shell while adopting the Settings *interaction quality, lifecycle behavior, editing safety, and reusable UI doctrine* proven through the Fields convergence work.** Fields and Locations must **converge on shared Settings interaction primitives**, and successful Fields-proven patterns must be **extracted into shared primitives** wherever they are not already shared.
+
+Fields is where several Settings behaviors were first proven to production quality (lifecycle Hide/Show/Archive/Restore, delete-safety dependency preflight, ownership/source chips, 409-safe create, polished row anatomy). Those belong to **every** Settings surface, not just Fields — so the convergence is bidirectional: Locations adopts the shared shell (already true) **and** the runtime absorbs Fields' interaction wins as shared primitives.
 
 **Reuse inventory (all already in Locations' dependency graph unless noted):**
 
@@ -298,6 +365,31 @@ The ten required answers:
 
 **Direct comparison Location vs Fields:** *patterns reused* — page shell, config nav/IA, explicit-Save + local-draft, badges; *patterns extended* — Location adds the crown-jewel ScopePicker + EffectiveDatedEditor (Fields lacks these); *domain-specific exceptions* — ratio tier editor, timezone control, capacity multi-kind panel (no Fields analog, justified); *must-not-duplicate* — shell, form controls, scope picker, effective-dated editor, badges (all shared already).
 
+### Fields → Configuration-Runtime behavior convergence matrix
+
+Every Settings behavior the requirement names, classified as **[Shared]** already shared through Configuration Runtime · **[Extract]** implemented only in Fields, promote to a shared primitive · **[Locations]** already in Locations · **[New]** needs a net-new shared primitive · **[Local]** domain-specific, stays local. Target: all behaviors become **shared** primitives that both Fields and Locations consume.
+
+| # | Behavior | Fields today | Locations today | Classification | Convergence action |
+|---|---|---|---|---|---|
+| 1 | **Canonical control resolution** | shared `ConfigurationFieldOptionsEditor`, dependent `<select>` | hand-rolled `config-runtime-input` inputs | **[Shared]** (`ConfigEditorPrimitives`) not yet adopted by Locations | Converge Location detail panels onto `ConfigTextInput/NumberInput/DateInput/SelectInput` |
+| 2 | **Searchable list/detail** | ownership-chip filter + category grouping; **no free-text search** | **no search** | **[New]** neither has canonical list search | Add a shared `ConfigurationListSearch`/filter primitive to the object queue |
+| 3 | **Canonical labels & descriptions** | `ConfigurationCategoryHeader`, label+hint | partial | **[Shared]** (`ConfigFieldLabel`) + **[Extract]** Fields label/description density | Standardize label+description slot in `ConfigEditorPrimitives` |
+| 4 | **Active/inactive lifecycle** | `ConfigurationStatusToggle` + Hide/Show/Archive/Restore | boolean `Active` checkbox only | **[Extract]** | Promote `ConfigurationStatusToggle` + lifecycle verbs to a shared primitive; Locations adopts |
+| 5 | **Safe deletion + dependency preflight** | delete-safety preflight (`GET …/delete-safety`, blocker labels, `window.confirm`) | **none** (no destructive path) | **[Extract]** | Promote a shared `useDeleteSafety`/preflight primitive; Locations adopts for site/program/room |
+| 6 | **Ownership & source visibility** | ownership chips (Platform/Custom/Runtime/Calculated) | `OwnershipBadge`/`ConfigScopeBadge` (via rules panel) | **[Shared]** (badges) + **[Extract]** Fields ownership-chip filter | Unify badge + ownership-chip into one shared source-visibility primitive |
+| 7 | **Invalid-reference handling** | renders invalid ref without crashing | inconsistent | **[New]** | Add a shared "render invalid reference safely (label + warning, never throw)" primitive; used by pickers |
+| 8 | **Dirty-state protection** | **none** (silent discard) | **none** | **[New]** (pattern exists only in layout-builder editors) | Extract the `beforeunload`/`isDirty` guard from layout editors into a shared `useUnsavedGuard` |
+| 9 | **Explicit-save / draft behavior** | explicit per-row Save + local draft | explicit per-panel Save + local draft | **[Locations]** + **[Shared]** (both already do it) | Standardize one explicit-Save+draft contract in the runtime; no behavior change |
+| 10 | **Inline validation** | inline error, 409 key-conflict handling | `role="alert"` error | **[Shared]** partial | Standardize client==server validation surface in `ConfigEditorPrimitives` |
+| 11 | **Empty/loading/error states** | present | `ConfigurationEmptyState` present | **[Shared]** (`ConfigurationEmptyState`) | Ensure both consume the shared states |
+| 12 | **Permission-aware controls** | `useAdminAuth().canMutate` gating | same | **[Shared]** | Keep; assert on every mutating control |
+| 13 | **Dependent reference selection** | dependent category `<select>` | `ScopePicker` (inheritance-aware) | **[Shared]** (`ScopePicker`) + **[Extract]** generic dependent-select | One shared dependent-picker family; Location program/room selectors use it |
+| 14 | **Consistent add/edit/remove** | inline create row, slug derive, 409-safe | "Add Location" only; no program/room create here | **[Extract]** | Promote Fields' create-row pattern into a shared primitive; Locations gains program/room create |
+| 15 | **Row/card/section/detail anatomy** | polished row (glyph/type/label/chips/hover actions) | `ConfigurationQueueItem`/`DetailCard` (simpler) | **[Shared]** shell + **[Extract]** Fields row richness | Enrich shared `ConfigurationQueueItem` with the proven anatomy where useful |
+| 16 | **No duplicate legacy representations to operators** | hides legacy | exposes EAV duplicates (room metadata, dual program keys) | **[Local]** domain convergence (Program §6 / Room §7) | Resolved by the Program/Room convergence, not a UI primitive |
+
+**Net:** 5 behaviors are **[Extract]** (lifecycle, delete-safety, ownership-chip, add/edit/remove, row-anatomy), 3 are **[New]** shared primitives (list search, invalid-ref handling, unsaved guard), the rest are already **[Shared]**/**[Locations]** or a **[Local]** domain concern. **None** requires changing the shell or the storage model. This is the concrete meaning of "converge on shared Settings interaction primitives, extracting Fields patterns where not already shared."
+
 ---
 
 ## 12. Configuration scope and precedence
@@ -314,6 +406,10 @@ The ten required answers:
 Note the axes are **not orthogonal**: scope dominates age (a `room` rule with null age outranks a `site` rule with matching age). Effective window is inclusive both bounds; open-ended when `effective_end` null; query is an as-of `YYYY-MM-DD`.
 
 **Value inheritance vs availability** (per doctrine): *value* = set high, override lower (capacity, ratio, hours, branding, timezone-fallback); *availability* = defined once, offered/withdrawn per scope (programs offered at a site, workflows enabled). One control (the Inheritance Control) expresses both.
+
+**Precedence (selection) is NOT restrictiveness (binding) — the two layers must never be conflated.** Configuration precedence (above) chooses **which authored rule applies** at a (scope, age-group) context — purely by *specificity*, never by numeric value. Restrictiveness only enters later, when the capacity resolver takes `min` **across kinds** and applies the mixed-age policy **across age groups** (§8–§9). A less-specific rule therefore does **not** override a more-specific rule merely for being numerically stricter. See the explicit 3-step sequence in §9 item 6.
+
+**Regulatory (`licensing`) precedence — a binding ceiling, overrides may only TIGHTEN (hardening gap today; policy ratified here).** Verified in code: `source_key`/`jurisdiction_key` are **not** special-cased (`source_key` defaults to `"config"`; plain most-specific-wins within the `licensed` kind — `capacityRules.ts:19-29`, `ratioRules.ts`), so a more-specific override with a *higher* value silently **weakens** a licensing limit today. Ratified rule: for `source_key='licensing'` (capacity kind `licensed`, and ratio rules marked licensing), the **effective ceiling is clamped to `min` across all applicable licensing rules in scope**, and author-time validation **rejects** an override that would raise a regulatory limit above a broader one — operator/location config may only make regulatory limits **stricter**, never weaker. Non-regulatory (`organization`/`config`/`location_override`) value rules keep normal most-specific-wins override semantics. This closes the ambiguity; implemented in the Phase A capacity contract (§8).
 
 **Per-config precedence is UNIFORM** — capacity, ratio, hours, schedule rules already share `resolveConfigRule`. **Do not** fork precedence per domain. **One convergence needed:** `tour_availability_rules` uses an **older `location_id`/`user_id` scope model** not yet on the unified `scope_type` shape — align it (Phase C) so tours resolve through the same ladder. Placement config (`metadata.placement_priority_v1`) uses a **department→work-unit** merge, which is an **orthogonal access axis**, correctly *not* part of value resolution — leave as-is.
 
@@ -334,7 +430,7 @@ For every config type define (uniformly): scope, precedence (above), effective d
   - **Application/lead interest** — per-child OCM site; multiple children → multiple sites.
   - **Waitlist candidacy** — `placement_candidates.site_id` (multiple candidate rows/child).
 
-**`Location Interest` record — NOT recommended (gap not proven).** The prompt asks to prove the gap before adding it. Multi-location *interest* is **already satisfiable** by existing records: multiple `placement_candidates` rows (per site×cohort), multiple `tour_bookings`, and per-child `OCM.location_id`. The only thing absent is a **ranked / weighted** cross-location preference. Recommendation: **do not** introduce a new `Location Interest` entity. If ranked multi-site preference becomes a real product need, model it as a thin **extension of `placement_candidates`** (a `preference_rank` + link group) — the waitlist grain already is the "interested in this site×program" record. Escalate as open decision §23 only if product confirms ranked interest is required.
+**`Location Interest` record — NOT recommended (gap not proven).** The prompt asks to prove the gap before adding it. Multi-location *interest* is **already satisfiable** by existing records: multiple `placement_candidates` rows (per site×cohort), multiple `tour_bookings`, and per-child `OCM.location_id`. The only thing absent is a **ranked / weighted** cross-location preference. Recommendation: **do not** introduce a new `Location Interest` entity. If ranked multi-site preference becomes a real product need, model it as a thin **extension of `placement_candidates`** (a `preference_rank` + link group) — the waitlist grain already is the "interested in this site×program" record. Escalate as open decision §21-1 only if product confirms ranked interest is required.
 
 **Harden:** transfer preserves effective-dated history (supersede `child_placements`, never patch); communications resolve the **contextual** location (fix the opportunity→location send gap, §14/§17); location list/option APIs enforce `user_site_access` (close the verified dropdown scope leak).
 
@@ -440,7 +536,9 @@ canonical provider (resolver/table)  →  compatibility adapter (dual-read, cano
 - Most-restrictive applicable limit wins at the capacity binding.
 - Effective-dated ratio rules resolve by as-of date; superseded rows excluded.
 - Precedence room>program>site>org, then age-specific>null, then latest effective_start, then **id tiebreak** (new) — deterministic.
-- Mixed-age behavior deterministic per the chosen policy (§23).
+- Mixed-age behavior deterministic under the ratified `most_restrictive` policy (§9); unknown age group ⇒ `status:"incomplete"` + `unknown_age_group` warning, never silently dropped and never "fits."
+- Regulatory (`licensing`) ceiling cannot be weakened by a more-specific override (author-time reject + resolve-time clamp) — §9 item 9 / §12.
+- Capacity resolver returns the correct `status` (`resolved`/`incomplete`/`not_configured`/`conflicted`); unknown data is never coerced to 0 or unlimited; consumers branch on `status`.
 
 **Timezones**
 - Location timezone authoritative for operational times.
@@ -470,16 +568,20 @@ canonical provider (resolver/table)  →  compatibility adapter (dual-read, cano
 
 Grouped into meaningful phases; de-duplicate + contract-freeze before net-new; each phase has objective / scope / dependencies / likely files / migrations / tests / doctrine / exit / non-goals.
 
-### Phase A — Canonical contracts (freeze the seams)
+### Phase A — Canonical contracts (freeze the seams) — **UNBLOCKED (mixed-age + program-identity ratified §9/§6)**
 - **Objective:** lock the resolver + type contracts every consumer depends on, before any migration.
-- **Scope:** canonical `Location` type + `resolveRoomsForLocation` + `resolveProgramsForLocation`; `resolveOperationalCapacity` contract (over existing engine) incl. `availableNow`; ratio-tier contract + **deterministic tiebreak**; timezone-resolution contract (storage/viewer/recipient); Settings metadata/primitive contract; designate `childcare_program_type` as canonical Program vocabulary.
-- **Dependencies:** none (contracts over existing code).
-- **Likely files:** `web/lib/childcareOperational/config/*` (formalize exports), `resolveConfigRule.ts` (add `id`/`created_at` tiebreak), a new `web/lib/location/*` provider, `web/lib/fields/enrollmentPlacementDoctrine.ts`.
-- **Migrations:** none (add tiebreak is code).
-- **Tests:** ratio tier + precedence + tiebreak; capacity binding + availableNow; resolver scoping.
-- **Doctrine:** update `placement-system.md` (remove "future" `child_placements` framing), ratify "projections are governed calculations" line.
-- **Exit:** contracts merged; existing consumers compile against them; no behavior change.
-- **Non-goals:** no schema, no UI, no data migration.
+- **Scope (the *complete* contract — anything less leaves a seam a consumer fills with its own math):**
+  - Canonical `Location` type + `resolveRoomsForLocation`.
+  - **Canonical Program provider** (`resolveProgramsForOrganization`/`resolveProgramsForLocation`/`resolveProgramByKey`) over the `program_key` vocabulary — consumers never touch option-set internals (§6).
+  - **`resolveOperationalCapacity` contract** with ALL of: distinct capacity kinds · stepped ratio evaluation · **`mixed_age_policy` (`most_restrictive` supported; extensible)** · **regulatory (`licensing`) ceiling handling** (clamp + stricter-only, §12) · **deterministic config tiebreak** (`id`/`created_at`) · positive **`availableNow`** · explainability (`limitingFactor`/`appliedRules`) · **`status` incomplete-data model** (`resolved`/`incomplete`/`not_configured`/`conflicted`) · canonical Location/Program/Room resolution.
+  - Ratio-tier contract; timezone-resolution contract (storage/viewer/recipient); Settings metadata/primitive contract.
+- **Dependencies:** none (contracts over existing code). **No longer gated** by mixed-age policy or Program-identity storage.
+- **Likely files:** `web/lib/childcareOperational/config/*` + `expectations/*` (formalize exports; add mixed-age + licensing-clamp + `status`), `resolveConfigRule.ts` (add `id`/`created_at` tiebreak), a new `web/lib/location/*` provider, `web/lib/programs/*` (canonical Program provider), `web/lib/fields/enrollmentPlacementDoctrine.ts`.
+- **Migrations:** none (tiebreak + clamp + status are code; author-time stricter-only validation is code).
+- **Tests:** ratio stepped tiers (1:5, 2:11) + precedence + tiebreak; mixed-age `most_restrictive` + unknown-age `incomplete`; licensing stricter-only clamp; capacity binding + `availableNow` + `status`; Program provider scoping; resolver scoping.
+- **Doctrine (additive reconciliation only — no broad rewrites):** update `placement-system.md` (remove "future" `child_placements` framing); add one line to `configuration-ownership-and-inheritance.md` §4b ratifying that **regulatory (`licensing`-source) values are a binding ceiling overrides may only tighten** (the one genuinely new inheritance rule this RFC introduces); confirm "projections are governed calculations, never entities" already stated in `operational-truth-flow-doctrine.md`. No new doctrine document is created.
+- **Exit:** contracts merged; existing consumers compile against them; no behavior change beyond the safety fixes (tiebreak determinism, licensing clamp, incomplete-status).
+- **Non-goals:** no schema, no UI, no data migration; no `weighted` mixed-age adapter.
 
 ### Phase B — Settings convergence (make config coherent)
 - **Objective:** one Location Settings workspace on Configuration Runtime primitives.
@@ -505,7 +607,7 @@ Grouped into meaningful phases; de-duplicate + contract-freeze before net-new; e
 
 ### Phase D — Capacity operations (make truth visible + actionable)
 - **Objective:** surface and act on capacity.
-- **Scope:** positive **available-seats** surface; populate `capacity`/`attendance`/`staffing` metric packs from the engine; capacity-aware **placement recommendation** decision layer (Placement/Process engine) consuming `resolveOperationalCapacity`; Make/Respond Placement Offer actions (+ offered occupancy); ratio-aware calculations + explainability (`limitingFactor`/`appliedRules`); mixed-age policy per §23.
+- **Scope:** positive **available-seats** surface; populate `capacity`/`attendance`/`staffing` metric packs from the engine; capacity-aware **placement recommendation** decision layer (Placement/Process engine) consuming `resolveOperationalCapacity`; Make/Respond Placement Offer actions (+ offered occupancy); ratio-aware calculations + explainability (`limitingFactor`/`appliedRules`); mixed-age `most_restrictive` policy per §9.
 - **Dependencies:** A, C.
 - **Likely files:** `web/lib/childcareOperational/*`, `web/lib/orchestration/placement/*`, `web/lib/metrics/packs.ts`, new placement-offer action handlers.
 - **Migrations:** placement-offer state (if not derivable); metric definitions.
@@ -545,13 +647,16 @@ Grouped into meaningful phases; de-duplicate + contract-freeze before net-new; e
 
 ## 21. Open decisions requiring product input
 
-1. **Mixed-age ratio policy (§9-8):** most-restrictive-across-age-groups (recommended default) vs weighted licensing math vs explicit room age-group designation. Jurisdiction-dependent.
-2. **Program identity storage (§6):** keep `program_key` vocabulary-as-identity (recommended) vs promote to a first-class org-level `programs` table (Phase E, only if vocabulary proves insufficient).
-3. **Ranked multi-location interest (§13):** confirm whether ranked/weighted cross-site preference is a real need; if yes, extend `placement_candidates` (not a new entity).
-4. **RLS vs app-layer site scope (§13):** whether to move site-scope enforcement into `locations` RLS or keep app-layer + fix the API leak. Security posture decision.
-5. **Branding scope depth (§5):** which branding attributes are per-location (from-name, logo, colors) vs org-only; whether branding is a new table or extends comm identity config.
-6. **Timezone dual-display default (§10):** always show recipient/viewer + site time, or only on cross-tz mismatch. UX preference.
-7. **Fields vs Configuration-Runtime shell (§11):** whether `/settings/fields` should also converge onto the shared Configuration Runtime shell (out of this initiative's scope, but a coherence question).
+**Closed by this pass (no longer gating Phase A):** *Mixed-age ratio policy* → ratified `most_restrictive` under an extensible policy contract (§9 item 8). *Program identity storage* → ratified `program_key` vocabulary behind a canonical Program provider; no `programs` table this initiative (§6). Both are removed from the gating list.
+
+Genuinely unresolved (do not block Phase A unless noted):
+
+1. **Ranked multi-location interest (§13):** confirm whether ranked/weighted cross-site preference is a real need; if yes, extend `placement_candidates` (not a new entity). *Recommended: not needed.*
+2. **RLS vs app-layer site scope (§13):** whether to move site-scope enforcement into `locations` RLS or keep app-layer + fix the API leak. Security posture decision.
+3. **Branding scope depth (§5):** which branding attributes are per-location (from-name, logo, colors) vs org-only; whether branding is a new table or extends comm identity config.
+4. **Timezone dual-display default (§10):** always show recipient/viewer + site time, or only on cross-tz mismatch. UX preference.
+5. **Room age-band storage (§7):** promote room age eligibility out of `classroom_age_group` EAV to a **typed column on `locations`** vs a **room-scoped config row** in the `childcare_*` family. Implementation-shape decision (Phase B); does not gate Phase A contracts.
+6. **Fields vs Configuration-Runtime shell (§11):** whether `/settings/fields` should also adopt the shared Configuration Runtime shell (out of this initiative's scope, but a coherence question). Independent of the behavior-primitive convergence, which proceeds regardless.
 
 ---
 
@@ -564,4 +669,4 @@ Grouped into meaningful phases; de-duplicate + contract-freeze before net-new; e
 
 ## 23. Summary certification
 
-Alloy already contains one Location scope root, one config ladder, one capacity/ratio engine with native stepped tiers, one placement/waitlist grain, and one Settings runtime — most consumers just haven't converged onto them, and four small primitives (closures, branding, transfer/offer actions, capacity-aware routing) are genuinely absent. This RFC's canonical model **extends** those systems and provides a de-duplication-first, no-flag-day migration path. **The next phase may begin Phase A (canonical contracts) once the open decisions in §21 that gate it (mixed-age policy, program-identity storage) are answered.** No production implementation, migrations, or pushes were performed in this phase.
+Alloy already contains one Location scope root, one config ladder, one capacity/ratio engine with native stepped tiers, one placement/waitlist grain, and one Settings runtime — most consumers just haven't converged onto them, and four small primitives (closures, branding, transfer/offer actions, capacity-aware routing) are genuinely absent. This RFC's canonical model **extends** those systems and provides a de-duplication-first, no-flag-day migration path. **Phase A (canonical contracts) is now UNBLOCKED:** the two decisions that previously gated it — mixed-age ratio policy and Program-identity storage — are ratified here (`most_restrictive` under an extensible policy; `program_key` vocabulary behind a canonical provider). The remaining open decisions (§21) are non-gating (they shape later phases, not the Phase A contracts). Phase A must ship the full capacity/ratio contract (distinct kinds · stepped tiers · mixed-age policy · regulatory ceiling · deterministic tiebreak · positive `availableNow` · explainability · `status` incomplete-data model · canonical Location/Program/Room resolution) so no consumer computes capacity independently. No production implementation, migrations, or pushes were performed in this phase.
