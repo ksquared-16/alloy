@@ -1,9 +1,9 @@
 # Processing Identity Resolution Engine V1 — Architecture & Implementation Sprint
 
-**Status:** **Identity-review defect fixed · Locally certified (identity review gate) · Closeout paused until release engineer resume · Not promoted · Not deployed.**
-Architecture and V1 decisions remain frozen. **Design baseline:** `origin/staging` @ `65afc8527…`; **promotion target:** latest staging after an explicit reconciliation.
+**Status:** **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+Architecture and V1 decisions remain frozen. **Design baseline:** `origin/staging` @ `65afc8527…`; **certified HEAD:** current branch tip; **promotion target:** latest staging after an explicit reconciliation.
 
-All V1 slices **B1a–E1 remain implemented locally.** The Manual Create Lead identity-review authority defect is fixed: plausible child/household matches now force blocking operator review; `IdentityResolutionEligibility` gates plan build, approve, and execute for every source. Full local certification (reset stack, 17/17 Postgres checks, Processing vitests, typechecks) re-passed after the fix. Do not resume sprint closeout until the release engineer confirms.
+All V1 slices **B1a–E1 are implemented and locally certified.** The Manual Create Lead identity-review authority defect is fixed: plausible child/household matches force blocking operator review; `IdentityResolutionEligibility` gates plan build, approve, and execute for every source. Full local certification (reset stack, 17/17 Postgres checks, Processing vitests, typechecks, production build) re-passed after the fix. Remaining work is staging reconciliation / promotion only — not new V1 platform functionality.
 **E1 status: implemented locally — certified locally** — Superseded direct-write paths retired: `applyFormIntakeSafe` always throws and has no replay flag. Static boundary tests: `web/tests/processing/processingIdentityE1Boundaries.test.ts`.
 **Type:** Architecture RFC + frozen decision register + phased Cursor implementation plan.
 **Owner:** Platform / Processing. **Created:** 2026-07-10. **Decision + freeze pass:** 2026-07-10.
@@ -56,9 +56,11 @@ Everything entering Alloy through an inbound channel passes through **one canoni
 | 13 | [rollback-plan](processing-identity-resolution-rollback-plan.md) | Staging rollback order, data safety, replay, and direct-write authority |
 | 14 | [regression-checklist](processing-identity-resolution-regression-checklist.md) | Consolidated automated, browser, API, security, and domain verification |
 | 15 | [commit-inventory](processing-identity-resolution-commit-inventory.md) | Complete phase-grouped implementation and certification history |
+| 16 | [migration-audit](processing-identity-resolution-migration-audit.md) | Sprint migration ordering, replay, RLS/index/function verification |
+| 17 | [cert-cleanup](processing-identity-resolution-cert-cleanup.md) | Isolated local cert DB cleanup (IDs, tables, method) |
 
 ## Reading order
-Decisions first: **9 (open-decisions)** → **3 (RFC)** → **4 (data-model)** → **5 (migration)** → **6 (implementation)**. Evidence base: **1 → 2**. Validation/impact: **7 → 8 → 10**. Every material claim cites exact repo paths; findings tagged **[C]** confirmed / **[I]** inferred / **[P]** proposed / **[D]** doctrine.
+Decisions first: **9 (open-decisions)** → **3 (RFC)** → **4 (data-model)** → **5 (migration)** → **6 (implementation)**. Evidence base: **1 → 2**. Validation/impact: **7 → 8 → 10**. Closeout: **11–17**. Every material claim cites exact repo paths; findings tagged **[C]** confirmed / **[I]** inferred / **[P]** proposed / **[D]** doctrine.
 
 ## Provenance
 Seven parallel read-only trace streams + firsthand reads of the load-bearing contracts + July 2026 Processing/Forms doctrine, followed by the B1a–E1 local implementation and certification on `claude/proc-identity-lib-normalization`.

@@ -1,4 +1,4 @@
-# Processing Identity Resolution — Implementation Plan (Cursor-ready, V1 FROZEN)
+# Processing Identity Resolution — Implementation Plan (Historical; V1 complete locally)
 
 **Status:** Historical implementation plan; V1 slices B1a through E1 are **implemented locally and locally certified**. The branch is **awaiting staging reconciliation, not promoted, and not deployed.** Frozen decisions remain authoritative in [open-decisions](processing-identity-resolution-open-decisions.md) and the [RFC](processing-identity-resolution-architecture-rfc.md).
 

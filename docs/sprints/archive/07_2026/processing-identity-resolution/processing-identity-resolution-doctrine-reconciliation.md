@@ -53,4 +53,6 @@ The proposed architecture is checked against Alloy doctrine and is consistent:
 
 ## Governance note
 
-At closeout: summarize into `docs/platform/foundation/release-history.md` and flip the Documents & forms capability (`platform-capabilities.md`, DCP → shipped); if a new canonical doctrine emerges (e.g. a Processing/Identity-Resolution platform doc), create it under `docs/platform/` and register it in `docs/README.md` load order. Update this sprint's `README.md` status table as artifacts move from design to delivered.
+**Canonical doc disposition update (final closeout):** Identity-review gate documented in `record-system.md`, `documents-and-forms.md`, `glossary.md`, `platform-capabilities.md`, `release-history.md`, and `implementation-patterns.md`. No new `workflow_events` keys. Event catalog unchanged.
+
+At closeout the local doctrine updates are complete; remaining work is staging reconciliation before promotion.
