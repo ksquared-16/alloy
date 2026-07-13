@@ -36,7 +36,11 @@ import {
     findCanonicalDataProvider,
 } from "@/lib/fields/canonicalDataProviderRegistry";
 import type { CanonicalDataProvider } from "@/lib/fields/canonicalDataProviderModel";
-import { assembleFocusPanelNestedProviders } from "@/lib/fields/consumerCanonicalProviderAssembly";
+import type { CanonicalDataConsumerSurface } from "@/lib/fields/canonicalDataProviderModel";
+import {
+    assembleFocusPanelNestedProviders,
+    assembleQueueRowProviders,
+} from "@/lib/fields/consumerCanonicalProviderAssembly";
 import {
     buildTenantLayoutCatalogFields,
     type TenantFieldDefinitionRow,
@@ -120,16 +124,41 @@ function resolveQueueField(key: string, tenantFieldDefinitions?: readonly Tenant
     return { key, label, entityNamespace: namespace, isSystemField: false };
 }
 
+export type CompositionFieldConsumer = Extract<CanonicalDataConsumerSurface, "queue_row" | "focus_panel">;
+
+function assembleProvidersForConsumer(
+    consumer: CompositionFieldConsumer,
+    filter: {
+        isWaitlist: boolean;
+        tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+    },
+) {
+    return consumer === "queue_row"
+        ? assembleQueueRowProviders(filter)
+        : assembleFocusPanelNestedProviders(filter);
+}
+
 function pickerProvidersForNamespaces(
+    consumer: CompositionFieldConsumer,
     namespaces: readonly AvailableFieldEntityNamespace[],
     isWaitlist: boolean,
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): CanonicalDataProvider[] {
     const acceptedSet = new Set(namespaces);
-    return assembleFocusPanelNestedProviders({
-        isWaitlist,
-        tenantFieldDefinitions,
-    }).filter((provider) => acceptedSet.has(provider.entityNamespace as AvailableFieldEntityNamespace));
+    return assembleProvidersForConsumer(consumer, { isWaitlist, tenantFieldDefinitions }).filter((provider) =>
+        acceptedSet.has(provider.entityNamespace as AvailableFieldEntityNamespace),
+    );
+}
+
+function namespacesForZone(zone: string, isWaitlist: boolean): AvailableFieldEntityNamespace[] {
+    const groups = evidenceGroupsForZone(zone, isWaitlist);
+    const namespaces = new Set<AvailableFieldEntityNamespace>();
+    for (const group of groups) {
+        for (const ns of group.acceptedNamespaces ?? []) {
+            namespaces.add(ns as AvailableFieldEntityNamespace);
+        }
+    }
+    return [...namespaces];
 }
 
 // ── Custom-field availability by namespace (V3 doctrine §5) ─────────────────────
@@ -218,8 +247,9 @@ export function availableFieldsForNamespaces(
     namespaces: readonly AvailableFieldEntityNamespace[],
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
     isWaitlist = false,
+    consumer: CompositionFieldConsumer = "focus_panel",
 ): AvailableField[] {
-    const providers = pickerProvidersForNamespaces(namespaces, isWaitlist, tenantFieldDefinitions);
+    const providers = pickerProvidersForNamespaces(consumer, namespaces, isWaitlist, tenantFieldDefinitions);
     const seen = new Set<string>();
     const out: AvailableField[] = [];
     for (const provider of providers) {
@@ -246,36 +276,45 @@ export function availableFieldsForGroup(
     const groups = evidenceGroupsForZone(zone, isWaitlist);
     const group = groups.find((g) => g.key === groupKey);
     if (!group) return [];
-    return [
-        ...group.defaultFieldKeys.map((key) => resolveQueueField(key, tenantFieldDefinitions)),
-        ...tenantFieldsForGroup(group, isWaitlist, tenantFieldDefinitions),
-    ];
+    const fromAssembly = group.acceptedNamespaces?.length
+        ? availableFieldsForNamespaces(
+              group.acceptedNamespaces as AvailableFieldEntityNamespace[],
+              tenantFieldDefinitions,
+              isWaitlist,
+              "queue_row",
+          )
+        : [];
+    const seen = new Set(fromAssembly.map((field) => field.key));
+    const seeded = group.defaultFieldKeys
+        .map((key) => resolveQueueField(key, tenantFieldDefinitions))
+        .filter((field) => {
+            if (seen.has(field.key)) return false;
+            seen.add(field.key);
+            return true;
+        });
+    return [...fromAssembly, ...seeded];
 }
 
 /**
  * Return all available composition fields for a zone — flat, across all groups.
- * Platform starter fields plus namespace-compatible tenant custom fields.
+ * Uses canonical queue_row provider assembly filtered by zone accepted namespaces,
+ * plus group defaultFieldKeys as non-boundary seeds.
  */
 export function availableFieldsForZone(
     zone: string,
     isWaitlist = false,
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): AvailableField[] {
-    const groups = evidenceGroupsForZone(zone, isWaitlist);
-    const seen = new Set<string>();
-    const fields: AvailableField[] = [];
-    for (const group of groups) {
+    const namespaces = namespacesForZone(zone, isWaitlist);
+    const fields = namespaces.length
+        ? availableFieldsForNamespaces(namespaces, tenantFieldDefinitions, isWaitlist, "queue_row")
+        : [];
+    const seen = new Set(fields.map((field) => field.key));
+    for (const group of evidenceGroupsForZone(zone, isWaitlist)) {
         for (const key of group.defaultFieldKeys) {
-            if (!seen.has(key)) {
-                seen.add(key);
-                fields.push(resolveQueueField(key, tenantFieldDefinitions));
-            }
-        }
-        for (const tenantField of tenantFieldsForGroup(group, isWaitlist, tenantFieldDefinitions)) {
-            if (!seen.has(tenantField.key)) {
-                seen.add(tenantField.key);
-                fields.push(tenantField);
-            }
+            if (seen.has(key)) continue;
+            seen.add(key);
+            fields.push(resolveQueueField(key, tenantFieldDefinitions));
         }
     }
     return fields;
@@ -300,10 +339,25 @@ export function namedEvidenceGroupsForZone(
             key: g.key,
             label: g.label,
             purpose: g.purpose,
-            availableFields: [
-                ...g.defaultFieldKeys.map((key) => resolveQueueField(key, tenantFieldDefinitions)),
-                ...tenantFieldsForGroup(g, isWaitlist, tenantFieldDefinitions),
-            ],
+            availableFields: (() => {
+                const fromAssembly = g.acceptedNamespaces?.length
+                    ? availableFieldsForNamespaces(
+                          g.acceptedNamespaces as AvailableFieldEntityNamespace[],
+                          tenantFieldDefinitions,
+                          isWaitlist,
+                          "queue_row",
+                      )
+                    : [];
+                const seen = new Set(fromAssembly.map((field) => field.key));
+                const seeded = g.defaultFieldKeys
+                    .map((key) => resolveQueueField(key, tenantFieldDefinitions))
+                    .filter((field) => {
+                        if (seen.has(field.key)) return false;
+                        seen.add(field.key);
+                        return true;
+                    });
+                return [...fromAssembly, ...seeded];
+            })(),
         }),
     );
 }

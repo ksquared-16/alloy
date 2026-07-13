@@ -7,12 +7,10 @@ import {
 } from "@/lib/fields/consumerCanonicalProviderAssembly";
 
 describe("consumerCanonicalProviderAssembly", () => {
-    it("includes shared native child providers once per consumer assembly", () => {
-        const forms = assembleFormsDocumentProviders();
+    it("deduplicates alias refKeys in queue_row assembly", () => {
         const queue = assembleQueueRowProviders();
-        expect(forms.some((p) => p.refKey === "child.display_name")).toBe(true);
-        expect(queue.some((p) => p.refKey === "child.display_name")).toBe(true);
-        expect(new Set(forms.filter((p) => p.refKey === "child.display_name").map((p) => p.refKey)).size).toBe(1);
+        expect(queue.some((p) => p.refKey === "child.first_name")).toBe(true);
+        expect(queue.map((p) => p.refKey)).not.toContain("child.display_name");
     });
 
     it("proves Forms assembly: field_definitions flow through canonical registry without Forms-local catalog", () => {
