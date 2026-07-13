@@ -79,6 +79,7 @@ import {
     putWorkUnitSurfaceConfigCache,
     putWorkUnitSurfaceQueueCache,
     putWorkUnitSurfaceSummariesCache,
+    putWorkUnitSurfaceRightRailCache,
     invalidateWorkUnitSurfaceCachesForWorkUnit,
     type WorkUnitViewModelCacheContext,
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
@@ -417,6 +418,12 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             ? summaryForLane.count
             : undefined;
     const fetchLimit = resolveWorkUnitQueueRowsFetchLimit(settledLaneCount);
+    // Decouple the active-row fetch from the SUMMARY request: the rows fetch reads the latest
+    // fetch-size at fire time from this ref, but `fetchLimit` is NOT a rows-effect dependency — so a
+    // summary arriving after the rows fetch never triggers a duplicate rows request. If summaries are
+    // already present they size the first fetch; if not, the reveal fetch uses the safe default.
+    const fetchLimitRef = useRef(fetchLimit);
+    fetchLimitRef.current = fetchLimit;
 
     useEffect(() => {
         // Wait for config settle: the lane validation above needs the queue definition, and a
@@ -429,7 +436,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             workUnitId,
             baseQueueKey: fetchQueueKey,
             workViewId: runtimeCtx.workViewId,
-            limit: fetchLimit,
+            limit: fetchLimitRef.current,
             selectedSiteId,
         });
         void dedupeAdminFetch(route, workspaceDataFetchInit())
@@ -460,12 +467,12 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                     setQueueSettledOnce(true);
                 }
             });
+        // fetchLimit intentionally excluded — read from fetchLimitRef so a late summary never refetches.
     }, [
         workUnitId,
         fetchQueueKey,
         runtimeCtx.workViewId,
         selectedSiteId,
-        fetchLimit,
         configSettled,
         queueRefreshNonce,
         cacheContext,
@@ -584,6 +591,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         selectedSiteId,
         enabled: configSettled,
         refreshToken: queueRefreshNonce,
+        cacheContext,
     });
     const totalCount = useMemo(() => {
         const activeViewId = runtimeCtx.workViewId?.trim() || null;
@@ -865,8 +873,11 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // directly from the bundle route (handles the bootstrap defer caveat — see the PR-V2
     // right-rail handoff §5), expose them on the model; RR.SURFACE renders + the existing
     // action runtime executes. Deduped + TTL, so no double-fetch. Never invents actions.
-    const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>([]);
-    const [rightRailSettled, setRightRailSettled] = useState(false);
+    const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>(
+        () => seed.rightRailActions ?? [],
+    );
+    // Settled if seeded from cache (a return renders the action rail immediately, then revalidates).
+    const [rightRailSettled, setRightRailSettled] = useState(() => seed.rightRailActions != null);
     const { displayVm } = useOpportunityDrawerVmPayload();
     const { canMutate: authCanMutate } = useAdminAuth();
     useEffect(() => {
@@ -876,17 +887,22 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             return;
         }
         let cancelled = false;
-        setRightRailSettled(false);
+        // Seeded-stale keeps the rail settled during the silent revalidate; only a cold establish
+        // drops it so the empty rail anchor shows until the actions resolve.
+        if (seed.rightRailActions == null) setRightRailSettled(false);
         void fetchWorkUnitRightRailResolvedActions({
             departmentId,
             workUnitId,
             fetchInit: workspaceDataFetchInit() ?? {},
         })
             .then((list) => {
-                if (!cancelled) setRightRailActions(list);
+                if (!cancelled) {
+                    setRightRailActions(list);
+                    putWorkUnitSurfaceRightRailCache(list, cacheContext);
+                }
             })
             .catch(() => {
-                if (!cancelled) setRightRailActions([]);
+                if (!cancelled && seed.rightRailActions == null) setRightRailActions([]);
             })
             .finally(() => {
                 if (!cancelled) setRightRailSettled(true);
@@ -894,7 +910,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, workUnitId]);
+    }, [departmentId, workUnitId, cacheContext, seed]);
 
     const filteredRightRailActions = useMemo(
         () =>

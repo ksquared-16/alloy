@@ -13,11 +13,16 @@ import {
     peekWorkUnitSurfaceQueueCache,
     putWorkUnitSurfaceSummariesCache,
     peekWorkUnitSurfaceSummariesCache,
+    putWorkUnitSurfaceRightRailCache,
+    peekWorkUnitSurfaceRightRailCache,
+    putWorkUnitSurfaceTotalsCache,
+    peekWorkUnitSurfaceTotalsCache,
     invalidateWorkUnitSurfaceCachesForWorkUnit,
     clearWorkUnitViewModelSessionCacheForTests,
     type WorkUnitViewModelCacheContext,
     type WorkUnitViewModelCacheLaneState,
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { ADMINV2_UI_SESSION_CACHE_TTL_MS } from "@/lib/adminV2/runtime/adminV2UiSessionCacheTtl";
 import type { QueueItemsResult } from "@/lib/queues/types";
 
@@ -120,21 +125,63 @@ describe("work unit surface summaries cache", () => {
     });
 });
 
+describe("work unit surface right-rail cache", () => {
+    const actions = [{ action_key: "create_lead" }] as unknown as ResolvedActionForClient[];
+
+    it("round-trips resolved actions and isolates by org", () => {
+        putWorkUnitSurfaceRightRailCache(actions, CTX_A);
+        expect(peekWorkUnitSurfaceRightRailCache(CTX_A)?.entry.actions).toHaveLength(1);
+        expect(peekWorkUnitSurfaceRightRailCache(CTX_OTHER_ORG)).toBeNull();
+    });
+
+    it("distinguishes a cached empty rail from a miss", () => {
+        putWorkUnitSurfaceRightRailCache([], CTX_A);
+        const read = peekWorkUnitSurfaceRightRailCache(CTX_A);
+        expect(read).not.toBeNull();
+        expect(read?.entry.actions).toEqual([]); // seeded empty, not "cold"
+    });
+});
+
+describe("work unit surface totals cache", () => {
+    it("round-trips the totals map and isolates by population fingerprint", () => {
+        const totals = new Map<string, number | null>([["wu-1::view-a", 5]]);
+        putWorkUnitSurfaceTotalsCache(totals, "pop-1", CTX_A);
+        expect(peekWorkUnitSurfaceTotalsCache({ context: CTX_A, populationKey: "pop-1" })?.entry.totals.get("wu-1::view-a")).toBe(5);
+        // A different visible-view set / site is a different population → miss.
+        expect(peekWorkUnitSurfaceTotalsCache({ context: CTX_A, populationKey: "pop-2" })).toBeNull();
+        // Org isolation.
+        expect(peekWorkUnitSurfaceTotalsCache({ context: CTX_OTHER_ORG, populationKey: "pop-1" })).toBeNull();
+    });
+
+    it("stores a defensive copy so later mutation of the source map cannot corrupt the cache", () => {
+        const totals = new Map<string, number | null>([["k", 1]]);
+        putWorkUnitSurfaceTotalsCache(totals, "pop-x", CTX_A);
+        totals.set("k", 999);
+        expect(peekWorkUnitSurfaceTotalsCache({ context: CTX_A, populationKey: "pop-x" })?.entry.totals.get("k")).toBe(1);
+    });
+});
+
 describe("invalidateWorkUnitSurfaceCachesForWorkUnit", () => {
     it("drops all surface caches for the target work unit but preserves a different work unit", () => {
         putWorkUnitSurfaceConfigCache(configEntry(), CTX_A);
         putWorkUnitSurfaceQueueCache({ queueResult: queueResult(3) }, CTX_A, LANE);
         putWorkUnitSurfaceSummariesCache([], CTX_A, "site-a");
+        putWorkUnitSurfaceRightRailCache([{ action_key: "x" }] as unknown as ResolvedActionForClient[], CTX_A);
+        putWorkUnitSurfaceTotalsCache(new Map([["k", 1]]), "pop-1", CTX_A);
         putWorkUnitSurfaceConfigCache(configEntry("other"), CTX_WU2);
         putWorkUnitSurfaceQueueCache({ queueResult: queueResult(9) }, CTX_WU2, LANE);
+        putWorkUnitSurfaceTotalsCache(new Map([["k", 2]]), "pop-1", CTX_WU2);
 
         invalidateWorkUnitSurfaceCachesForWorkUnit({ context: CTX_A });
 
         expect(peekWorkUnitSurfaceConfigCache(CTX_A)).toBeNull();
         expect(peekWorkUnitSurfaceQueueCache({ context: CTX_A, lane: LANE })).toBeNull();
         expect(peekWorkUnitSurfaceSummariesCache(CTX_A, "site-a")).toBeNull();
+        expect(peekWorkUnitSurfaceRightRailCache(CTX_A)).toBeNull();
+        expect(peekWorkUnitSurfaceTotalsCache({ context: CTX_A, populationKey: "pop-1" })).toBeNull();
         // The sibling work unit is untouched.
         expect(peekWorkUnitSurfaceConfigCache(CTX_WU2)?.entry.queueRowSurfaceId).toBe("other");
         expect(peekWorkUnitSurfaceQueueCache({ context: CTX_WU2, lane: LANE })?.entry.queueResult.total).toBe(9);
+        expect(peekWorkUnitSurfaceTotalsCache({ context: CTX_WU2, populationKey: "pop-1" })?.entry.totals.get("k")).toBe(2);
     });
 });

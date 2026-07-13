@@ -21,6 +21,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import {
+    peekWorkUnitSurfaceTotalsCache,
+    putWorkUnitSurfaceTotalsCache,
+    type WorkUnitViewModelCacheContext,
+} from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import type { QueueItemsResult } from "@/lib/queues/types";
 import { queueTotalCountFromQueueItemsResult } from "./types";
 import {
@@ -85,8 +90,14 @@ export function useWorkViewTotalsState(args: {
      * during the refresh when the canonical population is unchanged.
      */
     refreshToken?: string | number;
+    /**
+     * Session-cache scope (Trust Closure). When provided, the totals map is cached per host +
+     * population fingerprint so a return navigation resolves every badge from memory: a fresh cache
+     * seeds the display AND skips the fan-out; a stale cache seeds then revalidates (SWR).
+     */
+    cacheContext?: WorkUnitViewModelCacheContext | null;
 }): WorkViewTotalsState {
-    const { targets, selectedSiteId, enabled = true, refreshToken } = args;
+    const { targets, selectedSiteId, enabled = true, refreshToken, cacheContext } = args;
 
     const targetsKey = useMemo(
         () =>
@@ -114,10 +125,21 @@ export function useWorkViewTotalsState(args: {
 
     const settledStoreRef = useRef<WorkViewSettledTotalsStore>(new Map());
 
+    // Mount seed from the session cache — computed once so a return renders every badge instantly.
+    const totalsSeedRef = useRef<{ totals: Map<string, number | null>; fresh: boolean } | null | undefined>(
+        undefined,
+    );
+    if (totalsSeedRef.current === undefined) {
+        const read = cacheContext ? peekWorkUnitSurfaceTotalsCache({ context: cacheContext, populationKey }) : null;
+        totalsSeedRef.current = read ? { totals: new Map(read.entry.totals), fresh: read.fresh } : null;
+    }
+    // A fresh seed also skips the count fan-out on this navigation (no duplicate requests).
+    const skipFreshFetchRef = useRef(totalsSeedRef.current?.fresh === true);
+
     const [resolved, setResolved] = useState<{
         scopeKey: string;
         totals: Map<string, number | null>;
-    } | null>(null);
+    } | null>(() => (totalsSeedRef.current ? { scopeKey, totals: totalsSeedRef.current.totals } : null));
 
     // Population identity change: prune retention for removed/changed canonical locations.
     useEffect(() => {
@@ -136,6 +158,13 @@ export function useWorkViewTotalsState(args: {
             byKey.set(workViewTotalKey(target.workUnitId, target.viewId), target);
         }
         if (!byKey.size) return;
+
+        // Fresh cached totals seeded this navigation — do not re-issue the fan-out. (Stale/absent
+        // seeds fall through and revalidate.) One-shot: later scope changes always refetch.
+        if (skipFreshFetchRef.current) {
+            skipFreshFetchRef.current = false;
+            return;
+        }
 
         let cancelled = false;
         const fetchTotal = async (
@@ -171,6 +200,8 @@ export function useWorkViewTotalsState(args: {
                 settledStore: settledStoreRef.current,
             });
             setResolved({ scopeKey, totals: freshTotals });
+            // Write-back so a return navigation resolves these badges from the session cache.
+            if (cacheContext) putWorkUnitSurfaceTotalsCache(freshTotals, populationKey, cacheContext);
         });
         return () => {
             cancelled = true;

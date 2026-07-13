@@ -15,11 +15,13 @@ import {
     peekWorkUnitSurfaceConfigCache,
     peekWorkUnitSurfaceQueueCache,
     peekWorkUnitSurfaceSummariesCache,
+    peekWorkUnitSurfaceRightRailCache,
     type WorkUnitSurfaceConfigCacheEntry,
     type WorkUnitViewModelCacheContext,
     type WorkUnitViewModelCacheLaneState,
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { WorkUnitSlugRouteValue } from "@/contexts/WorkUnitSlugRouteContext";
 import type { WorkUnitReadiness } from "./types";
 
@@ -56,6 +58,8 @@ export type WorkUnitSurfaceInitialSeed = {
     configFresh: boolean;
     summaries: QueueSummary[] | null;
     queueResult: QueueItemsResult | null;
+    /** null = not cached (cold); [] = cached empty rail. */
+    rightRailActions: ResolvedActionForClient[] | null;
 };
 
 export const EMPTY_WORK_UNIT_SURFACE_SEED: WorkUnitSurfaceInitialSeed = {
@@ -63,6 +67,7 @@ export const EMPTY_WORK_UNIT_SURFACE_SEED: WorkUnitSurfaceInitialSeed = {
     configFresh: false,
     summaries: null,
     queueResult: null,
+    rightRailActions: null,
 };
 
 /**
@@ -81,7 +86,8 @@ export function computeWorkUnitSurfaceInitialSeed(args: {
 
     const configRead = peekWorkUnitSurfaceConfigCache(cacheContext);
     const summaries = peekWorkUnitSurfaceSummariesCache(cacheContext, selectedSiteId)?.entry.summaries ?? null;
-    if (!configRead) return { ...EMPTY_WORK_UNIT_SURFACE_SEED, summaries };
+    const rightRailActions = peekWorkUnitSurfaceRightRailCache(cacheContext)?.entry.actions ?? null;
+    if (!configRead) return { ...EMPTY_WORK_UNIT_SURFACE_SEED, summaries, rightRailActions };
 
     const cfg = configRead.entry;
     const routeWorkViewId = slugRoute?.initialWorkViewId ?? null;
@@ -99,7 +105,7 @@ export function computeWorkUnitSurfaceInitialSeed(args: {
           })?.entry.queueResult ?? null
         : null;
 
-    return { config: cfg, configFresh: configRead.fresh, summaries, queueResult };
+    return { config: cfg, configFresh: configRead.fresh, summaries, queueResult, rightRailActions };
 }
 
 /**

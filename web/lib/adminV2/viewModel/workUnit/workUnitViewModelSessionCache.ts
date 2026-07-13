@@ -28,6 +28,7 @@ import { recordWorkspaceCacheOutcome } from "@/lib/perf/workspaceNavGraph";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 import type { WorkViewCanonicalLocationWorkUnitRow } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 const DEFAULT_TTL_MS = ADMINV2_UI_SESSION_CACHE_TTL_MS;
 
@@ -275,6 +276,79 @@ export function peekWorkUnitSurfaceSummariesCache(
     return { entry: hit, fresh: age < SUMMARIES_FRESH_MS };
 }
 
+/** Right Rail resolved actions — the configured action lane (org/dept/wu scoped, no lane). */
+export type WorkUnitSurfaceRightRailCacheEntry = {
+    actions: ResolvedActionForClient[];
+    cachedAt: number;
+};
+
+const rightRailCache = new Map<string, WorkUnitSurfaceRightRailCacheEntry>();
+
+export function putWorkUnitSurfaceRightRailCache(
+    actions: ResolvedActionForClient[],
+    context?: WorkUnitViewModelCacheContext | null
+): void {
+    rightRailCache.set(configCacheKey(context), { actions, cachedAt: Date.now() });
+}
+
+export function peekWorkUnitSurfaceRightRailCache(
+    context?: WorkUnitViewModelCacheContext | null,
+    maxAgeMs: number = DEFAULT_TTL_MS
+): WorkUnitSurfaceCacheRead<WorkUnitSurfaceRightRailCacheEntry> {
+    const hit = rightRailCache.get(configCacheKey(context));
+    if (!hit) return null;
+    const age = Date.now() - hit.cachedAt;
+    if (age > maxAgeMs) {
+        rightRailCache.delete(configCacheKey(context));
+        return null;
+    }
+    return { entry: hit, fresh: age < CONFIG_FRESH_MS };
+}
+
+/**
+ * Canonical Work View totals — the per-pill count fan-out, cached as one map so a return
+ * navigation resolves every badge from memory instead of re-issuing N count requests. Keyed by the
+ * host context + the totals population fingerprint (targets + site), so a different visible-view set
+ * or site never reads a stale map.
+ */
+export type WorkUnitSurfaceTotalsCacheEntry = {
+    totals: Map<string, number | null>;
+    cachedAt: number;
+};
+
+const totalsCache = new Map<string, WorkUnitSurfaceTotalsCacheEntry>();
+
+function totalsCacheKey(context: WorkUnitViewModelCacheContext | null | undefined, populationKey: string): string {
+    return buildWorkUnitViewModelCacheKey({
+        context,
+        lane: { selectedQueueKey: null, recordFilterFingerprint: `totals:${populationKey}` },
+    });
+}
+
+export function putWorkUnitSurfaceTotalsCache(
+    totals: Map<string, number | null>,
+    populationKey: string,
+    context?: WorkUnitViewModelCacheContext | null
+): void {
+    totalsCache.set(totalsCacheKey(context, populationKey), { totals: new Map(totals), cachedAt: Date.now() });
+}
+
+export function peekWorkUnitSurfaceTotalsCache(params: {
+    context?: WorkUnitViewModelCacheContext | null;
+    populationKey: string;
+    maxAgeMs?: number;
+}): WorkUnitSurfaceCacheRead<WorkUnitSurfaceTotalsCacheEntry> {
+    const key = totalsCacheKey(params.context, params.populationKey);
+    const hit = totalsCache.get(key);
+    if (!hit) return null;
+    const age = Date.now() - hit.cachedAt;
+    if (age > (params.maxAgeMs ?? DEFAULT_TTL_MS)) {
+        totalsCache.delete(key);
+        return null;
+    }
+    return { entry: hit, fresh: age < QUEUE_FRESH_MS };
+}
+
 /** Drop all PRV2 surface caches for a work unit — e.g. after a queue-membership mutation. */
 export function invalidateWorkUnitSurfaceCachesForWorkUnit(params: {
     context?: WorkUnitViewModelCacheContext | null;
@@ -286,6 +360,8 @@ export function invalidateWorkUnitSurfaceCachesForWorkUnit(params: {
     for (const key of configCache.keys()) if (key.startsWith(prefix)) configCache.delete(key);
     for (const key of surfaceQueueCache.keys()) if (key.startsWith(prefix)) surfaceQueueCache.delete(key);
     for (const key of summariesCache.keys()) if (key.startsWith(prefix)) summariesCache.delete(key);
+    for (const key of rightRailCache.keys()) if (key.startsWith(prefix)) rightRailCache.delete(key);
+    for (const key of totalsCache.keys()) if (key.startsWith(prefix)) totalsCache.delete(key);
 }
 
 export function clearWorkUnitViewModelSessionCacheForTests(): void {
@@ -294,4 +370,6 @@ export function clearWorkUnitViewModelSessionCacheForTests(): void {
     configCache.clear();
     surfaceQueueCache.clear();
     summariesCache.clear();
+    rightRailCache.clear();
+    totalsCache.clear();
 }
