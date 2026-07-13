@@ -124,7 +124,7 @@ function pickerProvidersForNamespaces(
 ): CanonicalDataProvider[] {
     const acceptedSet = new Set(namespaces);
     return filterCanonicalDataProviders({
-        consumer: "queue_row",
+        consumer: "focus_panel",
         isWaitlist,
         tenantFieldDefinitions,
     }).filter((provider) => acceptedSet.has(provider.entityNamespace as AvailableFieldEntityNamespace));
