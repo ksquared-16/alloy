@@ -175,6 +175,15 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                     operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createChild, payload: { household_id: `@${sub.householdRef}`, display_name: String(sub.values?.display_name ?? "Child"), dob: sub.values?.dob ?? null }, after: { display_name: sub.values?.display_name, dob: sub.values?.dob }, dependsOnRefs: sub.householdRef ? [sub.householdRef] : [], reason: "new child" });
                 } else if (sub.decision === "update") {
                     operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updateChild, targetId: sub.selectedRecordId ?? null, payload: { child_id: sub.selectedRecordId, display_name: sub.values?.display_name, dob: sub.values?.dob }, after: { display_name: sub.values?.display_name }, preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update matched child" });
+                } else if (sub.decision === "link" && sub.selectedRecordId) {
+                    operations.push({
+                        ...common,
+                        opKind: "no_op",
+                        commandKey: IDENTITY_COMMAND_KEYS.updateChild,
+                        targetId: sub.selectedRecordId,
+                        payload: { child_id: sub.selectedRecordId },
+                        reason: "reuse existing child",
+                    });
                 }
                 break;
             case "lead":

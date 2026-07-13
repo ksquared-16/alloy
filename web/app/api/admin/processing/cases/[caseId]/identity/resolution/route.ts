@@ -24,6 +24,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         resolutionId?: string;
         decisionAction?: string;
         selectedCandidateId?: string | null;
+        createNewOverrideReason?: string | null;
+        createNewOverrideReasonCode?: string | null;
     } | null;
     if (!body?.resolutionId || !body.decisionAction) {
         return jsonError("resolutionId and decisionAction are required", 400);
@@ -35,6 +37,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             resolutionId: body.resolutionId,
             decisionAction: body.decisionAction,
             selectedCandidateId: body.selectedCandidateId ?? null,
+            createNewOverrideReason: body.createNewOverrideReason ?? null,
+            createNewOverrideReasonCode: body.createNewOverrideReasonCode ?? null,
         });
         return jsonData({ ok: true });
     } catch (e) {

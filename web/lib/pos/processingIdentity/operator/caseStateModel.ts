@@ -28,6 +28,8 @@ export type ReadinessInput = {
     undecidedResolutionCount: number;
     /** Unresolved blocking conflicts. */
     blockingConflictCount: number;
+    /** Subjects that fail the canonical identity-review eligibility gate. */
+    ineligibleSubjectCount?: number;
     /** A subject/plan is marked as needing more information. */
     needsInformation: boolean;
     /** Latest plan built for the case (if any). */
@@ -52,7 +54,12 @@ export function projectIdentityReadiness(input: ReadinessInput): IdentityReviewR
     if (input.needsInformation) return "needs_information";
 
     if (!input.hasFacts) return "needs_understanding_review";
-    if (input.resolutionCount === 0 || input.undecidedResolutionCount > 0 || input.blockingConflictCount > 0) {
+    if (
+        input.resolutionCount === 0 ||
+        input.undecidedResolutionCount > 0 ||
+        input.blockingConflictCount > 0 ||
+        (input.ineligibleSubjectCount ?? 0) > 0
+    ) {
         return "needs_identity_review";
     }
     if (!input.plan || !input.plan.exists) return "needs_plan_review";

@@ -53,6 +53,13 @@ import {
     type Escalation,
     type IdentityResolutionSet,
 } from "./recommendationBuilder";
+import {
+    evaluateCasePlanEligibility,
+    evaluateSubjectEligibility,
+    plausibleCandidates,
+    readCreateNewOverride,
+    type IdentityResolutionEligibility,
+} from "./identityResolutionEligibility";
 
 export class OperatorServiceError extends Error {
     code: string;
@@ -83,6 +90,9 @@ export type CaseReviewState = {
     latestAttempt: CommitAttempt | null;
     readiness: IdentityReviewReadiness;
     blockingConflictCount: number;
+    subjectEligibility: IdentityResolutionEligibility[];
+    planEligible: boolean;
+    identityBlockers: string[];
 };
 
 function assertAuthorized(deps: OperatorReviewDeps): void {
@@ -93,12 +103,26 @@ function assertAuthorized(deps: OperatorReviewDeps): void {
 
 function countBlockingConflicts(resolutions: ProcessingResolutionRow[]): number {
     let n = 0;
-    for (const r of resolutions) {
+    for (const r of pickLatestResolutionPerSubject(resolutions)) {
         for (const c of r.candidates ?? []) {
             if ((c.blockingConflicts ?? []).length > 0 && !r.decision_action) n += 1;
+            if (c.confidenceBand === "conflicted" && r.decision_action !== "link_existing" && r.decided_by !== "operator") {
+                n += 1;
+            }
         }
     }
     return n;
+}
+
+function requirePlanEligibility(rows: ProcessingResolutionRow[]): void {
+    const eligibility = evaluateCasePlanEligibility(rows);
+    if (!eligibility.eligibleForPlan) {
+        throw new OperatorServiceError(
+            "identity_review_required",
+            eligibility.blockers.map((b) => `${b.code}: ${b.explanation}`).join(" | ") ||
+                "Identity subjects are not eligible for plan finalization",
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -128,13 +152,20 @@ export async function loadCaseReview(
         .eq("case_id", caseId);
 
     const blockingConflictCount = countBlockingConflicts(resolutions);
-    const undecided = resolutions.filter((r) => !r.decision_action).length;
+    const caseEligibility = evaluateCasePlanEligibility(resolutions);
+    const active = pickLatestResolutionPerSubject(resolutions);
+    const undecided = active.filter((r) => {
+        const el = evaluateSubjectEligibility(r);
+        return !el.eligibleForPlan;
+    }).length;
+    const needsInformation = active.some((r) => r.decision_action === "request_information");
     const readiness = projectIdentityReadiness({
         hasFacts: facts.length > 0,
-        resolutionCount: resolutions.length,
+        resolutionCount: active.length,
         undecidedResolutionCount: undecided,
         blockingConflictCount,
-        needsInformation: false,
+        ineligibleSubjectCount: caseEligibility.subjects.filter((s) => !s.eligibleForPlan).length,
+        needsInformation,
         plan: plan ? { exists: true, supersededOrStale: Boolean(plan.supersededBy) } : null,
         hasValidApproval: Boolean(approval),
         latestAttemptOutcome:
@@ -152,6 +183,9 @@ export async function loadCaseReview(
         latestAttempt,
         readiness,
         blockingConflictCount,
+        subjectEligibility: caseEligibility.subjects,
+        planEligible: caseEligibility.eligibleForPlan,
+        identityBlockers: caseEligibility.blockers.map((b) => `${b.code}: ${b.explanation}`),
     };
 }
 
@@ -177,8 +211,57 @@ export async function recordCorrection(
 // ---------------------------------------------------------------------------
 export async function recordResolutionDecision(
     deps: OperatorReviewDeps,
-    input: { resolutionId: string; caseId: string; decisionAction: string; selectedCandidateId?: string | null },
+    input: {
+        resolutionId: string;
+        caseId: string;
+        decisionAction: string;
+        selectedCandidateId?: string | null;
+        /** Required when creating new despite plausible matches. */
+        createNewOverrideReason?: string | null;
+        createNewOverrideReasonCode?: string | null;
+    },
 ): Promise<void> {
+    const rows = await listProcessingResolutionsByCase(deps.supabase, deps.orgId, input.caseId);
+    const existing = rows.find((r) => r.id === input.resolutionId);
+    if (!existing) throw new OperatorServiceError("resolution_not_found", "Resolution not found in this case/org");
+
+    const candidates = plausibleCandidates(existing);
+    let provisional = { ...(existing.provisional ?? {}) };
+
+    if (input.decisionAction === "create_new" && candidates.length > 0) {
+        const reason = (input.createNewOverrideReason ?? "").trim();
+        if (!reason) {
+            throw new OperatorServiceError(
+                "create_new_override_required",
+                "Creating a new record despite a plausible existing match requires an explicit operator reason",
+            );
+        }
+        provisional = {
+            ...provisional,
+            create_new_override: {
+                reason,
+                reasonCode: input.createNewOverrideReasonCode ?? "operator_create_new_override",
+                rejectedCandidateIds: candidates.map((c) => c.recordId),
+                decidedAt: deps.now?.() ?? new Date().toISOString(),
+                operatorId: deps.actorId,
+            },
+            rejected_candidates: candidates,
+            recommended_action_at_decision: existing.decision_action,
+        };
+    } else if (input.decisionAction !== "create_new" && provisional.create_new_override) {
+        const { create_new_override: _removed, ...rest } = provisional;
+        provisional = rest;
+    }
+
+    // Preserve rejected-candidate audit when linking after review.
+    if (input.decisionAction === "link_existing" && candidates.length > 0) {
+        provisional = {
+            ...provisional,
+            operator_selected_candidate_id: input.selectedCandidateId ?? null,
+            candidates_shown_at_decision: candidates,
+        };
+    }
+
     const { data, error } = await deps.supabase
         .from("processing_resolutions")
         .update({
@@ -186,6 +269,7 @@ export async function recordResolutionDecision(
             selected_candidate_id: input.selectedCandidateId ?? null,
             decided_by: "operator",
             operator_id: deps.actorId,
+            provisional,
         })
         .eq("org_id", deps.orgId)
         .eq("case_id", input.caseId)
@@ -209,10 +293,12 @@ export async function buildPlan(
         sourceResolutionVersions?: string[];
     },
 ): Promise<{ plan: CommitPlan; escalations: Escalation[]; requestInformation: boolean }> {
+    const rows = await listProcessingResolutionsByCase(deps.supabase, deps.orgId, input.caseId);
+    requirePlanEligibility(rows);
+
     let resolutionSet = input.resolutionSet;
     let sourceResolutionVersions = input.sourceResolutionVersions;
     if (!resolutionSet) {
-        const rows = await listProcessingResolutionsByCase(deps.supabase, deps.orgId, input.caseId);
         const active = pickLatestResolutionPerSubject(rows);
         const rejected = active.filter((r) => r.decision_action === "reject");
         if (rejected.length > 0) {
@@ -266,6 +352,9 @@ export async function approvePlan(
     input: { caseId: string; planId: string; blockingConflicts?: string[] },
 ): Promise<PlanApproval> {
     assertAuthorized(deps);
+    const rows = await listProcessingResolutionsByCase(deps.supabase, deps.orgId, input.caseId);
+    requirePlanEligibility(rows);
+
     const plan = await loadCommitPlan(deps.supabase, { orgId: deps.orgId, planId: input.planId });
     if (!plan) throw new OperatorServiceError("plan_not_found", "Plan not found in this org");
     if (plan.caseId !== input.caseId) throw new OperatorServiceError("plan_case_mismatch", "Plan does not belong to this case");
@@ -287,6 +376,9 @@ export async function executeApprovedPlanForCase(
     input: { caseId: string; planId: string; executionIdempotencyKey: string; currentRecordVersions?: Record<string, string> },
 ): Promise<CommitAttempt> {
     assertAuthorized(deps);
+    const rows = await listProcessingResolutionsByCase(deps.supabase, deps.orgId, input.caseId);
+    requirePlanEligibility(rows);
+
     const plan = await loadCommitPlan(deps.supabase, { orgId: deps.orgId, planId: input.planId });
     if (!plan) throw new OperatorServiceError("plan_not_found", "Plan not found in this org");
     if (plan.caseId !== input.caseId) throw new OperatorServiceError("plan_case_mismatch", "Plan does not belong to this case");
@@ -340,4 +432,9 @@ export async function readAttempts(
     input: { planId: string },
 ): Promise<CommitAttempt | null> {
     return loadLatestAttemptForPlan(deps.supabase, { orgId: deps.orgId, planId: input.planId });
+}
+
+/** Test/helper export: inspect override lineage on a resolution. */
+export function getCreateNewOverrideAudit(row: ProcessingResolutionRow) {
+    return readCreateNewOverride(row.provisional);
 }

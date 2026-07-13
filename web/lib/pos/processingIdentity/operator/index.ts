@@ -7,5 +7,6 @@
 
 export * from "./caseStateModel";
 export * from "./recommendationBuilder";
+export * from "./identityResolutionEligibility";
 export * from "./operatorReviewService";
 export * from "./operatorRouteContext";
