@@ -10,9 +10,9 @@ import {
     findCanonicalDataProvider,
     publishableQueueRowRefKeys,
 } from "@/lib/fields/canonicalDataProviderRegistry";
-import type { CanonicalDataProvider, CanonicalDataProviderFilter } from "@/lib/fields/canonicalDataProviderModel";
+import type { CanonicalDataConsumerSurface, CanonicalDataProvider, CanonicalDataProviderFilter } from "@/lib/fields/canonicalDataProviderModel";
 import { consumerSupportsProviderInPicker } from "@/lib/fields/consumerProviderCapabilities";
-import { dedupeFocusPanelPickerProviders } from "@/lib/fields/focusPanelProviderDedup";
+import { dedupeCanonicalPickerProviders } from "@/lib/fields/canonicalProviderDedup";
 import {
     PLATFORM_FIELD_HUB_ENTITIES,
     platformFieldsForEntityExcludingRegistry,
@@ -55,6 +55,7 @@ function providerFromPlatformFieldCatalog(field: PlatformFieldDefinition): Canon
 function mergePlatformCatalogProviders(
     base: readonly CanonicalDataProvider[],
     filter: ConsumerProviderAssemblyFilter,
+    consumer: CanonicalDataConsumerSurface,
 ): CanonicalDataProvider[] {
     const merged = new Map<string, CanonicalDataProvider>(base.map((provider) => [provider.refKey, provider]));
     const tenantKeysByEntity = new Map<string, Set<string>>();
@@ -79,11 +80,27 @@ function mergePlatformCatalogProviders(
                 continue;
             }
             const catalogProvider = providerFromPlatformFieldCatalog(platformField);
-            if (!consumerSupportsProviderInPicker("focus_panel", catalogProvider)) continue;
+            if (!consumerSupportsProviderInPicker(consumer, catalogProvider)) continue;
             merged.set(platformField.refKey, catalogProvider);
         }
     }
     return [...merged.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function assembleConsumerProviders(
+    consumer: CanonicalDataConsumerSurface,
+    filter: ConsumerProviderAssemblyFilter = {},
+): CanonicalDataProvider[] {
+    const base = filterCanonicalDataProviders({
+        consumer,
+        tenantFieldDefinitions: filter.tenantFieldDefinitions,
+        isWaitlist: filter.isWaitlist ?? false,
+        includeLegacyOnly: filter.includeLegacyOnly ?? consumer !== "focus_panel",
+    });
+    return dedupeCanonicalPickerProviders(
+        mergePlatformCatalogProviders(base, filter, consumer),
+        consumer,
+    );
 }
 
 export function assembleFormsDocumentProviders(filter: ConsumerProviderAssemblyFilter = {}): CanonicalDataProvider[] {
@@ -96,22 +113,15 @@ export function assembleFormsDocumentProviders(filter: ConsumerProviderAssemblyF
 }
 
 export function assembleQueueRowProviders(filter: ConsumerProviderAssemblyFilter = {}): CanonicalDataProvider[] {
-    return filterCanonicalDataProviders({
-        consumer: "queue_row",
-        tenantFieldDefinitions: filter.tenantFieldDefinitions,
-        isWaitlist: filter.isWaitlist ?? false,
-        includeLegacyOnly: filter.includeLegacyOnly ?? true,
-    });
+    return assembleConsumerProviders("queue_row", filter);
+}
+
+export function assembleBusinessProcessProviders(filter: ConsumerProviderAssemblyFilter = {}): CanonicalDataProvider[] {
+    return assembleConsumerProviders("business_process", filter);
 }
 
 export function assembleFocusPanelNestedProviders(filter: ConsumerProviderAssemblyFilter = {}): CanonicalDataProvider[] {
-    const base = filterCanonicalDataProviders({
-        consumer: "focus_panel",
-        tenantFieldDefinitions: filter.tenantFieldDefinitions,
-        isWaitlist: filter.isWaitlist ?? false,
-        includeLegacyOnly: filter.includeLegacyOnly ?? false,
-    });
-    return dedupeFocusPanelPickerProviders(mergePlatformCatalogProviders(base, filter));
+    return assembleConsumerProviders("focus_panel", { ...filter, includeLegacyOnly: filter.includeLegacyOnly ?? false });
 }
 
 export function resolveCanonicalProviderForConsumer(
@@ -119,8 +129,14 @@ export function resolveCanonicalProviderForConsumer(
     consumer: CanonicalDataProviderFilter["consumer"],
     filter: ConsumerProviderAssemblyFilter = {},
 ): CanonicalDataProvider | undefined {
-    if (consumer === "focus_panel") {
-        return assembleFocusPanelNestedProviders(filter).find((provider) => provider.refKey === refKey.trim());
+    if (consumer === "focus_panel" || consumer === "queue_row" || consumer === "business_process") {
+        const assembly =
+            consumer === "focus_panel"
+                ? assembleFocusPanelNestedProviders(filter)
+                : consumer === "queue_row"
+                    ? assembleQueueRowProviders(filter)
+                    : assembleBusinessProcessProviders(filter);
+        return assembly.find((provider) => provider.refKey === refKey.trim());
     }
     const provider = findCanonicalDataProvider(refKey, {
         tenantFieldDefinitions: filter.tenantFieldDefinitions,
