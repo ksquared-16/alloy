@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
@@ -11,6 +11,40 @@ supersedes: []
 **Reference workspace:** Settings → Data Model (`/settings/fields`)
 
 Alloy separates three operator concepts. They are **not** interchangeable.
+
+---
+
+## Ownership, projection, and surface availability (doctrine)
+
+**Settings → Fields models canonical data ownership.** Surfaces determine contextual availability. Consumers may project fields from one owner onto another subject. Projection does not change ownership.
+
+Required flow:
+
+```text
+Canonical Owner
+→ Canonical Field Definition
+→ Canonical Provider
+→ Optional Canonical Projection
+→ Consumer Capability and Context
+→ Presentation
+```
+
+Reject this fallacy:
+
+```text
+A field belongs to Child because operators see it on Child surfaces.
+```
+
+| Concept | Meaning |
+| --- | --- |
+| **Canonical owner** | Entity grain that owns the business fact (`customer_member`, `inquiry_child`, `person`, …) |
+| **Storage grain** | Table/column or `field_values` target for that owner |
+| **Provider** | Consumer-facing identity (`refKey`) derived from the field, not invented per UI |
+| **Projection subject** | Subject a consumer views (e.g. Child Focus Panel) while the owner remains Enrollment |
+| **Consumer availability** | Whether a resolver can supply the field on a surface/context |
+| **Presentation label** | Operator-facing copy (`Current Program`) — never ownership |
+
+Example: **Current Program** on a Child Focus Panel is an **Enrollment-owned** field (`inquiry_child.program_category_id` → OCM) projected onto the Child subject. Option masters (`location_program_categories`) remain Location/Program catalog ownership — not Child Profile.
 
 ---
 

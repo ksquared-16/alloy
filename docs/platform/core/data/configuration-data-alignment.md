@@ -1,15 +1,17 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
 # Canonical Configuration Data Alignment
 
-**Status:** Phase 5 formal contract (June 2026)
+**Status:** Phase 5 formal contract (June 2026); Child hub ownership grain clarified July 2026
 
 How Configuration surfaces relate to canonical data — metadata only, not operational truth.
+
+**Doctrine:** Settings → Fields models canonical ownership. Surface availability is separate. Projection onto a Child subject does not reassign Enrollment-owned fields to Child Profile.
 
 ---
 
@@ -54,10 +56,12 @@ Configuration **never** directly sets `status_key` on live records except throug
 
 ## Child grain in configuration
 
-| entity_type in field_definitions | Meaning |
-|----------------------------------|---------|
-| `customer_member` | Child profile config fields (gender, allergies, …) |
-| `inquiry_child` | Enrollment participation fields on OCM |
+| entity_type in field_definitions | Meaning | Settings Child hub section |
+|----------------------------------|---------|----------------------------|
+| `customer_member` | Child **profile** config fields (gender, allergies, …) | Child Profile |
+| `inquiry_child` | **Enrollment** participation fields on OCM | Enrollment |
+
+Operator-friendly hub label **Child** may group both sections. Each field row must retain its canonical owner grain. Enrollment assignment fields (location/program/room/schedule) reference Location/Program/Room **option masters**; assignment ownership stays Enrollment.
 | `person` | Guardian/adult fields |
 | `opportunity` | Case-level fields |
 | `customer` | Household fields |

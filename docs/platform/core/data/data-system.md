@@ -1,13 +1,13 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
 # Canonical Data System
 
-**Status:** v1 complete — sprint closed (June 2026)  
+**Status:** v1 complete — sprint closed (June 2026); ownership/projection doctrine clarified July 2026  
 **Audience:** Runtime, Configuration, Actions, Workflows, Analytics, BOS, Documents, Reports  
 **Prerequisites:** Phases 1–4 (`docs/canonical-data-system-phase-*.md`)
 
@@ -133,6 +133,21 @@ Legacy text `status` columns remain in schema but are **blocked at API** and **e
 | **Enrollment** | `opportunity_customer_members` | desired_start_date, location_id, outcome_status_key |
 
 Profile fields **must not** read/write on OCM. Guards: `canonicalFieldOwnership.ts`, `canonicalStrictMode.ts`.
+
+### Settings ownership vs child-surface projections
+
+Settings → Fields models **canonical ownership**. The operator **Child** hub may list related grains (profile + enrollment) but must not imply one storage grain.
+
+| Assignment on Child surface | Owner | Storage | Option master |
+| --- | --- | --- | --- |
+| Current Location | Enrollment (`inquiry_child`) | OCM.`location_id` | Location entity catalog |
+| Current Program | Enrollment | OCM.`program_category_id` | Location program offerings |
+| Current Room | Enrollment | OCM.`program_room_cohort_key` | Room/cohort options scoped to location + program |
+| Current Schedule | Enrollment | OCM.`schedule_type` | Schedule option set |
+
+Child Profile owns neither the assignment fields nor the option masters. Projection subject = Child; mutation target = Enrollment/OCM.
+
+Capability ↔ provider contract: if Settings declares a field available for a consumer/context, a resolvable canonical provider must exist. Reserved-key collision guards protect against duplicate custom definitions of native columns — they must not suppress legitimate profile seed fields (e.g. FC-CM-1 `gender`).
 
 ---
 
