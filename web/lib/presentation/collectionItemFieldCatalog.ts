@@ -1,5 +1,6 @@
 /**
  * Collection item field catalog — derived from canonical child/inquiry_child providers.
+ * Kept separate from collectionFieldPresentation to avoid circular imports with queue-row derivation.
  */
 
 import { assembleQueueRowProviders } from "@/lib/fields/consumerCanonicalProviderAssembly";
@@ -39,13 +40,14 @@ function isCollectionItemProviderRef(refKey: string): boolean {
 export function buildChildrenCollectionItemFieldCatalog(
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): Record<string, CollectionItemFieldDescriptor> {
+    const providers = assembleQueueRowProviders({ tenantFieldDefinitions });
     const catalog: Record<string, CollectionItemFieldDescriptor> = {};
 
     for (const [legacyKey, refKey] of Object.entries(LEGACY_COLLECTION_ITEM_REF_KEYS) as [
         CollectionItemFieldKey,
         string,
     ][]) {
-        const provider = assembleQueueRowProviders({ tenantFieldDefinitions }).find((row) => row.refKey === refKey);
+        const provider = providers.find((row) => row.refKey === refKey);
         catalog[legacyKey] = {
             key: legacyKey,
             refKey,
@@ -54,7 +56,7 @@ export function buildChildrenCollectionItemFieldCatalog(
         };
     }
 
-    for (const provider of assembleQueueRowProviders({ tenantFieldDefinitions })) {
+    for (const provider of providers) {
         if (!isCollectionItemProviderRef(provider.refKey)) continue;
         if (provider.kind === "collection" || provider.kind === "relationship") continue;
         const suffix = suffixFromRefKey(provider.refKey);

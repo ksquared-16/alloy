@@ -12,11 +12,6 @@ import { inquiryChildAgeLabelFromDob } from "@/lib/admin/drawer/inquiryChildrenH
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
 import type { QueueRowContext, RelatedSubjectSummary } from "@/lib/workUnits/lifecycleSubjectContracts";
-import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
-import {
-    buildChildrenCollectionItemFieldCatalog,
-    selectableChildrenCollectionItemFieldKeys as selectableCollectionItemKeysFromCanonical,
-} from "@/lib/presentation/collectionItemFieldCatalog";
 
 export type CollectionFieldKey = "children";
 
@@ -81,18 +76,6 @@ export const COLLECTION_ITEM_FIELD_CATALOG: Record<
     gender: { label: "Gender", resolverBacked: true },
 };
 
-/** Canonical-derived collection item catalog — labels propagate from Settings / Fields. */
-export function resolveCollectionItemFieldCatalog(
-    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
-): Record<string, { label: string; resolverBacked: boolean }> {
-    const derived = buildChildrenCollectionItemFieldCatalog(tenantFieldDefinitions);
-    const merged: Record<string, { label: string; resolverBacked: boolean }> = { ...COLLECTION_ITEM_FIELD_CATALOG };
-    for (const entry of Object.values(derived)) {
-        merged[entry.key] = { label: entry.label, resolverBacked: entry.resolverBacked };
-    }
-    return merged;
-}
-
 /** Inspector copy when gender is registered but queue-row hydration is missing (should not show when resolver-backed). */
 export const CHILDREN_COLLECTION_GENDER_UNAVAILABLE_REASON =
     "Gender is configured in Fields but is not available in queue row runtime yet.";
@@ -120,29 +103,21 @@ export function isLegacyChildrenCollectionFieldKey(fieldKey: string): fieldKey i
     return (LEGACY_CHILDREN_COLLECTION_FIELD_KEYS as readonly string[]).includes(fieldKey.trim());
 }
 
-export function collectionItemFieldIsAvailable(
-    fieldKey: CollectionItemFieldKey,
-    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
-): boolean {
-    return resolveCollectionItemFieldCatalog(tenantFieldDefinitions)[fieldKey]?.resolverBacked ?? false;
+export function collectionItemFieldIsAvailable(fieldKey: CollectionItemFieldKey): boolean {
+    return COLLECTION_ITEM_FIELD_CATALOG[fieldKey].resolverBacked;
 }
 
 /** Subfields operators may toggle in the Children collection inspector. */
-export function selectableChildrenCollectionItemFieldKeys(
-    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
-): CollectionItemFieldKey[] {
-    return selectableCollectionItemKeysFromCanonical(tenantFieldDefinitions).filter(
-        (key): key is CollectionItemFieldKey => key in COLLECTION_ITEM_FIELD_CATALOG,
+export function selectableChildrenCollectionItemFieldKeys(): CollectionItemFieldKey[] {
+    return (Object.keys(COLLECTION_ITEM_FIELD_CATALOG) as CollectionItemFieldKey[]).filter((key) =>
+        collectionItemFieldIsAvailable(key),
     );
 }
 
 /** Subfields registered but not queue-row resolver-backed — inspector unavailable only. */
-export function unavailableChildrenCollectionItemFieldKeys(
-    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
-): CollectionItemFieldKey[] {
-    const catalog = resolveCollectionItemFieldCatalog(tenantFieldDefinitions);
+export function unavailableChildrenCollectionItemFieldKeys(): CollectionItemFieldKey[] {
     return (Object.keys(COLLECTION_ITEM_FIELD_CATALOG) as CollectionItemFieldKey[]).filter(
-        (key) => !catalog[key]?.resolverBacked,
+        (key) => !collectionItemFieldIsAvailable(key),
     );
 }
 
@@ -151,7 +126,7 @@ export function normalizeCollectionFieldPresentation(
 ): CollectionFieldPresentationConfig {
     const base = DEFAULT_CHILDREN_COLLECTION_PRESENTATION;
     const includedFields = (config?.includedFields ?? base.includedFields).filter((key) =>
-        collectionItemFieldIsAvailable(key as CollectionItemFieldKey),
+        collectionItemFieldIsAvailable(key),
     );
     return {
         displayMode: config?.displayMode ?? base.displayMode,
@@ -401,9 +376,8 @@ export function extractChildrenCollectionItems(
 export function resolveCollectionItemFieldValue(
     item: CollectionItem,
     fieldKey: CollectionItemFieldKey,
-    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): string | null {
-    if (!collectionItemFieldIsAvailable(fieldKey, tenantFieldDefinitions)) return null;
+    if (!collectionItemFieldIsAvailable(fieldKey)) return null;
     switch (fieldKey) {
         case "first_name":
             return item.firstName.trim() || null;
