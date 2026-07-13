@@ -19,6 +19,7 @@ import {
     customFieldRuleId,
     lifecycleFieldRuleBinding,
 } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
+import { resolveLifecycleCanonicalFieldLabel } from "@/lib/lifecycle/lifecycleCanonicalFieldMetadata";
 import type { OrgFieldDefinitionRow } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import { isDeprecatedLifecycleFieldRule, sanitizeLifecycleFieldRuleIds } from "@/lib/lifecycle/lifecycleConfiguration";
 
@@ -38,10 +39,15 @@ export type LifecycleFieldPaletteEntry = {
 
 function catalogEntryToPalette(entry: LifecycleFieldRequirementDefinition): LifecycleFieldPaletteEntry {
     const binding = lifecycleFieldRuleBinding(entry.rule_id);
+    const field_label = resolveLifecycleCanonicalFieldLabel(
+        entry.entity,
+        binding?.field_key ?? null,
+        entry.field_label,
+    );
     return {
         rule_id: entry.rule_id,
         entity: entry.entity,
-        field_label: entry.field_label,
+        field_label,
         field_key: binding?.field_key ?? null,
         field_source: binding?.field_key ? "catalog" : "catalog",
         runtime_enforced: binding?.runtime_enforced ?? entry.runtime_enforced,
