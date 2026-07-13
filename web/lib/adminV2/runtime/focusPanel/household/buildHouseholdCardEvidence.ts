@@ -42,7 +42,11 @@ import { resolveOpportunitySecondaryContactPerson } from "@/lib/layout/runtime/r
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { resolveHouseholdContactSectionKey } from "@/lib/adminV2/runtime/focusPanel/household/identityRelationshipSections";
+import {
+    householdRelationshipSectionTitle,
+    resolveHouseholdContactSectionKey,
+    shouldShowRelationshipSection,
+} from "@/lib/adminV2/runtime/focusPanel/household/identityRelationshipSections";
 import {
     householdEmergencySectionEnabled,
     householdDrillInGroups,
@@ -453,95 +457,116 @@ export function buildHouseholdCardEvidence(
         ? householdEmergencySectionEnabled(nestedConfig)
         : emergencyRows.length > 0;
 
-    const groups: HouseholdEvidenceGroup[] = [];
-    const pushGroup = (group: HouseholdEvidenceGroup) => {
-        if (published) {
-            const fixed = (HOUSEHOLD_FIXED_GROUP_KEYS as readonly string[]).includes(group.key);
-            if (fixed) {
-                groups.push(group);
-                return;
-            }
-            if (group.key === "other_parent_guardian" && group.count > 0) {
-                groups.push(group);
-                return;
-            }
-            if (group.key === "emergency_contacts") {
-                if (emergencyEnabled) groups.push(group);
-                return;
-            }
-            if (!isNestedGroupEnabled(nestedConfig!, group.key) && group.count === 0) return;
-        }
-        if (group.count > 0 || group.addressLine) groups.push(group);
+    const sectionTitle = (key: string, fallback: string) =>
+        householdRelationshipSectionTitle(nestedConfig, key, fallback);
+
+    const builtByKey = new Map<string, HouseholdEvidenceGroup>();
+
+    const stageGroup = (group: HouseholdEvidenceGroup) => {
+        builtByKey.set(group.key, group);
     };
 
-    if (primaryContact || (published && (HOUSEHOLD_FIXED_GROUP_KEYS as readonly string[]).includes("primary_contact"))) {
-        pushGroup({
-            key: "primary_contact",
-            title: "Primary contact",
-            contacts: primaryContact ? [primaryContact] : [],
-            children: [],
-            count: primaryContact ? 1 : 0,
-        });
-    }
-    if (otherParentGuardianRows.length > 0) {
-        pushGroup({
-            key: "other_parent_guardian",
-            title: "Other parent / guardian",
-            contacts: otherParentGuardianRows,
-            children: [],
-            count: otherParentGuardianRows.length,
-        });
-    }
-    pushGroup({
+    stageGroup({
+        key: "primary_contact",
+        title: sectionTitle("primary_contact", "Primary contact"),
+        contacts: primaryContact ? [primaryContact] : [],
+        children: [],
+        count: primaryContact ? 1 : 0,
+    });
+    stageGroup({
+        key: "other_parent_guardian",
+        title: sectionTitle("other_parent_guardian", "Other parent / guardian"),
+        contacts: otherParentGuardianRows,
+        children: [],
+        count: otherParentGuardianRows.length,
+    });
+    stageGroup({
         key: "household_members",
-        title: "Additional contacts",
+        title: sectionTitle("household_members", "Additional contacts"),
         contacts: additionalRows,
         children: [],
         count: additionalRows.length,
     });
-    if (emergencyEnabled) {
-        pushGroup({
-            key: "emergency_contacts",
-            title: "Emergency contacts",
-            contacts: emergencyRows,
-            children: [],
-            count: emergencyRows.length,
-        });
-    }
-    if (pickupRows.length > 0) {
-        pushGroup({
-            key: "authorized_pickups",
-            title: "Authorized pickups",
-            contacts: pickupRows,
-            children: [],
-            count: pickupRows.length,
-        });
-    }
-    pushGroup({
+    stageGroup({
+        key: "emergency_contacts",
+        title: sectionTitle("emergency_contacts", "Emergency contacts"),
+        contacts: emergencyRows,
+        children: [],
+        count: emergencyRows.length,
+    });
+    stageGroup({
+        key: "authorized_pickups",
+        title: sectionTitle("authorized_pickups", "Authorized pickups"),
+        contacts: pickupRows,
+        children: [],
+        count: pickupRows.length,
+    });
+    stageGroup({
         key: "children",
-        title: "Children",
+        title: sectionTitle("children", "Children"),
         contacts: [],
         children: childRows,
         count: childRows.length,
     });
     if (address) {
-        pushGroup({
+        stageGroup({
             key: "address",
-            title: "Address",
+            title: sectionTitle("address", "Address"),
             contacts: [],
             children: [],
             count: 1,
             addressLine: address,
         });
     }
-    if (billingRows.length > 0) {
-        pushGroup({
-            key: "billing_contact",
-            title: "Billing contact",
-            contacts: billingRows,
-            children: [],
-            count: billingRows.length,
-        });
+    stageGroup({
+        key: "billing_contact",
+        title: sectionTitle("billing_contact", "Billing contact"),
+        contacts: billingRows,
+        children: [],
+        count: billingRows.length,
+    });
+
+    const groups: HouseholdEvidenceGroup[] = [];
+    const pushGroup = (group: HouseholdEvidenceGroup) => {
+        if (published) {
+            if (group.key === "emergency_contacts" && !emergencyEnabled) return;
+            if (
+                !shouldShowRelationshipSection({
+                    config: nestedConfig,
+                    sectionKey: group.key,
+                    count: group.count,
+                    hasAddressLine: Boolean(group.addressLine),
+                })
+            ) {
+                return;
+            }
+            if (
+                group.key !== "primary_contact"
+                && group.key !== "children"
+                && group.key !== "address"
+                && !isNestedGroupEnabled(nestedConfig!, group.key)
+                && group.count === 0
+            ) {
+                return;
+            }
+        } else if (group.count === 0 && !group.addressLine) {
+            if (group.key !== "primary_contact" && group.key !== "children") return;
+        }
+        groups.push(group);
+    };
+
+    for (const key of [
+        "primary_contact",
+        "other_parent_guardian",
+        "household_members",
+        "emergency_contacts",
+        "authorized_pickups",
+        "children",
+        "address",
+        "billing_contact",
+    ] as const) {
+        const group = builtByKey.get(key);
+        if (group) pushGroup(group);
     }
 
     const childCount = childRows.length;

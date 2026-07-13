@@ -96,3 +96,13 @@ Updated `docs/platform/operator/identity-surface-composition-v2.md` §11 (publis
 - Opaque drill-in surface + scroll containment
 
 **Status:** READY FOR FINAL MANUAL QA
+
+## Focus Panel Builder Finalization (Jul 2026)
+
+- Configurable relationship sections (label, criteria, visibility, order)
+- Relationship section authoring UI in Builder inspector
+- Runtime section projection wired (`householdRelationshipSectionsFromConfig`, `shouldShowRelationshipSection`)
+- Canonical field consumption readiness documented
+- Builder architecture doc: `docs/platform/operator/focus-panel-builder.md`
+
+**Status:** BUILDER ARCHITECTURE COMPLETE — pending manual QA + Canonical Field Convergence integration

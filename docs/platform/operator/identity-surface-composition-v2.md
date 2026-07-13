@@ -380,3 +380,44 @@ Stage/status fields appear in pickers only when registered canonical providers e
 ### Composer containment and opaque drill-in
 
 Shared compose shell uses flex/min-height scroll ownership; categorized field picker popovers portal to `document.body`. Drill-in depth uses opaque surface background (no canvas bleed-through).
+
+---
+
+## 14. Focus Panel Builder final architecture
+
+### Builder convergence model
+
+```
+Relationship Sections → Canonical Fields → Disclosure Layers → Runtime
+```
+
+The Focus Panel Builder does not own field definitions. It consumes the Settings Fields catalog (`focus_panel` consumer), filters by namespace, groups by configured category metadata, and authors disclosure placement and policy.
+
+### Relationship sections
+
+Each Household relationship section configures:
+
+- **label** — operator-facing section title
+- **relationshipCriteria** — role/type matching for contact assignment
+- **visibility** — `always` | `when_nonempty` | `hidden`
+- **order** — persisted on nested surface group sequence
+- **presentation** — Parent / Guardian template (`contact_edit`) applies to Primary and Other Parent unless `roleOverride`
+
+Runtime resolves contacts into the highest-priority matching section once. Children remains a handoff to the canonical Children surface — child Summary/Context/Details/Evidence are not duplicated in Household.
+
+### Canonical field consumption readiness
+
+When Canonical Field Consumer Convergence lands, new fields registered in Settings → Fields appear in Focus Panel pickers automatically via `filterCanonicalDataProviders`. Focus Panel adds no parallel labels, categories, or ownership metadata.
+
+### Disclosure authoring
+
+Every relationship section supports independent Summary, Context Facts, Details, and Evidence Collections configuration with tier-specific visible/editable/read-only policy.
+
+### Placement parity
+
+Builder grid placement and runtime card placement share `focusPanelGridLayoutOps` and `focusPanelPublishedLayout`. Same-column cards stack vertically in both surfaces.
+
+### Remaining consumer-only gaps
+
+- Canonical Field Consumer Convergence integration (automatic when convergence lands)
+- Future UX polish (nested-purpose drill frames, insight templates)

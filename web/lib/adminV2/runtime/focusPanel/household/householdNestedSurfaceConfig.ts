@@ -17,6 +17,7 @@ import {
     HOUSEHOLD_DEFAULT_SECTION_ORDER,
     sortByNestedSectionOrder,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceSectionOrder";
+import { shouldShowRelationshipSection } from "@/lib/adminV2/runtime/focusPanel/household/identityRelationshipSections";
 
 export function readHouseholdNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
     return resolvePublishedIdentitySurfaceConfigFromDoc(HOUSEHOLD_SURFACE_ID, doc);
@@ -72,25 +73,18 @@ export function shouldShowHouseholdDrillInGroup(
     group: HouseholdDrillInGroupLike,
     config: NestedSurfaceConfig | null,
 ): boolean {
-    if ((HOUSEHOLD_REQUIRED_DRILL_IN_KEYS as readonly string[]).includes(group.key)) {
-        return true;
-    }
-    if ((HOUSEHOLD_FIXED_GROUP_KEYS as readonly string[]).includes(group.key)) {
-        return true;
-    }
-    if (group.key === "other_parent_guardian") {
-        return group.count > 0;
-    }
     if (!config) {
         return group.count > 0 || Boolean(group.addressLine);
     }
-    if (group.key === "emergency_contacts") {
-        return householdEmergencySectionEnabled(config) || group.count > 0;
+    if (group.key === "emergency_contacts" && !householdEmergencySectionEnabled(config)) {
+        return false;
     }
-    if (group.count > 0 || group.addressLine) {
-        return true;
-    }
-    return isNestedGroupEnabled(config, group.key);
+    return shouldShowRelationshipSection({
+        config,
+        sectionKey: group.key,
+        count: group.count,
+        hasAddressLine: Boolean(group.addressLine),
+    });
 }
 
 /** Order + filter household drill-in groups for runtime/composer parity. */

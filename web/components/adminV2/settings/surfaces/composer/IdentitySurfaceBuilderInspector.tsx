@@ -7,6 +7,7 @@ import IdentityBuilderBreadcrumb from "@/components/adminV2/settings/surfaces/co
 import IdentityBuilderDrillIn from "@/components/adminV2/settings/surfaces/composer/IdentityBuilderDrillIn";
 import IdentityContextFactsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityContextFactsPanel";
 import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
+import IdentityRelationshipSectionInspector from "@/components/adminV2/settings/surfaces/composer/IdentityRelationshipSectionInspector";
 import IdentityNestedFieldLayoutPanel from "@/components/adminV2/settings/surfaces/composer/IdentityNestedFieldLayoutPanel";
 import SurfaceFieldInspector from "@/components/adminV2/settings/surfaces/composer/SurfaceFieldInspector";
 import SurfaceItemLibraryPanel from "@/components/adminV2/settings/surfaces/composer/SurfaceItemLibraryPanel";
@@ -378,6 +379,12 @@ export default function IdentitySurfaceBuilderInspector({
                     onSelectPurpose={setActiveConfigPurpose}
                     onBack={handleIdentityBack}
                     groupLabel={groupDefs.find((g) => g.key === selectedGroupKey)?.label ?? selectedGroupKey}
+                />
+                <IdentityRelationshipSectionInspector
+                    surfaceId={surfaceId}
+                    groupKey={selectedGroupKey}
+                    config={config}
+                    onChange={onChange}
                 />
                 {activeConfigPurpose === "summary" ?
                     <IdentityNestedFieldLayoutPanel

@@ -1109,3 +1109,41 @@ export function setEvidenceCollectionEnabled(
         ),
     }));
 }
+
+
+/** Household relationship sections configurable in Builder (not template/address). */
+export function isHouseholdRelationshipSectionKey(groupKey: string): boolean {
+    return (
+        groupKey === "primary_contact"
+        || groupKey === "other_parent_guardian"
+        || groupKey === "household_members"
+        || groupKey === "emergency_contacts"
+        || groupKey === "authorized_pickups"
+        || groupKey === "billing_contact"
+        || groupKey === "children"
+    );
+}
+
+export function setNestedGroupSectionVisibility(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    visibility: "always" | "when_nonempty" | "hidden",
+): NestedSurfaceConfig {
+    return patchNestedGroup(config, groupKey, (group) => ({ ...group, sectionVisibility: visibility }));
+}
+
+export function setNestedGroupRelationshipCriteria(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    criteria: { roleKeys?: string[]; relationshipTypes?: string[] } | undefined,
+): NestedSurfaceConfig {
+    return patchNestedGroup(config, groupKey, (group) => ({ ...group, relationshipCriteria: criteria }));
+}
+
+export function setNestedGroupRoleOverride(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    roleOverride: boolean,
+): NestedSurfaceConfig {
+    return patchNestedGroup(config, groupKey, (group) => ({ ...group, roleOverride: roleOverride || undefined }));
+}
