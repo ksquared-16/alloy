@@ -417,9 +417,8 @@ export default function HouseholdCard({
             })()
         : null;
 
-    const footerAction =
-        composeFooterAction
-        ?? (isEmpty || editing ? null :
+    const runtimeFooterAction =
+        isEmpty || editing ? null :
         disclosure.depth === "evidence" && selectedIdentityRecord ?
             <IdentityDisclosureBackAction label="← Back to details" onBack={backDisclosure} dataAction="back-to-details" />
         : disclosure.depth === "details" && selectedIdentityRecord ?
@@ -445,7 +444,13 @@ export default function HouseholdCard({
             >
                 View household →
             </button>
-        : null);
+        : null;
+
+    const footerAction = showComposeCanvas
+        ? composeFooterAction
+        : composingHouseholdSurface && composer?.composeCanvasMode === "configure"
+            ? null
+            : runtimeFooterAction;
 
     let body: React.ReactNode;
     let perspective: "collapsed" | "expanded" | "focused" | "edit" | "empty";
@@ -514,12 +519,19 @@ export default function HouseholdCard({
                             activeSectionKey={composeAuthoringGroupKey}
                             onSelectSection={handleAuthoringSectionSelect}
                         />
-                        <IdentityComposeSectionCanvas
-                            surfaceId={HOUSEHOLD_SURFACE_ID}
-                            groupKey={composeAuthoringGroupKey}
-                            record={householdSectionRecord(householdPreviewSectionKey)}
-                            purpose="details"
-                        />
+                        {composeSelectedRecord ? (
+                            <FocusedHouseholdPerson
+                                record={composeSelectedRecord}
+                                groupKey={composeAuthoringGroupKey}
+                            />
+                        ) : (
+                            <IdentityComposeSectionCanvas
+                                surfaceId={HOUSEHOLD_SURFACE_ID}
+                                groupKey={composeAuthoringGroupKey}
+                                record={householdSectionRecord(householdPreviewSectionKey)}
+                                purpose="details"
+                            />
+                        )}
                     </div>
                 ) : purpose === "context_facts" ? (
                     <div className="space-y-4" data-household-compose-context="true">

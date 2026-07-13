@@ -225,7 +225,7 @@ describe("Household composer parity with Children", () => {
             );
         });
         act(() => {});
-        expect(document.querySelector('[data-nested-layout-surface="primary_contact"] .fp-layout-field__grip, [data-nested-layout-surface="primary_contact"] .fp-field-instance__toolbar')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface="contact_edit"] .fp-layout-field__grip, [data-nested-layout-surface="primary_contact"] .fp-field-instance__toolbar')).toBeTruthy();
         expect(document.querySelector('[data-identity-disclosure-surface="true"]')).toBeFalsy();
     });
 
@@ -248,7 +248,7 @@ describe("Household composer parity with Children", () => {
         });
         act(() => {});
         expect(document.querySelector('[data-household-focused-person]')).toBeTruthy();
-        expect(document.querySelector('[data-nested-layout-surface="primary_contact"]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface="contact_edit"]')).toBeTruthy();
     });
 
     it("Household Evidence mounts collection editor with section picker", () => {

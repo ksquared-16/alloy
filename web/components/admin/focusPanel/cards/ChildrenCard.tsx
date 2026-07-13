@@ -317,17 +317,17 @@ export default function ChildrenCard({
         </button>
     );
 
-    let footerAction: React.ReactNode;
+    let runtimeFooterAction: React.ReactNode;
     if (isEmpty) {
-        footerAction = null;
+        runtimeFooterAction = null;
     } else if (editing && focused) {
-        footerAction = backToFocusButton("cancel-edit");
+        runtimeFooterAction = backToFocusButton("cancel-edit");
     } else if (relatedViewId && focused) {
-        footerAction = backToFocusButton("close-related");
+        runtimeFooterAction = backToFocusButton("close-related");
     } else if (disclosure.depth === "evidence" && focused) {
-        footerAction = backToFocusButton("collapse-evidence");
+        runtimeFooterAction = backToFocusButton("collapse-evidence");
     } else if (focused && disclosure.depth === "details") {
-        footerAction = (
+        runtimeFooterAction = (
             <div className="alloy-os-card-nav">
                 {backToSourceButton ?? (
                     <IdentityDisclosureBackAction
@@ -359,7 +359,7 @@ export default function ChildrenCard({
             </div>
         );
     } else if (disclosure.depth === "context") {
-        footerAction =
+        runtimeFooterAction =
             backToSourceButton ?? (
                 <IdentityDisclosureBackAction
                     label="← Back to panel"
@@ -368,7 +368,7 @@ export default function ChildrenCard({
                 />
             );
     } else {
-        footerAction = (
+        runtimeFooterAction = (
             <button
                 type="button"
                 className="alloy-os-ucard__action alloy-os-ucard__action--system5"
@@ -380,6 +380,12 @@ export default function ChildrenCard({
         );
     }
 
+
+    const footerAction = showComposeCanvas
+        ? null
+        : composingChildrenSurface && composer?.composeCanvasMode === "configure"
+            ? null
+            : runtimeFooterAction;
 
     const focusedIdentityRecord = useMemo(() => {
         if (!focused || !childrenSurfaceConfig) return null;

@@ -1157,3 +1157,15 @@ export function setNestedGroupRoleOverride(
 ): NestedSurfaceConfig {
     return patchNestedGroup(config, groupKey, (group) => ({ ...group, roleOverride: roleOverride || undefined }));
 }
+
+/** Resolve a nested group by registry key, instance key, or presentation ref. */
+export function resolveNestedGroupConfig(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+): NestedSurfaceGroupConfig | null {
+    const direct = config.groups.find((group) => group.key === groupKey);
+    if (direct) return direct;
+    const byInstance = config.groups.find((group) => (group.instanceKey ?? group.key) === groupKey);
+    if (byInstance) return byInstance;
+    return config.groups.find((group) => group.presentationRef === groupKey) ?? null;
+}
