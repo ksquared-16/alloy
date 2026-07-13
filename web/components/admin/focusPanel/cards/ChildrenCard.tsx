@@ -594,6 +594,9 @@ export default function ChildrenCard({
                                 child={child}
                                 depth="summary"
                                 childrenSurfaceConfig={childrenSurfaceConfig}
+                                onActivate={
+                                    composingChildrenSurface ? undefined : selectChildIdentity
+                                }
                             />
                         ))}
                     </div>
@@ -678,10 +681,12 @@ function ChildSummaryRow({
     child,
     childrenSurfaceConfig,
     depth = "summary",
+    onActivate,
 }: {
     child: ChildrenEvidenceChild;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
     depth?: "summary" | "context";
+    onActivate?: (childId: string) => void;
 }) {
     const record = buildChildIdentityRecordVM({
         config: childrenSurfaceConfig,
@@ -693,6 +698,7 @@ function ChildSummaryRow({
             <IdentityRecordSummary
                 record={{ ...record, badge: child.status }}
                 depth={depth}
+                onActivate={onActivate}
             />
             {child.missingLine ? (
                 <span className="alloy-os-children__summary-line alloy-os-card-detail--risk" data-children-missing={child.id}>

@@ -12,12 +12,17 @@ type Props = {
     onEditField?: (fieldRef: string) => void;
     /** When true, rows are selectable for Details depth. */
     selectable?: boolean;
-    /** Context collection shows Summary Fields only — not inspection-level detail rows. */
+    /**
+     * When true, collection rows show Summary Fields only.
+     * Default false: collection shows Summary + configured Context Facts.
+     * Detail Fields never appear here — only after identity selection.
+     */
     collectionSummaryOnly?: boolean;
 };
 
 /**
- * Context collection — one identity object per row using Summary Fields.
+ * Collection view — one identity object per row.
+ * Renders Summary fields plus configured Context Facts (when present).
  * Selecting an identity opens Details for that identity only.
  */
 export default function IdentityCollectionContext({
@@ -27,7 +32,7 @@ export default function IdentityCollectionContext({
     onEditContact,
     onEditField,
     selectable = true,
-    collectionSummaryOnly = true,
+    collectionSummaryOnly = false,
 }: Props) {
     if (records.length === 0) return null;
 

@@ -455,3 +455,48 @@ Final Focus Panel Builder polish (July 2026):
 ## 17. Composer convergence
 
 Final cleanup removes the duplicate flat field-layout editor from identity Builder. Canvas-owned green `NestedSurfaceFieldLayoutSurface` is the only Summary/Context/Details authoring UI. Inspector retains purpose navigation, relationship-section management, and section metadata.
+
+
+## Configuration vs runtime navigation (final product shape)
+
+**Configuration purposes** (Builder): Summary Fields · Context Facts · Detail Fields · Evidence Collections.
+
+**Runtime interaction** (operator):
+
+```text
+Summary card
+→ Collection view (Summary fields + configured Context Facts per section)
+→ Selected identity Details
+→ Evidence
+```
+
+Context Facts remain a configuration layer that enrich the collection presentation.
+They are **not** a separately named mandatory runtime screen. When a section has no
+Context Facts, collection rows may equal Summary for that section — do not add a
+redundant click.
+
+### Direct summary navigation
+
+Household Summary is a navigation hub:
+
+- Parent / Guardian identity → that person's Details
+- Children section → Children card handoff
+- Specific child (when shown) → that child's Details on Children
+- Emergency (and other) section tiles → Household collection focused on that section
+- Specific emergency contact → that contact's Details
+- `View Household` → full Household collection
+
+Back navigation stays deterministic: Evidence → Details → Collection → Summary.
+
+### Semantic avatars
+
+Avatar color conveys identity **type/role** via Alloy tokens (Primary = Alloy blue,
+Other Parent = Bend Pine, contacts = neutral, children = deterministic id palette).
+Never gender. Badges convey Primary / Parent / Enrolling / status.
+
+### Collection vs person Details
+
+Collection shows every configured relationship section with effective collection
+presentation (Summary + Context Facts). Detail Fields appear only after an identity
+is selected.
+

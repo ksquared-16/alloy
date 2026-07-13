@@ -355,6 +355,27 @@ export default function HouseholdCard({
           }
         : undefined;
 
+    /** Children section tile — hand off to the Children card without a specific child. */
+    const openChildrenSection = coordination
+        ? () => {
+              const source = { card: "household" as const, focus: "children" as const };
+              resetDisclosure();
+              coordination.requestFocus("children", null, source);
+          }
+        : undefined;
+
+    const handlePreviewGroup = (key: HouseholdEvidenceGroupKey) => {
+        if (key === "children") {
+            if (openChildrenSection) {
+                openChildrenSection();
+                return;
+            }
+            enterContext("children");
+            return;
+        }
+        enterContext(key);
+    };
+
     const density = !isEmpty && disclosure.depth !== "summary" ? "expanded" : "compact";
     const hasWarning = Boolean(evidence.missingCriticalWarning);
     // The transient saved chip takes precedence so the card visibly confirms the save.
@@ -600,6 +621,7 @@ export default function HouseholdCard({
             <ExpandedBody
                 groups={evidence.groups}
                 masked={maskedChannels}
+                focusedSectionKey={disclosure.selectedSectionKey}
                 onOpenChild={openChild}
                 onEditContact={onEditContact}
                 onSelectIdentity={
@@ -623,7 +645,13 @@ export default function HouseholdCard({
                 composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
                 canEdit={canEdit}
-                onPreviewGroup={() => enterContext()}
+                onPreviewGroup={handlePreviewGroup}
+                onSelectIdentity={
+                    composingHouseholdSurface
+                        ? handleSelectIdentityForCompose
+                        : (personId, sectionKey) => selectIdentity(personId, sectionKey)
+                }
+                onOpenChild={openChild}
                 onEditContact={onEditContact}
                 onAddEmergencyContact={
                     canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
@@ -693,6 +721,8 @@ function CollapsedBody({
     nestedConfig,
     canEdit,
     onPreviewGroup,
+    onSelectIdentity,
+    onOpenChild,
     onAddEmergencyContact,
     onEditContact,
 }: {
@@ -703,6 +733,8 @@ function CollapsedBody({
     nestedConfig: NestedSurfaceConfig | null;
     canEdit?: boolean;
     onPreviewGroup: (key: HouseholdEvidenceGroupKey) => void;
+    onSelectIdentity?: (personId: string, sectionKey: string) => void;
+    onOpenChild?: (childId: string) => void;
     onAddEmergencyContact?: () => void;
     onEditContact?: (personId: string) => void;
 }) {
@@ -765,6 +797,11 @@ function CollapsedBody({
                     <IdentityRecordSummary
                         record={primaryRecord}
                         depth="summary"
+                        onActivate={
+                            !composing && onSelectIdentity && primaryRecord.id !== "primary"
+                                ? (id) => onSelectIdentity(id, "primary_contact")
+                                : undefined
+                        }
                         onEditContact={
                             primaryRecord.id !== "primary" && !masked && !composing
                                 ? onEditContact
@@ -779,7 +816,7 @@ function CollapsedBody({
                     />
                 ) : evidence.primaryContact ? (
                     <div className="alloy-os-household__primary-row" data-household-primary-row="true">
-                        <CardAvatar name={evidence.primaryContact.name} imageUrl={evidence.primaryContact.imageUrl} size={30} />
+                        <CardAvatar name={evidence.primaryContact.name} imageUrl={evidence.primaryContact.imageUrl} size={30} role="primary_contact" recordId={evidence.primaryContact.personId} />
                         <div className="alloy-os-household__row-main min-w-0">
                             <span className="alloy-os-household__row-name">
                                 {evidence.primaryContact.name}
@@ -819,6 +856,11 @@ function CollapsedBody({
                             key={record.id}
                             record={record}
                             depth="summary"
+                            onActivate={
+                                !composing && onSelectIdentity
+                                    ? (id) => onSelectIdentity(id, "other_parent_guardian")
+                                    : undefined
+                            }
                             onEditContact={!masked && !composing ? onEditContact : undefined}
                             onEditField={
                                 onEditContact && !masked && !composing
@@ -905,6 +947,7 @@ function AddressLine({ address }: { address: string }) {
 function ExpandedBody({
     groups,
     masked,
+    focusedSectionKey,
     onSelectIdentity,
     onOpenChild,
     onEditContact,
@@ -916,6 +959,7 @@ function ExpandedBody({
 }: {
     groups: HouseholdEvidenceGroup[];
     masked: boolean;
+    focusedSectionKey?: string;
     onSelectIdentity: (personId: string, sectionKey: string) => void;
     onOpenChild?: (childId: string) => void;
     onEditContact?: (personId: string) => void;
@@ -925,8 +969,26 @@ function ExpandedBody({
     nestedConfig: NestedSurfaceConfig | null;
     composePickerOnly?: boolean;
 }) {
+    const groupsRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!focusedSectionKey || !groupsRef.current) return;
+        const el = groupsRef.current.querySelector(
+            `[data-household-evidence-group="${focusedSectionKey}"]`,
+        );
+        if (el instanceof HTMLElement) {
+            el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+    }, [focusedSectionKey]);
+
     return (
-        <div className="alloy-os-household__groups" data-household-groups data-identity-depth="context">
+        <div
+            ref={groupsRef}
+            className="alloy-os-household__groups"
+            data-household-groups
+            data-identity-depth="context"
+            data-household-focused-section={focusedSectionKey || undefined}
+        >
             {groups.map((group) => (
                 <ComposableRegionShell
                     key={group.key}
@@ -934,7 +996,10 @@ function ExpandedBody({
                     surfaceId={HOUSEHOLD_SURFACE_ID}
                     groupKey={group.key}
                     label={group.title}
-                    className="alloy-os-household__group"
+                    className={clsx(
+                        "alloy-os-household__group",
+                        focusedSectionKey === group.key && "alloy-os-household__group--focused",
+                    )}
                     dataAttrs={{ "data-household-evidence-group": group.key }}
                 >
                     <div className="alloy-os-household__group-header">

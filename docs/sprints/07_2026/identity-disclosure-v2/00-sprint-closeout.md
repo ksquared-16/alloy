@@ -119,3 +119,13 @@ Separated collapsible section management from section-tab field authoring. Resto
 ## Composer convergence
 
 Removed duplicate field-layout editors. Summary/Context/Details use one green visual composer on the canvas; Context is explicitly configured; raw refs never render; elevated drill-in fully contains underlying cards.
+
+
+## Product-shape correction (disclosure, containment, placement)
+
+Locked: Context Facts stay a configuration purpose; runtime navigates
+Summary → Collection → Details → Evidence with direct identity/section actions.
+Elevated compose surfaces are fully opaque; field pickers are portaled and
+collision-aware; Household summaries truncate sensibly with semantic avatar tokens;
+Builder grid config and `/work-unit` share column/order/width/gap via the lanes
+projection.

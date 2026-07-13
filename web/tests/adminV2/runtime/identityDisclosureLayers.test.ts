@@ -310,13 +310,14 @@ describe("identityLayerFieldKeysFromGroup", () => {
         expect(layers.details).toEqual(["c"]);
     });
 
-    it("fieldKeysForConfigurationPurpose returns context facts only", () => {
+    it("fieldKeysForConfigurationPurpose returns explicit contextFieldKeys (no Summary strip)", () => {
+        // Builder Context purpose is a complete authored list — not Summary inheritance minus overlap.
         expect(
             fieldKeysForConfigurationPurpose(
                 { selectedFieldKeys: ["a"], contextFieldKeys: ["a", "b"] },
                 "context_facts",
             ),
-        ).toEqual(["b"]);
+        ).toEqual(["a", "b"]);
     });
 
     it("removeFieldFromNestedGroup removes from the active configuration tier only", () => {

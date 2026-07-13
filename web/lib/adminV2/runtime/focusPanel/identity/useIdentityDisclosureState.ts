@@ -10,8 +10,10 @@ import {
 export function useIdentityDisclosureState(initial: IdentityDisclosureState = INITIAL_IDENTITY_DISCLOSURE_STATE) {
     const [state, setState] = useState(initial);
 
-    const enterContext = useCallback(() => {
-        setState((current) => transitionIdentityDisclosure(current, { type: "enter_context" }));
+    const enterContext = useCallback((sectionKey?: string) => {
+        setState((current) =>
+            transitionIdentityDisclosure(current, { type: "enter_context", sectionKey }),
+        );
     }, []);
 
     const selectIdentity = useCallback((identityId: string, sectionKey?: string) => {

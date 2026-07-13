@@ -1,7 +1,11 @@
 /**
  * Canonical identity disclosure navigation state for Focus Panel identity cards.
  *
- * Runtime flow: Summary → Context → Details → Evidence
+ * Runtime flow: Summary → Collection → Details → Evidence
+ *
+ * Internal depth `"context"` is the collection view (Summary fields + configured
+ * Context Facts). Context Facts are a configuration purpose — not a separately
+ * named mandatory runtime screen.
  */
 
 import type { IdentityDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
@@ -28,7 +32,7 @@ export function canEnterIdentityEvidence(state: IdentityDisclosureState): boolea
 export function transitionIdentityDisclosure(
     state: IdentityDisclosureState,
     action:
-        | { type: "enter_context" }
+        | { type: "enter_context"; sectionKey?: string }
         | { type: "select_identity"; identityId: string; sectionKey?: string }
         | { type: "enter_details"; identityId: string; sectionKey?: string }
         | { type: "enter_evidence"; identityId: string; sectionKey?: string }
@@ -36,7 +40,11 @@ export function transitionIdentityDisclosure(
 ): IdentityDisclosureState {
     switch (action.type) {
         case "enter_context":
-            return { depth: "context", selectedIdentityId: undefined, selectedSectionKey: undefined };
+            return {
+                depth: "context",
+                selectedIdentityId: undefined,
+                selectedSectionKey: action.sectionKey,
+            };
         case "select_identity":
             if (!action.identityId) return state;
             return {
@@ -85,7 +93,7 @@ export function identityDisclosureDepthLabel(depth: IdentityDisclosureDepth): st
         case "summary":
             return "Summary";
         case "context":
-            return "Context";
+            return "Collection";
         case "details":
             return "Details";
         case "evidence":
@@ -97,7 +105,7 @@ export function identityDisclosureDepthLabel(depth: IdentityDisclosureDepth): st
 /**
  * Map identity disclosure depth to Focus Panel grid coordination level.
  *
- * Context expands inside the card (Summary → Context) without grid elevation.
+ * Collection (`context` depth) expands inside the card without grid elevation.
  * Details and Evidence elevate into the centered Focus Card layer.
  */
 export function identityDisclosureCoordinationLevel(args: {
