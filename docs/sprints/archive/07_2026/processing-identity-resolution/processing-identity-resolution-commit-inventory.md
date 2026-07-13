@@ -4,11 +4,11 @@
 
 **Branch:** `claude/proc-identity-lib-normalization`
 
-**Certified HEAD:** `6d8851f1c416516d598ce94a28e1bf547bc98170`
+**Certified HEAD:** \`03c97f39eb1e3ae9c1702c53f08804f0b92ecd44\`
 
 **Merge-base vs origin/staging:** `1a4a85c98539289d3dc21a23465f9b5bc7f7c681`
 
-**Commit count (sprint range):** 65
+**Commit count (sprint range):** 67
 
 Grouped by phase (heuristic from commit messages; each commit listed once).
 
@@ -104,8 +104,10 @@ Grouped by phase (heuristic from commit messages; each commit listed once).
 - `5e84f2630 fix(identity): require operator resolution for plausible child matches`
 - `f64ca7693 feat(processing): integrate identity review and commit planning (D3)`
 
-## Closeout/docs (15+)
+## Closeout/docs (17)
 
+- `743612fe3 docs(processing): refresh certified HEAD in commit inventory`
+- `e9cb694ed chore(processing): complete sprint closeout`
 - `6d8851f1c docs(processing): prepare promotion and rollback artifacts`
 - `95aab1853 docs(processing): finalize identity resolution sprint documentation`
 - `19c0fbf11 docs(processing): align canonical docs with closeout audit`
