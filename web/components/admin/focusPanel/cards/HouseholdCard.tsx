@@ -646,7 +646,7 @@ export default function HouseholdCard({
             />
         );
     } else if (disclosure.depth === "context") {
-        perspective = "expanded";
+        perspective = "focused";
         body = (
             <ExpandedBody
                 groups={evidence.groups}

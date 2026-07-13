@@ -36,11 +36,11 @@ describe("identity disclosure navigation parity", () => {
         ).toBe("details");
     });
 
-    it("Context does not trigger grid elevation (shared coordination helper)", () => {
+    it("Collection (context) uses shared centered focus elevation", () => {
         const context = transitionIdentityDisclosure(INITIAL_IDENTITY_DISCLOSURE_STATE, {
             type: "enter_context",
         });
-        expect(identityDisclosureCoordinationLevel({ depth: context.depth })).toBe("base");
+        expect(identityDisclosureCoordinationLevel({ depth: context.depth })).toBe("focused");
     });
 
     it("selecting identity transitions Context to Details for parent and child flows", () => {

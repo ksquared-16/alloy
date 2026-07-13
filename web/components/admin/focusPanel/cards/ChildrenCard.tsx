@@ -561,7 +561,7 @@ export default function ChildrenCard({
             </>
         );
     } else if (disclosure.depth === "context") {
-        lifecycle = "summary";
+        lifecycle = "focus";
         body = (
             <ComposableRegionShell
                 surfaceId={CHILDREN_SURFACE_ID}
@@ -610,8 +610,10 @@ export default function ChildrenCard({
             data-children-card="true"
             data-children-card-perspective={
                 lifecycle === "summary"
-                    ? (disclosure.depth === "context" ? "expanded" : "collapsed")
-                    : lifecycle
+                    ? "collapsed"
+                    : lifecycle === "focus"
+                      ? "focused"
+                      : lifecycle
             }
             data-children-lifecycle={lifecycle}
         >

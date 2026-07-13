@@ -165,3 +165,10 @@ Enter identity → resolve candidates → confirm existing or create new → cho
 
 Candidates come from the canonical intake record-resolution path. Scope labels use real child
 names; Household invocation defaults to **All children**.
+
+
+## Runtime collection focus
+
+`View Household` / `View Children` elevate into the shared centered focus surface
+(same primitive as selected-identity Details). Max width uses
+`--alloy-os-focus-panel-max-width`.

@@ -100,9 +100,9 @@ describe("identityDisclosureState", () => {
 });
 
 describe("identityDisclosureCoordinationLevel", () => {
-    it("keeps context at base grid level (in-card expansion only)", () => {
+    it("elevates collection (context) with details/evidence on the centered focus surface", () => {
         expect(identityDisclosureCoordinationLevel({ depth: "summary" })).toBe("base");
-        expect(identityDisclosureCoordinationLevel({ depth: "context" })).toBe("base");
+        expect(identityDisclosureCoordinationLevel({ depth: "context" })).toBe("focused");
     });
 
     it("elevates details and evidence to focused grid level", () => {

@@ -3241,7 +3241,7 @@ html[data-alloy-os-runtime-split="true"]
   left: 0;
   right: 0;
   margin-inline: auto;
-  width: min(560px, calc(100% - 32px));
+  width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
   display: flex;
   flex-direction: column;
   /* Content-sized between a readable floor and a viewport ceiling — never forced 70vh. */
@@ -3410,8 +3410,8 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard {
-  width: min(560px, calc(100% - 32px));
-  max-width: 560px;
+  width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
+  max-width: var(--alloy-os-focus-panel-max-width, 720px);
   min-height: 0;
   max-height: min(75vh, calc(100dvh - 48px));
 }
@@ -4969,8 +4969,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   right: auto;
   margin-inline: 0;
   transform: translate(-50%, -50%);
-  width: min(560px, calc(100% - 32px));
-  max-width: 560px;
+  width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
+  max-width: var(--alloy-os-focus-panel-max-width, 720px);
   /* Body-anchored bounds — card stays fully inside the visible builder canvas. */
   min-height: min(280px, calc(100% - 48px));
   max-height: min(75vh, calc(100% - 32px), calc(100dvh - 120px));

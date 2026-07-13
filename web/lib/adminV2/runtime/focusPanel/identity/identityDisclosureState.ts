@@ -105,15 +105,18 @@ export function identityDisclosureDepthLabel(depth: IdentityDisclosureDepth): st
 /**
  * Map identity disclosure depth to Focus Panel grid coordination level.
  *
- * Collection (`context` depth) expands inside the card without grid elevation.
- * Details and Evidence elevate into the centered Focus Card layer.
+ * Collection (`context`), Details, and Evidence all share the centered elevated
+ * Focus Card surface. Summary stays in the base grid. Edit elevates as the
+ * deepest state of Focus.
  */
 export function identityDisclosureCoordinationLevel(args: {
     depth: IdentityDisclosureDepth;
     editing?: boolean;
 }): FocusPanelPerspectiveLevel {
     if (args.editing) return "edit";
-    if (args.depth === "details" || args.depth === "evidence") return "focused";
+    if (args.depth === "context" || args.depth === "details" || args.depth === "evidence") {
+        return "focused";
+    }
     return "base";
 }
 
