@@ -40,7 +40,19 @@ type Candidate = {
     recordId?: string | null;
     entityType?: string;
     confidenceBand?: string;
-    blockingConflicts?: unknown[];
+    displayName?: string | null;
+    explanation?: string | null;
+    blockingConflicts?: { explanation?: string }[];
+    signals?: { kind?: string; explanation?: string }[];
+};
+
+type SubjectEligibility = {
+    subjectRef: string;
+    subjectRole: string;
+    state: string;
+    eligibleForPlan: boolean;
+    blockingReasons: { code: string; explanation: string }[];
+    recommendationSummary: string | null;
 };
 
 type ResolutionRow = {
@@ -50,6 +62,7 @@ type ResolutionRow = {
     decision_action: string | null;
     selected_candidate_id: string | null;
     candidates: Candidate[];
+    provisional?: Record<string, unknown>;
 };
 
 type DiffEntry = {
@@ -87,6 +100,9 @@ type ReviewState = {
     latestAttempt: Attempt;
     readiness: Readiness;
     blockingConflictCount: number;
+    subjectEligibility?: SubjectEligibility[];
+    planEligible?: boolean;
+    identityBlockers?: string[];
 };
 
 const READINESS_LABEL: Record<Readiness, string> = {
@@ -104,12 +120,12 @@ const READINESS_LABEL: Record<Readiness, string> = {
 };
 
 const DECISION_OPTIONS: { value: string; label: string }[] = [
-    { value: "link_existing", label: "Link existing" },
-    { value: "create_new", label: "Create new" },
+    { value: "link_existing", label: "Use this existing record" },
+    { value: "create_new", label: "Create new anyway" },
     { value: "update_existing", label: "Update existing" },
     { value: "review_required", label: "Mark unresolved" },
-    { value: "reject", label: "Reject" },
-    { value: "request_information", label: "Request info" },
+    { value: "reject", label: "Reject candidate" },
+    { value: "request_information", label: "Request more information" },
 ];
 
 function Eyebrow({ children }: { children: ReactNode }) {
@@ -200,14 +216,39 @@ export default function IdentityReviewPanel({
         [load],
     );
 
-    const decide = (resolutionId: string, decisionAction: string, selectedCandidateId?: string | null) =>
+    const decide = (
+        resolutionId: string,
+        decisionAction: string,
+        selectedCandidateId?: string | null,
+        createNewOverrideReason?: string | null,
+    ) =>
         run("decision", () =>
             postJson(`/api/admin/processing/cases/${caseId}/identity/resolution`, {
                 resolutionId,
                 decisionAction,
                 selectedCandidateId: selectedCandidateId ?? null,
+                createNewOverrideReason: createNewOverrideReason ?? null,
+                createNewOverrideReasonCode: createNewOverrideReason ? "operator_create_new_override" : null,
             }),
         );
+
+    const decideWithPrompt = (r: ResolutionRow, decisionAction: string, selectedCandidateId?: string | null) => {
+        const plausible = (r.candidates ?? []).filter((c) => c.recordId && c.recordId !== "none");
+        if (decisionAction === "create_new" && plausible.length > 0) {
+            const reason = window.prompt(
+                "A plausible existing match was found. Creating a new record requires an explicit reason (create-new override):",
+                "",
+            );
+            if (reason == null) return;
+            if (!reason.trim()) {
+                setActionError("Create-new override requires a non-empty operator reason.");
+                return;
+            }
+            void decide(r.id, decisionAction, null, reason.trim());
+            return;
+        }
+        void decide(r.id, decisionAction, selectedCandidateId ?? null, null);
+    };
 
     const correct = (originalFactId: string, correctedNormalizedValue: string) =>
         run("correction", () =>
@@ -259,9 +300,12 @@ export default function IdentityReviewPanel({
 
     const { readiness, plan, planDiff, approval, latestAttempt, resolutions, facts, blockingConflictCount } = state;
     const approvalStale = Boolean(plan && approval && approval.planContentHash !== plan.contentHash);
-    const canApprove = readiness === "ready_for_approval";
+    const planEligible = state.planEligible !== false && (state.identityBlockers?.length ?? 0) === 0;
+    const canApprove = readiness === "ready_for_approval" && planEligible;
     const canExecute = readiness === "approved_ready_to_commit" || readiness === "partially_committed";
+    const canBuildPlan = planEligible && busy === null;
     const blockingConflictIds = blockingConflictCount > 0 ? ["unresolved"] : [];
+    const eligibilityByRef = new Map((state.subjectEligibility ?? []).map((e) => [e.subjectRef, e]));
 
     return (
         <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
@@ -288,28 +332,74 @@ export default function IdentityReviewPanel({
                 )}
             </div>
 
+            {(state.identityBlockers?.length ?? 0) > 0 ? (
+                <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11.5px] text-amber-900">
+                    <div className="font-medium">Blocking identity review</div>
+                    <ul className="mt-1 list-disc pl-4">
+                        {(state.identityBlockers ?? []).slice(0, 6).map((b) => (
+                            <li key={b}>{b}</li>
+                        ))}
+                    </ul>
+                    <div className="mt-1">
+                        You selected related records for this household. Review each subject — especially children —
+                        before creating a new record. Plausible matches require an explicit operator decision.
+                    </div>
+                </div>
+            ) : null}
+
             {/* Resolutions + candidate decisions */}
             <div className="mb-3">
-                <Eyebrow>Subjects ({resolutions.length})</Eyebrow>
+                <Eyebrow>Household identity subjects ({resolutions.length})</Eyebrow>
                 {resolutions.length === 0 ? (
                     <div className="text-[12px] text-stone-400">No resolutions yet.</div>
                 ) : (
                     <ul className="space-y-2">
-                        {resolutions.map((r) => (
-                            <li key={r.id} className="rounded-md border border-stone-200 p-2.5">
+                        {resolutions.map((r) => {
+                            const el = eligibilityByRef.get(r.subject_ref);
+                            const blocking = el && !el.eligibleForPlan;
+                            return (
+                            <li key={r.id} className={`rounded-md border p-2.5 ${blocking ? "border-amber-300 bg-amber-50/40" : "border-stone-200"}`}>
                                 <div className="flex items-center gap-2">
                                     <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10.5px] text-stone-600">{r.subject_role}</span>
                                     <span className="min-w-0 flex-1 truncate text-[12.5px] text-stone-800">{r.subject_ref}</span>
-                                    {r.decision_action ? (
+                                    {el?.state ? (
+                                        <span className={`text-[10.5px] ${blocking ? "text-amber-800" : "text-emerald-700"}`}>{el.state}</span>
+                                    ) : r.decision_action ? (
                                         <span className="text-[10.5px] text-emerald-700">{r.decision_action}</span>
                                     ) : (
                                         <span className="text-[10.5px] text-amber-700">undecided</span>
                                     )}
                                 </div>
-                                <div className="mt-1 text-[11px] text-stone-500">
-                                    {r.candidates.length} candidate{r.candidates.length === 1 ? "" : "s"}
-                                    {r.candidates[0]?.confidenceBand ? ` · ${r.candidates[0].confidenceBand}` : ""}
-                                    {(r.candidates[0]?.blockingConflicts?.length ?? 0) > 0 ? " · conflict" : ""}
+                                {el?.recommendationSummary ? (
+                                    <div className="mt-1 text-[11px] text-stone-700">{el.recommendationSummary}</div>
+                                ) : null}
+                                <div className="mt-1 space-y-1">
+                                    {(r.candidates ?? []).slice(0, 5).map((c) => (
+                                        <div key={`${r.id}:${c.recordId}`} className="rounded border border-stone-100 bg-white px-2 py-1 text-[11px] text-stone-600">
+                                            <div className="flex flex-wrap gap-2">
+                                                <span className="font-medium text-stone-800">{c.displayName ?? c.recordId}</span>
+                                                {c.confidenceBand ? <span>{c.confidenceBand}</span> : null}
+                                                {c.entityType ? <span>{c.entityType}</span> : null}
+                                            </div>
+                                            {c.explanation ? <div className="text-stone-500">{c.explanation}</div> : null}
+                                            {(c.blockingConflicts?.length ?? 0) > 0 ? (
+                                                <div className="text-amber-800">
+                                                    Contradictions: {(c.blockingConflicts ?? []).map((b) => b.explanation).filter(Boolean).join("; ") || "conflict"}
+                                                </div>
+                                            ) : null}
+                                            <button
+                                                type="button"
+                                                disabled={busy !== null}
+                                                className="mt-1 text-[10.5px] font-medium text-emerald-700 hover:underline disabled:opacity-50"
+                                                onClick={() => decideWithPrompt(r, "link_existing", c.recordId ?? null)}
+                                            >
+                                                Choose this record
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {(r.candidates ?? []).length === 0 ? (
+                                        <div className="text-[11px] text-stone-500">No candidates — create new is allowed after operator confirmation of empty match set.</div>
+                                    ) : null}
                                 </div>
                                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                                     {DECISION_OPTIONS.map((opt) => (
@@ -318,8 +408,8 @@ export default function IdentityReviewPanel({
                                             type="button"
                                             disabled={busy !== null}
                                             onClick={() =>
-                                                void decide(
-                                                    r.id,
+                                                decideWithPrompt(
+                                                    r,
                                                     opt.value,
                                                     opt.value === "link_existing"
                                                         ? r.candidates[0]?.recordId ?? r.selected_candidate_id
@@ -337,7 +427,8 @@ export default function IdentityReviewPanel({
                                     ))}
                                 </div>
                             </li>
-                        ))}
+                            );
+                        })}
                     </ul>
                 )}
             </div>
@@ -348,7 +439,8 @@ export default function IdentityReviewPanel({
                     <Eyebrow>Commit plan</Eyebrow>
                     <button
                         type="button"
-                        disabled={busy !== null}
+                        disabled={!canBuildPlan}
+                        title={!planEligible ? "Resolve blocking identity subjects before building a plan" : undefined}
                         onClick={() => void buildPlan()}
                         className="rounded-md border border-stone-300 px-2.5 py-1 text-[11.5px] font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
                     >
