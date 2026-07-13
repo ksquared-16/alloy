@@ -433,6 +433,17 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     );
 }
 
+function OperatorGuidanceBlock({ text }: { text: string | null | undefined }) {
+    const guidance = text?.trim();
+    if (!guidance) return null;
+    return (
+        <div className="alloy-os-currentwork__guidance" data-work-operator-guidance="true">
+            <p className="alloy-os-currentwork__guidance-label">Operator guidance</p>
+            <p className="alloy-os-currentwork__guidance-text">{guidance}</p>
+        </div>
+    );
+}
+
 function SurfaceProgress({ surface }: { surface: CurrentWorkSurfaceVM }) {
     const readiness = surface.readiness;
     if (!readiness.reasonLabel && !readiness.requirements && !readiness.workItems) return null;
@@ -685,6 +696,7 @@ function SummaryBody({
                 </div>
             :   null}
             <SurfaceProgress surface={surface} />
+            <OperatorGuidanceBlock text={surface.operatorGuidance} />
             <RequirementsDisclosure
                 surface={surface}
                 expanded={requirementsExpanded}
@@ -830,6 +842,7 @@ function FocusedBody({
     return (
         <div className="alloy-os-currentwork__focus alloy-os-currentwork__focus--scroll" data-work-completion="working">
             <SurfaceProgress surface={surface} />
+            <OperatorGuidanceBlock text={surface.operatorGuidance} />
             <RequirementsDisclosure
                 surface={surface}
                 expanded={requirementsExpanded}

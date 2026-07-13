@@ -179,13 +179,13 @@ describe("canonical field label resolution", () => {
 });
 
 describe("stage validation duplicate error", () => {
-    it("unified save sets only stageSaveError for missing status", () => {
+    it("unified save sets only stageSaveError for missing status on manual-selection stages", () => {
         const source = readFileSync(
             resolve(__dirname, "../../../components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx"),
             "utf8",
         );
         const block = source.slice(
-            source.indexOf("if (selectedKeys.length < 1)"),
+            source.indexOf("if (effectiveKeys.length < 1)"),
             source.indexOf("setStageSaveState(\"saving\")"),
         );
         expect(block).toContain("setStageSaveError(message)");

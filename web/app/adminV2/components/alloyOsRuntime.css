@@ -5427,6 +5427,31 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
 }
 
+.alloy-os-currentwork__guidance {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 4%, #fff);
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+
+.alloy-os-currentwork__guidance-label {
+  margin: 0 0 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, #64748b);
+}
+
+.alloy-os-currentwork__guidance-text {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, #64748b);
+  white-space: pre-wrap;
+}
+
 .alloy-os-card-pill--blocked {
   background: color-mix(in srgb, #b45309 12%, #fff);
   color: #b45309;

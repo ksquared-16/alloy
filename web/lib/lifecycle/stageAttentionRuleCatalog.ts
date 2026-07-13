@@ -11,6 +11,9 @@ export type StageAttentionRuleCatalogEntry = {
     supportsThreshold: boolean;
     defaultThreshold: number;
     defaultSeverity: StageAttentionSeverity;
+    /** When false, rule may be saved but is not evaluated by stage-plan attention runtime. */
+    evaluatorSupported?: boolean;
+    unsupportedReason?: string;
 };
 
 /** Canonical editor kinds — legacy kinds normalize to these on display. */
@@ -54,6 +57,9 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         supportsThreshold: true,
         defaultThreshold: 3,
         defaultSeverity: "low",
+        evaluatorSupported: false,
+        unsupportedReason:
+            "Requires enrollment_operational.wait_bucket — configure via outcome automation or org-wide attention until stage-plan evaluation is wired.",
     },
     {
         kind: "waiting_on_provider",
@@ -62,6 +68,9 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         supportsThreshold: true,
         defaultThreshold: 2,
         defaultSeverity: "low",
+        evaluatorSupported: false,
+        unsupportedReason:
+            "Maps to waiting_on_staff wait bucket — not yet evaluated from stage attention rules. Use org-wide attention or outcome automation.",
     },
 ];
 
@@ -85,6 +94,17 @@ export function catalogEntryForAttentionKind(
 
 export function defaultAttentionRuleLabel(kind: StageAttentionRuleKind): string {
     return catalogEntryForAttentionKind(kind)?.label ?? kind.replace(/_/g, " ");
+}
+
+export function isStageAttentionRuleEvaluatorSupported(kind: StageAttentionRuleKind): boolean {
+    const entry = catalogEntryForAttentionKind(kind);
+    return entry?.evaluatorSupported !== false;
+}
+
+export function stageAttentionRuleUnsupportedReason(kind: StageAttentionRuleKind): string | null {
+    const entry = catalogEntryForAttentionKind(kind);
+    if (!entry || entry.evaluatorSupported !== false) return null;
+    return entry.unsupportedReason ?? "Not evaluated at runtime for this stage context.";
 }
 
 export function newAttentionRuleDraft(index: number, kind: StageAttentionRuleKind = "work_overdue"): StageAttentionRuleV1 {

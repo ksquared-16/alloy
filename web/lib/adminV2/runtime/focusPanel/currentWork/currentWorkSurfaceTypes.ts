@@ -42,10 +42,13 @@ export type CurrentWorkActionVM = {
 
 export type CurrentWorkChecklistStatus = "complete" | "missing" | "blocked";
 
+export type CurrentWorkChecklistItemKind = "requirement" | "stage_work";
+
 export type CurrentWorkChecklistItemVM = {
     key: string;
     label: string;
     status: CurrentWorkChecklistStatus;
+    kind?: CurrentWorkChecklistItemKind;
     scope?: "record" | "child" | "person";
     targetLabel?: string | null;
     actionRef?: string | null;
@@ -109,6 +112,8 @@ export type CurrentWorkSurfaceVM = {
 
     title: string;
     description?: string | null;
+    /** Stage operator guidance — supporting content, not a competing primary card. */
+    operatorGuidance?: string | null;
     status: CurrentWorkSurfaceStatus;
     statusLabel: string;
     readiness: CurrentWorkReadinessVM;

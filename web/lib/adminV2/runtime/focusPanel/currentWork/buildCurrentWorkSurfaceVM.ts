@@ -8,6 +8,7 @@ import type {
 import { workIntentProjectionForStageWorkItem } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import { completionOutcomesForPicker } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 
 import {
@@ -96,20 +97,11 @@ function classifyChecklistItems(checklist: CurrentWorkChecklistItemVM[]): {
             scope: item.scope,
             targetLabel: item.targetLabel,
         };
-        if (item.key.startsWith("work_") || item.description?.includes("stage work")) {
+        if (item.kind === "stage_work") {
             workItems.push(row);
         } else {
             requirements.push(row);
         }
-    }
-    if (requirements.length === 0 && workItems.length === 0 && checklist.length > 0) {
-        return { requirements: checklist.map((item) => ({
-            key: item.key,
-            label: item.label,
-            status: item.status,
-            scope: item.scope,
-            targetLabel: item.targetLabel,
-        })), workItems: [] };
     }
     return { requirements, workItems };
 }
@@ -223,6 +215,7 @@ function checklistFromStageRuntime(runtime: StageWorkRuntimeProjection | null): 
             key: item.template_key,
             label: item.label,
             status,
+            kind: "stage_work",
             scope: "record",
             targetLabel,
             actionRef: null,
@@ -246,6 +239,7 @@ function checklistFromConfig(
             key: row.key,
             label: row.label,
             status,
+            kind: row.kind ?? "requirement",
             scope: row.scope,
             targetLabel:
                 truth?.targetLabel
@@ -278,6 +272,7 @@ function checklistFromReadiness(readiness: ReadinessResult | null | undefined): 
         key: gap.requirement_id,
         label: gap.label,
         status: gap.blocking ? ("blocked" as const) : ("missing" as const),
+        kind: "requirement" as const,
         scope:
             gap.entity_type === "child" ? ("child" as const)
             : gap.entity_type === "person" ? ("person" as const)
@@ -517,6 +512,35 @@ function alternatePathsFromConfigRefs(
     return out;
 }
 
+function contextAllowedActionKeys(args: {
+    actionCatalog: StageActionCatalogV1 | null | undefined;
+    templateConfig: CurrentWorkTemplateConfigOverlay | null | undefined;
+}): ReadonlySet<string> {
+    const keys = new Set<string>();
+    for (const candidate of args.actionCatalog?.candidate_actions ?? []) {
+        const key = candidate.action_key.trim();
+        if (!key) continue;
+        keys.add(key);
+        keys.add(normalizeActionRefToIntentKey(key));
+    }
+    const template = args.templateConfig;
+    const refs = [
+        template?.primary_action?.action_ref,
+        ...(template?.helpful_actions ?? []).map((row) => row.action_ref),
+        ...(template?.alternate_paths ?? []).flatMap((row) =>
+            "action_ref" in row ? [row.action_ref] : [],
+        ),
+        ...(template?.communication_actions ?? []).map((row) => row.action_ref),
+    ];
+    for (const ref of refs) {
+        const key = ref?.trim();
+        if (!key) continue;
+        keys.add(key);
+        keys.add(normalizeActionRefToIntentKey(key));
+    }
+    return keys;
+}
+
 /**
  * Build the presentation-safe Current Work surface VM from runtime + config.
  * Deterministic; UI renders this only — no domain-specific branches in components.
@@ -581,6 +605,10 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         recordHeaderSlots: context.recordHeaderActions ?? null,
         showOutcomeCompletion,
         primaryActionLabel,
+        allowedActionKeys: contextAllowedActionKeys({
+            actionCatalog: context.publishedStageInputs?.actionCatalog ?? null,
+            templateConfig,
+        }),
     });
 
     const configCompletedKeys = new Set(completedChecklistKeys ?? []);
@@ -652,6 +680,8 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         ?? actionableWorkItem?.description?.trim()
         ?? runtime?.purpose?.trim()
         ?? null;
+
+    const operatorGuidance = context.publishedStageInputs?.operatorGuidance?.trim() ?? null;
 
     const intentCtx = actionIntentContext(context);
 
@@ -727,6 +757,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         workKey,
         title: isEmpty ? "No current work configured" : title,
         description,
+        operatorGuidance,
         status,
         statusLabel: statusLabelFor(status, hasOpenWork),
         readiness,
