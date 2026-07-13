@@ -100,6 +100,10 @@ AXIS 3 — Time:         effective_start … effective_end  (orthogonal to both)
 
 This is exactly the most-specific-wins behavior the schema already encodes — this doctrine names it and makes it universal.
 
+#### 4b-i. Regulatory constraints are binding across scopes (additive reconciliation)
+Most-specific-wins governs **operator-chosen values**. It does **not** apply to **regulatory constraints** (values sourced from licensing, e.g. `capacity_kind = 'licensed'` / `source_key = 'licensing'`). A regulatory constraint is a **binding limit that lower scopes may only *tighten*, never *weaken*.** A more-specific rule with a *weaker* value does **not** override (erase) a broader regulatory constraint — the effective regulatory limit is the **most restrictive applicable** value in scope (for a capacity ceiling, the minimum; for a required-staff floor, the maximum). Ordinary most-specific-wins inheritance therefore never lifts a binding regulatory constraint.
+*Enforced (Location Operational Phase A):* resolution-time clamp in `web/lib/childcareOperational/config/regulatoryCeiling.ts` (`resolveLicensedCeiling`) + author-time guard in `configRuleAuthoringService` (`validateLicensedOverrideNotWeaker`), which rejects an override that would weaken a binding licensing limit.
+
 ### 4c. What inherits along which axis (challenged per object)
 | Object | Inherits? | Axis | Kind |
 |---|---|---|---|

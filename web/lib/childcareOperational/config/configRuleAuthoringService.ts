@@ -41,8 +41,10 @@ import {
     type ChildcareRatioRuleRow,
     type ChildcareRatioRuleTierRow,
     type ChildcareScheduleRuleRow,
+    type ConfigRuleScopeContext,
     type ConfigRuleScopeType,
 } from "@/lib/childcareOperational/config/configRuleTypes";
+import { validateLicensedOverrideNotWeaker } from "@/lib/childcareOperational/config/regulatoryCeiling";
 
 const CAPACITY = "childcare_capacity_rules";
 const RATIO = "childcare_ratio_rules";
@@ -329,6 +331,45 @@ function requireNonNegInt(value: unknown, field: string): number {
     return n;
 }
 
+function scopeContextFromColumns(scope: ScopeColumns, ageGroupKey: string | null): ConfigRuleScopeContext {
+    return {
+        siteLocationId: scope.site_location_id,
+        programCategoryId: scope.program_category_id,
+        roomLocationId: scope.room_location_id,
+        ageGroupKey,
+    };
+}
+
+/**
+ * Author-time regulatory guard (A7): a `licensed` capacity rule may not weaken
+ * (raise above) the binding licensing ceiling already applicable at its scope.
+ * No-op for non-licensed kinds. `excludeId` omits the row being superseded so a
+ * version does not validate against its own predecessor.
+ */
+async function assertLicensedCapacityNotWeakened(
+    supabase: SupabaseClient,
+    orgId: string,
+    candidate: {
+        context: ConfigRuleScopeContext;
+        capacityKind: string;
+        capacity: number;
+        effectiveStart: string;
+    },
+    excludeId?: string,
+): Promise<void> {
+    if (candidate.capacityKind !== "licensed") return;
+    const all = await listRowsByOrg<ChildcareCapacityRuleRow>(supabase, CAPACITY, orgId);
+    const existing = excludeId ? all.filter((r) => r.id !== excludeId) : all;
+    const result = validateLicensedOverrideNotWeaker(candidate, existing);
+    if (!result.ok) {
+        fail("validation_failed", result.message, {
+            code: result.code,
+            boundByRuleId: result.boundByRuleId,
+            boundCeiling: result.boundCeiling,
+        });
+    }
+}
+
 export type CreateCapacityRuleInput = ScopeInput & {
     orgId: string;
     ageGroupKey?: string | null;
@@ -348,12 +389,20 @@ export async function createCapacityRule(
     const effectiveStart = requireEffectiveStart(input.effectiveStart);
     const effectiveEnd = optionalEffectiveEnd(input.effectiveEnd, effectiveStart);
     const actor = trimOrNull(input.actorUserId);
+    const capacityKind = requireCapacityKind(input.capacityKind);
+    const capacity = requireNonNegInt(input.capacity, "capacity");
+    await assertLicensedCapacityNotWeakened(supabase, input.orgId, {
+        context: scopeContextFromColumns(scope, trimOrNull(input.ageGroupKey)),
+        capacityKind,
+        capacity,
+        effectiveStart,
+    });
     return insertRow<ChildcareCapacityRuleRow>(supabase, CAPACITY, {
         org_id: input.orgId,
         ...scope,
         age_group_key: trimOrNull(input.ageGroupKey),
-        capacity_kind: requireCapacityKind(input.capacityKind),
-        capacity: requireNonNegInt(input.capacity, "capacity"),
+        capacity_kind: capacityKind,
+        capacity,
         effective_start: effectiveStart,
         effective_end: effectiveEnd,
         source_key: "config",
@@ -373,20 +422,43 @@ export type CapacityVersionInput = {
 };
 
 export async function createCapacityRuleVersion(supabase: SupabaseClient, input: CapacityVersionInput) {
+    const prior = await getRowById<ChildcareCapacityRuleRow>(supabase, CAPACITY, input.orgId, input.priorId);
+    const newKind = input.capacityKind != null ? requireCapacityKind(input.capacityKind) : prior.capacity_kind;
+    const newCapacity = input.capacity != null ? requireNonNegInt(input.capacity, "capacity") : prior.capacity;
+    const newStart = requireEffectiveStart(input.effectiveStart);
+    await assertLicensedCapacityNotWeakened(
+        supabase,
+        input.orgId,
+        {
+            context: scopeContextFromColumns(
+                {
+                    scope_type: prior.scope_type,
+                    site_location_id: prior.site_location_id,
+                    program_category_id: prior.program_category_id,
+                    room_location_id: prior.room_location_id,
+                },
+                prior.age_group_key,
+            ),
+            capacityKind: newKind,
+            capacity: newCapacity,
+            effectiveStart: newStart,
+        },
+        prior.id,
+    );
     return supersedeRow<ChildcareCapacityRuleRow>(supabase, {
         table: CAPACITY,
         orgId: input.orgId,
         priorId: input.priorId,
-        newStart: requireEffectiveStart(input.effectiveStart),
+        newStart,
         actor: trimOrNull(input.actorUserId),
-        valueColumns: (prior) => ({
-            scope_type: prior.scope_type,
-            site_location_id: prior.site_location_id,
-            program_category_id: prior.program_category_id,
-            room_location_id: prior.room_location_id,
-            age_group_key: prior.age_group_key,
-            capacity_kind: input.capacityKind != null ? requireCapacityKind(input.capacityKind) : prior.capacity_kind,
-            capacity: input.capacity != null ? requireNonNegInt(input.capacity, "capacity") : prior.capacity,
+        valueColumns: (p) => ({
+            scope_type: p.scope_type,
+            site_location_id: p.site_location_id,
+            program_category_id: p.program_category_id,
+            room_location_id: p.room_location_id,
+            age_group_key: p.age_group_key,
+            capacity_kind: newKind,
+            capacity: newCapacity,
         }),
     });
 }
