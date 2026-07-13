@@ -116,6 +116,8 @@ export type IdentityRecordVM = {
         imageUrl?: string | null;
         initials: string;
         visible: boolean;
+        /** Semantic identity role for avatar tokens (not gender/status). */
+        role?: "primary_contact" | "other_parent_guardian" | "contact" | "child";
     };
     badge?: string | null;
     /** Summary Fields — recognition. */

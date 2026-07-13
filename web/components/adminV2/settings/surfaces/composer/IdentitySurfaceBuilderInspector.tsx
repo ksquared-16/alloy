@@ -4,14 +4,20 @@ import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import IdentityBuilderBreadcrumb from "@/components/adminV2/settings/surfaces/composer/IdentityBuilderBreadcrumb";
-import IdentityBuilderDrillIn from "@/components/adminV2/settings/surfaces/composer/IdentityBuilderDrillIn";
-import IdentityContextFactsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityContextFactsPanel";
-import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
-import IdentityNestedFieldLayoutPanel from "@/components/adminV2/settings/surfaces/composer/IdentityNestedFieldLayoutPanel";
-import SurfaceFieldInspector from "@/components/adminV2/settings/surfaces/composer/SurfaceFieldInspector";
-import SurfaceItemLibraryPanel from "@/components/adminV2/settings/surfaces/composer/SurfaceItemLibraryPanel";
+import IdentityBuilderPurposeNavigation from "@/components/adminV2/settings/surfaces/composer/IdentityBuilderPurposeNavigation";
+import IdentityRelationshipSectionInspector from "@/components/adminV2/settings/surfaces/composer/IdentityRelationshipSectionInspector";
+import RelationshipSectionsPanel from "@/components/adminV2/settings/surfaces/composer/RelationshipSectionsPanel";
+import IdentityRelationshipSectionTabs from "@/components/adminV2/settings/surfaces/composer/IdentityRelationshipSectionTabs";
 import {
-    addFieldToNestedGroup,
+    buildHouseholdRelationshipAuthoringTabs,
+    authoringGroupKeyForTab,
+    selectionGroupKeyForTab,
+    type HouseholdRelationshipAuthoringTab,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdRelationshipAuthoringTabs";
+import { HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
+import { CHILDREN_SURFACE_ID, HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import SurfaceFieldInspector from "@/components/adminV2/settings/surfaces/composer/SurfaceFieldInspector";
+import {
     fieldLayoutWidthForNestedGroup,
     groupDefsFor,
     identityTierContainingField,
@@ -30,16 +36,12 @@ import {
     type IdentityConfigurationPurpose,
 } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import {
-    buildNestedSurfaceLibraryForGroup,
-    nestedSurfaceLibraryCategories,
-    type NestedSurfaceLibraryItem,
-} from "@/lib/adminV2/settings/surfaces/nestedSurfaceBuilderLibrary";
-import {
     listNestedPlacedFields,
     toSurfaceComposerPlacedItemRef,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceComposerModel";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import { SURFACE_COMPOSER_EMPTY_HINT } from "@/lib/adminV2/settings/surfaces/surfaceComposer";
+import { resolveIdentityBuilderGroupConfig, resolveIdentityBuilderSectionKey } from "@/lib/adminV2/settings/surfaces/resolveIdentityAuthoringGroupKey";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 
 export type IdentitySurfaceBuilderInspectorProps = {
@@ -69,8 +71,6 @@ export default function IdentitySurfaceBuilderInspector({
     const composer = useFocusPanelComposer();
     const { tenantFieldDefinitions } = useTenantFieldDefinitions(grainEntityType);
     const [localPurpose, setLocalPurpose] = useState<IdentityConfigurationPurpose>("summary");
-    const [libraryOpen, setLibraryOpen] = useState(false);
-    const [libraryGroupKey, setLibraryGroupKey] = useState<string | null>(null);
 
     const usesSharedPurpose = Boolean(composer?.enabled && composer.isComposingSurface(surfaceId));
     const activeConfigPurpose = usesSharedPurpose ? composer!.activeConfigPurpose : localPurpose;
@@ -78,11 +78,6 @@ export default function IdentitySurfaceBuilderInspector({
         if (usesSharedPurpose) composer!.setActiveConfigPurpose(purpose);
         else setLocalPurpose(purpose);
     };
-
-    useEffect(() => {
-        if (usesSharedPurpose) return;
-        setLocalPurpose("summary");
-    }, [selectedGroupKey, usesSharedPurpose]);
 
     const activeFieldTier = useMemo(() => {
         if (activeConfigPurpose === "evidence") return undefined;
@@ -93,12 +88,13 @@ export default function IdentitySurfaceBuilderInspector({
 
     const builderNavigation = useMemo(() => {
         let state = initialIdentityBuilderNavigation(surfaceId, nestedSurfaceLabel(surfaceId));
-        if (!selectedGroupKey) return state;
-        const groupLabel = groupDefsFor(surfaceId).find((g) => g.key === selectedGroupKey)?.label;
+        const sectionKey = resolveIdentityBuilderSectionKey(surfaceId, selectedGroupKey);
+        if (!sectionKey) return state;
+        const groupLabel = groupDefsFor(surfaceId).find((g) => g.key === sectionKey)?.label;
         return identityBuilderPushPurpose(state, {
             kind: "purpose",
             surfaceId,
-            groupKey: selectedGroupKey,
+            groupKey: sectionKey,
             purpose: activeConfigPurpose,
             groupLabel,
         });
@@ -170,53 +166,12 @@ export default function IdentitySurfaceBuilderInspector({
         return null;
     }, [placedByGroup, selectedFieldId]);
 
-    const selectedGroupConfig = useMemo(
-        () => (selectedGroupKey ? config.groups.find((g) => g.key === selectedGroupKey) ?? null : null),
-        [config.groups, selectedGroupKey],
+    const { sectionKey: effectiveSectionKey, groupConfig: effectiveGroupConfig, authoringGroupKey } = useMemo(
+        () => resolveIdentityBuilderGroupConfig(config, surfaceId, selectedGroupKey),
+        [config, selectedGroupKey, surfaceId],
     );
 
-    const libraryItems: NestedSurfaceLibraryItem[] = useMemo(() => {
-        if (!libraryGroupKey) return [];
-        return buildNestedSurfaceLibraryForGroup(
-            surfaceId,
-            libraryGroupKey,
-            config,
-            tenantFieldDefinitions,
-        );
-    }, [config, libraryGroupKey, surfaceId, tenantFieldDefinitions]);
-
-    const libraryCategories = useMemo(
-        () => nestedSurfaceLibraryCategories(libraryItems),
-        [libraryItems],
-    );
-
-    const openLibrary = useCallback(
-        (groupKey: string) => {
-            setLibraryGroupKey(groupKey);
-            onSelectGroup(groupKey);
-            onSelectField(null);
-            setLibraryOpen(true);
-        },
-        [onSelectField, onSelectGroup],
-    );
-
-    const handleLibraryPick = useCallback(
-        (item: NestedSurfaceLibraryItem) => {
-            if (item.kind !== "field") return;
-            const tier =
-                activeConfigPurpose !== "evidence"
-                    ? activeConfigPurpose === "context_facts"
-                        ? "context_fact"
-                        : activeConfigPurpose
-                    : "summary";
-            onChange(addFieldToNestedGroup(config, item.groupKey, item.fieldKey, { tier }));
-            onSelectGroup(item.groupKey);
-            onSelectField(`${item.groupKey}:${item.fieldKey}`);
-            setLibraryOpen(false);
-            setLibraryGroupKey(null);
-        },
-        [activeConfigPurpose, config, onChange, onSelectField, onSelectGroup],
-    );
+    const isHouseholdSurface = surfaceId === HOUSEHOLD_SURFACE_ID;
 
     if (selectedPlacedField) {
         return (
@@ -358,83 +313,96 @@ export default function IdentitySurfaceBuilderInspector({
         );
     }
 
-    if (!selectedGroupKey || !selectedGroupConfig) {
-        return (
-            <div
-                className={clsx("process-config-setup-card flex h-full items-center justify-center p-6 text-center", className)}
-                data-identity-surface-builder-inspector="empty"
-            >
-                <p className="config-typo-sublabel">{SURFACE_COMPOSER_EMPTY_HINT}</p>
-            </div>
-        );
-    }
+    const inspectorMode = effectiveGroupConfig || isHouseholdSurface ? "group" : "sections";
+    const householdTabs = isHouseholdSurface ? buildHouseholdRelationshipAuthoringTabs(config) : [];
+    const activeHouseholdTab =
+        householdTabs.find(
+            (tab) =>
+                tab.key === effectiveSectionKey
+                || tab.instanceKey === effectiveSectionKey
+                || (tab.kind === "parent_guardian_shared"
+                    && (effectiveSectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
+                        || effectiveSectionKey === "primary_contact"
+                        || effectiveSectionKey === "other_parent_guardian"
+                        || !effectiveSectionKey)),
+        ) ?? householdTabs[0] ?? null;
+    const layoutGroupKey = isHouseholdSurface && activeHouseholdTab
+        ? authoringGroupKeyForTab(activeHouseholdTab.key)
+        : authoringGroupKey ?? effectiveSectionKey ?? selectedGroupKey ?? "";
+    const childrenHandoff = isHouseholdSurface && activeHouseholdTab?.kind === "children_handoff";
+
+    const handleHouseholdTabSelect = (tab: HouseholdRelationshipAuthoringTab) => {
+        onSelectGroup(selectionGroupKeyForTab(tab.key));
+    };
 
     return (
         <>
-            <div className={clsx("space-y-3", className)} data-identity-surface-builder-inspector="group">
+            <div className={clsx("space-y-3", className)} data-identity-surface-builder-inspector={inspectorMode}>
                 <IdentityBuilderBreadcrumb segments={breadcrumbSegments} onNavigate={handleBreadcrumbNavigate} />
-                <IdentityBuilderDrillIn
+                <IdentityBuilderPurposeNavigation
                     activePurpose={activeConfigPurpose}
                     onSelectPurpose={setActiveConfigPurpose}
-                    onBack={handleIdentityBack}
-                    groupLabel={groupDefs.find((g) => g.key === selectedGroupKey)?.label ?? selectedGroupKey}
                 />
-                {activeConfigPurpose === "summary" ?
-                    <IdentityNestedFieldLayoutPanel
-                        surfaceId={surfaceId}
-                        groupKey={selectedGroupKey}
+                {isHouseholdSurface ?
+                    <RelationshipSectionsPanel
                         config={config}
-                        purpose="summary"
                         onChange={onChange}
-                        onOpenLibrary={() => openLibrary(selectedGroupKey)}
-                        onSelectField={(fieldKey) => onSelectField(`${selectedGroupKey}:${fieldKey}`)}
+                        selectedInstanceKey={effectiveSectionKey ?? "primary_contact"}
+                        onSelectInstance={(instanceKey) => onSelectGroup(instanceKey)}
+                        defaultCollapsed
+                        fieldAuthoringActive
                     />
                 :   null}
-                {activeConfigPurpose === "context_facts" ?
-                    <IdentityContextFactsPanel
-                        surfaceId={surfaceId}
-                        groupKey={selectedGroupKey}
+                {isHouseholdSurface && activeHouseholdTab ?
+                    <IdentityRelationshipSectionTabs
                         config={config}
-                        onChange={onChange}
-                        onOpenLibrary={() => openLibrary(selectedGroupKey)}
-                        onSelectField={(fieldKey) => onSelectField(`${selectedGroupKey}:${fieldKey}`)}
+                        activeTabKey={activeHouseholdTab.key}
+                        onSelectTab={handleHouseholdTabSelect}
                     />
                 :   null}
-                {activeConfigPurpose === "details" ?
-                    <IdentityNestedFieldLayoutPanel
+                {isHouseholdSurface && activeHouseholdTab && activeHouseholdTab.kind !== "children_handoff" ?
+                    <IdentityRelationshipSectionInspector
                         surfaceId={surfaceId}
-                        groupKey={selectedGroupKey}
+                        groupKey={activeHouseholdTab.instanceKey ?? activeHouseholdTab.key}
                         config={config}
-                        purpose="details"
                         onChange={onChange}
-                        onOpenLibrary={() => openLibrary(selectedGroupKey)}
-                        onSelectField={(fieldKey) => onSelectField(`${selectedGroupKey}:${fieldKey}`)}
+                        onOpenChildrenSurface={() => {
+                            onSelectGroup("children");
+                        }}
                     />
                 :   null}
-                {activeConfigPurpose === "evidence" ?
-                    <IdentityEvidenceCollectionsPanel
-                        surfaceId={surfaceId}
-                        groupKey={selectedGroupKey}
-                        config={config}
-                        onChange={onChange}
-                    />
+                {childrenHandoff ?
+                    <div className="process-config-setup-card space-y-3 p-4" data-household-children-handoff="true">
+                        <p className="config-typo-sublabel">
+                            Children uses the Children surface presentation. Configure field layout on the Children surface.
+                        </p>
+                        <button
+                            type="button"
+                            className="text-[12px] font-medium text-alloy-pine hover:underline"
+                            data-household-configure-children="true"
+                            onClick={() => {
+                                if (composer?.enabled) {
+                                    composer.enterDrillIn("children", "children_surface");
+                                    return;
+                                }
+                                onSelectGroup("children");
+                            }}
+                        >
+                            Configure Children surface →
+                        </button>
+                    </div>
+                :   null}
+                {!isHouseholdSurface && !effectiveGroupConfig ?
+                    <div className="process-config-setup-card p-4 text-center">
+                        <p className="config-typo-sublabel">{SURFACE_COMPOSER_EMPTY_HINT}</p>
+                    </div>
+                :   null}
+                {!childrenHandoff && layoutGroupKey ?
+                    <p className="config-typo-sublabel" data-identity-inspector-canvas-hint="true">
+                        Field layout is edited on the canvas composer for the selected section and disclosure level.
+                    </p>
                 :   null}
             </div>
-
-            <SurfaceItemLibraryPanel<NestedSurfaceLibraryItem>
-                open={libraryOpen}
-                categories={libraryCategories}
-                sectionLabel="Add to group"
-                subtitle="Choose a field to place in this evidence group."
-                itemKey={(item) => item.fieldKey}
-                itemLabel={(item) => item.label}
-                itemMeta={(item) => (item.isSystemField ? null : "Custom")}
-                onPick={handleLibraryPick}
-                onClose={() => {
-                    setLibraryOpen(false);
-                    setLibraryGroupKey(null);
-                }}
-            />
         </>
     );
 }

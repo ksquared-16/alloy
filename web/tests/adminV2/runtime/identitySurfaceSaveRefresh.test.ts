@@ -207,8 +207,9 @@ describe("child save refresh", () => {
 describe("expanded field save refresh", () => {
     it("expanded tier VM reflects saved contact value after merge", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.email", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.email", { tier: "expanded" });
         config = setFieldVisibilityInNestedGroup(config, "contact_edit", "contact.email", "editable");
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.email", "editable");
         const merged = mergePersonContactIntoFocusPanelTruth(HOUSEHOLD_TRUTH, "p-sarah", {
             first_name: "Sarah",
             last_name: "Johnson",
@@ -227,7 +228,7 @@ describe("expanded field save refresh", () => {
             ?.expandedRows.flatMap((r) => r.cells)
             .find((c) => c.fieldRef === "person.email");
         expect(expandedEmail?.value).toBe("expanded.saved@example.com");
-        expect(expandedEmail?.editable).toBe(false);
+        expect(expandedEmail?.editable).toBe(true);
     });
 });
 

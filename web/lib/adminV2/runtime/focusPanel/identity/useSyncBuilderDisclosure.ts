@@ -18,11 +18,13 @@ export function useSyncBuilderDisclosure(
     composing: boolean,
     disclosure: IdentityDisclosureState,
     actions: DisclosureActions,
+    composeCanvasMode?: "configure" | "preview",
 ) {
     const composer = useFocusPanelComposer();
 
     useEffect(() => {
-        if (!composing || !composer) return;
+        // Preview/runtime disclosure owns navigation — never reset from composer purpose.
+        if (!composing || !composer || composeCanvasMode === "preview") return;
 
         const purpose = composer.activeConfigPurpose;
         const identityId = composer.selectedIdentityId;
@@ -68,6 +70,7 @@ export function useSyncBuilderDisclosure(
         composer?.selection,
         disclosure.depth,
         disclosure.selectedIdentityId,
+        composeCanvasMode,
     ]);
 }
 

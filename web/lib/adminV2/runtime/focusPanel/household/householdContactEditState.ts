@@ -71,12 +71,21 @@ export type HouseholdPersonSeed = {
  * richer namespaced primary keys when the person IS the primary. Pure. Returns null
  * when the person can't be resolved (→ not editable).
  */
+/** True when personId is a real person UUID usable for mutation (not synthetic display ids). */
+export function isEditableHouseholdPersonId(personId: string | null | undefined): boolean {
+    const id = (personId ?? "").trim();
+    if (!id) return false;
+    if (id === "primary") return false;
+    if (id.startsWith("secondary:")) return false;
+    return true;
+}
+
 export function seedHouseholdContactValuesForPerson(
     truth: Record<string, unknown>,
     personId: string,
 ): HouseholdPersonSeed | null {
     const id = personId.trim();
-    if (!id) return null;
+    if (!isEditableHouseholdPersonId(id)) return null;
     const row = buildOpportunityFamilyContactRows(truth).find((r) => r.person_id === id) ?? null;
     const isPrimary = resolveLeadSummaryPrimaryPersonId(truth) === id;
     if (!row && !isPrimary) return null;
@@ -91,6 +100,39 @@ export function seedHouseholdContactValuesForPerson(
             last_name: (isPrimary && trimStr(truth.last_name)) || split.last_name,
             email: trimStr(row?.email) || (isPrimary ? trimStr(truth["person.primary_email"]) : ""),
             phone: trimStr(row?.phone) || (isPrimary ? trimStr(truth["person.primary_phone"]) : ""),
+        },
+    };
+}
+
+/**
+ * Seed editor for a card evidence contact — prefers authoritative family-row values,
+ * overlays display name/channels from the card evidence when the truth row is thin.
+ * Pure. Returns null for synthetic ids.
+ */
+export function seedHouseholdContactValuesFromEvidence(
+    truth: Record<string, unknown>,
+    contact: {
+        personId: string;
+        name: string;
+        email?: string | null;
+        phone?: string | null;
+    },
+): HouseholdPersonSeed | null {
+    const fromTruth = seedHouseholdContactValuesForPerson(truth, contact.personId);
+    if (!isEditableHouseholdPersonId(contact.personId)) return null;
+    const id = contact.personId.trim();
+    const split = splitName(contact.name);
+    // Prefer authoritative row values; fill gaps from evidence (strip display phone later in UI if needed).
+    const email = (fromTruth?.values.email || trimStr(contact.email)).trim();
+    const phone = (fromTruth?.values.phone || trimStr(contact.phone)).trim();
+    return {
+        personId: id,
+        name: (fromTruth?.name || contact.name || "Contact").trim(),
+        values: {
+            first_name: fromTruth?.values.first_name || split.first_name,
+            last_name: fromTruth?.values.last_name || split.last_name,
+            email,
+            phone,
         },
     };
 }

@@ -254,7 +254,8 @@ describe("household identity VM", () => {
         const secondary = vm.sections.find((s) => s.key === "other_parent_guardian");
         expect(secondary?.items.map((item) => item.title)).toEqual(["Michael Johnson"]);
         const members = vm.sections.find((s) => s.key === "household_members");
-        expect(members?.items.some((item) => item.title === "Sarah Johnson")).toBe(false);
+        // Additional Contacts may be disabled by default; primary must not appear there when present.
+        expect(members?.items.some((item) => item.title === "Sarah Johnson") ?? false).toBe(false);
     });
 
     it("children section renders configured child rows", () => {
@@ -296,7 +297,7 @@ describe("children identity VM", () => {
                 },
             ],
         };
-        const adapted = adaptChildSurfaceToChildrenSurface(childSurface, defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID));
+        const adapted = adaptChildSurfaceToChildrenSurface(childSurface, null);
         const placement = adapted.groups.find((g) => g.key === "placement")!;
         expect(placement.selectedFieldKeys).toContain("child.start_date");
         expect(placement.fieldPolicies?.["child.start_date"]).toBe("editable");
@@ -560,12 +561,13 @@ describe("identity editability matrix", () => {
 
     it("expanded tier honors the same policy as summary", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line", { tier: "expanded" });
-        config = setFieldVisibilityInNestedGroup(config, "primary_contact", "person.address_line", "editable");
+        // Parent/Guardian template is authoritative for primary_contact Details.
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line1", { tier: "expanded" });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.address_line1", "editable");
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
         const vm = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: true });
         const primary = vm.sections.find((s) => s.key === "primary_contact")?.items[0];
-        const address = primary?.expandedRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.address_line");
+        const address = primary?.expandedRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.address_line1");
         expect(address?.editable).toBe(true);
         expect(primary?.canExpand).toBe(true);
     });

@@ -21,6 +21,7 @@ import {
 import {
     generateDefaultIdentityFieldPlacements,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import { migrateHouseholdRelationshipSectionInstances } from "@/lib/adminV2/runtime/focusPanel/household/householdRelationshipSectionInstances";
 import {
     identityLayerFieldKeysFromGroup,
     normalizeIdentityFieldPlacements,
@@ -88,12 +89,15 @@ export function adaptHouseholdContactSurfaceToHouseholdSurface(
         HOUSEHOLD_SURFACE_CANONICAL_ID,
         householdSurface ?? defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_CANONICAL_ID),
     );
-    const legacyGroup = legacyContactSurface?.groups.find((group) => group.key === "contact_fields");
-    if (!legacyGroup) return canonical;
+    // Published canonical household_surface wins — legacy contact surface is migration input only.
+    if (!legacyContactSurface || householdSurface) return applyIdentityGroupReconcile(canonical);
+
+    const legacyGroup = legacyContactSurface.groups.find((group) => group.key === "contact_fields");
+    if (!legacyGroup) return applyIdentityGroupReconcile(canonical);
 
     const canonicalGroup = canonical.groups.find((group) => group.key === "contact_edit");
-    if (!canonicalGroup) return canonical;
-    const canonicalWasPublished = householdSurface?.groups.some((group) => group.key === "contact_edit") ?? false;
+    if (!canonicalGroup) return applyIdentityGroupReconcile(canonical);
+    const canonicalWasPublished = false;
 
     const selectedFieldKeys = legacyGroup.selectedFieldKeys
         .map((fieldRef) => LEGACY_CONTACT_TO_CANONICAL_FIELD[fieldRef])
@@ -150,14 +154,13 @@ export function migrateIdentityDisclosureGroup(group: NestedSurfaceGroupConfig):
     const reconciled = reconcileFieldModesToPolicies(group);
     const layers = identityLayerFieldKeysFromGroup(reconciled);
     const contextFactKeys = sanitizeContextFactKeys(layers.summary, reconciled.contextFieldKeys ?? layers.contextFacts);
-    const placements = normalizeIdentityFieldPlacements(
-        generateDefaultIdentityFieldPlacements({
-            ...reconciled,
-            selectedFieldKeys: layers.summary,
-            contextFieldKeys: contextFactKeys,
-            expandedFieldKeys: layers.details,
-        }),
-    );
+    const placementSeed = {
+        ...reconciled,
+        selectedFieldKeys: layers.summary,
+        contextFieldKeys: contextFactKeys,
+        expandedFieldKeys: layers.details,
+    };
+    const placements = normalizeIdentityFieldPlacements(generateDefaultIdentityFieldPlacements(placementSeed));
     return {
         ...reconciled,
         selectedFieldKeys: layers.summary,
@@ -172,11 +175,16 @@ export function adaptChildSurfaceToChildrenSurface(
     childSurface: NestedSurfaceConfig | null,
     childrenSurface: NestedSurfaceConfig | null,
 ): NestedSurfaceConfig {
+    if (childrenSurface) {
+        return applyIdentityGroupReconcile(
+            reconcileNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID, childrenSurface),
+        );
+    }
     const canonical = reconcileNestedSurfaceConfig(
         CHILDREN_SURFACE_CANONICAL_ID,
-        childrenSurface ?? defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
+        defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
     );
-    if (!childSurface) return canonical;
+    if (!childSurface) return applyIdentityGroupReconcile(canonical);
 
     const childByKey = new Map(childSurface.groups.map((group) => [group.key, group]));
     const mergedGroups = canonical.groups.map((group) => {
@@ -288,9 +296,13 @@ export type ReconcileIdentityNestedConfigInput = {
 };
 
 function applyIdentityGroupReconcile(config: NestedSurfaceConfig): NestedSurfaceConfig {
+    const migratedSections =
+        config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID
+            ? migrateHouseholdRelationshipSectionInstances(config)
+            : config;
     return {
-        ...config,
-        groups: config.groups.map((group) => migrateIdentityDisclosureGroup(group)),
+        ...migratedSections,
+        groups: migratedSections.groups.map((group) => migrateIdentityDisclosureGroup(group)),
     };
 }
 
@@ -306,20 +318,17 @@ function reconcileIdentityNestedConfigImpl(input: ReconcileIdentityNestedConfigI
     } else if (surfaceKey === CHILDREN_SURFACE_CANONICAL_ID) {
         config = adaptChildSurfaceToChildrenSurface(
             legacyConfigs.childSurface ?? null,
-            reconcileNestedSurfaceConfig(
-                CHILDREN_SURFACE_CANONICAL_ID,
-                currentConfig ?? defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
-            ),
+            currentConfig,
         );
     } else if (surfaceKey === CHILD_SURFACE_COMPAT_ID) {
         config = adaptChildSurfaceToChildrenSurface(
             currentConfig,
-            defaultNestedSurfaceConfig(CHILDREN_SURFACE_CANONICAL_ID),
+            null,
         );
     } else if (surfaceKey === HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID) {
         config = adaptHouseholdContactSurfaceToHouseholdSurface(
             currentConfig,
-            defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_CANONICAL_ID),
+            null,
         );
     } else {
         config = reconcileNestedSurfaceConfig(surfaceKey, currentConfig);
@@ -416,11 +425,26 @@ export function resolveIdentityFieldPolicy(args: {
     groupKey: string;
     fieldRef: string;
     editGroupKey?: string;
+    tier?: "summary" | "context_facts" | "details";
+    skipGlobalPolicy?: boolean;
+    skipPlacementPolicy?: boolean;
 }): SurfaceFieldVisibility {
-    const { config, groupKey, fieldRef, editGroupKey } = args;
+    const { config, groupKey, fieldRef, editGroupKey, tier, skipGlobalPolicy, skipPlacementPolicy } = args;
     const group = config.groups.find((g) => g.key === groupKey);
-    const stored = group?.fieldPolicies?.[fieldRef];
-    if (stored) return normalizeFieldVisibility(stored);
+
+    if (tier && !skipPlacementPolicy) {
+        const tierPlacement = (group?.fieldPlacements ?? []).find(
+            (row) =>
+                row.fieldRef === fieldRef
+                && storageTierMatchesPurpose(normalizeIdentityStorageTier(row.tier), tier),
+        );
+        if (tierPlacement?.policy) return normalizeFieldVisibility(tierPlacement.policy);
+    }
+
+    if (!skipGlobalPolicy) {
+        const stored = group?.fieldPolicies?.[fieldRef];
+        if (stored) return normalizeFieldVisibility(stored);
+    }
 
     if (editGroupKey) {
         const editGroup = config.groups.find((g) => g.key === editGroupKey);
@@ -431,6 +455,14 @@ export function resolveIdentityFieldPolicy(args: {
                 || editLayers.details.includes(fieldRef)
             : false;
         if (editContainsField) {
+            if (tier && !skipPlacementPolicy) {
+                const editTierPlacement = (editGroup?.fieldPlacements ?? []).find(
+                    (row) =>
+                        row.fieldRef === fieldRef
+                        && storageTierMatchesPurpose(normalizeIdentityStorageTier(row.tier), tier),
+                );
+                if (editTierPlacement?.policy) return normalizeFieldVisibility(editTierPlacement.policy);
+            }
             const editPolicy = editGroup?.fieldPolicies?.[fieldRef];
             if (editPolicy) return normalizeFieldVisibility(editPolicy);
             if (config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID && editGroupKey === "contact_edit") {
@@ -446,8 +478,10 @@ export function resolveIdentityFieldPolicy(args: {
     const fromMode = fieldModeToPolicy(legacyMode);
     if (fromMode) return fromMode;
 
-    const placement = group?.fieldPlacements?.find((row) => row.fieldRef === fieldRef);
-    if (placement?.policy) return placement.policy;
+    if (!tier && !skipPlacementPolicy) {
+        const placement = group?.fieldPlacements?.find((row) => row.fieldRef === fieldRef);
+        if (placement?.policy) return placement.policy;
+    }
 
     if (config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID && groupKey === "contact_edit") return "editable";
     if (config.surfaceId === CHILDREN_SURFACE_CANONICAL_ID && groupKey === "child_edit") return "editable";

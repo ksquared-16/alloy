@@ -56,9 +56,16 @@ import {
     type IdentityFieldPlacement,
     type IdentityFieldTier,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import { identityPickerFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
+import {
+    fieldVisibilityForIdentityTier,
+    setFieldVisibilityForIdentityTier,
+    type IdentityFieldPolicyTier,
+} from "@/lib/adminV2/settings/surfaces/identityFieldPolicy";
 import {
     configurationPurposeFromTierArg,
     fieldKeysForConfigurationPurpose,
+    normalizeIdentityFieldPlacements,
     normalizeIdentityStorageTier,
     type IdentityConfigurationPurpose,
     type IdentityEvidenceCollectionConfig,
@@ -116,6 +123,12 @@ export type NestedSurfaceGroupDef = {
 
 export type NestedSurfaceGroupConfig = {
     key: string;
+    /** Canonical relationship-section definition key. */
+    definitionKey?: string;
+    /** Stable tenant section instance key. */
+    instanceKey?: string;
+    /** Registry group key for field presentation authoring. */
+    presentationRef?: string;
     /** Summary layer — recognition fields (who is this?). */
     selectedFieldKeys: string[];
     /** Context Facts — incremental operational facts (persisted as contextFieldKeys). */
@@ -147,6 +160,16 @@ export type NestedSurfaceGroupConfig = {
     sectionSemantic?: string;
     /** Operator-chosen section label (custom sections); overrides the registry label. */
     sectionLabel?: string;
+    /** When true, Parent / Guardian template inheritance is disabled for this section. */
+    roleOverride?: boolean;
+    /** Relationship matching criteria for configurable Household sections. */
+    relationshipCriteria?: {
+        roleKeys?: string[];
+        relationshipTypes?: string[];
+        excludeRoleKeys?: string[];
+    };
+    sectionVisibility?: "always" | "when_nonempty" | "hidden";
+    sectionOrder?: number;
 };
 
 export type NestedSurfaceConfig = {
@@ -311,7 +334,17 @@ export function availableFieldsForNestedGroup(
             : surfaceId === CHILDREN_SURFACE_ID && isEvidenceSection(surfaceId, groupKey)
                 ? (["child", "inquiry_child"] as const)
                 : def.acceptedNamespaces;
-    return availableFieldsForNamespaces(namespaces, tenantFieldDefinitions).filter((f) => !selected.has(f.key));
+    return identityPickerFieldsForNamespaces({
+        namespaces,
+        tenantFieldDefinitions,
+        excludeKeys: selected,
+    }).map((field) => ({
+        key: field.key,
+        label: field.label,
+        entityNamespace: field.entityNamespace,
+        displayHint: field.displayHint,
+        isSystemField: field.isSystemField,
+    }));
 }
 
 function patchGroup(
@@ -516,7 +549,11 @@ export function setFieldVisibilityInNestedGroup(
     groupKey: string,
     fieldKey: string,
     visibility: SurfaceFieldVisibility,
+    options?: { tier?: IdentityFieldPolicyTier },
 ): NestedSurfaceConfig {
+    if (options?.tier) {
+        return setFieldVisibilityForIdentityTier(config, groupKey, fieldKey, options.tier, visibility);
+    }
     return {
         ...config,
         groups: config.groups.map((g) =>
@@ -534,7 +571,13 @@ export function fieldVisibilityForNestedGroup(
     config: NestedSurfaceConfig,
     groupKey: string,
     fieldKey: string,
+    options?: { tier?: IdentityFieldPolicyTier },
 ): SurfaceFieldVisibility {
+    if (options?.tier) {
+        return fieldVisibilityForIdentityTier(config, groupKey, fieldKey, options.tier, () =>
+            defaultFieldVisibility(config.surfaceId, groupKey),
+        );
+    }
     const group = config.groups.find((g) => g.key === groupKey);
     const stored = group?.fieldPolicies?.[fieldKey];
     if (stored) return normalizeFieldVisibility(stored);
@@ -854,6 +897,20 @@ export function setNestedGroupEnabled(
     };
 }
 
+
+export function setNestedGroupSectionLabel(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    sectionLabel: string,
+): NestedSurfaceConfig {
+    return {
+        ...config,
+        groups: config.groups.map((g) =>
+            g.key === groupKey ? { ...g, sectionLabel: sectionLabel.trim() || undefined } : g,
+        ),
+    };
+}
+
 /** Operator-facing label for a section group (custom section label wins over registry). */
 export function nestedGroupLabel(config: NestedSurfaceConfig, groupKey: string): string | null {
     const group = config.groups.find((g) => g.key === groupKey);
@@ -882,6 +939,22 @@ export function enabledEvidenceSections(config: NestedSurfaceConfig): NestedSurf
     );
 }
 
+
+function filterPlacementsToConfiguredKeys(group: NestedSurfaceGroupConfig): IdentityFieldPlacement[] {
+    const placements = group.fieldPlacements ?? [];
+    if (placements.length === 0) return placements;
+    const allowed = new Set<string>();
+    for (const tier of ["summary", "context_fact", "details"] as const) {
+        const purpose = configurationPurposeFromTierArg(tier);
+        for (const fieldRef of fieldKeysForConfigurationPurpose(group, purpose)) {
+            allowed.add(`${tier}:${fieldRef}`);
+        }
+    }
+    return placements.filter((placement) =>
+        allowed.has(`${normalizeIdentityStorageTier(placement.tier)}:${placement.fieldRef}`),
+    );
+}
+
 /** Merge a loaded config with the current registry (adds new groups, drops stale). */
 export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSurfaceConfig | null): NestedSurfaceConfig {
     const base = defaultNestedSurfaceConfig(surfaceId);
@@ -897,23 +970,37 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
         const merged: NestedSurfaceGroupConfig = {
             key: g.key,
             selectedFieldKeys: [...found.selectedFieldKeys],
-            contextFieldKeys: found.contextFieldKeys ? [...found.contextFieldKeys] : undefined,
-            expandedFieldKeys: found.expandedFieldKeys ? [...found.expandedFieldKeys] : undefined,
+            contextFieldKeys:
+                found.contextFieldKeys !== undefined ? [...found.contextFieldKeys] : undefined,
+            expandedFieldKeys:
+                found.expandedFieldKeys !== undefined ? [...found.expandedFieldKeys] : undefined,
             evidenceCollections: found.evidenceCollections ? [...found.evidenceCollections] : undefined,
             enabled: found.enabled ?? defaultGroupEnabled(surfaceId, g.key),
             displayOptions: found.displayOptions ?? g.displayOptions,
             fieldModes: found.fieldModes ?? g.fieldModes,
             fieldPolicies,
             fieldLabels: found.fieldLabels ? { ...found.fieldLabels } : undefined,
+            roleOverride: found.roleOverride,
             fieldLayoutWidths: found.fieldLayoutWidths ? { ...found.fieldLayoutWidths } : undefined,
             fieldPlacements: found.fieldPlacements ? [...found.fieldPlacements] : undefined,
             fieldIcons: found.fieldIcons ? { ...found.fieldIcons } : undefined,
             sectionSemantic: found.sectionSemantic,
             sectionLabel: found.sectionLabel,
+            definitionKey: found.definitionKey,
+            instanceKey: found.instanceKey,
+            presentationRef: found.presentationRef,
+            relationshipCriteria: found.relationshipCriteria,
+            sectionVisibility: found.sectionVisibility,
+            sectionOrder: found.sectionOrder,
         };
+        const filteredPlacements = filterPlacementsToConfiguredKeys(merged);
+        const placements =
+            filteredPlacements.length > 0 || merged.fieldPlacements !== undefined
+                ? filteredPlacements
+                : generateDefaultIdentityFieldPlacements(merged);
         return {
             ...merged,
-            fieldPlacements: generateDefaultIdentityFieldPlacements(merged),
+            fieldPlacements: placements,
         };
     });
 
@@ -1031,4 +1118,54 @@ export function setEvidenceCollectionEnabled(
             entry.key === collectionKey ? { ...entry, enabled } : entry,
         ),
     }));
+}
+
+
+/** Household relationship sections configurable in Builder (not template/address). */
+export function isHouseholdRelationshipSectionKey(groupKey: string): boolean {
+    return (
+        groupKey === "primary_contact"
+        || groupKey === "other_parent_guardian"
+        || groupKey === "household_members"
+        || groupKey === "emergency_contacts"
+        || groupKey === "authorized_pickups"
+        || groupKey === "billing_contact"
+        || groupKey === "children"
+    );
+}
+
+export function setNestedGroupSectionVisibility(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    visibility: "always" | "when_nonempty" | "hidden",
+): NestedSurfaceConfig {
+    return patchNestedGroup(config, groupKey, (group) => ({ ...group, sectionVisibility: visibility }));
+}
+
+export function setNestedGroupRelationshipCriteria(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    criteria: { roleKeys?: string[]; relationshipTypes?: string[] } | undefined,
+): NestedSurfaceConfig {
+    return patchNestedGroup(config, groupKey, (group) => ({ ...group, relationshipCriteria: criteria }));
+}
+
+export function setNestedGroupRoleOverride(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    roleOverride: boolean,
+): NestedSurfaceConfig {
+    return patchNestedGroup(config, groupKey, (group) => ({ ...group, roleOverride: roleOverride || undefined }));
+}
+
+/** Resolve a nested group by registry key, instance key, or presentation ref. */
+export function resolveNestedGroupConfig(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+): NestedSurfaceGroupConfig | null {
+    const direct = config.groups.find((group) => group.key === groupKey);
+    if (direct) return direct;
+    const byInstance = config.groups.find((group) => (group.instanceKey ?? group.key) === groupKey);
+    if (byInstance) return byInstance;
+    return config.groups.find((group) => group.presentationRef === groupKey) ?? null;
 }

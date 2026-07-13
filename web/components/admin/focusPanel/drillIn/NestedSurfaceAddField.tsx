@@ -7,33 +7,37 @@ import ComposerFloatingPopover from "@/components/admin/focusPanel/drillIn/Compo
 import {
     addFieldToNestedGroup,
     availableFieldsForNestedGroup,
+    groupDefsFor,
+    identityConfigurationFieldKeys,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import { configurationPurposeFromTierArg } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { identityPickerCategoriesForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
+import type { AvailableFieldEntityNamespace } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
+import { householdAuthoringGroupKey } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
+import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 
 type Props = {
     surfaceId: string;
     groupKey: string;
-    /** Active disclosure tier for identity layers. */
     tier?: IdentityFieldTier;
     className?: string;
 };
 
-/** One Add field control per editable region — shared by layout surface and household groups. */
+/** Canonical + Add field control for the green NestedSurfaceFieldLayoutSurface composer. */
 export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, className = "" }: Props) {
     const composer = useFocusPanelComposer();
     const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
     const [addOpen, setAddOpen] = useState(false);
+    const [activeCategory, setActiveCategory] = useState<string | null>(null);
+    const [search, setSearch] = useState("");
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     const composing = composer?.isComposingSurface(surfaceId) ?? false;
     const config = composer?.configFor(surfaceId);
-    const regionSelected =
-        composer?.selection?.kind === "region" &&
-        composer.selection.surfaceId === surfaceId &&
-        composer.selection.groupKey === groupKey;
 
     const available = useMemo(
         () =>
@@ -43,13 +47,61 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
         [config, composing, surfaceId, groupKey, tenantFieldDefinitions, tier],
     );
 
+    const placedKeys = useMemo(() => {
+        if (!config) return new Set<string>();
+        const purpose = configurationPurposeFromTierArg(tier ?? "summary");
+        return new Set(identityConfigurationFieldKeys(config, groupKey, purpose));
+    }, [config, groupKey, tier]);
+
+    const categories = useMemo(() => {
+        const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
+        if (!def) return [];
+        const namespaces = def.acceptedNamespaces as readonly AvailableFieldEntityNamespace[];
+        const all = identityPickerCategoriesForNamespaces({
+            namespaces,
+            tenantFieldDefinitions,
+            excludeKeys: placedKeys,
+        });
+        const q = search.trim().toLowerCase();
+        if (!q) return all;
+        return all
+            .map((category) => ({
+                ...category,
+                fields: category.fields.filter(
+                    (field) =>
+                        field.label.toLowerCase().includes(q)
+                        || field.key.toLowerCase().includes(q),
+                ),
+            }))
+            .filter((category) => category.fields.length > 0);
+    }, [surfaceId, groupKey, tenantFieldDefinitions, placedKeys, search]);
+
+    const activeFields = useMemo(() => {
+        if (categories.length === 0) return [];
+        const key = activeCategory ?? categories[0]?.key ?? null;
+        return categories.find((c) => c.key === key)?.fields ?? [];
+    }, [categories, activeCategory]);
+
     const mutate = useCallback(
         (next: NestedSurfaceConfig) => composer?.updateConfig(surfaceId, next),
         [composer, surfaceId],
     );
 
-    if (!composing || !composer || !config || !regionSelected) return null;
-    if (available.length === 0) return null;
+    if (!composing || !composer || !config) return null;
+
+    // Ensure region selection matches authoring group so subsequent controls stay in sync.
+    const ensureRegionSelected = () => {
+        const selection = composer.selection;
+        const already =
+            selection?.kind === "region"
+            && selection.surfaceId === surfaceId
+            && (selection.groupKey === groupKey
+                || (surfaceId === HOUSEHOLD_SURFACE_ID
+                    && householdAuthoringGroupKey(selection.groupKey) === householdAuthoringGroupKey(groupKey)));
+        if (!already) {
+            composer.select({ kind: "region", surfaceId, groupKey });
+        }
+    };
 
     return (
         <div className={["fp-region-add-field", className].filter(Boolean).join(" ")} data-region-add-field={groupKey}>
@@ -61,36 +113,72 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
                 aria-expanded={addOpen}
                 onClick={(e) => {
                     e.stopPropagation();
+                    ensureRegionSelected();
                     setAddOpen((v) => !v);
                 }}
             >
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 Add field
             </button>
+            {available.length === 0 && addOpen ? (
+                <p className="mt-2 text-[11px] text-alloy-midnight/50" data-add-field-empty="true">
+                    No more fields available for this section.
+                </p>
+            ) : null}
             <ComposerFloatingPopover
-                open={addOpen}
+                open={addOpen && available.length > 0}
                 anchorRef={triggerRef}
-                onClose={() => setAddOpen(false)}
-                className="fp-inline-field-library"
+                onClose={() => {
+                    setAddOpen(false);
+                    setSearch("");
+                }}
+                className="fp-inline-field-library fp-inline-field-library--categorized"
             >
-                <div data-drill-in-field-library={groupKey}>
-                    {available.map((f) => (
-                        <button
-                            key={f.key}
-                            type="button"
-                            className="fp-inline-field-library__item"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                mutate(addFieldToNestedGroup(config, groupKey, f.key, { tier }));
-                                setAddOpen(false);
-                            }}
-                        >
-                            <span className="fp-inline-field-library__label">{f.label}</span>
-                            {!f.isSystemField ? (
-                                <span className="fp-inline-field-library__meta">Custom field</span>
-                            ) : null}
-                        </button>
-                    ))}
+                <div data-drill-in-field-library={groupKey} className="fp-inline-field-library__shell">
+                    <input
+                        type="search"
+                        className="fp-inline-field-library__search"
+                        placeholder="Search fields…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        aria-label="Search available fields"
+                    />
+                    <div className="fp-inline-field-library__categories">
+                        {categories.map((category) => (
+                            <button
+                                key={category.key}
+                                type="button"
+                                className={
+                                    (activeCategory ?? categories[0]?.key) === category.key
+                                        ? "fp-inline-field-library__category is-active"
+                                        : "fp-inline-field-library__category"
+                                }
+                                onClick={() => setActiveCategory(category.key)}
+                            >
+                                {category.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="fp-inline-field-library__items">
+                        {activeFields.map((f) => (
+                            <button
+                                key={f.key}
+                                type="button"
+                                className="fp-inline-field-library__item"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    mutate(addFieldToNestedGroup(config, groupKey, f.key, { tier }));
+                                    setAddOpen(false);
+                                    setSearch("");
+                                }}
+                            >
+                                <span className="fp-inline-field-library__label">{f.label}</span>
+                                {!f.isSystemField ? (
+                                    <span className="fp-inline-field-library__meta">Custom field</span>
+                                ) : null}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </ComposerFloatingPopover>
         </div>

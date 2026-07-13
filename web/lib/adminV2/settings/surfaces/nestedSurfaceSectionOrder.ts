@@ -89,10 +89,14 @@ export const HOUSEHOLD_DEFAULT_SECTION_ORDER = [
     "billing_contact",
 ] as const;
 
-/** Household sections that must stay enabled in published config. */
+/**
+ * Household sections that cannot be soft-deleted via Builder.
+ * Primary Contact remains required. Children stays as a handoff section when present.
+ * Optional/default sections (Additional Contacts, Emergency Contacts, etc.) must honor
+ * explicit `enabled: false` and must NOT be force-reenabled on reconcile.
+ */
 export const HOUSEHOLD_ALWAYS_ENABLED_KEYS = [
     "primary_contact",
-    "household_members",
     "children",
 ] as const;
 

@@ -53,6 +53,12 @@ type Props = {
     tier?: IdentityFieldTier;
 };
 
+function humanizeFieldKey(fieldKey: string): string {
+    const leaf = fieldKey.includes(".") ? fieldKey.slice(fieldKey.lastIndexOf(".") + 1) : fieldKey;
+    return leaf.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Never return raw canonical refs in Builder UI. */
 function catalogLabelFor(
     surfaceId: string,
     groupKey: string,
@@ -61,8 +67,14 @@ function catalogLabelFor(
 ): string {
     const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
     const all = def ? availableFieldsForNamespaces(def.acceptedNamespaces, tenantDefs) : [];
-    return all.find((f) => f.key === fieldKey)?.label
-        ?? fieldKey.replace(/^[a-z_]+\./, "").replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    const fromCatalog = all.find((f) => f.key === fieldKey)?.label?.trim();
+    if (fromCatalog && fromCatalog !== fieldKey && !/^[a-z_]+\./i.test(fromCatalog)) return fromCatalog;
+    if (fromCatalog && fromCatalog !== fieldKey) return humanizeFieldKey(fieldKey);
+    return humanizeFieldKey(fieldKey) || "Unavailable field";
+}
+
+function displayLabelLooksLikeRawRef(label: string): boolean {
+    return /^[a-z_]+\.[a-z0-9_.]+$/i.test(label.trim());
 }
 
 /**
@@ -92,13 +104,16 @@ export default function NestedSurfaceFieldLayoutSurface({
     );
 
     const orderedKeys = useMemo(() => {
-        if (!config) return fields.map((f) => f.fieldKey);
+        if (!config) return composing ? [] : fields.map((f) => f.fieldKey);
         const configured = tier
             ? identityConfigurationFieldKeys(config, groupKey, configurationPurposeFromTierArg(tier))
             : selectedFieldKeys(config, groupKey);
+        if (composing) return configured;
         const visible = configured.filter((key) => fieldMetaByKey.has(key));
-        return visible.length > 0 ? visible : fields.map((f) => f.fieldKey);
-    }, [config, groupKey, fields, fieldMetaByKey, tier]);
+        if (visible.length > 0) return visible;
+        if (configured.length > 0) return configured;
+        return fields.map((f) => f.fieldKey);
+    }, [composing, config, groupKey, fields, fieldMetaByKey, tier]);
 
     const rowChunks = useMemo(() => {
         if (!config) return orderedKeys.map((key) => [key]);
@@ -156,7 +171,25 @@ export default function NestedSurfaceFieldLayoutSurface({
                     data-children-inline-row={chunk.length === 2 ? "pair" : "single"}
                 >
                     {chunk.map((fieldKey) => {
-                        const meta = fieldMetaByKey.get(fieldKey);
+                        const meta =
+                            fieldMetaByKey.get(fieldKey)
+                            ?? (composing && config
+                                ? {
+                                      fieldKey,
+                                      label: fieldPresentationLabel(
+                                          config,
+                                          groupKey,
+                                          fieldKey,
+                                          catalogLabelFor(
+                                              surfaceId,
+                                              groupKey,
+                                              fieldKey,
+                                              tenantFieldDefinitions,
+                                          ),
+                                      ),
+                                      value: null,
+                                  }
+                                : undefined);
                         if (!meta) return null;
 
                         if (meta.renderBlock) {
@@ -209,7 +242,17 @@ export default function NestedSurfaceFieldLayoutSurface({
 
                         const showLabel = fieldShowLabelForNestedGroup(config!, groupKey, fieldKey);
                         const showIcon = fieldShowIconForNestedGroup(config!, groupKey, fieldKey);
-                        const label = fieldPresentationLabel(config!, groupKey, fieldKey, meta.label);
+                        const catalogLabel = catalogLabelFor(
+                            surfaceId,
+                            groupKey,
+                            fieldKey,
+                            tenantFieldDefinitions,
+                        );
+                        const resolvedLabel = fieldPresentationLabel(config!, groupKey, fieldKey, catalogLabel);
+                        const label =
+                            displayLabelLooksLikeRawRef(resolvedLabel) || displayLabelLooksLikeRawRef(meta.label)
+                                ? catalogLabel
+                                : resolvedLabel;
 
                         return (
                             <FieldInstance
@@ -339,7 +382,7 @@ function FieldInstance({
     className?: string;
     children: React.ReactNode;
 }) {
-    const visibility = fieldVisibilityForNestedGroup(config, groupKey, fieldKey);
+    const visibility = fieldVisibilityForNestedGroup(config, groupKey, fieldKey, tier ? { tier } : undefined);
     const showLabel = fieldShowLabelForNestedGroup(config, groupKey, fieldKey);
     const showIcon = fieldShowIconForNestedGroup(config, groupKey, fieldKey);
     const editingLabel = editingLabelKey === fieldKey;
@@ -455,6 +498,7 @@ function FieldInstance({
                                             groupKey,
                                             fieldKey,
                                             e.target.value as SurfaceFieldVisibility,
+                                            tier ? { tier } : undefined,
                                         ),
                                     )
                                 }

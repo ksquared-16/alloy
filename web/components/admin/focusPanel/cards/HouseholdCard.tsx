@@ -17,11 +17,20 @@ import IdentityDisclosureSurface from "@/components/admin/focusPanel/identity/Id
 import IdentityCollectionContext from "@/components/admin/focusPanel/identity/IdentityCollectionContext";
 import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity/IdentityDisclosureBackAction";
 import { useIdentityDisclosureState } from "@/lib/adminV2/runtime/focusPanel/identity/useIdentityDisclosureState";
-import { layoutFieldsFromIdentityRecord } from "@/lib/adminV2/runtime/focusPanel/identity/layoutFieldsFromIdentityRecord";
+import IdentityComposeCanvasShell from "@/components/admin/focusPanel/identity/IdentityComposeCanvasShell";
+import IdentityComposeSectionCanvas from "@/components/admin/focusPanel/identity/IdentityComposeSectionCanvas";
+import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
+import RelationshipSectionsPanel from "@/components/adminV2/settings/surfaces/composer/RelationshipSectionsPanel";
+import IdentityRelationshipSectionTabs from "@/components/adminV2/settings/surfaces/composer/IdentityRelationshipSectionTabs";
 import {
-    builderPurposeForDisclosureDepth,
-    useSyncBuilderDisclosure,
-} from "@/lib/adminV2/runtime/focusPanel/identity/useSyncBuilderDisclosure";
+    buildHouseholdRelationshipAuthoringTabs,
+    authoringGroupKeyForTab,
+    selectionGroupKeyForTab,
+    type HouseholdRelationshipAuthoringTab,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdRelationshipAuthoringTabs";
+import { shouldRenderIdentityComposeCanvas } from "@/lib/adminV2/runtime/focusPanel/identity/identityComposeMode";
+import { builderPurposeForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/useSyncBuilderDisclosure";
+import { identityDisclosureCoordinationLevel } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import { backIdentityDisclosure } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import type { IdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
@@ -29,14 +38,18 @@ import {
     readHouseholdNestedConfigFromDoc,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
 import {
+    householdAuthoringGroupKey,
+    HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP,
+    isHouseholdParentGuardianRuntimeGroup,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
+import {
     applyHouseholdDisplayView,
     type HouseholdNestedDisplayView,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
-import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { CHILDREN_SURFACE_ID, HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
 import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
-import NestedSurfaceFieldLayoutSurface from "@/components/admin/focusPanel/drillIn/NestedSurfaceFieldLayoutSurface";
 import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
 import InlineSectionControls from "@/components/admin/focusPanel/drillIn/InlineSectionControls";
 import {
@@ -44,7 +57,11 @@ import {
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
-import { seedHouseholdContactValuesForPerson } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
+import {
+    isEditableHouseholdPersonId,
+    seedHouseholdContactValuesForPerson,
+    seedHouseholdContactValuesFromEvidence,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
     FocusPanelCoordination,
@@ -102,11 +119,11 @@ export default function HouseholdCard({
 }: Props) {
     const composer = useFocusPanelComposer();
     const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
-    const nestedConfig = useMemo(() => {
-        if (composer?.enabled) return composer.configFor(HOUSEHOLD_SURFACE_ID);
-        return readHouseholdNestedConfigFromDoc(publishedDoc);
-    }, [composer, publishedDoc]);
     const composingHouseholdSurface = composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false;
+    const nestedConfig = useMemo(
+        () => (composingHouseholdSurface ? composer?.configFor(HOUSEHOLD_SURFACE_ID) ?? null : readHouseholdNestedConfigFromDoc(publishedDoc)),
+        [composer, composingHouseholdSurface, publishedDoc],
+    );
     const {
         state: disclosure,
         enterContext,
@@ -125,12 +142,27 @@ export default function HouseholdCard({
         ? composer?.activeConfigPurpose ?? "summary"
         : null;
 
-    useSyncBuilderDisclosure(composingHouseholdSurface, disclosure, {
-        enterContext,
-        selectIdentity,
-        enterEvidence,
-        reset: resetDisclosure,
+    const showComposeCanvas = shouldRenderIdentityComposeCanvas({
+        composing: composingHouseholdSurface,
+        composeCanvasMode: composer?.composeCanvasMode,
     });
+    const composeSelectedIdentityId = composingHouseholdSurface ? composer?.selectedIdentityId ?? null : null;
+    const composeSelectedGroupKey =
+        composer?.selection?.kind === "region" || composer?.selection?.kind === "field"
+            ? composer.selection.groupKey
+            : "primary_contact";
+
+    const focusPersonForCompose = (personId: string, sectionKey: string) => {
+        composer?.setSelectedIdentityId(personId);
+        composer?.setActiveConfigPurpose("details");
+        composer?.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: sectionKey });
+    };
+
+    useEffect(() => {
+        if (!composingHouseholdSurface || composer?.composeCanvasMode === "preview") return;
+        resetDisclosure();
+    }, [composingHouseholdSurface, composer?.composeCanvasMode, resetDisclosure]);
+
 
     useEffect(() => {
         if (!composingHouseholdSurface) return;
@@ -147,10 +179,9 @@ export default function HouseholdCard({
     };
 
     const handleSelectIdentityForCompose = (personId: string, sectionKey: string) => {
-        if (composingHouseholdSurface && composer) {
-            composer.setSelectedIdentityId(personId);
-            composer.setActiveConfigPurpose("details");
-            composer.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: sectionKey });
+        if (showComposeCanvas) {
+            focusPersonForCompose(personId, sectionKey);
+            return;
         }
         selectIdentity(personId, sectionKey);
     };
@@ -182,13 +213,39 @@ export default function HouseholdCard({
     // Edit is a capability of Focus, targeted at one person row. Seed the draft for the
     // selected person from observed truth. Each editable row owns its own affordance.
     const canEdit = Boolean(mutation?.canEdit);
-    const editingSeed = useMemo(
-        () => (editingPersonId ? seedHouseholdContactValuesForPerson(context.truth, editingPersonId) : null),
-        [editingPersonId, context.truth],
-    );
+    const findEvidenceContact = (personId: string) => {
+        const id = personId.trim();
+        if (evidence.primaryContact?.personId === id) return evidence.primaryContact;
+        for (const group of evidence.groups) {
+            const hit = group.contacts.find((c) => c.personId === id);
+            if (hit) return hit;
+        }
+        return null;
+    };
+
+    const editingSeed = useMemo(() => {
+        if (!editingPersonId) return null;
+        const evidenceContact = findEvidenceContact(editingPersonId);
+        if (evidenceContact) {
+            return seedHouseholdContactValuesFromEvidence(context.truth, evidenceContact);
+        }
+        return seedHouseholdContactValuesForPerson(context.truth, editingPersonId);
+        // evidence groups / primary contact are part of `evidence`
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editingPersonId, context.truth, evidence]);
+
     const editing = Boolean(editingPersonId && editingSeed);
+
+    // If Edit was requested for an unresolvable/synthetic id, clear the sticky request.
+    useEffect(() => {
+        if (editingPersonId && !editingSeed) {
+            setEditingPersonId(null);
+        }
+    }, [editingPersonId, editingSeed]);
+
     const onEditContact = canEdit
         ? (personId: string) => {
+              if (!isEditableHouseholdPersonId(personId)) return;
               composer?.setDrillDepth({ kind: "contact-edit", personId });
               composer?.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: "contact_edit" });
               setEditingPersonId(personId);
@@ -202,9 +259,11 @@ export default function HouseholdCard({
     useEffect(() => {
         if (request?.card !== "household") return;
         setEditingPersonId(null);
+        // In-canvas Configure uses the compose shell — do not open runtime collection depth.
+        if (showComposeCanvas) return;
         enterContext();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
-    }, [requestNonce, enterContext]);
+    }, [requestNonce, enterContext, showComposeCanvas]);
 
     const householdIdentityVm = useMemo(
         () =>
@@ -225,10 +284,91 @@ export default function HouseholdCard({
         return null;
     }, [disclosure.selectedIdentityId, householdIdentityVm.sections]);
 
+    const composeSelectedRecord = useMemo((): IdentityRecordVM | null => {
+        if (!composeSelectedIdentityId) return null;
+        for (const section of householdIdentityVm.sections) {
+            const found = section.items.find((item) => item.id === composeSelectedIdentityId);
+            if (found) return found;
+        }
+        return null;
+    }, [composeSelectedIdentityId, householdIdentityVm.sections]);
+
+    const householdComposeSections = useMemo(
+        () =>
+            householdIdentityVm.sections.filter(
+                (section) => section.key !== "children" && section.key !== "address",
+            ),
+        [householdIdentityVm.sections],
+    );
+
+    const householdAuthoringTabs = useMemo(
+        () => buildHouseholdRelationshipAuthoringTabs(nestedConfig),
+        [nestedConfig],
+    );
+
+    const activeAuthoringTab =
+        householdAuthoringTabs.find(
+            (tab) =>
+                tab.key === composeSelectedGroupKey
+                || tab.instanceKey === composeSelectedGroupKey
+                || (tab.kind === "parent_guardian_shared"
+                    && (composeSelectedGroupKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
+                        || composeSelectedGroupKey === "primary_contact"
+                        || composeSelectedGroupKey === "other_parent_guardian")),
+        ) ?? householdAuthoringTabs[0]!;
+
+    const composeAuthoringGroupKey = authoringGroupKeyForTab(activeAuthoringTab.key);
+
+    const householdPreviewSectionKey =
+        composeAuthoringGroupKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
+            ? "primary_contact"
+            : activeAuthoringTab.presentationRef ?? activeAuthoringTab.key;
+
+
+    const householdSectionRecord = (sectionKey: string): IdentityRecordVM | null => {
+        const section = householdIdentityVm.sections.find((entry) => entry.key === sectionKey);
+        return section?.items[0] ?? null;
+    };
+
+    const householdSelectablePeople = useMemo(
+        () =>
+            householdIdentityVm.sections.flatMap((section) => {
+                if (section.key === "children") return [];
+                return section.items.map((item) => ({
+                    personId: item.id,
+                    sectionKey: section.key,
+                    name: item.title,
+                }));
+            }),
+        [householdIdentityVm.sections],
+    );
+
+
+    const openChildrenSurfaceConfiguration = () => {
+        composer?.enterDrillIn("children", CHILDREN_SURFACE_ID);
+        composer?.setActiveConfigPurpose(composePurpose ?? "summary");
+    };
+
+    const handleAuthoringTabSelect = (tab: HouseholdRelationshipAuthoringTab) => {
+        composer?.select({
+            kind: "region",
+            surfaceId: HOUSEHOLD_SURFACE_ID,
+            groupKey: selectionGroupKeyForTab(tab.key),
+        });
+    };
+
+    const selectHouseholdSectionForEvidence = (sectionKey: string) => {
+        composer?.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: sectionKey });
+    };
+
     // ANY open state elevates as a centered Focus Card — Household never expands
     // height inline (no row reflow). Edit is the deepest state OF Focus.
-    const level: FocusPanelPerspectiveLevel =
-        editing ? "edit" : disclosure.depth !== "summary" ? "focused" : "base";
+    const level: FocusPanelPerspectiveLevel = showComposeCanvas
+        ? "base"
+        : identityDisclosureCoordinationLevel({
+              depth: disclosure.depth,
+              editing,
+          });
     useReportPerspective(coordination, "household", level);
     useDismissSignal(coordination, "household", () => {
         setEditingPersonId(null);
@@ -249,20 +389,117 @@ export default function HouseholdCard({
           }
         : undefined;
 
+    /** Children section tile — hand off to the Children card without a specific child. */
+    const openChildrenSection = coordination
+        ? () => {
+              const source = { card: "household" as const, focus: "children" as const };
+              resetDisclosure();
+              coordination.requestFocus("children", null, source);
+          }
+        : undefined;
+
+    const handlePreviewGroup = (key: HouseholdEvidenceGroupKey) => {
+        if (key === "children") {
+            if (openChildrenSection) {
+                openChildrenSection();
+                return;
+            }
+            enterContext("children");
+            return;
+        }
+        enterContext(key);
+    };
+
     const density = !isEmpty && disclosure.depth !== "summary" ? "expanded" : "compact";
     const hasWarning = Boolean(evidence.missingCriticalWarning);
     // The transient saved chip takes precedence so the card visibly confirms the save.
     const statusTone = justSaved ? "ready" : hasWarning ? "at-risk" : "neutral";
     const statusChip = justSaved ? "✓ Saved" : hasWarning ? "Needs contact" : null;
 
-    const footerAction =
+    const composeFooterAction =
+        showComposeCanvas && composer && !isEmpty && !editing ?
+            (() => {
+                const purpose = composePurpose ?? "summary";
+                if (purpose === "evidence") {
+                    return (
+                        <button
+                            type="button"
+                            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                            onClick={() => composer.setActiveConfigPurpose("details")}
+                            data-household-compose-action="back-to-details"
+                        >
+                            ← Detail Fields
+                        </button>
+                    );
+                }
+                if (purpose === "details") {
+                    return (
+                        <div className="alloy-os-card-nav">
+                            <button
+                                type="button"
+                                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                                onClick={() => composer.setActiveConfigPurpose("context_facts")}
+                                data-household-compose-action="back-to-context"
+                            >
+                                ← Context Facts
+                            </button>
+                            <button
+                                type="button"
+                                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                                onClick={() => composer.setActiveConfigPurpose("evidence")}
+                                data-household-compose-action="open-evidence"
+                            >
+                                Evidence collections →
+                            </button>
+                        </div>
+                    );
+                }
+                if (purpose === "context_facts") {
+                    return (
+                        <button
+                            type="button"
+                            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                            onClick={() => composer.setActiveConfigPurpose("summary")}
+                            data-household-compose-action="back-to-summary"
+                        >
+                            ← Summary Fields
+                        </button>
+                    );
+                }
+                if (evidence.groups.length > 0) {
+                    return (
+                        <button
+                            type="button"
+                            className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                            onClick={() => composer.setActiveConfigPurpose("context_facts")}
+                            data-household-compose-action="open-context"
+                        >
+                            Context Facts →
+                        </button>
+                    );
+                }
+                return null;
+            })()
+        : null;
+
+    const runtimeFooterAction =
         isEmpty || editing ? null :
         disclosure.depth === "evidence" && selectedIdentityRecord ?
-            <IdentityDisclosureBackAction label="← Back to details" onBack={composingHouseholdSurface ? backWithComposerSync : backDisclosure} dataAction="back-to-details" />
+            <IdentityDisclosureBackAction label="← Back to details" onBack={backDisclosure} dataAction="back-to-details" />
         : disclosure.depth === "details" && selectedIdentityRecord ?
-            <IdentityDisclosureBackAction label="← View household" onBack={composingHouseholdSurface ? backWithComposerSync : backDisclosure} dataAction="back-to-context" />
+            <div className="alloy-os-card-nav">
+                <IdentityDisclosureBackAction label="← View household" onBack={backDisclosure} dataAction="back-to-context" />
+                <button
+                    type="button"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    onClick={() => enterEvidence(selectedIdentityRecord.id, disclosure.selectedSectionKey)}
+                    data-household-action="open-evidence"
+                >
+                    View evidence →
+                </button>
+            </div>
         : disclosure.depth === "context" ?
-            <IdentityDisclosureBackAction label="← Back to panel" onBack={composingHouseholdSurface ? backWithComposerSync : backDisclosure} dataAction="back-to-summary" />
+            <IdentityDisclosureBackAction label="← Back to panel" onBack={backDisclosure} dataAction="back-to-summary" />
         : evidence.groups.length > 0 ?
             <button
                 type="button"
@@ -273,6 +510,12 @@ export default function HouseholdCard({
                 View household →
             </button>
         : null;
+
+    const footerAction = showComposeCanvas
+        ? composeFooterAction
+        : composingHouseholdSurface && composer?.composeCanvasMode === "configure"
+            ? null
+            : runtimeFooterAction;
 
     let body: React.ReactNode;
     let perspective: "collapsed" | "expanded" | "focused" | "edit" | "empty";
@@ -293,20 +536,104 @@ export default function HouseholdCard({
                 nestedConfig={nestedConfig}
             />
         );
-    } else if (
-        selectedIdentityRecord &&
-        disclosure.depth === "details" &&
-        composingHouseholdSurface &&
-        composePurpose === "details"
-    ) {
-        perspective = "focused";
+    } else if (composingHouseholdSurface && composer && process.env.NEXT_PUBLIC_VERCEL_ENV === "preview" && !showComposeCanvas) {
+        perspective = "collapsed";
         body = (
-            <NestedSurfaceFieldLayoutSurface
+            <div className="space-y-3">                <p className="text-[12px] text-amber-800">Compose canvas bypassed — check Preview vs Configure toggle.</p>
+            </div>
+        );
+    } else if (showComposeCanvas && nestedConfig && composer) {
+        const purpose = composePurpose ?? "summary";
+        perspective = purpose === "summary" ? "collapsed" : "focused";
+        body = (
+            <IdentityComposeCanvasShell
+                activePurpose={purpose}
+                onSelectPurpose={composer.setActiveConfigPurpose}
+                composeCanvasMode={composer.composeCanvasMode}
                 surfaceId={HOUSEHOLD_SURFACE_ID}
-                groupKey={disclosure.selectedSectionKey ?? "primary_contact"}
-                fields={layoutFieldsFromIdentityRecord(selectedIdentityRecord, "details")}
-                tier="details"
-            />
+                selectedGroupKey={composeSelectedGroupKey}
+                groupLabel="Household contacts"
+                onBack={() => composer.exitDrillIn()}
+            >
+                <RelationshipSectionsPanel
+                    config={nestedConfig}
+                    onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
+                    selectedInstanceKey={
+                        activeAuthoringTab.instanceKey
+                        ?? (activeAuthoringTab.kind === "parent_guardian_shared" ? "primary_contact" : activeAuthoringTab.key)
+                    }
+                    onSelectInstance={(instanceKey) => {
+                        composer.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: instanceKey });
+                    }}
+                    defaultCollapsed
+                    fieldAuthoringActive
+                />
+                <IdentityRelationshipSectionTabs
+                    config={nestedConfig}
+                    activeTabKey={activeAuthoringTab.key}
+                    onSelectTab={handleAuthoringTabSelect}
+                />
+                {activeAuthoringTab.kind === "children_handoff" ? (
+                    <div className="space-y-3 rounded-lg border border-alloy-stone/15 bg-white p-4" data-household-children-handoff="true">
+                        <p className="text-[12px] text-alloy-midnight/70">
+                            Children uses the Children surface presentation. Household controls section label, order, and visibility only.
+                        </p>
+                        <button
+                            type="button"
+                            className="text-[12px] font-medium text-alloy-pine hover:underline"
+                            data-household-configure-children="true"
+                            onClick={openChildrenSurfaceConfiguration}
+                        >
+                            Configure Children surface →
+                        </button>
+                    </div>
+                ) : purpose === "evidence" ? (
+                    <div className="space-y-3 bg-white" data-household-compose-evidence="true">
+                        <IdentityEvidenceCollectionsPanel
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={composeAuthoringGroupKey}
+                            config={nestedConfig}
+                            onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
+                        />
+                    </div>
+                ) : (
+                    <div
+                        className="space-y-3 bg-white"
+                        data-household-compose-fields={purpose}
+                    >
+                        <IdentityComposeSectionCanvas
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={composeAuthoringGroupKey}
+                            record={
+                                purpose === "summary"
+                                    ? householdSectionRecord(householdPreviewSectionKey)
+                                    : householdSectionRecord(householdPreviewSectionKey)
+                            }
+                            purpose={purpose === "context_facts" || purpose === "details" || purpose === "summary" ? purpose : "summary"}
+                        />
+                        {purpose === "summary" ? (
+                            <div className="identity-summary-columns mt-2" data-identity-summary-columns="true">
+                                {(["primary_contact", "other_parent_guardian"] as const).map((sectionKey) => {
+                                    const record = householdSectionRecord(sectionKey);
+                                    if (!record) return null;
+                                    return (
+                                        <ComposableRegionShell
+                                            key={sectionKey}
+                                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                                            groupKey={sectionKey}
+                                            className="alloy-os-household__summary-region identity-summary-columns__cell"
+                                            dataAttrs={{ "data-household-summary-region": sectionKey }}
+                                        >
+                                            <IdentityRecordSummary record={record} depth="summary" />
+                                        </ComposableRegionShell>
+                                    );
+                                })}
+                            </div>
+                        ) : null}
+                    </div>
+                )}
+            </IdentityComposeCanvasShell>
+
         );
     } else if (selectedIdentityRecord && (disclosure.depth === "details" || disclosure.depth === "evidence")) {
         perspective = disclosure.depth === "evidence" ? "focused" : "focused";
@@ -323,11 +650,12 @@ export default function HouseholdCard({
             />
         );
     } else if (disclosure.depth === "context") {
-        perspective = "expanded";
+        perspective = "focused";
         body = (
             <ExpandedBody
                 groups={evidence.groups}
                 masked={maskedChannels}
+                focusedSectionKey={disclosure.selectedSectionKey}
                 onOpenChild={openChild}
                 onEditContact={onEditContact}
                 onSelectIdentity={
@@ -336,7 +664,7 @@ export default function HouseholdCard({
                 onAddEmergencyContact={
                     canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
                 }
-                composing={composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false}
+                composing={showComposeCanvas}
                 composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
             />
@@ -347,11 +675,17 @@ export default function HouseholdCard({
             <CollapsedBody
                 evidence={evidence}
                 masked={maskedChannels}
-                composing={composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false}
+                composing={showComposeCanvas}
                 composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
                 canEdit={canEdit}
-                onPreviewGroup={() => enterContext()}
+                onPreviewGroup={handlePreviewGroup}
+                onSelectIdentity={
+                    composingHouseholdSurface
+                        ? handleSelectIdentityForCompose
+                        : (personId, sectionKey) => selectIdentity(personId, sectionKey)
+                }
+                onOpenChild={openChild}
                 onEditContact={onEditContact}
                 onAddEmergencyContact={
                     canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
@@ -421,6 +755,8 @@ function CollapsedBody({
     nestedConfig,
     canEdit,
     onPreviewGroup,
+    onSelectIdentity,
+    onOpenChild,
     onAddEmergencyContact,
     onEditContact,
 }: {
@@ -431,6 +767,8 @@ function CollapsedBody({
     nestedConfig: NestedSurfaceConfig | null;
     canEdit?: boolean;
     onPreviewGroup: (key: HouseholdEvidenceGroupKey) => void;
+    onSelectIdentity?: (personId: string, sectionKey: string) => void;
+    onOpenChild?: (childId: string) => void;
     onAddEmergencyContact?: () => void;
     onEditContact?: (personId: string) => void;
 }) {
@@ -489,32 +827,25 @@ function CollapsedBody({
                 className="alloy-os-household__summary-region identity-summary-columns__cell"
                 dataAttrs={{ "data-household-summary-region": "primary_contact" }}
             >
-                {composing && composePurpose === "summary" && primaryRecord ?
-                    <NestedSurfaceFieldLayoutSurface
-                        surfaceId={HOUSEHOLD_SURFACE_ID}
-                        groupKey="primary_contact"
-                        fields={layoutFieldsFromIdentityRecord(primaryRecord, "summary")}
-                        tier="summary"
-                    />
-                : primaryRecord ? (
+                {primaryRecord ? (
                     <IdentityRecordSummary
                         record={primaryRecord}
                         depth="summary"
+                        onActivate={
+                            !composing && onSelectIdentity && primaryRecord.id !== "primary"
+                                ? (id) => onSelectIdentity(id, "primary_contact")
+                                : undefined
+                        }
                         onEditContact={
                             primaryRecord.id !== "primary" && !masked && !composing
                                 ? onEditContact
-                                : undefined
-                        }
-                        onEditField={
-                            primaryRecord.id !== "primary" && onEditContact && !masked && !composing
-                                ? () => onEditContact(primaryRecord.id)
                                 : undefined
                         }
                         dataAttr="primary"
                     />
                 ) : evidence.primaryContact ? (
                     <div className="alloy-os-household__primary-row" data-household-primary-row="true">
-                        <CardAvatar name={evidence.primaryContact.name} imageUrl={evidence.primaryContact.imageUrl} size={30} />
+                        <CardAvatar name={evidence.primaryContact.name} imageUrl={evidence.primaryContact.imageUrl} size={30} role="primary_contact" recordId={evidence.primaryContact.personId} />
                         <div className="alloy-os-household__row-main min-w-0">
                             <span className="alloy-os-household__row-name">
                                 {evidence.primaryContact.name}
@@ -539,7 +870,7 @@ function CollapsedBody({
                         Primary contact needed
                     </p>
                 )}
-                {composing && composePurpose !== "summary" ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="primary_contact" /> : null}
+
             </ComposableRegionShell>
 
             {secondaryRecords.length > 0 ? (
@@ -549,30 +880,21 @@ function CollapsedBody({
                     className="alloy-os-household__summary-region identity-summary-columns__cell"
                     dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
                 >
-                    {composing && composePurpose === "summary" && secondaryRecords[0] ?
-                        <NestedSurfaceFieldLayoutSurface
-                            surfaceId={HOUSEHOLD_SURFACE_ID}
-                            groupKey="other_parent_guardian"
-                            fields={layoutFieldsFromIdentityRecord(secondaryRecords[0]!, "summary")}
-                            tier="summary"
-                        />
-                    : secondaryRecords.map((record) => (
+                    {secondaryRecords.map((record) => (
                         <IdentityRecordSummary
                             key={record.id}
                             record={record}
                             depth="summary"
-                            onEditContact={!masked && !composing ? onEditContact : undefined}
-                            onEditField={
-                                onEditContact && !masked && !composing
-                                    ? () => onEditContact(record.id)
+                            onActivate={
+                                !composing && onSelectIdentity
+                                    ? (id) => onSelectIdentity(id, "other_parent_guardian")
                                     : undefined
                             }
+                            onEditContact={!masked && !composing ? onEditContact : undefined}
                             dataAttr={record.id}
                         />
                     ))}
-                    {composing && composePurpose !== "summary" ? (
-                        <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="other_parent_guardian" />
-                    ) : null}
+
                 </ComposableRegionShell>
             ) : composing ? (
                 <ComposableRegionShell
@@ -582,14 +904,6 @@ function CollapsedBody({
                     dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
                 >
                     <p className="alloy-os-household__row-detail">Add secondary parent fields when contacts exist</p>
-                    {composePurpose === "summary" ?
-                        <NestedSurfaceFieldLayoutSurface
-                            surfaceId={HOUSEHOLD_SURFACE_ID}
-                            groupKey="other_parent_guardian"
-                            fields={[]}
-                            tier="summary"
-                        />
-                    :   <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey="other_parent_guardian" />}
                 </ComposableRegionShell>
             ) : null}
             </div>
@@ -657,6 +971,7 @@ function AddressLine({ address }: { address: string }) {
 function ExpandedBody({
     groups,
     masked,
+    focusedSectionKey,
     onSelectIdentity,
     onOpenChild,
     onEditContact,
@@ -664,9 +979,11 @@ function ExpandedBody({
     composing,
     composePurpose = null,
     nestedConfig,
+    composePickerOnly = false,
 }: {
     groups: HouseholdEvidenceGroup[];
     masked: boolean;
+    focusedSectionKey?: string;
     onSelectIdentity: (personId: string, sectionKey: string) => void;
     onOpenChild?: (childId: string) => void;
     onEditContact?: (personId: string) => void;
@@ -674,9 +991,28 @@ function ExpandedBody({
     composing: boolean;
     composePurpose?: IdentityConfigurationPurpose | null;
     nestedConfig: NestedSurfaceConfig | null;
+    composePickerOnly?: boolean;
 }) {
+    const groupsRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!focusedSectionKey || !groupsRef.current) return;
+        const el = groupsRef.current.querySelector(
+            `[data-household-evidence-group="${focusedSectionKey}"]`,
+        );
+        if (el instanceof HTMLElement) {
+            el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+    }, [focusedSectionKey]);
+
     return (
-        <div className="alloy-os-household__groups" data-household-groups data-identity-depth="context">
+        <div
+            ref={groupsRef}
+            className="alloy-os-household__groups"
+            data-household-groups
+            data-identity-depth="context"
+            data-household-focused-section={focusedSectionKey || undefined}
+        >
             {groups.map((group) => (
                 <ComposableRegionShell
                     key={group.key}
@@ -684,7 +1020,10 @@ function ExpandedBody({
                     surfaceId={HOUSEHOLD_SURFACE_ID}
                     groupKey={group.key}
                     label={group.title}
-                    className="alloy-os-household__group"
+                    className={clsx(
+                        "alloy-os-household__group",
+                        focusedSectionKey === group.key && "alloy-os-household__group--focused",
+                    )}
                     dataAttrs={{ "data-household-evidence-group": group.key }}
                 >
                     <div className="alloy-os-household__group-header">
@@ -706,8 +1045,9 @@ function ExpandedBody({
                         nestedConfig={nestedConfig}
                         composing={composing}
                         composePurpose={composePurpose}
+                        composePickerOnly={composePickerOnly}
                     />
-                    {composing && composePurpose !== "context_facts" ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey={group.key} /> : null}
+                    {composing && !composePickerOnly && composePurpose !== "context_facts" ? <NestedSurfaceAddField surfaceId={HOUSEHOLD_SURFACE_ID} groupKey={group.key} /> : null}
                 </ComposableRegionShell>
             ))}
             {composing ? <AddSectionMenu surfaceId={HOUSEHOLD_SURFACE_ID} /> : null}
@@ -756,6 +1096,7 @@ function GroupRows({
     nestedConfig = null,
     composing = false,
     composePurpose = null,
+    composePickerOnly = false,
 }: {
     group: HouseholdEvidenceGroup;
     masked: boolean;
@@ -767,6 +1108,7 @@ function GroupRows({
     nestedConfig?: NestedSurfaceConfig | null;
     composing?: boolean;
     composePurpose?: IdentityConfigurationPurpose | null;
+    composePickerOnly?: boolean;
 }) {
     if (group.key === "address" && group.addressLine) {
         return <AddressLine address={group.addressLine} />;
@@ -792,14 +1134,16 @@ function GroupRows({
                     Belonging only — open Children for enrollment detail
                 </p>
             ) : null}
-            {composing && composePurpose === "context_facts" && visible[0] ? (
+            {composing && (composePurpose === "context_facts" || composePickerOnly) && visible[0] ? (
                 <>
-                    <NestedSurfaceFieldLayoutSurface
-                        surfaceId={HOUSEHOLD_SURFACE_ID}
-                        groupKey={group.key}
-                        fields={layoutFieldsFromIdentityRecord(visible[0], "context_facts")}
-                        tier="context_fact"
-                    />
+                    {!composePickerOnly ? (
+                        <IdentityComposeSectionCanvas
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={group.key}
+                            record={visible[0]}
+                            purpose={composePickerOnly ? "details" : "context_facts"}
+                        />
+                    ) : null}
                     <IdentityCollectionContext
                         records={visible}
                         selectable={Boolean(onSelectIdentity)}
@@ -820,18 +1164,6 @@ function GroupRows({
                             : undefined
                     }
                     onEditContact={onEditContact && !composing && !masked ? onEditContact : undefined}
-                    onEditField={
-                        onEditContact && !composing && !masked
-                            ? (fieldRef) => {
-                                  const record = visible.find((row) =>
-                                      [...row.summaryRows, ...row.contextRows].some((r) =>
-                                          r.cells.some((c) => c.fieldRef === fieldRef),
-                                      ),
-                                  );
-                                  if (record) onEditContact(record.id);
-                              }
-                            : undefined
-                    }
                 />
             ) : (
                 visible.map((record) => (
@@ -847,6 +1179,99 @@ function GroupRows({
             {overflow > 0 ? (
                 <div className="alloy-os-household__overflow">+{overflow} more</div>
             ) : null}
+        </div>
+    );
+}
+
+type HouseholdComposePerson = {
+    personId: string;
+    sectionKey: string;
+    name: string;
+};
+
+function HouseholdComposePersonPicker({
+    people,
+    selectedId,
+    onSelect,
+    hint = "Select a contact to configure Detail Fields",
+}: {
+    people: HouseholdComposePerson[];
+    selectedId?: string | null;
+    onSelect: (personId: string, sectionKey: string) => void;
+    hint?: string;
+}) {
+    if (people.length === 0) return null;
+    return (
+        <div className="identity-compose-person-picker space-y-2" data-identity-compose-person-picker="true">
+            <p className="config-typo-sublabel">{hint}</p>
+            <ul className="space-y-1">
+                {people.map((person) => (
+                    <li key={`${person.sectionKey}:${person.personId}`}>
+                        <button
+                            type="button"
+                            className="w-full rounded-md border border-alloy-stone/15 px-3 py-2 text-left text-[12px] hover:border-alloy-pine/30 hover:bg-alloy-pine/5"
+                            data-identity-compose-person={person.personId}
+                            data-identity-compose-section={person.sectionKey}
+                            aria-current={selectedId === person.personId ? "true" : undefined}
+                            onClick={() => onSelect(person.personId, person.sectionKey)}
+                        >
+                            {person.name}
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+function HouseholdComposeSectionPicker({
+    sections,
+    activeSectionKey,
+    onSelectSection,
+}: {
+    sections: Array<{ key: string; label: string }>;
+    activeSectionKey: string;
+    onSelectSection: (sectionKey: string) => void;
+}) {
+    return (
+        <div className="identity-compose-section-picker flex flex-wrap gap-2" data-identity-compose-section-picker="true">
+            {sections.map((section) => (
+                <button
+                    key={section.key}
+                    type="button"
+                    className={clsx(
+                        "rounded-md border px-2 py-1 text-[11px]",
+                        activeSectionKey === section.key
+                            ? "border-alloy-pine/40 bg-alloy-pine/10 text-alloy-midnight"
+                            : "border-alloy-stone/15 text-alloy-midnight/55",
+                    )}
+                    data-identity-compose-section={section.key}
+                    aria-pressed={activeSectionKey === section.key}
+                    onClick={() => onSelectSection(section.key)}
+                >
+                    {section.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+function FocusedHouseholdPerson({
+    record,
+    groupKey,
+}: {
+    record: IdentityRecordVM;
+    groupKey: string;
+}) {
+    return (
+        <div className="alloy-os-household__focused" data-household-focused-person={record.id}>
+            <p className="alloy-os-household__group-title">{record.title}</p>
+            <IdentityComposeSectionCanvas
+                surfaceId={HOUSEHOLD_SURFACE_ID}
+                groupKey={groupKey}
+                record={record}
+                purpose="details"
+            />
         </div>
     );
 }

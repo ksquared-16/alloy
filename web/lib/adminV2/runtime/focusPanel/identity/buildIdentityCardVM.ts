@@ -16,6 +16,7 @@ import type {
     HouseholdEvidenceGroup,
 } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
 import type { ChildrenEvidenceChild } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { withHouseholdRoleMergedGroups } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
 import {
     generateDefaultPlacementsForGroup,
     identitySurfaceFromNestedConfig,
@@ -37,6 +38,7 @@ import {
     enabledEvidenceSections,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM, IdentityEvidenceCollectionVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import { inferAvatarRoleFromSectionKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelIdentityAvatar";
 import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
@@ -103,6 +105,7 @@ function buildRecordRows(args: {
             groupKey: args.groupKey,
             fieldRef: placement.fieldRef,
             editGroupKey: args.editGroupKey,
+            tier: args.purpose,
         });
         if (!fieldShouldRender(policy)) continue;
         const isMaskedChannel =
@@ -210,6 +213,7 @@ function buildContactRecordVM(args: {
             imageUrl: args.contact.imageUrl ?? null,
             initials: args.contact.initials || initialsFor(args.contact.name),
             visible: showAvatar,
+            role: inferAvatarRoleFromSectionKey(args.groupKey),
         },
         badge: args.contact.roleLabel,
         summaryRows,
@@ -263,6 +267,7 @@ function buildChildRecordVM(args: {
             imageUrl: "imageUrl" in args.child ? args.child.imageUrl ?? null : null,
             initials: initialsFor(name),
             visible: showAvatar,
+            role: "child",
         },
         badge: args.groupKey === "children" ? "Child" : null,
         summaryRows,
@@ -279,7 +284,9 @@ export function buildHouseholdIdentityCardVM(args: {
     canMutate?: boolean;
     maskedChannels?: boolean;
 }): IdentityCardVM {
-    const config = reconcileIdentityNestedConfig("household_surface", args.config);
+    const config = withHouseholdRoleMergedGroups(
+        reconcileIdentityNestedConfig("household_surface", args.config),
+    );
     const surfaceKey = "household_surface";
     const identityConfig = identitySurfaceFromNestedConfig(config);
     const sections = identityConfig.sections.flatMap((section) => {
@@ -345,7 +352,21 @@ export function buildHouseholdContactEditFieldRows(args: {
         editGroupKey: "contact_edit",
         isFieldSaveSupported: (fieldRef) => fieldRef in CONTACT_EDIT_FIELD_MAP,
     });
-    return [...summaryRows, ...detailRows];
+    // Alias-normalize by mutation value key so contact.phone and person.phone do not double-render.
+    const seenValueKeys = new Set<string>();
+    const deduped: IdentityFieldRowVM[] = [];
+    for (const row of [...summaryRows, ...detailRows]) {
+        const cells = row.cells.filter((cell) => {
+            const valueKey = CONTACT_EDIT_FIELD_MAP[cell.fieldRef];
+            if (!valueKey) return false;
+            if (seenValueKeys.has(valueKey)) return false;
+            seenValueKeys.add(valueKey);
+            return true;
+        });
+        if (cells.length === 0) continue;
+        deduped.push({ ...row, cells });
+    }
+    return deduped;
 }
 
 /** Build children identity VM for one child record. */
@@ -413,6 +434,7 @@ export function buildEmployeeIdentityRecordVM(args: {
             imageUrl: args.employee.imageUrl ?? null,
             initials: initialsFor(args.employee.name),
             visible: true,
+            role: "contact",
         },
         badge: args.employee.badge ?? args.employee.title ?? "Employee",
         summaryRows,

@@ -6,6 +6,8 @@ import {
     householdContactPatch,
     seedHouseholdContactValues,
     seedHouseholdContactValuesForPerson,
+    seedHouseholdContactValuesFromEvidence,
+    isEditableHouseholdPersonId,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import { mergePersonContactIntoFocusPanelTruth } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
@@ -159,5 +161,26 @@ describe("mergePersonContactIntoFocusPanelTruth — updates the correct person",
         expect(merged["person.primary_email"]).toBe("peyton.new@example.com");
         const rows = merged._opportunity_persons as { person_id: string; email: string }[];
         expect(rows.find((r) => r.person_id === "p-1")?.email).toBe("peyton.new@example.com");
+    });
+});
+
+describe("isEditableHouseholdPersonId + evidence seed", () => {
+    it("blocks synthetic ids", () => {
+        expect(isEditableHouseholdPersonId("primary")).toBe(false);
+        expect(isEditableHouseholdPersonId("secondary:Name")).toBe(false);
+    });
+
+    it("fills gaps from evidence when family row is thin", () => {
+        const seed = seedHouseholdContactValuesFromEvidence(
+            {
+                primary_person_id: "p-1",
+                _opportunity_persons: [
+                    { person_id: "p-1", display_name: "Kelly Kurzman", email: "", phone: "", is_primary: true },
+                ],
+            },
+            { personId: "p-1", name: "Kelly Kurzman", email: "kelly@x.com", phone: "555" },
+        );
+        expect(seed?.values.email).toBe("kelly@x.com");
+        expect(seed?.values.phone).toBe("555");
     });
 });

@@ -42,6 +42,7 @@ import { focusPanelNestedSurfaceByCardKey } from "@/lib/platform/surfaceComposit
 import {
     reconcileIdentityNestedConfigsFromMetadata,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { serializeIdentityNestedSurfacesForPublish } from "@/lib/adminV2/runtime/focusPanel/identity/resolvePublishedIdentitySurfaceConfig";
 import {
     reconcileNestedSurfaceConfig,
     type NestedSurfaceConfig,
@@ -81,12 +82,7 @@ function readNestedSurfacesFromDoc(doc: { metadata?: Record<string, unknown> } |
 function reconcileNestedConfigsForPublish(
     configs: Record<string, NestedSurfaceConfig>,
 ): Record<string, NestedSurfaceConfig> {
-    return Object.fromEntries(
-        Object.entries(configs).map(([surfaceId, config]) => [
-            surfaceId,
-            reconcileNestedSurfaceConfig(surfaceId, config),
-        ]),
-    );
+    return serializeIdentityNestedSurfacesForPublish(configs);
 }
 
 function FocusPanelComposerInspectorSlot({

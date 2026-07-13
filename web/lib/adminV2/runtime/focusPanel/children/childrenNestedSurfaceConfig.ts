@@ -23,9 +23,7 @@ import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusP
 import {
     isChildFocusFieldSaveSupported,
 } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
-import {
-    reconcileIdentityNestedConfigFromDocMetadata,
-} from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { resolvePublishedIdentitySurfaceConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/identity/resolvePublishedIdentitySurfaceConfig";
 import { nestedSurfaceFieldKeysFromConfig } from "@/lib/adminV2/runtime/focusPanel/nestedSurfaceConfigReader";
 
 /** Configurable groups that render on the operational child Focus surface (not archive). */
@@ -48,10 +46,7 @@ export type ChildrenEvidenceSectionView = {
 
 /** Read + reconcile the published Children Surface config from a Focus Panel summary doc. */
 export function readChildrenNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
-    if (!doc) return null;
-    return reconcileIdentityNestedConfigFromDocMetadata(CHILDREN_SURFACE_ID, doc.metadata as {
-        nestedSurfaces?: Record<string, NestedSurfaceConfig | undefined>;
-    });
+    return resolvePublishedIdentitySurfaceConfigFromDoc(CHILDREN_SURFACE_ID, doc);
 }
 
 function catalogLabelForGroupField(

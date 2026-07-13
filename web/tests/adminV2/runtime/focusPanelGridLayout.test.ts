@@ -233,7 +233,8 @@ describe("focusPanelGridLayoutOps", () => {
         };
         const moving = grid.areas.find((a) => a.card === "children")!;
         const snapped = snapMoveTarget(grid, moving, 7, 2);
-        expect(snapped.rowStart).toBe(1);
+        // Left-column alignment pulls toward row 1, then same-column stack lands under Household.
+        expect(snapped.rowStart).toBe(3);
         expect(snapped.colStart).toBe(7);
     });
 

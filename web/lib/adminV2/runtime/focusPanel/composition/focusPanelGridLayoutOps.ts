@@ -68,11 +68,58 @@ export function nextFreeRow(grid: FocusPanelGridLayout): number {
     return Math.max(...grid.areas.map((a) => a.rowStart + a.rowSpan - 1)) + 1;
 }
 
+
+
+/** True when two areas share any column occupancy. PURE. */
+function columnsOverlap(a: FocusPanelGridArea, b: FocusPanelGridArea): boolean {
+    const aEnd = a.colStart + a.colSpan;
+    const bEnd = b.colStart + b.colSpan;
+    return a.colStart < bEnd && b.colStart < aEnd;
+}
+
+/**
+ * Same vertical stack lane — exact colStart, or near-start overlap of a narrower
+ * card (e.g. col 7 vs 8). Does not stack half-width side cards under full-width
+ * neighbours solely because columns intersect. PURE.
+ */
+function sameStackColumn(a: FocusPanelGridArea, b: FocusPanelGridArea): boolean {
+    if (a.colStart === b.colStart) return true;
+    if (!columnsOverlap(a, b)) return false;
+    const overlap =
+        Math.min(a.colStart + a.colSpan, b.colStart + b.colSpan) - Math.max(a.colStart, b.colStart);
+    const narrower = Math.min(a.colSpan, b.colSpan);
+    if (overlap < Math.max(1, Math.floor(narrower * 0.8))) return false;
+    return Math.abs(a.colStart - b.colStart) <= Math.floor(narrower / 2);
+}
+
+/** Resolve overlapping cards in the same column into a vertical stack. PURE. */
+export function normalizeGridColumnStacking(grid: FocusPanelGridLayout): FocusPanelGridLayout {
+    const order = new Map(grid.areas.map((area, index) => [area.card, index]));
+    const sorted = [...grid.areas].sort((a, b) => {
+        if (a.colStart !== b.colStart) return a.colStart - b.colStart;
+        if (a.rowStart !== b.rowStart) return a.rowStart - b.rowStart;
+        return (order.get(a.card) ?? 0) - (order.get(b.card) ?? 0);
+    });
+    const placed: FocusPanelGridArea[] = [];
+    for (const area of sorted) {
+        let rowStart = area.rowStart;
+        for (const prior of placed) {
+            if (!sameStackColumn(prior, area)) continue;
+            const priorEnd = prior.rowStart + prior.rowSpan;
+            const areaEnd = rowStart + area.rowSpan;
+            const overlaps = rowStart < priorEnd && areaEnd > prior.rowStart;
+            if (overlaps) rowStart = priorEnd;
+        }
+        placed.push(clampArea(grid, { ...area, rowStart }));
+    }
+    return { ...grid, areas: placed };
+}
+
 /** Place (or replace) a card's region. Snaps/clamps to the grid. PURE. */
 export function placeArea(grid: FocusPanelGridLayout, area: FocusPanelGridArea): FocusPanelGridLayout {
     const next = clampArea(grid, area);
     const areas = [...grid.areas.filter((a) => a.card !== area.card), next];
-    return { ...grid, areas };
+    return normalizeGridColumnStacking({ ...grid, areas });
 }
 
 /** Add a card as a full-width region on the next free row (default span). PURE. */
@@ -153,11 +200,13 @@ export function snapMoveTarget(
         }
     }
 
-    // Stack directly beneath a card already occupying this column.
+    // Stack directly beneath cards already occupying this column (including overlaps).
     for (const neighbor of grid.areas) {
-        if (neighbor.card === moving.card || neighbor.colStart !== next.colStart) continue;
+        if (neighbor.card === moving.card || !sameStackColumn(neighbor, next)) continue;
         const stackBelow = neighbor.rowStart + neighbor.rowSpan;
-        if (next.rowStart > neighbor.rowStart && next.rowStart < stackBelow + 1) {
+        const nextEnd = next.rowStart + next.rowSpan;
+        const overlaps = next.rowStart < stackBelow && nextEnd > neighbor.rowStart;
+        if (overlaps || (next.rowStart > neighbor.rowStart && next.rowStart < stackBelow + 1)) {
             next = { ...next, rowStart: stackBelow };
         }
     }

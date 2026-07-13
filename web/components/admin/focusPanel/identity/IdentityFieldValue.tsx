@@ -58,7 +58,12 @@ export default function IdentityFieldValue({ cell, className, onEdit }: Props) {
             ) : Icon ? (
                 <Icon className="identity-field-value__icon identity-field-value__icon--solo" aria-hidden />
             ) : null}
-            <span className="identity-field-value__value">{cell.value ?? "—"}</span>
+            <span
+                className="identity-field-value__value"
+                title={cell.value ? String(cell.value) : undefined}
+            >
+                {cell.value ?? "—"}
+            </span>
             {cell.editable && onEdit ? (
                 <button type="button" className="identity-field-value__edit" onClick={onEdit}>
                     Edit

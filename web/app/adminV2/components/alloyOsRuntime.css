@@ -3241,7 +3241,7 @@ html[data-alloy-os-runtime-split="true"]
   left: 0;
   right: 0;
   margin-inline: auto;
-  width: min(560px, calc(100% - 32px));
+  width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
   display: flex;
   flex-direction: column;
   /* Content-sized between a readable floor and a viewport ceiling — never forced 70vh. */
@@ -3265,13 +3265,153 @@ html[data-alloy-os-runtime-split="true"]
   animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 
+/* Shared identity drill-in — fully opaque elevated surface (no canvas bleed-through). */
+
+/* Composer edit mode: fully obscure non-elevated cards and lock elevated stack. */
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"]) {
+  opacity: 0 !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard {
+  isolation: isolate;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  z-index: 80;
+}
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__body,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__header,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__footer,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .identity-compose-canvas,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .fp-layout-surface,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .relationship-sections-panel,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .fp-evidence-section,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .fp-evidence-section__header,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .fp-evidence-section__body,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .identity-expanded-details__panel,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-household,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-children,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .nested-surface-purpose-panel,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .identity-compose-section-canvas {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+}
+
+/* Elevated active surface: solid opaque fill on the stacking context root. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"] {
+  isolation: isolate;
+  background: #ffffff;
+  z-index: 40;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+}
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-fp-composer__body
+  .alloy-os-fp-depth-scrim {
+  background: rgba(248, 250, 252, 0.82);
+  backdrop-filter: blur(10px) saturate(0.8);
+  -webkit-backdrop-filter: blur(10px) saturate(0.8);
+}
+
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__body,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__header,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__footer {
+  background: var(--alloy-os-surface, #ffffff);
+  background-color: var(--alloy-os-surface, #ffffff);
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .identity-compose-canvas,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .relationship-sections-panel,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-household,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-household__summary,
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-children {
+  background: var(--alloy-os-surface, #ffffff);
+  background-color: var(--alloy-os-surface, #ffffff);
+}
+
 /* Surface Composer V3 — drill-in edit mode uses most of the viewport as workspace. */
 [data-fp-composer-edit-mode="true"]
   .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard {
-  width: min(560px, calc(100% - 32px));
-  max-width: 560px;
+  width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
+  max-width: var(--alloy-os-focus-panel-max-width, 720px);
   min-height: 0;
   max-height: min(75vh, calc(100dvh - 48px));
 }
@@ -3410,6 +3550,9 @@ html[data-alloy-os-runtime-split="true"]
   flex-direction: column;
   gap: 0;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .fp-layout-surface--composing .fp-layout-field {
   position: relative;
@@ -3618,7 +3761,7 @@ html[data-alloy-os-runtime-split="true"]
   margin-top: 8px;
   border: 1px solid var(--alloy-os-border, #e5e9ef);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--alloy-os-surface, #ffffff);
   overflow: visible;
 }
 .fp-evidence-section__header {
@@ -3626,8 +3769,8 @@ html[data-alloy-os-runtime-split="true"]
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 70%, transparent);
-  background: color-mix(in srgb, var(--alloy-os-surface-muted, #f6f8fa) 55%, #fff);
+  border-bottom: 1px solid var(--alloy-os-border, #e5e9ef);
+  background: var(--alloy-os-surface-muted, #f6f8fa);
 }
 .fp-evidence-section__title-btn {
   display: inline-flex;
@@ -4382,7 +4525,8 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-fp-canvas--grid {
   display: grid;
   grid-template-columns: repeat(var(--fp-grid-cols, 12), minmax(0, 1fr));
-  grid-auto-rows: minmax(min-content, auto);
+  /* Match composer authoring track (76px) so Builder and /work-unit share vertical rhythm. */
+  grid-auto-rows: minmax(76px, auto);
   gap: var(--alloy-os-fp-gap-y) var(--alloy-os-fp-gap-x);
   width: 100%;
   align-items: stretch;
@@ -4489,6 +4633,24 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-card-avatar[data-avatar-tone="3"] { --alloy-os-avatar-bg: #e0f2fe; --alloy-os-avatar-fg: #0369a1; }
 .alloy-os-card-avatar[data-avatar-tone="4"] { --alloy-os-avatar-bg: #ccfbf1; --alloy-os-avatar-fg: #0f766e; }
 .alloy-os-card-avatar[data-avatar-tone="5"] { --alloy-os-avatar-bg: #f1f5f9; --alloy-os-avatar-fg: #64748b; }
+
+/* Semantic identity roles — color conveys type/role, never gender or ops status. */
+.alloy-os-card-avatar[data-avatar-role="primary_contact"] {
+  --alloy-os-avatar-bg: color-mix(in srgb, var(--color-alloy-blue, #00458C) 16%, #fff);
+  --alloy-os-avatar-fg: var(--color-alloy-blue, #00458C);
+}
+.alloy-os-card-avatar[data-avatar-role="other_parent_guardian"] {
+  --alloy-os-avatar-bg: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, #fff);
+  --alloy-os-avatar-fg: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-card-avatar[data-avatar-role="contact"] {
+  --alloy-os-avatar-bg: #f1f5f9;
+  --alloy-os-avatar-fg: #64748b;
+}
+/* Children keep deterministic tone buckets; role attribute scopes the family. */
+.alloy-os-card-avatar[data-avatar-role="child"] {
+  /* tone CSS vars remain authoritative for child palette */
+}
 .alloy-os-card-avatar[data-card-avatar="image"] { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08); }
 
 /* ── Children Summary: scannable per-child mini-profile (details stack) ── */
@@ -4526,10 +4688,16 @@ html[data-alloy-os-runtime-split="true"]
   grid-template-columns: 1fr;
   gap: 0;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.alloy-os-child-truth__inline-row--pair {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
 }
 @media (min-width: 480px) {
   .alloy-os-child-truth__inline-row--pair {
-    grid-template-columns: 1fr 1fr;
     gap: 12px;
   }
 }
@@ -4801,8 +4969,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   right: auto;
   margin-inline: 0;
   transform: translate(-50%, -50%);
-  width: min(560px, calc(100% - 32px));
-  max-width: 560px;
+  width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
+  max-width: var(--alloy-os-focus-panel-max-width, 720px);
   /* Body-anchored bounds — card stays fully inside the visible builder canvas. */
   min-height: min(280px, calc(100% - 48px));
   max-height: min(75vh, calc(100% - 32px), calc(100dvh - 120px));
@@ -6509,6 +6677,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: grid;
   flex: 1 1 auto;
   gap: 4px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .identity-record-summary__title {
@@ -6558,6 +6728,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: grid;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .identity-field-grid__row {
@@ -6578,9 +6750,11 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-summary-columns__cell {
   min-width: 0;
+  max-width: 100%;
+  overflow: clip;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .identity-summary-columns {
     grid-template-columns: 1fr;
   }
@@ -6594,6 +6768,22 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-field-grid__row--pair {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 100%;
+}
+
+.identity-field-grid__row--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 100%;
+}
+
+.identity-field-grid__cell--third {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.identity-field-grid__cell--half {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .identity-field-value {
@@ -6625,7 +6815,13 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .identity-field-value__value {
-  overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
   color: var(--alloy-os-text-primary, #17211c);
   font-size: 11.5px;
 }
@@ -6656,9 +6852,129 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 @media (max-width: 440px) {
-  .identity-field-grid__row--pair {
+  .identity-field-grid__row--pair,
+  .identity-field-grid__row--triple {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Identity canvas composer — always-visible layout controls in Configure mode. */
+.identity-compose-canvas[data-compose-canvas-mode="configure"] .fp-layout-surface--composing .fp-field-instance__toolbar,
+.identity-compose-canvas[data-compose-canvas-mode="configure"] .fp-layout-surface--composing .fp-field-instance__remove,
+.identity-compose-canvas[data-compose-canvas-mode="configure"] .fp-layout-surface--composing .fp-layout-field__grip {
+  opacity: 1;
+  pointer-events: auto;
+}
+.identity-compose-canvas[data-compose-canvas-mode="configure"] .fp-layout-surface--composing .fp-layout-drop-zone {
+  min-height: 8px;
+  opacity: 0.65;
+}
+.identity-compose-canvas[data-compose-canvas-mode="configure"] {
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 28%, transparent);
+  border-radius: 12px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 2%, #fff);
+}
+
+
+/* Identity field picker — category-driven library */
+.fp-inline-field-library--categorized .fp-inline-field-library__shell {
+  display: grid;
+  gap: 8px;
+  max-height: min(360px, 60vh);
+  overflow: hidden;
+}
+.fp-inline-field-library__search {
+  width: 100%;
+  border: 1px solid var(--alloy-os-border, #e5e7eb);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.fp-inline-field-library__categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.fp-inline-field-library__category {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  background: color-mix(in srgb, var(--alloy-os-surface, #fff) 90%, #000);
+}
+.fp-inline-field-library__category.is-active {
+  background: color-mix(in srgb, var(--alloy-os-accent, #24634f) 12%, #fff);
+  color: var(--alloy-os-accent, #24634f);
+}
+.fp-inline-field-library__items {
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 240px;
+}
+
+/* Opaque identity drill-in surface */
+[data-fp-composer-depth-active="true"] .alloy-os-fp-composer__body .alloy-os-fp-depth-scrim {
+  background: var(--alloy-os-surface, #fff);
+  backdrop-filter: none;
+}
+[data-fp-composer-depth-active="true"] .identity-compose-canvas[data-compose-canvas-mode="configure"] {
+  background: var(--alloy-os-surface, #fff);
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+[data-fp-composer-depth-active="true"] .identity-compose-canvas[data-compose-canvas-mode="configure"] > :last-child {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+[data-fp-composer-depth-active="true"] .alloy-os-ucard__body {
+  min-height: 0;
+}
+
+/* Person-level Edit — one quiet affordance per identity block (not per field). */
+.identity-record-summary__edit {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.identity-record-summary:hover .identity-record-summary__edit,
+.identity-record-summary:focus-within .identity-record-summary__edit,
+.identity-record-summary__edit:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .identity-record-summary__edit {
+    opacity: 1;
+  }
+}
+
+.alloy-os-card-edit__opaque {
+  background: var(--alloy-os-surface, #ffffff);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.alloy-os-card-edit__loading {
+  margin: 8px 0;
+  color: var(--alloy-os-text-secondary, #6b7280);
+  font-size: 12px;
+}
+.alloy-os-card-edit__readonly {
+  display: block;
+  min-width: 0;
+  padding: 6px 0;
+  color: var(--alloy-os-text-primary, #17211c);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-card-edit__btn--primary {
+  background: var(--alloy-os-bend-pine, #00a283) !important;
+  border-color: var(--alloy-os-bend-pine, #00a283) !important;
+  color: #fff !important;
 }
 
 /* Current Work Focus workspace (full Focus Panel canvas replace) */

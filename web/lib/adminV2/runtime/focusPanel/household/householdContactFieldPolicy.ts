@@ -49,7 +49,8 @@ export function resolveContactEditFieldPolicy(
 ): ContactEditFieldRow[] {
     const config = canonicalConfig(contactConfig);
     const group = config.groups.find((row) => row.key === "contact_edit");
-    const keys = group?.selectedFieldKeys.length ? [...group.selectedFieldKeys] : [...DEFAULT_CONFIG_KEYS];
+    // Explicit `[]` stays empty; defaults only when the contact_edit group is absent.
+    const keys = group ? [...group.selectedFieldKeys] : [...DEFAULT_CONFIG_KEYS];
     return keys.map((configKey) => {
         const policy = resolveIdentityFieldPolicy({
             config,

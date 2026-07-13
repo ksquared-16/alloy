@@ -1,5 +1,7 @@
 "use client";
 
+import clsx from "clsx";
+
 import FocusPanelCardInspector from "@/components/admin/focusPanel/FocusPanelCardInspector";
 import IdentitySurfaceBuilderInspector from "@/components/adminV2/settings/surfaces/composer/IdentitySurfaceBuilderInspector";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
@@ -86,6 +88,28 @@ export default function FocusPanelDrillInInspector({
                         ? "Configure layout — drag fields, set width, and manage evidence collections."
                         : "Edit fields directly on the runtime surface. This panel is for card metadata only."}
                 </p>
+                {identitySurface ? (
+                    <div className="mt-3 flex gap-1 rounded-lg border border-alloy-stone/15 bg-alloy-stone/5 p-1" data-compose-canvas-mode-toggle="true">
+                        {(["configure", "preview"] as const).map((mode) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                className={clsx(
+                                    "flex-1 rounded-md px-2 py-1.5 text-[11px] font-medium capitalize",
+                                    composer.composeCanvasMode === mode
+                                        ? "bg-white text-alloy-midnight shadow-sm"
+                                        : "text-alloy-midnight/50 hover:text-alloy-midnight",
+                                )}
+                                aria-pressed={composer.composeCanvasMode === mode}
+                                onClick={() => composer.setComposeCanvasMode(mode)}
+                                data-compose-canvas-mode={mode}
+                            >
+                                {mode}
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
+
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 {identitySurface ?

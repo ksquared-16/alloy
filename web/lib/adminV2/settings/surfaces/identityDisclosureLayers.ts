@@ -7,7 +7,8 @@
  * Configuration purposes (administrator buckets):
  *   Summary Fields → Context Facts → Detail Fields → Evidence Collections
  *
- * Context runtime projection = Summary + Context Facts (not a duplicate field layer).
+ * Builder Context authors an explicit `contextFieldKeys` presentation list.
+ * Runtime may still compose Summary+Facts as an implementation detail — not Builder UX.
  *
  * @see docs/platform/operator/identity-surface-composition-v2.md
  */
@@ -16,7 +17,7 @@ export const IDENTITY_RUNTIME_LAYERS = ["summary", "context", "details", "eviden
 
 export type IdentityDisclosureLayer = (typeof IDENTITY_RUNTIME_LAYERS)[number];
 
-/** Administrator configuration purposes — Context Facts are incremental only. */
+/** Administrator configuration purposes — Context is an explicit presentation list. */
 export const IDENTITY_CONFIGURATION_PURPOSES = [
     "summary",
     "context_facts",
@@ -31,7 +32,7 @@ export type IdentityFieldDisclosureLayer = "summary" | "context" | "details";
 
 export type IdentityLayerFieldKeys = {
     summary: string[];
-    /** Incremental context facts — persisted as `contextFieldKeys`. */
+    /** Explicit Context presentation keys — persisted as `contextFieldKeys`. */
     contextFacts: string[];
     details: string[];
 };
@@ -107,16 +108,16 @@ export function fieldKeysForConfigurationPurpose(
         case "summary":
             return [...group.selectedFieldKeys];
         case "context_facts":
-            return sanitizeContextFactKeysFromGroup(group);
+            // Complete Context presentation — no Summary inheritance in Builder.
+            return [...(group.contextFieldKeys ?? [])];
         case "details":
             return [...(group.expandedFieldKeys ?? [])];
     }
 }
 
-/** Context fact keys with summary duplicates removed. */
+/** @deprecated Prefer treating contextFieldKeys as the complete Context presentation. */
 export function sanitizeContextFactKeysFromGroup(group: IdentityLayerFieldKeyGroupLike): string[] {
-    const summary = new Set(group.selectedFieldKeys);
-    return (group.contextFieldKeys ?? []).filter((fieldRef) => !summary.has(fieldRef));
+    return [...(group.contextFieldKeys ?? [])];
 }
 
 /** Map persisted keys into configuration buckets. */
