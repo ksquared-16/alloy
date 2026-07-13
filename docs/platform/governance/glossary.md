@@ -1,13 +1,32 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
 # Glossary
 
-**Status:** Canonical shared vocabulary (June 2026 rebaseline).
+**Status:** Canonical shared vocabulary (June 2026 rebaseline; **Operational Truth two-ledger terms added 2026-07-13**).
+
+---
+
+## Operational Truth (two-ledger ontology)
+
+The frozen ontology has **two authored ledgers** — neither derivable from the other — and everything else is **derived**. The word **"Expectation" always means the authored ledger; "Projection" always means derived state.** See [`../operational-expectations-system-design.md`](../operational-expectations-system-design.md) and [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md).
+
+| Term | Meaning |
+|---|---|
+| **Operational Facts** | Authored ledger of **observed** operational truth — "what IS". Facts witness reality; immutable/append-only; corrected by reference. |
+| **Operational Expectations** | Authored ledger of **intended** operational truth — "what SHOULD / WILL be". Expectations assert reality; revised (future changed) vs corrected (never valid). **Authoritative, never derived.** An Expectation is the tuple ⟨Authority · Modality · Subject · Condition · Temporal Frame · [Beneficiary]⟩; modality ∈ {required, prohibited, intended, committed, predicted}. |
+| **Projection** | **Derived** operational state / read model (the layer formerly called "L3 Operational Expectations"). Never a system of record; recomputable. Includes the "Expected X" values (expected attendance/occupancy/tuition), Scheduling, and Forecasting. |
+| **Judgment** | Derived comparison between Facts and Expectations (modality-relative: satisfied/violated, honored/breached, respected/breached, achieved/unachieved, confirmed/disconfirmed, plus at-risk). |
+| **Gap** | Derived operational difference between asserted and witnessed; read-only. |
+| **Scheduling** | A **Projection** over committed temporal expectations. |
+| **Forecasting** | A **Projection** over predicted expectations. |
+| **Billing** | A financial **Projection** plus a financial **effector**. |
+
+> **Do not** use "Expectation" for derived state, or "Projection" for the authored ledger. The retired usage "L3 Operational Expectations (derived)" is now "L3 Operational Projections (derived)." Legacy code identifiers that still say `Expectation` (e.g. `scheduleExpectationCore.ts`) denote L3 **Projections**; renaming them is an implementation concern, out of scope for doctrine.
 
 ---
 

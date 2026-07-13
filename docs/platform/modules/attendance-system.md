@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
@@ -9,7 +9,7 @@ supersedes: []
 
 **Status:** Canonical module doctrine (June 2026). Defines Attendance as the keystone **Operational Fact (L4)** stream in the truth-flow axis. **P2 (June 2026) implements the backend foundation** (immutable fact table + service + expected-vs-actual diff); **P2.1 adds org-local service dates, an absence-reason vocabulary, and pure actual occupancy/staffing/compliance + child-drawer read models**. UI is not yet built. See [Implemented model (P2)](#implemented-model-p2) and [Hardening + actual compliance (P2.1)](#hardening--actual-compliance-p21) below.
 
-> **Layer:** Attendance is **L4 Operational Facts** in [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md). It is compared against **L3 Expectations** (expected attendance) and feeds **L5 Consequences** (billing). It is recorded from the Operations plane and reviewed from the Records plane (see [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md)).
+> **Layer:** Attendance is **L4 Operational Facts** in [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md). It is compared against **L3 Projections** (expected attendance — the derived layer formerly called "Expectations"; not to be confused with the authored **Operational Expectations** ledger) and feeds **L5 Consequences** (billing). It is recorded from the Operations plane and reviewed from the Records plane (see [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md)).
 
 ---
 
@@ -45,17 +45,17 @@ Fact kinds in scope:
 2. **Own participation entity + attendance-child context.** Per [`../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6, attendance gets its **own** participation/record entity, surfaced via an **attendance-child context** (relationship_section / repeater / widget) with `{attendance_entity_type}.*` refKeys. Operators always see "Child." Do **not** reuse `inquiry_child.*`, and do **not** flatten attendance onto the child.
 3. **Immutable + effective-dated.** Attendance facts are never edited in place. A correction is a **new effective-dated fact** that supersedes the prior one (prior row closed the day before, successor links via a `supersedes_*` reference), following the supersede pattern in `web/lib/childcareOperational/effectiveDating.ts`. The original fact remains in history.
 4. **Event-emitting.** Every recorded or corrected attendance fact emits an event on `workflow_events` (`emitEvent` → `workflow_events` → `workflowRun`), with a versioned payload. Downstream consequences (billing, compliance, forecasting) react to events; they do not poll mutable state.
-5. **Authored by Actions, not queues or projections.** Attendance is created/corrected through the canonical action/workflow path (see [`./actions-and-workflows.md`](./actions-and-workflows.md)). Queue rows and Expectation read models are previews/derivations only; they never write attendance.
+5. **Authored by Actions, not queues or projections.** Attendance is created/corrected through the canonical action/workflow path (see [`./actions-and-workflows.md`](./actions-and-workflows.md)). Queue rows and Projection read models are previews/derivations only; they never write attendance.
 6. **Room transfer ≠ placement supersede.** An intraday room transfer is an attendance fact about where the child *was*; a placement change is a committed-intent change about where the child *belongs*. Keep them distinct models.
 
 ---
 
-## Expectations vs Facts (the comparison contract)
+## Projections vs Facts (the comparison contract)
 
 Attendance Facts (L4) are compared against Expected Attendance (L3), which is **derived** from committed schedule assignments + placements + L1 attendance/schedule rules.
 
 - **Expected attendance is computed**, never stored as a system of record. See [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md) (L3).
-- The comparison surface (expected vs actual, variance, absence patterns) is a **read model / projection** over Expectations and Facts. It is observational; it does not author either side.
+- The comparison surface (expected vs actual, variance, absence patterns) is a **read model / projection** over Projections and Facts. It is observational; it does not author either side.
 - BOS may surface absence-pattern detection and follow-up suggestions over this comparison, **proposing**; humans approve (see [`./ai-platform.md`](./ai-platform.md)).
 
 ---
@@ -115,10 +115,10 @@ P2.1 hardens P2 and adds **read models over actuals** — still no UI, no billin
 - **Absence reasons** — `attendanceAbsenceReasons.ts`: a code-owned controlled vocabulary stored via the existing `reason_key` column. Each reason has an excused / unexcused / unspecified **classification that is operational metadata only and carries no billing or subsidy meaning yet** (downstream L5 / processing may map these keys to their own policies). The service validates `reason_key` for `absence` facts. Promotable to a tenant-configurable table later without changing the stored shape.
 - **Actual compliance (pure)** — `actualCompliance.ts`: `aggregateActualOccupancyByRoomDate` (distinct children **observed** per room/date — day-level union; point-in-time precision deferred), `computeActualStaffingByRoomDate` (reuses P1 `requiredStaffForChildren` + ratio tiers — identical resolver to L3 expected staffing via the shared `config/roomConfigResolvers.ts`), and `computeActualCompliance` (staffing gap, over-capacity, understaffed). **Staff scheduling is not modeled**: `staffOnHandByRoomDate` is an optional placeholder; a missing datum yields a `null` gap + `staff_data_unavailable` warning, never a failure. `buildActualComplianceReadModel.ts` + `fetchActualComplianceReadModel.ts` assemble the site-level model (and surface `room_mismatch` from the existing diff).
 - **Child-drawer read-model contract (pure)** — `childAttendanceReadModel.ts`: `buildChildAttendanceReadModel` deterministically projects, for one child, expected attendance, actual presence summary, current presence state, check-in/out timeline, room-movement timeline, absences (classified), corrections audit trail, expected-vs-actual variances, and room-scoped actual-compliance context. Defines the shape a future Attendance tab / Focus Panel will consume — **no UI is built**.
-- **Shared resolution** — `config/roomConfigResolvers.ts` and `expectations/loadOperationalExpectationInputs.ts` are extracted so L3 expectations and L4 actual compliance resolve tiers/capacity and load inputs identically (`buildScheduleExpectations` / `fetchScheduleExpectations` refactored onto them with no behavior change).
+- **Shared resolution** — `config/roomConfigResolvers.ts` and `expectations/loadOperationalExpectationInputs.ts` are extracted so L3 projections and L4 actual compliance resolve tiers/capacity and load inputs identically (`buildScheduleExpectations` / `fetchScheduleExpectations` refactored onto them with no behavior change).
 - **API** — `GET /api/admin/childcare-attendance/actual-compliance` — read-only site occupancy/staffing/compliance over a date range.
 
-**Deferred** (unchanged by P2.1): all attendance UI; staff scheduling tables (only placeholder interfaces exist); billing/financial resolution (L5); subsidy intake/reporting; materialized expectation or attendance rollups; point-in-time (time-block) occupancy.
+**Deferred** (unchanged by P2.1): all attendance UI; staff scheduling tables (only placeholder interfaces exist); billing/financial resolution (L5); subsidy intake/reporting; materialized projection or attendance rollups; point-in-time (time-block) occupancy.
 
 ## Cross-references
 
@@ -137,6 +137,6 @@ P2.1 hardens P2 and adds **read models over actuals** — still no UI, no billin
 ## When this doc must be updated
 
 - Attendance fact kinds change, or the committed-foundation references change.
-- The expectations-vs-facts comparison contract changes.
+- The projections-vs-facts comparison contract changes.
 - The attendance-child context / refKey namespace changes.
 - Attendance moves from doctrine to implemented schema/runtime (record the model here).

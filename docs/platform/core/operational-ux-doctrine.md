@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
@@ -13,7 +13,7 @@ This document is **doctrine, not implementation detail**. It explains *why* Allo
 
 > **Platform stabilization (July 2026).** Where this doctrine says "drawer," the **runtime product surface is the Focus Panel** on a single operational subject. There is **no legacy entity drawer runtime**. Records-plane execution uses **condensed queue → Focus Panel** Operational Mode with Presentation Runtime + Surface Host continuity. Canonical: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md), [`../operator/queue-system.md`](../operator/queue-system.md). This doctrine's *planes/domains* framing is unchanged.
 
-> **Orthogonal axis:** This doc defines the **surface axis** — *where* an operator stands when they act (the five planes). The complementary **truth-flow axis** — *what is true and what it derives from* (Configuration -> Intent -> Expectations -> Facts -> Consequences) — is defined in [`./operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md). The two axes compose; neither replaces the other. The Planning plane and "Expectations" are detailed there (Expectations are derived/non-authoritative).
+> **Orthogonal axis:** This doc defines the **surface axis** — *where* an operator stands when they act (the five planes). The complementary **truth-flow axis** — *what is true and what it derives from* (Configuration -> Intent -> Projections -> Facts -> Consequences) — is defined in [`./operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md). The two axes compose; neither replaces the other. The Planning plane and **"Projections"** (the derived layer formerly called "Expectations") are detailed there (Projections are derived/non-authoritative; "Operational Expectations" now names the separate authored ledger).
 
 > **Companion doctrine:** This doc covers the **planes and domains** (why one architecture serves all domains). The **canonical interaction spine** an operator traverses — Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field, and the one universal drawer (Record of Truth / Record of Attention / Context Frame) — is defined in [`../operator/canonical-interaction-model.md`](../operator/canonical-interaction-model.md), with laws in [`../operator/interaction-grammar.md`](../operator/interaction-grammar.md) and the lived flow in [`../operator/operator-story.md`](../operator/operator-story.md). The progressive **tabs vs. actions** rules below are the current expression of what the interaction model frames as **Modes** (Summary / Work / Activity) and **Cards** (per-domain surfaces within Work); the Hidden / Startable / Active states carry forward unchanged.
 
@@ -215,7 +215,7 @@ None of these requires a new navigation spine, a new "record module," or a new d
 
 | Concern | Doctrine |
 |---------|----------|
-| Truth-flow axis (Configuration -> Intent -> Expectations -> Facts -> Consequences) | `./operational-truth-flow-doctrine.md` |
+| Truth-flow axis (Configuration -> Intent -> Projections -> Facts -> Consequences) | `./operational-truth-flow-doctrine.md` |
 | Canonical interaction spine / primitives | `../operator/canonical-interaction-model.md` |
 | Interaction laws / grammar | `../operator/interaction-grammar.md` |
 | Lived operator experience | `../operator/operator-story.md` |

@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
@@ -13,6 +13,8 @@ supersedes: []
 **Governing principle:** Prove Alloy by composing existing capabilities. No parallel modules, no duplicate runtimes, no consumer-owned business logic, no childcare-specific platform abstractions.
 
 > **Approval gate — CLEARED (2026-07).** The operator approved the architecture and authorized the freeze. The four load-bearing decisions (D3, D7, D8, D12) are **accepted**; the §7.4 doctrine reconciliations are **applied**; the Exit-Criteria checklist (§7.5) is satisfied. Standing implementation constraint carried forward to Implementation Wave 1: **D12a must land before any D12b wiring touches drafts.**
+
+> **Reconciliation note (2026-07-13, Operational Expectations two-ledger freeze).** The frozen Operational Expectations ontology ([`../operational-expectations-system-design.md`](../operational-expectations-system-design.md)) reserves the word **"Expectation" for the authored Operational Expectations ledger** (intended truth, "what SHOULD / WILL be") and makes **"Projection" the umbrella term for derived operational state.** Accordingly, the derived category this RFC calls **"Expectation (L3)"** — expected attendance/occupancy/staffing-demand, a function of L1+L2, "the target Facts are compared against" — is renamed **"Projection (expected-state, L3)"**; its behavior and ownership are unchanged. The separate **"Projection"** row in the §3 taxonomy (the Operational-Calculations descriptor primitive) is unaffected. **Law 2** now reads *"Projections are derived / Expectations are authored"* (see [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md)). Legacy code identifiers (`scheduleExpectationCore.ts`, etc.) retain their names — implementation is out of scope for this documentation pass.
 
 ---
 
@@ -37,7 +39,7 @@ Classification legend: **Ratified doctrine** · **Implemented runtime** · **Imp
 | Two-axis operating model (five planes × L1–L5 truth-flow) | **Ratified doctrine** | `operational-ux-doctrine.md`, `operational-truth-flow-doctrine.md` |
 | L1 Configuration rules (ratio/capacity/schedule/operating-window) + most-specific-wins resolver | **Implemented runtime** | `childcareOperational/config/{resolveConfigRule,ratioRules,capacityRules,scheduleRules}.ts`; `…config_rules_phase1.sql` |
 | L2 Intent (agreement/placement/schedule-assignment, effective-dated, supersede, provenance FK) | **Implemented runtime** | `childPlacementService.ts`, `scheduleAssignmentService.ts`, `…enrollment_slice1.sql` (self-FK provenance) |
-| L3 Expectations (expected attendance/occupancy/**staffing demand**, pure, non-persisted) | **Implemented runtime** | `expectations/scheduleExpectationCore.ts` |
+| L3 Projections (expected attendance/occupancy/**staffing demand**, pure, non-persisted) | **Implemented runtime** | `expectations/scheduleExpectationCore.ts` |
 | L4 Attendance Facts (immutable append-only, event-emitting, corrects-by-reference) | **Implemented runtime** | `attendance/attendanceService.ts`, `child_attendance_events` (DB trigger) |
 | Expected-vs-actual + actual occupancy/staffing/compliance read models | **Implemented runtime** | `attendance/{expectedVsActual,actualCompliance}.ts` |
 | L4→L5 Operational Consumption (Fact→Consumption Event→Resolved Obligation→draft Charge; Slices 1–4) | **Implemented-but-unwired** | `operationalConsumption/*`; only caller is `…/consumption/simulate` route (no fact-write invokes it) |
@@ -109,7 +111,7 @@ Each decision: **Decision · Status · Evidence · Alternatives · Rationale · 
 
 | Projection | Category | Persisted? | Authoritative? |
 |---|---|---|---|
-| Expected attendance / occupancy / staffing demand | **Expectation (L3)** | No (derived) | No |
+| Expected attendance / occupancy / staffing demand | **Projection (expected-state, L3)** | No (derived) | No |
 | Actual occupancy / staffing / compliance | **Read model** over L4 | No | No (reflects facts) |
 | Expected-vs-actual variance | **Read model** (observational) | No | No |
 | Consumption Event | **Fact-interpretation contract** (L4→L5) | Yes (recorded) | Contract, not money |
@@ -119,7 +121,7 @@ Each decision: **Decision · Status · Evidence · Alternatives · Rationale · 
 | Forecast (fill/revenue/labor) | **Snapshot/projection** (Planning) | Optional cache | No |
 | Focus Panel card / queue row data | **Consumer view model** | No | No |
 
-- **Rationale:** Prevents any consumer or forecast from treating a derived number as truth; enforces Law 2 (expectations derived) and Law 3 (financials from facts, authoritative only past each domain's commitment boundary — Posting for financial charges).
+- **Rationale:** Prevents any consumer or forecast from treating a derived number as truth; enforces Law 2 (projections derived / expectations authored) and Law 3 (financials from facts, authoritative only past each domain's commitment boundary — Posting for financial charges).
 - **Doctrine affected:** `operational-truth-flow-doctrine.md` (record the commitment-boundary authority model + vocabulary), `operational-calculations.md`.
 
 ### D6 — Business logic ownership is fixed by the Responsibility Matrix (§4). No business logic in consumers.
@@ -208,7 +210,7 @@ Each concept: **owner (platform/application) · persisted/derived · mutability 
 | **Intent** | Application (per-domain) | Persisted | via commitment | source FK | as-of intent | n/a | pre-commitment; becomes Commitment |
 | **Agreement** | Application (`child_enrollment_agreements`) | Persisted | lifecycle (end/cancel), not patch | opportunity/OCM FK | start/end dates | status lifecycle | scope+subject of commitments; not a charge |
 | **Commitment** (placement/schedule/shift) | Application (per-domain tables) | Persisted | **supersede only** | self-FK `supersedes_*` | effective-dated | new row per version | authored by Actions; consumed by projections |
-| **Expectation** | Platform-governed calc, application inputs | **Derived** | recomputable | function of L1+L2 | as-of window | calc version | target Facts are compared against |
+| **Projection (expected-state, L3)** | Platform-governed calc, application inputs | **Derived** | recomputable | function of L1+L2 | as-of window | calc version | target Facts are compared against |
 | **Fact** | Application (per-domain, conforming to D2) | Persisted | **immutable, append-only; correct-by-reference** | correction FK + source | event/service-date | `schema_version` on the emitted event envelope today (`workflow_events`); a per-fact-table `schema_version` column is recommended by the D2 conformance test | authored by Actions only; emits event |
 | **Consequence** | Application (charges/ledger + future domains) | Persisted | pre-boundary recomputable; **committed/posted immutable, reverse-by-reference** | billable-source + resolution_key | occurs/billable-on | source_charge_id lineage + authority-state | derived from Facts via Consumption; authoritative **past the domain-defined commitment boundary** (Posting for charges; `approved`/`committed` for others) |
 | **Exception** | Platform (read model) | **Derived** | n/a (observational) | over L3×L4 | as-of | calc version | not an entity; operator response is a new Fact |
@@ -218,7 +220,7 @@ Each concept: **owner (platform/application) · persisted/derived · mutability 
 | **Consumer** | Platform (Work Unit/Focus Panel/Surface) | Derived view model | n/a | binds by key+grain | request-time | n/a | reads; authors/computes nothing |
 | **Proposal** | Platform (BOS) | Ephemeral (+ decision record) | n/a | grounded on facts/calcs | request-time | n/a | proposes registered commands; human commits |
 
-**Cross-cutting invariants:** (1) **Facts** are authoritative per their domain fact contract, and **Consequences** are authoritative only **past their domain-defined commitment boundary** (Posting for financial charges; `approved`/`committed` for others — D5); events (`workflow_events`) communicate lifecycle and are **never** authoritative fact/consequence truth (D3); (2) every persisted operational object is either immutable-append-only past its authority point (Fact; committed/posted Consequence) or effective-dated-supersede (Config/Commitment/Agreement/Resolution); (3) Expectation/Exception/Projection/Consumer are derived and never a system of record; (4) nothing in this model is childcare-specific — childcare supplies *instances* (agreement=`child_enrollment_agreements`), the platform owns the *categories*.
+**Cross-cutting invariants:** (1) **Facts** are authoritative per their domain fact contract, and **Consequences** are authoritative only **past their domain-defined commitment boundary** (Posting for financial charges; `approved`/`committed` for others — D5); events (`workflow_events`) communicate lifecycle and are **never** authoritative fact/consequence truth (D3); (2) every persisted operational object is either immutable-append-only past its authority point (Fact; committed/posted Consequence) or effective-dated-supersede (Config/Commitment/Agreement/Resolution); (3) the derived categories — expected-state Projection, Exception, Projection, Snapshot, Consumer — are derived and never a system of record; (4) nothing in this model is childcare-specific — childcare supplies *instances* (agreement=`child_enrollment_agreements`), the platform owns the *categories*.
 
 ---
 
@@ -232,7 +234,7 @@ Which system owns which business logic. **No category is owned by a UI consumer.
 | **Business Processes** | stages, membership, expected work, outcomes (the durable-state mutation path), readiness gates | facts, pricing, projections, non-staged sequences (D8) |
 | **Status & State** | per-grain status domains, transition graphs, stage_key (produced by outcomes) | queue behavior, work, dashboards (it is produced, not driver) |
 | **Domain runtimes** (enrollment ops, attendance, consumption, commercial, staffing-future) | authoring Commitments & Facts, domain invariants, effective-dating/immutability, event emission, pricing (`evaluate()`) | presentation, cross-domain truth, forecasting |
-| **Deterministic calculations** (OIP + Operational Calculations) | all derived numbers — expectations, occupancy, staffing demand, variance, KPIs, forecast inputs | authoring facts, mutating state, posting money |
+| **Deterministic calculations** (OIP + Operational Calculations) | all derived numbers — projections, occupancy, staffing demand, variance, KPIs, forecast inputs | authoring facts, mutating state, posting money |
 | **Current Work** | projecting stage-plan expected work + action-bearing attention into operator work; outcome completion | inventing work from raw variance (D7); computing metrics |
 | **Actions** (Command Runtime) | executing registered commands, context resolution, preview, atomic write+event, audit | workflow ownership, consequence computation, projections |
 | **Work Units** | queue hosting, slug routing, operational bootstrap | business/financial math, record truth |
@@ -249,7 +251,7 @@ Which system owns which business logic. **No category is owned by a UI consumer.
 
 ### 5.1 Operational truth-flow graph
 ```
-L1 Config ──┬─▶ L3 Expectations ──(compared against)──▶ L4 Facts ──▶ L4→L5 Consumption ──▶ L5 Consequences ──(Posting)──▶ authoritative
+L1 Config ──┬─▶ L3 Projections ──(compared against)──▶ L4 Facts ──▶ L4→L5 Consumption ──▶ L5 Consequences ──(Posting)──▶ authoritative
             └─▶ L2 Intent/Agreement ──▶ Commitment (placement/schedule/shift) ──▶ L3
 ```
 

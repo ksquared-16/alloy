@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
@@ -11,7 +11,7 @@ supersedes: []
 
 > **Companion doctrine:** [`billing-financials-platform.md`](./billing-financials-platform.md) is the L5 *billing/posting* doctrine and as-built record. **This document is the upstream domain model** that billing, posting, payments, and subsidy all conform to. Where the two overlap, this domain model is canonical for *what the entities are*; the billing doc is canonical for *how L5 posting behaves*.
 >
-> **Layer model:** [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md) (L1 Config → L2 Intent → L3 Expectations → L4 Facts → L5 Consequences). Every financial entity below is placed on that axis.
+> **Layer model:** [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md) (L1 Config → L2 Intent → L3 Projections → L4 Facts → L5 Consequences). Every financial entity below is placed on that axis. *(L3 "Expected X" values are **Projections** — derived; "Operational Expectations" is the separate authored ledger. See [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md).)*
 
 **Scope of this freeze:** identify the canonical financial concepts and lock the invariants. It is **not** an implementation plan and intentionally contains no schema. The "Implementation implications before next build" section at the end states what must be true *before* code resumes.
 
