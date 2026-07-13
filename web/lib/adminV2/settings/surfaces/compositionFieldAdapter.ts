@@ -33,10 +33,10 @@
 import type { CompositionEvidenceGroupDef } from "@/lib/adminV2/settings/surfaces/compositionEvidenceGroupRegistry";
 import { evidenceGroupsForZone } from "@/lib/adminV2/settings/surfaces/compositionEvidenceGroupRegistry";
 import {
-    filterCanonicalDataProviders,
     findCanonicalDataProvider,
 } from "@/lib/fields/canonicalDataProviderRegistry";
 import type { CanonicalDataProvider } from "@/lib/fields/canonicalDataProviderModel";
+import { assembleFocusPanelNestedProviders } from "@/lib/fields/consumerCanonicalProviderAssembly";
 import {
     buildTenantLayoutCatalogFields,
     type TenantFieldDefinitionRow,
@@ -56,6 +56,8 @@ export type AvailableField = {
     label: string;
     /** Which entity namespace this field reads from. */
     entityNamespace: AvailableFieldEntityNamespace;
+    /** Settings → Fields category key (when known from canonical provider). */
+    categoryKey?: string;
     /** Rendered hint (how the runtime should display this). */
     displayHint?: AvailableFieldDisplayHint;
     /** True if this field is a core system field (not tenant-custom). */
@@ -92,6 +94,7 @@ function providerToAvailableField(provider: CanonicalDataProvider): AvailableFie
         key: provider.refKey,
         label: provider.label,
         entityNamespace: provider.entityNamespace as AvailableFieldEntityNamespace,
+        categoryKey: provider.categoryKey,
         displayHint: provider.displayHint,
         isSystemField: provider.isSystem,
     };
@@ -123,8 +126,7 @@ function pickerProvidersForNamespaces(
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
 ): CanonicalDataProvider[] {
     const acceptedSet = new Set(namespaces);
-    return filterCanonicalDataProviders({
-        consumer: "queue_row",
+    return assembleFocusPanelNestedProviders({
         isWaitlist,
         tenantFieldDefinitions,
     }).filter((provider) => acceptedSet.has(provider.entityNamespace as AvailableFieldEntityNamespace));
