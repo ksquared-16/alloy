@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **Function count:** 3282
+**Generated:** 2026-07-13 · **Function count:** 3282
 
 | Schema | Function | Return type | Security |
 |--------|----------|-------------|----------|
@@ -1123,15 +1123,16 @@
 | `public` | `` | — | — |
 | ` RETURNS boolean` | `` | — | — |
 | ` LANGUAGE sql` | `` | — | — |
-| ` STABLE` | `` | — | — |
+| ` STABLE SECURITY DEFINER` | `` | — | — |
+| ` SET search_path TO 'public'` | `` | — | — |
 | `AS $function$` | `` | — | — |
-| `  SELECT EXISTS (` | `` | — | — |
-| `    SELECT 1` | `` | — | — |
-| `    FROM public.user_roles ur` | `` | — | — |
-| `    WHERE ur.user_id = auth.uid()` | `` | — | — |
-| `      AND ur.org_id = _org_id` | `` | — | — |
-| `      AND ur.role = ANY(_roles)` | `` | — | — |
-| `  );` | `` | — | — |
+| `    SELECT EXISTS (` | `` | — | — |
+| `        SELECT 1` | `` | — | — |
+| `        FROM public.user_roles ur` | `` | — | — |
+| `        WHERE ur.user_id = auth.uid()` | `` | — | — |
+| `          AND ur.org_id = _org_id` | `` | — | — |
+| `          AND ur.role = ANY(_roles)` | `` | — | — |
+| `    );` | `` | — | — |
 | `$function$` | `` | — | — |
 | `public` | `` | — | — |
 | ` RETURNS boolean` | `` | — | — |
@@ -1404,7 +1405,6 @@
 | ` SET search_path TO 'public'` | `` | — | — |
 | `AS $function$` | `` | — | — |
 | `BEGIN` | `` | — | — |
-| `    -- Only the supersession pointer + status may change after build.` | `` | — | — |
 | `    IF NEW.version IS DISTINCT FROM OLD.version` | `` | — | — |
 | `        OR NEW.content_hash IS DISTINCT FROM OLD.content_hash` | `` | — | — |
 | `        OR NEW.case_id IS DISTINCT FROM OLD.case_id` | `` | — | — |
@@ -3224,7 +3224,7 @@
 | `public` | `form_submission_canonical_capture` | jsonb | false |
 | `public` | `get_quote_pricing` | record | true |
 | `public` | `handle_new_user` | trigger | false |
-| `public` | `has_org_role` | boolean | false |
+| `public` | `has_org_role` | boolean | true |
 | `public` | `is_admin` | boolean | false |
 | `public` | `is_org_member` | boolean | true |
 | `public` | `locations_parent_same_org` | trigger | false |

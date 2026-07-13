@@ -93,6 +93,7 @@ Canonical spine: **Workspace → Perspective → Queue → Row → Drawer → Co
 | **Identity Subject** | Provisional real-world parent, child, or household being resolved. |
 | **Candidate Match** | Existing canonical record that may represent an Identity Subject, with signals/conflicts. |
 | **Identity Resolution** | Deterministic, human-authoritative selection between linking an existing record, creating a record, requesting information, or rejecting/escalating. |
+| **Identity-review gate** | Blocking operator-review requirement when plausible matches, ambiguity, or contradictions exist. Subject states: `confirmed_existing`, `confirmed_new`, `needs_review`, `conflicted`, `unresolved`. Plan build, approval, and execution re-validate; create is never the silent fallback. |
 | **Commit Plan** | Versioned immutable set of registered semantic operations; approval binds to its exact version and content hash. |
 | **Commit Attempt** | One audited executor invocation with per-operation results, compensation, and retry identity. |
 | **Merge** | Privileged proposal to collapse duplicate existing records. Propose-only in Processing Identity V1; never an intake side effect. |

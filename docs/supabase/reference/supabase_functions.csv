@@ -1268,18 +1268,19 @@ begin
 end;
 $function$
 "
-public,has_org_role,function,sql,STABLE,false,"_org_id uuid, _roles text[]",boolean,"CREATE OR REPLACE FUNCTION public.has_org_role(_org_id uuid, _roles text[])
+public,has_org_role,function,sql,STABLE,true,"_org_id uuid, _roles text[]",boolean,"CREATE OR REPLACE FUNCTION public.has_org_role(_org_id uuid, _roles text[])
  RETURNS boolean
  LANGUAGE sql
- STABLE
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.user_roles ur
-    WHERE ur.user_id = auth.uid()
-      AND ur.org_id = _org_id
-      AND ur.role = ANY(_roles)
-  );
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.user_roles ur
+        WHERE ur.user_id = auth.uid()
+          AND ur.org_id = _org_id
+          AND ur.role = ANY(_roles)
+    );
 $function$
 "
 public,is_admin,function,sql,STABLE,false,,boolean,"CREATE OR REPLACE FUNCTION public.is_admin()
@@ -1592,7 +1593,6 @@ public,processing_commit_plans_immutable_guard,function,plpgsql,VOLATILE,false,,
  SET search_path TO 'public'
 AS $function$
 BEGIN
-    -- Only the supersession pointer + status may change after build.
     IF NEW.version IS DISTINCT FROM OLD.version
         OR NEW.content_hash IS DISTINCT FROM OLD.content_hash
         OR NEW.case_id IS DISTINCT FROM OLD.case_id

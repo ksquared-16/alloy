@@ -41,11 +41,12 @@ supersedes: []
 - Versioned immutable Commit Plans and approvals bound to exact version/content hash
 - Deterministic executor with atomic identity RPC, stale-plan preflight, idempotent retry, compensation audit, and exceptions
 - Operator review/correction/plan/approve/explicit-commit flow in Digital Mailroom
+- Identity-review eligibility gate: plausible, ambiguous, or conflicted subjects block plan build, approval, and execution until explicit operator resolution (create-new override requires reason + rejected-candidate audit)
 - Manual Create Lead and public lead-capture forms cut over to Processing; zero identity writes before approval
 - D4/D5 direct-write replay and fallback authority retired
 - Org-scoped RLS hardening, including authenticated `has_org_role` recursion fix
 
-Local certification: 263-migration fresh replay, 17/17 database checks, 29/29 integration scenarios, 119/119 combined Processing + resolver tests on isolated serial execution, production/test typechecks, and production build.
+Local certification: fresh isolated migration replay, 17/17 database checks, integration scenarios including identity-review gate coverage, Processing + resolver tests on isolated serial execution, production/test typechecks, and production build.
 
 ---
 

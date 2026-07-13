@@ -59,6 +59,7 @@ Manual Create Lead and public lead-capture forms use one authority path:
 - Plans contain registered semantic command keys, never arbitrary table writes.
 - Approval binds to one plan version/content hash; revisions invalidate approval.
 - Atomic identity operations execute in one database transaction; dependent failures are recorded for retry/compensation.
+- Identity-review gate: plausible matches, ambiguity, and contradictions block plan build, approval, and execution until explicit operator resolution; record creation is never the silent fallback. Subject eligibility: `confirmed_existing`, `confirmed_new`, `needs_review`, `conflicted`, `unresolved`.
 - `applyFormIntakeSafe` is retired and throw-only. There is no D4/D5 legacy fallback or runtime feature flag.
 
 Processing owns inbound information resolution; entity, workflow, and Business Process systems retain authority after handoff.
