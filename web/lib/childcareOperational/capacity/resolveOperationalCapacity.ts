@@ -124,15 +124,25 @@ export function resolveOperationalCapacity(
         }
     }
 
-    // 5) available now — only a fully resolved result with known occupancy.
+    // 5) available now = binding − committed − offered (RFC §8 ratified formula).
+    // Committed is the required input: without it availableNow is null (never
+    // treated as zero). Offered (in-flight placement offers) is subtracted when
+    // known; when unknown it is NOT invented as a lower number — the result is an
+    // upper bound and is flagged so no consumer treats it as a guaranteed opening.
     const availableNow =
         status === "resolved" && bindingCapacity != null && committed != null
-            ? Math.max(0, bindingCapacity - committed)
+            ? Math.max(0, bindingCapacity - committed - (offered ?? 0))
             : null;
     if (bindingCapacity != null && committed == null) {
         warnings.push({
             code: "occupancy_unknown",
             message: "Committed occupancy was not supplied; available seats cannot be computed.",
+        });
+    } else if (availableNow != null && offered == null) {
+        warnings.push({
+            code: "offered_occupancy_unknown",
+            message:
+                "Available seats exclude in-flight placement offers (offered occupancy unknown); treat as an upper bound.",
         });
     }
 

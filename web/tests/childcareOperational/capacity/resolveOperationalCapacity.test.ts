@@ -117,14 +117,20 @@ describe("availableNow + occupancy", () => {
         ratioRules: [],
         ratioRuleTiers: [],
     };
-    it("computes max(0, binding - committed) when resolved with known occupancy", () => {
+    it("computes binding - committed - offered when both occupancy inputs are known", () => {
         const res = resolveOperationalCapacity(config, { ...baseReq, occupancyContext: { committed: 12, offered: 3, attended: 10 } });
-        expect(res.availableNow).toBe(8);
+        expect(res.availableNow).toBe(5); // 20 - 12 - 3
         expect(res.offeredOccupancy).toBe(3);
         expect(res.attendedOccupancy).toBe(10);
+        expect(res.warnings.some((w) => w.code === "offered_occupancy_unknown")).toBe(false);
     });
-    it("never goes negative", () => {
-        const res = resolveOperationalCapacity(config, { ...baseReq, occupancyContext: { committed: 25 } });
+    it("subtracts committed only when offered is unknown, flagging it as an upper bound", () => {
+        const res = resolveOperationalCapacity(config, { ...baseReq, occupancyContext: { committed: 12 } });
+        expect(res.availableNow).toBe(8); // 20 - 12 - 0 (offered unknown)
+        expect(res.warnings.some((w) => w.code === "offered_occupancy_unknown")).toBe(true);
+    });
+    it("never goes negative (committed + offered exceed binding)", () => {
+        const res = resolveOperationalCapacity(config, { ...baseReq, occupancyContext: { committed: 18, offered: 5 } });
         expect(res.availableNow).toBe(0);
     });
     it("is null (with a warning) when occupancy is unknown — never guessed", () => {
