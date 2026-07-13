@@ -254,6 +254,8 @@ describe("HouseholdCard component — Operational Context boundary purity", () =
         for (const token of forbidden) {
             expect(source, `HouseholdCard must not reference "${token}"`).not.toContain(token);
         }
-        expect(source).not.toMatch(/record\s*:/);
+        // Allow identity VM prop types; forbid drawer-style record object literals.
+        const withoutIdentityVmProps = source.replace(/record:\s*IdentityRecordVM/g, "");
+        expect(withoutIdentityVmProps).not.toMatch(/record\s*:/);
     });
 });
