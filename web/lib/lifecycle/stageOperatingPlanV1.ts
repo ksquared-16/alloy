@@ -7,6 +7,12 @@
 
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { normalizeCompletionPolicy } from "@/lib/lifecycle/stageWorkCompletionPolicy";
+import {
+    parseStageFollowUpWorkDuePolicyV1,
+    type StageFollowUpWorkDuePolicyV1,
+} from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
+
+export type { StageFollowUpWorkDuePolicyV1 } from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
 
 export const STAGE_OPERATING_PLAN_METADATA_KEY = "stage_operating_plan_v1" as const;
 
@@ -77,8 +83,13 @@ export type StageCompletionOutcomeV1 = {
     label: string;
     /** When set, outcome is scoped to a work item in the operating plan editor. */
     work_template_key?: string | null;
-    /** When true, counts toward successful-progress SLA rules. */
+    /**
+     * When true, recording this outcome completes the active work item.
+     * Also counts toward successful-progress SLA rules (legacy `successful` alias).
+     */
     successful?: boolean;
+    /** Explicit completion semantic — persisted alias of `successful` when set. */
+    completes_work?: boolean;
 };
 
 export type StageOutcomeRuleTargetKind =
@@ -103,8 +114,12 @@ export type StageOutcomeRuleTargetV1 = {
     wait_bucket?: string | null;
     template_key?: string | null;
     stage_key?: string | null;
-    /** Due offset for create_next_work / reopen_work targets. */
+    /** Canonical transition identity for move_to_stage — preferred over stage_key alone. */
+    transition_ref?: string | null;
+    /** Due offset for create_next_work / reopen_work targets (legacy — prefer follow_up_due_policy). */
     due_days?: number | null;
+    /** Anchored due policy for create_next_work follow-up scheduling. */
+    follow_up_due_policy?: StageFollowUpWorkDuePolicyV1;
 };
 
 export type StageDomainSignalTriggerV1 = {
@@ -130,6 +145,8 @@ export type StageOutcomeRuleV1 = {
 export type StageAttentionRuleKind =
     | "work_overdue"
     | "stage_age_exceeded"
+    | "missing_requirements"
+    /** @deprecated Prefer missing_requirements */
     | "missing_required_fields"
     | "no_contact_attempt"
     | "waiting_on_family"
@@ -183,6 +200,7 @@ const TARGET_KINDS = new Set<StageOutcomeRuleTargetKind>([
 const ATTENTION_KINDS = new Set<StageAttentionRuleKind>([
     "work_overdue",
     "stage_age_exceeded",
+    "missing_requirements",
     "missing_required_fields",
     "no_contact_attempt",
     "waiting_on_family",
@@ -313,11 +331,12 @@ function parseOutcome(raw: unknown): StageCompletionOutcomeV1 | null {
     const outcome_key = trimNonEmpty(o.outcome_key);
     const label = trimNonEmpty(o.label);
     if (!outcome_key || !label) return null;
+    const completesWork = o.completes_work === true || o.successful === true;
     return {
         outcome_key,
         label,
         ...(trimNonEmpty(o.work_template_key) ? { work_template_key: trimNonEmpty(o.work_template_key) } : {}),
-        ...(o.successful === true ? { successful: true } : {}),
+        ...(completesWork ? { successful: true, completes_work: true } : {}),
     };
 }
 
@@ -345,9 +364,13 @@ function parseTarget(raw: unknown): StageOutcomeRuleTargetV1 | null {
     if (template_key) target.template_key = template_key;
     const stage_key = trimNonEmpty(o.stage_key);
     if (stage_key) target.stage_key = stage_key;
+    const transition_ref = trimNonEmpty(o.transition_ref);
+    if (transition_ref) target.transition_ref = transition_ref;
     if (typeof o.due_days === "number" && Number.isFinite(o.due_days)) {
         target.due_days = Math.max(0, Math.floor(o.due_days));
     }
+    const follow_up_due_policy = parseStageFollowUpWorkDuePolicyV1(o.follow_up_due_policy);
+    if (follow_up_due_policy) target.follow_up_due_policy = follow_up_due_policy;
     return target;
 }
 

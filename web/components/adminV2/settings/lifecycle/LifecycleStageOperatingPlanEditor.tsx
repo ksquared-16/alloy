@@ -353,7 +353,7 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                     <details className="group" data-testid={`stage-operating-plan-outcomes-${work.template_key}`}>
                                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-1 [&::-webkit-details-marker]:hidden">
                                             <span className="text-[10px] font-semibold text-alloy-midnight/70">
-                                                Result Definitions ({workOutcomes.length})
+                                                Outcomes available to operators ({workOutcomes.length})
                                             </span>
                                             <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
                                         </summary>
@@ -409,19 +409,24 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                                         <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">
                                                             <input
                                                                 type="checkbox"
-                                                                checked={Boolean(outcome.successful)}
+                                                                checked={Boolean(outcome.completes_work ?? outcome.successful)}
                                                                 onChange={(e) =>
                                                                     setDraft((prev) => {
                                                                         const outcomes = [...prev.outcomes];
                                                                         const next = { ...outcome };
-                                                                        if (e.target.checked) next.successful = true;
-                                                                        else delete next.successful;
+                                                                        if (e.target.checked) {
+                                                                            next.successful = true;
+                                                                            next.completes_work = true;
+                                                                        } else {
+                                                                            delete next.successful;
+                                                                            delete next.completes_work;
+                                                                        }
                                                                         outcomes[outcomeIndex] = next;
                                                                         return { ...prev, outcomes };
                                                                     })
                                                                 }
                                                             />
-                                                            Success
+                                                            Completes this work
                                                         </label>
                                                         <button
                                                             type="button"
@@ -446,7 +451,10 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                                         outcomeLabel={outcome.label}
                                                         rules={draft.outcome_rules}
                                                         workTemplates={draft.work_templates}
+                                                        stageKey={stageKey}
+                                                        processStages={processStages ?? []}
                                                         defaultRepeatTemplateKey={work.template_key}
+                                                        completesWork={Boolean(outcome.completes_work ?? outcome.successful)}
                                                         onRulesChange={(outcome_rules) =>
                                                             setDraft((prev) => ({ ...prev, outcome_rules }))
                                                         }

@@ -12,6 +12,11 @@ import {
 } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
 import { resolveEffectiveWorkDefinitionKeyFromTemplate } from "@/lib/lifecycle/resolveWorkDefinitionKeyFromTemplate";
 import type { StageWorkDuePolicy, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import {
+    effectiveFollowUpDuePolicy,
+    resolveFollowUpWorkDueAt,
+    type StageFollowUpWorkDuePolicyV1,
+} from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
 
 export type InstantiateStageWorkFromTemplateResult =
     | { status: "created"; work_id: string }
@@ -46,6 +51,10 @@ export async function instantiateStageWorkFromTemplate(params: {
     template: Pick<StageWorkTemplateV1, "template_key" | "label" | "work_definition_key" | "due_policy">;
     departmentMetadata?: Record<string, unknown> | null;
     dueDaysOverride?: number | null;
+    followUpDuePolicy?: StageFollowUpWorkDuePolicyV1 | null;
+    scheduledEventStartAt?: string | null;
+    stageEnteredAt?: string | null;
+    fieldValueAt?: string | null;
     now?: Date;
 }): Promise<InstantiateStageWorkFromTemplateResult> {
     const templateKey = params.template.template_key.trim();
@@ -97,9 +106,29 @@ export async function instantiateStageWorkFromTemplate(params: {
         opportunityId,
         stageKey,
     });
-    const dueAtOverride =
-        dueAtFromTargetDays(params.dueDaysOverride, now) ??
-        dueAtIsoFromPolicy(params.template.due_policy, now);
+
+    let dueAtOverride: string | undefined;
+    const followUpPolicy = params.followUpDuePolicy
+        ? effectiveFollowUpDuePolicy(params.followUpDuePolicy, params.dueDaysOverride)
+        : null;
+    if (followUpPolicy) {
+        const resolved = resolveFollowUpWorkDueAt({
+            policy: followUpPolicy,
+            legacyDueDays: params.dueDaysOverride,
+            outcomeRecordedAt: now,
+            scheduledEventStartAt: params.scheduledEventStartAt,
+            stageEnteredAt: params.stageEnteredAt,
+            fieldValueAt: params.fieldValueAt,
+        });
+        if (!resolved.ok) {
+            return { status: "rejected", error: resolved.reason };
+        }
+        dueAtOverride = resolved.dueAt ?? undefined;
+    } else {
+        dueAtOverride =
+            dueAtFromTargetDays(params.dueDaysOverride, now)
+            ?? dueAtIsoFromPolicy(params.template.due_policy, now);
+    }
 
     const result = await instantiateWorkFromDefinition({
         supabase: params.supabase,
