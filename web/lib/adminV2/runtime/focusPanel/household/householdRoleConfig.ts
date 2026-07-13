@@ -90,6 +90,12 @@ function mergePlacements(
         return runtimePlacement;
     });
 
+    const templateTierKeys = (tier: string) => {
+        if (tier === "summary") return new Set(template.selectedFieldKeys);
+        if (tier === "context_fact") return new Set(template.contextFieldKeys ?? []);
+        return new Set(template.expandedFieldKeys ?? []);
+    };
+
     for (const templatePlacement of templatePlacements) {
         const runtimeFieldRef = bridgeTemplateFieldRef(templatePlacement.fieldRef);
         const exists = merged.some(
@@ -97,6 +103,10 @@ function mergePlacements(
                 placement.fieldRef === runtimeFieldRef && placement.tier === templatePlacement.tier,
         );
         if (exists) continue;
+        const templateRef = Object.entries(PARENT_GUARDIAN_TEMPLATE_TO_RUNTIME_FIELD).find(
+            ([, runtimeRef]) => runtimeRef === runtimeFieldRef,
+        )?.[0] ?? templatePlacement.fieldRef;
+        if (!templateTierKeys(templatePlacement.tier).has(templateRef)) continue;
         merged.push({ ...templatePlacement, fieldRef: runtimeFieldRef });
     }
 

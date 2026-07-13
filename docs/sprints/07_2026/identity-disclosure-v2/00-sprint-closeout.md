@@ -86,3 +86,13 @@ Updated `docs/platform/operator/identity-surface-composition-v2.md` §11 (publis
 - Builder/runtime Focus Panel column stacking parity
 
 **Status:** READY FOR FINAL QA (manual screenshots on Vercel preview)
+
+## Final QA cleanup closeout (Jul 2026)
+
+- Canonical Settings Fields picker (category-driven, focus_panel consumer)
+- Composer stale-field fixes (explicit empty, no VM fallback)
+- Configurable relationship section criteria + precedence
+- Household → Children surface configuration handoff
+- Opaque drill-in surface + scroll containment
+
+**Status:** READY FOR FINAL MANUAL QA

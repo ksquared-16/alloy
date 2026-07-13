@@ -56,6 +56,7 @@ import {
     type IdentityFieldPlacement,
     type IdentityFieldTier,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import { identityPickerFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
 import {
     fieldVisibilityForIdentityTier,
     setFieldVisibilityForIdentityTier,
@@ -155,6 +156,13 @@ export type NestedSurfaceGroupConfig = {
     sectionLabel?: string;
     /** When true, Parent / Guardian template inheritance is disabled for this section. */
     roleOverride?: boolean;
+    /** Relationship matching criteria for configurable Household sections. */
+    relationshipCriteria?: {
+        roleKeys?: string[];
+        relationshipTypes?: string[];
+    };
+    sectionVisibility?: "always" | "when_nonempty" | "hidden";
+    sectionOrder?: number;
 };
 
 export type NestedSurfaceConfig = {
@@ -319,7 +327,17 @@ export function availableFieldsForNestedGroup(
             : surfaceId === CHILDREN_SURFACE_ID && isEvidenceSection(surfaceId, groupKey)
                 ? (["child", "inquiry_child"] as const)
                 : def.acceptedNamespaces;
-    return availableFieldsForNamespaces(namespaces, tenantFieldDefinitions).filter((f) => !selected.has(f.key));
+    return identityPickerFieldsForNamespaces({
+        namespaces,
+        tenantFieldDefinitions,
+        excludeKeys: selected,
+    }).map((field) => ({
+        key: field.key,
+        label: field.label,
+        entityNamespace: field.entityNamespace,
+        displayHint: field.displayHint,
+        isSystemField: field.isSystemField,
+    }));
 }
 
 function patchGroup(
@@ -914,6 +932,22 @@ export function enabledEvidenceSections(config: NestedSurfaceConfig): NestedSurf
     );
 }
 
+
+function filterPlacementsToConfiguredKeys(group: NestedSurfaceGroupConfig): IdentityFieldPlacement[] {
+    const placements = group.fieldPlacements ?? [];
+    if (placements.length === 0) return placements;
+    const allowed = new Set<string>();
+    for (const tier of ["summary", "context_fact", "details"] as const) {
+        const purpose = configurationPurposeFromTierArg(tier);
+        for (const fieldRef of fieldKeysForConfigurationPurpose(group, purpose)) {
+            allowed.add(`${tier}:${fieldRef}`);
+        }
+    }
+    return placements.filter((placement) =>
+        allowed.has(`${normalizeIdentityStorageTier(placement.tier)}:${placement.fieldRef}`),
+    );
+}
+
 /** Merge a loaded config with the current registry (adds new groups, drops stale). */
 export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSurfaceConfig | null): NestedSurfaceConfig {
     const base = defaultNestedSurfaceConfig(surfaceId);
@@ -929,8 +963,10 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
         const merged: NestedSurfaceGroupConfig = {
             key: g.key,
             selectedFieldKeys: [...found.selectedFieldKeys],
-            contextFieldKeys: found.contextFieldKeys ? [...found.contextFieldKeys] : undefined,
-            expandedFieldKeys: found.expandedFieldKeys ? [...found.expandedFieldKeys] : undefined,
+            contextFieldKeys:
+                found.contextFieldKeys !== undefined ? [...found.contextFieldKeys] : undefined,
+            expandedFieldKeys:
+                found.expandedFieldKeys !== undefined ? [...found.expandedFieldKeys] : undefined,
             evidenceCollections: found.evidenceCollections ? [...found.evidenceCollections] : undefined,
             enabled: found.enabled ?? defaultGroupEnabled(surfaceId, g.key),
             displayOptions: found.displayOptions ?? g.displayOptions,
@@ -943,10 +979,18 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
             fieldIcons: found.fieldIcons ? { ...found.fieldIcons } : undefined,
             sectionSemantic: found.sectionSemantic,
             sectionLabel: found.sectionLabel,
+            relationshipCriteria: found.relationshipCriteria,
+            sectionVisibility: found.sectionVisibility,
+            sectionOrder: found.sectionOrder,
         };
+        const filteredPlacements = filterPlacementsToConfiguredKeys(merged);
+        const placements =
+            filteredPlacements.length > 0 || merged.fieldPlacements !== undefined
+                ? filteredPlacements
+                : generateDefaultIdentityFieldPlacements(merged);
         return {
             ...merged,
-            fieldPlacements: generateDefaultIdentityFieldPlacements(merged),
+            fieldPlacements: placements,
         };
     });
 

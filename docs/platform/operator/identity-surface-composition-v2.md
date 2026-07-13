@@ -347,3 +347,36 @@ Selecting an identity from Context (`select_identity`) opens **Details** for tha
 ### Builder/runtime card placement parity
 
 Focus Panel composer grid areas in the same column normalize into a vertical stack via `normalizeGridColumnStacking` — overlap is not required to express order. Builder and `/work-unit` both consume the same published grid coordinates.
+
+---
+
+## 13. Final QA cleanup — canonical catalog, relationship sections, composer state
+
+### Canonical Settings Fields catalog
+
+Identity field pickers consume `filterCanonicalDataProviders({ consumer: "focus_panel" })` grouped by Settings category metadata (`categoryKey` → `platformCategoryLabel`). Derived display fields (`child.name`, etc.) are excluded from selectable options.
+
+### Explicit empty vs default seed
+
+- `expandedFieldKeys: undefined` — tier not explicitly authored; defaults may seed on first reconcile.
+- `expandedFieldKeys: []` — intentionally empty; reconcile must preserve `[]` (never treat as falsy).
+
+### Composer state invariants
+
+Configure mode uses configured tier keys only — no record-VM fallback rows after removal. Read/write both reconcile through `reconcileIdentityNestedConfig` for household/children surfaces.
+
+### Configurable relationship sections
+
+Household sections carry optional `relationshipCriteria`, `sectionVisibility`, and `sectionOrder`. Runtime assigns each person to the highest-precedence matching section once (`identityRelationshipSections.ts`).
+
+### Children handoff
+
+Household Builder **Children** navigates to the canonical **Children** surface configuration. Child Summary/Context/Details/Evidence remain owned by `children_surface`.
+
+### Lifecycle stage/status boundary
+
+Stage/status fields appear in pickers only when registered canonical providers exist; calculated lifecycle projections are read-only. Process stage is not invented as an editable child attribute in this pass.
+
+### Composer containment and opaque drill-in
+
+Shared compose shell uses flex/min-height scroll ownership; categorized field picker popovers portal to `document.body`. Drill-in depth uses opaque surface background (no canvas bleed-through).

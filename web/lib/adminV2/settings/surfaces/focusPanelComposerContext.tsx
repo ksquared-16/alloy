@@ -136,14 +136,24 @@ export function FocusPanelComposerProvider({
 
     const updateConfig = useCallback(
         (surfaceId: string, config: NestedSurfaceConfig) => {
-            const reconciled = reconcileNestedSurfaceConfig(surfaceId, config);
+            const reconciled =
+                surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID
+                || surfaceId === CHILDREN_SURFACE_CANONICAL_ID
+                    ? reconcileIdentityNestedConfig({
+                          surfaceKey: surfaceId,
+                          currentConfig: config,
+                          legacyConfigs: legacyIdentityConfigsFromMetadata({
+                              nestedSurfaces: { ...nestedConfigs, [surfaceId]: config },
+                          }),
+                      })
+                    : reconcileNestedSurfaceConfig(surfaceId, config);
             setNestedConfigs((prev) => {
                 const next = { ...prev, [surfaceId]: reconciled };
                 onNestedConfigsChange?.(next);
                 return next;
             });
         },
-        [onNestedConfigsChange],
+        [nestedConfigs, onNestedConfigsChange],
     );
 
     const enterDrillIn = useCallback((cardKey: FocusPanelCardKey, surfaceId: string) => {

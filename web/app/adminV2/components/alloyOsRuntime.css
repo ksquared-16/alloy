@@ -6426,3 +6426,62 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   padding: 12px;
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 2%, #fff);
 }
+
+
+/* Identity field picker — category-driven library */
+.fp-inline-field-library--categorized .fp-inline-field-library__shell {
+  display: grid;
+  gap: 8px;
+  max-height: min(360px, 60vh);
+  overflow: hidden;
+}
+.fp-inline-field-library__search {
+  width: 100%;
+  border: 1px solid var(--alloy-os-border, #e5e7eb);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.fp-inline-field-library__categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.fp-inline-field-library__category {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  background: color-mix(in srgb, var(--alloy-os-surface, #fff) 90%, #000);
+}
+.fp-inline-field-library__category.is-active {
+  background: color-mix(in srgb, var(--alloy-os-accent, #24634f) 12%, #fff);
+  color: var(--alloy-os-accent, #24634f);
+}
+.fp-inline-field-library__items {
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 240px;
+}
+
+/* Opaque identity drill-in surface */
+[data-fp-composer-depth-active="true"] .alloy-os-fp-composer__body .alloy-os-fp-depth-scrim {
+  background: var(--alloy-os-surface, #fff);
+  backdrop-filter: none;
+}
+[data-fp-composer-depth-active="true"] .identity-compose-canvas[data-compose-canvas-mode="configure"] {
+  background: var(--alloy-os-surface, #fff);
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+[data-fp-composer-depth-active="true"] .identity-compose-canvas[data-compose-canvas-mode="configure"] > :last-child {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+[data-fp-composer-depth-active="true"] .alloy-os-ucard__body {
+  min-height: 0;
+}

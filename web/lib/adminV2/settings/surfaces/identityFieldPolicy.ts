@@ -7,6 +7,8 @@
 
 import type { IdentityStorageTier } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import {
+    configurationPurposeFromTierArg,
+    fieldKeysForConfigurationPurpose,
     normalizeIdentityStorageTier,
     storageTierMatchesPurpose,
     type IdentityConfigurationPurpose,
@@ -50,6 +52,27 @@ function findTierPlacement(
     );
 }
 
+function ensureFieldInTierKeys(
+    group: NestedSurfaceGroupConfig,
+    fieldRef: string,
+    tier: IdentityFieldPolicyTier,
+): NestedSurfaceGroupConfig {
+    const purpose = configurationPurposeFromTierArg(
+        tier === "context_facts" ? "context_facts" : normalizePolicyTier(tier),
+    );
+    const keys = fieldKeysForConfigurationPurpose(group, purpose);
+    if (keys.includes(fieldRef)) return group;
+
+    switch (purpose) {
+        case "summary":
+            return { ...group, selectedFieldKeys: [...group.selectedFieldKeys, fieldRef] };
+        case "context_facts":
+            return { ...group, contextFieldKeys: [...keys, fieldRef] };
+        case "details":
+            return { ...group, expandedFieldKeys: [...keys, fieldRef] };
+    }
+}
+
 function upsertTierPlacementPolicy(
     group: NestedSurfaceGroupConfig,
     fieldRef: string,
@@ -76,7 +99,8 @@ function upsertTierPlacementPolicy(
             policy: normalizeFieldVisibility(policy),
         });
     }
-    return { ...group, fieldPlacements };
+    const withPlacement = { ...group, fieldPlacements };
+    return ensureFieldInTierKeys(withPlacement, fieldRef, tier);
 }
 
 /** Resolve effective policy for one field at a disclosure tier. */

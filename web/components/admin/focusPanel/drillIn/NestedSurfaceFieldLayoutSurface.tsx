@@ -92,13 +92,14 @@ export default function NestedSurfaceFieldLayoutSurface({
     );
 
     const orderedKeys = useMemo(() => {
-        if (!config) return fields.map((f) => f.fieldKey);
+        if (!config) return composing ? [] : fields.map((f) => f.fieldKey);
         const configured = tier
             ? identityConfigurationFieldKeys(config, groupKey, configurationPurposeFromTierArg(tier))
             : selectedFieldKeys(config, groupKey);
+        if (composing) return configured;
         const visible = configured.filter((key) => fieldMetaByKey.has(key));
         if (visible.length > 0) return visible;
-        if (composing && configured.length > 0) return configured;
+        if (configured.length > 0) return configured;
         return fields.map((f) => f.fieldKey);
     }, [composing, config, groupKey, fields, fieldMetaByKey, tier]);
 
