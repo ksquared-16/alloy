@@ -4,11 +4,11 @@
 
 **Branch:** `claude/proc-identity-lib-normalization`
 
-**Certified HEAD:** \`03c97f39eb1e3ae9c1702c53f08804f0b92ecd44\`
+**Certified HEAD:** `e9cb694ed33fbfa8230c979ca3c05481fe5b2774` (implementation closeout; branch tip may include later inventory housekeeping)
 
 **Merge-base vs origin/staging:** `1a4a85c98539289d3dc21a23465f9b5bc7f7c681`
 
-**Commit count (sprint range):** 67
+**Commit count (sprint range):** 68
 
 Grouped by phase (heuristic from commit messages; each commit listed once).
 
