@@ -6650,3 +6650,45 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 [data-fp-composer-depth-active="true"] .alloy-os-ucard__body {
   min-height: 0;
 }
+
+/* Person-level Edit — one quiet affordance per identity block (not per field). */
+.identity-record-summary__edit {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.identity-record-summary:hover .identity-record-summary__edit,
+.identity-record-summary:focus-within .identity-record-summary__edit,
+.identity-record-summary__edit:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .identity-record-summary__edit {
+    opacity: 1;
+  }
+}
+
+.alloy-os-card-edit__opaque {
+  background: var(--alloy-os-surface, #ffffff);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.alloy-os-card-edit__loading {
+  margin: 8px 0;
+  color: var(--alloy-os-text-secondary, #6b7280);
+  font-size: 12px;
+}
+.alloy-os-card-edit__readonly {
+  display: block;
+  min-width: 0;
+  padding: 6px 0;
+  color: var(--alloy-os-text-primary, #17211c);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-card-edit__btn--primary {
+  background: var(--alloy-os-bend-pine, #00a283) !important;
+  border-color: var(--alloy-os-bend-pine, #00a283) !important;
+  color: #fff !important;
+}

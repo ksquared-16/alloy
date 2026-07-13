@@ -209,13 +209,39 @@ export default function HouseholdCard({
     // Edit is a capability of Focus, targeted at one person row. Seed the draft for the
     // selected person from observed truth. Each editable row owns its own affordance.
     const canEdit = Boolean(mutation?.canEdit);
-    const editingSeed = useMemo(
-        () => (editingPersonId ? seedHouseholdContactValuesForPerson(context.truth, editingPersonId) : null),
-        [editingPersonId, context.truth],
-    );
+    const findEvidenceContact = (personId: string) => {
+        const id = personId.trim();
+        if (evidence.primaryContact?.personId === id) return evidence.primaryContact;
+        for (const group of evidence.groups) {
+            const hit = group.contacts.find((c) => c.personId === id);
+            if (hit) return hit;
+        }
+        return null;
+    };
+
+    const editingSeed = useMemo(() => {
+        if (!editingPersonId) return null;
+        const evidenceContact = findEvidenceContact(editingPersonId);
+        if (evidenceContact) {
+            return seedHouseholdContactValuesFromEvidence(context.truth, evidenceContact);
+        }
+        return seedHouseholdContactValuesForPerson(context.truth, editingPersonId);
+        // evidence groups / primary contact are part of `evidence`
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editingPersonId, context.truth, evidence]);
+
     const editing = Boolean(editingPersonId && editingSeed);
+
+    // If Edit was requested for an unresolvable/synthetic id, clear the sticky request.
+    useEffect(() => {
+        if (editingPersonId && !editingSeed) {
+            setEditingPersonId(null);
+        }
+    }, [editingPersonId, editingSeed]);
+
     const onEditContact = canEdit
         ? (personId: string) => {
+              if (!isEditableHouseholdPersonId(personId)) return;
               composer?.setDrillDepth({ kind: "contact-edit", personId });
               composer?.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: "contact_edit" });
               setEditingPersonId(personId);
@@ -807,11 +833,6 @@ function CollapsedBody({
                                 ? onEditContact
                                 : undefined
                         }
-                        onEditField={
-                            primaryRecord.id !== "primary" && onEditContact && !masked && !composing
-                                ? () => onEditContact(primaryRecord.id)
-                                : undefined
-                        }
                         dataAttr="primary"
                     />
                 ) : evidence.primaryContact ? (
@@ -862,11 +883,6 @@ function CollapsedBody({
                                     : undefined
                             }
                             onEditContact={!masked && !composing ? onEditContact : undefined}
-                            onEditField={
-                                onEditContact && !masked && !composing
-                                    ? () => onEditContact(record.id)
-                                    : undefined
-                            }
                             dataAttr={record.id}
                         />
                     ))}
@@ -1140,18 +1156,6 @@ function GroupRows({
                             : undefined
                     }
                     onEditContact={onEditContact && !composing && !masked ? onEditContact : undefined}
-                    onEditField={
-                        onEditContact && !composing && !masked
-                            ? (fieldRef) => {
-                                  const record = visible.find((row) =>
-                                      [...row.summaryRows, ...row.contextRows].some((r) =>
-                                          r.cells.some((c) => c.fieldRef === fieldRef),
-                                      ),
-                                  );
-                                  if (record) onEditContact(record.id);
-                              }
-                            : undefined
-                    }
                 />
             ) : (
                 visible.map((record) => (

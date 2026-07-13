@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EditableCardStatus } from "@/lib/experience/editing/EditableCardStatus";
 import { editableCardIsSaving } from "@/lib/experience/editing/editableCardRuntime";
@@ -14,7 +14,6 @@ import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPane
 import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
 import InlineRuntimeFieldList from "@/components/admin/focusPanel/drillIn/InlineRuntimeFieldList";
-import IdentityFieldGrid from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
 import { CONTACT_EDIT_FIELD_MAP } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -33,6 +32,8 @@ type Props = {
     onClose: () => void;
     onSaved?: () => void;
     nestedConfig?: NestedSurfaceConfig | null;
+    /** Semantic section driving edit presentation (Parent/Guardian shared). */
+    sectionKey?: string;
 };
 
 const SAVED_BEAT_MS = 900;
@@ -44,6 +45,11 @@ const INPUT_TYPE_BY_VALUE_KEY: Record<keyof PersonContactValues, string> = {
     phone: "tel",
 };
 
+/**
+ * Person-level Household contact editor.
+ * Presentation comes from the shared `contact_edit` / Parent-Guardian semantic map;
+ * selected person supplies values + mutation target only.
+ */
 export default function HouseholdContactEdit({
     personId,
     personName,
@@ -57,9 +63,17 @@ export default function HouseholdContactEdit({
     const composing = composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false;
     const activeConfig = composer?.enabled ? composer.configFor(HOUSEHOLD_SURFACE_ID) : nestedConfig;
     const [draft, setDraft] = useState<PersonContactValues>(initial);
+    const [hydrated, setHydrated] = useState(false);
     const baselineRef = useRef<PersonContactValues>(initial);
     const draftRef = useRef(draft);
     draftRef.current = draft;
+
+    // Re-hydrate when the selected person seed changes (Kelly vs Kristi).
+    useEffect(() => {
+        setDraft(initial);
+        baselineRef.current = initial;
+        setHydrated(true);
+    }, [personId, initial.first_name, initial.last_name, initial.email, initial.phone]);
 
     const identityRows = useMemo(
         () =>
@@ -71,27 +85,48 @@ export default function HouseholdContactEdit({
         [activeConfig, draft],
     );
 
-    const editableCells = useMemo(
+    const formCells = useMemo(
         () =>
             identityRows.flatMap((row) =>
                 row.cells.filter(
                     (cell: IdentityFieldCellVM) =>
-                        fieldShouldRender(cell.policy)
-                        && cell.editable
-                        && CONTACT_EDIT_FIELD_MAP[cell.fieldRef],
+                        fieldShouldRender(cell.policy) && CONTACT_EDIT_FIELD_MAP[cell.fieldRef],
                 ),
             ),
         [identityRows],
     );
 
+    // Fallback: if contact_edit has no configured fields, still offer the canonical
+    // four contact values so edit is never a blank surface for parents.
+    const cellsOrFallback: IdentityFieldCellVM[] = useMemo(() => {
+        if (formCells.length > 0) return formCells;
+        const fallback = (fieldRef: string, label: string): IdentityFieldCellVM => ({
+            fieldRef,
+            label,
+            value: null,
+            labelMode: "visible",
+            policy: "editable",
+            editable: true,
+            hideWhenEmpty: false,
+            width: "full",
+        });
+        return [
+            fallback("contact.first_name", "First name"),
+            fallback("contact.last_name", "Last name"),
+            fallback("contact.phone", "Phone"),
+            fallback("contact.email", "Email"),
+        ];
+    }, [formCells]);
+
     const saveableKeys = useMemo(
         () =>
             new Set(
-                editableCells
+                cellsOrFallback
+                    .filter((cell) => cell.editable)
                     .map((cell) => CONTACT_EDIT_FIELD_MAP[cell.fieldRef])
                     .filter((key): key is keyof PersonContactValues => Boolean(key)),
             ),
-        [editableCells],
+        [cellsOrFallback],
     );
 
     const dirty = householdContactDirty(draft, baselineRef.current);
@@ -136,9 +171,13 @@ export default function HouseholdContactEdit({
             groupKey="contact_edit"
             label="Contact Edit"
             className="alloy-os-card-edit"
-            dataAttrs={{ "data-household-contact-edit": "true", "data-edit-person-id": personId }}
+            dataAttrs={{
+                "data-household-contact-edit": "true",
+                "data-edit-person-id": personId,
+                "data-edit-hydrated": hydrated ? "true" : "false",
+            }}
         >
-            <div data-household-contact-edit-inner="true">
+            <div data-household-contact-edit-inner="true" className="alloy-os-card-edit__opaque">
                 <p className="alloy-os-card-edit__title" data-household-edit-title="true">
                     {personName ? `Edit ${personName}` : "Edit contact"}
                 </p>
@@ -154,35 +193,44 @@ export default function HouseholdContactEdit({
                         }}
                         className="mb-3"
                     />
+                ) : null}
+                {!hydrated ? (
+                    <p className="alloy-os-card-edit__loading" data-household-edit-loading="true">
+                        Loading contact…
+                    </p>
                 ) : (
-                    <IdentityFieldGrid rows={identityRows} className="mb-3" data-identity-contact-edit-preview="true" />
+                    <div className="alloy-os-card-edit__form">
+                        {cellsOrFallback.map((cell) => {
+                            const valueKey = CONTACT_EDIT_FIELD_MAP[cell.fieldRef]!;
+                            const editable = Boolean(cell.editable);
+                            return (
+                                <label
+                                    key={cell.fieldRef}
+                                    className="alloy-os-card-edit__row"
+                                    data-household-edit-field={valueKey}
+                                    data-identity-field-ref={cell.fieldRef}
+                                    data-identity-policy={cell.policy}
+                                >
+                                    <span className="alloy-os-card-edit__label">{cell.label}</span>
+                                    {editable ? (
+                                        <input
+                                            className="alloy-os-card-edit__input"
+                                            data-testid={`household-edit-${valueKey}`}
+                                            type={INPUT_TYPE_BY_VALUE_KEY[valueKey]}
+                                            value={draft[valueKey]}
+                                            disabled={locked}
+                                            onChange={(e) => setField(valueKey, e.target.value)}
+                                        />
+                                    ) : (
+                                        <span className="alloy-os-card-edit__readonly" title={draft[valueKey] || undefined}>
+                                            {draft[valueKey] || "—"}
+                                        </span>
+                                    )}
+                                </label>
+                            );
+                        })}
+                    </div>
                 )}
-                <div className="alloy-os-card-edit__form">
-                    {editableCells.map((cell) => {
-                        const valueKey = CONTACT_EDIT_FIELD_MAP[cell.fieldRef]!;
-                        const input = (
-                            <input
-                                className="alloy-os-card-edit__input"
-                                data-testid={`household-edit-${valueKey}`}
-                                type={INPUT_TYPE_BY_VALUE_KEY[valueKey]}
-                                value={draft[valueKey]}
-                                disabled={locked}
-                                onChange={(e) => setField(valueKey, e.target.value)}
-                            />
-                        );
-                        return (
-                            <label
-                                key={cell.fieldRef}
-                                className="alloy-os-card-edit__row"
-                                data-household-edit-field={valueKey}
-                                data-identity-field-ref={cell.fieldRef}
-                            >
-                                <span className="alloy-os-card-edit__label">{cell.label}</span>
-                                {input}
-                            </label>
-                        );
-                    })}
-                </div>
 
                 <EditableCardStatus state={edit.state} />
 
@@ -202,7 +250,7 @@ export default function HouseholdContactEdit({
                         data-testid="household-edit-save"
                         data-save-phase={edit.state.phase}
                         onClick={() => void edit.commit()}
-                        disabled={!dirty || locked}
+                        disabled={!dirty || locked || !hydrated}
                     >
                         {saving ? "Saving…" : edit.state.phase === "saved" ? "✓ Saved" : "Save"}
                     </button>

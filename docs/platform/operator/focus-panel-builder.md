@@ -144,3 +144,24 @@ Published Focus Panel layouts share one projection:
 
 Builder continues to author on the grid track model (76px); runtime Preview on
 `/work-unit` uses the shared lanes resolver for flush stack parity.
+
+
+## Household person edit and emergency contacts
+
+- Collection/scan surfaces expose **one person-level Edit** affordance (not per-field Edit links).
+- Edit presentation is driven by the Parent/Guardian `contact_edit` semantic map; the selected
+  person supplies values and the mutation target only.
+- Seed uses authoritative family-row truth with evidence channels as fallback; synthetic display
+  ids (`primary`, `secondary:…`) are not editable.
+- Save continues through `savePersonContact` → `patchLinkedPersonFromOpportunityDrawer` with truth refresh.
+
+### Add Emergency Contact
+
+Focus Panel opens the **identity-resolved one-surface** action (not the legacy four-step wizard):
+
+```text
+Enter identity → resolve candidates → confirm existing or create new → choose scope → save
+```
+
+Candidates come from the canonical intake record-resolution path. Scope labels use real child
+names; Household invocation defaults to **All children**.

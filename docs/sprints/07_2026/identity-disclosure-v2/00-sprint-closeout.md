@@ -129,3 +129,9 @@ Elevated compose surfaces are fully opaque; field pickers are portaled and
 collision-aware; Household summaries truncate sensibly with semantic avatar tokens;
 Builder grid config and `/work-unit` share column/order/width/gap via the lanes
 projection.
+
+
+## Household edit + identity-resolved emergency contact
+
+Person-level Edit only; authoritative seed/save-refresh. Add Emergency Contact uses intake
+record resolution on one Alloy surface; legacy four-step wizard superseded for this action.
