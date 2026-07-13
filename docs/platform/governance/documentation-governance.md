@@ -172,6 +172,7 @@ Current frozen (July 2026):
 - AdminV2 reveal gates
 - BOS human-in-the-loop
 - Platform architecture freeze (`platform/milestones/freeze-july-2026.md`)
+- Operational Expectations architecture (`platform/milestones/operational-expectations-architecture-closeout.md`); realization program: `platform/milestones/operational-expectations-engineering-realization.md`
 
 ---
 
