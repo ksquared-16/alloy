@@ -29,13 +29,15 @@ describe("LifecycleStageWorkTemplateActionsEditor", () => {
         expect(source).toContain("Using stage recommendations");
     });
 
-    it("labels Available Results and references stage Result Definitions", () => {
+    it("labels Available Results and keeps stage outcome definitions separate", () => {
         const editor = read("components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor.tsx");
         expect(editor).toContain("Available Results");
         expect(editor).not.toContain("Completion Outcomes");
+        expect(editor).not.toContain("work-template-alternate-paths");
+        expect(editor).toContain("work-template-transitions-note");
 
         const operatingPlan = read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx");
-        expect(operatingPlan).toContain("Result Definitions");
+        expect(operatingPlan).toContain("Outcomes");
     });
 });
 
@@ -59,7 +61,7 @@ describe("Current Work activity preview", () => {
         expect(preview).toContain("ComposerFloatingPopover");
         expect(preview).toContain("No activity recorded yet.");
         expect(preview).toContain("Loading recent activity");
-        expect(preview).toContain("View full activity");
+        expect(preview).toContain("View all activity");
     });
 
     it("does not use absolute in-card positioning for preview panel", () => {

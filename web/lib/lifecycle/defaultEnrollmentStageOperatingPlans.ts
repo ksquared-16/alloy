@@ -25,7 +25,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
     lead: {
         version: 1,
         journey_segment: "family",
-        purpose: "Review inbound lead and reach the family.",
+        purpose: "Reach the family, understand their needs, and determine the next step.",
         work_templates: [
             {
                 template_key: "review_lead",
@@ -39,6 +39,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
             {
                 template_key: "contact_family",
                 label: "Contact Family",
+                description: "Reach the family, understand their needs, and determine the next step.",
                 required: true,
                 due_policy: { kind: "offset_days", days: 1 },
                 owner_strategy: "record_owner",
