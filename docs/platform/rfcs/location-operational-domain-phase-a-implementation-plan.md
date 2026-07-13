@@ -429,9 +429,9 @@ No production code, no schema, no migrations, no pushes. Documentation only. Thi
 
 ## 16. Implementation record (Phase A executed)
 
-**Status:** IMPLEMENTED and reconciled onto latest `origin/staging` `7f8c545e8`. Behavior-neutral except the two ratified A7 safety fixes + the two post-rebase review corrections below. No schema, no migrations, no UI, no consumer migration, no deletions.
+**Status:** IMPLEMENTED and reconciled onto latest `origin/staging` `82e700b68`. Behavior-neutral except the two ratified A7 safety fixes + the two post-rebase review corrections below. No schema, no migrations, no UI, no consumer migration, no deletions.
 
-**Branch:** `phase-a/location-canonical-contracts` (rebased onto `7f8c545e8`; nine-workstream commit structure preserved + 3 post-rebase correction commits). Local only — not pushed.
+**Branch:** `phase-a/location-canonical-contracts` (rebased onto `82e700b68`; nine-workstream commit structure preserved + 3 post-rebase correction commits). Local only — not pushed.
 
 ### Delivered contracts (actual paths)
 
@@ -461,4 +461,4 @@ No production code, no schema, no migrations, no pushes. Documentation only. Thi
 - Dedicated tests per workstream (contracts 12; A7 config incl. author-time licensing 14; A1 20; A2 10; A3 9; A4 12 incl. DST; A6 10; A5 10; A9 cross-provider cert). **Focused certification suite: 222 tests green across 22 files** (providers + config/capacity/expectations/attendance + financials + timezone regressions). `typecheck:build` exits 0.
 - Pre-existing baseline-red `operationalConfigurationV1Batch0.test.ts` (1 failure) is **byte-identical to staging and reads only `settings/locations/*.tsx` sources** — Phase A touched no components/app source; classified pre-existing, unchanged by staging, unaffected by Phase A.
 
-**Exit status: Phase A IMPLEMENTED and CERTIFIED on `origin/staging` `7f8c545e8`** (post-rebase gate green; scope confirmed contracts-only).
+**Exit status: Phase A IMPLEMENTED and CERTIFIED on `origin/staging` `82e700b68`** (post-rebase gate green; scope confirmed contracts-only).

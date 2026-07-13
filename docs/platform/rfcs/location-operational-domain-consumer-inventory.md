@@ -353,7 +353,7 @@ No implementation, no runtime code, no migrations, no schema, no pushes. Documen
 
 ## 14. Phase A implementation update (canonical providers now available)
 
-Phase A (Canonical Contracts) is implemented on `origin/staging` `7f8c545e8` (branch `phase-a/location-canonical-contracts`, local). The migration targets referenced throughout §2–§9 now EXIST as concrete modules. **No consumer was migrated** — the read matrix (§3) is unchanged; every consumer migration remains assigned to Phase C (bulk) / D (capacity) / E (legacy removal).
+Phase A (Canonical Contracts) is implemented on `origin/staging` `82e700b68` (branch `phase-a/location-canonical-contracts`, local). The migration targets referenced throughout §2–§9 now EXIST as concrete modules. **No consumer was migrated** — the read matrix (§3) is unchanged; every consumer migration remains assigned to Phase C (bulk) / D (capacity) / E (legacy removal).
 
 **Canonical provider paths now available (Phase C/D migration targets):**
 
