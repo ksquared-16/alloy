@@ -25,6 +25,7 @@ export type TenantFieldDefinitionRow = {
     label: string | null;
     entity_type: string;
     field_type: string;
+    section_key?: string | null;
     config?: Record<string, unknown> | null;
     is_system: boolean;
     is_active: boolean;

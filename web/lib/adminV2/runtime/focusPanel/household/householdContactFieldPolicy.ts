@@ -10,6 +10,13 @@ import {
     HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID,
     resolveIdentityFieldPolicy,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
+import {
+    contactMutationValueKeyForRef,
+    inputTypeForIdentityFieldRef,
+    isIdentityFieldSaveSupported,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
 export type ContactEditFieldRow = {
     configKey: string;
@@ -21,19 +28,12 @@ export type ContactEditFieldRow = {
     editable: boolean;
 };
 
-const FIELD_DEFS: {
-    configKey: string;
-    valueKey?: keyof PersonContactValues;
-    label: string;
-    inputType: ContactEditFieldRow["inputType"];
-}[] = [
-    { configKey: "contact.first_name", valueKey: "first_name", label: "First name", inputType: "text" },
-    { configKey: "contact.last_name", valueKey: "last_name", label: "Last name", inputType: "text" },
-    { configKey: "contact.email", valueKey: "email", label: "Email", inputType: "email" },
-    { configKey: "contact.phone", valueKey: "phone", label: "Phone", inputType: "tel" },
+const DEFAULT_CONFIG_KEYS = [
+    "contact.first_name",
+    "contact.last_name",
+    "contact.email",
+    "contact.phone",
 ];
-
-const DEFAULT_CONFIG_KEYS = FIELD_DEFS.map((d) => d.configKey);
 
 function canonicalConfig(contactConfig: NestedSurfaceConfig | null): NestedSurfaceConfig {
     if (contactConfig?.surfaceId === HOUSEHOLD_CONTACT_SURFACE_COMPAT_ID) {
@@ -43,28 +43,38 @@ function canonicalConfig(contactConfig: NestedSurfaceConfig | null): NestedSurfa
 }
 
 /** Resolve which contact edit rows render and whether each is editable. */
-export function resolveContactEditFieldPolicy(contactConfig: NestedSurfaceConfig | null): ContactEditFieldRow[] {
+export function resolveContactEditFieldPolicy(
+    contactConfig: NestedSurfaceConfig | null,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): ContactEditFieldRow[] {
     const config = canonicalConfig(contactConfig);
     const group = config.groups.find((row) => row.key === "contact_edit");
-    const keys = group?.selectedFieldKeys.length ? group.selectedFieldKeys : DEFAULT_CONFIG_KEYS;
-    const keySet = new Set(keys);
-    return FIELD_DEFS.filter((def) => keySet.has(def.configKey)).map((def) => {
+    const keys = group?.selectedFieldKeys.length ? [...group.selectedFieldKeys] : [...DEFAULT_CONFIG_KEYS];
+    return keys.map((configKey) => {
         const policy = resolveIdentityFieldPolicy({
             config,
             groupKey: "contact_edit",
-            fieldRef: def.configKey,
+            fieldRef: configKey,
         });
+        const valueKey = contactMutationValueKeyForRef(configKey);
         const displayed = policy !== "hidden";
-        const editable = displayed && def.valueKey != null && policy === "editable";
+        const editable =
+            displayed
+            && valueKey != null
+            && isIdentityFieldSaveSupported(configKey)
+            && policy === "editable";
+        const inputType = inputTypeForIdentityFieldRef(configKey);
+        const resolvedInputType: ContactEditFieldRow["inputType"] =
+            inputType === "email" ? "email" : inputType === "tel" ? "tel" : "text";
         return {
-            configKey: def.configKey,
-            valueKey: def.valueKey,
-            label: def.label,
-            inputType: def.inputType,
+            configKey,
+            valueKey,
+            label: resolveCanonicalIdentityFieldLabel(configKey, tenantFieldDefinitions),
+            inputType: resolvedInputType,
             displayed,
             editable,
         };
-    });
+    }).filter((row) => row.displayed);
 }
 
 /** Saveable value keys that remain editable under the published policy. */

@@ -9,8 +9,9 @@ import { randomUUID } from "crypto";
 
 import {
     canonicalWorkViewConditionFieldKey,
-    WORK_VIEW_CONDITION_FIELD_DEFS,
 } from "@/lib/lifecycle/workViewConditionFieldRegistry";
+import { workViewFilterFieldOptions } from "@/lib/lifecycle/workViewCanonicalOperands";
+import { canonicalWorkViewSortFieldKey } from "@/lib/lifecycle/workViewSortOperands";
 
 export const WORK_VIEWS_V1_METADATA_KEY = "work_views_v1" as const;
 
@@ -128,9 +129,10 @@ function parseFilter(raw: unknown): WorkViewFilterV1 | null {
 
 function parseSort(raw: unknown): WorkViewSortV1 | null {
     if (!isRecord(raw)) return null;
-    const field_key = typeof raw.field_key === "string" ? raw.field_key.trim() : "";
+    const rawFieldKey = typeof raw.field_key === "string" ? raw.field_key.trim() : "";
     const direction = raw.direction === "desc" ? "desc" : "asc";
-    if (!field_key) return null;
+    if (!rawFieldKey) return null;
+    const field_key = canonicalWorkViewSortFieldKey(rawFieldKey);
     return { field_key, direction };
 }
 
@@ -231,16 +233,18 @@ export function slugifyWorkViewId(raw: string): string {
 }
 
 /**
- * Selectable condition field options for the Work View editor — derived from the typed condition
- * registry. Generic `status` / `stage` are intentionally excluded (replaced by typed fields such as
- * Opportunity Stage / Opportunity Status / Child Enrollment Status). See
- * {@link WORK_VIEW_CONDITION_FIELD_DEFS} and {@link workViewConditionFieldGroups}.
+ * Selectable condition field options for the Work View editor — operational predicates plus
+ * canonical provider operands. Pass tenant field definitions for custom-field parity.
  */
+export function buildWorkViewFilterFieldOptions(
+    tenantFieldDefinitions?: readonly import("@/lib/layout/tenantLayoutFieldPickerCatalog").TenantFieldDefinitionRow[],
+): ReadonlyArray<{ key: string; label: string }> {
+    return workViewFilterFieldOptions(tenantFieldDefinitions);
+}
+
+/** Operational-only seed list — prefer {@link buildWorkViewFilterFieldOptions}. */
 export const WORK_VIEW_FILTER_FIELD_OPTIONS: ReadonlyArray<{ key: string; label: string }> =
-    WORK_VIEW_CONDITION_FIELD_DEFS.filter((def) => def.runtimeSupported).map((def) => ({
-        key: def.key,
-        label: def.label,
-    }));
+    workViewFilterFieldOptions();
 
 export const WORK_VIEW_FILTER_OPERATOR_OPTIONS: ReadonlyArray<{ value: WorkViewFilterOperatorV1; label: string }> = [
     { value: "equals", label: "equals" },
@@ -252,9 +256,4 @@ export const WORK_VIEW_FILTER_OPERATOR_OPTIONS: ReadonlyArray<{ value: WorkViewF
     { value: "date_between", label: "date between" },
 ];
 
-export const WORK_VIEW_SORT_FIELD_OPTIONS = [
-    { key: "updated_at", label: "Updated" },
-    { key: "tour_time", label: "Tour time" },
-    { key: "created_at", label: "Created" },
-    { key: "priority", label: "Priority" },
-] as const;
+export { WORK_VIEW_SORT_FIELD_OPTIONS } from "@/lib/lifecycle/workViewSortOperands";

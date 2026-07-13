@@ -226,8 +226,27 @@ export function queueRowZoneLabel(zoneKey: QueueRowLibraryZoneKey): string {
     return ZONE_OPERATOR_LABELS[zoneKey] ?? zoneKey;
 }
 
-function fieldCategory(fieldKey: string, zoneKey: QueueRowLibraryZoneKey): QueueRowLibraryCategoryKey {
+function fieldCategory(fieldKey: string, zoneKey: QueueRowLibraryZoneKey, categoryKey?: string): QueueRowLibraryCategoryKey {
+    if (categoryKey) {
+        const normalized = categoryKey.trim().toLowerCase();
+        if (normalized.includes("child") || normalized === "child_profile" || normalized === "program") return "child";
+        if (normalized.includes("identity") || normalized.includes("contact")) return "family_parents";
+        if (normalized.includes("status") || normalized.includes("lifecycle")) return "status";
+        if (normalized.includes("tour") || normalized.includes("enrollment")) return "tour";
+        if (normalized.includes("waitlist")) return "waitlist_placement";
+    }
     return FIELD_CATEGORY[fieldKey] ?? ZONE_DEFAULT_CATEGORY[zoneKey] ?? "operational";
+}
+
+function fieldItem(zoneKey: QueueRowLibraryZoneKey, field: AvailableField): QueueRowLibraryFieldItem {
+    return {
+        kind: "field",
+        zoneKey,
+        fieldKey: field.key,
+        label: field.label,
+        isSystemField: field.isSystemField,
+        category: fieldCategory(field.key, zoneKey, field.categoryKey),
+    };
 }
 
 export function buildQueueRowLibraryCatalog(args: {
@@ -336,17 +355,6 @@ function supplementalWaitlistFields(
             (WAITLIST_PLACEMENT_FIELD_KEYS.includes(f.key as (typeof WAITLIST_PLACEMENT_FIELD_KEYS)[number]) ||
                 !pipelineKeys.has(f.key)),
     );
-}
-
-function fieldItem(zoneKey: QueueRowLibraryZoneKey, field: AvailableField): QueueRowLibraryFieldItem {
-    return {
-        kind: "field",
-        zoneKey,
-        fieldKey: field.key,
-        label: FIELD_LIBRARY_LABELS[field.key] ?? field.label,
-        isSystemField: field.isSystemField,
-        category: fieldCategory(field.key, zoneKey),
-    };
 }
 
 /** Library is slot-driven — no zone filtering. */

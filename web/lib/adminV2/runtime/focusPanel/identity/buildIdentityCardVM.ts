@@ -37,6 +37,8 @@ import {
     enabledEvidenceSections,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM, IdentityEvidenceCollectionVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
 function initialsFor(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -45,12 +47,11 @@ function initialsFor(name: string): string {
     return (parts[0]!.charAt(0) + parts[parts.length - 1]!.charAt(0)).toUpperCase();
 }
 
-function catalogLabel(surfaceId: string, groupKey: string, fieldRef: string): string {
-    const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
-    const item = def?.defaultFieldKeys.includes(fieldRef)
-        ? fieldRef
-        : fieldRef;
-    return item.replace(/^[a-z_]+\./, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function catalogLabel(
+    fieldRef: string,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): string {
+    return resolveCanonicalIdentityFieldLabel(fieldRef, tenantFieldDefinitions);
 }
 
 function resolveEvidenceCollectionsForGroup(
@@ -88,6 +89,7 @@ function buildRecordRows(args: {
     isFieldSaveSupported?: (fieldRef: string) => boolean;
     editGroupKey?: string;
     maskedChannels?: boolean;
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
 }): ReturnType<typeof resolveIdentityFieldRows> {
     const group = args.config.groups.find((g) => g.key === args.groupKey);
     if (!group) return [];
@@ -118,7 +120,7 @@ function buildRecordRows(args: {
                 args.config,
                 args.groupKey,
                 placement.fieldRef,
-                catalogLabel(args.config.surfaceId, args.groupKey, placement.fieldRef),
+                catalogLabel(placement.fieldRef, args.tenantFieldDefinitions),
             ),
             value,
             icon: resolveIdentityFieldIcon({ group, fieldRef: placement.fieldRef }),

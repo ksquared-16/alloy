@@ -19,10 +19,9 @@ import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfa
 import { fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { resolveIdentityFieldPolicy } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import { identityLayerFieldKeysFromGroup } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
 import {
-    CHILD_FOCUS_FIELD_DEFS,
     isChildFocusFieldSaveSupported,
-    type ChildFocusFieldKey,
 } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
 import {
     reconcileIdentityNestedConfigFromDocMetadata,
@@ -60,13 +59,11 @@ function catalogLabelForGroupField(
     groupKey: string,
     fieldKey: string,
 ): string {
-    const def = CHILD_FOCUS_FIELD_DEFS[fieldKey as ChildFocusFieldKey];
     return fieldPresentationLabel(
         config,
         groupKey,
         fieldKey,
-        def?.label
-            ?? fieldKey.replace(/^[a-z_]+\./, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        resolveCanonicalIdentityFieldLabel(fieldKey),
     );
 }
 
@@ -105,7 +102,7 @@ export function childrenFocusRowsFromNestedConfig(config: NestedSurfaceConfig | 
             const displayed = fieldShouldRender(visibility);
             const editable =
                 displayed
-                && isChildFocusFieldSaveSupported(fieldKey as ChildFocusFieldKey)
+                && isChildFocusFieldSaveSupported(fieldKey)
                 && fieldIsSaveable(visibility);
             rows.push({
                 fieldKey,

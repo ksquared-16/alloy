@@ -51,11 +51,15 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/cardCompositionModel";
 import { isOperationalTruthCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
-    conceptOptionsForCard,
     defaultCardExpansion,
     defaultCardFields,
     getFocusPanelCardReference,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReference";
+import { availableFieldsForFocusPanelCard } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardFieldPicker";
+import { legacyConceptToRefKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelConceptCompat";
+import { categoryDisplayLabel } from "@/lib/fields/fieldCatalogForSettings";
+import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
+import type { AvailableField } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import {
     CONCEPT_TREE,
     buildConceptPath,
@@ -179,6 +183,11 @@ export default function FocusPanelCardInspector({
     );
     const [tab, setTab] = useState<InspectorTab>(metadataOnly ? "question" : "question");
     const reference = getFocusPanelCardReference(baseModel.key);
+    const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
+    const cardFieldOptions = useMemo(
+        () => availableFieldsForFocusPanelCard(baseModel.key, tenantFieldDefinitions),
+        [baseModel.key, tenantFieldDefinitions],
+    );
 
     const appearance = config.appearance ?? {};
     const effectiveTitle = appearance.titleOverride?.trim() || baseModel.title;
@@ -197,7 +206,10 @@ export default function FocusPanelCardInspector({
     const fields = useMemo(() => configFields(editingConfig), [editingConfig]);
     const expansion = config.expansion ?? defaultCardExpansion(baseModel.key);
     const conditions = config.conditions ?? [];
-    const conceptOptions = conceptOptionsForCard(baseModel.key);
+    const conceptOptions = useMemo(
+        () => cardFieldOptions.map((field) => field.key),
+        [cardFieldOptions],
+    );
 
     // Ownership-aware validation (binding, renderer, group names, edit-only-on-owner).
     const validation = useMemo(() => validateFocusPanelCardConfig(editingConfig, baseModel.key), [editingConfig, baseModel.key]);
@@ -239,8 +251,9 @@ export default function FocusPanelCardInspector({
                   }
                 : {
                       id: `custom_${n}`,
-                      label: "New field",
-                      concept: conceptOptions[0] ?? "Enrollment → Primary Contact → Name",
+                      label: cardFieldOptions[0]?.label ?? "New field",
+                      refKey: cardFieldOptions[0]?.key ?? "person.primary_contact_name",
+                      concept: legacyConceptToRefKey(cardFieldOptions[0]?.key ?? "") ?? cardFieldOptions[0]?.key ?? "",
                       renderer: "text",
                       kind: "field",
                       placement: expansion.default,
@@ -432,7 +445,7 @@ export default function FocusPanelCardInspector({
                                         field={field}
                                         canUp={index > 0}
                                         canDown={index < group.fields.length - 1}
-                                        conceptOptions={conceptOptions}
+                                        availableFields={cardFieldOptions}
                                         groups={groups.map((g) => ({ id: g.id, label: g.label }))}
                                         currentGroupId={group.id}
                                         onUp={() => moveFieldUpDown(field.id, -1)}
@@ -656,7 +669,7 @@ function FieldRow({
     field,
     canUp,
     canDown,
-    conceptOptions,
+    availableFields,
     groups,
     currentGroupId,
     onUp,
@@ -668,7 +681,7 @@ function FieldRow({
     field: FocusPanelCardField;
     canUp: boolean;
     canDown: boolean;
-    conceptOptions: string[];
+    availableFields: AvailableField[];
     groups: { id: string; label: string }[];
     currentGroupId: string;
     onUp: () => void;
@@ -688,7 +701,12 @@ function FieldRow({
                     <button type="button" aria-label="Remove field" data-focus-panel-field-remove={field.id} onClick={onRemove} className="rounded-md border border-red-300 px-1.5 py-1 text-xs text-red-600 hover:bg-red-50">✕</button>
                 </div>
             </div>
-            <ConceptPicker label={`${field.label} concept`} value={field.concept} onChange={(concept) => onChange({ concept })} extraOptions={conceptOptions} />
+            <CanonicalRefFieldPicker
+                label={`${field.label} field`}
+                field={field}
+                availableFields={availableFields}
+                onChange={onChange}
+            />
             {isCollection ? (
                 <>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -731,7 +749,58 @@ function FieldRow({
     );
 }
 
-/** Cascading business-concept picker: branch → attribute → path (no raw columns). */
+/** Canonical refKey picker — same provider source as nested Identity Builder. */
+function CanonicalRefFieldPicker({
+    label,
+    field,
+    availableFields,
+    onChange,
+}: {
+    label: string;
+    field: FocusPanelCardField;
+    availableFields: AvailableField[];
+    onChange: (patch: Partial<FocusPanelCardField>) => void;
+}) {
+    const selected =
+        field.refKey?.trim()
+        ?? legacyConceptToRefKey(field.concept)
+        ?? availableFields[0]?.key
+        ?? "";
+    const categories = [...new Set(availableFields.map((entry) => entry.categoryKey ?? "general"))].sort((a, b) =>
+        categoryDisplayLabel(a).localeCompare(categoryDisplayLabel(b)),
+    );
+    return (
+        <select
+            aria-label={label}
+            className={FIELD}
+            data-focus-panel-canonical-ref-picker={field.id}
+            value={selected}
+            onChange={(e) => {
+                const refKey = e.target.value;
+                const match = availableFields.find((entry) => entry.key === refKey);
+                onChange({
+                    refKey,
+                    concept: field.concept,
+                    label: match?.label ?? field.label,
+                });
+            }}
+        >
+            {categories.map((categoryKey) => (
+                <optgroup key={categoryKey} label={categoryDisplayLabel(categoryKey)}>
+                    {availableFields
+                        .filter((entry) => (entry.categoryKey ?? "general") === categoryKey)
+                        .map((entry) => (
+                            <option key={entry.key} value={entry.key}>
+                                {entry.label}
+                            </option>
+                        ))}
+                </optgroup>
+            ))}
+        </select>
+    );
+}
+
+/** Legacy condition concept picker (conditions still use concept record paths). */
 function ConceptPicker({
     label,
     value,
