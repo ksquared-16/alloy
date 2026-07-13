@@ -74,3 +74,15 @@ Focused parity + composer regression suites executed before push.
 ## Doctrine
 
 Updated `docs/platform/operator/identity-surface-composition-v2.md` §11 (published config resolution). No competing doctrine document added.
+
+## QA refinement closeout (Jul 2026)
+
+- Tier-specific field policy ( per disclosure tier)
+- Role-based Parent / Guardian configuration ( template)
+- Configurable section labels ()
+- Household section precedence / deduplicated contacts
+- Third-width identity field rows
+- Direct Context → Details identity drill
+- Builder/runtime Focus Panel column stacking parity
+
+**Status:** READY FOR FINAL QA (manual screenshots on Vercel preview)

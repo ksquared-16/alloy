@@ -313,3 +313,37 @@ Representative Johnson data in Builder preview may differ from Kurzman runtime r
 ### Post-publish refresh
 
 `usePublishedFocusPanelSummaryDoc` caches the published summary document per org/location. Publishing dispatches `FOCUS_PANEL_SUMMARY_PUBLISHED_EVENT` to invalidate the cache in-tab so `/work-unit` recomposes against the latest revision.
+
+---
+
+## 12. QA refinement — tier policy, role configuration, layout, drill, placement
+
+### Tier-specific field policy
+
+Field policy identity is **`surface + group + field + tier`**. Summary, Context Facts, and Detail Fields each store independent `placement.policy` values. Legacy `fieldPolicies[fieldRef]` remains a read fallback when no tier-specific placement policy exists.
+
+### Role-based Household configuration
+
+Parent / Guardian defaults live on the **`contact_edit`** template group (Builder label: **Parent / Guardian**). Runtime sections **`primary_contact`** and **`other_parent_guardian`** inherit that template unless `roleOverride: true` on the runtime section.
+
+Representative Johnson/Taylor preview rows are **not** configuration identity — Builder drill targets semantic roles/sections.
+
+### Section labels
+
+Operators may set `sectionLabel` on a group (e.g. rename **Other Parent / Guardian** → **Secondary Parent**). Runtime and Builder use `nestedGroupLabel()`; internal `groupKey` values never surface.
+
+### Relationship section precedence
+
+Household contact bucketing assigns each person to the highest-priority semantic section once: `primary_contact → other_parent_guardian → emergency_contact → additional_contact`. Duplicates are suppressed by `person_id`.
+
+### Third-width field layout
+
+Identity field rows support **`full` | `half` | `third`** semantic widths (max three fields per row). Builder drag/drop and runtime `IdentityFieldGrid` share the same chunking resolver.
+
+### Direct identity drill
+
+Selecting an identity from Context (`select_identity`) opens **Details** for that exact record id immediately. Household child clicks hand off to the Children card via `requestFocus("children", childId)`.
+
+### Builder/runtime card placement parity
+
+Focus Panel composer grid areas in the same column normalize into a vertical stack via `normalizeGridColumnStacking` — overlap is not required to express order. Builder and `/work-unit` both consume the same published grid coordinates.

@@ -68,11 +68,35 @@ export function nextFreeRow(grid: FocusPanelGridLayout): number {
     return Math.max(...grid.areas.map((a) => a.rowStart + a.rowSpan - 1)) + 1;
 }
 
+
+/** Resolve overlapping cards in the same column into a vertical stack. PURE. */
+export function normalizeGridColumnStacking(grid: FocusPanelGridLayout): FocusPanelGridLayout {
+    const order = new Map(grid.areas.map((area, index) => [area.card, index]));
+    const sorted = [...grid.areas].sort((a, b) => {
+        if (a.colStart !== b.colStart) return a.colStart - b.colStart;
+        if (a.rowStart !== b.rowStart) return a.rowStart - b.rowStart;
+        return (order.get(a.card) ?? 0) - (order.get(b.card) ?? 0);
+    });
+    const placed: FocusPanelGridArea[] = [];
+    for (const area of sorted) {
+        let rowStart = area.rowStart;
+        for (const prior of placed) {
+            if (prior.colStart !== area.colStart) continue;
+            const priorEnd = prior.rowStart + prior.rowSpan;
+            const areaEnd = rowStart + area.rowSpan;
+            const overlaps = rowStart < priorEnd && areaEnd > prior.rowStart;
+            if (overlaps) rowStart = priorEnd;
+        }
+        placed.push(clampArea(grid, { ...area, rowStart }));
+    }
+    return { ...grid, areas: placed };
+}
+
 /** Place (or replace) a card's region. Snaps/clamps to the grid. PURE. */
 export function placeArea(grid: FocusPanelGridLayout, area: FocusPanelGridArea): FocusPanelGridLayout {
     const next = clampArea(grid, area);
     const areas = [...grid.areas.filter((a) => a.card !== area.card), next];
-    return { ...grid, areas };
+    return normalizeGridColumnStacking({ ...grid, areas });
 }
 
 /** Add a card as a full-width region on the next free row (default span). PURE. */
@@ -153,11 +177,13 @@ export function snapMoveTarget(
         }
     }
 
-    // Stack directly beneath a card already occupying this column.
+    // Stack directly beneath cards already occupying this column (including overlaps).
     for (const neighbor of grid.areas) {
         if (neighbor.card === moving.card || neighbor.colStart !== next.colStart) continue;
         const stackBelow = neighbor.rowStart + neighbor.rowSpan;
-        if (next.rowStart > neighbor.rowStart && next.rowStart < stackBelow + 1) {
+        const nextEnd = next.rowStart + next.rowSpan;
+        const overlaps = next.rowStart < stackBelow && nextEnd > neighbor.rowStart;
+        if (overlaps || (next.rowStart > neighbor.rowStart && next.rowStart < stackBelow + 1)) {
             next = { ...next, rowStart: stackBelow };
         }
     }
