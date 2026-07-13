@@ -60,11 +60,11 @@ Configuration **never** directly sets `status_key` on live records except throug
 |----------------------------------|---------|----------------------------|
 | `customer_member` | Child **profile** config fields (gender, allergies, …) | Child Profile |
 | `inquiry_child` | **Enrollment** participation fields on OCM | Enrollment |
+| `person` | Guardian/adult fields | (Person hub) |
+| `opportunity` | Case-level fields | (Lead hub) |
+| `customer` | Household fields | (Family hub) |
 
-Operator-friendly hub label **Child** may group both sections. Each field row must retain its canonical owner grain. Enrollment assignment fields (location/program/room/schedule) reference Location/Program/Room **option masters**; assignment ownership stays Enrollment.
-| `person` | Guardian/adult fields |
-| `opportunity` | Case-level fields |
-| `customer` | Household fields |
+Operator-friendly hub label **Child** may group both Child Profile and Enrollment sections. Each field row must retain its canonical owner grain. Enrollment assignment fields (location/program/room/schedule) reference Location/Program/Room **option masters**; assignment ownership stays Enrollment.
 
 Ownership guard rejects cross-grain registration (`validateFieldDefinitionOwnership`).
 

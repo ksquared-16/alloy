@@ -312,9 +312,14 @@ export function sectionDisplayLabel(sectionKey: string): string {
     const key = sectionKey.trim().toLowerCase();
     if (!key) return "General";
     const aliases: Record<string, string> = {
-        child_profile: "Profile",
+        child_profile: "Child Profile",
         enrollment_profile: "Enrollment",
-        profile: "Profile",
+        enrollment: "Enrollment",
+        profile: "Child Profile",
+        medical: "Child Profile",
+        health: "Child Profile",
+        runtime_signals: "Runtime Signals",
+        relationships: "Relationships",
     };
     if (aliases[key]) return aliases[key];
     return platformCategoryLabel(key);
@@ -323,6 +328,75 @@ export function sectionDisplayLabel(sectionKey: string): string {
 /** Operator-facing alias — categories are business concepts, not presentation sections. */
 export function categoryDisplayLabel(categoryKey: string): string {
     return sectionDisplayLabel(categoryKey);
+}
+
+/**
+ * Settings → Child hub ownership grains — surface presentation without inventing storage.
+ * A field may appear under Child while owned by Enrollment (inquiry_child / OCM).
+ */
+export type ChildHubOwnershipGrain =
+    | "child_profile"
+    | "enrollment"
+    | "relationships"
+    | "calculated"
+    | "runtime_signals";
+
+export const CHILD_HUB_OWNERSHIP_GRAIN_ORDER: readonly ChildHubOwnershipGrain[] = [
+    "child_profile",
+    "enrollment",
+    "relationships",
+    "calculated",
+    "runtime_signals",
+] as const;
+
+export const CHILD_HUB_OWNERSHIP_GRAIN_LABELS: Readonly<Record<ChildHubOwnershipGrain, string>> = {
+    child_profile: "Child Profile",
+    enrollment: "Enrollment",
+    relationships: "Relationships",
+    calculated: "Calculated",
+    runtime_signals: "Runtime Signals",
+};
+
+export function childHubOwnerGrainLabel(entityType: string): string {
+    const et = entityType.trim().toLowerCase();
+    if (et === "customer_member") return "Child Profile";
+    if (et === "inquiry_child") return "Enrollment";
+    return et.replace(/_/g, " ");
+}
+
+export function childHubOwnershipGrainForEntry(entry: SettingsFieldCatalogEntry): ChildHubOwnershipGrain {
+    if (entry.ownership === "computed") {
+        const concept = entry.computedField?.concept_kind;
+        if (concept === "calculated_field") return "calculated";
+        return "runtime_signals";
+    }
+    const section = catalogEntrySectionKey(entry).toLowerCase();
+    if (section === "relationships" || entry.refKey.includes("relationship")) return "relationships";
+    if (entry.entity_type === "inquiry_child") return "enrollment";
+    if (entry.entity_type === "customer_member") return "child_profile";
+    if (section === "enrollment" || section === "enrollment_profile" || section === "placement") {
+        return "enrollment";
+    }
+    if (section === "child_profile" || section === "profile" || section === "medical" || section === "health") {
+        return "child_profile";
+    }
+    return entry.entity_type === "inquiry_child" ? "enrollment" : "child_profile";
+}
+
+export function groupCatalogEntriesByChildOwnershipGrain(
+    entries: readonly SettingsFieldCatalogEntry[],
+): Map<ChildHubOwnershipGrain, SettingsFieldCatalogEntry[]> {
+    const groups = new Map<ChildHubOwnershipGrain, SettingsFieldCatalogEntry[]>();
+    for (const grain of CHILD_HUB_OWNERSHIP_GRAIN_ORDER) {
+        groups.set(grain, []);
+    }
+    for (const entry of entries) {
+        const grain = childHubOwnershipGrainForEntry(entry);
+        const list = groups.get(grain) ?? [];
+        list.push(entry);
+        groups.set(grain, list);
+    }
+    return groups;
 }
 
 /** Resolved section key for grouping — persisted field_definitions override catalog defaults. */
