@@ -162,30 +162,8 @@ describe("Section tabs for disclosure authoring", () => {
 });
 
 describe("Parent / Guardian Add Field", () => {
-    it("12–15. Context Facts Add field mutates context tier only and inherits", () => {
+    it("12–15. Context Facts Add field mutates context tier only", () => {
         let config = defaultHouseholdRelationshipSectionConfig();
-        act(() => {
-            root.render(
-                <FocusPanelComposerProvider initialNestedConfigs={{ [HOUSEHOLD_SURFACE_ID]: config }}>
-                    <InspectorHarness purpose="context_facts">
-                        <IdentitySurfaceBuilderInspector
-                            surfaceId={HOUSEHOLD_SURFACE_ID}
-                            config={config}
-                            onChange={(next) => {
-                                config = next;
-                            }}
-                            selectedGroupKey={HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP}
-                            onSelectGroup={vi.fn()}
-                            selectedFieldId={null}
-                            onSelectField={vi.fn()}
-                        />
-                    </InspectorHarness>
-                </FocusPanelComposerProvider>,
-            );
-        });
-        expect(document.querySelector('[data-identity-context-facts-panel="true"]')).toBeTruthy();
-        expect(document.body.textContent).toContain("+ Add field");
-
         const summaryBefore = identityConfigurationFieldKeys(config, HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP, "summary");
         config = addFieldToNestedGroup(config, HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP, "person.preferred_name", {
             tier: "context_fact",

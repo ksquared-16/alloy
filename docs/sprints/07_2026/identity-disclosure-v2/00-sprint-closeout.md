@@ -115,3 +115,7 @@ Editing metadata on fixed groups was not sufficient. Section definition/instance
 ## Relationship-section UX cleanup (final Builder polish)
 
 Separated collapsible section management from section-tab field authoring. Restored Parent/Guardian Add Field for Context Facts/Details. Optional section deletion (Additional Contacts) now sticks across reconcile. Elevated identity drill-in is fully opaque.
+
+## Composer convergence
+
+Removed duplicate field-layout editors. Summary/Context/Details use one green visual composer on the canvas; Context is explicitly configured; raw refs never render; elevated drill-in fully contains underlying cards.

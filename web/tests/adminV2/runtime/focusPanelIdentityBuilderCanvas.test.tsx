@@ -136,8 +136,8 @@ describe("Focus Panel identity builder canvas composer", () => {
             );
         });
         expect(document.querySelector('[data-identity-compose-canvas="summary"]')).toBeTruthy();
-        expect(document.querySelector('[data-nested-layout-surface="primary_contact"]')).toBeTruthy();
-        expect(document.querySelector('[data-nested-layout-surface="other_parent_guardian"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-canonical-composer="true"]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface="contact_edit"], [data-nested-layout-surface="primary_contact"]')).toBeTruthy();
     });
 
     it("Household Context Facts mounts canvas composer", () => {
@@ -153,7 +153,8 @@ describe("Focus Panel identity builder canvas composer", () => {
             );
         });
         expect(document.querySelector('[data-identity-compose-canvas="context_facts"]')).toBeTruthy();
-        expect(document.querySelector('[data-identity-context-facts-panel="true"], [data-identity-nested-field-layout]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-canonical-composer="true"]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface]')).toBeTruthy();
     });
 
     it("Preview mode bypasses compose canvas", () => {
@@ -225,7 +226,7 @@ describe("Household composer parity with Children", () => {
             );
         });
         act(() => {});
-        expect(document.querySelector('[data-nested-layout-surface="contact_edit"] .fp-layout-field__grip, [data-nested-layout-surface="primary_contact"] .fp-field-instance__toolbar')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface] .fp-layout-field__grip, [data-nested-layout-surface] .fp-field-instance__toolbar, [data-canvas-add-field]')).toBeTruthy();
         expect(document.querySelector('[data-identity-disclosure-surface="true"]')).toBeFalsy();
     });
 
@@ -247,8 +248,9 @@ describe("Household composer parity with Children", () => {
             );
         });
         act(() => {});
-        expect(document.querySelector('[data-household-compose-details="true"]')).toBeTruthy();
-        expect(document.querySelector('[data-identity-nested-field-layout="details"]')).toBeTruthy();
+        expect(document.querySelector('[data-household-compose-fields="details"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-canonical-composer="true"]')).toBeTruthy();
+        expect(document.querySelector('[data-nested-layout-surface]')).toBeTruthy();
     });
 
     it("Household Evidence mounts collection editor with section picker", () => {

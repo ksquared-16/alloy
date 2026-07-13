@@ -99,3 +99,25 @@ Card grid placement in Builder equals runtime via shared published layout resolv
 ## Drill-in surface
 
 The shared elevated identity drill-in uses an opaque Alloy surface background on the card shell, body, footer, and compose canvas. Backdrop/scrim may dim the canvas outside the surface; underlying cards must not show through the composer.
+
+## Canonical visual field composer
+
+Disclosure field authoring uses **one** green visual composer (`NestedSurfaceFieldLayoutSurface` via `IdentityComposeSectionCanvas`) for:
+
+- Summary Fields
+- Context
+- Detail Fields
+
+Evidence uses the collection editor. The flat white `IdentityNestedFieldLayoutPanel` is not an active authoring path for identity surfaces — the inspector is metadata/navigation only; the canvas owns field layout.
+
+### Context model
+
+Builder Context is an **explicit** `contextFieldKeys` presentation list. Operators do not see “Inherited from Summary.” Runtime may still compose Summary+Facts as an implementation detail.
+
+### Display labels
+
+Canonical field refs never render raw (`contact.first_name`). Labels resolve through the presentation catalog adapter; unresolved refs show a humanized leaf label or `Unavailable field`.
+
+### Opaque drill-in
+
+Shared elevated identity drill-in is fully opaque; non-elevated cards are obscured during composer edit mode.

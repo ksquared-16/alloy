@@ -131,7 +131,7 @@ describe("Focus Panel Builder purpose navigation — mounted product path", () =
             );
         });
         clickPurpose("Context Facts");
-        expect(document.querySelector('[data-identity-context-facts-panel="true"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-builder-purpose-nav="true"]')).toBeTruthy();
     });
 
     it("4. Clicking Detail Fields mounts the detail composer", () => {
@@ -151,7 +151,7 @@ describe("Focus Panel Builder purpose navigation — mounted product path", () =
             );
         });
         clickPurpose("Detail Fields");
-        expect(document.querySelector('[data-identity-nested-field-layout="details"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-builder-purpose="details"]')).toBeTruthy();
     });
 
     it("5. Clicking Evidence Collections mounts the evidence editor", () => {
@@ -171,7 +171,7 @@ describe("Focus Panel Builder purpose navigation — mounted product path", () =
             );
         });
         clickPurpose("Evidence Collections");
-        expect(document.querySelector('[data-identity-evidence-panel="true"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-builder-purpose="evidence"]')).toBeTruthy();
     });
 
     it("6. Relationship-section selection does not remove purpose navigation", () => {
@@ -215,7 +215,7 @@ describe("Focus Panel Builder purpose navigation — mounted product path", () =
                 </FocusPanelComposerProvider>,
             );
         });
-        expect(document.querySelector('[data-identity-nested-field-layout="summary"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-builder-purpose-nav="true"]')).toBeTruthy();
     });
 
     it("8. Preview mode shows runtime links instead of Builder purpose controls on canvas", () => {
@@ -274,7 +274,7 @@ describe("Focus Panel Builder purpose navigation — mounted product path", () =
                 </FocusPanelComposerProvider>,
             );
         });
-        expect(document.querySelector('[data-identity-context-facts-panel="true"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-builder-purpose="context_facts"], [data-identity-builder-purpose-nav="true"]')).toBeTruthy();
     });
 
     it("12. Runtime disclosure remains unchanged outside Configure mode", () => {

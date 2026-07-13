@@ -3266,6 +3266,62 @@ html[data-alloy-os-runtime-split="true"]
 }
 
 /* Shared identity drill-in — fully opaque elevated surface (no canvas bleed-through). */
+
+/* Composer edit mode: fully obscure non-elevated cards and lock elevated stack. */
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"]) {
+  opacity: 0 !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard {
+  isolation: isolate;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  z-index: 80;
+}
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__body,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__header,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard
+  .alloy-os-ucard__footer,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .identity-compose-canvas,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .fp-layout-surface,
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .relationship-sections-panel {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+}
+[data-fp-composer-edit-mode="true"]
+  .alloy-os-fp-composer__body
+  .alloy-os-fp-depth-scrim {
+  background: rgba(248, 250, 252, 0.82);
+  backdrop-filter: blur(10px) saturate(0.8);
+  -webkit-backdrop-filter: blur(10px) saturate(0.8);
+}
+
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   .alloy-os-ucard,

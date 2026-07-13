@@ -8,9 +8,11 @@ import {
     addFieldToNestedGroup,
     availableFieldsForNestedGroup,
     groupDefsFor,
+    identityConfigurationFieldKeys,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import { configurationPurposeFromTierArg } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { identityPickerCategoriesForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
 import type { AvailableFieldEntityNamespace } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
@@ -25,6 +27,7 @@ type Props = {
     className?: string;
 };
 
+/** Canonical + Add field control for the green NestedSurfaceFieldLayoutSurface composer. */
 export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, className = "" }: Props) {
     const composer = useFocusPanelComposer();
     const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
@@ -35,14 +38,6 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
 
     const composing = composer?.isComposingSurface(surfaceId) ?? false;
     const config = composer?.configFor(surfaceId);
-    const regionSelected = (() => {
-        if (!composer?.selection || composer.selection.kind !== "region") return false;
-        if (composer.selection.surfaceId !== surfaceId) return false;
-        if (composer.selection.groupKey === groupKey) return true;
-        if (surfaceId !== HOUSEHOLD_SURFACE_ID) return false;
-        // Parent / Guardian shared template matches Primary / Other Parent selection.
-        return householdAuthoringGroupKey(composer.selection.groupKey) === householdAuthoringGroupKey(groupKey);
-    })();
 
     const available = useMemo(
         () =>
@@ -52,15 +47,20 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
         [config, composing, surfaceId, groupKey, tenantFieldDefinitions, tier],
     );
 
+    const placedKeys = useMemo(() => {
+        if (!config) return new Set<string>();
+        const purpose = configurationPurposeFromTierArg(tier ?? "summary");
+        return new Set(identityConfigurationFieldKeys(config, groupKey, purpose));
+    }, [config, groupKey, tier]);
+
     const categories = useMemo(() => {
         const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
         if (!def) return [];
         const namespaces = def.acceptedNamespaces as readonly AvailableFieldEntityNamespace[];
-        const exclude = new Set(available.map((f) => f.key));
         const all = identityPickerCategoriesForNamespaces({
             namespaces,
             tenantFieldDefinitions,
-            excludeKeys: exclude,
+            excludeKeys: placedKeys,
         });
         const q = search.trim().toLowerCase();
         if (!q) return all;
@@ -74,7 +74,7 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
                 ),
             }))
             .filter((category) => category.fields.length > 0);
-    }, [surfaceId, groupKey, tenantFieldDefinitions, available, search]);
+    }, [surfaceId, groupKey, tenantFieldDefinitions, placedKeys, search]);
 
     const activeFields = useMemo(() => {
         if (categories.length === 0) return [];
@@ -87,8 +87,21 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
         [composer, surfaceId],
     );
 
-    if (!composing || !composer || !config || !regionSelected) return null;
-    if (available.length === 0) return null;
+    if (!composing || !composer || !config) return null;
+
+    // Ensure region selection matches authoring group so subsequent controls stay in sync.
+    const ensureRegionSelected = () => {
+        const selection = composer.selection;
+        const already =
+            selection?.kind === "region"
+            && selection.surfaceId === surfaceId
+            && (selection.groupKey === groupKey
+                || (surfaceId === HOUSEHOLD_SURFACE_ID
+                    && householdAuthoringGroupKey(selection.groupKey) === householdAuthoringGroupKey(groupKey)));
+        if (!already) {
+            composer.select({ kind: "region", surfaceId, groupKey });
+        }
+    };
 
     return (
         <div className={["fp-region-add-field", className].filter(Boolean).join(" ")} data-region-add-field={groupKey}>
@@ -100,14 +113,20 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
                 aria-expanded={addOpen}
                 onClick={(e) => {
                     e.stopPropagation();
+                    ensureRegionSelected();
                     setAddOpen((v) => !v);
                 }}
             >
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 Add field
             </button>
+            {available.length === 0 && addOpen ? (
+                <p className="mt-2 text-[11px] text-alloy-midnight/50" data-add-field-empty="true">
+                    No more fields available for this section.
+                </p>
+            ) : null}
             <ComposerFloatingPopover
-                open={addOpen}
+                open={addOpen && available.length > 0}
                 anchorRef={triggerRef}
                 onClose={() => {
                     setAddOpen(false);

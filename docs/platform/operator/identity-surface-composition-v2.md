@@ -411,7 +411,12 @@ When Canonical Field Consumer Convergence lands, new fields registered in Settin
 
 ### Disclosure authoring
 
-Every relationship section supports independent Summary, Context Facts, Details, and Evidence Collections configuration with tier-specific visible/editable/read-only policy.
+Every relationship section supports independent Summary, Context, Details, and Evidence Collections configuration.
+
+- **One visual composer** authors Summary / Context / Details on the canvas.
+- **Context** is an explicit presentation list (`contextFieldKeys`) — inheritance is not Builder UX.
+- **Evidence** uses the collection editor only.
+- Raw canonical refs never render in Builder UI.
 
 ### Placement parity
 
@@ -444,3 +449,9 @@ Final Focus Panel Builder polish (July 2026):
 - Disclosure purposes use section tabs for field authoring; Children tab offers Configure Children surface handoff.
 - Parent / Guardian shared template; Other Parent override tab only when `roleOverride` is enabled.
 - Opaque elevated drill-in surface with one internal scroll owner.
+
+---
+
+## 17. Composer convergence
+
+Final cleanup removes the duplicate flat field-layout editor from identity Builder. Canvas-owned green `NestedSurfaceFieldLayoutSurface` is the only Summary/Context/Details authoring UI. Inspector retains purpose navigation, relationship-section management, and section metadata.
