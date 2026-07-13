@@ -27,6 +27,12 @@ import LifecycleStageOutcomeAutomationEditor from "@/components/adminV2/settings
 import LifecycleStageWorkTemplateActionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
+import { resolveStageOutcomeTransitionOptions } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
+import {
+    validateStageOperatingPlanOperatingContract,
+    type StageOperatingContractIssue,
+} from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
 
 
 export type LifecycleStageOperatingPlanEditorHandle = {
@@ -43,6 +49,7 @@ type Props = {
     configuredActions?: LifecycleConfiguredActionRow[];
     processStages?: Array<{ key: string; label: string }>;
     processTracks?: ProcessTracksV1 | null;
+    configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
 };
 
 function dueDaysFromPolicy(work: StageOperatingPlanEditorDraft["work_templates"][number]): number {
@@ -53,7 +60,17 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     LifecycleStageOperatingPlanEditorHandle,
     Props
 >(function LifecycleStageOperatingPlanEditor(
-    { stageKey, stageLabel, savedPlan, onDirtyChange, actionCatalog, configuredActions, processStages, processTracks },
+    {
+        stageKey,
+        stageLabel,
+        savedPlan,
+        onDirtyChange,
+        actionCatalog,
+        configuredActions,
+        processStages,
+        processTracks,
+        configuredStatuses = [],
+    },
     ref,
 ) {
     const [draft, setDraft] = useState<StageOperatingPlanEditorDraft>(() =>
@@ -84,28 +101,78 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
         onDirtyChange?.(dirty);
     }, [dirty, onDirtyChange]);
 
+    const entityType = draft.journey_segment === "child" ? "opportunity_customer_members" : "opportunities";
+
+    const stageOperatingPlanForResolver: StageOperatingPlanV1 = useMemo(
+        () =>
+            stageOperatingPlanDraftToPersisted(draft, stageKey, undefined, { validate: false })
+            ?? {
+                version: 1,
+                lifecycle_key: stageKey,
+                stage_key: stageKey,
+                journey_segment: draft.journey_segment,
+                work_templates: draft.work_templates,
+                outcomes: draft.outcomes,
+                outcome_rules: draft.outcome_rules,
+                attention_rules: draft.attention_rules,
+            },
+        [draft, stageKey],
+    );
+
+    const transitionOptions = useMemo(
+        () =>
+            resolveStageOutcomeTransitionOptions({
+                currentStageKey: stageKey,
+                currentStageLabel: stageLabel,
+                stageOperatingPlan: stageOperatingPlanForResolver,
+                processTracks: processTracks ?? null,
+                processStages: processStages ?? [],
+            }),
+        [stageKey, stageLabel, stageOperatingPlanForResolver, processTracks, processStages],
+    );
+
+    const validPrimaryActionRefs = useMemo(
+        () =>
+            new Set(
+                (configuredActions ?? [])
+                    .map((row) => row.key?.trim())
+                    .filter((key): key is string => Boolean(key)),
+            ),
+        [configuredActions],
+    );
+
+    const operatingContractContext = useMemo(
+        () => ({
+            validPrimaryActionRefs,
+            transitionOptions,
+            configuredStatuses,
+            entityType,
+        }),
+        [validPrimaryActionRefs, transitionOptions, configuredStatuses, entityType],
+    );
+
+    const operatingContractIssues: StageOperatingContractIssue[] = useMemo(
+        () =>
+            validateStageOperatingPlanOperatingContract({
+                plan: stageOperatingPlanForResolver,
+                ...operatingContractContext,
+            }),
+        [stageOperatingPlanForResolver, operatingContractContext],
+    );
+
     useImperativeHandle(
         ref,
         () => ({
-            getDraftPlan: () => stageOperatingPlanDraftToPersisted(draft, stageKey),
+            getDraftPlan: () =>
+                stageOperatingPlanDraftToPersisted(draft, stageKey, undefined, {
+                    operatingContract: operatingContractContext,
+                }),
             isDirty: () => dirty,
         }),
-        [draft, dirty, stageKey],
+        [draft, dirty, stageKey, operatingContractContext],
     );
 
     const primaryWork = resolveEffectivePrimaryWorkTemplate({ work_templates: draft.work_templates });
-    const stageOperatingPlanForResolver: StageOperatingPlanV1 =
-        stageOperatingPlanDraftToPersisted(draft, stageKey, undefined, { validate: false })
-        ?? {
-            version: 1,
-            lifecycle_key: stageKey,
-            stage_key: stageKey,
-            journey_segment: draft.journey_segment,
-            work_templates: draft.work_templates,
-            outcomes: draft.outcomes,
-            outcome_rules: draft.outcome_rules,
-            attention_rules: draft.attention_rules,
-        };
 
     return (
         <div className="space-y-4" data-testid="lifecycle-stage-operating-plan-editor">
@@ -113,6 +180,24 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 Configure work items, outcomes, and attention for this stage. Primary work drives Work Intent
                 runtime when saved.
             </p>
+            {operatingContractIssues.length > 0 ?
+                <ul
+                    className="space-y-1 rounded border border-amber-200 bg-amber-50/80 px-2 py-1.5"
+                    data-testid="stage-operating-plan-contract-issues"
+                    role="status"
+                >
+                    {operatingContractIssues.map((issue) => (
+                        <li
+                            key={`${issue.controlId}:${issue.code}`}
+                            className="text-[10px] text-amber-950"
+                            data-contract-issue={issue.code}
+                            data-control-id={issue.controlId}
+                        >
+                            {issue.message}
+                        </li>
+                    ))}
+                </ul>
+            :   null}
 
             <label className="block space-y-1">
                 <span className="text-[11px] font-medium text-alloy-midnight/70">{BUSINESS_PROCESS_SECTION_PURPOSE}</span>
@@ -370,13 +455,13 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                     <details className="group" data-testid={`stage-operating-plan-outcomes-${work.template_key}`}>
                                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-1 [&::-webkit-details-marker]:hidden">
                                             <span className="text-[10px] font-semibold text-alloy-midnight/70">
-                                                Outcomes available to operators ({workOutcomes.length})
+                                                Outcome Definitions ({workOutcomes.length})
                                             </span>
                                             <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
                                         </summary>
                                         <div className="pt-2">
                                             <p className="mb-2 text-[10px] text-alloy-midnight/45">
-                                                Define what recorded results mean and what they do.
+                                                Define what each stage outcome means and what happens after recording it.
                                             </p>
                                     <div className="mb-1 flex items-center justify-end gap-2">
                                         <button
@@ -475,6 +560,8 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                                         processTracks={processTracks ?? null}
                                                         defaultRepeatTemplateKey={work.template_key}
                                                         completesWork={Boolean(outcome.completes_work ?? outcome.successful)}
+                                                        configuredStatuses={configuredStatuses}
+                                                        entityType={entityType}
                                                         onRulesChange={(outcome_rules) =>
                                                             setDraft((prev) => ({ ...prev, outcome_rules }))
                                                         }

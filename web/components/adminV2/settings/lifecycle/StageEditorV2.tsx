@@ -878,6 +878,12 @@ export default function StageEditorV2({
                                     })) ?? []
                                 }
                                 processTracks={processTracks ?? null}
+                                configuredStatuses={(bootstrap?.queue_membership_status_options ?? []).map((row) => ({
+                                    status_key: row.status_key,
+                                    status_label: row.status_label,
+                                    entity_type: "opportunities",
+                                    is_active: true,
+                                }))}
                             />
 
                             <Subsection label="Recommended actions">

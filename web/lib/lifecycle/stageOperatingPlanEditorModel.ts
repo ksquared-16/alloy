@@ -13,6 +13,11 @@ import { normalizeOperatingPlanDraftForPersist } from "@/lib/lifecycle/stageOper
 import { normalizeOutcomeRulesOnPersist } from "@/lib/lifecycle/stageOutcomeAutomation";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { validateStageOperatingPlanWorkDefinitions } from "@/lib/lifecycle/validateStageOperatingPlanWorkDefinitions";
+import {
+    stageOperatingContractHasBlockingErrors,
+    validateStageOperatingPlanOperatingContract,
+    type ValidateStageOperatingPlanOperatingContractInput,
+} from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
 
 export type StageOperatingPlanEditorDraft = {
     purpose: string;
@@ -53,6 +58,8 @@ export function stageOperatingPlanDraftFromSaved(
 export type StageOperatingPlanDraftPersistOptions = {
     /** When false, skip work-definition validation (editor dirty-state only). Default true. */
     validate?: boolean;
+    /** Operating-contract context for Primary Action / outcome automation validation. */
+    operatingContract?: Omit<ValidateStageOperatingPlanOperatingContractInput, "plan">;
 };
 
 export function stageOperatingPlanDraftToPersisted(
@@ -89,6 +96,17 @@ export function stageOperatingPlanDraftToPersisted(
             const first = validation.issues[0]!;
             throw new Error(first.message);
         }
+        // Operating-contract checks require editor context (transitions / statuses / action refs).
+        // Skip when callers use draftToPersisted without that context (runtime fixtures, dirty-diff).
+        if (options?.operatingContract) {
+            const operatingIssues = validateStageOperatingPlanOperatingContract({
+                plan,
+                ...options.operatingContract,
+            });
+            if (stageOperatingContractHasBlockingErrors(operatingIssues)) {
+                throw new Error(operatingIssues.find((issue) => issue.severity === "error")!.message);
+            }
+        }
     }
 
     return parseStageOperatingPlanV1(plan);
@@ -114,6 +132,7 @@ export function newWorkTemplateDraft(index: number): StageWorkTemplateV1 {
         due_policy: { kind: "offset_days", days: 1 },
         owner_strategy: "record_owner",
         work_definition_key: MANUAL_AD_HOC_WORK_DEFINITION_KEY,
+        execution_mode: "outcome_led",
     };
 }
 
