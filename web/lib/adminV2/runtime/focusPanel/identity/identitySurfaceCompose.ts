@@ -98,8 +98,16 @@ const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {
 
 const PERSON_RESOLVERS: Record<string, Resolver> = {
     "person.primary_contact_name": (subject) => (subject.kind === "person" ? subject.value.name : null),
-    "person.phone": (subject) => (subject.kind === "person" ? subject.value.phone : null),
-    "person.email": (subject) => (subject.kind === "person" ? subject.value.email : null),
+    "person.phone": (subject) => {
+        if (subject.kind === "person") return subject.value.phone?.trim() || null;
+        if (subject.kind === "contact_edit") return subject.value.phone?.trim() || null;
+        return null;
+    },
+    "person.email": (subject) => {
+        if (subject.kind === "person") return subject.value.email?.trim() || null;
+        if (subject.kind === "contact_edit") return subject.value.email?.trim() || null;
+        return null;
+    },
     "person.role_label": (subject) => (subject.kind === "person" ? subject.value.roleLabel : null),
     "person.date_of_birth": () => null,
     "person.address_line": () => null,

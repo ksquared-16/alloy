@@ -25,6 +25,15 @@ const READ_ONLY_PROJECTION_REFS = new Set<string>([
 /** Collapse ambiguous duplicate aliases to one canonical selectable ref per storage concept. */
 const CANONICAL_REF_ALIASES: Record<string, string> = {
     "inquiry_child.program_category_label": "inquiry_child.program",
+    "person.address_line": "person.address_line1",
+    "person.address": "person.address_line1",
+    "contact.address_line": "person.address_line1",
+    "contact.address_line1": "person.address_line1",
+    "contact.address_line2": "person.address_line2",
+    "contact.address": "person.address_line1",
+    "person.dob": "person.date_of_birth",
+    "contact.date_of_birth": "person.date_of_birth",
+    "contact.dob": "person.date_of_birth",
 };
 
 export type IdentityPickerFieldOption = AvailableField & {

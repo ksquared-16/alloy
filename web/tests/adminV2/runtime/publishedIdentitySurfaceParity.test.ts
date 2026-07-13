@@ -26,6 +26,7 @@ import {
 import { readHouseholdNestedConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
 import { readChildrenNestedConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/children/childrenNestedSurfaceConfig";
 import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
+import { withHouseholdRoleMergedGroups } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
 import { buildHouseholdIdentityCardVM } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
@@ -180,24 +181,26 @@ describe("published identity surface parity", () => {
         draft = {
             ...draft,
             groups: draft.groups.map((group) =>
-                group.key === "primary_contact"
+                group.key === "contact_edit" || group.key === "primary_contact"
                     ? { ...group, selectedFieldKeys: [], fieldPlacements: [] }
                     : group,
             ),
         };
 
         const { runtimeResolved } = publishRoundTrip(HOUSEHOLD_SURFACE_ID, draft);
-        expect(identityConfigurationFieldKeys(runtimeResolved!, "primary_contact", "summary")).toEqual([]);
+        const merged = withHouseholdRoleMergedGroups(runtimeResolved!);
+        expect(identityConfigurationFieldKeys(merged, "primary_contact", "summary")).toEqual([]);
     });
 
     it("Builder live-preview projector equals work-unit runtime projector", () => {
         let draft = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        draft = addFieldToNestedGroup(draft, "primary_contact", "person.phone");
-        draft = addFieldToNestedGroup(draft, "primary_contact", "person.email");
-        draft = addFieldToNestedGroup(draft, "primary_contact", "person.address_line", { tier: "expanded" });
+        // Parent/Guardian (`contact_edit`) is the published authority for parent runtime rows.
+        draft = addFieldToNestedGroup(draft, "contact_edit", "person.phone");
+        draft = addFieldToNestedGroup(draft, "contact_edit", "person.email");
+        draft = addFieldToNestedGroup(draft, "contact_edit", "person.address_line1", { tier: "expanded" });
         draft = applyNestedSurfaceFieldDrop(
             draft,
-            "primary_contact",
+            "contact_edit",
             "person.email",
             "person.phone",
             "beside",
@@ -208,17 +211,27 @@ describe("published identity surface parity", () => {
         expect(builderResolved).toEqual(runtimeResolved);
 
         const evidence = buildHouseholdCardEvidence(householdCtx(), { nestedConfig: runtimeResolved });
-        const card = buildHouseholdIdentityCardVM({ config: runtimeResolved!, groups: evidence.groups, canMutate: false });
-        const primary = card.sections.find((section) => section.key === "primary_contact")?.items[0]!;
+        const builderCard = buildHouseholdIdentityCardVM({
+            config: builderResolved!,
+            groups: evidence.groups,
+            canMutate: false,
+        });
+        const runtimeCard = buildHouseholdIdentityCardVM({
+            config: runtimeResolved!,
+            groups: evidence.groups,
+            canMutate: false,
+        });
+        const builderPrimary = builderCard.sections.find((section) => section.key === "primary_contact")?.items[0]!;
+        const runtimePrimary = runtimeCard.sections.find((section) => section.key === "primary_contact")?.items[0]!;
 
-        const builderSummary = identityConfigurationFieldKeys(builderResolved!, "primary_contact", "summary");
-        const runtimeSummary = primary.summaryRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
-        expect(runtimeSummary).toEqual(builderSummary);
-        expect(runtimeSummary).not.toContain("person.address_line");
+        const fieldRefs = (rows: typeof runtimePrimary.summaryRows) =>
+            rows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
 
-        const builderDetails = identityConfigurationFieldKeys(builderResolved!, "primary_contact", "details");
-        const runtimeDetails = primary.detailRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
-        expect(runtimeDetails).toEqual(builderDetails);
+        expect(fieldRefs(runtimePrimary.summaryRows)).toEqual(fieldRefs(builderPrimary.summaryRows));
+        expect(fieldRefs(runtimePrimary.detailRows)).toEqual(fieldRefs(builderPrimary.detailRows));
+        expect(fieldRefs(runtimePrimary.detailRows)).toEqual(["person.address_line1"]);
+        expect(fieldRefs(runtimePrimary.summaryRows)).not.toContain("person.address_line");
+        expect(fieldRefs(runtimePrimary.detailRows)).not.toContain("person.date_of_birth");
     });
 
     it("children publish round-trip preserves summary and context fact tiers", () => {

@@ -358,7 +358,7 @@ Identity field pickers consume `filterCanonicalDataProviders({ consumer: "focus_
 
 ### Explicit empty vs default seed
 
-- `expandedFieldKeys: undefined` — tier not explicitly authored; defaults may seed on first reconcile.
+- `expandedFieldKeys: undefined` — tier not explicitly authored on that group; when Parent / Guardian template is present, inherited parent sections leave Details empty rather than absorbing primary_contact seed.
 - `expandedFieldKeys: []` — intentionally empty; reconcile must preserve `[]` (never treat as falsy).
 
 ### Composer state invariants
@@ -500,3 +500,22 @@ Collection shows every configured relationship section with effective collection
 presentation (Summary + Context Facts). Detail Fields appear only after an identity
 is selected.
 
+
+## Collection focus and published field authority
+
+Collection depth (`context`) uses the same centered elevated Focus Card surface as
+Details and Evidence — not an in-column narrow expand.
+
+Published Parent / Guardian (`contact_edit`) tier keys are authoritative for Primary
+and Other Parent runtime sections when `roleOverride` is unset:
+
+- explicit keys (including `[]`) replace platform seed entirely
+- when the Parent / Guardian template exists, an `undefined` tier means that tier is
+  unset on the role — runtime does **not** inherit `primary_contact` seed pollution
+  (for example DOB / legacy `person.address_line`)
+- address aliases (`person.address_line`, `contact.address_line1`, …) normalize to
+  canonical Field Platform refs before projection; duplicate aliases collapse by
+  canonical identity, not by label
+- Builder published preview and work-unit runtime project through the same Household
+  VM builder (`buildHouseholdIdentityCardVM` + role merge)
+- Collection is the Context projection (no mandatory separate Context screen label)

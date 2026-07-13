@@ -135,3 +135,9 @@ projection.
 
 Person-level Edit only; authoritative seed/save-refresh. Add Emergency Contact uses intake
 record resolution on one Alloy surface; legacy four-step wizard superseded for this action.
+
+
+## Collection focus + published field parity
+
+Collection drill-ins elevate centered. Parent/Guardian published tiers are authoritative;
+address/DOB aliases normalize to canonical refs with no union of seeded defaults.

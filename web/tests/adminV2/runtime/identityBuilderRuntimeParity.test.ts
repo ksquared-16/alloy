@@ -16,6 +16,7 @@ import {
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { serializeIdentityNestedSurfacesForPublish } from "@/lib/adminV2/runtime/focusPanel/identity/resolvePublishedIdentitySurfaceConfig";
 import { readHouseholdNestedConfigFromDoc } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceConfig";
+import { withHouseholdRoleMergedGroups } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
 import {
     buildChildIdentityRecordVM,
     buildHouseholdIdentityCardVM,
@@ -99,24 +100,28 @@ beforeEach(() => {
 describe("identity builder/runtime parity fixture", () => {
     it("Builder Summary configuration equals runtime Summary", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.phone");
-        config = addFieldToNestedGroup(config, "primary_contact", "person.email");
+        config = addFieldToNestedGroup(config, "contact_edit", "person.phone");
+        config = addFieldToNestedGroup(config, "contact_edit", "person.email");
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
         const card = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
         const primary = card.sections.find((section) => section.key === "primary_contact")?.items[0]!;
-        const builderSummaryKeys = identityConfigurationFieldKeys(config, "primary_contact", "summary");
+        const builderSummaryKeys = identityConfigurationFieldKeys(
+            withHouseholdRoleMergedGroups(config),
+            "primary_contact",
+            "summary",
+        );
         const runtimeSummaryKeys = primary.summaryRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
-        expect(runtimeSummaryKeys).toEqual(expect.arrayContaining(builderSummaryKeys));
+        expect(runtimeSummaryKeys).toEqual(builderSummaryKeys);
     });
 
     it("Builder Context preview equals runtime summaryRows + contextFactRows", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.phone");
-        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line", { tier: "context" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.phone");
+        config = addFieldToNestedGroup(config, "contact_edit", "person.role_label", { tier: "context" });
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
         const card = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
         const primary = card.sections.find((section) => section.key === "primary_contact")?.items[0]!;
-        const builderPreview = builderContextPreviewRows(config, "primary_contact");
+        const builderPreview = builderContextPreviewRows(withHouseholdRoleMergedGroups(config), "primary_contact");
         expect(primary.contextRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef)).toEqual(
             builderPreview.flatMap((row) => row.cells).map((cell) => cell.fieldRef),
         );
@@ -124,13 +129,38 @@ describe("identity builder/runtime parity fixture", () => {
 
     it("Builder Detail configuration equals runtime Details", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line1", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line2", { tier: "expanded" });
+        // Seed pollution on the runtime section must not leak once contact_edit Details is explicit.
+        config = {
+            ...config,
+            groups: config.groups.map((group) =>
+                group.key === "primary_contact"
+                    ? {
+                          ...group,
+                          expandedFieldKeys: [
+                              "person.date_of_birth",
+                              "person.address_line",
+                              "person.address_line1",
+                              "person.address_line2",
+                          ],
+                      }
+                    : group,
+            ),
+        };
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
         const card = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
         const primary = card.sections.find((section) => section.key === "primary_contact")?.items[0]!;
-        const builderDetailKeys = identityConfigurationFieldKeys(config, "primary_contact", "details");
+        const builderDetailKeys = identityConfigurationFieldKeys(
+            withHouseholdRoleMergedGroups(config),
+            "primary_contact",
+            "details",
+        );
         const runtimeDetailKeys = identityRowsForDisclosureDepth(primary, "details").detailRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
-        expect(runtimeDetailKeys).toEqual(expect.arrayContaining(builderDetailKeys));
+        expect(runtimeDetailKeys).toEqual(builderDetailKeys);
+        expect(runtimeDetailKeys).toEqual(["person.address_line1", "person.address_line2"]);
+        expect(runtimeDetailKeys).not.toContain("person.date_of_birth");
+        expect(runtimeDetailKeys).not.toContain("person.address_line");
     });
 
     it("Builder Evidence collection order equals runtime Evidence", () => {
