@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import WorkViewConditionValueControl from "@/components/adminV2/settings/businessProcess/WorkViewConditionValueControl";
 import { ConfigRuntimeSectionHeader } from "@/components/adminV2/settings/configurationRuntime/ConfigurationRuntimePrimitives";
 import { useWorkViewsConfiguration } from "@/components/adminV2/settings/businessProcess/WorkViewsConfigurationContext";
+import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import {
     createDefaultWorkViewFilterRow,
     operatorLabelsForField,
@@ -12,9 +13,10 @@ import {
 } from "@/lib/lifecycle/workViewFilterValueControls";
 import {
     DEFAULT_WORK_VIEW_CONDITION_FIELD_KEY,
-    getWorkViewConditionField,
+    getWorkViewConditionFieldDef,
     workViewConditionFieldGroups,
-} from "@/lib/lifecycle/workViewConditionFieldRegistry";
+    choiceOptionsForWorkViewField,
+} from "@/lib/lifecycle/workViewCanonicalOperands";
 import {
     BUSINESS_PROCESS_WORK_VIEW_CATCH_ALL_HELPER,
     BUSINESS_PROCESS_WORK_VIEW_SHOW_WHEN_ALL,
@@ -35,8 +37,6 @@ type ProgramCategoriesResponse = {
 
 type ShowWhenMode = "all" | "conditions";
 
-const FIELD_GROUPS = workViewConditionFieldGroups();
-
 export default function WorkViewConditionEditor({
     filters,
     onChange,
@@ -50,6 +50,16 @@ export default function WorkViewConditionEditor({
     onMatchChange?: (match: "all" | "any") => void;
 }) {
     const { stageOptions } = useWorkViewsConfiguration();
+    const { tenantFieldDefinitions: opportunityFieldDefinitions } = useTenantFieldDefinitions("opportunities");
+    const { tenantFieldDefinitions: memberFieldDefinitions } = useTenantFieldDefinitions("customer_member");
+    const tenantFieldDefinitions = useMemo(
+        () => [...opportunityFieldDefinitions, ...memberFieldDefinitions],
+        [memberFieldDefinitions, opportunityFieldDefinitions],
+    );
+    const fieldGroups = useMemo(
+        () => workViewConditionFieldGroups(tenantFieldDefinitions),
+        [tenantFieldDefinitions],
+    );
     const [opportunityStatusOptions, setOpportunityStatusOptions] = useState<WorkViewFilterOption[]>([]);
     const [childEnrollmentStatusOptions, setChildEnrollmentStatusOptions] = useState<WorkViewFilterOption[]>([]);
     const [siteOptions, setSiteOptions] = useState<WorkViewFilterOption[]>([]);
@@ -114,7 +124,7 @@ export default function WorkViewConditionEditor({
 
     const optionsForField = useCallback(
         (fieldKey: string): readonly WorkViewFilterOption[] => {
-            const source = getWorkViewConditionField(fieldKey)?.optionSource;
+            const source = getWorkViewConditionFieldDef(fieldKey, tenantFieldDefinitions)?.optionSource;
             if (!source) return [];
             switch (source.kind) {
                 case "process_stages":
@@ -129,11 +139,21 @@ export default function WorkViewConditionEditor({
                     return roomOptions;
                 case "programs":
                     return programOptions;
+                case "inline_choice":
+                    return choiceOptionsForWorkViewField(fieldKey, tenantFieldDefinitions);
                 default:
                     return [];
             }
         },
-        [childEnrollmentStatusOptions, opportunityStatusOptions, programOptions, roomOptions, siteOptions, stageOptions],
+        [
+            childEnrollmentStatusOptions,
+            opportunityStatusOptions,
+            programOptions,
+            roomOptions,
+            siteOptions,
+            stageOptions,
+            tenantFieldDefinitions,
+        ],
     );
 
     const updateRow = (index: number, patch: Partial<WorkViewFilterV1>) => {
@@ -205,7 +225,7 @@ export default function WorkViewConditionEditor({
                 <>
                     <div className="space-y-2">
                         {filters.map((row, index) => {
-                            const operators = operatorLabelsForField(row.field_key);
+                            const operators = operatorLabelsForField(row.field_key, tenantFieldDefinitions);
                             return (
                                 <div
                                     key={`${row.field_key}-${index}`}
@@ -213,12 +233,12 @@ export default function WorkViewConditionEditor({
                                     data-testid={`work-view-condition-row-${index}`}
                                 >
                                     <select
-                                        value={getWorkViewConditionField(row.field_key)?.key ?? row.field_key}
+                                        value={getWorkViewConditionFieldDef(row.field_key, tenantFieldDefinitions)?.key ?? row.field_key}
                                         onChange={(e) => updateRow(index, { field_key: e.target.value })}
                                         className="config-runtime-select"
                                         data-testid={`work-view-condition-field-${index}`}
                                     >
-                                        {FIELD_GROUPS.map((group) => (
+                                        {fieldGroups.map((group) => (
                                             <optgroup key={group.key} label={group.label}>
                                                 {group.fields.map((def) => (
                                                     <option key={def.key} value={def.key}>
