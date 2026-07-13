@@ -1,9 +1,9 @@
 # Processing Identity Resolution Engine V1 — Architecture & Implementation Sprint
 
-**Status:** **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
-Architecture and V1 decisions remain frozen. **Design baseline:** `origin/staging` @ `65afc8527…`; **certified branch HEAD:** `4f3bbdb54`; **promotion target:** latest staging after an explicit reconciliation.
+**Status:** **Identity-review defect fixed · Locally certified (identity review gate) · Closeout paused until release engineer resume · Not promoted · Not deployed.**
+Architecture and V1 decisions remain frozen. **Design baseline:** `origin/staging` @ `65afc8527…`; **promotion target:** latest staging after an explicit reconciliation.
 
-All V1 slices **B1a, B0, B1b, B2, B3, C1, D0, D1, D2, D3, D4, D5, and E1 are implemented locally and locally certified.** C1 remains as historical comparison tooling only; D4 and D5 are the authoritative runtime paths. No Processing Identity feature flag, org toggle, or environment toggle is required. Safety is structural: source intake creates Processing state only, and identity mutation requires an approved immutable Commit Plan plus explicit executor invocation.
+All V1 slices **B1a–E1 remain implemented locally.** The Manual Create Lead identity-review authority defect is fixed: plausible child/household matches now force blocking operator review; `IdentityResolutionEligibility` gates plan build, approve, and execute for every source. Full local certification (reset stack, 17/17 Postgres checks, Processing vitests, typechecks) re-passed after the fix. Do not resume sprint closeout until the release engineer confirms.
 **E1 status: implemented locally — certified locally** — Superseded direct-write paths retired: `applyFormIntakeSafe` always throws and has no replay flag. Static boundary tests: `web/tests/processing/processingIdentityE1Boundaries.test.ts`.
 **Type:** Architecture RFC + frozen decision register + phased Cursor implementation plan.
 **Owner:** Platform / Processing. **Created:** 2026-07-10. **Decision + freeze pass:** 2026-07-10.
