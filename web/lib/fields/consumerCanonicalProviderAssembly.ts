@@ -20,6 +20,7 @@ import {
     type PlatformFieldDefinition,
 } from "@/lib/fields/platformFieldCatalog";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import { enrichProvidersWithChildEnrollmentProjections } from "@/lib/fields/canonicalFieldProjection";
 
 export type ConsumerProviderAssemblyFilter = {
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
@@ -102,10 +103,12 @@ function assembleConsumerProviders(
         mergePlatformCatalogProviders(base, filter, consumer),
         consumer,
     );
-    return filterProvidersByConsumerCapability(
-        assembled,
-        consumer,
-        filter.tenantFieldDefinitions,
+    return enrichProvidersWithChildEnrollmentProjections(
+        filterProvidersByConsumerCapability(
+            assembled,
+            consumer,
+            filter.tenantFieldDefinitions,
+        ),
     );
 }
 
