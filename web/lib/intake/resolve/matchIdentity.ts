@@ -30,6 +30,27 @@ export function personDisplayNameFromRecord(person: PersonRecordSnapshot): strin
     return formatPersonDisplayName(person.first_name, person.last_name) ?? person.id;
 }
 
+/** Exact name match (both sides normalized). Empty last on either side fails when the other has a last. */
+export function childNameMatches(args: {
+    firstName: string;
+    lastName: string;
+    candidateFirst: string | null | undefined;
+    candidateLast: string | null | undefined;
+}): boolean {
+    if (normalizePersonNamePart(args.candidateFirst) !== normalizePersonNamePart(args.firstName)) return false;
+    const submittedLast = normalizePersonNamePart(args.lastName);
+    const candidateLast = normalizePersonNamePart(args.candidateLast);
+    if (submittedLast && candidateLast) return submittedLast === candidateLast;
+    if (!submittedLast && !candidateLast) return true;
+    // One side missing last name: still treat as name-plausible for review, not exact.
+    return false;
+}
+
+/**
+ * Exact child identity: same name AND agreeing DOB when both sides provide DOB.
+ * Missing DOB on either side is NOT proof of a new child — callers must use
+ * {@link childNameMatches} + possible_match / needs_review instead of create_new.
+ */
 export function childIdentityMatches(args: {
     firstName: string;
     lastName: string;
@@ -38,12 +59,11 @@ export function childIdentityMatches(args: {
     candidateLast: string | null | undefined;
     candidateDob: string | null | undefined;
 }): boolean {
-    if (normalizePersonNamePart(args.candidateFirst) !== normalizePersonNamePart(args.firstName)) return false;
-    if (normalizePersonNamePart(args.candidateLast) !== normalizePersonNamePart(args.lastName)) return false;
-    if (args.dob) {
-        return normalizeDob(args.candidateDob) === args.dob;
-    }
-    return true;
+    if (!childNameMatches(args)) return false;
+    if (!args.dob) return false;
+    const candidateDob = normalizeDob(args.candidateDob);
+    if (!candidateDob) return false;
+    return candidateDob === args.dob;
 }
 
 export type ParentMatchEvaluation = {
@@ -173,6 +193,7 @@ export function evaluateChildPersonMatch(input: {
         first_name?: string | null;
         last_name?: string | null;
         dob?: string | null;
+        display_name?: string | null;
     }>;
     orgPersonMatches: PersonRecordSnapshot[];
     matchedParentPersonId?: string | null;
@@ -183,21 +204,33 @@ export function evaluateChildPersonMatch(input: {
     const last = normalizePersonNamePart(input.lastName);
     const dob = normalizeDob(input.dob);
 
-    for (const member of input.householdMembers) {
-        const memberFirst = normalizePersonNamePart(member.first_name);
-        const memberLast = normalizePersonNamePart(member.last_name);
-        const nameMatches = memberFirst === first && memberLast === last;
-        if (nameMatches && dob && member.dob && normalizeDob(member.dob) !== dob) {
+    const namedHouseholdMembers = input.householdMembers.filter((member) =>
+        childNameMatches({
+            firstName: input.firstName,
+            lastName: input.lastName,
+            candidateFirst: member.first_name,
+            candidateLast: member.last_name,
+        }),
+    );
+
+    // Same name + same household + conflicting DOB → block
+    for (const member of namedHouseholdMembers) {
+        const memberDob = normalizeDob(member.dob);
+        if (dob && memberDob && memberDob !== dob) {
             return {
                 confidence: "conflict",
+                personId: member.person_id ?? undefined,
                 customerMemberId: member.customer_member_id ?? undefined,
-                reasons: ["Child name matches household member but date of birth differs."],
+                reasons: [
+                    "Child name matches an existing household member but date of birth conflicts.",
+                ],
                 blocking_conflicts: ["child_dob_mismatch"],
             };
         }
     }
 
-    for (const member of input.householdMembers) {
+    // Same name + same household + same DOB → strong/confirmed existing
+    for (const member of namedHouseholdMembers) {
         if (
             childIdentityMatches({
                 firstName: input.firstName,
@@ -206,16 +239,37 @@ export function evaluateChildPersonMatch(input: {
                 candidateFirst: member.first_name,
                 candidateLast: member.last_name,
                 candidateDob: member.dob,
-            }) &&
-            member.person_id
+            })
         ) {
             return {
                 confidence: "exact_match",
-                personId: member.person_id,
+                personId: member.person_id ?? undefined,
                 customerMemberId: member.customer_member_id ?? undefined,
-                reasons: ["Child matches an existing household member."],
+                reasons: ["Child matches an existing household member (name and date of birth)."],
             };
         }
+    }
+
+    // Same name + same household + DOB missing on either side → needs review (never create_new)
+    if (namedHouseholdMembers.length === 1) {
+        const member = namedHouseholdMembers[0]!;
+        return {
+            confidence: "possible_match",
+            personId: member.person_id ?? undefined,
+            customerMemberId: member.customer_member_id ?? undefined,
+            reasons: [
+                "Child name matches an existing household member, but date of birth is incomplete — operator confirmation required.",
+            ],
+        };
+    }
+    if (namedHouseholdMembers.length > 1) {
+        return {
+            confidence: "conflict",
+            reasons: ["Multiple household children share this name — operator selection required."],
+            blocking_conflicts: ["multiple_household_child_name_matches"],
+            customerMemberId: namedHouseholdMembers[0]?.customer_member_id ?? undefined,
+            personId: namedHouseholdMembers[0]?.person_id ?? undefined,
+        };
     }
 
     const orgExact = input.orgPersonMatches.filter((p) =>
@@ -236,26 +290,54 @@ export function evaluateChildPersonMatch(input: {
             reasons: ["Exact child full name and date of birth match."],
         };
     }
+    if (dob && first && last && orgExact.length > 1) {
+        return {
+            confidence: "conflict",
+            reasons: ["Multiple children share this full name and date of birth in the org."],
+            blocking_conflicts: ["multiple_child_name_dob_matches"],
+            personId: orgExact[0]?.id,
+        };
+    }
+
+    const orgNameMatches = input.orgPersonMatches.filter((p) =>
+        childNameMatches({
+            firstName: input.firstName,
+            lastName: input.lastName,
+            candidateFirst: p.first_name,
+            candidateLast: p.last_name,
+        }),
+    );
+    if (dob && first && last) {
+        const conflicting = orgNameMatches.filter((p) => {
+            const candidateDob = normalizeDob(p.date_of_birth);
+            return Boolean(candidateDob && candidateDob !== dob);
+        });
+        if (conflicting.length > 0 && orgExact.length === 0) {
+            return {
+                confidence: "conflict",
+                personId: conflicting[0]?.id,
+                reasons: ["Child name matches an existing person with a conflicting date of birth."],
+                blocking_conflicts: ["child_dob_mismatch"],
+            };
+        }
+    }
 
     if (dob && first && input.matchedParentPersonId) {
-        const firstDobMatches = input.orgPersonMatches.filter(
-            (p) =>
-                normalizePersonNamePart(p.first_name) === first &&
-                normalizeDob(p.date_of_birth) === dob &&
-                childIdentityMatches({
-                    firstName: input.firstName,
-                    lastName: "",
-                    dob,
-                    candidateFirst: p.first_name,
-                    candidateLast: p.last_name,
-                    candidateDob: p.date_of_birth,
-                }),
+        const firstDobWithParent = input.orgPersonMatches.filter(
+            (p) => normalizePersonNamePart(p.first_name) === first && normalizeDob(p.date_of_birth) === dob,
         );
-        if (firstDobMatches.length === 1) {
+        if (firstDobWithParent.length === 1) {
             return {
                 confidence: "probable_match",
-                personId: firstDobMatches[0]!.id,
+                personId: firstDobWithParent[0]!.id,
                 reasons: ["First name and DOB match with a linked parent context."],
+            };
+        }
+        if (firstDobWithParent.length > 1) {
+            return {
+                confidence: "conflict",
+                reasons: ["Multiple children share first name and DOB in this org."],
+                blocking_conflicts: ["multiple_child_first_dob_matches"],
             };
         }
     }
@@ -280,31 +362,24 @@ export function evaluateChildPersonMatch(input: {
         }
     }
 
-    const nameOnly = input.orgPersonMatches.filter(
-        (p) =>
-            normalizePersonNamePart(p.first_name) === first &&
-            (last ? normalizePersonNamePart(p.last_name) === last : true),
-    );
-    if (nameOnly.length > 1) {
+    // Same name across org without confirmed DOB → possible (review), never auto-create
+    if (orgNameMatches.length > 1) {
         return {
             confidence: "conflict",
             reasons: ["Multiple persons match this child name in the org."],
             blocking_conflicts: ["multiple_child_name_matches"],
+            personId: orgNameMatches[0]?.id,
         };
     }
-    if (nameOnly.length === 1 && !dob) {
+    if (orgNameMatches.length === 1) {
         return {
             confidence: "possible_match",
-            personId: nameOnly[0]!.id,
-            reasons: ["Name-only child match — date of birth not confirmed."],
-        };
-    }
-
-    if (first && last && !dob && nameOnly.length === 1) {
-        return {
-            confidence: "possible_match",
-            personId: nameOnly[0]!.id,
-            reasons: ["Child name match without date of birth confirmation."],
+            personId: orgNameMatches[0]!.id,
+            reasons: [
+                dob
+                    ? "Child name match without agreeing date of birth on the candidate — operator confirmation required."
+                    : "Child name match without submitted date of birth — operator confirmation required.",
+            ],
         };
     }
 
