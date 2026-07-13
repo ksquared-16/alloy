@@ -21,6 +21,7 @@ import {
 import {
     generateDefaultIdentityFieldPlacements,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import { migrateHouseholdRelationshipSectionInstances } from "@/lib/adminV2/runtime/focusPanel/household/householdRelationshipSectionInstances";
 import {
     identityLayerFieldKeysFromGroup,
     normalizeIdentityFieldPlacements,
@@ -295,9 +296,13 @@ export type ReconcileIdentityNestedConfigInput = {
 };
 
 function applyIdentityGroupReconcile(config: NestedSurfaceConfig): NestedSurfaceConfig {
+    const migratedSections =
+        config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID
+            ? migrateHouseholdRelationshipSectionInstances(config)
+            : config;
     return {
-        ...config,
-        groups: config.groups.map((group) => migrateIdentityDisclosureGroup(group)),
+        ...migratedSections,
+        groups: migratedSections.groups.map((group) => migrateIdentityDisclosureGroup(group)),
     };
 }
 

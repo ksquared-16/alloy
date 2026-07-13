@@ -8,6 +8,8 @@ import IdentityBuilderDrillIn from "@/components/adminV2/settings/surfaces/compo
 import IdentityContextFactsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityContextFactsPanel";
 import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
 import IdentityRelationshipSectionInspector from "@/components/adminV2/settings/surfaces/composer/IdentityRelationshipSectionInspector";
+import RelationshipSectionsPanel from "@/components/adminV2/settings/surfaces/composer/RelationshipSectionsPanel";
+import { CHILDREN_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import IdentityNestedFieldLayoutPanel from "@/components/adminV2/settings/surfaces/composer/IdentityNestedFieldLayoutPanel";
 import SurfaceFieldInspector from "@/components/adminV2/settings/surfaces/composer/SurfaceFieldInspector";
 import SurfaceItemLibraryPanel from "@/components/adminV2/settings/surfaces/composer/SurfaceItemLibraryPanel";
@@ -361,11 +363,17 @@ export default function IdentitySurfaceBuilderInspector({
 
     if (!selectedGroupKey || !selectedGroupConfig) {
         return (
-            <div
-                className={clsx("process-config-setup-card flex h-full items-center justify-center p-6 text-center", className)}
-                data-identity-surface-builder-inspector="empty"
-            >
-                <p className="config-typo-sublabel">{SURFACE_COMPOSER_EMPTY_HINT}</p>
+            <div className={clsx("space-y-3", className)} data-identity-surface-builder-inspector="sections">
+                {surfaceId === "household_surface" ?
+                    <RelationshipSectionsPanel
+                        config={config}
+                        onChange={onChange}
+                        onSelectInstance={(instanceKey) => onSelectGroup(instanceKey)}
+                    />
+                :   <div className="process-config-setup-card flex h-full items-center justify-center p-6 text-center">
+                        <p className="config-typo-sublabel">{SURFACE_COMPOSER_EMPTY_HINT}</p>
+                    </div>
+                }
             </div>
         );
     }
@@ -380,11 +388,20 @@ export default function IdentitySurfaceBuilderInspector({
                     onBack={handleIdentityBack}
                     groupLabel={groupDefs.find((g) => g.key === selectedGroupKey)?.label ?? selectedGroupKey}
                 />
+                <RelationshipSectionsPanel
+                    config={config}
+                    onChange={onChange}
+                    selectedInstanceKey={selectedGroupKey}
+                    onSelectInstance={onSelectGroup}
+                />
                 <IdentityRelationshipSectionInspector
                     surfaceId={surfaceId}
                     groupKey={selectedGroupKey}
                     config={config}
                     onChange={onChange}
+                    onOpenChildrenSurface={() => {
+                        onSelectGroup("children");
+                    }}
                 />
                 {activeConfigPurpose === "summary" ?
                     <IdentityNestedFieldLayoutPanel

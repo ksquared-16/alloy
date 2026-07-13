@@ -20,6 +20,8 @@ import { useIdentityDisclosureState } from "@/lib/adminV2/runtime/focusPanel/ide
 import IdentityComposeCanvasShell from "@/components/admin/focusPanel/identity/IdentityComposeCanvasShell";
 import IdentityComposeSectionCanvas from "@/components/admin/focusPanel/identity/IdentityComposeSectionCanvas";
 import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
+import RelationshipSectionsPanel from "@/components/adminV2/settings/surfaces/composer/RelationshipSectionsPanel";
+import { listHouseholdRelationshipSectionInstances } from "@/lib/adminV2/runtime/focusPanel/household/householdRelationshipSectionInstances";
 import { shouldRenderIdentityComposeCanvas } from "@/lib/adminV2/runtime/focusPanel/identity/identityComposeMode";
 import { builderPurposeForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/useSyncBuilderDisclosure";
 import { identityDisclosureCoordinationLevel } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
@@ -261,20 +263,20 @@ export default function HouseholdCard({
         [householdIdentityVm.sections],
     );
 
-    const householdAuthoringSections = useMemo(
-        () => {
-            const runtimeSections = householdIdentityVm.sections.filter(
-                (section) =>
-                    !isHouseholdParentGuardianRuntimeGroup(section.key)
-                    && section.key !== "address",
-            );
+    const householdAuthoringSections = useMemo(() => {
+            if (!nestedConfig) {
+                return [{ key: HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP, label: "Parent / Guardian" }];
+            }
+            const instances = listHouseholdRelationshipSectionInstances(nestedConfig);
+            const sections = instances.map((instance) => ({
+                key: instance.instanceKey,
+                label: instance.label,
+            }));
             return [
                 { key: HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP, label: "Parent / Guardian" },
-                ...runtimeSections.map((section) => ({ key: section.key, label: section.label })),
+                ...sections.filter((section) => section.key !== "primary_contact"),
             ];
-        },
-        [householdIdentityVm.sections],
-    );
+        }, [nestedConfig]);
 
     const composeAuthoringGroupKey = householdAuthoringGroupKey(composeSelectedGroupKey);
 
@@ -308,10 +310,6 @@ export default function HouseholdCard({
     };
 
     const handleAuthoringSectionSelect = (sectionKey: string) => {
-        if (sectionKey === "children" && (composePurpose ?? "summary") !== "summary") {
-            openChildrenSurfaceConfiguration();
-            return;
-        }
         const runtimeKey =
             sectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP ? "primary_contact" : sectionKey;
         selectHouseholdSectionForEvidence(runtimeKey);
@@ -487,6 +485,14 @@ export default function HouseholdCard({
                 groupLabel="Household contacts"
                 onBack={() => composer.exitDrillIn()}
             >
+                <RelationshipSectionsPanel
+                    config={nestedConfig}
+                    onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
+                    selectedInstanceKey={composeSelectedGroupKey}
+                    onSelectInstance={(instanceKey) => {
+                        composer.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: instanceKey });
+                    }}
+                />
                 {purpose === "evidence" ? (
                     <div className="space-y-3" data-household-compose-evidence="true">
                         <HouseholdComposeSectionPicker

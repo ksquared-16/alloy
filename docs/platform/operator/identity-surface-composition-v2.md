@@ -421,3 +421,14 @@ Builder grid placement and runtime card placement share `focusPanelGridLayoutOps
 
 - Canonical Field Consumer Convergence integration (automatic when convergence lands)
 - Future UX polish (nested-purpose drill frames, insight templates)
+
+
+---
+
+## 15. Relationship section definitions and instances
+
+Prior completion claims that only edited metadata on fixed groups were incorrect. The Builder now supports **+ Add section** via canonical relationship-section definitions and tenant section instances.
+
+Definitions own capability metadata; instances own label, criteria, visibility, order, and presentation reference. Field options inside a section remain a Canonical Field Platform consumer concern — not duplicated here.
+
+Children section handoff to `children_surface` is explicit in the Builder inspector; child field ownership is not duplicated in Household.

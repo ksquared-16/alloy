@@ -44,6 +44,7 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import {
     householdRelationshipSectionTitle,
+    householdRelationshipSectionsFromConfig,
     resolveHouseholdContactSectionKey,
     shouldShowRelationshipSection,
 } from "@/lib/adminV2/runtime/focusPanel/household/identityRelationshipSections";
@@ -555,19 +556,23 @@ export function buildHouseholdCardEvidence(
         groups.push(group);
     };
 
-    for (const key of [
-        "primary_contact",
-        "other_parent_guardian",
-        "household_members",
-        "emergency_contacts",
-        "authorized_pickups",
-        "children",
-        "address",
-        "billing_contact",
-    ] as const) {
+    const configuredOrder = nestedConfig
+        ? householdRelationshipSectionsFromConfig(nestedConfig).map((section) => section.key)
+        : [
+            "primary_contact",
+            "other_parent_guardian",
+            "household_members",
+            "emergency_contacts",
+            "authorized_pickups",
+            "children",
+            "billing_contact",
+        ];
+    for (const key of configuredOrder) {
         const group = builtByKey.get(key);
         if (group) pushGroup(group);
     }
+    const addressGroup = builtByKey.get("address");
+    if (addressGroup) pushGroup(addressGroup);
 
     const childCount = childRows.length;
     const otherParentGuardianCount = otherParentGuardianRows.length;

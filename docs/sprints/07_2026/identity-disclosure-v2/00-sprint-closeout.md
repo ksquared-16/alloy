@@ -105,4 +105,9 @@ Updated `docs/platform/operator/identity-surface-composition-v2.md` §11 (publis
 - Canonical field consumption readiness documented
 - Builder architecture doc: `docs/platform/operator/focus-panel-builder.md`
 
-**Status:** BUILDER ARCHITECTURE COMPLETE — pending manual QA + Canonical Field Convergence integration
+**Status:** BUILDER RELATIONSHIP-SECTION AUTHORING COMPLETE — pending manual QA + Canonical Field Convergence integration
+
+
+### Prior overstatement corrected (Jul 13)
+
+Editing metadata on fixed groups was not sufficient. Section definition/instance model, + Add section picker, criteria include/exclude editor, and migration from legacy groups are now implemented.

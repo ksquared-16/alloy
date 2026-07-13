@@ -1,39 +1,27 @@
 /**
- * Configurable Household relationship sections — criteria, precedence, and deduplication.
- *
- * Builder configures label, relationshipCriteria, visibility, and order per section.
- * Runtime resolves each person once into the highest-priority matching section.
+ * Household relationship section runtime resolution.
  */
 
 import type { NestedSurfaceConfig, NestedSurfaceGroupConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { nestedGroupLabel } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { sectionSemanticForGroup } from "@/lib/adminV2/settings/surfaces/sectionCatalog";
+import {
+    householdRelationshipSectionDefinition,
+    householdRelationshipSectionDefinitionForLegacyGroup,
+    type RelationshipCriteria,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdRelationshipSectionDefinitions";
+import {
+    listHouseholdRelationshipSectionInstances,
+    migrateHouseholdRelationshipSectionInstances,
+    type HouseholdRelationshipSectionInstance,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdRelationshipSectionInstances";
 
-export type IdentityRelationshipCriteria = {
-    roleKeys?: string[];
-    relationshipTypes?: string[];
-};
+export type IdentityRelationshipCriteria = RelationshipCriteria;
 
-export type IdentityRelationshipSectionConfig = {
+export type IdentityRelationshipSectionConfig = HouseholdRelationshipSectionInstance & {
     key: string;
-    label: string;
-    relationshipCriteria?: IdentityRelationshipCriteria;
-    order: number;
-    visibility?: "always" | "when_nonempty" | "hidden";
-    presentationRef?: string;
 };
 
-/** Contact-shaped relationship sections (not children/address/template). */
-export const HOUSEHOLD_CONTACT_RELATIONSHIP_SECTION_KEYS = [
-    "primary_contact",
-    "other_parent_guardian",
-    "household_members",
-    "emergency_contacts",
-    "authorized_pickups",
-    "billing_contact",
-] as const;
-
-/** Default section precedence — highest priority wins once per person. */
+/** @deprecated Use instance order from config. */
 export const HOUSEHOLD_RELATIONSHIP_SECTION_PRECEDENCE = [
     "primary_contact",
     "other_parent_guardian",
@@ -44,17 +32,8 @@ export const HOUSEHOLD_RELATIONSHIP_SECTION_PRECEDENCE = [
     "children",
 ] as const;
 
-const DEFAULT_OTHER_PARENT_CRITERIA: IdentityRelationshipCriteria = {
-    roleKeys: ["parent", "guardian", "primary_contact", "primary"],
-};
-
-const DEFAULT_HOUSEHOLD_MEMBERS_CRITERIA: IdentityRelationshipCriteria = {
-    roleKeys: ["additional", "contact", "member", "relative", "grandparent"],
-};
-
-/** Role keys operators can assign in Builder criteria editor. */
 export const HOUSEHOLD_RELATIONSHIP_ROLE_OPTIONS = [
-    { key: "parent", label: "Parent" },
+    { key: "parent", label: "Parent / Guardian" },
     { key: "guardian", label: "Guardian" },
     { key: "primary_contact", label: "Primary contact role" },
     { key: "emergency_contact", label: "Emergency contact" },
@@ -74,82 +53,58 @@ function normalizeRole(role: string | null | undefined): string {
     return (role ?? "").trim().toLowerCase();
 }
 
-export function isHouseholdRelationshipSectionKey(groupKey: string): boolean {
-    return (
-        (HOUSEHOLD_CONTACT_RELATIONSHIP_SECTION_KEYS as readonly string[]).includes(groupKey)
-        || groupKey === "children"
-    );
+function groupForInstance(config: NestedSurfaceConfig, instanceKey: string): NestedSurfaceGroupConfig | undefined {
+    return config.groups.find((group) => (group.instanceKey ?? group.key) === instanceKey);
 }
 
-function groupCriteria(group: NestedSurfaceGroupConfig): IdentityRelationshipCriteria | null {
+function criteriaForGroup(group: NestedSurfaceGroupConfig): RelationshipCriteria {
     if (group.relationshipCriteria) return group.relationshipCriteria;
-    const semantic = group.sectionSemantic ?? sectionSemanticForGroup("household_surface", group.key);
-    switch (semantic) {
-        case "emergency_contact":
-            return { roleKeys: ["emergency_contact", "emergency"] };
-        case "authorized_pickup":
-            return { roleKeys: ["authorized_pickup", "pickup"] };
-        case "billing_contact":
-            return { roleKeys: ["billing_contact", "billing"] };
-        default:
-            break;
-    }
-    if (group.key === "other_parent_guardian") return DEFAULT_OTHER_PARENT_CRITERIA;
-    if (group.key === "household_members") return DEFAULT_HOUSEHOLD_MEMBERS_CRITERIA;
-    return null;
+    const def =
+        (group.definitionKey ? householdRelationshipSectionDefinition(group.definitionKey) : undefined)
+        ?? householdRelationshipSectionDefinitionForLegacyGroup(group.key);
+    return def?.defaultCriteria ?? {};
 }
 
-function roleMatchesCriteria(roleType: string | null, criteria: IdentityRelationshipCriteria): boolean {
+function roleMatchesCriteria(roleType: string | null, criteria: RelationshipCriteria): boolean {
     const role = normalizeRole(roleType);
+    if (criteria.excludeRoleKeys?.some((key) => role.includes(key))) return false;
     if (criteria.roleKeys?.some((key) => role.includes(key))) return true;
     if (criteria.relationshipTypes?.some((key) => role === key)) return true;
     return false;
 }
 
-/** Resolve relationship sections from nested config in precedence order. */
+export function isHouseholdRelationshipSectionKey(groupKey: string): boolean {
+    return Boolean(householdRelationshipSectionDefinitionForLegacyGroup(groupKey));
+}
+
 export function householdRelationshipSectionsFromConfig(
     config: NestedSurfaceConfig | null,
 ): IdentityRelationshipSectionConfig[] {
     if (!config) return [];
-    const byKey = new Map(config.groups.map((group) => [group.key, group]));
-    return HOUSEHOLD_RELATIONSHIP_SECTION_PRECEDENCE.flatMap((key, index) => {
-        const group = byKey.get(key);
-        if (!group || group.enabled === false) return [];
-        return [{
-            key,
-            label: nestedGroupLabel(config, key) ?? key,
-            relationshipCriteria: groupCriteria(group) ?? undefined,
-            order: group.sectionOrder ?? index,
-            visibility: group.sectionVisibility ?? defaultSectionVisibility(key),
-            presentationRef: key,
-        }];
-    }).sort((a, b) => a.order - b.order);
+    const migrated = migrateHouseholdRelationshipSectionInstances(config);
+    return listHouseholdRelationshipSectionInstances(migrated).map((instance) => ({
+        ...instance,
+        key: instance.instanceKey,
+    }));
 }
 
-function defaultSectionVisibility(key: string): "always" | "when_nonempty" | "hidden" {
-    if (key === "primary_contact" || key === "children") return "always";
-    return "when_nonempty";
-}
-
-/** Whether a built section should render given configured visibility. */
 export function shouldShowRelationshipSection(args: {
     config: NestedSurfaceConfig | null;
     sectionKey: string;
     count: number;
     hasAddressLine?: boolean;
 }): boolean {
-    if (!args.config) {
-        return args.count > 0 || Boolean(args.hasAddressLine);
-    }
-    const group = args.config.groups.find((g) => g.key === args.sectionKey);
-    if (group?.enabled === false) return false;
-    const visibility = group?.sectionVisibility ?? defaultSectionVisibility(args.sectionKey);
+    if (!args.config) return args.count > 0 || Boolean(args.hasAddressLine);
+    const migrated = migrateHouseholdRelationshipSectionInstances(args.config);
+    const group = groupForInstance(migrated, args.sectionKey)
+        ?? migrated.groups.find((entry) => entry.key === args.sectionKey);
+    if (!group || group.enabled === false) return false;
+    const visibility = group.sectionVisibility ?? "when_nonempty";
     if (visibility === "hidden") return false;
     if (visibility === "always") return true;
     return args.count > 0 || Boolean(args.hasAddressLine);
 }
 
-/** Operator-facing section title from published config. */
 export function householdRelationshipSectionTitle(
     config: NestedSurfaceConfig | null,
     sectionKey: string,
@@ -159,7 +114,7 @@ export function householdRelationshipSectionTitle(
     return nestedGroupLabel(config, sectionKey)?.trim() || fallback;
 }
 
-/** Assign a contact role to the highest-priority matching configured section. */
+/** Assign a contact to the highest-priority matching enabled section instance. */
 export function resolveHouseholdContactSectionKey(args: {
     config: NestedSurfaceConfig | null;
     roleType: string | null;
@@ -167,22 +122,35 @@ export function resolveHouseholdContactSectionKey(args: {
     assignedPersonIds: ReadonlySet<string>;
     personId: string;
 }): string {
-    if (args.isPrimary) return "primary_contact";
+    if (args.isPrimary) {
+        const primary = args.config
+            ? migrateHouseholdRelationshipSectionInstances(args.config).groups.find(
+                  (group) => group.definitionKey === "parent_primary" || group.key === "primary_contact",
+              )
+            : undefined;
+        return primary?.instanceKey ?? primary?.key ?? "primary_contact";
+    }
     if (args.assignedPersonIds.has(args.personId)) return "";
-
     if (!args.config) return "household_members";
-    const byKey = new Map(args.config.groups.map((group) => [group.key, group]));
-    for (const key of HOUSEHOLD_RELATIONSHIP_SECTION_PRECEDENCE) {
-        if (key === "primary_contact" || key === "children") continue;
-        const group = byKey.get(key);
-        if (!group || group.enabled === false) continue;
-        const criteria = groupCriteria(group);
-        if (criteria && roleMatchesCriteria(args.roleType, criteria)) {
-            return key;
-        }
-        if (key === "household_members") {
-            return key;
+
+    const migrated = migrateHouseholdRelationshipSectionInstances(args.config);
+    const instances = listHouseholdRelationshipSectionInstances(migrated).filter(
+        (instance) =>
+            instance.definitionKey !== "parent_primary"
+            && instance.definitionKey !== "children"
+            && instance.enabled,
+    );
+
+    for (const instance of instances) {
+        if (instance.definitionKey === "additional_contact") continue;
+        const group = groupForInstance(migrated, instance.instanceKey);
+        if (!group) continue;
+        const criteria = criteriaForGroup(group);
+        if (roleMatchesCriteria(args.roleType, criteria)) {
+            return instance.instanceKey;
         }
     }
-    return "household_members";
+
+    const fallback = instances.find((instance) => instance.definitionKey === "additional_contact");
+    return fallback?.instanceKey ?? "household_members";
 }

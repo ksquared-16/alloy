@@ -123,6 +123,12 @@ export type NestedSurfaceGroupDef = {
 
 export type NestedSurfaceGroupConfig = {
     key: string;
+    /** Canonical relationship-section definition key. */
+    definitionKey?: string;
+    /** Stable tenant section instance key. */
+    instanceKey?: string;
+    /** Registry group key for field presentation authoring. */
+    presentationRef?: string;
     /** Summary layer — recognition fields (who is this?). */
     selectedFieldKeys: string[];
     /** Context Facts — incremental operational facts (persisted as contextFieldKeys). */
@@ -160,6 +166,7 @@ export type NestedSurfaceGroupConfig = {
     relationshipCriteria?: {
         roleKeys?: string[];
         relationshipTypes?: string[];
+        excludeRoleKeys?: string[];
     };
     sectionVisibility?: "always" | "when_nonempty" | "hidden";
     sectionOrder?: number;
@@ -979,6 +986,9 @@ export function reconcileNestedSurfaceConfig(surfaceId: string, loaded: NestedSu
             fieldIcons: found.fieldIcons ? { ...found.fieldIcons } : undefined,
             sectionSemantic: found.sectionSemantic,
             sectionLabel: found.sectionLabel,
+            definitionKey: found.definitionKey,
+            instanceKey: found.instanceKey,
+            presentationRef: found.presentationRef,
             relationshipCriteria: found.relationshipCriteria,
             sectionVisibility: found.sectionVisibility,
             sectionOrder: found.sectionOrder,
