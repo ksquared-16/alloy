@@ -33,6 +33,7 @@ import {
     isPostedStatus,
     type ChargeCategory,
 } from "@/lib/financials/billableSource";
+import type { ChargeIntent } from "@/lib/financials/chargeLifecycle/resolveChargeFromTemplate";
 
 /** Subset of the charges row this service reads/writes. */
 export type ChargeRow = {
@@ -112,6 +113,76 @@ function assertChargeCategory(value: unknown): asserts value is ChargeCategory {
     if (!isChargeCategory(value)) {
         throw new OperationalEnrollmentServiceError("invalid_input", `invalid charge_category: ${String(value)}`);
     }
+}
+
+/**
+ * D12a PLANNING helper (no write). Given a superseded obligation's DRAFT charge id,
+ * produce the retirement intent the reconciliation plan carries. The actual write
+ * (draft -> void in place, DP-2) happens atomically inside the
+ * reconcile_consumption_correction RPC — never here. Charge-domain knowledge (the
+ * retirement reason + that only DRAFT charges are retired) stays in this service.
+ */
+export type DraftChargeRetirementIntent = {
+    draftChargeId: string;
+    reason: "obligation_superseded";
+};
+
+export function buildDraftChargeRetirementIntent(draftChargeId: string): DraftChargeRetirementIntent {
+    return { draftChargeId, reason: "obligation_superseded" };
+}
+
+/**
+ * The priced childcare DRAFT-charge FIELDS the correction reconciliation plan carries.
+ * Financials-owned shape: what a childcare draft charge IS (the enrollment-agreement
+ * billable-source dimension, category, provenance metadata). Operational Consumption
+ * only orchestrates WHEN a charge is (re)written during reconciliation; the
+ * create-vs-recalc decision and the atomic write live in reconcile_consumption_correction
+ * UNDER LOCK (never a pre-lock plan hint). No pricing here — `intent` is already priced
+ * by the charge-template resolver. (Audit F2: restore the charge-semantics ownership boundary.)
+ */
+export type ChildcareDraftChargeFields = {
+    billableSourceType: string;
+    billableSourceId: string | null;
+    chargeType: string;
+    chargeCategory: string | null;
+    currencyCode: string;
+    amountCents: number | null;
+    serviceDate: string | null;
+    occursOn: string | null;
+    billableOn: string | null;
+    chargeTemplateId: string | null;
+    serviceId: string | null;
+    description: string | null;
+    metadata: Record<string, unknown>;
+};
+
+export function buildChildcareDraftChargeFields(
+    intent: ChargeIntent,
+    agreementId: string,
+): ChildcareDraftChargeFields {
+    return {
+        billableSourceType: BILLABLE_SOURCE_ENROLLMENT,
+        billableSourceId: agreementId,
+        chargeType: "fee",
+        chargeCategory: intent.chargeCategory,
+        currencyCode: intent.currencyCode,
+        amountCents: intent.amountCents,
+        serviceDate: intent.occursOn,
+        occursOn: intent.occursOn,
+        billableOn: intent.billableOn,
+        chargeTemplateId: intent.templateId,
+        serviceId: intent.serviceId,
+        description: intent.templateKey,
+        metadata: {
+            resolution_key: intent.resolutionKey,
+            charge_template_key: intent.templateKey,
+            gl_mapping_key: intent.glMappingKey,
+            responsibility_key: intent.responsibilityKey,
+            review_required: intent.reviewRequired,
+            lifecycle_status: intent.lifecycleStatus,
+            source: "charge_template",
+        },
+    };
 }
 
 async function loadCharge(

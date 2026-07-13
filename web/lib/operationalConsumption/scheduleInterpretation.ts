@@ -82,6 +82,13 @@ function noImpact(scheduleChangeKind: ScheduleChangeKind, reason: string): Sched
  */
 export function interpretSchedule(fact: OperationalFactDto): ScheduleInterpretation {
     const kind: ScheduleChangeKind = fact.scheduleChangeKind ?? "recurring";
+
+    // D12a: a reversal produces ZERO directives (no impact); the prior obligation is
+    // reconciled by supersession. A correction re-interprets the corrected values.
+    if ((fact.entryType ?? "original") === "reversal") {
+        return { scheduleChangeKind: kind, directives: [], noImpactReason: "reversal of prior fact — obligations reconciled by supersession" };
+    }
+
     const basis = isScheduleBasis(fact.scheduleBasis) ? fact.scheduleBasis : weekdaysToScheduleBasis(fact.weekdays);
     const priorBasis = isScheduleBasis(fact.priorScheduleBasis) ? fact.priorScheduleBasis : null;
 

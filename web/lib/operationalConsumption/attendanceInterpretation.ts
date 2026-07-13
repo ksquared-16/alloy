@@ -58,6 +58,13 @@ function lateDirective(checkOut: string, threshold: string, minutesLate: number 
 export function interpretAttendance(fact: OperationalFactDto): AttendanceInterpretation {
     const ft: AttendanceFactType = fact.attendanceFactType ?? "check_out";
 
+    // D12a: a reversal produces ZERO positive directives — it only causes the prior
+    // obligation to be superseded (reconciled downstream). A correction re-interprets
+    // the CORRECTED values exactly as an original would (fall through the switch).
+    if ((fact.entryType ?? "original") === "reversal") {
+        return { attendanceFactType: ft, directives: [], discardReason: "reversal of prior fact — obligations reconciled by supersession" };
+    }
+
     switch (ft) {
         case "late_pickup": {
             const threshold = fact.lateThresholdTime ?? DEFAULT_LATE_THRESHOLD;
