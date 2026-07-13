@@ -21,6 +21,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { mapWithConcurrencyLimit } from "@/lib/workspace/mapWithConcurrencyLimit";
+
+/** Max canonical-total count requests in flight at once (bounds the pill fan-out). */
+export const WORK_VIEW_TOTALS_FETCH_CONCURRENCY = 4;
 import {
     peekWorkUnitSurfaceTotalsCache,
     putWorkUnitSurfaceTotalsCache,
@@ -188,8 +192,13 @@ export function useWorkViewTotalsState(args: {
             }
         };
 
-        void Promise.all(
-            [...byKey.entries()].map(([key, target]) => fetchTotal(key, target)),
+        // Bounded fan-out: at most WORK_VIEW_TOTALS_FETCH_CONCURRENCY count requests in flight, so a
+        // work unit with many pills never bursts an unbounded set of requests competing with the
+        // active queue. The request COUNT stays bounded by the number of inactive views (not rows).
+        void mapWithConcurrencyLimit(
+            [...byKey.entries()],
+            WORK_VIEW_TOTALS_FETCH_CONCURRENCY,
+            ([key, target]) => fetchTotal(key, target),
         ).then((entries) => {
             if (cancelled) return;
             const freshTotals = new Map(entries);
