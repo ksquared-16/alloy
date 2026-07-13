@@ -70,6 +70,7 @@ import { alloyPerfGet } from "@/lib/perf/alloyPerfGlobal";
 import {
     beginWorkspaceNav,
     markWorkspaceNavSignal,
+    resolveWorkspaceNavMode,
     type WorkspaceNavMode,
 } from "@/lib/perf/workspaceNavGraph";
 import {
@@ -93,6 +94,7 @@ import {
     queueRowSurfaceIdForDepartment,
 } from "./workUnitSurfaceConfigFetch";
 import { warmOperatorWorkUnitSurfaceFromHref } from "./warmWorkUnitSurfaceSession";
+import { peekRetainedWorkView, putRetainedWorkView } from "./workUnitOperatorContext";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
 import {
@@ -130,17 +132,24 @@ import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3
 /** Drawer open provenance for Focus Panel opens from the presentation runtime queue. */
 const PRESENTATION_RUNTIME_QUEUE_ROW_OPEN_SOURCE = "presentation_runtime_queue_row";
 
-// ── Trust Closure navigation-mode classification (Commit 1 instrumentation) ──────────────────
-// Distinguishes the sprint §3 scenarios without a cache yet: a slug seen earlier this JS session
-// is a `return`; a first-ever slug is `cold` on the very first nav after a full page load and
-// `warm` on a soft nav within the already-hydrated app. Commit 2 refines `warm`/`prefetched` from
-// real cache outcomes. Module-scoped so it survives the surface unmount/remount that IS the defect.
+// ── Trust Closure navigation-mode classification ─────────────────────────────────────────────
+// Classified from real cache + prefetch evidence, not the slug alone (a remount is not "warm"
+// merely because the slug was seen):
+//   - a cached composition is present AND this slug was navigated before → `return`;
+//   - a cached composition is present but this slug was NOT navigated before → `prefetched`
+//     (a prewarm wrote it ahead of the first visit);
+//   - no cache, first navigation since a full page load → `cold`;
+//   - no cache, a soft navigation within the already-hydrated app → `warm`.
+// Module-scoped so it survives the surface unmount/remount that IS the defect.
 const seenWorkUnitNavSlugs = new Set<string>();
 let firstWorkspaceNavSincePageLoad = true;
 
-function classifyWorkspaceNavMode(slug: string): WorkspaceNavMode {
-    if (seenWorkUnitNavSlugs.has(slug)) return "return";
-    return firstWorkspaceNavSincePageLoad ? "cold" : "warm";
+function classifyWorkspaceNavMode(slug: string, hasCachedComposition: boolean): WorkspaceNavMode {
+    return resolveWorkspaceNavMode({
+        seenBefore: seenWorkUnitNavSlugs.has(slug),
+        firstSinceLoad: firstWorkspaceNavSincePageLoad,
+        hasCachedComposition,
+    });
 }
 
 
@@ -259,15 +268,26 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // `localWorkViewId` (Excel-tab swap — no navigation). Cross-host clicks use optimistic
     // highlight until `router.push` commits the destination slug.
     const routeSlug = slugRoute?.routeSlug ?? null;
-    const [localWorkViewId, setLocalWorkViewId] = useState<string | null>(null);
+    // Retained selection: on a return to this unit (no explicit Work View in the URL) restore the
+    // operator's last in-page Work View. An explicit route view (deep link / cross-host landing)
+    // always wins over the retained one.
+    const [localWorkViewId, setLocalWorkViewId] = useState<string | null>(() =>
+        slugRoute?.initialWorkViewId ? null : peekRetainedWorkView(orgId, workUnitId),
+    );
     const [optimisticSelection, setOptimisticSelection] = useState<{
         routeSlug: string | null;
         workViewId: string;
     } | null>(null);
 
+    // Reset the in-page selection only when the unit/route ACTUALLY changes (a cross-host switch),
+    // not on the initial mount — otherwise the retained-view seed above would be wiped immediately.
+    const workViewResetKeyRef = useRef(`${workUnitId ?? ""}|${routeSlug ?? ""}`);
     useEffect(() => {
-        setLocalWorkViewId(null);
-    }, [workUnitId, routeSlug]);
+        const nextKey = `${workUnitId ?? ""}|${routeSlug ?? ""}`;
+        if (workViewResetKeyRef.current === nextKey) return;
+        workViewResetKeyRef.current = nextKey;
+        setLocalWorkViewId(slugRoute?.initialWorkViewId ? null : peekRetainedWorkView(orgId, workUnitId));
+    }, [workUnitId, routeSlug, slugRoute?.initialWorkViewId, orgId]);
 
     const selectedWorkViewId =
         optimisticSelection && optimisticSelection.routeSlug === routeSlug
@@ -680,6 +700,8 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             if (action.kind === "in-page") {
                 setLocalWorkViewId(action.workViewId);
                 setOptimisticSelection(null);
+                // Retain the operator's choice so a return to this unit restores this Work View.
+                putRetainedWorkView(orgId, workUnitId, action.workViewId);
                 return;
             }
 
@@ -695,6 +717,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             routeSlug,
             runtimeCtx.workViewId,
             workUnitId,
+            orgId,
             closeDrawer,
         ],
     );
@@ -992,10 +1015,11 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             performance.now() - navStart < 8000
                 ? navStart
                 : undefined;
-        beginWorkspaceNav(routeSlug, classifyWorkspaceNavMode(routeSlug), freshStart);
+        const hasCachedComposition = seed.config != null && seed.queueResult != null;
+        beginWorkspaceNav(routeSlug, classifyWorkspaceNavMode(routeSlug, hasCachedComposition), freshStart);
         seenWorkUnitNavSlugs.add(routeSlug);
         firstWorkspaceNavSincePageLoad = false;
-    }, [workUnitId, routeSlug]);
+    }, [workUnitId, routeSlug, seed]);
 
     useEffect(() => {
         if (slugRoute != null) markWorkspaceNavSignal("shell_visible");

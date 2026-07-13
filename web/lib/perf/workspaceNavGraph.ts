@@ -25,6 +25,21 @@ import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 /** How the operator arrived at this Work Unit (sprint §15 navigation mode). */
 export type WorkspaceNavMode = "cold" | "warm" | "prefetched" | "return";
 
+/**
+ * Pure navigation-mode decision (sprint §10 — classify from real cache + prefetch evidence, not the
+ * slug alone). A cached composition means we opened from memory: `return` if this slug was navigated
+ * before, else `prefetched` (a prewarm wrote it ahead of the first visit). With no cache it is `cold`
+ * on the first navigation after a full page load, else `warm` (a soft nav in the hydrated app).
+ */
+export function resolveWorkspaceNavMode(input: {
+    seenBefore: boolean;
+    firstSinceLoad: boolean;
+    hasCachedComposition: boolean;
+}): WorkspaceNavMode {
+    if (input.hasCachedComposition) return input.seenBefore ? "return" : "prefetched";
+    return input.firstSinceLoad ? "cold" : "warm";
+}
+
 /** Where a resource read was answered from (sprint §15 cache outcome). */
 export type WorkspaceCacheOutcome = "hit" | "stale_hit" | "miss" | "dedup_inflight";
 
