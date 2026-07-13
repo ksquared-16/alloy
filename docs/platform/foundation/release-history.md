@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
@@ -14,6 +14,22 @@ supersedes: []
 ---
 
 ## 2026 H1 — Platform maturation
+
+### July 2026 — Operational Expansion Wave 1 (fact & correction-aware consumption contracts)
+
+**Shipped to `staging`** — PR #181, merge `9333379a9`. The first delivery step of the frozen operational-expansion architecture ([`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md)): the runtime **contracts** for operational facts and correction-aware consumption. No operator surface, no Posting, no automatic fact→consumption wiring.
+
+- **D2 — Operational Fact contract (platform-generic)** — a domain-neutral fact contract + reusable conformance harness; `child_attendance_events` is the asserted **reference conformer** and was **not behaviorally changed**. **No universal `operational_facts` table** was introduced — per-domain authoritative fact stores conform to the contract.
+- **D12a — correction-aware deterministic consumption** — correction identity on the fact DTO, correction/reversal interpretation, and an atomic reconciliation RPC; the consumption pipeline now handles correction, reversal, reparenting, supersession, chains, and replay.
+- **DP-1 atomic reconciliation certified** — all correction writes execute all-or-nothing in one `SECURITY DEFINER` RPC (injected mid-reconcile fault → zero partial state).
+- **DP-2 draft-consequence retirement & posted-artifact protection certified** — a superseded obligation's **draft** charge is retired in place (`draft → void`); posted charges are never mutated.
+- **DP-3 source-fact idempotency certified** — the consumption event is anchored on the source fact's own identity (not on the corrected-fact reference); replay and two distinct corrections of one prior fact each remain correct and distinct.
+- **DP-4 same-key reparenting & deterministic convergence certified** — reparent on same key, supersede on absent key; concurrent same-key corrections converge (one obligation, one draft charge, zero orphan draft charges).
+- **D12b remains intentionally unimplemented** — no reactor and no fact-write subscriber; the pipeline is still invoked only by the consumption simulate path.
+
+**Precise scope.** D2 is platform-generic. D12a establishes the correction-aware consumption protocol and proves it through the childcare financial consumer. Consumer-specific consequence persistence remains consumer-owned. Wave 1 is a **contract and protocol**, not a universal consumption engine.
+
+**Deferred follow-ups** (recorded, not implemented) — see [`../../audits/active/operational-expansion-architecture-audit-2026-07.md`](../../audits/active/operational-expansion-architecture-audit-2026-07.md) §4: **F4/G10** consumption lineage uniqueness; **F5/G11** superseded obligation review-queue visibility.
 
 ### July 2026 — Platform Stabilization Complete
 
