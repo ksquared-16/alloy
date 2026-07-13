@@ -69,6 +69,29 @@ export function nextFreeRow(grid: FocusPanelGridLayout): number {
 }
 
 
+
+/** True when two areas share any column occupancy. PURE. */
+function columnsOverlap(a: FocusPanelGridArea, b: FocusPanelGridArea): boolean {
+    const aEnd = a.colStart + a.colSpan;
+    const bEnd = b.colStart + b.colSpan;
+    return a.colStart < bEnd && b.colStart < aEnd;
+}
+
+/**
+ * Same vertical stack lane — exact colStart, or near-start overlap of a narrower
+ * card (e.g. col 7 vs 8). Does not stack half-width side cards under full-width
+ * neighbours solely because columns intersect. PURE.
+ */
+function sameStackColumn(a: FocusPanelGridArea, b: FocusPanelGridArea): boolean {
+    if (a.colStart === b.colStart) return true;
+    if (!columnsOverlap(a, b)) return false;
+    const overlap =
+        Math.min(a.colStart + a.colSpan, b.colStart + b.colSpan) - Math.max(a.colStart, b.colStart);
+    const narrower = Math.min(a.colSpan, b.colSpan);
+    if (overlap < Math.max(1, Math.floor(narrower * 0.8))) return false;
+    return Math.abs(a.colStart - b.colStart) <= Math.floor(narrower / 2);
+}
+
 /** Resolve overlapping cards in the same column into a vertical stack. PURE. */
 export function normalizeGridColumnStacking(grid: FocusPanelGridLayout): FocusPanelGridLayout {
     const order = new Map(grid.areas.map((area, index) => [area.card, index]));
@@ -81,7 +104,7 @@ export function normalizeGridColumnStacking(grid: FocusPanelGridLayout): FocusPa
     for (const area of sorted) {
         let rowStart = area.rowStart;
         for (const prior of placed) {
-            if (prior.colStart !== area.colStart) continue;
+            if (!sameStackColumn(prior, area)) continue;
             const priorEnd = prior.rowStart + prior.rowSpan;
             const areaEnd = rowStart + area.rowSpan;
             const overlaps = rowStart < priorEnd && areaEnd > prior.rowStart;
@@ -179,7 +202,7 @@ export function snapMoveTarget(
 
     // Stack directly beneath cards already occupying this column (including overlaps).
     for (const neighbor of grid.areas) {
-        if (neighbor.card === moving.card || neighbor.colStart !== next.colStart) continue;
+        if (neighbor.card === moving.card || !sameStackColumn(neighbor, next)) continue;
         const stackBelow = neighbor.rowStart + neighbor.rowSpan;
         const nextEnd = next.rowStart + next.rowSpan;
         const overlaps = next.rowStart < stackBelow && nextEnd > neighbor.rowStart;
