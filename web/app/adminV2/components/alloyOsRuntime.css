@@ -6328,6 +6328,16 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   max-width: 100%;
 }
 
+.identity-field-grid__row--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 100%;
+}
+
+.identity-field-grid__cell--third {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .identity-field-grid__cell--half {
   min-width: 0;
   max-width: 100%;
@@ -6393,7 +6403,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 @media (max-width: 440px) {
-  .identity-field-grid__row--pair {
+  .identity-field-grid__row--pair,
+  .identity-field-grid__row--triple {
     grid-template-columns: minmax(0, 1fr);
   }
 }

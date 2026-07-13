@@ -6,6 +6,7 @@ import type { NestedSurfaceFieldLayoutWidth } from "@/lib/adminV2/settings/surfa
 import {
     chunkNestedSurfaceFieldsForHalfRowLayout,
     isNestedSurfaceFieldHalfWidth,
+    isNestedSurfaceFieldThirdWidth,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import type { IdentityFieldCellVM, IdentityFieldRowVM, IdentityFieldPlacement } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 
@@ -55,8 +56,8 @@ export function resolveIdentityFieldRows(
                 editable: input.editable,
                 hideWhenEmpty: input.placement.hideWhenEmpty ?? false,
                 width,
-                column: width === "half" ? ((columnIndex % 2) + 1) as 1 | 2 : 1,
-            } satisfies IdentityFieldCellVM & { column?: 1 | 2 };
+                column: (columnIndex + 1) as 1 | 2 | 3,
+            } satisfies IdentityFieldCellVM & { column?: 1 | 2 | 3 };
         }),
     }));
 }
@@ -76,9 +77,5 @@ export function identityFieldsShareRow(
     left: IdentityFieldPlacement,
     right: IdentityFieldPlacement,
 ): boolean {
-    return (
-        left.row === right.row
-        && isNestedSurfaceFieldHalfWidth(left.width)
-        && isNestedSurfaceFieldHalfWidth(right.width)
-    );
+    return left.row === right.row && left.row === right.row && left.width !== "full" && right.width !== "full";
 }

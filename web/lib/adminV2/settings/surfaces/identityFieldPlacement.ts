@@ -18,7 +18,7 @@ export type IdentityFieldPlacement = {
     fieldRef: string;
     tier: IdentityStorageTier;
     row: number;
-    column: 1 | 2;
+    column: 1 | 2 | 3;
     width: NestedSurfaceFieldLayoutWidth;
     icon?: string;
     labelMode?: IdentityFieldLabelMode;
@@ -39,7 +39,7 @@ function seedPlacement(args: {
     fieldRef: string;
     tier: IdentityStorageTier;
     row: number;
-    column: 1 | 2;
+    column: 1 | 2 | 3;
     width: NestedSurfaceFieldLayoutWidth;
     policy?: SurfaceFieldVisibility;
     existing?: IdentityFieldPlacement;
@@ -86,10 +86,17 @@ export function generateDefaultIdentityFieldPlacements(
 
     const appendTier = (tier: "summary" | "context_fact" | "details", fieldRefs: readonly string[]) => {
         let row = 1;
-        let column: 1 | 2 = 1;
+        let column: 1 | 2 | 3 = 1;
+        let rowUnits = 0;
         for (const fieldRef of fieldRefs) {
             const width = group.fieldLayoutWidths?.[fieldRef] ?? "full";
             const prior = existingByTierAndRef.get(`${tier}:${fieldRef}`);
+            const widthUnits = width === "third" ? 1 : width === "half" ? 2 : 3;
+            if (rowUnits > 0 && rowUnits + widthUnits > 3) {
+                row += 1;
+                column = 1;
+                rowUnits = 0;
+            }
             placements.push(
                 seedPlacement({
                     fieldRef,
@@ -101,11 +108,16 @@ export function generateDefaultIdentityFieldPlacements(
                     existing: prior,
                 }),
             );
-            if (width === "half" && column === 1) {
+            if (width === "third" && column < 3) {
+                column = (column + 1) as 1 | 2 | 3;
+                rowUnits += 1;
+            } else if (width === "half" && column === 1) {
                 column = 2;
+                rowUnits += 2;
             } else {
                 row += 1;
                 column = 1;
+                rowUnits = 0;
             }
         }
     };

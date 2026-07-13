@@ -20,8 +20,9 @@ export default function IdentityFieldGrid({ rows, className, onEditField }: Prop
                     className={clsx(
                         "identity-field-grid__row",
                         row.cells.length === 2 && "identity-field-grid__row--pair",
+                        row.cells.length === 3 && "identity-field-grid__row--triple",
                     )}
-                    data-identity-row={row.cells.length === 2 ? "pair" : "single"}
+                    data-identity-row={row.cells.length === 3 ? "triple" : row.cells.length === 2 ? "pair" : "single"}
                 >
                     {row.cells.map((cell) => (
                         <IdentityFieldValue
@@ -30,6 +31,7 @@ export default function IdentityFieldGrid({ rows, className, onEditField }: Prop
                             className={clsx(
                                 "identity-field-grid__cell",
                                 cell.width === "half" && "identity-field-grid__cell--half",
+                                cell.width === "third" && "identity-field-grid__cell--third",
                                 cell.width === "full" && "identity-field-grid__cell--full",
                             )}
                             onEdit={cell.editable && onEditField ? () => onEditField(cell.fieldRef) : undefined}

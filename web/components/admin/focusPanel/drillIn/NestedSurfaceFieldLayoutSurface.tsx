@@ -359,7 +359,7 @@ function FieldInstance({
     className?: string;
     children: React.ReactNode;
 }) {
-    const visibility = fieldVisibilityForNestedGroup(config, groupKey, fieldKey);
+    const visibility = fieldVisibilityForNestedGroup(config, groupKey, fieldKey, tier ? { tier } : undefined);
     const showLabel = fieldShowLabelForNestedGroup(config, groupKey, fieldKey);
     const showIcon = fieldShowIconForNestedGroup(config, groupKey, fieldKey);
     const editingLabel = editingLabelKey === fieldKey;
@@ -475,6 +475,7 @@ function FieldInstance({
                                             groupKey,
                                             fieldKey,
                                             e.target.value as SurfaceFieldVisibility,
+                                            tier ? { tier } : undefined,
                                         ),
                                     )
                                 }
