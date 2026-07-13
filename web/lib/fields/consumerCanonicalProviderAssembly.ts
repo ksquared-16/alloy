@@ -124,18 +124,29 @@ export function assembleFocusPanelNestedProviders(filter: ConsumerProviderAssemb
     return assembleConsumerProviders("focus_panel", { ...filter, includeLegacyOnly: filter.includeLegacyOnly ?? false });
 }
 
+export function assembleDrawerProviders(filter: ConsumerProviderAssemblyFilter = {}): CanonicalDataProvider[] {
+    return assembleConsumerProviders("drawer", filter);
+}
+
 export function resolveCanonicalProviderForConsumer(
     refKey: string,
     consumer: CanonicalDataProviderFilter["consumer"],
     filter: ConsumerProviderAssemblyFilter = {},
 ): CanonicalDataProvider | undefined {
-    if (consumer === "focus_panel" || consumer === "queue_row" || consumer === "business_process") {
+    if (
+        consumer === "focus_panel"
+        || consumer === "queue_row"
+        || consumer === "business_process"
+        || consumer === "drawer"
+    ) {
         const assembly =
             consumer === "focus_panel"
                 ? assembleFocusPanelNestedProviders(filter)
                 : consumer === "queue_row"
                     ? assembleQueueRowProviders(filter)
-                    : assembleBusinessProcessProviders(filter);
+                    : consumer === "drawer"
+                        ? assembleDrawerProviders(filter)
+                        : assembleBusinessProcessProviders(filter);
         return assembly.find((provider) => provider.refKey === refKey.trim());
     }
     const provider = findCanonicalDataProvider(refKey, {
