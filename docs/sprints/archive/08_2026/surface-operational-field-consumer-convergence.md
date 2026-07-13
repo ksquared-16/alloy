@@ -1,71 +1,94 @@
 # Surface + Operational Field Consumer Convergence
 
-**Status:** In progress — July 2026  
+**Status:** Complete — July 2026  
 **Predecessor:** [identity-builder-canonical-field-convergence.md](./identity-builder-canonical-field-convergence.md)
 
 ---
 
-## Answer (target)
+## Answer
 
-**If I create a new compatible field in `/settings/fields`, how many Surface Builder or Business Process consumer files must change?**
+**If I create a new compatible field in `/settings/fields`, how many implemented consumer files must change?**
 
-**Zero** — for queue row, card/tile (focus panel), and stage requirement palette consumers wired in this phase.
-
----
-
-## Consumer inventory
-
-| Consumer | Before | After |
-| --- | --- | --- |
-| Queue row V2 library | `focus_panel` assembly + hardcoded labels | `queue_row` assembly + canonical labels |
-| Queue zone/group pickers | defaultFieldKeys + tenant merge only | Full `assembleQueueRowProviders` + seeds |
-| Focus Panel / Identity | `focus_panel` assembly | Unchanged (P0) |
-| Stage requirement palette | Copied catalog labels | Canonical labels via `business_process` assembly |
-| Work View conditions | Typed operational registry | Unchanged (typed predicates — not refKey fields) |
-| Header/tile metrics | Operational Calculations registry | Unchanged (by design — not field refKeys) |
-| Automation field pickers | Not built | Pending |
+**Zero.**
 
 ---
 
-## Architecture
+## Global consumer matrix
+
+| Consumer | Source | Persisted identity | Status |
+| --- | --- | --- | --- |
+| Identity / Focus Panel card + nested pickers | `assembleFocusPanelNestedProviders` | `refKey` | Complete (P0) |
+| Queue row V2 library + zone pickers | `assembleQueueRowProviders` | `refKey` | Complete |
+| Stage requirement palette labels | `assembleBusinessProcessProviders` | rule_id + canonical label | Complete |
+| Work View conditions | operational predicates + `resolveCanonicalConditionOperands` | `field_key` / `refKey` | Complete |
+| Work View sort | `resolveWorkViewSortFieldOptions` (sort capability filter) | `field_key` / `refKey` | Complete |
+| Process / transition conditions | `resolveProcessConditionOperands` | `refKey` | Complete |
+| Automation conditions | `resolveAutomationConditionOperands` | `refKey` | Foundation complete (UI stub) |
+| Automation mutation targets | `resolveAutomationMutationTargets` | `refKey` | Foundation complete (UI stub) |
+| Drawer layout pickers | `assembleDrawerProviders` + `resolveDrawerCanonicalFieldLabel` | `refKey` | Complete |
+| Collection item fields | `buildChildrenCollectionItemFieldCatalog` | item field key / `refKey` | Complete |
+| Legacy queue picker | `queueRecordFieldPickerCatalog` → canonical `queue_row` labels | `refKey` | Delegated |
+| Header/tile metrics | Operational Calculations registry | metric id | Intentionally separate |
+
+---
+
+## Shared architecture
 
 ```text
 /settings/fields
 → canonicalDataProviderRegistry
-→ canonicalProviderDedup (shared)
-→ assembleQueueRowProviders | assembleFocusPanelNestedProviders | assembleBusinessProcessProviders
-→ compositionFieldAdapter (consumer param)
-→ Surface Builder / lifecycle palette consumers
+→ canonicalProviderDedup
+→ assemble*Providers (consumer capability filter)
+→ resolveCanonicalConditionOperands (conditions)
+→ resolveWorkViewSortFieldOptions (sort capability)
+→ resolveAutomationMutationTargets (writable capability)
+→ consumer presentation adapters
+→ persisted stable refKey
+→ runtime canonical resolver (+ legacy compatibility boundary)
 ```
 
----
+### Condition operand seam
 
-## Drift removed (this phase)
+`web/lib/fields/canonicalConditionOperands.ts` — shared by Work Views, process/transition conditions, and automation conditions. Consumers own operators, grouping, and UI grammar only.
 
-1. Queue row pickers use `queue_row` consumer gate (not `focus_panel`).
-2. Shared deduplication utility (`canonicalProviderDedup.ts`).
-3. Platform catalog merge applies to queue_row and business_process assemblies.
-4. Queue row library uses canonical provider labels (not `FIELD_LIBRARY_LABELS` override).
-5. Stage requirement catalog labels resolve from canonical providers.
+### Metrics vs fields boundary
+
+**Operational Calculations** (queue/workspace metrics, aggregates, ratios) remain outside the Field Platform. Metric definitions are not fields. Metric configuration that exposes **input field pickers** (grouping/date/value/filter dimensions) must use canonical providers when implemented.
 
 ---
 
-## Remaining gaps
+## Registry classification (remaining)
 
-- Work View condition registry (`workViewConditionFieldRegistry`) — typed operational fields
-- Legacy queue picker (`queueRecordFieldPickerCatalog`) — parallel path
-- Collection item field catalog (`COLLECTION_ITEM_FIELD_CATALOG`)
-- Drawer layout pickers — parallel manifest catalog
-- Automation mutation/condition field pickers — not built
-- Header/OI metrics — calculations registry (intentional)
+| Registry | Class | Owns |
+| --- | --- | --- |
+| `WORK_VIEW_CONDITION_FIELD_DEFS` | C + F + D | Operational predicates, operators, option sources — not custom field metadata |
+| `LEGACY_WORK_VIEW_SORT_KEY_ALIASES` | E | Compatibility only |
+| `LIFECYCLE_FIELD_REQUIREMENT_CATALOG` | E + F | Named rules — labels via canonical merge |
+| `fieldPickerContextCatalog` | B + D + E | Context groups, visibility — labels delegate to canonical |
+| Drawer structural manifests | B + D | Sections/tabs/containers — fields from canonical assembly |
+| `COLLECTION_ITEM_FIELD_CATALOG` | E (seed) | Legacy seed; active catalog from `collectionItemFieldCatalog.ts` |
+| Automation shell UI | F | Product stub — field foundation complete |
 
 ---
 
-## Tests
+## Validation
 
 ```bash
 cd web && npm run test -- \
+  tests/fields/globalCanonicalFieldConsumerConvergence.test.ts \
   tests/fields/surfaceOperationalFieldConsumerConvergence.test.ts \
-  tests/adminV2/compositionFieldAdapter.test.ts \
+  tests/lifecycle/workViewConditionFieldRegistry.test.ts \
+  tests/lifecycle/workViewFilterValueControls.test.ts \
+  tests/layout/queueRecordFieldPickerCatalog.test.ts \
   tests/fields/consumerCanonicalProviderAssembly.test.ts
+
+cd web && npm run typecheck
 ```
+
+---
+
+## Remaining genuine gaps
+
+- **Automation product UI** — shell is intentionally stubbed; canonical condition/mutation foundation is complete.
+- **Work View runtime** — canonical custom-field evaluation requires tenant field definitions at evaluation time (optional param on evaluator).
+- **Operational Calculations** — not field consumers; no change required unless metric input pickers are added.
