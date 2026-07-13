@@ -72,6 +72,24 @@ import { filterRightRailActionsForCurrentWork } from "@/lib/adminV2/runtime/focu
 import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
+import { alloyPerfGet } from "@/lib/perf/alloyPerfGlobal";
+import {
+    beginWorkspaceNav,
+    markWorkspaceNavSignal,
+    type WorkspaceNavMode,
+} from "@/lib/perf/workspaceNavGraph";
+import {
+    peekWorkUnitSurfaceConfigCache,
+    putWorkUnitSurfaceConfigCache,
+    peekWorkUnitSurfaceQueueCache,
+    putWorkUnitSurfaceQueueCache,
+    peekWorkUnitSurfaceSummariesCache,
+    putWorkUnitSurfaceSummariesCache,
+    invalidateWorkUnitSurfaceCachesForWorkUnit,
+    type WorkUnitSurfaceConfigCacheEntry,
+    type WorkUnitViewModelCacheContext,
+    type WorkUnitViewModelCacheLaneState,
+} from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
 import {
@@ -107,6 +125,85 @@ import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3
 
 /** Drawer open provenance for Focus Panel opens from the presentation runtime queue. */
 const PRESENTATION_RUNTIME_QUEUE_ROW_OPEN_SOURCE = "presentation_runtime_queue_row";
+
+// ── Trust Closure navigation-mode classification (Commit 1 instrumentation) ──────────────────
+// Distinguishes the sprint §3 scenarios without a cache yet: a slug seen earlier this JS session
+// is a `return`; a first-ever slug is `cold` on the very first nav after a full page load and
+// `warm` on a soft nav within the already-hydrated app. Commit 2 refines `warm`/`prefetched` from
+// real cache outcomes. Module-scoped so it survives the surface unmount/remount that IS the defect.
+const seenWorkUnitNavSlugs = new Set<string>();
+let firstWorkspaceNavSincePageLoad = true;
+
+function classifyWorkspaceNavMode(slug: string): WorkspaceNavMode {
+    if (seenWorkUnitNavSlugs.has(slug)) return "return";
+    return firstWorkspaceNavSincePageLoad ? "cold" : "warm";
+}
+
+// ── Trust Closure session cache (Commit 2): read-through seed + write-back ────────────────────
+// The queue-rows cache lane must key identically at read (mount seed) and write (rows effect):
+// base lane key + active Work View + selected site. `limit` is intentionally excluded — it is a
+// fetch-sizing detail, not a content dimension (a wider limit is a superset the SWR pass corrects).
+function workUnitSurfaceQueueLane(
+    fetchQueueKey: string | null,
+    workViewId: string | null | undefined,
+    selectedSiteId: string | null,
+): WorkUnitViewModelCacheLaneState {
+    return {
+        selectedQueueKey: fetchQueueKey,
+        recordFilterFingerprint: `view:${workViewId ?? "_"}|site:${selectedSiteId ?? "_"}`,
+    };
+}
+
+type WorkUnitSurfaceInitialSeed = {
+    config: WorkUnitSurfaceConfigCacheEntry | null;
+    configFresh: boolean;
+    summaries: QueueSummary[] | null;
+    queueResult: QueueItemsResult | null;
+};
+
+const EMPTY_SEED: WorkUnitSurfaceInitialSeed = {
+    config: null,
+    configFresh: false,
+    summaries: null,
+    queueResult: null,
+};
+
+/**
+ * Synchronous mount seed for the PRV2 surface — the read side of the session cache. Runs once per
+ * surface mount (guarded by a ref) so a return navigation renders the prior config + rows instantly
+ * instead of re-running the config→layout→summaries→rows waterfall. Cold entry (no cached config)
+ * returns the empty seed and the normal fetch path runs unchanged.
+ */
+function computeWorkUnitSurfaceInitialSeed(args: {
+    cacheContext: WorkUnitViewModelCacheContext;
+    slugRoute: WorkUnitSlugRouteValue | null;
+    selectedSiteId: string | null;
+}): WorkUnitSurfaceInitialSeed {
+    const { cacheContext, slugRoute, selectedSiteId } = args;
+    if (!cacheContext.workUnitId || !cacheContext.departmentId) return EMPTY_SEED;
+
+    const configRead = peekWorkUnitSurfaceConfigCache(cacheContext);
+    const summaries = peekWorkUnitSurfaceSummariesCache(cacheContext, selectedSiteId)?.entry.summaries ?? null;
+    if (!configRead) return { ...EMPTY_SEED, summaries };
+
+    const cfg = configRead.entry;
+    const routeWorkViewId = slugRoute?.initialWorkViewId ?? null;
+    const runtimeCtx = resolveActiveWorkViewRuntimeContext({
+        departmentMetadata: cfg.deptMetadata,
+        workViewId: routeWorkViewId,
+        queueKey: routeWorkViewId ? null : slugRoute?.initialQueueKey ?? null,
+        queueDefinition: cfg.queueDefinition,
+    });
+    const fetchQueueKey = validatedBaseQueueKeyForUnit(runtimeCtx.queueKey, cfg.queueDefinition);
+    const queueResult = fetchQueueKey
+        ? peekWorkUnitSurfaceQueueCache({
+              context: cacheContext,
+              lane: workUnitSurfaceQueueLane(fetchQueueKey, runtimeCtx.workViewId, selectedSiteId),
+          })?.entry.queueResult ?? null
+        : null;
+
+    return { config: cfg, configFresh: configRead.fresh, summaries, queueResult };
+}
 
 /**
  * Resolve published Queue Row surface id from department lifecycle process.
@@ -147,29 +244,75 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
 
     // Fetches gate on org readiness: the queue route resolves visibility under the org/auth
     // gate, and a request racing org-context bootstrap 404s transiently.
-    const { orgId } = useWorkspaceOrg();
+    const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const departmentId = orgId ? slugRoute?.departmentId ?? null : null;
     const workUnitId = orgId ? slugRoute?.workUnitId ?? null : null;
+
+    // Session-cache scope — the same org/dept/wu/user/scope key the view-model cache uses. Org id
+    // is part of the key, so a cache read can never cross tenants.
+    const cacheContext = useMemo<WorkUnitViewModelCacheContext>(
+        () => ({
+            orgId,
+            departmentId,
+            workUnitId,
+            userId: principalUserId,
+            scopeFingerprint: accessScopeFingerprint,
+        }),
+        [orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint],
+    );
+
+    // Read-through seed, computed exactly once per surface mount. On a return navigation (the surface
+    // remounts) this holds the prior config + rows for instant first paint; on cold entry it is empty.
+    const seedRef = useRef<WorkUnitSurfaceInitialSeed | null>(null);
+    if (seedRef.current === null) {
+        seedRef.current = computeWorkUnitSurfaceInitialSeed({ cacheContext, slugRoute, selectedSiteId });
+    }
+    const seed = seedRef.current;
+    // Current cache scope for the once-subscribed mutation listener (which cannot close over it).
+    const cacheContextRef = useRef(cacheContext);
+    cacheContextRef.current = cacheContext;
 
     // ── Work Views: department metadata (`work_views_v1`) + host queue_definition ──────
     // Dept work units are fetched alongside so every visible view's CANONICAL location
     // (host unit + base lane — `resolveWorkViewCanonicalLocation`) resolves client-side;
     // pill counts and pill navigation both read it.
-    const [deptMetadata, setDeptMetadata] = useState<unknown | null>(null);
-    const [queueDefinition, setQueueDefinition] = useState<unknown | null>(null);
+    const [deptMetadata, setDeptMetadata] = useState<unknown | null>(() => seed.config?.deptMetadata ?? null);
+    const [queueDefinition, setQueueDefinition] = useState<unknown | null>(
+        () => seed.config?.queueDefinition ?? null,
+    );
     const [deptWorkUnits, setDeptWorkUnits] = useState<
         WorkViewCanonicalLocationWorkUnitRow[] | null
-    >(null);
-    const [queueRowLayoutConfig, setQueueRowLayoutConfig] = useState<QueueRecordLayoutConfigV3 | null>(null);
-    const [queueRowSurfaceIdState, setQueueRowSurfaceIdState] = useState<string>("pipeline-queue-row");
-    const [configSettled, setConfigSettled] = useState(false);
+    >(() => seed.config?.deptWorkUnits ?? null);
+    const [queueRowLayoutConfig, setQueueRowLayoutConfig] = useState<QueueRecordLayoutConfigV3 | null>(
+        () => seed.config?.queueRowLayoutConfig ?? null,
+    );
+    const [queueRowSurfaceIdState, setQueueRowSurfaceIdState] = useState<string>(
+        () => seed.config?.queueRowSurfaceId ?? "pipeline-queue-row",
+    );
+    // Seeded config → the surface is already established: `configSettled` starts true so the queue
+    // rows effect fires immediately (no re-establish gate) and the seeded rows show without a skeleton.
+    const [configSettled, setConfigSettled] = useState(() => seed.config != null);
+    // The mount seed applies only to the first config-effect run (its context). Later runs (a slug
+    // change without remount) ignore it and re-establish normally.
+    const configSeedConsumedRef = useRef(false);
 
     useEffect(() => {
         if (!departmentId || !workUnitId) return;
+        const useSeed = !configSeedConsumedRef.current && seed.config != null;
+        configSeedConsumedRef.current = true;
+        // Fresh cached config → skip the whole config→layout waterfall for this navigation.
+        if (useSeed && seed.configFresh) {
+            setConfigSettled(true);
+            return;
+        }
         let cancelled = false;
-        setConfigSettled(false);
-        const surfaceId = queueRowSurfaceIdForDepartment(departmentId, null);
-        setQueueRowSurfaceIdState(surfaceId);
+        // Seeded-stale keeps the established surface visible during the silent revalidate (SWR); only
+        // a genuine cold establish drops the gate so the surface shows its establish state.
+        if (!useSeed) {
+            setConfigSettled(false);
+            const surfaceId = queueRowSurfaceIdForDepartment(departmentId, null);
+            setQueueRowSurfaceIdState(surfaceId);
+        }
         const init = workspaceDataFetchInit();
         void Promise.all([
             dedupeAdminFetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`, init)
@@ -198,26 +341,46 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 )
                     .then((res) => (res.ok ? res.json() : null))
                     .catch(() => null)
-                    .then((queueRowLayoutRes) => ({ wu, deptUnits, queueRowLayoutRes }));
+                    .then((queueRowLayoutRes) => ({
+                        wu,
+                        deptUnits,
+                        queueRowLayoutRes,
+                        deptMeta,
+                        resolvedSurfaceId,
+                    }));
             })
             .then((payload) => {
                 if (cancelled || !payload) return;
-                const { wu, deptUnits, queueRowLayoutRes } = payload;
-                setQueueDefinition((wu as { queue_definition?: unknown } | null)?.queue_definition ?? null);
+                const { wu, deptUnits, queueRowLayoutRes, deptMeta, resolvedSurfaceId } = payload;
+                const resolvedQueueDefinition =
+                    (wu as { queue_definition?: unknown } | null)?.queue_definition ?? null;
+                setQueueDefinition(resolvedQueueDefinition);
                 const items = (deptUnits as { items?: unknown } | null)?.items;
-                setDeptWorkUnits(
-                    Array.isArray(items) ? (items as WorkViewCanonicalLocationWorkUnitRow[]) : null,
-                );
+                const resolvedDeptWorkUnits = Array.isArray(items)
+                    ? (items as WorkViewCanonicalLocationWorkUnitRow[])
+                    : null;
+                setDeptWorkUnits(resolvedDeptWorkUnits);
                 const envelopeLayout =
                     (queueRowLayoutRes as { envelope?: { layout?: unknown } } | null)?.envelope?.layout ??
                     (queueRowLayoutRes as { config?: unknown } | null)?.config ??
                     null;
-                setQueueRowLayoutConfig(
+                const resolvedLayout =
                     envelopeLayout
                         && typeof envelopeLayout === "object"
                         && Array.isArray((envelopeLayout as { columns?: unknown }).columns)
                         ? (envelopeLayout as QueueRecordLayoutConfigV3)
-                        : null,
+                        : null;
+                setQueueRowLayoutConfig(resolvedLayout);
+                // Write-back: persist the session-stable config bundle for instant return navigation.
+                putWorkUnitSurfaceConfigCache(
+                    {
+                        deptMetadata: deptMeta,
+                        queueDefinition: resolvedQueueDefinition,
+                        deptWorkUnits: resolvedDeptWorkUnits,
+                        queueRowLayoutConfig: resolvedLayout,
+                        queueRowSurfaceId: resolvedSurfaceId,
+                    },
+                    cacheContext,
                 );
             })
             .finally(() => {
@@ -226,7 +389,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, workUnitId]);
+    }, [departmentId, workUnitId, cacheContext, seed]);
 
     // Active Work View: route seeds the landing view; same-host pill clicks override via
     // `localWorkViewId` (Excel-tab swap — no navigation). Cross-host clicks use optimistic
@@ -267,7 +430,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // predicate path) — the same evaluation that renders the rows. Lane summaries evaluate
     // lanes (`compat_queue_key`), a DIFFERENT path that disagrees with view predicates; they
     // are kept only to size the rows fetch so the loaded page covers the lane.
-    const [summaries, setSummaries] = useState<QueueSummary[] | null>(null);
+    const [summaries, setSummaries] = useState<QueueSummary[] | null>(() => seed.summaries);
     const summariesRequestSeq = useRef(0);
 
     // ── Live refresh: re-run the queue + summary + totals fetches when a mutation dispatches
@@ -296,15 +459,21 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             .then(async (res) => {
                 const json = (await res.json().catch(() => ({}))) as { queues?: QueueSummary[]; error?: string };
                 if (!res.ok) throw new Error(json.error ?? "Failed to load queues");
-                if (seq === summariesRequestSeq.current) setSummaries(json.queues ?? []);
+                if (seq === summariesRequestSeq.current) {
+                    const nextSummaries = json.queues ?? [];
+                    setSummaries(nextSummaries);
+                    putWorkUnitSurfaceSummariesCache(nextSummaries, cacheContext, selectedSiteId);
+                }
             })
             .catch(() => {
                 if (seq === summariesRequestSeq.current) setSummaries(null);
             });
-    }, [workUnitId, selectedSiteId, queueRefreshNonce]);
+    }, [workUnitId, selectedSiteId, queueRefreshNonce, cacheContext]);
 
     // ── Queue rows: server applies the active Work View's filters (work_view_id) ────────
-    const [queueResult, setQueueResult] = useState<QueueItemsResult | null>(null);
+    // Seeded from the session cache on mount so a return navigation renders the prior rows instantly;
+    // the effect below still revalidates (SWR) and writes fresh rows back.
+    const [queueResult, setQueueResult] = useState<QueueItemsResult | null>(() => seed.queueResult);
     const [queueLoading, setQueueLoading] = useState(false);
     const [queueError, setQueueError] = useState<string | null>(null);
     const queueRequestSeq = useRef(0);
@@ -342,7 +511,16 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 const json = (await res.json().catch(() => ({}))) as { error?: string };
                 if (!res.ok) throw new Error(json.error ?? "Failed to load queue items");
                 // Stale-response guard: only the latest request may apply.
-                if (seq === queueRequestSeq.current) setQueueResult(json as unknown as QueueItemsResult);
+                if (seq === queueRequestSeq.current) {
+                    const nextQueue = json as unknown as QueueItemsResult;
+                    setQueueResult(nextQueue);
+                    // Write-back: persist rows for this lane so return navigation is instant.
+                    putWorkUnitSurfaceQueueCache(
+                        { queueResult: nextQueue },
+                        cacheContext,
+                        workUnitSurfaceQueueLane(fetchQueueKey, runtimeCtx.workViewId, selectedSiteId),
+                    );
+                }
             })
             .catch((e) => {
                 if (seq === queueRequestSeq.current) {
@@ -361,6 +539,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         fetchLimit,
         configSettled,
         queueRefreshNonce,
+        cacheContext,
     ]);
 
     const rows = useMemo(() => {
@@ -397,6 +576,9 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             const visibleOpportunityIds = visibleRowIdsRef.current;
             if (isQueueMembershipMutationActionKey(detail?.action_key)) {
                 bustOperatorRuntimeReadCaches();
+                // Drop the seeded config/rows/summaries for this work unit so a return navigation
+                // after a membership mutation revalidates rather than seeding pre-mutation rows.
+                invalidateWorkUnitSurfaceCachesForWorkUnit({ context: cacheContextRef.current });
             }
             const refetchRows = shouldRefetchWorkUnitQueueRowsForEvent({ detail, visibleOpportunityIds });
             const refreshSummaries = shouldRefreshQueueSummariesForEvent({ detail, visibleOpportunityIds });
@@ -739,14 +921,17 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // right-rail handoff §5), expose them on the model; RR.SURFACE renders + the existing
     // action runtime executes. Deduped + TTL, so no double-fetch. Never invents actions.
     const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>([]);
+    const [rightRailSettled, setRightRailSettled] = useState(false);
     const { displayVm } = useOpportunityDrawerVmPayload();
     const { canMutate: authCanMutate } = useAdminAuth();
     useEffect(() => {
         if (!departmentId || !workUnitId) {
             setRightRailActions([]);
+            setRightRailSettled(false);
             return;
         }
         let cancelled = false;
+        setRightRailSettled(false);
         void fetchWorkUnitRightRailResolvedActions({
             departmentId,
             workUnitId,
@@ -757,6 +942,9 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             })
             .catch(() => {
                 if (!cancelled) setRightRailActions([]);
+            })
+            .finally(() => {
+                if (!cancelled) setRightRailSettled(true);
             });
         return () => {
             cancelled = true;
@@ -821,6 +1009,40 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             configSettled,
         ],
     );
+
+    // ── Trust Closure instrumentation: open a nav record + stamp the §3 composition markers ─────
+    // Purely observational (dev/staging-gated inside the recorder). `shell_visible` = identity
+    // resolved (frame can render); `coherent_content` = shell + primary queue rows composed as one
+    // (the atomic-reveal point); `interaction_ready` = rows + action rail settled. First-write-wins.
+    useEffect(() => {
+        if (!workUnitId || !routeSlug) return;
+        const navStart = alloyPerfGet("work_unit_navigation_start");
+        const freshStart =
+            typeof navStart === "number" &&
+            typeof performance !== "undefined" &&
+            performance.now() - navStart < 8000
+                ? navStart
+                : undefined;
+        beginWorkspaceNav(routeSlug, classifyWorkspaceNavMode(routeSlug), freshStart);
+        seenWorkUnitNavSlugs.add(routeSlug);
+        firstWorkspaceNavSincePageLoad = false;
+    }, [workUnitId, routeSlug]);
+
+    useEffect(() => {
+        if (slugRoute != null) markWorkspaceNavSignal("shell_visible");
+    }, [slugRoute]);
+
+    useEffect(() => {
+        if (model.ready && !queueLoading && queueResult != null) {
+            markWorkspaceNavSignal("coherent_content");
+        }
+    }, [model.ready, queueLoading, queueResult]);
+
+    useEffect(() => {
+        if (model.ready && !queueLoading && queueResult != null && rightRailSettled) {
+            markWorkspaceNavSignal("interaction_ready");
+        }
+    }, [model.ready, queueLoading, queueResult, rightRailSettled]);
 
     const intents = useMemo<WorkUnitSurfaceIntents>(
         () => ({ selectWorkView, prefetchWorkView, openRecord, prefetchRecord }),
