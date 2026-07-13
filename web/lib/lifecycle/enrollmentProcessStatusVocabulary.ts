@@ -112,6 +112,28 @@ export function enrollmentStageMembership(
     return { grain: entry.grain, states };
 }
 
+/** Platform-managed durable status keys for a known enrollment stage, or null when manual selection is required. */
+export function resolvePlatformManagedStatusKeysForStage(stageKey: string): string[] | null {
+    const membership = enrollmentStageMembership(stageKey);
+    if (!membership?.states.length) return null;
+    return membership.states.map((row) => row.key);
+}
+
+/** True when operators must explicitly assign status keys — unknown/custom stages without platform-managed durable states. */
+export function stageRequiresManualStatusSelection(stageKey: string): boolean {
+    return resolvePlatformManagedStatusKeysForStage(stageKey) === null;
+}
+
+/** Effective status keys for save/runtime — explicit selection wins; else platform-managed durable states. */
+export function effectiveLifecycleStageStatusKeys(
+    stageKey: string,
+    selectedKeys: readonly string[],
+): string[] {
+    const manual = selectedKeys.map((key) => key.trim()).filter(Boolean);
+    if (manual.length > 0) return [...new Set(manual)];
+    return resolvePlatformManagedStatusKeysForStage(stageKey) ?? [];
+}
+
 export function enrollmentStatusVocabularyMetadata(
     row: EnrollmentStatusVocabularyRow
 ): Record<string, unknown> {

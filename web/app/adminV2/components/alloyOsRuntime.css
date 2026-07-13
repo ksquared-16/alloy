@@ -5414,6 +5414,127 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
 }
 
+.alloy-os-currentwork__readiness-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alloy-os-currentwork__readiness-reason,
+.alloy-os-currentwork__readiness-count {
+  margin: 0;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+
+.alloy-os-currentwork__guidance {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 4%, #fff);
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+
+.alloy-os-currentwork__guidance-label {
+  margin: 0 0 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, #64748b);
+}
+
+.alloy-os-currentwork__guidance-text {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 70%, #64748b);
+  white-space: pre-wrap;
+}
+
+.alloy-os-card-pill--blocked {
+  background: color-mix(in srgb, #b45309 12%, #fff);
+  color: #b45309;
+}
+
+.alloy-os-currentwork__requirements-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alloy-os-currentwork__requirements-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  cursor: pointer;
+  text-align: left;
+}
+
+.alloy-os-currentwork__requirements-meta {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-currentwork__focus--scroll {
+  max-height: min(72vh, 42rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alloy-os-currentwork__record-outcome--summary {
+  align-self: flex-start;
+}
+
+.alloy-os-currentwork__activity-meta {
+  margin-left: 6px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-currentwork__path-action {
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, #fff);
+  border-radius: 6px;
+  background: #fff;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.76rem;
+  color: var(--alloy-os-midnight, #273f52);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.alloy-os-currentwork__path-action:hover:not(:disabled),
+.alloy-os-currentwork__path-action:focus-visible {
+  border-color: var(--alloy-os-bend-pine, #00a283);
+  outline: none;
+}
+
+.alloy-os-currentwork__path-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.alloy-os-currentwork__activity-preview-portal {
+  z-index: 60;
+}
+
+.alloy-os-currentwork__activity-preview {
+  max-height: min(40vh, 18rem);
+  overflow-y: auto;
+}
+
 .alloy-os-currentwork__stepper {
   display: flex;
   flex-wrap: wrap;

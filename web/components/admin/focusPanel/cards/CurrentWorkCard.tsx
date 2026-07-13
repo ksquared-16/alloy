@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 
 import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
@@ -63,6 +63,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
     const [activePanelAction, setActivePanelAction] = useState<CurrentWorkActionVM | null>(null);
     const [activityPreviewOpen, setActivityPreviewOpen] = useState(false);
+    const [requirementsExpanded, setRequirementsExpanded] = useState(false);
 
     const activityPreviewItems = useMemo(
         () => buildCurrentWorkActivityPreviewItemsFromContext(context, {
@@ -301,30 +302,20 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
         closeActionPanel();
     };
 
-    const statusChip =
-        surface.progress.total > 0 ?
-            <span
-                className={clsx(
-                    "alloy-os-currentwork__status-progress-pill",
-                    surface.status === "completed" && "alloy-os-currentwork__status-progress-pill--complete",
-                )}
-                data-work-status-pill={focused ? "focused" : "summary"}
-                style={{ "--work-progress-percent": `${surface.progress.percent}%` } as CSSProperties}
-            >
-                <span className="alloy-os-currentwork__status-progress-fill" aria-hidden />
-                <span className="alloy-os-currentwork__status-progress-label">
-                    {surface.statusLabel} · {surface.progress.percent}%
-                </span>
-            </span>
-        :   <span
-                className={clsx(
-                    "alloy-os-card-pill alloy-os-card-pill--subtle alloy-os-currentwork__status-chip",
-                    surface.status === "completed" && "alloy-os-card-pill--complete",
-                )}
-                data-work-status-pill={focused ? "focused" : "summary"}
-            >
-                {surface.statusLabel}
-            </span>;
+    const statusChip = (
+        <span
+            className={clsx(
+                "alloy-os-card-pill alloy-os-card-pill--subtle alloy-os-currentwork__status-chip",
+                surface.status === "completed" && "alloy-os-card-pill--complete",
+                surface.status === "blocked" && "alloy-os-card-pill--blocked",
+            )}
+            data-work-status-pill={focused ? "focused" : "summary"}
+        >
+            {surface.statusLabel}
+        </span>
+    );
+
+    const readinessSummary = surface.readiness.reasonLabel;
 
     const footerAction =
         evidence.isEmpty || focused ? null : (
@@ -332,9 +323,9 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 type="button"
                 className="alloy-os-ucard__action alloy-os-ucard__action--system5"
                 onClick={openFocus}
-                data-work-action="details"
+                data-work-action="open-work"
             >
-                Details →
+                Open work →
             </button>
         );
 
@@ -367,8 +358,11 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                     primaryWorkItem={vm.primaryWorkItem}
                     busy={busy}
                     error={error}
-                    onChecklistItem={handleChecklistItem}
-                    handoffNotice={handoffNotice}
+                onChecklistItem={handleChecklistItem}
+                handoffNotice={handoffNotice}
+                requirementsExpanded={focused || requirementsExpanded}
+                onToggleRequirements={() => setRequirementsExpanded((open) => !open)}
+                readinessSummary={readinessSummary}
                     onSelectOutcome={(key) => {
                         clearError();
                         setPendingOutcomeKey(key);
@@ -401,6 +395,9 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 opportunityId={opportunityId}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
+                requirementsExpanded={requirementsExpanded}
+                onToggleRequirements={() => setRequirementsExpanded((open) => !open)}
+                readinessSummary={readinessSummary}
                 activityPreviewOpen={activityPreviewOpen}
                 onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
                 onCloseActivityPreview={handleCloseActivityPreview}
@@ -436,19 +433,71 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     );
 }
 
-function SurfaceProgress({ progress }: { progress: CurrentWorkSurfaceVM["progress"] }) {
-    if (progress.total <= 0) return null;
+function OperatorGuidanceBlock({ text }: { text: string | null | undefined }) {
+    const guidance = text?.trim();
+    if (!guidance) return null;
     return (
-        <div className="alloy-os-currentwork__progress-block" data-work-progress="true">
-            <div className="alloy-os-currentwork__progress-bar" aria-hidden>
-                <span
-                    className="alloy-os-currentwork__progress-bar-fill"
-                    style={{ width: `${progress.percent}%` }}
-                />
-            </div>
-            <p className="alloy-os-currentwork__progress-copy">
-                {progress.completed} of {progress.total} complete
-            </p>
+        <div className="alloy-os-currentwork__guidance" data-work-operator-guidance="true">
+            <p className="alloy-os-currentwork__guidance-label">Operator guidance</p>
+            <p className="alloy-os-currentwork__guidance-text">{guidance}</p>
+        </div>
+    );
+}
+
+function SurfaceProgress({ surface }: { surface: CurrentWorkSurfaceVM }) {
+    const readiness = surface.readiness;
+    if (!readiness.reasonLabel && !readiness.requirements && !readiness.workItems) return null;
+    return (
+        <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true">
+            {readiness.reasonLabel ?
+                <p className="alloy-os-currentwork__readiness-reason">{readiness.reasonLabel}</p>
+            :   null}
+            {readiness.requirements ?
+                <p className="alloy-os-currentwork__readiness-count">
+                    Requirements: {readiness.requirements.remaining} remaining
+                </p>
+            :   null}
+            {readiness.workItems ?
+                <p className="alloy-os-currentwork__readiness-count">
+                    Work items: {readiness.workItems.complete} of {readiness.workItems.total} complete
+                </p>
+            :   null}
+        </div>
+    );
+}
+
+function RequirementsDisclosure({
+    surface,
+    expanded,
+    onToggle,
+    onNavigate,
+}: {
+    surface: CurrentWorkSurfaceVM;
+    expanded: boolean;
+    onToggle: () => void;
+    onNavigate: (item: CurrentWorkChecklistItemVM) => void;
+}) {
+    const items = surface.readiness.requirements?.items ?? surface.checklist;
+    if (items.length === 0) return null;
+    const remaining = surface.readiness.requirements?.remaining ?? items.filter((i) => i.status !== "complete").length;
+
+    return (
+        <div className="alloy-os-currentwork__requirements-disclosure" data-work-requirements-disclosure="true">
+            <button
+                type="button"
+                className="alloy-os-currentwork__requirements-trigger"
+                onClick={onToggle}
+                aria-expanded={expanded}
+                data-work-requirements-trigger="true"
+            >
+                <span>Requirements</span>
+                <span className="alloy-os-currentwork__requirements-meta">
+                    {remaining} remaining {expanded ? "▴" : "▾"}
+                </span>
+            </button>
+            {expanded ?
+                <ChecklistStepper items={items as CurrentWorkChecklistItemVM[]} onNavigate={onNavigate} />
+            :   null}
         </div>
     );
 }
@@ -582,16 +631,6 @@ function ActivityFooter({
 
     return (
         <div className="alloy-os-currentwork__activity-footer" data-work-activity-footer="true">
-            {surface.lastActivity ?
-                <p className="alloy-os-currentwork__last-activity">
-                    Last contact: {surface.lastActivity.occurredAt ?? "—"}
-                    {surface.lastActivity.detail ?
-                        <span> · {surface.lastActivity.detail}</span>
-                    : surface.lastActivity.label ?
-                        <span> · {surface.lastActivity.label}</span>
-                    :   null}
-                </p>
-            :   null}
             <div className="alloy-os-currentwork__activity-link-wrap">
                 <button
                     ref={triggerRef}
@@ -601,7 +640,11 @@ function ActivityFooter({
                     aria-expanded={activityPreviewOpen}
                     data-work-action="preview-activity"
                 >
-                    View recent activity →
+                    Recent activity
+                    <span className="alloy-os-currentwork__activity-meta">
+                        {activityPreviewItems.length} recent event{activityPreviewItems.length === 1 ? "" : "s"}{" "}
+                        {activityPreviewOpen ? "▴" : "▾"}
+                    </span>
                 </button>
                 <CurrentWorkActivityPreview
                     open={activityPreviewOpen}
@@ -621,6 +664,8 @@ function SummaryBody({
     opportunityId,
     onChecklistItem,
     onAction,
+    requirementsExpanded,
+    onToggleRequirements,
     activityPreviewOpen,
     onToggleActivityPreview,
     onCloseActivityPreview,
@@ -632,6 +677,9 @@ function SummaryBody({
     opportunityId: string;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
+    requirementsExpanded: boolean;
+    onToggleRequirements: () => void;
+    readinessSummary?: string | null;
     activityPreviewOpen: boolean;
     onToggleActivityPreview: () => void;
     onCloseActivityPreview: () => void;
@@ -647,12 +695,31 @@ function SummaryBody({
                     <ViewInWorkItemsLink taskId={primaryWorkItem.work_id} opportunityId={opportunityId} />
                 </div>
             :   null}
-            <SurfaceProgress progress={surface.progress} />
-            <ChecklistStepper items={surface.checklist} onNavigate={onChecklistItem} />
+            <SurfaceProgress surface={surface} />
+            <OperatorGuidanceBlock text={surface.operatorGuidance} />
+            <RequirementsDisclosure
+                surface={surface}
+                expanded={requirementsExpanded}
+                onToggle={onToggleRequirements}
+                onNavigate={onChecklistItem}
+            />
             {surface.primaryAction ?
                 <WorkPrimaryCard action={surface.primaryAction} onAction={onAction} />
             :   null}
+            {surface.recordOutcomeAction ?
+                <button
+                    type="button"
+                    className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                    data-work-action="record-outcome"
+                    onClick={() => onAction(surface.recordOutcomeAction!)}
+                >
+                    {surface.recordOutcomeAction.label}
+                </button>
+            :   null}
             <SupportingGrid actions={helpfulActions} onAction={onAction} />
+            {surface.alternatePaths.length > 0 ?
+                <AlternatePathsList actions={surface.alternatePaths} onAction={onAction} />
+            :   null}
             <ActivityFooter
                 surface={surface}
                 activityPreviewOpen={activityPreviewOpen}
@@ -661,6 +728,35 @@ function SummaryBody({
                 onViewFullActivity={onViewFullActivity}
                 activityPreviewItems={activityPreviewItems}
             />
+        </div>
+    );
+}
+
+function AlternatePathsList({
+    actions,
+    onAction,
+}: {
+    actions: CurrentWorkActionVM[];
+    onAction: (action: CurrentWorkActionVM) => void;
+}) {
+    return (
+        <div className="alloy-os-currentwork__path-list" data-work-section="alternate">
+            <p className="alloy-os-currentwork__actions-eyebrow">Alternate paths</p>
+            <ul className="alloy-os-currentwork__path-items">
+                {actions.map((action) => (
+                    <li key={action.key}>
+                        <button
+                            type="button"
+                            className="alloy-os-currentwork__path-action"
+                            disabled={action.disabled}
+                            title={action.disabledReason ?? undefined}
+                            onClick={() => onAction(action)}
+                        >
+                            {action.label}
+                        </button>
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 }
@@ -675,6 +771,8 @@ function FocusedBody({
     error,
     onChecklistItem,
     handoffNotice,
+    requirementsExpanded,
+    onToggleRequirements,
     onSelectOutcome,
     onCancelOutcome,
     onConfirmOutcome,
@@ -690,6 +788,9 @@ function FocusedBody({
     error: string | null;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     handoffNotice: string | null;
+    requirementsExpanded: boolean;
+    onToggleRequirements: () => void;
+    readinessSummary?: string | null;
     onSelectOutcome: (key: string) => void;
     onCancelOutcome: () => void;
     onConfirmOutcome: () => void;
@@ -739,9 +840,15 @@ function FocusedBody({
     const helpfulActions = [...surface.supportingActions, ...surface.communicationActions];
 
     return (
-        <div className="alloy-os-currentwork__focus" data-work-completion="working">
-            <SurfaceProgress progress={surface.progress} />
-            <ChecklistStepper items={surface.checklist} onNavigate={onChecklistItem} />
+        <div className="alloy-os-currentwork__focus alloy-os-currentwork__focus--scroll" data-work-completion="working">
+            <SurfaceProgress surface={surface} />
+            <OperatorGuidanceBlock text={surface.operatorGuidance} />
+            <RequirementsDisclosure
+                surface={surface}
+                expanded={requirementsExpanded}
+                onToggle={onToggleRequirements}
+                onNavigate={onChecklistItem}
+            />
             {handoffNotice ?
                 <p className="alloy-os-currentwork__handoff-notice" role="status" data-work-handoff-blocked="true">
                     {handoffNotice}
@@ -772,22 +879,7 @@ function FocusedBody({
                 {surface.alternatePaths.length > 0 || surface.bosRecommendations.length > 0 ?
                     <div className="alloy-os-currentwork__expanded-side">
                         {surface.alternatePaths.length > 0 ?
-                            <div className="alloy-os-currentwork__path-list" data-work-section="alternate">
-                                <p className="alloy-os-currentwork__supporting-title">Other paths</p>
-                                <ul className="alloy-os-currentwork__path-items">
-                                    {surface.alternatePaths.map((action) => (
-                                        <li key={action.key}>
-                                            <button
-                                                type="button"
-                                                className="alloy-os-currentwork__path-action"
-                                                onClick={() => onAction(action)}
-                                            >
-                                                {action.label}
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
+                            <AlternatePathsList actions={surface.alternatePaths} onAction={onAction} />
                         :   null}
                         {surface.bosRecommendations.length > 0 ?
                             <div className="alloy-os-currentwork__path-list" data-work-section="bos">

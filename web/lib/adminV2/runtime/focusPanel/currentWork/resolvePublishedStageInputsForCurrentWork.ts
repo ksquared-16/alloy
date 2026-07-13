@@ -15,6 +15,7 @@ import {
 import { effectiveFieldRulesForBuilderStage } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 
@@ -26,6 +27,8 @@ export type PublishedStageInputsForCurrentWork = {
     stageKey: string;
     departmentMetadata: Record<string, unknown>;
     processStages: Array<{ key: string; label: string }>;
+    processTracks?: ProcessTracksV1 | null;
+    operatorGuidance?: string | null;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -79,5 +82,7 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
         stageKey,
         departmentMetadata,
         processStages,
+        processTracks: process?.tracks_v1 ?? null,
+        operatorGuidance: stage?.operator_guidance?.trim() || null,
     };
 }

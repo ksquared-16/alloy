@@ -5,10 +5,15 @@
  * target metadata from configured process/stage context.
  */
 
-import { ACTION_BUTTON_LIBRARY } from "@/lib/admin/actions/actionDefinitionRegistry";
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
 import { GENERIC_UMBRELLA_LIFECYCLE_ACTION_KEYS } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActionSurfacePolicy";
+import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
+import {
+    resolveOutgoingProcessTransitions,
+    type OutgoingProcessTransition,
+} from "@/lib/lifecycle/resolveOutgoingProcessTransitions";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
+import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     isNonCanonicalIntentAlias,
     resolveIntentExecutionRef,
@@ -92,8 +97,6 @@ function actionLabel(actionKey: string, overrideLabel?: string | null): string {
     if (override) return override;
     const intent = workTemplateActionIntentForKey(actionKey);
     if (intent) return intent.label;
-    const catalog = ACTION_BUTTON_LIBRARY.find((row) => row.key === actionKey);
-    if (catalog?.label) return catalog.label;
     const canonical = canonicalActionDefinition(actionKey);
     if (canonical?.label) return canonical.label;
     const platform = getPlatformAction(actionKey);
@@ -104,8 +107,6 @@ function actionLabel(actionKey: string, overrideLabel?: string | null): string {
 function actionDescription(actionKey: string): string | undefined {
     const intent = workTemplateActionIntentForKey(actionKey);
     if (intent?.description) return intent.description;
-    const catalog = ACTION_BUTTON_LIBRARY.find((row) => row.key === actionKey);
-    if (catalog?.description) return catalog.description;
     return canonicalActionDefinition(actionKey)?.description;
 }
 
@@ -114,8 +115,7 @@ function rawCategory(actionKey: string): string {
     if (canonical?.category) return canonical.category;
     const platform = getPlatformAction(actionKey);
     if (platform?.category) return platform.category;
-    const catalog = ACTION_BUTTON_LIBRARY.find((row) => row.key === actionKey);
-    return catalog?.category ?? "record";
+    return "record";
 }
 
 function executionSurfaceForAction(actionKey: string): string | undefined {
@@ -181,27 +181,56 @@ export function formatCanonicalActionOptionDescription(option: CanonicalWorkTemp
     return parts.filter(Boolean).join(" · ");
 }
 
-function collectCandidateActionKeys(args: {
-    actionRegistry: unknown;
-    stageActionCatalog?: StageActionCatalogV1 | null;
-}): string[] {
-    const keys = new Set<string>();
+function configuredRegistryKeys(
+    registry: unknown,
+    stageKey: string,
+    catalogKeys: Set<string>,
+): string[] {
+    if (!Array.isArray(registry)) return [];
+    const keys: string[] = [];
 
-    for (const row of args.stageActionCatalog?.candidate_actions ?? []) {
-        const key = row.action_key.trim();
-        if (key) keys.add(key);
-    }
+    for (const row of registry) {
+        if (row == null || typeof row !== "object") continue;
+        const record = row as LifecycleConfiguredActionRow;
+        const key = trimOrNull(record.key);
+        if (!key) continue;
 
-    if (Array.isArray(args.actionRegistry)) {
-        for (const row of args.actionRegistry) {
-            if (row == null || typeof row !== "object") continue;
-            const key = trimOrNull((row as Record<string, unknown>).key);
-            if (key) keys.add(key);
+        if (catalogKeys.has(key)) {
+            keys.push(key);
+            continue;
+        }
+
+        if (!("action_scope" in record)) continue;
+        if (record.action_scope === "lifecycle") {
+            keys.push(key);
+            continue;
+        }
+        if (record.operator_stages?.some((stage) => stage === stageKey)) {
+            keys.push(key);
         }
     }
 
-    for (const row of ACTION_BUTTON_LIBRARY) {
-        if (row.settingsConfigurable) keys.add(row.key);
+    return keys;
+}
+
+function collectCandidateActionKeys(args: {
+    actionRegistry: unknown;
+    stageActionCatalog?: StageActionCatalogV1 | null;
+    stageKey?: string;
+}): string[] {
+    const keys = new Set<string>();
+    const catalogKeys = new Set<string>();
+
+    for (const row of args.stageActionCatalog?.candidate_actions ?? []) {
+        const key = row.action_key.trim();
+        if (key) {
+            keys.add(key);
+            catalogKeys.add(key);
+        }
+    }
+
+    for (const key of configuredRegistryKeys(args.actionRegistry, args.stageKey?.trim() ?? "", catalogKeys)) {
+        keys.add(key);
     }
 
     return [...keys].filter((key) => !isHiddenFromEditor(key) && !isNonCanonicalIntentAlias(key));
@@ -283,6 +312,7 @@ export function resolveCanonicalWorkTemplateActionOptions(input: {
     const candidateKeys = collectCandidateActionKeys({
         actionRegistry: input.actionRegistry,
         stageActionCatalog: input.stageActionCatalog ?? null,
+        stageKey: input.stageKey,
     });
 
     const rawOptions = candidateKeys
@@ -300,39 +330,44 @@ export function resolveCanonicalWorkTemplateActionOptions(input: {
     return mergeByIntent(rawOptions);
 }
 
+function canonicalOptionFromTransition(
+    row: OutgoingProcessTransition,
+    currentStageKey: string,
+    currentStageLabel?: string,
+): CanonicalWorkTemplateActionOption {
+    const fromLabel = currentStageLabel?.trim() || currentStageKey.replace(/_/g, " ");
+    return {
+        ref: row.transition_ref,
+        intentKey: row.transition_ref,
+        label: row.label,
+        description: `Transition · ${fromLabel} → ${row.target_stage_label}`,
+        category: "transition",
+        group: "Recommended",
+        supported: true,
+        target: { source: "process_subject", selectionMode: "configured" },
+        executionSurface: "stage_transition",
+    };
+}
+
 export function resolveCanonicalTransitionOptions(input: {
-    processTransitions: unknown;
-    stageKey: string;
+    currentStageKey: string;
+    currentStageLabel?: string;
+    stageOperatingPlan?: StageOperatingPlanV1 | null;
+    processTracks?: unknown;
+    processStages?: ReadonlyArray<{ key: string; label: string }>;
+    /** @deprecated Legacy callers pass stage inventory — ignored; use configured edges only. */
+    processTransitions?: unknown;
 }): CanonicalWorkTemplateActionOption[] {
-    if (!Array.isArray(input.processTransitions)) return [];
-    const current = input.stageKey.trim();
-    const options: CanonicalWorkTemplateActionOption[] = [];
-    const seen = new Set<string>();
+    const transitions = resolveOutgoingProcessTransitions({
+        currentStageKey: input.currentStageKey,
+        stageOperatingPlan: input.stageOperatingPlan ?? null,
+        processTracks: input.processTracks ?? null,
+        processStages: input.processStages ?? [],
+    });
 
-    for (const row of input.processTransitions) {
-        if (row == null || typeof row !== "object") continue;
-        const record = row as Record<string, unknown>;
-        const targetStageKey = trimOrNull(record.key);
-        if (!targetStageKey || targetStageKey === current || seen.has(targetStageKey)) continue;
-        seen.add(targetStageKey);
-        const label =
-            trimOrNull(record.label)
-            ?? targetStageKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-        const ref = `move_to_stage:${targetStageKey}`;
-        options.push({
-            ref,
-            intentKey: ref,
-            label: `Move to ${label}`,
-            description: `Advance record to ${label}`,
-            category: "transition",
-            group: "Recommended",
-            supported: true,
-            target: { source: "process_subject", selectionMode: "configured" },
-            executionSurface: "stage_transition",
-        });
-    }
-
-    return options;
+    return transitions.map((row) =>
+        canonicalOptionFromTransition(row, input.currentStageKey, input.currentStageLabel),
+    );
 }
 
 export function resolveCanonicalWorkTemplateAlternatePathOptions(input: {
@@ -340,19 +375,21 @@ export function resolveCanonicalWorkTemplateAlternatePathOptions(input: {
     stageDefinition?: unknown;
     actionRegistry: unknown;
     stageActionCatalog?: StageActionCatalogV1 | null;
-    processTransitions: unknown;
+    stageOperatingPlan?: StageOperatingPlanV1 | null;
+    processTracks?: unknown;
+    processStages?: ReadonlyArray<{ key: string; label: string }>;
     stageKey: string;
+    stageLabel?: string;
+    /** @deprecated Legacy callers pass stage inventory — ignored. */
+    processTransitions?: unknown;
 }): CanonicalWorkTemplateActionOption[] {
-    const transitions = resolveCanonicalTransitionOptions({
-        processTransitions: input.processTransitions,
-        stageKey: input.stageKey,
+    return resolveCanonicalTransitionOptions({
+        currentStageKey: input.stageKey,
+        currentStageLabel: input.stageLabel,
+        stageOperatingPlan: input.stageOperatingPlan ?? null,
+        processTracks: input.processTracks ?? null,
+        processStages: input.processStages ?? [],
     });
-
-    const lifecycleActions = resolveCanonicalWorkTemplateActionOptions(input).filter(
-        (row) => row.category === "lifecycle",
-    );
-
-    return [...transitions, ...lifecycleActions];
 }
 
 export { CATEGORY_TO_GROUP as WORK_TEMPLATE_ACTION_GROUP_LABELS };

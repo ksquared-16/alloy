@@ -41,6 +41,7 @@ import {
     type StageGrain,
     type StageSubjectResolutionStrategy,
 } from "@/lib/lifecycle/stageGrainV1";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { StageCandidateAction } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
@@ -531,6 +532,7 @@ export default function StageEditorV2({
     stageLabel,
     stageRecord,
     allStages: _allStages,
+    processTracks,
     bootstrap,
     bootstrapLoading,
     entityDisplayLabels,
@@ -548,6 +550,7 @@ export default function StageEditorV2({
     stageLabel: string;
     stageRecord?: LifecycleBuilderStageRecord | null;
     allStages?: LifecycleBuilderStageRecord[];
+    processTracks?: ProcessTracksV1 | null;
     bootstrap: LifecycleStageBootstrapPayload | null;
     bootstrapLoading: boolean;
     entityDisplayLabels?: Partial<Record<LifecycleRequirementEntityKey, string>>;
@@ -874,6 +877,7 @@ export default function StageEditorV2({
                                         label: stage.label,
                                     })) ?? []
                                 }
+                                processTracks={processTracks ?? null}
                             />
 
                             <Subsection label="Recommended actions">

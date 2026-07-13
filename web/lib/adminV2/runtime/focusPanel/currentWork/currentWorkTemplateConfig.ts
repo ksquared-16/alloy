@@ -12,6 +12,7 @@ export type CurrentWorkTemplateChecklistConfig = {
     required?: boolean;
     scope?: "record" | "child" | "person";
     action_ref?: string;
+    kind?: "requirement" | "stage_work";
 };
 
 export type CurrentWorkTemplateActionRefConfig = {

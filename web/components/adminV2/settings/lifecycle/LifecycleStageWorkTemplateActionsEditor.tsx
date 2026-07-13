@@ -3,7 +3,8 @@
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 
 import AlloyConfigPicker, { type AlloyConfigPickerOption } from "@/components/adminV2/settings/shared/AlloyConfigPicker";
-import type { StageCompletionOutcomeV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
+import type { StageCompletionOutcomeV1, StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     addWorkTemplateHelpfulAction,
     markWorkTemplateAlternatePathsEmpty,
@@ -38,10 +39,13 @@ import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConf
 type Props = {
     work: StageWorkTemplateV1;
     stageKey: string;
+    stageLabel?: string;
     stageOutcomes: StageCompletionOutcomeV1[];
     actionCatalog: StageActionCatalogV1 | null;
     configuredActions: LifecycleConfiguredActionRow[];
     processStages: Array<{ key: string; label: string }>;
+    stageOperatingPlan?: StageOperatingPlanV1 | null;
+    processTracks?: ProcessTracksV1 | null;
     stageDefinition?: { journey_segment?: string } | null;
     processDefinition?: { primary_entity?: string } | null;
     onChange: (work: StageWorkTemplateV1) => void;
@@ -169,10 +173,13 @@ function OrderedActionRows({
 export default function LifecycleStageWorkTemplateActionsEditor({
     work,
     stageKey,
+    stageLabel,
     stageOutcomes,
     actionCatalog,
     configuredActions,
     processStages,
+    stageOperatingPlan,
+    processTracks,
     stageDefinition,
     processDefinition,
     onChange,
@@ -180,8 +187,11 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     const options = resolveWorkTemplateActionOptions({
         actionRegistry: configuredActions,
         stageActionCatalog: actionCatalog,
-        processTransitions: processStages,
+        stageOperatingPlan: stageOperatingPlan ?? null,
+        processTracks: processTracks ?? null,
+        processStages,
         stageKey,
+        stageLabel,
         stageOutcomes,
         workTemplateKey: work.template_key,
         stageDefinition,

@@ -1,6 +1,6 @@
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
-import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
+import { normalizeActionRefToIntentKey, workTemplateActionIntentForKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 
 import { resolveCurrentWorkTemplateAction } from "./resolveCurrentWorkTemplateAction";
 import {
@@ -74,6 +74,36 @@ function placementForCategory(category: CurrentWorkActionCategory): CurrentWorkA
     }
 }
 
+function isEnrollmentIntentAction(actionKey: string): boolean {
+    const key = actionKey.trim();
+    if (!key) return false;
+    const intent = workTemplateActionIntentForKey(key);
+    if (!intent) return false;
+    return intent.intentKey === "move_to_waitlist"
+        || intent.intentKey === "enroll_subject"
+        || intent.intentKey === "close_lead";
+}
+
+function isContextuallyAllowedRecordHeaderAction(
+    actionKey: string,
+    allowedActionKeys: ReadonlySet<string> | null | undefined,
+): boolean {
+    const key = actionKey.trim();
+    if (!key) return false;
+
+    const intentKey = normalizeActionRefToIntentKey(key);
+    if (allowedActionKeys?.size) {
+        return allowedActionKeys.has(key) || allowedActionKeys.has(intentKey);
+    }
+
+    if (isEnrollmentIntentAction(key)) return false;
+
+    const category = canonicalActionDefinition(key)?.category;
+    if (category === "status_lifecycle") return false;
+
+    return true;
+}
+
 export type ClassifiedCurrentWorkActions = {
     supporting: CurrentWorkActionVM[];
     alternatePaths: CurrentWorkActionVM[];
@@ -90,6 +120,8 @@ export function classifyRecordHeaderActionsForCurrentWork(args: {
     recordHeaderSlots: ResolvedActionsBySlot | null | undefined;
     showOutcomeCompletion: boolean;
     primaryActionLabel: string | null;
+    /** Stage catalog + explicit template refs — record-header fallback must match these. */
+    allowedActionKeys?: ReadonlySet<string> | null;
 }): ClassifiedCurrentWorkActions {
     const slots = args.recordHeaderSlots;
     const supporting: CurrentWorkActionVM[] = [];
@@ -114,6 +146,7 @@ export function classifyRecordHeaderActionsForCurrentWork(args: {
         const key = action.key.trim();
         if (!key || seen.has(key)) continue;
         if (isGenericUmbrellaLifecycleAction(key)) continue;
+        if (!isContextuallyAllowedRecordHeaderAction(key, args.allowedActionKeys)) continue;
 
         const labelNorm = action.label.trim().toLowerCase();
         if (primaryNorm && (labelNorm === primaryNorm || labelNorm === `${primaryNorm} →`)) continue;

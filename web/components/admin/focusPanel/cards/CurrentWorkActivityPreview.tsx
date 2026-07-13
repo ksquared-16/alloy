@@ -103,7 +103,7 @@ export default function CurrentWorkActivityPreview({
                         onClick={onViewFullActivity}
                         data-work-action="view-full-activity"
                     >
-                        View full activity →
+                        View all activity →
                     </button>
                 :   null}
             </div>

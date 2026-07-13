@@ -8,6 +8,7 @@ import type {
 import { workIntentProjectionForStageWorkItem } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import { completionOutcomesForPicker } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 
 import {
@@ -29,6 +30,8 @@ import type {
     CurrentWorkSurfaceStatus,
     CurrentWorkSurfaceVM,
     CurrentWorkActionVM,
+    CurrentWorkReadinessItemVM,
+    CurrentWorkReadinessVM,
 } from "./currentWorkSurfaceTypes";
 import { resolveCurrentWorkChecklistTruthFromPublishedRules, type ChecklistTruthResult } from "./resolveCurrentWorkChecklistTruthFromPublishedRules";
 import { resolveCurrentWorkTemplateFromPublishedPlan } from "./resolveCurrentWorkTemplateFromPublishedPlan";
@@ -80,6 +83,91 @@ function statusLabelFor(status: CurrentWorkSurfaceStatus, hasOpenWork: boolean):
     }
 }
 
+function classifyChecklistItems(checklist: CurrentWorkChecklistItemVM[]): {
+    requirements: CurrentWorkReadinessItemVM[];
+    workItems: CurrentWorkReadinessItemVM[];
+} {
+    const requirements: CurrentWorkReadinessItemVM[] = [];
+    const workItems: CurrentWorkReadinessItemVM[] = [];
+    for (const item of checklist) {
+        const row: CurrentWorkReadinessItemVM = {
+            key: item.key,
+            label: item.label,
+            status: item.status,
+            scope: item.scope,
+            targetLabel: item.targetLabel,
+        };
+        if (item.kind === "stage_work") {
+            workItems.push(row);
+        } else {
+            requirements.push(row);
+        }
+    }
+    return { requirements, workItems };
+}
+
+function buildReadinessVM(args: {
+    status: CurrentWorkSurfaceStatus;
+    statusLabel: string;
+    checklist: CurrentWorkChecklistItemVM[];
+    blocked: boolean;
+    attentionReason: string | null;
+    hasOpenWork: boolean;
+    hasOverdue: boolean;
+    dueLabel?: string | null;
+}): CurrentWorkReadinessVM {
+    const { requirements, workItems } = classifyChecklistItems(args.checklist);
+    const reqComplete = requirements.filter((i) => i.status === "complete").length;
+    const reqTotal = requirements.length;
+    const workComplete = workItems.filter((i) => i.status === "complete").length;
+    const workTotal = workItems.length;
+
+    const reasonCodes: string[] = [];
+    let reasonLabel: string | null = null;
+
+    if (args.status === "blocked") {
+        if (args.attentionReason) {
+            reasonCodes.push("attention");
+            reasonLabel = args.attentionReason;
+        } else if (reqTotal > 0 && reqComplete < reqTotal) {
+            reasonCodes.push("requirements_remaining");
+            const remaining = reqTotal - reqComplete;
+            reasonLabel = `${remaining} requirement${remaining === 1 ? "" : "s"} remaining`;
+        } else {
+            reasonCodes.push("blocked");
+            reasonLabel = "Waiting for a required action";
+        }
+    } else if (args.hasOverdue && args.dueLabel) {
+        reasonCodes.push("overdue");
+        reasonLabel = args.dueLabel;
+    } else if (reqTotal > 0 && reqComplete < reqTotal) {
+        reasonCodes.push("requirements_remaining");
+        const remaining = reqTotal - reqComplete;
+        reasonLabel = `${remaining} requirement${remaining === 1 ? "" : "s"} remaining`;
+    }
+
+    return {
+        state: args.status,
+        reasonCodes,
+        reasonLabel,
+        ...(reqTotal > 0 ? {
+            requirements: {
+                complete: reqComplete,
+                total: reqTotal,
+                remaining: reqTotal - reqComplete,
+                items: requirements,
+            },
+        } : {}),
+        ...(workTotal > 0 ? {
+            workItems: {
+                complete: workComplete,
+                total: workTotal,
+                remaining: workTotal - workComplete,
+            },
+        } : {}),
+    };
+}
+
 function resolveSurfaceStatus(args: {
     isEmpty: boolean;
     blocked: boolean;
@@ -127,6 +215,7 @@ function checklistFromStageRuntime(runtime: StageWorkRuntimeProjection | null): 
             key: item.template_key,
             label: item.label,
             status,
+            kind: "stage_work",
             scope: "record",
             targetLabel,
             actionRef: null,
@@ -150,6 +239,7 @@ function checklistFromConfig(
             key: row.key,
             label: row.label,
             status,
+            kind: row.kind ?? "requirement",
             scope: row.scope,
             targetLabel:
                 truth?.targetLabel
@@ -182,6 +272,7 @@ function checklistFromReadiness(readiness: ReadinessResult | null | undefined): 
         key: gap.requirement_id,
         label: gap.label,
         status: gap.blocking ? ("blocked" as const) : ("missing" as const),
+        kind: "requirement" as const,
         scope:
             gap.entity_type === "child" ? ("child" as const)
             : gap.entity_type === "person" ? ("person" as const)
@@ -421,6 +512,35 @@ function alternatePathsFromConfigRefs(
     return out;
 }
 
+function contextAllowedActionKeys(args: {
+    actionCatalog: StageActionCatalogV1 | null | undefined;
+    templateConfig: CurrentWorkTemplateConfigOverlay | null | undefined;
+}): ReadonlySet<string> {
+    const keys = new Set<string>();
+    for (const candidate of args.actionCatalog?.candidate_actions ?? []) {
+        const key = candidate.action_key.trim();
+        if (!key) continue;
+        keys.add(key);
+        keys.add(normalizeActionRefToIntentKey(key));
+    }
+    const template = args.templateConfig;
+    const refs = [
+        template?.primary_action?.action_ref,
+        ...(template?.helpful_actions ?? []).map((row) => row.action_ref),
+        ...(template?.alternate_paths ?? []).flatMap((row) =>
+            "action_ref" in row ? [row.action_ref] : [],
+        ),
+        ...(template?.communication_actions ?? []).map((row) => row.action_ref),
+    ];
+    for (const ref of refs) {
+        const key = ref?.trim();
+        if (!key) continue;
+        keys.add(key);
+        keys.add(normalizeActionRefToIntentKey(key));
+    }
+    return keys;
+}
+
 /**
  * Build the presentation-safe Current Work surface VM from runtime + config.
  * Deterministic; UI renders this only — no domain-specific branches in components.
@@ -485,6 +605,10 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         recordHeaderSlots: context.recordHeaderActions ?? null,
         showOutcomeCompletion,
         primaryActionLabel,
+        allowedActionKeys: contextAllowedActionKeys({
+            actionCatalog: context.publishedStageInputs?.actionCatalog ?? null,
+            templateConfig,
+        }),
     });
 
     const configCompletedKeys = new Set(completedChecklistKeys ?? []);
@@ -528,9 +652,22 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         && !templateConfig
         && classified.supporting.length === 0
         && classified.alternatePaths.length === 0;
-    const blocked = attention.needsAttention && Boolean(attention.primaryReason);
+    const blocked =
+        (attention.needsAttention && Boolean(attention.primaryReason))
+        || (checklist.some((item) => item.status === "blocked"));
     const hasOpenWork = Boolean(actionableWorkItem?.state === "open");
+    const hasOverdue = context.signals.work.overdueCount > 0;
     const status = resolveSurfaceStatus({ isEmpty, blocked, completed, total, hasOpenWork });
+    const readiness = buildReadinessVM({
+        status,
+        statusLabel: statusLabelFor(status, hasOpenWork),
+        checklist,
+        blocked,
+        attentionReason: attention.primaryReason,
+        hasOpenWork,
+        hasOverdue,
+        dueLabel: context.signals.work.primary?.dueLabel ?? null,
+    });
 
     const title =
         templateConfig?.title?.trim()
@@ -543,6 +680,8 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         ?? actionableWorkItem?.description?.trim()
         ?? runtime?.purpose?.trim()
         ?? null;
+
+    const operatorGuidance = context.publishedStageInputs?.operatorGuidance?.trim() ?? null;
 
     const intentCtx = actionIntentContext(context);
 
@@ -618,8 +757,10 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         workKey,
         title: isEmpty ? "No current work configured" : title,
         description,
+        operatorGuidance,
         status,
         statusLabel: statusLabelFor(status, hasOpenWork),
+        readiness,
         progress,
         checklist,
         primaryAction,

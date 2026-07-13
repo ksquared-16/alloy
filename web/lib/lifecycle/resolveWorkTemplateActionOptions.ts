@@ -7,12 +7,13 @@
 
 import {
     formatCanonicalActionOptionDescription,
-    resolveCanonicalTransitionOptions,
     resolveCanonicalWorkTemplateActionOptions,
     resolveCanonicalWorkTemplateAlternatePathOptions,
     type CanonicalWorkTemplateActionOption,
 } from "@/lib/lifecycle/resolveCanonicalWorkTemplateActionOptions";
+import { resolveOutgoingProcessTransitions } from "@/lib/lifecycle/resolveOutgoingProcessTransitions";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
+import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 export type WorkTemplateActionOption = {
     ref: string;
@@ -58,22 +59,38 @@ function toWorkTemplateActionOption(row: CanonicalWorkTemplateActionOption): Wor
     };
 }
 
-function buildTransitionOptions(processTransitions: unknown, stageKey: string): WorkTemplateTransitionOption[] {
-    return resolveCanonicalTransitionOptions({ processTransitions, stageKey }).map((row) => ({
-        ref: row.ref,
+function buildTransitionOptions(input: {
+    stageKey: string;
+    stageLabel?: string;
+    stageOperatingPlan?: StageOperatingPlanV1 | null;
+    processTracks?: unknown;
+    processStages?: ReadonlyArray<{ key: string; label: string }>;
+}): WorkTemplateTransitionOption[] {
+    const fromLabel = input.stageLabel?.trim() || input.stageKey.replace(/_/g, " ");
+    return resolveOutgoingProcessTransitions({
+        currentStageKey: input.stageKey,
+        stageOperatingPlan: input.stageOperatingPlan ?? null,
+        processTracks: input.processTracks ?? null,
+        processStages: input.processStages ?? [],
+    }).map((row) => ({
+        ref: row.transition_ref,
         label: row.label,
-        description: row.description,
-        targetStageKey: row.ref.startsWith("move_to_stage:") ? row.ref.slice("move_to_stage:".length) : undefined,
-        supported: row.supported,
-        ...(row.disabledReason ? { disabledReason: row.disabledReason } : {}),
+        description: `Transition · ${fromLabel} → ${row.target_stage_label}`,
+        targetStageKey: row.target_stage_key,
+        supported: true,
     }));
 }
 
 export function resolveWorkTemplateActionOptions(input: {
     actionRegistry: unknown;
     stageActionCatalog?: StageActionCatalogV1 | null;
-    processTransitions: unknown;
+    stageOperatingPlan?: StageOperatingPlanV1 | null;
+    processTracks?: unknown;
+    processStages?: ReadonlyArray<{ key: string; label: string }>;
+    /** @deprecated Legacy callers pass all stages as transitions — used for label lookup only. */
+    processTransitions?: unknown;
     stageKey: string;
+    stageLabel?: string;
     stageOutcomes?: Array<{ outcome_key: string; label: string; work_template_key?: string | null; successful?: boolean }>;
     workTemplateKey?: string | null;
     processDefinition?: unknown;
@@ -85,20 +102,35 @@ export function resolveWorkTemplateActionOptions(input: {
     transitionOptions: WorkTemplateTransitionOption[];
     outcomeOptions: WorkTemplateOutcomeOption[];
 } {
+    const processStages =
+        input.processStages
+        ?? (Array.isArray(input.processTransitions)
+            ? (input.processTransitions as Array<{ key: string; label: string }>)
+            : []);
+
     const canonicalInput = {
         processDefinition: input.processDefinition,
         stageDefinition: input.stageDefinition,
         actionRegistry: input.actionRegistry,
         stageActionCatalog: input.stageActionCatalog ?? null,
-        processTransitions: input.processTransitions,
+        stageOperatingPlan: input.stageOperatingPlan ?? null,
+        processTracks: input.processTracks ?? null,
+        processStages,
         stageKey: input.stageKey,
+        stageLabel: input.stageLabel,
     };
 
     const primaryActionOptions = resolveCanonicalWorkTemplateActionOptions(canonicalInput).map(toWorkTemplateActionOption);
 
     const helpfulActionOptions = resolveCanonicalWorkTemplateActionOptions(canonicalInput).map(toWorkTemplateActionOption);
 
-    const transitionOptions = buildTransitionOptions(input.processTransitions, input.stageKey);
+    const transitionOptions = buildTransitionOptions({
+        stageKey: input.stageKey,
+        stageLabel: input.stageLabel,
+        stageOperatingPlan: input.stageOperatingPlan ?? null,
+        processTracks: input.processTracks ?? null,
+        processStages,
+    });
 
     const alternatePathOptions = resolveCanonicalWorkTemplateAlternatePathOptions(canonicalInput).map(
         toWorkTemplateActionOption,
@@ -127,28 +159,51 @@ export function resolveWorkTemplateActionOptions(input: {
     };
 }
 
-/** Resolve transition ref to operator label. */
+/** Resolve transition ref to operator label from configured outgoing transitions. */
 export function transitionRefLabel(
     transitionRef: string,
-    processTransitions: unknown,
+    context?: {
+        currentStageKey?: string;
+        stageOperatingPlan?: StageOperatingPlanV1 | null;
+        processTracks?: unknown;
+        processStages?: ReadonlyArray<{ key: string; label: string }>;
+    } | unknown,
 ): string {
     const ref = transitionRef.trim();
-    if (!ref.startsWith("move_to_stage:")) {
-        return ref.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    if (!ref) return ref;
+
+    const resolvedContext =
+        context != null && typeof context === "object" && !Array.isArray(context)
+        && ("currentStageKey" in context || "stageOperatingPlan" in context || "processStages" in context)
+            ? (context as {
+                  currentStageKey?: string;
+                  stageOperatingPlan?: StageOperatingPlanV1 | null;
+                  processTracks?: unknown;
+                  processStages?: ReadonlyArray<{ key: string; label: string }>;
+              })
+            : {
+                  currentStageKey: "",
+                  processStages: Array.isArray(context)
+                      ? (context as Array<{ key: string; label: string }>)
+                      : [],
+              };
+
+    const options = buildTransitionOptions({
+        stageKey: resolvedContext.currentStageKey ?? "",
+        stageOperatingPlan: resolvedContext.stageOperatingPlan ?? null,
+        processTracks: resolvedContext.processTracks ?? null,
+        processStages: resolvedContext.processStages ?? [],
+    });
+
+    const match = options.find((row) => row.ref === ref);
+    if (match?.label) return match.label;
+
+    if (ref.startsWith("move_to_stage:")) {
+        const targetKey = ref.slice("move_to_stage:".length).split(":")[0] ?? "";
+        const stageLabel = (resolvedContext.processStages ?? []).find((row) => row.key === targetKey)?.label;
+        const label = stageLabel?.trim() || targetKey.replace(/_/g, " ");
+        return `Move to ${label}`;
     }
-    const targetKey = ref.slice("move_to_stage:".length);
-    if (!Array.isArray(processTransitions)) {
-        return `Move to ${targetKey.replace(/_/g, " ")}`;
-    }
-    for (const row of processTransitions) {
-        if (row == null || typeof row !== "object") continue;
-        const record = row as Record<string, unknown>;
-        if (trimOrNull(record.key) === targetKey) {
-            const label =
-                trimOrNull(record.label)
-                ?? targetKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-            return `Move to ${label}`;
-        }
-    }
-    return `Move to ${targetKey.replace(/_/g, " ")}`;
+
+    return ref.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }

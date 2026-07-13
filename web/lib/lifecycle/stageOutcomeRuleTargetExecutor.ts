@@ -234,6 +234,7 @@ export async function applyStageOutcomeRuleTarget(
                 departmentId,
                 template: workTpl,
                 dueDaysOverride: target.due_days,
+                followUpDuePolicy: target.follow_up_due_policy ?? null,
             });
             if (result.status === "rejected") {
                 return { error: result.error };
@@ -259,9 +260,11 @@ export async function applyStageOutcomeRuleTarget(
         }
 
         case "move_to_stage": {
-            // Stage is a persisted process-state column (S4). Outcome execution is the
-            // authoritative writer of stage_key on the family case or the child track.
-            const targetStageKey = target.stage_key?.trim();
+            const targetStageKey =
+                target.stage_key?.trim()
+                ?? (target.transition_ref?.startsWith("move_to_stage:")
+                    ? target.transition_ref.slice("move_to_stage:".length).trim()
+                    : null);
             if (!targetStageKey) return { error: "Missing target stage key" };
             const nowIso = new Date().toISOString();
             if (subject.journey_segment === "child") {
