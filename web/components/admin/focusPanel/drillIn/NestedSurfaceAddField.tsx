@@ -14,6 +14,8 @@ import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identity
 import { identityPickerCategoriesForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
 import type { AvailableFieldEntityNamespace } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
+import { householdAuthoringGroupKey } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
+import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 
 type Props = {
@@ -33,10 +35,14 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
 
     const composing = composer?.isComposingSurface(surfaceId) ?? false;
     const config = composer?.configFor(surfaceId);
-    const regionSelected =
-        composer?.selection?.kind === "region" &&
-        composer.selection.surfaceId === surfaceId &&
-        composer.selection.groupKey === groupKey;
+    const regionSelected = (() => {
+        if (!composer?.selection || composer.selection.kind !== "region") return false;
+        if (composer.selection.surfaceId !== surfaceId) return false;
+        if (composer.selection.groupKey === groupKey) return true;
+        if (surfaceId !== HOUSEHOLD_SURFACE_ID) return false;
+        // Parent / Guardian shared template matches Primary / Other Parent selection.
+        return householdAuthoringGroupKey(composer.selection.groupKey) === householdAuthoringGroupKey(groupKey);
+    })();
 
     const available = useMemo(
         () =>

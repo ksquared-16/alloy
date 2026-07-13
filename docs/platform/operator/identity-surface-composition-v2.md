@@ -379,7 +379,7 @@ Stage/status fields appear in pickers only when registered canonical providers e
 
 ### Composer containment and opaque drill-in
 
-Shared compose shell uses flex/min-height scroll ownership; categorized field picker popovers portal to `document.body`. Drill-in depth uses opaque surface background (no canvas bleed-through).
+Shared compose shell uses flex/min-height scroll ownership; categorized field picker popovers portal to `document.body`. Drill-in depth uses a **fully opaque** Alloy surface background on the elevated card, body, footer, and compose canvas (no canvas bleed-through). Relationship section management is collapsible and orthogonal to section-tab field authoring.
 
 ---
 
@@ -432,3 +432,15 @@ Prior completion claims that only edited metadata on fixed groups were incorrect
 Definitions own capability metadata; instances own label, criteria, visibility, order, and presentation reference. Field options inside a section remain a Canonical Field Platform consumer concern — not duplicated here.
 
 Children section handoff to `children_surface` is explicit in the Builder inspector; child field ownership is not duplicated in Household.
+
+---
+
+## 16. Relationship-section UX cleanup
+
+Final Focus Panel Builder polish (July 2026):
+
+- Optional/default sections (including Additional Contacts) soft-delete and stay deleted across save/reload.
+- Collapsible Relationship Sections management (UI-only collapse state).
+- Disclosure purposes use section tabs for field authoring; Children tab offers Configure Children surface handoff.
+- Parent / Guardian shared template; Other Parent override tab only when `roleOverride` is enabled.
+- Opaque elevated drill-in surface with one internal scroll owner.

@@ -111,3 +111,7 @@ Updated `docs/platform/operator/identity-surface-composition-v2.md` §11 (publis
 ### Prior overstatement corrected (Jul 13)
 
 Editing metadata on fixed groups was not sufficient. Section definition/instance model, + Add section picker, criteria include/exclude editor, and migration from legacy groups are now implemented.
+
+## Relationship-section UX cleanup (final Builder polish)
+
+Separated collapsible section management from section-tab field authoring. Restored Parent/Guardian Add Field for Context Facts/Details. Optional section deletion (Additional Contacts) now sticks across reconcile. Elevated identity drill-in is fully opaque.

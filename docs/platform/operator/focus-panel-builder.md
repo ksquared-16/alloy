@@ -38,17 +38,32 @@ Legacy fixed registry groups migrate into instances on reconcile — no manual r
 
 | Policy | Examples | Remove? |
 | --- | --- | --- |
-| **required** | Primary Contact | No |
-| **default** | Parents/Guardians, Children, Additional Contacts | Optional hide only |
-| **optional** | Emergency Contacts, Authorized Pickup, Billing | Yes — via + Add section |
+| **required** | Primary Contact | No — always enabled on reconcile |
+| **default** | Other Parent / Guardian, Children | Removable unless pinned as always-enabled (Children stays present as handoff when enabled) |
+| **optional** | Additional Contacts, Emergency Contacts, Authorized Pickup, Billing, custom | Yes — soft-delete (`enabled: false`) honors explicit removal; reconcile must not re-enable |
+
+`HOUSEHOLD_ALWAYS_ENABLED_KEYS` is only Primary Contact + Children. Additional Contacts must **not** be silently protected by its legacy `household_members` key.
 
 Children remains a **presentation handoff** to `children_surface` — Household configures label/order/visibility only.
+
+### Manage sections vs configure fields
+
+These are orthogonal Builder concerns:
+
+1. **Manage relationship sections** — collapsible `RelationshipSectionsPanel` (add / rename / reorder / delete / criteria / visibility). Collapse is UI-only session state — not published.
+2. **Configure selected section fields** — purpose nav (Summary / Context Facts / Detail Fields / Evidence) + compact **section tabs** generated from configured instances.
+
+Do not keep the full management list open while authoring Context Facts or Detail Fields. Default: management collapsed when field-authoring is active; expandable via **Manage sections**.
+
+### Parent / Guardian shared presentation
+
+- One **Parent / Guardian** tab authors the shared `contact_edit` template.
+- Primary Contact and Other Parent inherit it unless `roleOverride` is enabled on the Other Parent instance.
+- Do not show a separate `Parent#2` tab by default; use configured labels (`Other Parent / Guardian` or tenant rename) only when override is on.
 
 ### + Add section workflow
 
 Household Configure mode shows **Relationship Sections** with **+ Add section**. The picker lists addable definitions; selecting one creates/enables an instance, seeds criteria, and selects it for configuration.
-
-
 
 Household sections are configurable relationship regions — not fixed Primary/Other/Additional buckets.
 
@@ -80,3 +95,7 @@ Card grid placement in Builder equals runtime via shared published layout resolv
 
 - Canonical Field Consumer Convergence — automatic field availability
 - UX polish — nested-purpose drill, insight templates
+
+## Drill-in surface
+
+The shared elevated identity drill-in uses an opaque Alloy surface background on the card shell, body, footer, and compose canvas. Backdrop/scrim may dim the canvas outside the surface; underlying cards must not show through the composer.

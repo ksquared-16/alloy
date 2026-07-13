@@ -21,7 +21,23 @@ import IdentityComposeCanvasShell from "@/components/admin/focusPanel/identity/I
 import IdentityComposeSectionCanvas from "@/components/admin/focusPanel/identity/IdentityComposeSectionCanvas";
 import IdentityEvidenceCollectionsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityEvidenceCollectionsPanel";
 import RelationshipSectionsPanel from "@/components/adminV2/settings/surfaces/composer/RelationshipSectionsPanel";
-import { listHouseholdRelationshipSectionInstances } from "@/lib/adminV2/runtime/focusPanel/household/householdRelationshipSectionInstances";
+import IdentityRelationshipSectionTabs from "@/components/adminV2/settings/surfaces/composer/IdentityRelationshipSectionTabs";
+import IdentityContextFactsPanel from "@/components/adminV2/settings/surfaces/composer/IdentityContextFactsPanel";
+import IdentityNestedFieldLayoutPanel from "@/components/adminV2/settings/surfaces/composer/IdentityNestedFieldLayoutPanel";
+import SurfaceItemLibraryPanel from "@/components/adminV2/settings/surfaces/composer/SurfaceItemLibraryPanel";
+import {
+    buildHouseholdRelationshipAuthoringTabs,
+    authoringGroupKeyForTab,
+    selectionGroupKeyForTab,
+    type HouseholdRelationshipAuthoringTab,
+} from "@/lib/adminV2/runtime/focusPanel/household/householdRelationshipAuthoringTabs";
+import {
+    buildNestedSurfaceLibraryForGroup,
+    nestedSurfaceLibraryCategories,
+    type NestedSurfaceLibraryItem,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceBuilderLibrary";
+import { addFieldToNestedGroup } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
 import { shouldRenderIdentityComposeCanvas } from "@/lib/adminV2/runtime/focusPanel/identity/identityComposeMode";
 import { builderPurposeForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/useSyncBuilderDisclosure";
 import { identityDisclosureCoordinationLevel } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
@@ -263,27 +279,31 @@ export default function HouseholdCard({
         [householdIdentityVm.sections],
     );
 
-    const householdAuthoringSections = useMemo(() => {
-            if (!nestedConfig) {
-                return [{ key: HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP, label: "Parent / Guardian" }];
-            }
-            const instances = listHouseholdRelationshipSectionInstances(nestedConfig);
-            const sections = instances.map((instance) => ({
-                key: instance.instanceKey,
-                label: instance.label,
-            }));
-            return [
-                { key: HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP, label: "Parent / Guardian" },
-                ...sections.filter((section) => section.key !== "primary_contact"),
-            ];
-        }, [nestedConfig]);
+    const householdAuthoringTabs = useMemo(
+        () => buildHouseholdRelationshipAuthoringTabs(nestedConfig),
+        [nestedConfig],
+    );
 
-    const composeAuthoringGroupKey = householdAuthoringGroupKey(composeSelectedGroupKey);
+    const activeAuthoringTab =
+        householdAuthoringTabs.find(
+            (tab) =>
+                tab.key === composeSelectedGroupKey
+                || tab.instanceKey === composeSelectedGroupKey
+                || (tab.kind === "parent_guardian_shared"
+                    && (composeSelectedGroupKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
+                        || composeSelectedGroupKey === "primary_contact"
+                        || composeSelectedGroupKey === "other_parent_guardian")),
+        ) ?? householdAuthoringTabs[0]!;
+
+    const composeAuthoringGroupKey = authoringGroupKeyForTab(activeAuthoringTab.key);
 
     const householdPreviewSectionKey =
         composeAuthoringGroupKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP
             ? "primary_contact"
-            : composeSelectedGroupKey;
+            : activeAuthoringTab.presentationRef ?? activeAuthoringTab.key;
+
+    const { tenantFieldDefinitions } = useTenantFieldDefinitions("opportunities");
+    const [libraryOpen, setLibraryOpen] = useState(false);
 
     const householdSectionRecord = (sectionKey: string): IdentityRecordVM | null => {
         const section = householdIdentityVm.sections.find((entry) => entry.key === sectionKey);
@@ -309,15 +329,41 @@ export default function HouseholdCard({
         composer?.setActiveConfigPurpose(composePurpose ?? "summary");
     };
 
-    const handleAuthoringSectionSelect = (sectionKey: string) => {
-        const runtimeKey =
-            sectionKey === HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP ? "primary_contact" : sectionKey;
-        selectHouseholdSectionForEvidence(runtimeKey);
+    const handleAuthoringTabSelect = (tab: HouseholdRelationshipAuthoringTab) => {
+        composer?.select({
+            kind: "region",
+            surfaceId: HOUSEHOLD_SURFACE_ID,
+            groupKey: selectionGroupKeyForTab(tab.key),
+        });
     };
 
     const selectHouseholdSectionForEvidence = (sectionKey: string) => {
         composer?.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: sectionKey });
     };
+
+    const openComposeLibrary = () => setLibraryOpen(true);
+
+    const handleComposeLibraryPick = (item: NestedSurfaceLibraryItem) => {
+        if (!nestedConfig || !composer || item.kind !== "field") return;
+        const purpose = composePurpose ?? "summary";
+        const tier =
+            purpose === "context_facts" ? "context_fact" : purpose === "details" ? "details" : "summary";
+        composer.updateConfig(
+            HOUSEHOLD_SURFACE_ID,
+            addFieldToNestedGroup(nestedConfig, composeAuthoringGroupKey, item.fieldKey, { tier }),
+        );
+        setLibraryOpen(false);
+    };
+
+    const composeLibraryItems = nestedConfig
+        ? buildNestedSurfaceLibraryForGroup(
+              HOUSEHOLD_SURFACE_ID,
+              composeAuthoringGroupKey,
+              nestedConfig,
+              tenantFieldDefinitions,
+          )
+        : [];
+    const composeLibraryCategories = nestedSurfaceLibraryCategories(composeLibraryItems);
 
     // ANY open state elevates as a centered Focus Card — Household never expands
     // height inline (no row reflow). Edit is the deepest state OF Focus.
@@ -493,63 +539,76 @@ export default function HouseholdCard({
                 <RelationshipSectionsPanel
                     config={nestedConfig}
                     onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
-                    selectedInstanceKey={composeSelectedGroupKey}
+                    selectedInstanceKey={
+                        activeAuthoringTab.instanceKey
+                        ?? (activeAuthoringTab.kind === "parent_guardian_shared" ? "primary_contact" : activeAuthoringTab.key)
+                    }
                     onSelectInstance={(instanceKey) => {
                         composer.select({ kind: "region", surfaceId: HOUSEHOLD_SURFACE_ID, groupKey: instanceKey });
                     }}
+                    defaultCollapsed
+                    fieldAuthoringActive
                 />
-                {purpose === "evidence" ? (
-                    <div className="space-y-3" data-household-compose-evidence="true">
-                        <HouseholdComposeSectionPicker
-                            sections={householdAuthoringSections}
-                            activeSectionKey={composeAuthoringGroupKey}
-                            onSelectSection={handleAuthoringSectionSelect}
-                        />
+                <IdentityRelationshipSectionTabs
+                    config={nestedConfig}
+                    activeTabKey={activeAuthoringTab.key}
+                    onSelectTab={handleAuthoringTabSelect}
+                />
+                {activeAuthoringTab.kind === "children_handoff" ? (
+                    <div className="space-y-3 rounded-lg border border-alloy-stone/15 bg-white p-4" data-household-children-handoff="true">
+                        <p className="text-[12px] text-alloy-midnight/70">
+                            Children uses the Children surface presentation. Household controls section label, order, and visibility only.
+                        </p>
+                        <button
+                            type="button"
+                            className="text-[12px] font-medium text-alloy-pine hover:underline"
+                            data-household-configure-children="true"
+                            onClick={openChildrenSurfaceConfiguration}
+                        >
+                            Configure Children surface →
+                        </button>
+                    </div>
+                ) : purpose === "evidence" ? (
+                    <div className="space-y-3 bg-white" data-household-compose-evidence="true">
                         <IdentityEvidenceCollectionsPanel
                             surfaceId={HOUSEHOLD_SURFACE_ID}
-                            groupKey={composeSelectedGroupKey}
+                            groupKey={composeAuthoringGroupKey}
                             config={nestedConfig}
                             onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
                         />
                     </div>
                 ) : purpose === "details" ? (
-                    <div className="space-y-4" data-household-compose-details="true">
-                        <HouseholdComposeSectionPicker
-                            sections={householdAuthoringSections}
-                            activeSectionKey={composeAuthoringGroupKey}
-                            onSelectSection={handleAuthoringSectionSelect}
-                        />
-                        {composeSelectedRecord ? (
-                            <FocusedHouseholdPerson
-                                record={composeSelectedRecord}
-                                groupKey={composeAuthoringGroupKey}
-                            />
-                        ) : (
-                            <IdentityComposeSectionCanvas
-                                surfaceId={HOUSEHOLD_SURFACE_ID}
-                                groupKey={composeAuthoringGroupKey}
-                                record={householdSectionRecord(householdPreviewSectionKey)}
-                                purpose="details"
-                            />
-                        )}
-                    </div>
-                ) : purpose === "context_facts" ? (
-                    <div className="space-y-4" data-household-compose-context="true">
-                        <HouseholdComposeSectionPicker
-                            sections={householdAuthoringSections}
-                            activeSectionKey={composeAuthoringGroupKey}
-                            onSelectSection={handleAuthoringSectionSelect}
-                        />
-                        <IdentityComposeSectionCanvas
+                    <div className="space-y-4 bg-white" data-household-compose-details="true">
+                        <IdentityNestedFieldLayoutPanel
                             surfaceId={HOUSEHOLD_SURFACE_ID}
                             groupKey={composeAuthoringGroupKey}
-                            record={householdSectionRecord(householdPreviewSectionKey)}
-                            purpose="context_facts"
+                            config={nestedConfig}
+                            purpose="details"
+                            onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
+                            onOpenLibrary={openComposeLibrary}
+                        />
+                    </div>
+                ) : purpose === "context_facts" ? (
+                    <div className="space-y-4 bg-white" data-household-compose-context="true">
+                        <IdentityContextFactsPanel
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={composeAuthoringGroupKey}
+                            config={nestedConfig}
+                            onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
+                            onOpenLibrary={openComposeLibrary}
                         />
                     </div>
                 ) : (
-                    <div className="alloy-os-household__summary">
-                        <div className="identity-summary-columns" data-identity-summary-columns="true">
+                    <div className="alloy-os-household__summary bg-white">
+                        <IdentityNestedFieldLayoutPanel
+                            surfaceId={HOUSEHOLD_SURFACE_ID}
+                            groupKey={composeAuthoringGroupKey}
+                            config={nestedConfig}
+                            purpose="summary"
+                            onChange={(next) => composer.updateConfig(HOUSEHOLD_SURFACE_ID, next)}
+                            onOpenLibrary={openComposeLibrary}
+                        />
+                        <div className="identity-summary-columns mt-3" data-identity-summary-columns="true">
                             <ComposableRegionShell
                                 surfaceId={HOUSEHOLD_SURFACE_ID}
                                 groupKey="primary_contact"
@@ -580,6 +639,17 @@ export default function HouseholdCard({
                         {evidence.address ? <AddressLine address={evidence.address} /> : null}
                     </div>
                 )}
+                <SurfaceItemLibraryPanel<NestedSurfaceLibraryItem>
+                    open={libraryOpen}
+                    categories={composeLibraryCategories}
+                    sectionLabel="Add to section"
+                    subtitle="Choose a field for the active disclosure purpose."
+                    itemKey={(item) => item.fieldKey}
+                    itemLabel={(item) => item.label}
+                    itemMeta={(item) => (item.isSystemField ? null : "Custom")}
+                    onPick={handleComposeLibraryPick}
+                    onClose={() => setLibraryOpen(false)}
+                />
             </IdentityComposeCanvasShell>
         );
     } else if (selectedIdentityRecord && (disclosure.depth === "details" || disclosure.depth === "evidence")) {

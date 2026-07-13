@@ -27,7 +27,7 @@ export default function IdentityComposeCanvasShell({
 }: Props) {
     return (
         <div
-            className="identity-compose-canvas flex min-h-0 flex-col gap-3 space-y-0"
+            className="identity-compose-canvas flex min-h-0 flex-col gap-3 space-y-0 bg-white"
             data-identity-compose-canvas={activePurpose}
             data-compose-canvas-mode={composeCanvasMode}
         >

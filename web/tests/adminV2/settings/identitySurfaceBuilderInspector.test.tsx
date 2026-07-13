@@ -69,9 +69,9 @@ function clickPurpose(label: string) {
 describe("IdentitySurfaceBuilderInspector — shared layout composer mounts", () => {
     it("1. Household Summary mounts drag/drop composer with handles and width controls", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.phone", { tier: "summary" });
-        config = addFieldToNestedGroup(config, "primary_contact", "person.email", { tier: "summary" });
-        renderInspector(HOUSEHOLD_SURFACE_ID, "primary_contact", config);
+        config = addFieldToNestedGroup(config, "contact_edit", "person.phone", { tier: "summary" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.email", { tier: "summary" });
+        renderInspector(HOUSEHOLD_SURFACE_ID, "contact_edit", config);
 
         expect(document.querySelector('[data-identity-surface-builder-inspector="group"]')).toBeTruthy();
         expect(document.querySelector('[data-identity-nested-field-layout="summary"]')).toBeTruthy();
@@ -85,16 +85,16 @@ describe("IdentitySurfaceBuilderInspector — shared layout composer mounts", ()
 
     it("2. Household Context Facts mounts shared composer", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.phone", { tier: "context_fact" });
-        renderInspector(HOUSEHOLD_SURFACE_ID, "primary_contact", config);
+        config = addFieldToNestedGroup(config, "contact_edit", "person.phone", { tier: "context_fact" });
+        renderInspector(HOUSEHOLD_SURFACE_ID, "contact_edit", config);
         clickPurpose("Context Facts");
         expect(document.querySelector('[data-identity-context-facts-panel="true"]')).toBeTruthy();
     });
 
     it("3. Household Details mounts shared composer", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.email", { tier: "details" });
-        renderInspector(HOUSEHOLD_SURFACE_ID, "primary_contact", config);
+        config = addFieldToNestedGroup(config, "contact_edit", "person.email", { tier: "details" });
+        renderInspector(HOUSEHOLD_SURFACE_ID, "contact_edit", config);
         clickPurpose("Detail Fields");
         expect(document.querySelector('[data-identity-nested-field-layout="details"]')).toBeTruthy();
     });

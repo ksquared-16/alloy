@@ -59,7 +59,7 @@ const DEFINITIONS: HouseholdRelationshipSectionDefinition[] = [
     },
     {
         definitionKey: "parent_guardian",
-        defaultLabel: "Parents / Guardians",
+        defaultLabel: "Other Parent / Guardian",
         presentationGroupKey: "other_parent_guardian",
         supportedEntity: "person",
         policy: "default",
@@ -117,7 +117,7 @@ const DEFINITIONS: HouseholdRelationshipSectionDefinition[] = [
         defaultLabel: "Additional Contacts",
         presentationGroupKey: "household_members",
         supportedEntity: "person",
-        policy: "default",
+        policy: "optional",
         defaultEnabled: true,
         allowMultipleInstances: false,
         clickBehavior: "open_identity_details",

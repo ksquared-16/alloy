@@ -153,7 +153,7 @@ describe("Focus Panel identity builder canvas composer", () => {
             );
         });
         expect(document.querySelector('[data-identity-compose-canvas="context_facts"]')).toBeTruthy();
-        expect(document.querySelector('[data-nested-layout-surface]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-context-facts-panel="true"], [data-identity-nested-field-layout]')).toBeTruthy();
     });
 
     it("Preview mode bypasses compose canvas", () => {
@@ -247,8 +247,8 @@ describe("Household composer parity with Children", () => {
             );
         });
         act(() => {});
-        expect(document.querySelector('[data-household-focused-person]')).toBeTruthy();
-        expect(document.querySelector('[data-nested-layout-surface="contact_edit"]')).toBeTruthy();
+        expect(document.querySelector('[data-household-compose-details="true"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-nested-field-layout="details"]')).toBeTruthy();
     });
 
     it("Household Evidence mounts collection editor with section picker", () => {
@@ -265,7 +265,7 @@ describe("Household composer parity with Children", () => {
         });
         act(() => {});
         expect(document.querySelector('[data-identity-evidence-panel="true"]')).toBeTruthy();
-        expect(document.querySelector('[data-identity-compose-section-picker="true"]')).toBeTruthy();
+        expect(document.querySelector('[data-identity-relationship-section-tabs="true"]')).toBeTruthy();
     });
 
     it("Runtime View household opens context and person click reaches details", () => {
