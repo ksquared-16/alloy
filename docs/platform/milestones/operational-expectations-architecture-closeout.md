@@ -16,6 +16,7 @@ implementation detail are introduced here.
 - Architecture / system design — [`../operational-expectations-system-design.md`](../operational-expectations-system-design.md)
 - Doctrine convergence certification — [`./operational-expectations-doctrine-convergence.md`](./operational-expectations-doctrine-convergence.md)
 - Truth-flow doctrine (reconciled) — [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md)
+- Engineering realization plan (implementation baseline) — [`./operational-expectations-engineering-realization.md`](./operational-expectations-engineering-realization.md)
 
 ---
 

@@ -19,7 +19,7 @@ only place new decisions are made.
 > derived" reading**). Observed ledger: `operational-facts-platform` design.
 > Consumer #1 (parity proof): [`modules/operational-consumption-platform.md`](modules/operational-consumption-platform.md).
 > Structural sibling for a canonical ledger doc: [`modules/financial-platform-domain.md`](modules/financial-platform-domain.md).
-> Initiative record: [doctrine convergence certification](milestones/operational-expectations-doctrine-convergence.md) · [architecture closeout](milestones/operational-expectations-architecture-closeout.md).
+> Initiative record: [doctrine convergence certification](milestones/operational-expectations-doctrine-convergence.md) · [architecture closeout](milestones/operational-expectations-architecture-closeout.md) · [engineering realization plan](milestones/operational-expectations-engineering-realization.md).
 
 ---
 
