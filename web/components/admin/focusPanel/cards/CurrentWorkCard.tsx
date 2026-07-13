@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 
-import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
-import StageWorkOutcomeConfirm from "@/components/workIntent/StageWorkOutcomeConfirm";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
 import CurrentWorkActivityPreview, {
     type CurrentWorkActivityPreviewItem,
 } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
+import CurrentWorkWorkspace from "@/components/admin/focusPanel/cards/CurrentWorkWorkspace";
 import { useWorkIntentOutcomeCompletion } from "@/components/workIntent/useWorkIntentOutcomeCompletion";
 import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
 import { buildCurrentWorkCardEvidence } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkCardEvidence";
@@ -17,23 +16,19 @@ import { buildOutcomeCompletionSummary } from "@/lib/adminV2/runtime/focusPanel/
 import type { CurrentWorkChecklistItem } from "@/lib/adminV2/runtime/focusPanel/currentWork/projectCurrentWork";
 import { resolveWorkItemHandoff } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveWorkItemHandoff";
 import { handoffOwnerCardForChecklistScope } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkSurfaceVM";
+import {
+    isCurrentWorkActionExecutable,
+    planCurrentWorkActionExecution,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
     CurrentWorkCompletionSummary,
     CurrentWorkSurfaceVM,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
-import { resolveCurrentWorkActionSurface } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionSurface";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type {
-    FocusPanelCoordination,
-    FocusPanelPerspectiveLevel,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
-import {
-    useDismissSignal,
-    useReportPerspective,
-} from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
@@ -45,18 +40,27 @@ type Props = {
     receded?: boolean;
     coordination?: FocusPanelCoordination;
     mutation?: FocusPanelMutation;
+    /** Summary card in the identity grid, or full Focus Panel workspace takeover. */
+    presentation?: "summary" | "workspace";
 };
 
 type CompletionPhase = "working" | "select_result" | "confirm" | "processing" | "complete";
 
-export default function CurrentWorkCard({ model, context, receded = false, coordination, mutation }: Props) {
+export default function CurrentWorkCard({
+    model,
+    context,
+    receded = false,
+    coordination,
+    mutation,
+    presentation = "summary",
+}: Props) {
     const evidence = useMemo(() => buildCurrentWorkCardEvidence(context), [context]);
     const vm = evidence.viewModel;
     const surface = vm.surface;
     const opportunityId = context.subject.id;
     const { completeOutcome, busy, error, clearError } = useWorkIntentOutcomeCompletion(opportunityId);
+    const isWorkspace = presentation === "workspace";
 
-    const [focused, setFocused] = useState(false);
     const [completionPhase, setCompletionPhase] = useState<CompletionPhase>("working");
     const [pendingOutcomeKey, setPendingOutcomeKey] = useState<string | null>(null);
     const [completionSummary, setCompletionSummary] = useState<CurrentWorkCompletionSummary | null>(null);
@@ -64,6 +68,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     const [activePanelAction, setActivePanelAction] = useState<CurrentWorkActionVM | null>(null);
     const [activityPreviewOpen, setActivityPreviewOpen] = useState(false);
     const [requirementsExpanded, setRequirementsExpanded] = useState(false);
+    const openWorkspaceTriggerRef = useRef<HTMLButtonElement>(null);
 
     const activityPreviewItems = useMemo(
         () => buildCurrentWorkActivityPreviewItemsFromContext(context, {
@@ -100,43 +105,63 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
         clearError();
     }, [clearError]);
 
-    const request = coordination?.request;
-    const requestNonce = request?.card === "current_work" ? request.nonce : null;
-    useEffect(() => {
-        if (request?.card !== "current_work") return;
-        setFocused(true);
+    const openWorkspace = useCallback(
+        (intent: NonNullable<Parameters<NonNullable<FocusPanelCoordination["openCurrentWorkWorkspace"]>>[0]> = {
+            kind: "drill_in",
+        }) => {
+            resetCompletion();
+            closeActionPanel();
+            coordination?.openCurrentWorkWorkspace?.(intent);
+        },
+        [closeActionPanel, coordination, resetCompletion],
+    );
+
+    const closeWorkspace = useCallback(() => {
         resetCompletion();
         closeActionPanel();
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
-    }, [requestNonce]);
-
-    const level: FocusPanelPerspectiveLevel = focused ? "focused" : "base";
-    useReportPerspective(coordination, "current_work", level);
+        setActivityPreviewOpen(false);
+        coordination?.closeCurrentWorkWorkspace?.();
+        queueMicrotask(() => openWorkspaceTriggerRef.current?.focus());
+    }, [closeActionPanel, coordination, resetCompletion]);
 
     useEffect(() => {
         const onFocusCurrentWork = (event: Event) => {
             const detail = (event as CustomEvent<{ opportunity_id?: string; task_id?: string | null }>).detail;
             if (detail?.opportunity_id !== opportunityId) return;
-            setFocused(true);
-            resetCompletion();
-            closeActionPanel();
+            openWorkspace({ kind: "drill_in" });
         };
         window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
         return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
-    }, [closeActionPanel, opportunityId, resetCompletion]);
+    }, [openWorkspace, opportunityId]);
 
-    useDismissSignal(coordination, "current_work", () => {
-        setFocused(false);
-        resetCompletion();
-        closeActionPanel();
-        setActivityPreviewOpen(false);
-    });
-
-    const openFocus = () => {
-        setFocused(true);
-        resetCompletion();
-        closeActionPanel();
-    };
+    // Consume one-shot workspace intents (action panel / record outcome) after mount.
+    const workspaceIntent = coordination?.currentWorkWorkspace?.intent ?? null;
+    const workspaceIntentKind = workspaceIntent?.kind ?? null;
+    const workspaceIntentActionKey =
+        workspaceIntent && workspaceIntent.kind === "action" ? workspaceIntent.actionKey : null;
+    useEffect(() => {
+        if (!isWorkspace || !workspaceIntentKind) return;
+        if (workspaceIntentKind === "record_outcome") {
+            setCompletionPhase("select_result");
+        } else if (workspaceIntentKind === "action" && workspaceIntentActionKey) {
+            const allActions = [
+                surface.primaryAction,
+                surface.recordOutcomeAction,
+                ...surface.supportingActions,
+                ...surface.communicationActions,
+                ...surface.alternatePaths,
+            ].filter(Boolean) as CurrentWorkActionVM[];
+            const match = allActions.find(
+                (action) =>
+                    action.key === workspaceIntentActionKey
+                    || action.actionRef === workspaceIntentActionKey
+                    || action.handlerKey === workspaceIntentActionKey,
+            );
+            if (match) setActivePanelAction(match);
+        }
+        coordination?.clearCurrentWorkWorkspaceIntent?.();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- consume intent once per open
+    }, [isWorkspace, workspaceIntentKind, workspaceIntentActionKey]);
 
     const invokeHeaderDelegate = (action: CurrentWorkActionVM) => {
         const resolved = action.resolved;
@@ -177,36 +202,50 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     };
 
     const invokeAction = (action: CurrentWorkActionVM) => {
-        if (action.handlerKey === "record_outcome") {
-            closeActionPanel();
-            setCompletionPhase("select_result");
-            return;
-        }
-        if (action.handlerKey === "expand_work") {
-            openFocus();
-            return;
-        }
-
-        const surface = resolveCurrentWorkActionSurface(action);
-        switch (surface) {
-            case "inline_form":
+        const plan = planCurrentWorkActionExecution(action);
+        switch (plan.kind) {
+            case "blocked":
+                setHandoffNotice(plan.reason);
+                return;
+            case "unsupported":
+                setHandoffNotice(plan.reason);
+                return;
+            case "record_outcome":
+                if (!isWorkspace) {
+                    openWorkspace({ kind: "record_outcome" });
+                    return;
+                }
+                closeActionPanel();
+                setCompletionPhase("select_result");
+                return;
+            case "open_workspace":
+                openWorkspace({ kind: "drill_in" });
+                return;
+            case "open_inline_panel":
                 setHandoffNotice(null);
-                setFocused(true);
-                setActivePanelAction(action);
+                if (!isWorkspace) {
+                    openWorkspace({ kind: "action", actionKey: plan.action.key });
+                    return;
+                }
+                setActivePanelAction(plan.action);
+                return;
+            case "process_transition":
+                setHandoffNotice(null);
+                if (!isWorkspace) {
+                    openWorkspace({ kind: "action", actionKey: plan.action.key });
+                    return;
+                }
+                setActivePanelAction(plan.action);
                 return;
             case "communications_composer":
                 invokeCommunicationsComposer();
                 return;
             case "header_delegate":
                 setHandoffNotice(null);
-                invokeHeaderDelegate(action);
+                invokeHeaderDelegate(plan.action);
                 return;
-            case "unsupported":
             default:
-                setHandoffNotice(null);
-                setFocused(true);
-                setActivePanelAction(action);
-                return;
+                setHandoffNotice("This action is not available from Current Work.");
         }
     };
 
@@ -225,7 +264,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
         if (ownerCard && coordination?.requestFocus) {
             setHandoffNotice(null);
             const source = { card: "current_work" as const, focus: null };
-            setFocused(false);
+            if (isWorkspace) coordination.closeCurrentWorkWorkspace?.();
             resetCompletion();
             coordination.requestFocus(ownerCard, null, source);
             return;
@@ -271,7 +310,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
             case "focus": {
                 setHandoffNotice(null);
                 const source = { card: "current_work" as const, focus: null };
-                setFocused(false);
+                if (isWorkspace) coordination?.closeCurrentWorkWorkspace?.();
                 resetCompletion();
                 coordination?.requestFocus(plan.card, plan.focus, source);
                 return;
@@ -296,12 +335,6 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
         });
     }, [completeOutcome, pendingOutcomeKey, vm.primaryProjection, vm.primaryWorkItem]);
 
-    const closeFocus = () => {
-        setFocused(false);
-        resetCompletion();
-        closeActionPanel();
-    };
-
     const statusChip = (
         <span
             className={clsx(
@@ -309,15 +342,89 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 surface.status === "completed" && "alloy-os-card-pill--complete",
                 surface.status === "blocked" && "alloy-os-card-pill--blocked",
             )}
-            data-work-status-pill={focused ? "focused" : "summary"}
+            data-work-status-pill="summary"
         >
             {surface.statusLabel}
         </span>
     );
 
     const readinessSummary = surface.readiness.reasonLabel;
-
     const footerAction = null;
+    const stageLabel = context.businessProcess?.stageKey ?? null;
+    const ownerLabel = null;
+
+    if (isWorkspace) {
+        if (evidence.isEmpty) {
+            return (
+                <section className="alloy-os-currentwork-workspace" data-current-work-workspace="true" data-work-empty="true">
+                    <button
+                        type="button"
+                        className="alloy-os-currentwork-workspace__back"
+                        onClick={closeWorkspace}
+                        data-work-action="back-to-summary"
+                    >
+                        ← Back to summary
+                    </button>
+                    <p className="alloy-os-household__row-detail">No active work</p>
+                </section>
+            );
+        }
+        return (
+            <CurrentWorkWorkspace
+                surface={surface}
+                completionPhase={completionPhase}
+                pendingOutcome={pendingOutcome}
+                pendingOutcomeKey={pendingOutcomeKey}
+                primaryWorkItem={vm.primaryWorkItem}
+                busy={busy}
+                error={error}
+                handoffNotice={handoffNotice}
+                activityItems={activityPreviewItems}
+                activityPreviewOpen={activityPreviewOpen}
+                onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
+                onCloseActivityPreview={handleCloseActivityPreview}
+                onViewFullActivity={handleViewFullActivity}
+                onChecklistItem={handleChecklistItem}
+                onSelectOutcome={(key) => {
+                    clearError();
+                    setPendingOutcomeKey(key);
+                    setCompletionPhase("confirm");
+                }}
+                onCancelOutcome={() => {
+                    setPendingOutcomeKey(null);
+                    setCompletionPhase("select_result");
+                }}
+                onConfirmOutcome={handleConfirmOutcome}
+                onCancelPicker={() => {
+                    setPendingOutcomeKey(null);
+                    setCompletionPhase("working");
+                }}
+                onAction={invokeAction}
+                onBack={closeWorkspace}
+                onContinueAfterComplete={() => {
+                    if (completionSummary?.nextWorkLabel) {
+                        resetCompletion();
+                        return;
+                    }
+                    closeWorkspace();
+                }}
+                completionSummary={completionSummary}
+                stageLabel={stageLabel}
+                ownerLabel={ownerLabel}
+                actionPanel={
+                    activePanelAction ?
+                        <CurrentWorkActionPanel
+                            action={activePanelAction}
+                            context={context}
+                            mutation={mutation}
+                            onClose={closeActionPanel}
+                            onComplete={handleActionPanelComplete}
+                        />
+                    :   null
+                }
+            />
+        );
+    }
 
     const body =
         evidence.isEmpty ? (
@@ -335,57 +442,16 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 activityPreviewItems={activityPreviewItems}
                 onContinue={() => {
                     resetCompletion();
-                    setFocused(false);
                 }}
             />
-        : focused ?
-            <>
-                <FocusedBody
-                    surface={surface}
-                    completionPhase={completionPhase}
-                    pendingOutcome={pendingOutcome}
-                    pendingOutcomeKey={pendingOutcomeKey}
-                    primaryWorkItem={vm.primaryWorkItem}
-                    busy={busy}
-                    error={error}
-                onChecklistItem={handleChecklistItem}
-                handoffNotice={handoffNotice}
-                requirementsExpanded={focused || requirementsExpanded}
-                onToggleRequirements={() => setRequirementsExpanded((open) => !open)}
-                readinessSummary={readinessSummary}
-                    onSelectOutcome={(key) => {
-                        clearError();
-                        setPendingOutcomeKey(key);
-                        setCompletionPhase("confirm");
-                    }}
-                    onCancelOutcome={() => {
-                        setPendingOutcomeKey(null);
-                        setCompletionPhase("select_result");
-                    }}
-                    onConfirmOutcome={handleConfirmOutcome}
-                    onCancelPicker={() => {
-                        setPendingOutcomeKey(null);
-                        setCompletionPhase("working");
-                    }}
-                    onAction={invokeAction}
-                />
-                {activePanelAction ?
-                    <CurrentWorkActionPanel
-                        action={activePanelAction}
-                        context={context}
-                        mutation={mutation}
-                        onClose={closeActionPanel}
-                        onComplete={handleActionPanelComplete}
-                    />
-                :   null}
-            </>
         :   <SummaryBody
                 surface={surface}
                 primaryWorkItem={vm.primaryWorkItem}
                 opportunityId={opportunityId}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
-                onOpenWork={openFocus}
+                onOpenWork={() => openWorkspace({ kind: "drill_in" })}
+                openWorkTriggerRef={openWorkspaceTriggerRef}
                 requirementsExpanded={requirementsExpanded}
                 onToggleRequirements={() => setRequirementsExpanded((open) => !open)}
                 readinessSummary={readinessSummary}
@@ -400,7 +466,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
         <div
             className="alloy-os-household alloy-os-currentwork"
             data-work-card="true"
-            data-work-card-perspective={focused ? "focused" : evidence.isEmpty ? "empty" : "summary"}
+            data-work-card-perspective={evidence.isEmpty ? "empty" : "summary"}
             data-current-work-surface="true"
         >
             <UniversalCard
@@ -412,7 +478,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 archetype="status"
                 statusChip={statusChip}
                 statusTone={surface.progress.total > 0 ? "neutral" : evidence.statusTone}
-                density={focused ? "expanded" : "compact"}
+                density="compact"
                 gridSpan={model.span}
                 data-universal-card-key={model.key}
                 receded={receded}
@@ -421,30 +487,6 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 {body}
             </UniversalCard>
         </div>
-    );
-}
-
-function OperatorGuidanceBlock({
-    text,
-    workDescription,
-}: {
-    text: string | null | undefined;
-    workDescription?: string | null;
-}) {
-    const guidance = text?.trim();
-    if (!guidance) return null;
-    // Hide when guidance merely restates the work description.
-    if (workDescription?.trim() && guidance === workDescription.trim()) return null;
-    return (
-        <details className="alloy-os-currentwork__guidance-disclosure" data-work-operator-guidance="true">
-            <summary className="alloy-os-currentwork__disclosure-trigger">
-                <span>Guidance</span>
-                <span className="alloy-os-currentwork__disclosure-meta" aria-hidden>
-                    ▾
-                </span>
-            </summary>
-            <p className="alloy-os-currentwork__guidance-text">{guidance}</p>
-        </details>
     );
 }
 
@@ -614,24 +656,24 @@ function WorkPrimaryCard({
     );
 }
 
-function SupportingGrid({
+function MoreActionsLauncher({
     actions,
     onAction,
 }: {
     actions: CurrentWorkActionVM[];
     onAction: (action: CurrentWorkActionVM) => void;
 }) {
-    const [moreOpen, setMoreOpen] = useState(false);
-    const moreRef = useRef<HTMLDivElement>(null);
+    const [open, setOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (!moreOpen) return;
+        if (!open) return;
         const onKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setMoreOpen(false);
+            if (event.key === "Escape") setOpen(false);
         };
         const onPointer = (event: MouseEvent) => {
-            if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
-                setMoreOpen(false);
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setOpen(false);
             }
         };
         window.addEventListener("keydown", onKey);
@@ -640,62 +682,47 @@ function SupportingGrid({
             window.removeEventListener("keydown", onKey);
             window.removeEventListener("mousedown", onPointer);
         };
-    }, [moreOpen]);
+    }, [open]);
 
     if (actions.length === 0) return null;
-    const visible = actions.slice(0, 3);
-    const overflow = actions.slice(3);
 
     return (
-        <div className="alloy-os-currentwork__quick-actions" data-work-supporting-grid="true">
-            <p className="alloy-os-currentwork__actions-eyebrow">Quick actions</p>
-            <div className="alloy-os-currentwork__quick-action-chips">
-                {visible.map((action) => (
-                    <button
-                        key={action.key}
-                        type="button"
-                        className="alloy-os-currentwork__quick-chip"
-                        data-work-supporting-action={action.key}
-                        onClick={() => onAction(action)}
-                    >
-                        {action.label}
-                    </button>
-                ))}
-                {overflow.length > 0 ?
-                    <div className="alloy-os-currentwork__quick-more" ref={moreRef}>
-                        <button
-                            type="button"
-                            className="alloy-os-currentwork__quick-chip alloy-os-currentwork__quick-chip--more"
-                            aria-expanded={moreOpen}
-                            aria-haspopup="menu"
-                            data-work-quick-actions-more="true"
-                            onClick={() => setMoreOpen((open) => !open)}
-                        >
-                            More
-                        </button>
-                        {moreOpen ?
-                            <ul className="alloy-os-currentwork__quick-more-menu" role="menu">
-                                {overflow.map((action) => (
-                                    <li key={action.key} role="none">
-                                        <button
-                                            type="button"
-                                            role="menuitem"
-                                            className="alloy-os-currentwork__quick-more-item"
-                                            data-work-supporting-action={action.key}
-                                            onClick={() => {
-                                                setMoreOpen(false);
-                                                onAction(action);
-                                            }}
-                                        >
-                                            {action.label}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        :   null}
-                    </div>
-                :   null}
-            </div>
+        <div className="alloy-os-currentwork__more-launcher" ref={menuRef} data-work-more-actions="true">
+            <button
+                type="button"
+                className="alloy-os-currentwork__disclosure-trigger"
+                aria-expanded={open}
+                aria-haspopup="menu"
+                data-work-more-actions-trigger="true"
+                onClick={() => setOpen((value) => !value)}
+            >
+                <span>More actions</span>
+                <span className="alloy-os-currentwork__disclosure-meta">
+                    {actions.length} available {open ? "▴" : "▾"}
+                </span>
+            </button>
+            {open ?
+                <ul className="alloy-os-currentwork__quick-more-menu" role="menu">
+                    {actions.map((action) => (
+                        <li key={action.key} role="none">
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="alloy-os-currentwork__quick-more-item"
+                                data-work-supporting-action={action.key}
+                                disabled={action.disabled}
+                                title={action.disabledReason ?? undefined}
+                                onClick={() => {
+                                    setOpen(false);
+                                    onAction(action);
+                                }}
+                            >
+                                {action.label}
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            :   null}
         </div>
     );
 }
@@ -798,6 +825,7 @@ function SummaryBody({
     onChecklistItem,
     onAction,
     onOpenWork,
+    openWorkTriggerRef,
     requirementsExpanded,
     onToggleRequirements,
     activityPreviewOpen,
@@ -812,6 +840,7 @@ function SummaryBody({
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
     onOpenWork: () => void;
+    openWorkTriggerRef?: React.RefObject<HTMLButtonElement | null>;
     requirementsExpanded: boolean;
     onToggleRequirements: () => void;
     readinessSummary?: string | null;
@@ -821,215 +850,98 @@ function SummaryBody({
     onViewFullActivity?: () => void;
     activityPreviewItems: CurrentWorkActivityPreviewItem[];
 }) {
-    const helpfulActions = [...surface.supportingActions, ...surface.communicationActions];
+    const helpfulActions = [...surface.supportingActions, ...surface.communicationActions].filter(
+        isCurrentWorkActionExecutable,
+    );
+    const primary =
+        surface.primaryAction
+        && surface.primaryAction.handlerKey !== "expand_work"
+        && isCurrentWorkActionExecutable(surface.primaryAction)
+            ? surface.primaryAction
+            : null;
+    const recordOutcome =
+        surface.recordOutcomeAction && isCurrentWorkActionExecutable(surface.recordOutcomeAction)
+            ? surface.recordOutcomeAction
+            : null;
     const additionalLinkedWork =
         (surface.readiness.workItems?.total ?? 0) > 1
         || (surface.runtime?.additional?.length ?? 0) > 0;
 
     return (
-        <div className="alloy-os-currentwork__summary" data-work-summary="true">
-            <SurfaceProgress surface={surface} />
-            <RequirementsDisclosure
-                surface={surface}
-                expanded={requirementsExpanded}
-                onToggle={onToggleRequirements}
-                onNavigate={onChecklistItem}
-            />
-            <div className="alloy-os-currentwork__primary-row" data-work-primary-row="true">
-                {surface.primaryAction && surface.primaryAction.handlerKey !== "expand_work" ?
-                    <WorkPrimaryCard action={surface.primaryAction} onAction={onAction} />
-                :   null}
-                {surface.recordOutcomeAction ?
-                    <button
-                        type="button"
-                        className={clsx(
-                            "alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary",
-                            !surface.primaryAction || surface.primaryAction.handlerKey === "expand_work"
-                                ? "alloy-os-currentwork__record-outcome--strong"
-                                : null,
-                        )}
-                        data-work-action="record-outcome"
-                        onClick={() => onAction(surface.recordOutcomeAction!)}
-                    >
-                        {surface.recordOutcomeAction.label}
-                    </button>
-                :   null}
-                <button
-                    type="button"
-                    className="alloy-os-currentwork__open-work"
-                    onClick={onOpenWork}
-                    data-work-action="open-work"
-                >
-                    Open work →
-                </button>
+        <div
+            className="alloy-os-currentwork__summary"
+            data-work-summary="true"
+            role="group"
+            aria-label="Current Work summary"
+        >
+            <div
+                className="alloy-os-currentwork__summary-open-region"
+                role="button"
+                tabIndex={0}
+                onClick={onOpenWork}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onOpenWork();
+                    }
+                }}
+                aria-label={`Open ${surface.title} workspace`}
+                data-work-action="open-work-body"
+            >
+                <SurfaceProgress surface={surface} />
             </div>
-            <SupportingGrid actions={helpfulActions} onAction={onAction} />
-            <OtherTransitionsDisclosure actions={surface.alternatePaths} onAction={onAction} />
-            <OperatorGuidanceBlock text={surface.operatorGuidance} workDescription={surface.description} />
-            {additionalLinkedWork && primaryWorkItem?.work_id ?
-                <div className="alloy-os-currentwork__linked-work" data-current-work-work-items-link="true">
-                    <p className="alloy-os-currentwork__linked-work-copy">Also tracked in Work Items</p>
-                    <ViewInWorkItemsLink taskId={primaryWorkItem.work_id} opportunityId={opportunityId} />
-                </div>
-            :   null}
-            <ActivityFooter
-                surface={surface}
-                activityPreviewOpen={activityPreviewOpen}
-                onToggleActivityPreview={onToggleActivityPreview}
-                onCloseActivityPreview={onCloseActivityPreview}
-                onViewFullActivity={onViewFullActivity}
-                activityPreviewItems={activityPreviewItems}
-            />
-        </div>
-    );
-}
-
-function FocusedBody({
-    surface,
-    completionPhase,
-    pendingOutcome,
-    pendingOutcomeKey,
-    primaryWorkItem,
-    busy,
-    error,
-    onChecklistItem,
-    handoffNotice,
-    requirementsExpanded,
-    onToggleRequirements,
-    onSelectOutcome,
-    onCancelOutcome,
-    onConfirmOutcome,
-    onCancelPicker,
-    onAction,
-}: {
-    surface: CurrentWorkSurfaceVM;
-    completionPhase: CompletionPhase;
-    pendingOutcome: { outcome_key: string; label: string } | null;
-    pendingOutcomeKey: string | null;
-    primaryWorkItem: CurrentWorkSurfaceVM["primaryWorkItem"];
-    busy: boolean;
-    error: string | null;
-    onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
-    handoffNotice: string | null;
-    requirementsExpanded: boolean;
-    onToggleRequirements: () => void;
-    readinessSummary?: string | null;
-    onSelectOutcome: (key: string) => void;
-    onCancelOutcome: () => void;
-    onConfirmOutcome: () => void;
-    onCancelPicker: () => void;
-    onAction: (action: CurrentWorkActionVM) => void;
-}) {
-    if (completionPhase === "select_result" && primaryWorkItem) {
-        return (
-            <div className="alloy-os-currentwork__focus" data-work-completion="select">
-                <StageWorkOutcomePicker
-                    workTitle={primaryWorkItem.label}
-                    outcomes={surface.completionOutcomes}
-                    automationPreview={primaryWorkItem.outcome_automation_preview}
-                    variant="focus"
-                    busy={busy}
-                    onSelect={onSelectOutcome}
-                    onCancel={onCancelPicker}
+            <div className="alloy-os-currentwork__summary-controls">
+                <RequirementsDisclosure
+                    surface={surface}
+                    expanded={requirementsExpanded}
+                    onToggle={onToggleRequirements}
+                    onNavigate={onChecklistItem}
                 />
-            </div>
-        );
-    }
-
-    if (completionPhase === "confirm" && pendingOutcome && primaryWorkItem) {
-        const effectLines = stageWorkOutcomeEffectLines(primaryWorkItem, pendingOutcomeKey!);
-        return (
-            <div className="alloy-os-currentwork__focus" data-work-completion="confirm">
-                <StageWorkOutcomeConfirm
-                    workTitle={primaryWorkItem.label}
-                    outcomeLabel={pendingOutcome.label}
-                    effectLines={effectLines}
-                    busy={busy}
-                    onConfirm={onConfirmOutcome}
-                    onCancel={onCancelOutcome}
-                />
-            </div>
-        );
-    }
-
-    if (completionPhase === "processing") {
-        return (
-            <div className="alloy-os-currentwork__focus" data-work-completion="processing">
-                <p className="alloy-os-household__row-detail">Applying outcome…</p>
-            </div>
-        );
-    }
-
-    const helpfulActions = [...surface.supportingActions, ...surface.communicationActions];
-
-    return (
-        <div className="alloy-os-currentwork__focus alloy-os-currentwork__focus--scroll" data-work-completion="working">
-            <SurfaceProgress surface={surface} />
-            <OperatorGuidanceBlock text={surface.operatorGuidance} workDescription={surface.description} />
-            <RequirementsDisclosure
-                surface={surface}
-                expanded={requirementsExpanded}
-                onToggle={onToggleRequirements}
-                onNavigate={onChecklistItem}
-            />
-            {handoffNotice ?
-                <p className="alloy-os-currentwork__handoff-notice" role="status" data-work-handoff-blocked="true">
-                    {handoffNotice}
-                </p>
-            :   null}
-            <div className="alloy-os-currentwork__expanded-grid">
-                <div className="alloy-os-currentwork__expanded-main">
-                    {surface.primaryAction ?
-                        <WorkPrimaryCard action={surface.primaryAction} onAction={onAction} />
-                    :   null}
-                    {surface.recordOutcomeAction ?
+                <div className="alloy-os-currentwork__primary-row" data-work-primary-row="true">
+                    {primary ? <WorkPrimaryCard action={primary} onAction={onAction} /> : null}
+                    {recordOutcome ?
                         <button
                             type="button"
-                            className="alloy-os-currentwork__record-outcome"
+                            className={clsx(
+                                "alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary",
+                                !primary ? "alloy-os-currentwork__record-outcome--strong" : null,
+                            )}
                             data-work-action="record-outcome"
-                            onClick={() => onAction(surface.recordOutcomeAction!)}
+                            onClick={() => onAction(recordOutcome)}
                         >
-                            {surface.recordOutcomeAction.label}
+                            {recordOutcome.label}
                         </button>
                     :   null}
-                    {!surface.showOutcomeCompletion && surface.outcomeCompletionBlockReason ?
-                        <p className="alloy-os-currentwork__outcomes-gap" data-work-outcomes-gap="true" role="status">
-                            {surface.outcomeCompletionBlockReason}
-                        </p>
-                    :   null}
-                    <SupportingGrid actions={helpfulActions} onAction={onAction} />
+                    <button
+                        ref={openWorkTriggerRef}
+                        type="button"
+                        className="alloy-os-currentwork__open-work"
+                        onClick={onOpenWork}
+                        data-work-action="open-work"
+                    >
+                        Open workspace →
+                    </button>
                 </div>
-                {surface.alternatePaths.length > 0 || surface.bosRecommendations.length > 0 ?
-                    <div className="alloy-os-currentwork__expanded-side">
-                        {surface.alternatePaths.length > 0 ?
-                            <OtherTransitionsDisclosure actions={surface.alternatePaths} onAction={onAction} />
-                        :   null}
-                        {surface.bosRecommendations.length > 0 ?
-                            <div className="alloy-os-currentwork__path-list" data-work-section="bos">
-                                <p className="alloy-os-currentwork__supporting-title">Recommended</p>
-                                <ul className="alloy-os-currentwork__path-items">
-                                    {surface.bosRecommendations.map((action) => (
-                                        <li key={action.key}>
-                                            <button
-                                                type="button"
-                                                className="alloy-os-currentwork__path-action"
-                                                onClick={() => onAction(action)}
-                                            >
-                                                {action.label}
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        :   null}
+                <MoreActionsLauncher actions={helpfulActions} onAction={onAction} />
+                <OtherTransitionsDisclosure
+                    actions={surface.alternatePaths.filter(isCurrentWorkActionExecutable)}
+                    onAction={onAction}
+                />
+                {additionalLinkedWork && primaryWorkItem?.work_id ?
+                    <div className="alloy-os-currentwork__linked-work" data-current-work-work-items-link="true">
+                        <p className="alloy-os-currentwork__linked-work-copy">Also tracked in Work Items</p>
+                        <ViewInWorkItemsLink taskId={primaryWorkItem.work_id} opportunityId={opportunityId} />
                     </div>
                 :   null}
+                <ActivityFooter
+                    surface={surface}
+                    activityPreviewOpen={activityPreviewOpen}
+                    onToggleActivityPreview={onToggleActivityPreview}
+                    onCloseActivityPreview={onCloseActivityPreview}
+                    onViewFullActivity={onViewFullActivity}
+                    activityPreviewItems={activityPreviewItems}
+                />
             </div>
-            {error ?
-                <p className="alloy-os-currentwork__error" role="alert">
-                    {error}
-                </p>
-            :   null}
         </div>
     );
 }
