@@ -86,5 +86,54 @@ mutation forms, destructive confirmations, transient errors.
 Dev/staging only (`NEXT_PUBLIC_PERF_PERCEIVED_MARKS`): `window.__alloyWorkspaceBaseline()` returns the
 per-navigation report (mode cold/warm/prefetched/return, shell/coherent/interaction markers, request &
 duplicate counts, cache outcomes); `window.__alloyWorkspaceNavRequests()` returns the request
-waterfall. See `docs/sprints/workspace-trust-closure-baseline-runbook.md` and
+waterfall (including the captured `Server-Timing` header per request). See
+`docs/sprints/workspace-trust-closure-baseline-runbook.md` and
 `web/playwright/tests/workspace-trust-closure.spec.ts`.
+
+## Server critical path
+
+Cold entry issues these server reads (client owner → route):
+
+| Resource | Route | Notes |
+|---|---|---|
+| identity | `GET /api/admin/work-units/by-slug/:slug` | module-cached; server-seeded in the route layout |
+| config bundle | `GET /api/admin/departments/:id`, `/work-units/:id`, `/work-units?department_id=`, `/queue-row-layout/:surfaceId` | one shared fetcher (`fetchWorkUnitSurfaceConfigBundle`); `ok` flag gates caching |
+| lane summaries | `GET /api/admin/work-units/:id/queues` | fetch-sizing only; never a displayed count |
+| active rows + count | `GET /api/admin/queues/:workUnitId/:queueKey?work_view_id=…&count_mode=exact` | one evaluation path for rows + active-view count |
+| per-view totals | same rows route, one request per inactive view | the fan-out (see below) |
+| right-rail actions | resolved-actions bundle | cached client-side |
+
+**Server-Timing.** The queue rows/summaries routes emit a standard `Server-Timing` response header
+(`web/lib/perf/queueRowsServerTiming.ts`) built from the service's existing breakdown — `auth`,
+`prep`, `load_def`, `operational_day`, `base_query`, `count`, `status_defs`, `enrichment`,
+`serialize`, `service_total`, `total`, plus a `cache` hit/miss marker. Durations only — no ids, SQL,
+tenant identifiers, or record values. The client nav report captures it per request so a trace
+correlates client and server time without extra round-trips.
+
+**Row enrichment is batched, not N+1** (verified). `getWorkUnitQueueItems` collects the distinct
+foreign keys across the loaded rows and issues **one bounded `IN (…)` query per entity class**
+(persons, contacts, customers, locations, tour bookings, tasks, …) — enrichment query count is
+bounded by entity class, never by row count; `queue_reveal` mode narrows the batch set further.
+`enrichment_queries_run` names the plan. No per-row fetch loop exists.
+
+**Canonical-total fan-out.** Per-view counts come from the rows route with each view's `work_view_id`
+predicate (the only source that agrees with the rendered rows). This is inherently one evaluation per
+view. It is bounded so it never dominates: cached (a return resolves every badge from memory, 0
+requests), fresh-skipped on a very recent return/prefetch, excludes the active view (its count comes
+from the rendered rows response), and **capped to `WORK_VIEW_TOTALS_FETCH_CONCURRENCY` in flight** so
+a many-pill unit never bursts. Request count is bounded by inactive-view count, not row count.
+
+**Designed next step (not yet implemented — needs deploy/DB verification):** a batched view-totals
+endpoint that resolves auth/scope/dept-metadata once, fetches the shared base lane once per
+`(workUnitId, baseQueueKey)` group, and applies each view's filter in memory
+(`applyWorkViewFilterToQueueItemsResult`, the same pure function the single route uses, so counts
+match by construction) — collapsing N per-view requests into one. Left as a follow-up because count
+parity must be certified against real data before replacing the per-view path.
+
+## Not implemented here (out of runnable reach)
+
+- Database `EXPLAIN (ANALYZE, BUFFERS)`, index analysis, and query-plan tuning — require database
+  access this environment does not have. The server-timing header makes the slow phases visible so
+  these can be targeted next.
+- Deployed browser certification (real cold/return/mutation timings) — requires an authenticated
+  staging deploy. The Playwright harness is ready to run there.
