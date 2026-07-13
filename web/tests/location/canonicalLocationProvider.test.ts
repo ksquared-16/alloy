@@ -138,6 +138,11 @@ describe("resolveSiteLocations / resolveLocationsForUser", () => {
         const sites = await resolveSiteLocations(supabase, ORG_ID);
         expect(sites.map((l) => l.id)).toEqual(["site-a", "site-b"]);
     });
+    it("restricts to the site-scope allow-list (pushed to the query)", async () => {
+        const supabase = setup();
+        const sites = await resolveSiteLocations(supabase, ORG_ID, { siteScope: { siteLocationIds: ["site-b"] } });
+        expect(sites.map((l) => l.id)).toEqual(["site-b"]);
+    });
     it("resolveLocationsForUser applies the user's site scope", async () => {
         const supabase = setup();
         const visible = await resolveLocationsForUser(supabase, ORG_ID, { siteLocationIds: ["site-b"] });

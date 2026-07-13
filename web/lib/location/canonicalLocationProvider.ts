@@ -135,11 +135,21 @@ function sortLocations(locations: CanonicalLocation[]): CanonicalLocation[] {
 async function fetchOrgLocationRows(
     supabase: SupabaseClient,
     orgId: string,
-    types?: readonly CanonicalLocationType[]
+    types?: readonly CanonicalLocationType[],
+    restrictToSiteIds?: readonly string[]
 ): Promise<CanonicalLocation[]> {
+    // Org boundary is always enforced at the query. `locations` RLS is org/role
+    // scoped (site-scope is app-layer by design — RFC open decision §21-4), so
+    // when a caller can express its scope as concrete site ids we ALSO push that
+    // filter to the DB (id ∈ sites) rather than fetching all org sites and
+    // narrowing in memory. Room-inclusive callers still narrow rooms by parent in
+    // memory (a within-org refinement), never crossing the org boundary.
     let query = supabase.from("locations").select(CANONICAL_LOCATION_SELECT).eq("org_id", orgId);
     if (types && types.length > 0) {
         query = query.in("location_type", types as string[]);
+    }
+    if (restrictToSiteIds) {
+        query = query.in("id", restrictToSiteIds as string[]);
     }
     const { data, error } = await query;
     if (error) throw new Error(error.message);
@@ -197,7 +207,10 @@ export async function resolveSiteLocations(
     orgId: string,
     options: { siteScope?: SiteScopeFilter; includeInactive?: boolean } = {}
 ): Promise<CanonicalLocation[]> {
-    const rows = await fetchOrgLocationRows(supabase, orgId, ["site"]);
+    // Push the site allow-list into the query (id ∈ sites) so a scoped operator
+    // never fetches other sites into memory; `isInSiteScope` remains as a
+    // defense-in-depth check.
+    const rows = await fetchOrgLocationRows(supabase, orgId, ["site"], options.siteScope?.siteLocationIds);
     const filtered = rows.filter((loc) => {
         if (loc.type !== "site") return false;
         if (!options.includeInactive && !loc.isActive) return false;
