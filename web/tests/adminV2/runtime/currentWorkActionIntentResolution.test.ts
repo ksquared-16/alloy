@@ -28,7 +28,7 @@ function baseContext(partial: Partial<OperationalContext> = {}): OperationalCont
 }
 
 describe("Current Work intent-first template actions", () => {
-    it("deduplicates waitlist intent aliases and stores intent ref on alternate paths", () => {
+    it("ignores Work Template alternate_paths in favor of process-owned transitions", () => {
         const templateConfig: CurrentWorkTemplateConfigOverlay = {
             work_key: "contact_family",
             alternate_paths: [
@@ -62,10 +62,8 @@ describe("Current Work intent-first template actions", () => {
             templateConfig,
         });
 
-        expect(vm.alternatePaths).toHaveLength(1);
-        expect(vm.alternatePaths[0]?.actionRef).toBe("move_to_waitlist");
-        expect(vm.alternatePaths[0]?.label).toBe("Move to Waitlist");
-        expect(vm.alternatePaths[0]?.handlerKey).toBe("waitlist_child");
+        // No process outgoing edges in this fixture → no Other Transitions.
+        expect(vm.alternatePaths).toEqual([]);
     });
 
     it("keeps explicit empty helpful actions when explicitly configured", () => {
