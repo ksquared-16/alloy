@@ -345,10 +345,24 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
             return { ok: true };
         },
         openAddEmergencyContact: () => {
+            // Household Focus Panel — one-surface identity-resolved flow (not the
+            // legacy four-step wizard). Default scope = all children in household.
+            const customerId =
+                typeof truth.customer_id === "string" ? truth.customer_id.trim() : "";
             dispatchOpenRelationshipActionModal({
                 action_key: "add_emergency_contact",
                 opportunity_id: opportunityId,
                 source_surface: "opportunity_drawer",
+                initial_proposal: {
+                    actionKey: "add_emergency_contact",
+                    sourceSurface: "opportunity_drawer",
+                    sourceRecordId: opportunityId,
+                    sourceEntityType: "opportunity",
+                    sourceOpportunityId: opportunityId,
+                    sourceCustomerId: customerId,
+                    scope: "all_children_in_household",
+                    confirmationRequired: true,
+                },
             });
         },
         openAddEmergencyContactForChild: ({ customerMemberId, childPersonId }) => {

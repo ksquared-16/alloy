@@ -177,6 +177,7 @@ export function useOpportunityDrawerVmRegistryModals({
     const [relationshipActionState, setRelationshipActionState] = useState<{
         actionKey: RelationshipActionKey;
         sourceSurface: RelationshipActionSourceSurface;
+        initialProposal?: Partial<import("@/lib/admin/relationship/relationshipActionContract").RelationshipActionExecutionRequest>;
     } | null>(null);
     const [enrollmentStatusState, setEnrollmentStatusState] = useState<{
         sourceSurface: EnrollmentStatusTransitionSourceSurface;
@@ -213,11 +214,13 @@ export function useOpportunityDrawerVmRegistryModals({
             actionKey: RelationshipActionKey;
             opportunityId: string;
             sourceSurface?: RelationshipActionSourceSurface;
+            initialProposal?: Partial<import("@/lib/admin/relationship/relationshipActionContract").RelationshipActionExecutionRequest>;
         }) => {
             if (input.opportunityId.trim() !== oid) return;
             setRelationshipActionState({
                 actionKey: input.actionKey,
                 sourceSurface: input.sourceSurface ?? "opportunity_drawer",
+                initialProposal: input.initialProposal,
             });
         },
         [oid],
@@ -376,6 +379,7 @@ export function useOpportunityDrawerVmRegistryModals({
                 actionKey: detail.action_key,
                 opportunityId: detail.opportunity_id,
                 sourceSurface: detail.source_surface,
+                initialProposal: detail.initial_proposal,
             });
         };
 
@@ -739,6 +743,7 @@ export function useOpportunityDrawerVmRegistryModals({
                         actionKey={relationshipActionState.actionKey}
                         context={relationshipActionContext}
                         anchorRecord={record as ProofRuntimeRecord}
+                        initialProposal={relationshipActionState.initialProposal}
                         onClose={() => setRelationshipActionState(null)}
                         onSuccess={() => {
                             dispatchOpportunityDrawerScopedUpdate(oid, relationshipActionState.actionKey, [
