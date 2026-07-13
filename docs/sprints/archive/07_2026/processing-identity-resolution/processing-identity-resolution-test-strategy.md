@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Test Strategy
 
-**Status:** **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+**Status:** **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
 
 **Design baseline:** `origin/staging` @ `65afc8527`. Final local certification uses an isolated Supabase stack, a fresh 263-migration replay, 17 database checks, real authenticated JWT RLS tests, real executor RPC integration, serial Processing suites, production typecheck, test typecheck, and production build. Browser smoke remains a staging-reconciliation activity because this worktree contains no Processing Playwright specs.
 

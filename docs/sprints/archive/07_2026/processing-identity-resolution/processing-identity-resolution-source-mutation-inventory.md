@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Source-to-Mutation Inventory
 
-**Status:** Reconciled source inventory. **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+**Status:** Reconciled source inventory. **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
 
 **Audit baseline:** `origin/staging` @ `65afc8527`. **[C]** = confirmed by file read; **[I]** = inferred. Rows not explicitly marked “V1 authoritative” remain historical inventory/future-source observations.
 

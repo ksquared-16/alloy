@@ -33,7 +33,7 @@ supersedes: []
 
 ### July 2026 — Processing Identity Resolution V1 (promotion candidate)
 
-**Implemented locally and locally certified; awaiting staging reconciliation; not promoted or deployed.**
+**Reconciled onto latest `origin/staging` and locally re-certified; awaiting PR merge to staging; not deployed.**
 
 - Canonical identity normalization, org-scoped candidate generation, confidence bands, evidence signals, and conflict detection
 - Durable Processing facts and resolution generations

@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Commit Inventory
 
-**Status:** Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.
+**Status:** Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.
 
 **Branch:** `claude/proc-identity-lib-normalization`
 

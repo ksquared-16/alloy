@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **Column count:** 3087
+**Generated:** 2026-07-13 · **Column count:** 3098
 
 Columns for `public` schema tables, grouped alphabetically by table.
 
@@ -869,10 +869,6 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
-| `default_access_mode` | text | NO | 'explicit_grants_required'::text |
-| `last_verification_at` | timestamp with time zone | YES | — |
-| `last_successful_send_at` | timestamp with time zone | YES | — |
-| `last_failed_send_at` | timestamp with time zone | YES | — |
 
 ## `communication_identity_grants`
 
@@ -908,8 +904,6 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `status` | text | NO | 'active'::text |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
-| `updated_by` | uuid | YES | — |
-| `metadata` | jsonb | NO | '{}'::jsonb |
 
 ## `communication_message_reads`
 
@@ -1028,9 +1022,6 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
-| `last_health_check_at` | timestamp with time zone | YES | — |
-| `last_successful_operation_at` | timestamp with time zone | YES | — |
-| `last_failed_operation_at` | timestamp with time zone | YES | — |
 
 ## `communication_provider_bindings`
 
@@ -1231,6 +1222,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `updated_by` | uuid | YES | — |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
+| `corrects_event_id` | uuid | YES | — |
 
 ## `contact_tags`
 
@@ -2919,6 +2911,34 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `is_active` | boolean | NO | true |
 | `created_at` | timestamp with time zone | NO | now() |
 
+## `person_child_relationship_roles`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `relationship_id` | uuid | NO | — |
+| `role_key` | text | NO | — |
+| `is_active` | boolean | NO | true |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+
+## `person_child_relationships`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `customer_id` | uuid | NO | — |
+| `customer_member_id` | uuid | NO | — |
+| `person_id` | uuid | NO | — |
+| `relationship_type` | text | YES | — |
+| `priority` | integer | YES | — |
+| `status` | text | NO | 'active'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+
 ## `person_locations`
 
 | Column | Type | Nullable | Default |
@@ -3614,6 +3634,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `reviewed_at` | timestamp with time zone | YES | — |
 | `reviewed_by` | uuid | YES | — |
 | `suppression_reason` | text | YES | — |
+| `superseded_by_event_id` | uuid | YES | — |
 
 ## `role_definitions`
 

@@ -1,6 +1,6 @@
 # Processing Identity Resolution V1 — Migration Audit
 
-**Status:** Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.
+**Status:** Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.
 
 **Scope:** Sprint-introduced migrations under `supabase/migrations/` (20260716–20260718 Processing Identity + `has_org_role` fix). Prerequisite Processing case foundation (`20260612120100`, `20260615120000`) predates this sprint and remains a dependency.
 

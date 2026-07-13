@@ -2,7 +2,7 @@
 
 **Status:** Historical pre-implementation audit. **Do not treat the findings below as current runtime state.**
 
-**Implementation reconciliation (2026-07-12):** the gaps identified here were closed locally through E1: durable facts and resolutions, immutable Commit Plans and approvals, registered identity commands, deterministic executor, operator review, authoritative Create Lead and public-form adapters, and retirement of their direct-write paths. Current status: **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+**Implementation reconciliation (2026-07-12):** the gaps identified here were closed locally through E1: durable facts and resolutions, immutable Commit Plans and approvals, registered identity commands, deterministic executor, operator review, authoritative Create Lead and public-form adapters, and retirement of their direct-write paths. Current status: **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
 
 **Audit baseline:** `origin/staging` @ `65afc8527506057ece2798675c6050e86ca92bcf` (HEAD of audit branch `claude/proc-identity-resolution-audit`; the merge of PR #141 `feat/processing-form-workflow-finish`). Read-only audit — no runtime code, schema, or migration was modified by this artifact.
 

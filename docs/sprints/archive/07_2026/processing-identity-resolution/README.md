@@ -1,6 +1,6 @@
 # Processing Identity Resolution Engine V1 — Architecture & Implementation Sprint
 
-**Status:** **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+**Status:** **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
 Architecture and V1 decisions remain frozen. **Design baseline:** `origin/staging` @ `65afc8527…`; **certified HEAD:** current branch tip; **promotion target:** latest staging after an explicit reconciliation.
 
 All V1 slices **B1a–E1 are implemented and locally certified.** The Manual Create Lead identity-review authority defect is fixed: plausible child/household matches force blocking operator review; `IdentityResolutionEligibility` gates plan build, approve, and execute for every source. Full local certification (reset stack, 17/17 Postgres checks, Processing vitests, typechecks, production build) re-passed after the fix. Remaining work is staging reconciliation / promotion only — not new V1 platform functionality.
@@ -82,7 +82,7 @@ Seven parallel read-only trace streams + firsthand reads of the load-bearing con
 
 ### Local certification (2026-07-12, isolated stack)
 
-**Implemented locally · Certified locally · Awaiting staging reconciliation · Not promoted · Not deployed**
+**Implemented locally · Certified locally · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed**
 
 | Item | Value |
 |------|-------|

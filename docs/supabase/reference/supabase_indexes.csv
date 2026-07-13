@@ -253,6 +253,7 @@ public,consumption_event_types,consumption_event_types_pkey,true,true,btree,CREA
 public,consumption_event_types,idx_consumption_event_types_global_key,true,false,btree,CREATE UNIQUE INDEX idx_consumption_event_types_global_key ON consumption_event_types USING btree (event_key) WHERE org_id IS NULL
 public,consumption_event_types,idx_consumption_event_types_org_key,true,false,btree,"CREATE UNIQUE INDEX idx_consumption_event_types_org_key ON consumption_event_types USING btree (org_id, event_key) WHERE org_id IS NOT NULL"
 public,consumption_events,consumption_events_pkey,true,true,btree,CREATE UNIQUE INDEX consumption_events_pkey ON consumption_events USING btree (id)
+public,consumption_events,idx_consumption_events_corrects,false,false,btree,"CREATE INDEX idx_consumption_events_corrects ON consumption_events USING btree (org_id, corrects_event_id) WHERE corrects_event_id IS NOT NULL"
 public,consumption_events,idx_consumption_events_org_event_key,false,false,btree,"CREATE INDEX idx_consumption_events_org_event_key ON consumption_events USING btree (org_id, event_key)"
 public,consumption_events,idx_consumption_events_org_idempotency,true,false,btree,"CREATE UNIQUE INDEX idx_consumption_events_org_idempotency ON consumption_events USING btree (org_id, idempotency_key)"
 public,consumption_events,idx_consumption_events_org_location,false,false,btree,"CREATE INDEX idx_consumption_events_org_location ON consumption_events USING btree (org_id, location_id) WHERE location_id IS NOT NULL"
@@ -660,6 +661,14 @@ public,permission_definitions,permission_definitions_key_key,true,false,btree,CR
 public,permission_definitions,permission_definitions_pkey,true,true,btree,CREATE UNIQUE INDEX permission_definitions_pkey ON permission_definitions USING btree (id)
 public,permission_keys,permission_keys_pkey,true,true,btree,CREATE UNIQUE INDEX permission_keys_pkey ON permission_keys USING btree (key)
 public,permissions,permissions_pkey,true,true,btree,CREATE UNIQUE INDEX permissions_pkey ON permissions USING btree (key)
+public,person_child_relationship_roles,idx_person_child_relationship_roles_rel,false,false,btree,"CREATE INDEX idx_person_child_relationship_roles_rel ON person_child_relationship_roles USING btree (org_id, relationship_id)"
+public,person_child_relationship_roles,person_child_relationship_roles_pkey,true,true,btree,CREATE UNIQUE INDEX person_child_relationship_roles_pkey ON person_child_relationship_roles USING btree (id)
+public,person_child_relationship_roles,uq_person_child_relationship_roles,true,false,btree,"CREATE UNIQUE INDEX uq_person_child_relationship_roles ON person_child_relationship_roles USING btree (org_id, relationship_id, role_key)"
+public,person_child_relationships,idx_person_child_relationships_org_customer,false,false,btree,"CREATE INDEX idx_person_child_relationships_org_customer ON person_child_relationships USING btree (org_id, customer_id)"
+public,person_child_relationships,idx_person_child_relationships_org_member,false,false,btree,"CREATE INDEX idx_person_child_relationships_org_member ON person_child_relationships USING btree (org_id, customer_member_id)"
+public,person_child_relationships,idx_person_child_relationships_org_person,false,false,btree,"CREATE INDEX idx_person_child_relationships_org_person ON person_child_relationships USING btree (org_id, person_id)"
+public,person_child_relationships,person_child_relationships_pkey,true,true,btree,CREATE UNIQUE INDEX person_child_relationships_pkey ON person_child_relationships USING btree (id)
+public,person_child_relationships,uq_person_child_relationships_member_person,true,false,btree,"CREATE UNIQUE INDEX uq_person_child_relationships_member_person ON person_child_relationships USING btree (org_id, customer_member_id, person_id)"
 public,person_locations,idx_person_locations_location,false,false,btree,CREATE INDEX idx_person_locations_location ON person_locations USING btree (location_id)
 public,person_locations,idx_person_locations_org,false,false,btree,CREATE INDEX idx_person_locations_org ON person_locations USING btree (org_id)
 public,person_locations,idx_person_locations_person,false,false,btree,CREATE INDEX idx_person_locations_person ON person_locations USING btree (person_id)
@@ -823,6 +832,7 @@ public,resolved_obligations,idx_resolved_obligations_org_kind,false,false,btree,
 public,resolved_obligations,idx_resolved_obligations_org_resolution,true,false,btree,"CREATE UNIQUE INDEX idx_resolved_obligations_org_resolution ON resolved_obligations USING btree (org_id, resolution_key) WHERE resolution_key IS NOT NULL"
 public,resolved_obligations,idx_resolved_obligations_org_review_status,false,false,btree,"CREATE INDEX idx_resolved_obligations_org_review_status ON resolved_obligations USING btree (org_id, review_status)"
 public,resolved_obligations,idx_resolved_obligations_org_status,false,false,btree,"CREATE INDEX idx_resolved_obligations_org_status ON resolved_obligations USING btree (org_id, status)"
+public,resolved_obligations,idx_resolved_obligations_superseded_by,false,false,btree,CREATE INDEX idx_resolved_obligations_superseded_by ON resolved_obligations USING btree (superseded_by_event_id) WHERE superseded_by_event_id IS NOT NULL
 public,resolved_obligations,resolved_obligations_pkey,true,true,btree,CREATE UNIQUE INDEX resolved_obligations_pkey ON resolved_obligations USING btree (id)
 public,role_definitions,role_definitions_org_role_key_uk,true,false,btree,"CREATE UNIQUE INDEX role_definitions_org_role_key_uk ON role_definitions USING btree (org_id, role_key)"
 public,role_definitions,role_definitions_org_role_key_uq,true,false,btree,"CREATE UNIQUE INDEX role_definitions_org_role_key_uq ON role_definitions USING btree (org_id, role_key)"

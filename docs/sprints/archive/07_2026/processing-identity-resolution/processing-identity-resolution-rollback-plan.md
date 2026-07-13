@@ -1,6 +1,6 @@
 # Processing Identity Resolution V1 — Staging Rollback Plan
 
-**Status:** Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.
+**Status:** Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.
 
 **Assumption:** The sprint has been promoted to staging, but not production.
 

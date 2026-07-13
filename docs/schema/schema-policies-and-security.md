@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **RLS policy count:** 703
+**Generated:** 2026-07-13 · **RLS policy count:** 709
 
 ## Posture
 
@@ -1222,6 +1222,22 @@
 |--------|---------|-------|--------------------------------|
 | `permissions_all_service_role` | ALL | {public} | — |
 | `permissions_select_authenticated` | SELECT | {authenticated} | — |
+
+### `person_child_relationship_roles`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `person_child_relationship_roles_select_org` | SELECT | {authenticated} | — |
+| `person_child_relationship_roles_service_role_all` | ALL | {service_role} | — |
+| `person_child_relationship_roles_write_org` | ALL | {authenticated} | — |
+
+### `person_child_relationships`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `person_child_relationships_select_org` | SELECT | {authenticated} | — |
+| `person_child_relationships_service_role_all` | ALL | {service_role} | — |
+| `person_child_relationships_write_org` | ALL | {authenticated} | — |
 
 ### `person_locations`
 

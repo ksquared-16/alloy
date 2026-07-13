@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Local Certification Data Cleanup
 
-**Status:** Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.
+**Status:** Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.
 
 **Scope:** Isolated certification database only (`127.0.0.1:55322`, project `alloy-processing-identity-cert`). No shared/staging/production data was touched.
 

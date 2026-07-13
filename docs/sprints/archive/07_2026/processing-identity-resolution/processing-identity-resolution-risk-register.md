@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Risk Register
 
-**Status:** Closeout risk register. **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+**Status:** Closeout risk register. **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
 
 **Design baseline:** `origin/staging` @ `65afc8527`. L = likelihood, I = impact (both L/M/H). Local certification reduced the RLS, replay, stale-plan, executor, and D4/D5 dual-authority risks; staging reconciliation must revalidate them after integration.
 

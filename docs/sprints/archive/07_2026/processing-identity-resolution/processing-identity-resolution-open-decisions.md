@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Decision Register (V1 FROZEN)
 
-**Status:** Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed. V1 decisions remain frozen. The reusable eligibility gate (`confirmed_existing` | `confirmed_new` | `needs_review` | `conflicted` | `unresolved`) is mandatory for plan build / approve / execute and is locally certified.
+**Status:** Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed. V1 decisions remain frozen. The reusable eligibility gate (`confirmed_existing` | `confirmed_new` | `needs_review` | `conflicted` | `unresolved`) is mandatory for plan build / approve / execute and is locally certified.
 
 **Status legend:** 🔒 **Frozen for V1** · 🧩 **Deferred behind an abstraction** (Processing does not depend on the unresolved detail) · 👤 **Requires product-owner approval** (default stated; safe to proceed on default).
 

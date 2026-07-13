@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Doctrine Reconciliation
 
-**Status:** Closeout reconciliation record. **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+**Status:** Closeout reconciliation record. **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
 
 **Design baseline:** `origin/staging` @ `65afc8527`. The table below is the original design-time reconciliation ledger; the closeout disposition is now recorded here and in the affected canonical docs.
 

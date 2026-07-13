@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **Trigger count:** 223
+**Generated:** 2026-07-13 · **Trigger count:** 229
 
 | Table | Trigger | Event | Function |
 |-------|---------|-------|----------|
@@ -147,6 +147,12 @@
 | `payment_allocations` | `trg_payment_allocations_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_payment_allocations_updated_at BEFORE UPDATE ON payment_alloc |
 | `payments` | `payments_post_to_ledger` | UPDATE AFTER | CREATE TRIGGER payments_post_to_ledger AFTER UPDATE OF posted_at, paid_at ON pay |
 | `payments` | `trg_payments_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_payments_updated_at BEFORE UPDATE ON payments FOR EACH ROW EX |
+| `person_child_relationship_roles` | `trg_person_child_relationship_roles_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_person_child_relationship_roles_updated_at BEFORE UPDATE ON p |
+| `person_child_relationship_roles` | `trg_validate_person_child_relationship_roles_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_person_child_relationship_roles_consistency BEFORE I |
+| `person_child_relationship_roles` | `trg_validate_person_child_relationship_roles_consistency` | UPDATE BEFORE | CREATE TRIGGER trg_validate_person_child_relationship_roles_consistency BEFORE I |
+| `person_child_relationships` | `trg_person_child_relationships_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_person_child_relationships_updated_at BEFORE UPDATE ON person |
+| `person_child_relationships` | `trg_validate_person_child_relationships_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_person_child_relationships_consistency BEFORE INSERT |
+| `person_child_relationships` | `trg_validate_person_child_relationships_consistency` | UPDATE BEFORE | CREATE TRIGGER trg_validate_person_child_relationships_consistency BEFORE INSERT |
 | `person_relationship_type_settings` | `trg_person_relationship_type_settings_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_person_relationship_type_settings_updated_at BEFORE UPDATE ON |
 | `persons` | `trg_assign_org_record_number_persons` | INSERT BEFORE | CREATE TRIGGER trg_assign_org_record_number_persons BEFORE INSERT ON persons FOR |
 | `persons` | `trg_set_person_full_name` | INSERT BEFORE | CREATE TRIGGER trg_set_person_full_name BEFORE INSERT OR UPDATE OF first_name, l |

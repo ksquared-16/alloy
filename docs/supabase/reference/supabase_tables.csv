@@ -151,6 +151,8 @@ public,payments,BASE TABLE,true,false,true
 public,permission_definitions,BASE TABLE,true,true,true
 public,permission_keys,BASE TABLE,true,false,true
 public,permissions,BASE TABLE,true,true,true
+public,person_child_relationship_roles,BASE TABLE,true,false,true
+public,person_child_relationships,BASE TABLE,true,false,true
 public,person_locations,BASE TABLE,true,false,true
 public,person_relationship_type_settings,BASE TABLE,true,false,true
 public,person_relationships,BASE TABLE,true,false,true

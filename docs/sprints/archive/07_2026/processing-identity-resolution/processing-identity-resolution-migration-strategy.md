@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Migration & Rollout Strategy (V1, refined)
 
-**Status:** **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+**Status:** **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
 
 **Design baseline:** `origin/staging` @ `65afc8527`. Decision I was executed in order: public-form comparison → Manual Create Lead first reviewed commit → public-form reviewed commit. The local migration chain was replayed from a fresh database and certified.
 

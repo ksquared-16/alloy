@@ -1,6 +1,6 @@
 # Processing Identity Resolution V1 — Consolidated Regression Checklist
 
-**Status:** Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.
+**Status:** Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.
 
 **Use:** Final staging reconciliation and promotion verification. No checklist item authorizes implementation or scope expansion.
 

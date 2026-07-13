@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **Constraint count:** 1178
+**Generated:** 2026-07-13 · **Constraint count:** 1191
 
 | Table | Name | Type | Definition |
 |-------|------|------|------------|
@@ -282,7 +282,6 @@
 | `communication_delivery_events` | `communication_delivery_events_recipient_id_fkey` | FOREIGN KEY | FOREIGN KEY (recipient_id) REFERENCES communication_message_recipients(id) ON DELETE SET NULL |
 | `communication_identities` | `communication_identities_address_nonempty` | CHECK | CHECK (char_length(btrim(normalized_address)) > 0) |
 | `communication_identities` | `communication_identities_channel_check` | CHECK | CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text, 'voice'::text, 'internal'::text])) |
-| `communication_identities` | `communication_identities_default_access_mode_check` | CHECK | CHECK (default_access_mode = ANY (ARRAY['open_until_restricted'::text, 'explicit_grants_required'::t |
 | `communication_identities` | `communication_identities_health_status_check` | CHECK | CHECK (health_status = ANY (ARRAY['unknown'::text, 'healthy'::text, 'degraded'::text, 'unavailable': |
 | `communication_identities` | `communication_identities_legacy_binding_id_fkey` | FOREIGN KEY | FOREIGN KEY (legacy_binding_id) REFERENCES communication_provider_bindings(id) ON DELETE SET NULL |
 | `communication_identities` | `communication_identities_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
@@ -381,6 +380,8 @@
 | `consumption_event_types` | `consumption_event_types_label_nonempty` | CHECK | CHECK (char_length(btrim(label)) > 0) |
 | `consumption_event_types` | `consumption_event_types_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
 | `consumption_event_types` | `consumption_event_types_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `consumption_events` | `consumption_events_corrects_event_id_fkey` | FOREIGN KEY | FOREIGN KEY (corrects_event_id) REFERENCES consumption_events(id) ON DELETE RESTRICT |
+| `consumption_events` | `consumption_events_corrects_no_self` | CHECK | CHECK (corrects_event_id IS NULL OR corrects_event_id <> id) |
 | `consumption_events` | `consumption_events_event_key_nonempty` | CHECK | CHECK (char_length(btrim(event_key)) > 0) |
 | `consumption_events` | `consumption_events_event_type_id_fkey` | FOREIGN KEY | FOREIGN KEY (event_type_id) REFERENCES consumption_event_types(id) ON DELETE SET NULL |
 | `consumption_events` | `consumption_events_family_nonempty` | CHECK | CHECK (char_length(btrim(source_family)) > 0) |
@@ -845,6 +846,17 @@
 | `permission_definitions` | `permission_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
 | `permission_keys` | `permission_keys_pkey` | PRIMARY KEY | PRIMARY KEY (key) |
 | `permissions` | `permissions_pkey` | PRIMARY KEY | PRIMARY KEY (key) |
+| `person_child_relationship_roles` | `person_child_relationship_roles_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `person_child_relationship_roles` | `person_child_relationship_roles_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `person_child_relationship_roles` | `person_child_relationship_roles_relationship_id_fkey` | FOREIGN KEY | FOREIGN KEY (relationship_id) REFERENCES person_child_relationships(id) ON DELETE CASCADE |
+| `person_child_relationship_roles` | `uq_person_child_relationship_roles` | UNIQUE | UNIQUE (org_id, relationship_id, role_key) |
+| `person_child_relationships` | `person_child_relationships_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE |
+| `person_child_relationships` | `person_child_relationships_customer_member_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE CASCADE |
+| `person_child_relationships` | `person_child_relationships_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `person_child_relationships` | `person_child_relationships_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE |
+| `person_child_relationships` | `person_child_relationships_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `person_child_relationships` | `person_child_relationships_status_check` | CHECK | CHECK (status = ANY (ARRAY['active'::text, 'inactive'::text])) |
+| `person_child_relationships` | `uq_person_child_relationships_member_person` | UNIQUE | UNIQUE (org_id, customer_member_id, person_id) |
 | `person_locations` | `person_locations_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE |
 | `person_locations` | `person_locations_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE |
 | `person_locations` | `person_locations_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
@@ -1005,6 +1017,7 @@
 | `resolved_obligations` | `resolved_obligations_review_status_check` | CHECK | CHECK (review_status = ANY (ARRAY['pending'::text, 'review_required'::text, 'reviewed'::text, 'suppr |
 | `resolved_obligations` | `resolved_obligations_service_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_id) REFERENCES financial_services(id) ON DELETE SET NULL |
 | `resolved_obligations` | `resolved_obligations_status_check` | CHECK | CHECK (status = ANY (ARRAY['previewed'::text, 'drafted'::text, 'no_charge'::text, 'superseded'::text |
+| `resolved_obligations` | `resolved_obligations_superseded_by_event_id_fkey` | FOREIGN KEY | FOREIGN KEY (superseded_by_event_id) REFERENCES consumption_events(id) ON DELETE SET NULL |
 | `role_definitions` | `role_definitions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
 | `role_definitions` | `role_definitions_org_role_key_uk` | UNIQUE | UNIQUE (org_id, role_key) |
 | `role_definitions` | `role_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |

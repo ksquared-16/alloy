@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Data Model (V1, refined)
 
-**Status:** **Implemented locally · Locally certified · Awaiting staging reconciliation · Not promoted · Not deployed.**
+**Status:** **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
 
 **Design baseline:** `origin/staging` @ `65afc8527`. The seven-table model is implemented by migrations `20260716130000` through `20260717130000`, with D4/D5 source-kind and D2/RLS hardening migrations through `20260718140000`. Generated column, constraint, index, function, trigger, and policy detail lives in `docs/schema/`; this artifact owns the conceptual model and V1 decisions. Evidence: **[C]** confirmed, **[P]** design-time proposal.
 

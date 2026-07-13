@@ -23,7 +23,7 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | VM Runtime (Opportunity/Person/Child) | **Complete** | Hard cutover; no kill-switch rollback | Legacy drawer deleted |
 | Business Process Runtime | **Complete** | Landing → stage queues → record focus | Operator model frozen |
 | Processing Runtime | **Complete** | Digital Mailroom operational workspace | Reference module shell |
-| Processing Identity Resolution V1 | **Complete** (promotion candidate) | Canonical normalization/candidates, durable facts/resolutions, immutable approval-bound plans, deterministic executor, identity-review gate, operator review, Create Lead + public-form cutovers | Locally certified; awaiting staging reconciliation; not deployed |
+| Processing Identity Resolution V1 | **Complete** (promotion candidate) | Canonical normalization/candidates, durable facts/resolutions, immutable approval-bound plans, deterministic executor, identity-review gate, operator review, Create Lead + public-form cutovers | Locally certified; reconciled onto staging tip; awaiting PR merge; not deployed |
 | Communications Runtime | **Complete** | Command Center + Activity embed + identity platform | PR #132, #147 |
 | Configuration Runtime | **Complete** | `/settings/*` control plane + Surfaces builder | Locations inline create |
 | Current Work Runtime | **Complete** | Config-driven stage work in Focus Panel | PR #95 |

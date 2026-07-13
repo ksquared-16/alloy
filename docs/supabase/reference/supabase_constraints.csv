@@ -275,7 +275,6 @@ public,communication_delivery_events_pkey,PRIMARY KEY,public,communication_deliv
 public,communication_delivery_events_recipient_id_fkey,FOREIGN KEY,public,communication_delivery_events,FOREIGN KEY (recipient_id) REFERENCES communication_message_recipients(id) ON DELETE SET NULL,false,false
 public,communication_identities_address_nonempty,CHECK,public,communication_identities,CHECK (char_length(btrim(normalized_address)) > 0),false,false
 public,communication_identities_channel_check,CHECK,public,communication_identities,"CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text, 'voice'::text, 'internal'::text]))",false,false
-public,communication_identities_default_access_mode_check,CHECK,public,communication_identities,"CHECK (default_access_mode = ANY (ARRAY['open_until_restricted'::text, 'explicit_grants_required'::text]))",false,false
 public,communication_identities_health_status_check,CHECK,public,communication_identities,"CHECK (health_status = ANY (ARRAY['unknown'::text, 'healthy'::text, 'degraded'::text, 'unavailable'::text]))",false,false
 public,communication_identities_legacy_binding_id_fkey,FOREIGN KEY,public,communication_identities,FOREIGN KEY (legacy_binding_id) REFERENCES communication_provider_bindings(id) ON DELETE SET NULL,false,false
 public,communication_identities_org_id_fkey,FOREIGN KEY,public,communication_identities,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
@@ -374,6 +373,8 @@ public,consumption_event_types_key_nonempty,CHECK,public,consumption_event_types
 public,consumption_event_types_label_nonempty,CHECK,public,consumption_event_types,CHECK (char_length(btrim(label)) > 0),false,false
 public,consumption_event_types_org_id_fkey,FOREIGN KEY,public,consumption_event_types,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,consumption_event_types_pkey,PRIMARY KEY,public,consumption_event_types,PRIMARY KEY (id),false,false
+public,consumption_events_corrects_event_id_fkey,FOREIGN KEY,public,consumption_events,FOREIGN KEY (corrects_event_id) REFERENCES consumption_events(id) ON DELETE RESTRICT,false,false
+public,consumption_events_corrects_no_self,CHECK,public,consumption_events,CHECK (corrects_event_id IS NULL OR corrects_event_id <> id),false,false
 public,consumption_events_event_key_nonempty,CHECK,public,consumption_events,CHECK (char_length(btrim(event_key)) > 0),false,false
 public,consumption_events_event_type_id_fkey,FOREIGN KEY,public,consumption_events,FOREIGN KEY (event_type_id) REFERENCES consumption_event_types(id) ON DELETE SET NULL,false,false
 public,consumption_events_family_nonempty,CHECK,public,consumption_events,CHECK (char_length(btrim(source_family)) > 0),false,false
@@ -838,6 +839,17 @@ public,permission_definitions_key_key,UNIQUE,public,permission_definitions,UNIQU
 public,permission_definitions_pkey,PRIMARY KEY,public,permission_definitions,PRIMARY KEY (id),false,false
 public,permission_keys_pkey,PRIMARY KEY,public,permission_keys,PRIMARY KEY (key),false,false
 public,permissions_pkey,PRIMARY KEY,public,permissions,PRIMARY KEY (key),false,false
+public,person_child_relationship_roles_org_id_fkey,FOREIGN KEY,public,person_child_relationship_roles,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT,false,false
+public,person_child_relationship_roles_pkey,PRIMARY KEY,public,person_child_relationship_roles,PRIMARY KEY (id),false,false
+public,person_child_relationship_roles_relationship_id_fkey,FOREIGN KEY,public,person_child_relationship_roles,FOREIGN KEY (relationship_id) REFERENCES person_child_relationships(id) ON DELETE CASCADE,false,false
+public,uq_person_child_relationship_roles,UNIQUE,public,person_child_relationship_roles,"UNIQUE (org_id, relationship_id, role_key)",false,false
+public,person_child_relationships_customer_id_fkey,FOREIGN KEY,public,person_child_relationships,FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,false,false
+public,person_child_relationships_customer_member_id_fkey,FOREIGN KEY,public,person_child_relationships,FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE CASCADE,false,false
+public,person_child_relationships_org_id_fkey,FOREIGN KEY,public,person_child_relationships,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT,false,false
+public,person_child_relationships_person_id_fkey,FOREIGN KEY,public,person_child_relationships,FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE,false,false
+public,person_child_relationships_pkey,PRIMARY KEY,public,person_child_relationships,PRIMARY KEY (id),false,false
+public,person_child_relationships_status_check,CHECK,public,person_child_relationships,"CHECK (status = ANY (ARRAY['active'::text, 'inactive'::text]))",false,false
+public,uq_person_child_relationships_member_person,UNIQUE,public,person_child_relationships,"UNIQUE (org_id, customer_member_id, person_id)",false,false
 public,person_locations_location_id_fkey,FOREIGN KEY,public,person_locations,FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,false,false
 public,person_locations_person_id_fkey,FOREIGN KEY,public,person_locations,FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE,false,false
 public,person_locations_pkey,PRIMARY KEY,public,person_locations,PRIMARY KEY (id),false,false
@@ -998,6 +1010,7 @@ public,resolved_obligations_pkey,PRIMARY KEY,public,resolved_obligations,PRIMARY
 public,resolved_obligations_review_status_check,CHECK,public,resolved_obligations,"CHECK (review_status = ANY (ARRAY['pending'::text, 'review_required'::text, 'reviewed'::text, 'suppressed'::text, 'stale'::text]))",false,false
 public,resolved_obligations_service_id_fkey,FOREIGN KEY,public,resolved_obligations,FOREIGN KEY (service_id) REFERENCES financial_services(id) ON DELETE SET NULL,false,false
 public,resolved_obligations_status_check,CHECK,public,resolved_obligations,"CHECK (status = ANY (ARRAY['previewed'::text, 'drafted'::text, 'no_charge'::text, 'superseded'::text]))",false,false
+public,resolved_obligations_superseded_by_event_id_fkey,FOREIGN KEY,public,resolved_obligations,FOREIGN KEY (superseded_by_event_id) REFERENCES consumption_events(id) ON DELETE SET NULL,false,false
 public,role_definitions_org_id_fkey,FOREIGN KEY,public,role_definitions,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,role_definitions_org_role_key_uk,UNIQUE,public,role_definitions,"UNIQUE (org_id, role_key)",false,false
 public,role_definitions_pkey,PRIMARY KEY,public,role_definitions,PRIMARY KEY (id),false,false

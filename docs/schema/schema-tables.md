@@ -4,15 +4,15 @@
 
 **Regenerate:** `npm run export:supabase-schema` then `node scripts/generate-schema-docs.mjs`
 
-**Generated:** 2026-07-12
+**Generated:** 2026-07-13
 
 ## Summary
 
 | Kind | Count |
 |------|------:|
-| Base tables (`public`) | 230 |
-| Views (`public`) | 7 |
-| Tables with RLS enabled | 230 |
+| Base tables (`public`) | 232 |
+| Views (`public`) | 2 |
+| Tables with RLS enabled | 232 |
 
 ## Base tables
 
@@ -170,6 +170,8 @@
 | `permission_definitions` | true | true | 4 |
 | `permission_keys` | true | false | 2 |
 | `permissions` | true | true | 2 |
+| `person_child_relationship_roles` | true | false | 3 |
+| `person_child_relationships` | true | false | 3 |
 | `person_locations` | true | false | 4 |
 | `person_relationship_type_settings` | true | false | 4 |
 | `person_relationships` | true | false | 4 |
@@ -253,13 +255,8 @@
 
 | View | Definition (truncated) |
 |------|------------------------|
-| ` '[]'::jsonb) AS benefits` |  |
-| ` '[]'::jsonb) AS qualifiers` |  |
-| ` x.id` |  |
-| ` x.id` |  'qualifier_type' |
-| ` x.id` |  'benefit_type' |
-| `discount_programs_admin_v` |  SELECT dp.id, |
-| `workflow_run_events` |  SELECT r.id AS run_id, |
+| `discount_programs_admin_v` |  SELECT dp.id, dp.org_id, dp.name, dp.code, dp.description, dp.status, dp.program_type, dp.stacking_mode, dp.priority, d… |
+| `workflow_run_events` |  SELECT r.id AS run_id, r.workflow_id, r.status, r.error, r.started_at, r.completed_at, r.org_id AS run_org_id, r.event_… |
 
 ## Domain groupings (conceptual)
 
