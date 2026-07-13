@@ -17,6 +17,10 @@ import {
     type OutcomeAutomationDraft,
     type OutcomeAutomationKind,
 } from "@/lib/lifecycle/stageOutcomeAutomation";
+import {
+    resolveOutcomeStatusOptions,
+    type OutcomeStatusConfiguredRow,
+} from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 
 type Props = {
     outcomeKey: string;
@@ -30,6 +34,8 @@ type Props = {
     processTracks?: ProcessTracksV1 | null;
     defaultRepeatTemplateKey?: string | null;
     completesWork?: boolean;
+    configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+    entityType?: string;
     onRulesChange: (rules: StageOutcomeRuleV1[]) => void;
 };
 
@@ -45,6 +51,8 @@ export default function LifecycleStageOutcomeAutomationEditor({
     processTracks,
     defaultRepeatTemplateKey,
     completesWork,
+    configuredStatuses = [],
+    entityType = "opportunities",
     onRulesChange,
 }: Props) {
     const transitionOptions = resolveStageOutcomeTransitionOptions({
@@ -57,8 +65,17 @@ export default function LifecycleStageOutcomeAutomationEditor({
     const transitionLabelByRef = Object.fromEntries(
         transitionOptions.map((opt) => [opt.transition_ref, opt.label]),
     );
+    const hasOutgoingTransitions = transitionOptions.length > 0;
 
     const draft = readOutcomeAutomationDraft(outcomeKey, rules, { transitionOptions });
+    const statusResolution = resolveOutcomeStatusOptions({
+        configuredStatuses,
+        purpose: "close_record",
+        entityType,
+        selectedStatusKey: draft.status_key,
+    });
+    const closeAvailable = statusResolution.available;
+
     const templateLabels = Object.fromEntries(workTemplates.map((t) => [t.template_key, t.label]));
     const summary = outcomeAutomationSummaryForOutcome(outcomeKey, outcomeLabel, rules, {
         workTemplateLabelByKey: templateLabels,
@@ -77,6 +94,9 @@ export default function LifecycleStageOutcomeAutomationEditor({
             onRulesChange(rules.filter((r) => r.when_outcome_key !== outcomeKey));
             return;
         }
+        if (kind === "move_to_stage" && !hasOutgoingTransitions) return;
+        if (kind === "close_record" && !closeAvailable) return;
+
         const defaultTransition = transitionOptions[0];
         applyDraft({
             ...draft,
@@ -85,7 +105,13 @@ export default function LifecycleStageOutcomeAutomationEditor({
             stage_key:
                 draft.stage_key
                 ?? defaultTransition?.target_stage_key,
-            status_key: draft.status_key,
+            status_key:
+                kind === "close_record"
+                    ? (statusResolution.selectedStatusKey
+                        ?? statusResolution.options[0]?.status_key
+                        ?? draft.status_key
+                        ?? undefined)
+                    : draft.status_key,
             repeat_template_key:
                 draft.repeat_template_key
                 ?? defaultRepeatTemplateKey
@@ -115,86 +141,146 @@ export default function LifecycleStageOutcomeAutomationEditor({
     };
 
     const repeatSummary = summarizeRepeatWorkDraft(draft, templateLabels);
+    const selectedTransition = transitionOptions.find((o) => o.transition_ref === draft.transition_ref);
 
     return (
         <div
             className="mt-2 space-y-2 rounded border border-alloy-forge/10 bg-white px-2 py-1.5"
             data-testid={`stage-outcome-automation-${outcomeKey}`}
         >
+            <div className="space-y-1">
+                <p className="text-[10px] font-medium text-alloy-midnight/70">Outcome Definitions</p>
+                <p className="text-[10px] text-alloy-midnight/45">
+                    Define what this outcome means and what happens after recording it.
+                </p>
+            </div>
+
             <label className="flex flex-wrap items-center gap-2 text-[10px] text-alloy-midnight/65">
-                Outcome behavior
+                After recording
                 <select
                     className="min-w-[10rem] rounded border border-alloy-forge/15 bg-white px-2 py-0.5 text-[10px]"
                     value={draft.kind}
                     onChange={(e) => setKind(e.target.value as OutcomeAutomationKind)}
                     data-testid={`stage-outcome-automation-kind-${outcomeKey}`}
                 >
-                    {OUTCOME_AUTOMATION_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                        </option>
-                    ))}
+                    {OUTCOME_AUTOMATION_OPTIONS.map((opt) => {
+                        const disabled =
+                            (opt.value === "move_to_stage" && !hasOutgoingTransitions)
+                            || (opt.value === "close_record" && !closeAvailable);
+                        return (
+                            <option key={opt.value} value={opt.value} disabled={disabled}>
+                                {opt.label}
+                                {opt.value === "move_to_stage" && !hasOutgoingTransitions
+                                    ? " (no outgoing transitions)"
+                                    : ""}
+                                {opt.value === "close_record" && !closeAvailable
+                                    ? " (no closed statuses)"
+                                    : ""}
+                            </option>
+                        );
+                    })}
                 </select>
             </label>
 
             {draft.kind === "move_to_stage" ?
-                <label className="flex flex-wrap items-center gap-2 text-[10px] text-alloy-midnight/65">
-                    Transition
-                    <select
-                        className="min-w-[12rem] rounded border border-alloy-forge/15 bg-white px-2 py-0.5 text-[10px]"
-                        value={draft.transition_ref ?? ""}
-                        onChange={(e) => {
-                            const transition_ref = e.target.value;
-                            const match = transitionOptions.find((opt) => opt.transition_ref === transition_ref);
-                            applyDraft({
-                                ...draft,
-                                transition_ref,
-                                stage_key: match?.target_stage_key ?? draft.stage_key,
-                            });
-                        }}
-                        data-testid={`stage-outcome-automation-transition-${outcomeKey}`}
-                    >
-                        {transitionOptions.length === 0 ?
-                            <option value="">No outgoing transitions configured</option>
-                        :   null}
-                        {transitionOptions.map((opt) => (
-                            <option key={opt.transition_ref} value={opt.transition_ref}>
-                                {opt.label}
-                            </option>
-                        ))}
-                    </select>
-                    {draft.transition_ref ?
-                        <span className="text-alloy-midnight/45">
-                            {transitionOptions.find((o) => o.transition_ref === draft.transition_ref)?.target_stage_label
-                                ?? ""}{" "}
-                            stage
-                        </span>
+                <div className="space-y-1">
+                    <label className="flex flex-wrap items-center gap-2 text-[10px] text-alloy-midnight/65">
+                        Transition
+                        <select
+                            className="min-w-[12rem] rounded border border-alloy-forge/15 bg-white px-2 py-0.5 text-[10px]"
+                            value={draft.transition_ref ?? ""}
+                            disabled={!hasOutgoingTransitions}
+                            onChange={(e) => {
+                                const transition_ref = e.target.value;
+                                const match = transitionOptions.find((opt) => opt.transition_ref === transition_ref);
+                                applyDraft({
+                                    ...draft,
+                                    transition_ref,
+                                    stage_key: match?.target_stage_key ?? draft.stage_key,
+                                });
+                            }}
+                            data-testid={`stage-outcome-automation-transition-${outcomeKey}`}
+                        >
+                            {!hasOutgoingTransitions ?
+                                <option value="">No outgoing transitions configured</option>
+                            :   <option value="">Select a transition…</option>}
+                            {transitionOptions.map((opt) => (
+                                <option key={opt.transition_ref} value={opt.transition_ref}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    {selectedTransition ?
+                        <p className="text-[10px] text-alloy-midnight/45" data-testid={`stage-outcome-automation-transition-detail-${outcomeKey}`}>
+                            {(stageLabel?.trim() || stageKey)}
+                            {" → "}
+                            {selectedTransition.target_stage_label}
+                        </p>
+                    : draft.transition_ref && !selectedTransition ?
+                        <p className="text-[10px] text-amber-800" role="status">
+                            Selected transition is not a valid outgoing edge — repair it.
+                        </p>
+                    : !hasOutgoingTransitions ?
+                        <p className="text-[10px] text-amber-800" role="status">
+                            Configure outgoing process transitions before using Move through transition.
+                        </p>
                     :   null}
-                </label>
+                </div>
             :   null}
 
             {draft.kind === "close_record" ?
-                <label className="flex flex-wrap items-center gap-2 text-[10px] text-alloy-midnight/65">
-                    Closed status
-                    <input
-                        className="rounded border border-alloy-forge/15 px-2 py-0.5 text-[10px]"
-                        value={draft.status_key ?? "closed"}
-                        onChange={(e) => applyDraft({ ...draft, status_key: e.target.value })}
-                        placeholder="closed"
-                    />
-                </label>
+                <div className="space-y-1" data-testid={`stage-outcome-automation-close-${outcomeKey}`}>
+                    <label className="flex flex-wrap items-center gap-2 text-[10px] text-alloy-midnight/65">
+                        Configured closed status
+                        <select
+                            className="min-w-[12rem] rounded border border-alloy-forge/15 bg-white px-2 py-0.5 text-[10px]"
+                            value={statusResolution.selectedStatusKey ?? ""}
+                            disabled={!closeAvailable}
+                            onChange={(e) =>
+                                applyDraft({
+                                    ...draft,
+                                    status_key: e.target.value ? e.target.value : undefined,
+                                })
+                            }
+                            data-testid={`stage-outcome-automation-status-${outcomeKey}`}
+                        >
+                            {!closeAvailable ?
+                                <option value="">No configured closed statuses</option>
+                            :   <option value="">Select a closed status…</option>}
+                            {statusResolution.options.map((opt) => (
+                                <option key={opt.status_key} value={opt.status_key}>
+                                    {opt.status_label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    {statusResolution.invalidSelectedStatusKey ?
+                        <p className="text-[10px] text-amber-800" role="status">
+                            Status &quot;{statusResolution.invalidSelectedStatusKey}&quot; is not a configured
+                            closed status — repair it. Raw status text is not accepted.
+                        </p>
+                    : !closeAvailable ?
+                        <p className="text-[10px] text-amber-800" role="status">
+                            {statusResolution.unavailableReason}
+                        </p>
+                    :   <p className="text-[10px] text-alloy-midnight/45">
+                            Choose a configured closed status. Status identity is owned by the status model.
+                        </p>}
+                </div>
             :   null}
 
             {draft.kind === "repeat_work" ?
                 <div className="space-y-2 text-[10px] text-alloy-midnight/65">
                     <label className="flex flex-wrap items-center gap-2">
-                        Work
+                        Work Template
                         <select
                             className="min-w-[10rem] rounded border border-alloy-forge/15 bg-white px-2 py-0.5 text-[10px]"
                             value={draft.repeat_template_key ?? defaultRepeatTemplateKey ?? ""}
                             onChange={(e) => applyDraft({ ...draft, repeat_template_key: e.target.value })}
                             data-testid={`stage-outcome-automation-work-template-${outcomeKey}`}
                         >
+                            <option value="">Select a Work Template…</option>
                             {workTemplates.map((t) => (
                                 <option key={t.template_key} value={t.template_key}>
                                     {t.label}
@@ -292,7 +378,14 @@ export default function LifecycleStageOutcomeAutomationEditor({
                 </label>
             :   null}
 
+            {draft.kind === "stay_in_stage" ?
+                <p className="text-[10px] text-alloy-midnight/45">
+                    Remain in the current stage. No transition or status mutation is authored here.
+                </p>
+            :   null}
+
             <p className="text-[10px] text-alloy-midnight/50" data-testid={`stage-outcome-automation-summary-${outcomeKey}`}>
+                <span className="font-medium text-alloy-midnight/65">Summary · </span>
                 {summary}
             </p>
         </div>

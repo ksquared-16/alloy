@@ -85,10 +85,12 @@ function detectAutomationKind(targets: StageOutcomeRuleTargetV1[]): OutcomeAutom
         return "mark_needs_attention";
     }
     if (kinds.has("reopen_work") || kinds.has("create_next_work")) return "repeat_work";
-    if (kinds.has("update_family_case_status") && targets.some((t) => trimKey(t.status_key) === "closed")) {
+    // Transition-owned moves first — they may also carry companion status updates.
+    if (kinds.has("move_to_stage")) return "move_to_stage";
+    // Status-only close / disposition (any configured status key — including legacy invalid).
+    if (kinds.has("update_family_case_status") || kinds.has("update_child_enrollment_status")) {
         return "close_record";
     }
-    if (kinds.has("move_to_stage") || kinds.has("update_family_case_status")) return "move_to_stage";
     if (kinds.has("no_movement")) return "stay_in_stage";
     return "none";
 }
@@ -234,7 +236,9 @@ export function buildOutcomeRuleFromAutomation(
             break;
         }
         case "close_record": {
-            const statusKey = trimKey(draft.status_key) ?? "closed";
+            // Never invent a closed status — require a configured status_key.
+            const statusKey = trimKey(draft.status_key);
+            if (!statusKey) return null;
             targets.push({ kind: "update_family_case_status", status_key: statusKey });
             targets.push({ kind: "mark_stage_work_complete" });
             break;
