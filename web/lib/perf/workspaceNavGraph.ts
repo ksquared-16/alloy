@@ -56,6 +56,8 @@ export type WorkspaceRequestRecord = {
     /** Served from a TTL response cache (`dedupeAdminFetchWithTtl`). */
     ttlCacheHit: boolean;
     ok: boolean | null;
+    /** Raw `Server-Timing` header (durations only) so a trace correlates server + client time. */
+    serverTiming?: string | null;
 };
 
 export type WorkspaceNavRecord = {
@@ -131,6 +133,7 @@ export function recordWorkspaceRequest(rec: {
     joinedInflight: boolean;
     ttlCacheHit: boolean;
     ok: boolean | null;
+    serverTiming?: string | null;
 }): void {
     if (!enabled() || !current) return;
     current.requests.push({ ...rec });

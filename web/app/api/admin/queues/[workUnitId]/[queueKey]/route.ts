@@ -21,6 +21,7 @@ import {
     resolveActiveWorkViewRuntimeContext,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
+import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
 import { buildWorkUnitQueueScopeCacheKey } from "@/lib/workspace/workUnitQueueScopeCacheKey";
 import {
     buildWorkUnitQueueItemsServerCacheKey,
@@ -186,6 +187,21 @@ export async function GET(
                 headers: {
                     "content-type": "application/json; charset=utf-8",
                     "x-alloy-queue-rows-cache": "hit",
+                    "Server-Timing": buildQueueRowsServerTimingHeader({
+                        cacheHit: true,
+                        metrics: {
+                            auth: auth_ms,
+                            prep: prep_ms,
+                            load_def: cached.rowsPerf.load_def_ms,
+                            operational_day: cached.rowsPerf.operational_day_ms,
+                            base_query: cached.rowsPerf.base_query_ms,
+                            count: cached.rowsPerf.count_ms,
+                            status_defs: cached.rowsPerf.status_defs_ms,
+                            enrichment: cached.rowsPerf.enrichment_ms,
+                            service_total: cached.rowsPerf.service_total_ms,
+                            total: Date.now() - handlerT0,
+                        },
+                    }),
                 },
             });
         }
@@ -265,6 +281,22 @@ export async function GET(
             headers: {
                 "content-type": "application/json; charset=utf-8",
                 "x-alloy-queue-rows-cache": "miss",
+                "Server-Timing": buildQueueRowsServerTimingHeader({
+                    cacheHit: false,
+                    metrics: {
+                        auth: auth_ms,
+                        prep: prep_ms,
+                        load_def: rowsPerf.load_def_ms,
+                        operational_day: rowsPerf.operational_day_ms,
+                        base_query: rowsPerf.base_query_ms,
+                        count: rowsPerf.count_ms,
+                        status_defs: rowsPerf.status_defs_ms,
+                        enrichment: rowsPerf.enrichment_ms,
+                        serialize: serialize_ms,
+                        service_total: rowsPerf.service_total_ms,
+                        total: total_ms,
+                    },
+                }),
             },
         });
     } catch (e) {

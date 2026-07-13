@@ -70,6 +70,7 @@ export function dedupeAdminFetch(input: string, init?: RequestInit): Promise<Res
                 joinedInflight,
                 ttlCacheHit: false,
                 ok: res.ok,
+                serverTiming: res.headers.get("Server-Timing"),
             });
             return res.clone();
         },

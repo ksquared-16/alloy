@@ -15,6 +15,7 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getWorkUnitQueueSummaries, QueueServiceError } from "@/lib/queues/QueueService";
+import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
 
 function parseLimit(searchParams: URLSearchParams): number | undefined {
     const raw = (searchParams.get("limit") ?? "").trim();
@@ -138,7 +139,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 summary_mode: effectiveSummaryMode,
             });
         }
-        return NextResponse.json(payload);
+        return NextResponse.json(payload, {
+            headers: { "Server-Timing": buildQueueRowsServerTimingHeader({ metrics: { total: ms } }) },
+        });
     } catch (e) {
         if (e instanceof QueueServiceError) {
             return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
