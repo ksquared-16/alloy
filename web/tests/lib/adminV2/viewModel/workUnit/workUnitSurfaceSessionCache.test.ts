@@ -18,6 +18,7 @@ import {
     putWorkUnitSurfaceTotalsCache,
     peekWorkUnitSurfaceTotalsCache,
     invalidateWorkUnitSurfaceCachesForWorkUnit,
+    invalidateWorkUnitSurfaceQueueCachesForWorkUnit,
     clearWorkUnitViewModelSessionCacheForTests,
     type WorkUnitViewModelCacheContext,
     type WorkUnitViewModelCacheLaneState,
@@ -158,6 +159,44 @@ describe("work unit surface totals cache", () => {
         putWorkUnitSurfaceTotalsCache(totals, "pop-x", CTX_A);
         totals.set("k", 999);
         expect(peekWorkUnitSurfaceTotalsCache({ context: CTX_A, populationKey: "pop-x" })?.entry.totals.get("k")).toBe(1);
+    });
+});
+
+describe("mutation invalidation scope (Commit 6)", () => {
+    function seedAll(ctx: WorkUnitViewModelCacheContext) {
+        putWorkUnitSurfaceConfigCache(configEntry(), ctx);
+        putWorkUnitSurfaceQueueCache({ queueResult: queueResult(3) }, ctx, LANE);
+        putWorkUnitSurfaceSummariesCache([], ctx, null);
+        putWorkUnitSurfaceRightRailCache([{ action_key: "x" }] as unknown as ResolvedActionForClient[], ctx);
+        putWorkUnitSurfaceTotalsCache(new Map([["k", 1]]), "pop-1", ctx);
+    }
+
+    it("a record mutation drops ONLY the data projections, retaining config + right rail", () => {
+        seedAll(CTX_A);
+        invalidateWorkUnitSurfaceQueueCachesForWorkUnit({ context: CTX_A });
+        // Data projections cleared — a return cannot resurrect pre-mutation rows/counts.
+        expect(peekWorkUnitSurfaceQueueCache({ context: CTX_A, lane: LANE })).toBeNull();
+        expect(peekWorkUnitSurfaceSummariesCache(CTX_A, null)).toBeNull();
+        expect(peekWorkUnitSurfaceTotalsCache({ context: CTX_A, populationKey: "pop-1" })).toBeNull();
+        // Session-stable config + configured actions retained — no needless refetch of unchanged data.
+        expect(peekWorkUnitSurfaceConfigCache(CTX_A)).not.toBeNull();
+        expect(peekWorkUnitSurfaceRightRailCache(CTX_A)).not.toBeNull();
+    });
+
+    it("a configuration publish drops the config + right rail as well", () => {
+        seedAll(CTX_A);
+        invalidateWorkUnitSurfaceCachesForWorkUnit({ context: CTX_A });
+        expect(peekWorkUnitSurfaceConfigCache(CTX_A)).toBeNull();
+        expect(peekWorkUnitSurfaceRightRailCache(CTX_A)).toBeNull();
+        expect(peekWorkUnitSurfaceQueueCache({ context: CTX_A, lane: LANE })).toBeNull();
+    });
+
+    it("a mutation on one work unit never clears another work unit's data", () => {
+        seedAll(CTX_A);
+        seedAll(CTX_WU2);
+        invalidateWorkUnitSurfaceQueueCachesForWorkUnit({ context: CTX_A });
+        expect(peekWorkUnitSurfaceQueueCache({ context: CTX_WU2, lane: LANE })?.entry.queueResult.total).toBe(3);
+        expect(peekWorkUnitSurfaceConfigCache(CTX_WU2)).not.toBeNull();
     });
 });
 

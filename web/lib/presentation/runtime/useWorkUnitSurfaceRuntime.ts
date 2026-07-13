@@ -78,6 +78,7 @@ import {
     putWorkUnitSurfaceSummariesCache,
     putWorkUnitSurfaceRightRailCache,
     invalidateWorkUnitSurfaceCachesForWorkUnit,
+    invalidateWorkUnitSurfaceQueueCachesForWorkUnit,
     type WorkUnitViewModelCacheContext,
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import {
@@ -477,16 +478,33 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             const visibleOpportunityIds = visibleRowIdsRef.current;
             if (isQueueMembershipMutationActionKey(detail?.action_key)) {
                 bustOperatorRuntimeReadCaches();
-                // Drop the seeded config/rows/summaries for this work unit so a return navigation
-                // after a membership mutation revalidates rather than seeding pre-mutation rows.
-                invalidateWorkUnitSurfaceCachesForWorkUnit({ context: cacheContextRef.current });
             }
             const refetchRows = shouldRefetchWorkUnitQueueRowsForEvent({ detail, visibleOpportunityIds });
             const refreshSummaries = shouldRefreshQueueSummariesForEvent({ detail, visibleOpportunityIds });
-            if (refetchRows || refreshSummaries) setQueueRefreshNonce((n) => n + 1);
+            if (refetchRows || refreshSummaries) {
+                // Narrowest correct invalidation: drop only the DATA projections (rows / summaries /
+                // counts) for THIS work unit so a return cannot resurrect pre-mutation rows, while the
+                // session-stable config and configured right-rail actions are retained (a data
+                // mutation never changes them). The active lane also refetches (nonce) and writes the
+                // fresh rows back, so the surface stays current in place — no route reconstruction.
+                invalidateWorkUnitSurfaceQueueCachesForWorkUnit({ context: cacheContextRef.current });
+                setQueueRefreshNonce((n) => n + 1);
+            }
         };
         window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
         return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+    }, []);
+
+    // Configuration publish (queue-row surface republished) — the config projection changed, so drop
+    // the FULL surface cache for this work unit (config + rows + right-rail) so a return re-resolves
+    // it. Operational record data is invalidated with it (its projection depends on the config).
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onConfigPublished = () => {
+            invalidateWorkUnitSurfaceCachesForWorkUnit({ context: cacheContextRef.current });
+        };
+        window.addEventListener(QUEUE_ROW_SURFACE_PUBLISHED_EVENT, onConfigPublished);
+        return () => window.removeEventListener(QUEUE_ROW_SURFACE_PUBLISHED_EVENT, onConfigPublished);
     }, []);
 
     // THE count model: the `total` of the same rows response that renders the queue.

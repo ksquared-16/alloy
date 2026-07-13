@@ -349,19 +349,36 @@ export function peekWorkUnitSurfaceTotalsCache(params: {
     return { entry: hit, fresh: age < QUEUE_FRESH_MS };
 }
 
-/** Drop all PRV2 surface caches for a work unit — e.g. after a queue-membership mutation. */
+function workUnitPrefix(context?: WorkUnitViewModelCacheContext | null): string {
+    const orgId = trim(context?.orgId) || "_";
+    const deptId = trim(context?.departmentId) || "_";
+    const wuId = trim(context?.workUnitId) || "_";
+    return `workUnitVm:${orgId}:${deptId}:${wuId}:`;
+}
+
+/**
+ * Drop only the DATA projections for a work unit (rows, lane summaries, per-view counts) — the
+ * caches a record mutation can invalidate. The session-stable config and the configured right-rail
+ * actions are retained, so a mutation never forces a config/action refetch on return. This is the
+ * default mutation invalidation; only a configuration change drops the config (below).
+ */
+export function invalidateWorkUnitSurfaceQueueCachesForWorkUnit(params: {
+    context?: WorkUnitViewModelCacheContext | null;
+}): void {
+    const prefix = workUnitPrefix(params.context);
+    for (const key of surfaceQueueCache.keys()) if (key.startsWith(prefix)) surfaceQueueCache.delete(key);
+    for (const key of summariesCache.keys()) if (key.startsWith(prefix)) summariesCache.delete(key);
+    for (const key of totalsCache.keys()) if (key.startsWith(prefix)) totalsCache.delete(key);
+}
+
+/** Drop ALL PRV2 surface caches for a work unit — a configuration change invalidates config too. */
 export function invalidateWorkUnitSurfaceCachesForWorkUnit(params: {
     context?: WorkUnitViewModelCacheContext | null;
 }): void {
-    const orgId = trim(params.context?.orgId) || "_";
-    const deptId = trim(params.context?.departmentId) || "_";
-    const wuId = trim(params.context?.workUnitId) || "_";
-    const prefix = `workUnitVm:${orgId}:${deptId}:${wuId}:`;
+    const prefix = workUnitPrefix(params.context);
     for (const key of configCache.keys()) if (key.startsWith(prefix)) configCache.delete(key);
-    for (const key of surfaceQueueCache.keys()) if (key.startsWith(prefix)) surfaceQueueCache.delete(key);
-    for (const key of summariesCache.keys()) if (key.startsWith(prefix)) summariesCache.delete(key);
     for (const key of rightRailCache.keys()) if (key.startsWith(prefix)) rightRailCache.delete(key);
-    for (const key of totalsCache.keys()) if (key.startsWith(prefix)) totalsCache.delete(key);
+    invalidateWorkUnitSurfaceQueueCachesForWorkUnit(params);
 }
 
 export function clearWorkUnitViewModelSessionCacheForTests(): void {
