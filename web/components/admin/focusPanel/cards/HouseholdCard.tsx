@@ -259,9 +259,11 @@ export default function HouseholdCard({
     useEffect(() => {
         if (request?.card !== "household") return;
         setEditingPersonId(null);
+        // In-canvas Configure uses the compose shell — do not open runtime collection depth.
+        if (showComposeCanvas) return;
         enterContext();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
-    }, [requestNonce, enterContext]);
+    }, [requestNonce, enterContext, showComposeCanvas]);
 
     const householdIdentityVm = useMemo(
         () =>
@@ -361,10 +363,12 @@ export default function HouseholdCard({
 
     // ANY open state elevates as a centered Focus Card — Household never expands
     // height inline (no row reflow). Edit is the deepest state OF Focus.
-    const level: FocusPanelPerspectiveLevel = identityDisclosureCoordinationLevel({
-        depth: disclosure.depth,
-        editing,
-    });
+    const level: FocusPanelPerspectiveLevel = showComposeCanvas
+        ? "base"
+        : identityDisclosureCoordinationLevel({
+              depth: disclosure.depth,
+              editing,
+          });
     useReportPerspective(coordination, "household", level);
     useDismissSignal(coordination, "household", () => {
         setEditingPersonId(null);

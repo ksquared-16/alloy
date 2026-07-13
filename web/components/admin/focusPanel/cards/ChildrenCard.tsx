@@ -189,12 +189,13 @@ export default function ChildrenCard({
     const requestNonce = request?.card === "children" ? request.nonce : null;
     useEffect(() => {
         if (request?.card !== "children") return;
+        if (composingChildrenSurface && composer?.composeCanvasMode !== "preview") return;
         enterContext();
         if (request.focus) selectIdentity(String(request.focus), "roster");
         setEditing(false);
         setRelatedViewId(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
-    }, [requestNonce, enterContext, selectIdentity]);
+    }, [requestNonce, enterContext, selectIdentity, composingChildrenSurface, composer?.composeCanvasMode]);
 
     useEffect(() => {
         if (!composerPreview) return;
@@ -276,10 +277,12 @@ export default function ChildrenCard({
         }
     };
 
-    const level: FocusPanelPerspectiveLevel = identityDisclosureCoordinationLevel({
-        depth: disclosure.depth,
-        editing: Boolean(editing && focused),
-    });
+    const level: FocusPanelPerspectiveLevel = showComposeCanvas
+        ? "base"
+        : identityDisclosureCoordinationLevel({
+              depth: disclosure.depth,
+              editing: Boolean(editing && focused),
+          });
     useReportPerspective(coordination, "children", level);
     useDismissSignal(coordination, "children", () => {
         setEditing(false);
