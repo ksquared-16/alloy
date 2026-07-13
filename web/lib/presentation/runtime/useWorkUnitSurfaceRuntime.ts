@@ -36,9 +36,6 @@ import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import {
-    queueRowSurfaceId,
-} from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
 import { QUEUE_ROW_SURFACE_PUBLISHED_EVENT } from "@/lib/adminV2/settings/surfaces/queueRowSurfaceService";
 import { isLegacyArtifactProcessName } from "@/lib/admin/buildOperatorLifecycleLanding";
 import {
@@ -90,6 +87,11 @@ import {
     workUnitSurfaceQueueLane,
     type WorkUnitSurfaceInitialSeed,
 } from "./workUnitSurfaceSeed";
+import {
+    fetchWorkUnitSurfaceConfigBundle,
+    queueRowSurfaceIdForDepartment,
+} from "./workUnitSurfaceConfigFetch";
+import { warmOperatorWorkUnitSurfaceFromHref } from "./warmWorkUnitSurfaceSession";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
 import {
@@ -140,18 +142,6 @@ function classifyWorkspaceNavMode(slug: string): WorkspaceNavMode {
     return firstWorkspaceNavSincePageLoad ? "cold" : "warm";
 }
 
-/**
- * Resolve published Queue Row surface id from department lifecycle process.
- * Falls back to legacy pipeline id when catalog id cannot be derived.
- */
-function queueRowSurfaceIdForDepartment(departmentId: string | null, deptMetadata: unknown): string {
-    const lifecycle = lifecycleBuilderFromDepartmentMetadata(deptMetadata);
-    const process = lifecycle ? activeLifecycleProcess(lifecycle) : null;
-    if (process && departmentId) {
-        return queueRowSurfaceId(`${departmentId}:${process.id}`);
-    }
-    return "pipeline-queue-row";
-}
 
 export type WorkUnitSurfaceRuntime = {
     model: WorkUnitSurfaceModel;
@@ -236,75 +226,25 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             const surfaceId = queueRowSurfaceIdForDepartment(departmentId, null);
             setQueueRowSurfaceIdState(surfaceId);
         }
-        const init = workspaceDataFetchInit();
-        void Promise.all([
-            dedupeAdminFetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`, init)
-                .then((res) => (res.ok ? res.json() : null))
-                .catch(() => null),
-            dedupeAdminFetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`, init)
-                .then((res) => (res.ok ? res.json() : null))
-                .catch(() => null),
-            dedupeAdminFetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init)
-                .then((res) => (res.ok ? res.json() : null))
-                .catch(() => null),
-        ])
-            .then(([dept, wu, deptUnits]) => {
+        const init = workspaceDataFetchInit() ?? undefined;
+        // One shared config-bundle fetch — the SAME function the navigation prewarm uses, so a
+        // prefetch writes exactly the entry this effect would (no divergent shape, no second contract).
+        void fetchWorkUnitSurfaceConfigBundle({ departmentId, workUnitId, fetchInit: init })
+            .then((bundle) => {
                 if (cancelled) return;
-                const deptMeta = (dept as { metadata?: unknown } | null)?.metadata ?? null;
-                setDeptMetadata(deptMeta);
-                const resolvedSurfaceId = queueRowSurfaceIdForDepartment(departmentId, deptMeta);
-                setQueueRowSurfaceIdState(resolvedSurfaceId);
-                const lifecycle = lifecycleBuilderFromDepartmentMetadata(deptMeta);
-                const process = lifecycle ? activeLifecycleProcess(lifecycle) : null;
-                const processKey = process?.key ?? "enrollment";
-                const qs = processKey ? `?processKey=${encodeURIComponent(processKey)}` : "";
-                return dedupeAdminFetch(
-                    `/api/admin/queue-row-layout/${encodeURIComponent(resolvedSurfaceId)}${qs}`,
-                    init,
-                )
-                    .then((res) => (res.ok ? res.json() : null))
-                    .catch(() => null)
-                    .then((queueRowLayoutRes) => ({
-                        wu,
-                        deptUnits,
-                        queueRowLayoutRes,
-                        deptMeta,
-                        resolvedSurfaceId,
-                    }));
+                // A failure shell (transient 404/network) must not overwrite good seeded config nor
+                // poison the cache; leave the prior/seeded config in place and let SWR retry.
+                if (!bundle.ok && seed.config != null) return;
+                setDeptMetadata(bundle.deptMetadata);
+                setQueueRowSurfaceIdState(bundle.queueRowSurfaceId);
+                setQueueDefinition(bundle.queueDefinition);
+                setDeptWorkUnits(bundle.deptWorkUnits);
+                setQueueRowLayoutConfig(bundle.queueRowLayoutConfig);
+                // Write-back only a real config, so a later fresh-skip never trusts an empty bundle.
+                if (bundle.ok) putWorkUnitSurfaceConfigCache(bundle, cacheContext);
             })
-            .then((payload) => {
-                if (cancelled || !payload) return;
-                const { wu, deptUnits, queueRowLayoutRes, deptMeta, resolvedSurfaceId } = payload;
-                const resolvedQueueDefinition =
-                    (wu as { queue_definition?: unknown } | null)?.queue_definition ?? null;
-                setQueueDefinition(resolvedQueueDefinition);
-                const items = (deptUnits as { items?: unknown } | null)?.items;
-                const resolvedDeptWorkUnits = Array.isArray(items)
-                    ? (items as WorkViewCanonicalLocationWorkUnitRow[])
-                    : null;
-                setDeptWorkUnits(resolvedDeptWorkUnits);
-                const envelopeLayout =
-                    (queueRowLayoutRes as { envelope?: { layout?: unknown } } | null)?.envelope?.layout ??
-                    (queueRowLayoutRes as { config?: unknown } | null)?.config ??
-                    null;
-                const resolvedLayout =
-                    envelopeLayout
-                        && typeof envelopeLayout === "object"
-                        && Array.isArray((envelopeLayout as { columns?: unknown }).columns)
-                        ? (envelopeLayout as QueueRecordLayoutConfigV3)
-                        : null;
-                setQueueRowLayoutConfig(resolvedLayout);
-                // Write-back: persist the session-stable config bundle for instant return navigation.
-                putWorkUnitSurfaceConfigCache(
-                    {
-                        deptMetadata: deptMeta,
-                        queueDefinition: resolvedQueueDefinition,
-                        deptWorkUnits: resolvedDeptWorkUnits,
-                        queueRowLayoutConfig: resolvedLayout,
-                        queueRowSurfaceId: resolvedSurfaceId,
-                    },
-                    cacheContext,
-                );
+            .catch(() => {
+                /* graceful: leave prior/seeded config in place */
             })
             .finally(() => {
                 if (!cancelled) setConfigSettled(true);
@@ -425,10 +365,19 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     const fetchLimitRef = useRef(fetchLimit);
     fetchLimitRef.current = fetchLimit;
 
+    // Fresh seeded rows (a prefetch or a very recent return) → skip the initial revalidate so a
+    // prefetched navigation launches NO duplicate rows request. One-shot: any later lane/view/site
+    // change or mutation nonce still refetches.
+    const skipFreshQueueFetchRef = useRef(seed.queueFresh === true);
+
     useEffect(() => {
         // Wait for config settle: the lane validation above needs the queue definition, and a
         // rows fetch racing org/config bootstrap 404s transiently.
         if (!workUnitId || !fetchQueueKey || !configSettled) return;
+        if (skipFreshQueueFetchRef.current) {
+            skipFreshQueueFetchRef.current = false;
+            return;
+        }
         const seq = ++queueRequestSeq.current;
         setQueueLoading(true);
         setQueueError(null);
@@ -748,9 +697,24 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             });
             if (href) {
                 warmOperatorWorkUnitEntryFromHref(href, selectedSiteId, "work_view_pill_intent");
+                // Warm the target unit's surface session into the SAME cache the runtime seeds from,
+                // under this session's org/user/scope so navigation consumes the prefetch.
+                warmOperatorWorkUnitSurfaceFromHref(href, selectedSiteId, {
+                    orgId,
+                    userId: principalUserId,
+                    scopeFingerprint: accessScopeFingerprint,
+                });
             }
         },
-        [savedViews, canonicalLocationByViewId, selectedSiteId, runtimeCtx.workViewId],
+        [
+            savedViews,
+            canonicalLocationByViewId,
+            selectedSiteId,
+            runtimeCtx.workViewId,
+            orgId,
+            principalUserId,
+            accessScopeFingerprint,
+        ],
     );
 
     const openRecord = useCallback(

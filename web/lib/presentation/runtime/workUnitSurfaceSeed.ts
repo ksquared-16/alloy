@@ -58,6 +58,8 @@ export type WorkUnitSurfaceInitialSeed = {
     configFresh: boolean;
     summaries: QueueSummary[] | null;
     queueResult: QueueItemsResult | null;
+    /** Seeded rows are within the fresh window → the runtime skips the initial revalidate. */
+    queueFresh: boolean;
     /** null = not cached (cold); [] = cached empty rail. */
     rightRailActions: ResolvedActionForClient[] | null;
 };
@@ -67,6 +69,7 @@ export const EMPTY_WORK_UNIT_SURFACE_SEED: WorkUnitSurfaceInitialSeed = {
     configFresh: false,
     summaries: null,
     queueResult: null,
+    queueFresh: false,
     rightRailActions: null,
 };
 
@@ -98,14 +101,21 @@ export function computeWorkUnitSurfaceInitialSeed(args: {
         queueDefinition: cfg.queueDefinition,
     });
     const fetchQueueKey = validatedBaseQueueKeyForUnit(runtimeCtx.queueKey, cfg.queueDefinition);
-    const queueResult = fetchQueueKey
+    const queueRead = fetchQueueKey
         ? peekWorkUnitSurfaceQueueCache({
               context: cacheContext,
               lane: workUnitSurfaceQueueLane(fetchQueueKey, runtimeCtx.workViewId, selectedSiteId),
-          })?.entry.queueResult ?? null
+          })
         : null;
 
-    return { config: cfg, configFresh: configRead.fresh, summaries, queueResult, rightRailActions };
+    return {
+        config: cfg,
+        configFresh: configRead.fresh,
+        summaries,
+        queueResult: queueRead?.entry.queueResult ?? null,
+        queueFresh: queueRead?.fresh ?? false,
+        rightRailActions,
+    };
 }
 
 /**
