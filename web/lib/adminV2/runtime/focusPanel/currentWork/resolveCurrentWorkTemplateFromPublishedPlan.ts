@@ -367,11 +367,10 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
         templateConfig.helpful_actions = catalogActions.supporting;
     }
 
+    // Legacy Work Template alternate_paths: parse safely for stored plans but do not
+    // emit as Current Work Other Transitions — those derive from process edges only.
     if (activeTemplate?.alternate_paths !== undefined) {
-        templateConfig.alternate_paths = mapAlternatePathRefs(activeTemplate.alternate_paths);
-        templateConfig.alternate_paths_explicit = true;
-    } else if (catalogActions.alternate_paths.length) {
-        templateConfig.alternate_paths = catalogActions.alternate_paths;
+        void mapAlternatePathRefs(activeTemplate.alternate_paths);
     }
 
     if (activeTemplate?.outcome_refs !== undefined) {

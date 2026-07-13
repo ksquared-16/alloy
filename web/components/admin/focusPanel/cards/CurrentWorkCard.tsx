@@ -317,17 +317,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
 
     const readinessSummary = surface.readiness.reasonLabel;
 
-    const footerAction =
-        evidence.isEmpty || focused ? null : (
-            <button
-                type="button"
-                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                onClick={openFocus}
-                data-work-action="open-work"
-            >
-                Open work →
-            </button>
-        );
+    const footerAction = null;
 
     const body =
         evidence.isEmpty ? (
@@ -395,6 +385,7 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
                 opportunityId={opportunityId}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
+                onOpenWork={openFocus}
                 requirementsExpanded={requirementsExpanded}
                 onToggleRequirements={() => setRequirementsExpanded((open) => !open)}
                 readinessSummary={readinessSummary}
@@ -433,34 +424,63 @@ export default function CurrentWorkCard({ model, context, receded = false, coord
     );
 }
 
-function OperatorGuidanceBlock({ text }: { text: string | null | undefined }) {
+function OperatorGuidanceBlock({
+    text,
+    workDescription,
+}: {
+    text: string | null | undefined;
+    workDescription?: string | null;
+}) {
     const guidance = text?.trim();
     if (!guidance) return null;
+    // Hide when guidance merely restates the work description.
+    if (workDescription?.trim() && guidance === workDescription.trim()) return null;
     return (
-        <div className="alloy-os-currentwork__guidance" data-work-operator-guidance="true">
-            <p className="alloy-os-currentwork__guidance-label">Operator guidance</p>
+        <details className="alloy-os-currentwork__guidance-disclosure" data-work-operator-guidance="true">
+            <summary className="alloy-os-currentwork__disclosure-trigger">
+                <span>Guidance</span>
+                <span className="alloy-os-currentwork__disclosure-meta" aria-hidden>
+                    ▾
+                </span>
+            </summary>
             <p className="alloy-os-currentwork__guidance-text">{guidance}</p>
-        </div>
+        </details>
     );
 }
 
 function SurfaceProgress({ surface }: { surface: CurrentWorkSurfaceVM }) {
     const readiness = surface.readiness;
-    if (!readiness.reasonLabel && !readiness.requirements && !readiness.workItems) return null;
+    const showBar = surface.progress.total > 0;
+    if (!readiness.reasonLabel && !showBar) return null;
     return (
         <div className="alloy-os-currentwork__readiness-block" data-work-readiness="true">
             {readiness.reasonLabel ?
                 <p className="alloy-os-currentwork__readiness-reason">{readiness.reasonLabel}</p>
             :   null}
-            {readiness.requirements ?
-                <p className="alloy-os-currentwork__readiness-count">
-                    Requirements: {readiness.requirements.remaining} remaining
-                </p>
-            :   null}
-            {readiness.workItems ?
-                <p className="alloy-os-currentwork__readiness-count">
-                    Work items: {readiness.workItems.complete} of {readiness.workItems.total} complete
-                </p>
+            {showBar ?
+                <div
+                    className="alloy-os-currentwork__progress-block"
+                    data-work-progress="true"
+                    role="progressbar"
+                    aria-valuenow={surface.progress.percent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`${surface.progress.completed} of ${surface.progress.total} requirements complete, ${surface.progress.percent} percent`}
+                >
+                    <div className="alloy-os-currentwork__progress-header">
+                        <span>Progress</span>
+                        <span>{surface.progress.percent}%</span>
+                    </div>
+                    <div className="alloy-os-currentwork__progress-bar">
+                        <span
+                            className="alloy-os-currentwork__progress-bar-fill"
+                            style={{ width: `${surface.progress.percent}%` }}
+                        />
+                    </div>
+                    <p className="alloy-os-currentwork__progress-copy">
+                        {surface.progress.completed} of {surface.progress.total} requirements complete
+                    </p>
+                </div>
             :   null}
         </div>
     );
@@ -477,9 +497,12 @@ function RequirementsDisclosure({
     onToggle: () => void;
     onNavigate: (item: CurrentWorkChecklistItemVM) => void;
 }) {
-    const items = surface.readiness.requirements?.items ?? surface.checklist;
+    const items = surface.readiness.requirements?.items ?? [];
     if (items.length === 0) return null;
     const remaining = surface.readiness.requirements?.remaining ?? items.filter((i) => i.status !== "complete").length;
+    const incomplete = items.filter((i) => i.status !== "complete");
+    const visible = incomplete.slice(0, 5);
+    const overflow = incomplete.length - visible.length;
 
     return (
         <div className="alloy-os-currentwork__requirements-disclosure" data-work-requirements-disclosure="true">
@@ -496,7 +519,14 @@ function RequirementsDisclosure({
                 </span>
             </button>
             {expanded ?
-                <ChecklistStepper items={items as CurrentWorkChecklistItemVM[]} onNavigate={onNavigate} />
+                <>
+                    <ChecklistStepper items={visible as CurrentWorkChecklistItemVM[]} onNavigate={onNavigate} />
+                    {overflow > 0 ?
+                        <p className="alloy-os-currentwork__disclosure-overflow">
+                            +{overflow} more — open work for the full list
+                        </p>
+                    :   null}
+                </>
             :   null}
         </div>
     );
@@ -591,23 +621,126 @@ function SupportingGrid({
     actions: CurrentWorkActionVM[];
     onAction: (action: CurrentWorkActionVM) => void;
 }) {
+    const [moreOpen, setMoreOpen] = useState(false);
+    const moreRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!moreOpen) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setMoreOpen(false);
+        };
+        const onPointer = (event: MouseEvent) => {
+            if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
+                setMoreOpen(false);
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        window.addEventListener("mousedown", onPointer);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("mousedown", onPointer);
+        };
+    }, [moreOpen]);
+
     if (actions.length === 0) return null;
+    const visible = actions.slice(0, 3);
+    const overflow = actions.slice(3);
+
     return (
-        <div className="alloy-os-currentwork__supporting-grid" data-work-supporting-grid="true">
-            <p className="alloy-os-currentwork__actions-eyebrow">Helpful actions</p>
-            <div className="alloy-os-currentwork__supporting-grid-items">
-                {actions.map((action) => (
+        <div className="alloy-os-currentwork__quick-actions" data-work-supporting-grid="true">
+            <p className="alloy-os-currentwork__actions-eyebrow">Quick actions</p>
+            <div className="alloy-os-currentwork__quick-action-chips">
+                {visible.map((action) => (
                     <button
                         key={action.key}
                         type="button"
-                        className="alloy-os-currentwork__grid-action"
+                        className="alloy-os-currentwork__quick-chip"
                         data-work-supporting-action={action.key}
                         onClick={() => onAction(action)}
                     >
                         {action.label}
                     </button>
                 ))}
+                {overflow.length > 0 ?
+                    <div className="alloy-os-currentwork__quick-more" ref={moreRef}>
+                        <button
+                            type="button"
+                            className="alloy-os-currentwork__quick-chip alloy-os-currentwork__quick-chip--more"
+                            aria-expanded={moreOpen}
+                            aria-haspopup="menu"
+                            data-work-quick-actions-more="true"
+                            onClick={() => setMoreOpen((open) => !open)}
+                        >
+                            More
+                        </button>
+                        {moreOpen ?
+                            <ul className="alloy-os-currentwork__quick-more-menu" role="menu">
+                                {overflow.map((action) => (
+                                    <li key={action.key} role="none">
+                                        <button
+                                            type="button"
+                                            role="menuitem"
+                                            className="alloy-os-currentwork__quick-more-item"
+                                            data-work-supporting-action={action.key}
+                                            onClick={() => {
+                                                setMoreOpen(false);
+                                                onAction(action);
+                                            }}
+                                        >
+                                            {action.label}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        :   null}
+                    </div>
+                :   null}
             </div>
+        </div>
+    );
+}
+
+function OtherTransitionsDisclosure({
+    actions,
+    onAction,
+}: {
+    actions: CurrentWorkActionVM[];
+    onAction: (action: CurrentWorkActionVM) => void;
+}) {
+    const [expanded, setExpanded] = useState(false);
+    if (actions.length === 0) return null;
+    return (
+        <div className="alloy-os-currentwork__path-list" data-work-section="other-transitions">
+            <button
+                type="button"
+                className="alloy-os-currentwork__disclosure-trigger"
+                aria-expanded={expanded}
+                data-work-other-transitions-trigger="true"
+                onClick={() => setExpanded((open) => !open)}
+            >
+                <span>Other transitions</span>
+                <span className="alloy-os-currentwork__disclosure-meta">
+                    {actions.length} available {expanded ? "▴" : "▾"}
+                </span>
+            </button>
+            {expanded ?
+                <ul className="alloy-os-currentwork__path-items">
+                    {actions.map((action) => (
+                        <li key={action.key}>
+                            <button
+                                type="button"
+                                className="alloy-os-currentwork__path-action"
+                                data-work-path-action={action.key}
+                                disabled={action.disabled}
+                                title={action.disabledReason ?? undefined}
+                                onClick={() => onAction(action)}
+                            >
+                                {action.label}
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            :   null}
         </div>
     );
 }
@@ -664,6 +797,7 @@ function SummaryBody({
     opportunityId,
     onChecklistItem,
     onAction,
+    onOpenWork,
     requirementsExpanded,
     onToggleRequirements,
     activityPreviewOpen,
@@ -677,6 +811,7 @@ function SummaryBody({
     opportunityId: string;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
+    onOpenWork: () => void;
     requirementsExpanded: boolean;
     onToggleRequirements: () => void;
     readinessSummary?: string | null;
@@ -687,38 +822,55 @@ function SummaryBody({
     activityPreviewItems: CurrentWorkActivityPreviewItem[];
 }) {
     const helpfulActions = [...surface.supportingActions, ...surface.communicationActions];
+    const additionalLinkedWork =
+        (surface.readiness.workItems?.total ?? 0) > 1
+        || (surface.runtime?.additional?.length ?? 0) > 0;
+
     return (
         <div className="alloy-os-currentwork__summary" data-work-summary="true">
-            {primaryWorkItem?.work_id ?
-                <div className="mb-2 flex flex-wrap items-center gap-2" data-current-work-work-items-link="true">
-                    <p className="text-[11px] text-alloy-midnight/55">Also tracked in Work Items.</p>
-                    <ViewInWorkItemsLink taskId={primaryWorkItem.work_id} opportunityId={opportunityId} />
-                </div>
-            :   null}
             <SurfaceProgress surface={surface} />
-            <OperatorGuidanceBlock text={surface.operatorGuidance} />
             <RequirementsDisclosure
                 surface={surface}
                 expanded={requirementsExpanded}
                 onToggle={onToggleRequirements}
                 onNavigate={onChecklistItem}
             />
-            {surface.primaryAction ?
-                <WorkPrimaryCard action={surface.primaryAction} onAction={onAction} />
-            :   null}
-            {surface.recordOutcomeAction ?
+            <div className="alloy-os-currentwork__primary-row" data-work-primary-row="true">
+                {surface.primaryAction && surface.primaryAction.handlerKey !== "expand_work" ?
+                    <WorkPrimaryCard action={surface.primaryAction} onAction={onAction} />
+                :   null}
+                {surface.recordOutcomeAction ?
+                    <button
+                        type="button"
+                        className={clsx(
+                            "alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary",
+                            !surface.primaryAction || surface.primaryAction.handlerKey === "expand_work"
+                                ? "alloy-os-currentwork__record-outcome--strong"
+                                : null,
+                        )}
+                        data-work-action="record-outcome"
+                        onClick={() => onAction(surface.recordOutcomeAction!)}
+                    >
+                        {surface.recordOutcomeAction.label}
+                    </button>
+                :   null}
                 <button
                     type="button"
-                    className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
-                    data-work-action="record-outcome"
-                    onClick={() => onAction(surface.recordOutcomeAction!)}
+                    className="alloy-os-currentwork__open-work"
+                    onClick={onOpenWork}
+                    data-work-action="open-work"
                 >
-                    {surface.recordOutcomeAction.label}
+                    Open work →
                 </button>
-            :   null}
+            </div>
             <SupportingGrid actions={helpfulActions} onAction={onAction} />
-            {surface.alternatePaths.length > 0 ?
-                <AlternatePathsList actions={surface.alternatePaths} onAction={onAction} />
+            <OtherTransitionsDisclosure actions={surface.alternatePaths} onAction={onAction} />
+            <OperatorGuidanceBlock text={surface.operatorGuidance} workDescription={surface.description} />
+            {additionalLinkedWork && primaryWorkItem?.work_id ?
+                <div className="alloy-os-currentwork__linked-work" data-current-work-work-items-link="true">
+                    <p className="alloy-os-currentwork__linked-work-copy">Also tracked in Work Items</p>
+                    <ViewInWorkItemsLink taskId={primaryWorkItem.work_id} opportunityId={opportunityId} />
+                </div>
             :   null}
             <ActivityFooter
                 surface={surface}
@@ -728,35 +880,6 @@ function SummaryBody({
                 onViewFullActivity={onViewFullActivity}
                 activityPreviewItems={activityPreviewItems}
             />
-        </div>
-    );
-}
-
-function AlternatePathsList({
-    actions,
-    onAction,
-}: {
-    actions: CurrentWorkActionVM[];
-    onAction: (action: CurrentWorkActionVM) => void;
-}) {
-    return (
-        <div className="alloy-os-currentwork__path-list" data-work-section="alternate">
-            <p className="alloy-os-currentwork__actions-eyebrow">Alternate paths</p>
-            <ul className="alloy-os-currentwork__path-items">
-                {actions.map((action) => (
-                    <li key={action.key}>
-                        <button
-                            type="button"
-                            className="alloy-os-currentwork__path-action"
-                            disabled={action.disabled}
-                            title={action.disabledReason ?? undefined}
-                            onClick={() => onAction(action)}
-                        >
-                            {action.label}
-                        </button>
-                    </li>
-                ))}
-            </ul>
         </div>
     );
 }
@@ -842,7 +965,7 @@ function FocusedBody({
     return (
         <div className="alloy-os-currentwork__focus alloy-os-currentwork__focus--scroll" data-work-completion="working">
             <SurfaceProgress surface={surface} />
-            <OperatorGuidanceBlock text={surface.operatorGuidance} />
+            <OperatorGuidanceBlock text={surface.operatorGuidance} workDescription={surface.description} />
             <RequirementsDisclosure
                 surface={surface}
                 expanded={requirementsExpanded}
@@ -879,7 +1002,7 @@ function FocusedBody({
                 {surface.alternatePaths.length > 0 || surface.bosRecommendations.length > 0 ?
                     <div className="alloy-os-currentwork__expanded-side">
                         {surface.alternatePaths.length > 0 ?
-                            <AlternatePathsList actions={surface.alternatePaths} onAction={onAction} />
+                            <OtherTransitionsDisclosure actions={surface.alternatePaths} onAction={onAction} />
                         :   null}
                         {surface.bosRecommendations.length > 0 ?
                             <div className="alloy-os-currentwork__path-list" data-work-section="bos">
