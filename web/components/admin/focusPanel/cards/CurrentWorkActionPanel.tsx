@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
+import CurrentWorkStageTransitionPanel from "@/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel";
 import { isScheduleTourRegistryAction } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
@@ -43,12 +44,25 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
     const surface = resolveCurrentWorkActionSurface(action);
     const opportunityId = context.subject.id;
     const tourFields = resolveOpportunityTourScheduleFromTruth(context.truth);
-    const actionKey = (action.actionRef ?? action.key).trim();
+    const actionKey = (action.handlerKey ?? action.actionRef ?? action.key).trim();
 
     const handleTourComplete = useCallback(async () => {
         mutation?.tour.dispatchTourUpdated(opportunityId, actionKey || "schedule_tour");
         onComplete();
     }, [actionKey, mutation, onComplete, opportunityId]);
+
+    if (surface === "process_transition") {
+        const nextStatusKey = (action.actionRef ?? action.key).trim();
+        return (
+            <CurrentWorkStageTransitionPanel
+                action={action}
+                opportunityId={opportunityId}
+                nextStatusKey={nextStatusKey}
+                onClose={onClose}
+                onComplete={onComplete}
+            />
+        );
+    }
 
     const canRunInline = Boolean(mutation?.canEdit) && !action.disabled;
 
