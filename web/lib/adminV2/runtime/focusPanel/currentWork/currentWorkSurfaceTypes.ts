@@ -60,6 +60,31 @@ export type CurrentWorkSurfaceProgress = {
     percent: number;
 };
 
+export type CurrentWorkReadinessItemVM = {
+    key: string;
+    label: string;
+    status: CurrentWorkChecklistStatus;
+    scope?: "record" | "child" | "person";
+    targetLabel?: string | null;
+};
+
+export type CurrentWorkReadinessVM = {
+    state: CurrentWorkSurfaceStatus;
+    reasonCodes: string[];
+    reasonLabel: string | null;
+    requirements?: {
+        complete: number;
+        total: number;
+        remaining: number;
+        items: CurrentWorkReadinessItemVM[];
+    };
+    workItems?: {
+        complete: number;
+        total: number;
+        remaining: number;
+    };
+};
+
 export type CurrentWorkLastActivity = {
     label: string;
     occurredAt?: string | null;
@@ -86,6 +111,7 @@ export type CurrentWorkSurfaceVM = {
     description?: string | null;
     status: CurrentWorkSurfaceStatus;
     statusLabel: string;
+    readiness: CurrentWorkReadinessVM;
 
     progress: CurrentWorkSurfaceProgress;
 

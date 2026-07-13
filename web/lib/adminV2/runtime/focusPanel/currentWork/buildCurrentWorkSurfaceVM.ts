@@ -29,6 +29,8 @@ import type {
     CurrentWorkSurfaceStatus,
     CurrentWorkSurfaceVM,
     CurrentWorkActionVM,
+    CurrentWorkReadinessItemVM,
+    CurrentWorkReadinessVM,
 } from "./currentWorkSurfaceTypes";
 import { resolveCurrentWorkChecklistTruthFromPublishedRules, type ChecklistTruthResult } from "./resolveCurrentWorkChecklistTruthFromPublishedRules";
 import { resolveCurrentWorkTemplateFromPublishedPlan } from "./resolveCurrentWorkTemplateFromPublishedPlan";
@@ -78,6 +80,100 @@ function statusLabelFor(status: CurrentWorkSurfaceStatus, hasOpenWork: boolean):
         case "in_progress":
             return hasOpenWork ? "Open" : "In progress";
     }
+}
+
+function classifyChecklistItems(checklist: CurrentWorkChecklistItemVM[]): {
+    requirements: CurrentWorkReadinessItemVM[];
+    workItems: CurrentWorkReadinessItemVM[];
+} {
+    const requirements: CurrentWorkReadinessItemVM[] = [];
+    const workItems: CurrentWorkReadinessItemVM[] = [];
+    for (const item of checklist) {
+        const row: CurrentWorkReadinessItemVM = {
+            key: item.key,
+            label: item.label,
+            status: item.status,
+            scope: item.scope,
+            targetLabel: item.targetLabel,
+        };
+        if (item.key.startsWith("work_") || item.description?.includes("stage work")) {
+            workItems.push(row);
+        } else {
+            requirements.push(row);
+        }
+    }
+    if (requirements.length === 0 && workItems.length === 0 && checklist.length > 0) {
+        return { requirements: checklist.map((item) => ({
+            key: item.key,
+            label: item.label,
+            status: item.status,
+            scope: item.scope,
+            targetLabel: item.targetLabel,
+        })), workItems: [] };
+    }
+    return { requirements, workItems };
+}
+
+function buildReadinessVM(args: {
+    status: CurrentWorkSurfaceStatus;
+    statusLabel: string;
+    checklist: CurrentWorkChecklistItemVM[];
+    blocked: boolean;
+    attentionReason: string | null;
+    hasOpenWork: boolean;
+    hasOverdue: boolean;
+    dueLabel?: string | null;
+}): CurrentWorkReadinessVM {
+    const { requirements, workItems } = classifyChecklistItems(args.checklist);
+    const reqComplete = requirements.filter((i) => i.status === "complete").length;
+    const reqTotal = requirements.length;
+    const workComplete = workItems.filter((i) => i.status === "complete").length;
+    const workTotal = workItems.length;
+
+    const reasonCodes: string[] = [];
+    let reasonLabel: string | null = null;
+
+    if (args.status === "blocked") {
+        if (args.attentionReason) {
+            reasonCodes.push("attention");
+            reasonLabel = args.attentionReason;
+        } else if (reqTotal > 0 && reqComplete < reqTotal) {
+            reasonCodes.push("requirements_remaining");
+            const remaining = reqTotal - reqComplete;
+            reasonLabel = `${remaining} requirement${remaining === 1 ? "" : "s"} remaining`;
+        } else {
+            reasonCodes.push("blocked");
+            reasonLabel = "Waiting for a required action";
+        }
+    } else if (args.hasOverdue && args.dueLabel) {
+        reasonCodes.push("overdue");
+        reasonLabel = args.dueLabel;
+    } else if (reqTotal > 0 && reqComplete < reqTotal) {
+        reasonCodes.push("requirements_remaining");
+        const remaining = reqTotal - reqComplete;
+        reasonLabel = `${remaining} requirement${remaining === 1 ? "" : "s"} remaining`;
+    }
+
+    return {
+        state: args.status,
+        reasonCodes,
+        reasonLabel,
+        ...(reqTotal > 0 ? {
+            requirements: {
+                complete: reqComplete,
+                total: reqTotal,
+                remaining: reqTotal - reqComplete,
+                items: requirements,
+            },
+        } : {}),
+        ...(workTotal > 0 ? {
+            workItems: {
+                complete: workComplete,
+                total: workTotal,
+                remaining: workTotal - workComplete,
+            },
+        } : {}),
+    };
 }
 
 function resolveSurfaceStatus(args: {
@@ -528,9 +624,22 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         && !templateConfig
         && classified.supporting.length === 0
         && classified.alternatePaths.length === 0;
-    const blocked = attention.needsAttention && Boolean(attention.primaryReason);
+    const blocked =
+        (attention.needsAttention && Boolean(attention.primaryReason))
+        || (checklist.some((item) => item.status === "blocked"));
     const hasOpenWork = Boolean(actionableWorkItem?.state === "open");
+    const hasOverdue = context.signals.work.overdueCount > 0;
     const status = resolveSurfaceStatus({ isEmpty, blocked, completed, total, hasOpenWork });
+    const readiness = buildReadinessVM({
+        status,
+        statusLabel: statusLabelFor(status, hasOpenWork),
+        checklist,
+        blocked,
+        attentionReason: attention.primaryReason,
+        hasOpenWork,
+        hasOverdue,
+        dueLabel: context.signals.work.primary?.dueLabel ?? null,
+    });
 
     const title =
         templateConfig?.title?.trim()
@@ -620,6 +729,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         description,
         status,
         statusLabel: statusLabelFor(status, hasOpenWork),
+        readiness,
         progress,
         checklist,
         primaryAction,
