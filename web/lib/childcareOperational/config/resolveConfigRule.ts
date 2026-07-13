@@ -4,6 +4,14 @@
  * Precedence (doctrine):  room > program > site > org   (scope is primary)
  * Secondary:              age-group-specific rule beats age-group-null rule
  * Tertiary:               latest effective_start wins (config versioning)
+ * Final tiebreak:         latest created_at, then smallest id (deterministic)
+ *
+ * The final tiebreak makes resolution deterministic when two rules are otherwise
+ * indistinguishable (identical scope, age dimension, and effective_start) —
+ * previously the winner depended on unspecified DB fetch / sort-stability order
+ * (RFC §12; consumer inventory A7). It only engages when both rules carry the
+ * optional `id` / `created_at` metadata, so callers with bare test rules are
+ * unaffected.
  *
  * Pure functions only — no DB, no IO. The same resolver is the single source of
  * "which rule applies" for every surface; nothing re-implements precedence.
@@ -20,6 +28,9 @@ import type {
 export type ResolvableConfigRule = ConfigRuleScopeColumns &
     ConfigRuleEffectiveColumns & {
         age_group_key?: string | null;
+        /** Optional stable metadata used only for the deterministic final tiebreak. */
+        id?: string;
+        created_at?: string;
     };
 
 const SCOPE_SPECIFICITY: Record<ConfigRuleScopeType, number> = {
@@ -78,7 +89,9 @@ function ageGroupSpecificity(rule: ResolvableConfigRule): number {
 
 /**
  * Rank: scope specificity desc, then age-group specificity desc, then latest
- * effective_start desc. Deterministic for equal keys via stable input order.
+ * effective_start desc, then a deterministic final tiebreak (latest created_at,
+ * then smallest id). The final tiebreak only engages when both rules carry the
+ * optional metadata; otherwise ordering is left stable for equal keys.
  */
 function compareRulePrecedence(a: ResolvableConfigRule, b: ResolvableConfigRule): number {
     const scopeDiff = scopeSpecificity(b.scope_type) - scopeSpecificity(a.scope_type);
@@ -88,7 +101,17 @@ function compareRulePrecedence(a: ResolvableConfigRule, b: ResolvableConfigRule)
     if (ageDiff !== 0) return ageDiff;
 
     // latest effective_start wins
-    return compareIsoDates(b.effective_start, a.effective_start);
+    const startDiff = compareIsoDates(b.effective_start, a.effective_start);
+    if (startDiff !== 0) return startDiff;
+
+    // deterministic final tiebreak: latest created_at wins, then smallest id.
+    if (a.created_at != null && b.created_at != null && a.created_at !== b.created_at) {
+        return a.created_at > b.created_at ? -1 : 1;
+    }
+    if (a.id != null && b.id != null && a.id !== b.id) {
+        return a.id < b.id ? -1 : 1;
+    }
+    return 0;
 }
 
 /** All rules applicable to the context on the date, most-specific first. */
