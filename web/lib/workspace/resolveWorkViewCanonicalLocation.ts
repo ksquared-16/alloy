@@ -162,9 +162,22 @@ export function workViewBaseQueueKeyForHost(
         hostQueueDefinition != null
             ? tryLoadWorkUnitQueueDefinitionBundle(hostQueueDefinition)
             : null;
-    if (!bundle) return compat;
-    if (compat && bundle.def.queues.some((q) => q.key === compat)) return compat;
-    return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def)) ?? compat;
+    // Same canonical contract as the runtime resolver (resolveWorkViewBaseQueueKey): a compat lane is
+    // only usable when it exists on THIS host's definition. A stale/deleted key (e.g.
+    // `lifecycle_qualification`, or an aggregate `pipeline_total` living on a sibling unit) must NEVER
+    // be emitted — the grouped-totals fan-out would request it and 404. Degrade to the host's
+    // all-records lane; null only when there is no lane and no definition to derive one.
+    if (bundle) {
+        if (compat && bundle.def.queues.some((q) => q.key === compat)) return compat;
+        if (compat && typeof console !== "undefined") {
+            console.warn("[work-view-resolver] dropped stale compat_queue_key not present on host def", {
+                compat_queue_key: compat,
+            });
+        }
+        return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def)) ?? null;
+    }
+    // No definition to validate against — cannot safely emit a possibly-stale key (would 404).
+    return null;
 }
 
 /**
