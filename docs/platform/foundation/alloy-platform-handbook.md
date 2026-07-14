@@ -10,7 +10,13 @@ supersedes: []
 **Audience:** Every engineer and AI agent joining Alloy  
 **Role:** Teach how the platform *thinks*. This is the map — not the encyclopedia.
 
-Deeper truth lives in canonical doctrine under `docs/platform/`, locked runtime detail under `docs/system/`, and generated reference under `docs/schema/` and `docs/api/`. Sprint and archive trees are **history**, not onboarding.
+| Layer | Role |
+|-------|------|
+| **This handbook** | Teaches Alloy from first principles |
+| **Canonical doctrine** (`docs/platform/`, `docs/system/`) | Defines current truth |
+| **[`platform-decisions.md`](./platform-decisions.md)** | Records durable cross-platform decisions and rationale |
+
+Deeper truth lives under `docs/platform/`, locked runtime detail under `docs/system/`, and generated reference under `docs/schema/` and `docs/api/`. Sprint and archive trees are **history**, not onboarding.
 
 ---
 
@@ -261,6 +267,7 @@ Hold these as operating rules:
 | Need | Start |
 |------|--------|
 | Full library map | [`../../README.md`](../../README.md) |
+| Platform Decisions | [`platform-decisions.md`](./platform-decisions.md) |
 | Freeze / certification | [`../milestones/freeze-july-2026.md`](../milestones/freeze-july-2026.md) |
 | Design & operational law | [`../governance/design-and-operational-doctrine.md`](../governance/design-and-operational-doctrine.md) |
 | Documentation governance | [`../governance/documentation-governance.md`](../governance/documentation-governance.md) |
