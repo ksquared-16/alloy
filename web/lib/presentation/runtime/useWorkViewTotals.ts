@@ -21,6 +21,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { mapWithConcurrencyLimit } from "@/lib/workspace/mapWithConcurrencyLimit";
+import { fetchQueueViewTotalsBatched } from "./fetchQueueViewTotalsBatched";
+
+/** Max canonical-total count requests in flight at once (bounds the per-view FALLBACK fan-out). */
+export const WORK_VIEW_TOTALS_FETCH_CONCURRENCY = 4;
+import {
+    peekWorkUnitSurfaceTotalsCache,
+    putWorkUnitSurfaceTotalsCache,
+    type WorkUnitViewModelCacheContext,
+} from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import type { QueueItemsResult } from "@/lib/queues/types";
 import { queueTotalCountFromQueueItemsResult } from "./types";
 import {
@@ -85,8 +95,14 @@ export function useWorkViewTotalsState(args: {
      * during the refresh when the canonical population is unchanged.
      */
     refreshToken?: string | number;
+    /**
+     * Session-cache scope (Trust Closure). When provided, the totals map is cached per host +
+     * population fingerprint so a return navigation resolves every badge from memory: a fresh cache
+     * seeds the display AND skips the fan-out; a stale cache seeds then revalidates (SWR).
+     */
+    cacheContext?: WorkUnitViewModelCacheContext | null;
 }): WorkViewTotalsState {
-    const { targets, selectedSiteId, enabled = true, refreshToken } = args;
+    const { targets, selectedSiteId, enabled = true, refreshToken, cacheContext } = args;
 
     const targetsKey = useMemo(
         () =>
@@ -114,10 +130,21 @@ export function useWorkViewTotalsState(args: {
 
     const settledStoreRef = useRef<WorkViewSettledTotalsStore>(new Map());
 
+    // Mount seed from the session cache — computed once so a return renders every badge instantly.
+    const totalsSeedRef = useRef<{ totals: Map<string, number | null>; fresh: boolean } | null | undefined>(
+        undefined,
+    );
+    if (totalsSeedRef.current === undefined) {
+        const read = cacheContext ? peekWorkUnitSurfaceTotalsCache({ context: cacheContext, populationKey }) : null;
+        totalsSeedRef.current = read ? { totals: new Map(read.entry.totals), fresh: read.fresh } : null;
+    }
+    // A fresh seed also skips the count fan-out on this navigation (no duplicate requests).
+    const skipFreshFetchRef = useRef(totalsSeedRef.current?.fresh === true);
+
     const [resolved, setResolved] = useState<{
         scopeKey: string;
         totals: Map<string, number | null>;
-    } | null>(null);
+    } | null>(() => (totalsSeedRef.current ? { scopeKey, totals: totalsSeedRef.current.totals } : null));
 
     // Population identity change: prune retention for removed/changed canonical locations.
     useEffect(() => {
@@ -137,7 +164,29 @@ export function useWorkViewTotalsState(args: {
         }
         if (!byKey.size) return;
 
+        // Fresh cached totals seeded this navigation — do not re-issue the fan-out. (Stale/absent
+        // seeds fall through and revalidate.) One-shot: later scope changes always refetch.
+        if (skipFreshFetchRef.current) {
+            skipFreshFetchRef.current = false;
+            return;
+        }
+
         let cancelled = false;
+
+        const applyFreshTotals = (freshTotals: Map<string, number | null>) => {
+            if (cancelled) return;
+            settledStoreRef.current = applyWorkViewTotalsFetchResult({
+                targets: parsedTargets,
+                selectedSiteId,
+                freshTotals,
+                settledStore: settledStoreRef.current,
+            });
+            setResolved({ scopeKey, totals: freshTotals });
+            // Write-back so a return navigation resolves these badges from the session cache.
+            if (cacheContext) putWorkUnitSurfaceTotalsCache(freshTotals, populationKey, cacheContext);
+        };
+
+        // Per-view fallback (legacy path): used only if the grouped request fails.
         const fetchTotal = async (
             key: string,
             target: WorkViewTotalTarget,
@@ -159,19 +208,33 @@ export function useWorkViewTotalsState(args: {
             }
         };
 
-        void Promise.all(
-            [...byKey.entries()].map(([key, target]) => fetchTotal(key, target)),
-        ).then((entries) => {
-            if (cancelled) return;
-            const freshTotals = new Map(entries);
-            settledStoreRef.current = applyWorkViewTotalsFetchResult({
-                targets: parsedTargets,
-                selectedSiteId,
-                freshTotals,
-                settledStore: settledStoreRef.current,
-            });
-            setResolved({ scopeKey, totals: freshTotals });
-        });
+        void (async () => {
+            // Batched: ONE request resolves every pill's count (see /api/admin/queue-view-totals),
+            // so the browser issues a single request regardless of how many views the unit has.
+            try {
+                const targetsList = [...byKey.values()].map((t) => ({
+                    workUnitId: t.workUnitId,
+                    queueKey: t.baseQueueKey,
+                    workViewId: t.viewId,
+                }));
+                const batched = await fetchQueueViewTotalsBatched({ targets: targetsList, selectedSiteId });
+                if (cancelled) return;
+                const freshTotals = new Map<string, number | null>();
+                for (const key of byKey.keys()) freshTotals.set(key, batched.has(key) ? batched.get(key)! : null);
+                applyFreshTotals(freshTotals);
+                return;
+            } catch {
+                // Grouped endpoint unavailable — fall back to the bounded per-view fan-out so counts
+                // are never lost. Request count still bounded by inactive-view count, not rows.
+            }
+            const entries = await mapWithConcurrencyLimit(
+                [...byKey.entries()],
+                WORK_VIEW_TOTALS_FETCH_CONCURRENCY,
+                ([key, target]) => fetchTotal(key, target),
+            );
+            applyFreshTotals(new Map(entries));
+        })();
+
         return () => {
             cancelled = true;
         };

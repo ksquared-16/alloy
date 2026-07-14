@@ -17,7 +17,8 @@ export type PerfNamespace =
     | "settings"
     | "intent"
     | "section"
-    | "perceived";
+    | "perceived"
+    | "workspace_nav";
 
 const BLOCKED_KEYS = new Set([
     "email",
@@ -76,6 +77,10 @@ function isSafeKey(key: string): boolean {
         key === "runtime" ||
         key === "path" ||
         key === "nav_source" ||
+        key === "mode" ||
+        key === "nav_id" ||
+        key === "resource" ||
+        key === "slug_present" ||
         key === "warm" ||
         key === "cold" ||
         key === "cache_hit" ||

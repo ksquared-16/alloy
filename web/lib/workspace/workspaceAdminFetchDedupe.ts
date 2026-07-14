@@ -6,6 +6,8 @@
  * to read each Response body stream. Returning the raw shared Response causes the second `.json()`
  * to fail or yield `{}`, breaking department lookup ("Department not found for this organization").
  */
+import { recordWorkspaceRequest } from "@/lib/perf/workspaceNavGraph";
+
 const inflight = new Map<string, Promise<Response>>();
 
 /**
@@ -49,6 +51,8 @@ export function resetWorkspaceAdminFetchDedupeForTests(): void {
 
 export function dedupeAdminFetch(input: string, init?: RequestInit): Promise<Response> {
     const key = input;
+    const joinedInflight = inflight.has(key);
+    const startedAtMs = typeof performance !== "undefined" ? performance.now() : Date.now();
     let p = inflight.get(key);
     if (!p) {
         p = fetch(input, init).finally(() => {
@@ -56,7 +60,33 @@ export function dedupeAdminFetch(input: string, init?: RequestInit): Promise<Res
         });
         inflight.set(key, p);
     }
-    return p.then((res) => res.clone());
+    return p.then(
+        (res) => {
+            recordWorkspaceRequest({
+                url: input,
+                startedAtMs,
+                durationMs:
+                    (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAtMs,
+                joinedInflight,
+                ttlCacheHit: false,
+                ok: res.ok,
+                serverTiming: res.headers.get("Server-Timing"),
+            });
+            return res.clone();
+        },
+        (err) => {
+            recordWorkspaceRequest({
+                url: input,
+                startedAtMs,
+                durationMs:
+                    (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAtMs,
+                joinedInflight,
+                ttlCacheHit: false,
+                ok: false,
+            });
+            throw err;
+        },
+    );
 }
 
 type CachedResponse = { atMs: number; status: number; statusText: string; headers: [string, string][]; bodyText: string };
@@ -84,6 +114,15 @@ export async function dedupeAdminFetchWithTtlMeta(
     if (method === "GET" && ttlMs > 0) {
         const hit = shortCache.get(key);
         if (hit && Date.now() - hit.atMs < ttlMs) {
+            const startedAtMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+            recordWorkspaceRequest({
+                url: input,
+                startedAtMs,
+                durationMs: 0,
+                joinedInflight: false,
+                ttlCacheHit: true,
+                ok: hit.status >= 200 && hit.status < 300,
+            });
             return {
                 response: new Response(hit.bodyText, {
                     status: hit.status,

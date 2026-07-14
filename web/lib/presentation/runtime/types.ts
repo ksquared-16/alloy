@@ -181,6 +181,25 @@ export type WorkspaceSurfaceModel = {
 };
 
 /** WU.SURFACE — resolved model for the Work Unit surface. */
+/**
+ * Canonical Work Unit readiness (Trust Closure, atomic reveal). The surface reveals as ONE
+ * coherent composition — header, work-view pills, counts, and the primary queue rows together —
+ * never region-by-region. `coldCompositionReady` is the gate the render mode uses; it includes the
+ * primary queue settling so cold entry holds one skeleton until rows are present, while a seeded
+ * return is ready on first render. `retainedCompositionReady` marks that this mount opened from a
+ * cached composition (no loading boundary should ever show for it).
+ */
+export type WorkUnitReadiness = {
+    /** Identity resolved — the stable shell frame can render. */
+    shellReady: boolean;
+    /** This mount opened from a cached config + rows composition (return navigation). */
+    retainedCompositionReady: boolean;
+    /** Config + header + primary queue all established — the atomic above-fold reveal gate. */
+    coldCompositionReady: boolean;
+    /** Primary composition ready AND the action rail settled — fully interactive. */
+    interactionReady: boolean;
+};
+
 export type WorkUnitSurfaceModel = {
     /** Configurable header (title, subtitle, KPIs) from published Work Unit Header surface. */
     header: WorkspaceHeaderPresentationModel;
@@ -219,7 +238,13 @@ export type WorkUnitSurfaceModel = {
      */
     departmentId: string | null;
     workUnitId: string | null;
+    /**
+     * Legacy single-boolean readiness — equals `readiness.coldCompositionReady`. Retained so the
+     * render mode and existing consumers keep one gate; prefer `readiness` for the full contract.
+     */
     ready: boolean;
+    /** Canonical atomic-reveal readiness (Trust Closure). */
+    readiness: WorkUnitReadiness;
 };
 
 /** Work Unit surface intents — the only mutations presentation components may express. */
