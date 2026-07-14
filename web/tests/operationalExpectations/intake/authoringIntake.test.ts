@@ -250,12 +250,18 @@ describe("Standing boundary (Wave C not begun)", () => {
         expect(gw.commits.at(-1)?.standing).not.toBe("binding");
     });
 
-    it("a predicted expectation may stand at model; deontic stays proposed", async () => {
-        const predicted = await authorOperationalExpectation(validCreateInput({ idempotencyKey: "k-pred", modality: "predicted", provisionalStanding: "model" }), TRUSTED_CONTEXT, gw);
+    it("standing is DERIVED from modality (not a caller input): predicted→model, else→proposed", async () => {
+        const predicted = await authorOperationalExpectation(validCreateInput({ idempotencyKey: "k-pred", modality: "predicted" }), TRUSTED_CONTEXT, gw);
         expect(gw.commits.at(-1)?.standing).toBe("model");
 
-        const required = await authorOperationalExpectation(validCreateInput({ idempotencyKey: "k-req", modality: "required", provisionalStanding: "model" }), TRUSTED_CONTEXT, gw);
-        expect(gw.commits.at(-1)?.standing).toBe("proposed"); // clamp: model only for predicted
+        const required = await authorOperationalExpectation(validCreateInput({ idempotencyKey: "k-req", modality: "required" }), TRUSTED_CONTEXT, gw);
+        expect(gw.commits.at(-1)?.standing).toBe("proposed");
         expect(predicted.status === "authored" && required.status === "authored").toBe(true);
+    });
+
+    it("AuthoringInput has no standing field — the caller cannot supply standing", () => {
+        const input = validCreateInput() as unknown as Record<string, unknown>;
+        expect("standing" in input).toBe(false);
+        expect("provisionalStanding" in input).toBe(false);
     });
 });

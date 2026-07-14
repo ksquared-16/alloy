@@ -35,7 +35,6 @@ export function fingerprintAuthoringInput(input: AuthoringInput): string {
         footprint: input.footprint,
         configVersionRef: input.configVersionRef ?? null,
         predecessorId: input.predecessorId ?? null,
-        provisionalStanding: input.provisionalStanding ?? null,
     };
     return createHash("sha256").update(stableStringify(material)).digest("hex");
 }

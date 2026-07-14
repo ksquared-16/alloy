@@ -59,12 +59,27 @@ describe("Wave B migration — atomic authoring RPC (row + Authoring Act, one tx
         expect(/TO authenticated/i.test(sql)).toBe(false);
     });
 
-    it("does not insert a client recorded time (authored_at left to the Wave A trigger)", () => {
+    it("does not insert a client recorded time OR lineage root (both left to the Wave A trigger)", () => {
         // The INSERT column list into operational_expectations must NOT include
-        // authored_at — recorded time is server-assigned by the Wave A trigger.
+        // authored_at (recorded time) or lineage_root_id — both are server-set by
+        // the Wave A trigger; a caller cannot forge them.
         const insertBlock = sql.match(/INSERT INTO public\.operational_expectations\s*\(([\s\S]*?)\)\s*VALUES/i);
         expect(insertBlock, "INSERT column list found").not.toBeNull();
         expect(/\bauthored_at\b/i.test(insertBlock![1])).toBe(false);
+        expect(/\blineage_root_id\b/i.test(insertBlock![1])).toBe(false);
+    });
+
+    it("is hardened: SET search_path, FOR UPDATE concurrency, no dynamic SQL", () => {
+        expect(/SET search_path = public/i.test(sql)).toBe(true);
+        expect(/FOR UPDATE/i.test(sql)).toBe(true); // idempotency lock → concurrent retries converge
+        // No dynamic SQL construction (EXECUTE format/quote_*).
+        expect(/EXECUTE\s+format\s*\(|EXECUTE\s+['"]/i.test(sql)).toBe(false);
+        // Conflict is raised BEFORE the row INSERT (index of conflict < index of insert).
+        const conflictAt = sql.search(/oe_idempotency_conflict/i);
+        const insertAt = sql.search(/INSERT INTO public\.operational_expectations/i);
+        expect(conflictAt).toBeGreaterThan(-1);
+        expect(insertAt).toBeGreaterThan(-1);
+        expect(conflictAt).toBeLessThan(insertAt);
     });
 });
 

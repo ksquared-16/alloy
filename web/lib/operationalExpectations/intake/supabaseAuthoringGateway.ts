@@ -11,8 +11,9 @@
  */
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { emitEvent } from "@/lib/emitEvent";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { isOeLedgerAuthorEnabledForOrg } from "@/lib/operationalExpectations/intake/ledgerAuthoringFeatureFlag";
+import { resolveAuthoringContext } from "@/lib/operationalExpectations/intake/authoringServerContext";
 import type {
     AuthoringActRecord,
     AuthoringGateway,
@@ -27,7 +28,6 @@ import {
     authorOperationalExpectation,
 } from "@/lib/operationalExpectations/intake/authorOperationalExpectation";
 import type {
-    AuthoringContext,
     AuthoringInput,
     AuthoringResult,
 } from "@/lib/operationalExpectations/intake/authoringTypes";
@@ -106,7 +106,11 @@ export function createSupabaseAuthoringGateway(admin: Admin = createAdminClient(
             const authoringActEventId = String(r.authoring_act_event_id ?? "");
             if (!expectationId) return { kind: "error", message: "empty_rpc_result" };
 
-            const outcome: CommitOutcome = {
+            // The ONE authoritative Authoring Act is the mutation_events outbox row
+            // written inside the RPC transaction. No second event is emitted here —
+            // a workflow_events fan-out would be an unregistered, duplicate
+            // vocabulary with no current consumer, so it is deliberately omitted.
+            return {
                 kind: "committed",
                 idempotent: r.idempotent === true,
                 expectationId,
@@ -117,44 +121,21 @@ export function createSupabaseAuthoringGateway(admin: Admin = createAdminClient(
                 standing: (r.standing as "proposed" | "binding" | "model") ?? "proposed",
                 authoredAt: String(r.authored_at ?? ""),
             };
-
-            // Best-effort, NON-FATAL spine fan-out (not the authoritative event).
-            if (!outcome.idempotent) {
-                try {
-                    await emitEvent({
-                        org_id: orgId,
-                        event_type: "operational_expectation_authored",
-                        entity_type: "operational_expectations",
-                        entity_id: expectationId,
-                        action_type: act.verb,
-                        payload: {
-                            schema_version: 1,
-                            authoring_act_event_id: authoringActEventId,
-                            verb: act.verb,
-                            modality: act.modality,
-                            transition_type: act.transitionType,
-                            standing: act.standing,
-                        },
-                    });
-                } catch (e) {
-                    // Non-fatal: the authoritative Authoring Act is the outbox row.
-                    console.warn("[oe.ledger.author] non-fatal workflow_events fan-out failed", (e as Error)?.message);
-                }
-            }
-
-            return outcome;
         },
     };
 }
 
 /**
- * The canonical server entry point: author an Operational Expectation through the
- * one intake using the production gateway. API routes / server actions / imports /
- * future AI proposals all delegate here — no duplicate write path.
+ * The canonical server entry point. Supported callers pass ONLY `input`; the org,
+ * actor, and authoring capability are resolved server-side from the canonical admin
+ * access context — a caller can never supply org identity, actor identity, or
+ * permission grants. API routes / server actions / imports / future AI proposals
+ * all delegate here — no duplicate write path, no manufacturable context.
  */
 export async function authorOperationalExpectationServer(
     input: AuthoringInput,
-    context: AuthoringContext,
 ): Promise<AuthoringResult> {
-    return authorOperationalExpectation(input, context, createSupabaseAuthoringGateway());
+    const resolved = resolveAuthoringContext(await getAdminAccessContextCached());
+    if (!resolved.ok) return resolved.result;
+    return authorOperationalExpectation(input, resolved.context, createSupabaseAuthoringGateway());
 }

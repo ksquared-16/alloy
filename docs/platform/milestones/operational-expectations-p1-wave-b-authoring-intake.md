@@ -50,26 +50,32 @@ After Wave C: the intake admits authors only through Authority→Standing resolu
 
 ## 2. The single authoring intake
 
-`authorOperationalExpectation(input, context) → AuthoringResult`
-(`web/lib/operationalExpectations/intake/authorOperationalExpectation.ts`; production wiring
-`supabaseAuthoringGateway.ts` → `authorOperationalExpectationServer`).
+Production entry `authorOperationalExpectationServer(input) → AuthoringResult`
+(`supabaseAuthoringGateway.ts`); internal core `authorOperationalExpectation(input, context, gateway)`
+(`authorOperationalExpectation.ts`).
 
 - **Typed grammar input**, never raw columns / arbitrary JSON: `⟨Authority·Modality·Subject·Condition·
-  TemporalFrame·[Beneficiary]⟩` + verb + footprint + idempotency key. Organization and actor come only
-  from the **server-trusted `AuthoringContext`**, never from input. Recorded time is not an input.
+  TemporalFrame·[Beneficiary]⟩` + verb + footprint + idempotency key. The production entry takes **only
+  `input`** — organization, actor, and permission are resolved server-side from the canonical admin
+  access context (`getAdminAccessContextCached`); a caller supplies none of them. Standing and recorded
+  time are not inputs.
 - **Never throws** — every outcome is a typed `AuthoringResult`
   (`disabled | authored | rejected | conflict | failed`).
 - **Reusable, domain-neutral**: API routes / server actions / imports / future AI proposals all delegate
-  here — no duplicate write path, no domain-specific branch.
+  here — no duplicate write path, no domain-specific branch, no manufacturable context.
 
-## 3. Sole write path & security boundary
+## 3. Sole write path, permission & security boundary
 
 - `authenticated` = **SELECT only** (Wave A); **no** client INSERT. Writes arrive only through the intake
-  behind the service-role RPC `author_operational_expectation` (`SECURITY DEFINER`, `REVOKE … FROM
-  PUBLIC`, `GRANT EXECUTE … TO service_role`). service_role is **infrastructure**, not the product
-  authoring contract.
-- Org + actor are server-trusted; predecessor reads are tenant-checked; raw DB errors are never exposed
-  (typed `failed`). An unauthenticated/orgless caller is rejected `unauthorized`.
+  behind the service-role RPC `author_operational_expectation` (`SECURITY DEFINER`, `SET search_path =
+  public`, `REVOKE … FROM PUBLIC`, `GRANT EXECUTE … TO service_role`). service_role is **infrastructure**,
+  not the product authoring contract — DB credentials are never application authorization.
+- **Permission:** the intake enforces the already-governed capability **`workflows.write`** from the
+  resolved access context (`resolveAuthoringContext`). A caller with server execution access but without
+  the capability is rejected. This is an **interim** binding; a dedicated `operational_expectations.author`
+  capability is a governed follow-up (implementation-contract gap, flagged — not a broad admin bypass).
+- Org + actor + permission are server-trusted; predecessor reads are tenant-checked; raw DB errors are
+  never exposed (typed `failed`). An unauthenticated caller is rejected `unauthorized`.
 
 ## 4. Feature flag `oe.ledger.author`
 
@@ -98,18 +104,22 @@ error). OFF → typed `disabled`, nothing written. A rollout control, not a perm
   payload → `conflict`; concurrent retries converge on one row (DB uniqueness + `FOR UPDATE`).
 - **Recorded time**: `authored_at` remains **server-assigned** (Wave A trigger) and immutable; the intake
   never inserts it. Valid time (`valid_from`) is author-supplied and validated.
-- **Authoring Act (atomic)**: `author_operational_expectation` inserts the ledger row **and** the
-  `mutation_events` outbox event (`domain=operational_expectations`, `command_key=author_expectation`) in
-  **one transaction** — no event without the committed row. Follows the house atomic-RPC/outbox
-  convention (`execute_lead_status_mutation`). A best-effort, **non-fatal** `workflow_events` fan-out
-  mirrors `leadStatus.ts` and is not the authoritative event.
+- **Authoring Act (atomic + sole authoritative event)**: `author_operational_expectation` inserts the
+  ledger row **and** the `mutation_events` outbox event (`domain=operational_expectations`,
+  `command_key=author_expectation`, `subject_id=`the expectation id) in **one transaction** — no event
+  without the committed row; a conflict or validation failure produces no event; an idempotent retry
+  produces no duplicate. Follows the house atomic-RPC/outbox convention (`execute_lead_status_mutation`).
+  The outbox row is the **one authoritative Authoring Act** — no `workflow_events` fan-out is emitted (it
+  would be an unregistered, duplicate vocabulary with no current consumer).
 
 ## 7. Standing boundary (Wave C not begun)
 
-The intake **stores** author class + authority claim and clamps standing to a **provisional**
-non-binding value — `proposed`, or `model` for a `predicted` expectation. It **never** authors
-`binding`; reaching the intake is not authorization. Final Authority→Standing resolution and
-ratification are **Wave C**.
+The intake **stores** author class + authority claim and **derives** a provisional non-binding standing
+**from modality alone** (never a caller input): `predicted` → `model` (imposes no obligation, System
+Design §12); every other modality → `proposed` (pending resolution). The allowed vocabulary
+(`proposed | binding | model`) is the frozen Wave A / System Design §5·§12 set. It **never** authors
+`binding` — reaching the intake grants no effective standing. Final Authority→Standing resolution and
+ratification are **Wave C**, which alone can supersede a row to an effective standing.
 
 ## 8. Migration & rollback
 

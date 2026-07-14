@@ -80,13 +80,11 @@ export interface AuthoringInput {
     configVersionRef?: unknown;
     /** Predecessor row id — REQUIRED for non-create verbs, FORBIDDEN for create. */
     predecessorId?: string | null;
-    /**
-     * Provisional standing input. Wave B stores it but does NOT treat it as
-     * authoritative: it is clamped to a non-binding provisional value until Wave C
-     * resolves Authority→Standing. A caller cannot select `binding` here.
-     */
-    provisionalStanding?: "proposed" | "model";
 }
+
+// NOTE: Standing is NOT a caller input. Wave B DERIVES a provisional, non-binding
+// standing from modality alone (predicted → model, else → proposed) and NEVER
+// binding. Final Authority→Standing resolution + ratification are Wave C.
 
 /** Why an authoring act was rejected (typed, caller-safe). */
 export type AuthoringRejectionCode =

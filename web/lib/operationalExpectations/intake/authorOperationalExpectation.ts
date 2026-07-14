@@ -36,13 +36,14 @@ import type {
 } from "@/lib/operationalExpectations/intake/authoringGateway";
 
 /**
- * Provisional standing for Wave B. Standing is NOT resolved here (Wave C). A
- * `predicted` expectation may stand at non-binding `model`; everything else lands
- * `proposed`. Binding is unreachable — a caller cannot author an effective act.
+ * Provisional standing for Wave B, DERIVED from modality alone — never a caller
+ * input. Standing is NOT resolved here (Wave C). A `predicted` expectation imposes
+ * no obligation so it may stand at non-binding `model` (System Design §12);
+ * everything else lands `proposed` (pending Wave C Authority→Standing resolution).
+ * `binding` is unreachable — Wave B grants no effective standing.
  */
 function provisionalStanding(input: AuthoringInput): "proposed" | "model" {
-    if (input.modality === "predicted" && input.provisionalStanding === "model") return "model";
-    return "proposed";
+    return input.modality === "predicted" ? "model" : "proposed";
 }
 
 export async function authorOperationalExpectation(
