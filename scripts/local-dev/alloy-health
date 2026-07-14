@@ -50,8 +50,13 @@ main() {
   fi
 
   section "Active validators"
-  ps aux 2>/dev/null | awk 'BEGIN{IGNORECASE=1}
-    /[t]sc |typescript\/bin\/tsc|[v]itest|[n]ext build|[p]laywright/ {print}' | head -n 30 || true
+  local validators
+  validators="$(alloy_print_active_validators | head -n 30 || true)"
+  if [[ -n "$validators" ]]; then
+    printf '%s\n' "$validators"
+  else
+    echo "(none)"
+  fi
 
   section "Top CPU"
   ps -arco pid,pcpu,pmem,comm 2>/dev/null | head -n 12 || \

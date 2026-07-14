@@ -40,6 +40,7 @@ for f in \
   "$ROOT"/lib/common.sh \
   "$ROOT"/lib/lock.sh \
   "$ROOT"/tests/run-phase1-tests.sh \
+  "$ROOT"/tests/test-install-and-validators.sh \
   "$ROOT"/alloy-worktree-create \
   "$ROOT"/alloy-worktree-sync \
   "$ROOT"/alloy-worktree-remove \
@@ -239,15 +240,33 @@ env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-dev-stop" wt2-fixture-tw
 assert_fail "remove rejects unmerged branch" \
   env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-worktree-remove" wt2-fixture-two
 
-# Install preserves existing config under a fake HOME
+# Install preserves existing config under a fake HOME (directory symlink model).
+# Unset fixture ALLOY_CONFIG_FILE so install uses ~/.config/alloy-dev/config under HOME.
 HOME_TMP="$TMP/home"
 mkdir -p "$HOME_TMP/.config/alloy-dev" "$HOME_TMP/bin"
 printf 'PRESERVE=1\nALLOY_REPO="%s"\n' "$CANON" >"$HOME_TMP/.config/alloy-dev/config"
-HOME="$HOME_TMP" bash "$ROOT/install.sh" >/tmp/alloy-install.out
+HOME="$HOME_TMP" env -u ALLOY_CONFIG_FILE bash "$ROOT/install.sh" >/tmp/alloy-install.out
 grep -q "Preserved existing config" /tmp/alloy-install.out && pass "install preserves config" || fail "install overwrite"
 grep -q "PRESERVE=1" "$HOME_TMP/.config/alloy-dev/config" && pass "config contents preserved" || fail "config contents changed"
+[[ -L "$HOME_TMP/bin/alloy-dev" ]] && pass "fixture install uses directory symlink" || fail "fixture install is not directory symlink"
+[[ "$(readlink "$HOME_TMP/bin/alloy-dev")" == "$ROOT" ]] && pass "fixture install points at source tree" || fail "fixture install bad target"
+[[ -e "$HOME_TMP/bin/alloy-dev/lib/common.sh" ]] && pass "fixture install resolves lib/common.sh" || fail "fixture install missing lib"
 
 env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-dev-stop" wt1-fixture-one >/dev/null || true
+
+echo
+echo "== Focused install + validator suite =="
+FOCUSED_PASS=0
+FOCUSED_FAIL=0
+set +e
+bash "$ROOT/tests/test-install-and-validators.sh"
+focused_rc=$?
+set -e
+if [[ "$focused_rc" -eq 0 ]]; then
+  pass "focused install/validator suite"
+else
+  fail "focused install/validator suite"
+fi
 
 echo
 echo "Results: PASS=$PASS FAIL=$FAIL"

@@ -37,11 +37,13 @@ bash scripts/local-dev/install.sh
 
 Installer behavior:
 
-- symlinks commands into `~/bin/alloy-dev/`
+- installs **one directory symlink**: `~/bin/alloy-dev` → `<checkout>/scripts/local-dev`
+  (so `lib/`, `alloy-config.example`, and commands resolve together)
 - creates runtime directories
 - copies `alloy-config.example` to `~/.config/alloy-dev/config` **only if missing**
 - never overwrites an existing config
-- never uses `sudo`, never runs cleanup, never changes git state
+- never uses `sudo`, never changes git state, never mutates PATH automatically
+- may replace only `~/bin/alloy-dev` when it is a symlink or a prior Alloy toolkit install directory
 - prints a proposed `PATH` line; does not edit shell rc files blindly
 
 Edit the config and set `ALLOY_REPO` to your canonical checkout before creating worktrees.

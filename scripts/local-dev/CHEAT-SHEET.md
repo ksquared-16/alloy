@@ -1,7 +1,7 @@
 # Alloy local-dev cheat sheet
 
 ```bash
-# Install (once per machine/worktree copy of scripts)
+# Install (once): ~/bin/alloy-dev -> <checkout>/scripts/local-dev
 bash scripts/local-dev/install.sh
 export PATH="$HOME/bin/alloy-dev:$PATH"   # if needed
 

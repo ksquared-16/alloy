@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Install Alloy local-dev Phase 1 command wrappers.
-# No sudo, no cleanup, no git changes. Never overwrites existing config.
+# Install Alloy local-dev Phase 1 toolkit as one directory symlink.
+# No sudo, no PATH mutation, never overwrites existing config.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,26 +20,88 @@ COMMANDS=(
   alloy-clean
 )
 
+alloy_looks_like_toolkit_install() {
+  local path="$1"
+  local cmd hits=0
+  for cmd in "${COMMANDS[@]}"; do
+    if [[ -e "${path}/${cmd}" || -L "${path}/${cmd}" ]]; then
+      hits=$((hits + 1))
+    fi
+  done
+  # Legacy incomplete install had per-command symlinks without lib/.
+  # A current install is a directory symlink (or its resolved tree) with lib + commands.
+  if [[ -e "${path}/lib/common.sh" || -L "${path}/lib/common.sh" ]]; then
+    [[ "$hits" -ge 3 ]]
+    return
+  fi
+  [[ "$hits" -ge 5 ]]
+}
+
+alloy_prepare_install_path() {
+  local install_path="$1"
+  local source_dir="$2"
+
+  if [[ -L "$install_path" ]]; then
+    local current
+    current="$(readlink "$install_path" || true)"
+    if [[ "$current" == "$source_dir" ]]; then
+      return 0
+    fi
+    # Stale or prior symlink — replace only this path.
+    rm -f "$install_path"
+    return 0
+  fi
+
+  if [[ -d "$install_path" ]]; then
+    if alloy_looks_like_toolkit_install "$install_path"; then
+      # Incomplete per-command install directory from the original installer.
+      rm -rf "$install_path"
+      return 0
+    fi
+    cat >&2 <<EOF
+error: refusing to replace '${install_path}'.
+
+It is a real directory that does not look like an Alloy local-dev toolkit install
+(expected alloy-* commands and/or lib/common.sh).
+
+Move or rename that directory, then re-run install.sh.
+EOF
+    exit 1
+  fi
+
+  if [[ -e "$install_path" ]]; then
+    alloy_die "refusing to replace unexpected non-directory path: ${install_path}"
+  fi
+}
+
 main() {
   alloy_load_config
 
-  local bin_dir="${ALLOY_BIN_DIR:-$HOME/bin/alloy-dev}"
+  local install_path="${ALLOY_BIN_DIR:-$HOME/bin/alloy-dev}"
+  local parent_dir
+  parent_dir="$(dirname "$install_path")"
   local config_dir="${ALLOY_CONFIG_DIR:-$HOME/.config/alloy-dev}"
   local config_file="${config_dir}/config"
   local example="${SCRIPT_DIR}/alloy-config.example"
 
-  mkdir -p "$bin_dir" "$config_dir" \
+  mkdir -p "$parent_dir" "$config_dir" \
     "${ALLOY_RUNTIME_ROOT}/metadata" \
     "${ALLOY_RUNTIME_ROOT}/pids" \
     "${ALLOY_RUNTIME_ROOT}/logs" \
     "${ALLOY_RUNTIME_ROOT}/locks"
 
-  chmod +x "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/lib/"*.sh
+  chmod +x "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/lib/"*.sh "${SCRIPT_DIR}/tests/"*.sh 2>/dev/null || true
   local cmd
   for cmd in "${COMMANDS[@]}"; do
     chmod +x "${SCRIPT_DIR}/${cmd}"
-    ln -sfn "${SCRIPT_DIR}/${cmd}" "${bin_dir}/${cmd}"
   done
+
+  alloy_prepare_install_path "$install_path" "$SCRIPT_DIR"
+  ln -sfn "$SCRIPT_DIR" "$install_path"
+
+  if [[ ! -e "${install_path}/lib/common.sh" || ! -e "${install_path}/lib/lock.sh" || ! -e "${install_path}/alloy-config.example" ]]; then
+    alloy_die "installation incomplete: support files not resolvable under ${install_path}"
+  fi
 
   if [[ -f "$config_file" ]]; then
     echo "Preserved existing config: $config_file"
@@ -50,16 +112,17 @@ main() {
   fi
 
   echo
-  echo "Installed command symlinks in: $bin_dir"
-  echo "Source scripts remain in:      $SCRIPT_DIR"
-  echo "Re-run this installer after pulling toolkit updates."
+  echo "Installed toolkit:"
+  echo "${install_path} -> ${SCRIPT_DIR}"
+  echo
+  echo "Re-run this installer after switching toolkits or pulling updates."
   echo
 
-  local path_line="export PATH=\"${bin_dir}:\$PATH\""
-  if [[ ":$PATH:" == *":${bin_dir}:"* ]]; then
-    echo "PATH already includes ${bin_dir}"
+  local path_line="export PATH=\"${install_path}:\$PATH\""
+  if [[ ":$PATH:" == *":${install_path}:"* ]]; then
+    echo "PATH already includes ${install_path}"
   else
-    echo "PATH does not yet include ${bin_dir}."
+    echo "PATH does not yet include ${install_path}."
     echo "Proposed shell line (not applied automatically):"
     echo
     echo "  ${path_line}"

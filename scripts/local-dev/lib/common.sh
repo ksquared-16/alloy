@@ -384,3 +384,74 @@ alloy_web_dir_for() {
   local worktree_path="$1"
   printf '%s/%s' "$worktree_path" "$ALLOY_WEB_DIR"
 }
+
+# True when a process command line is an Alloy heavyweight validator (not sandboxes / inspectors).
+alloy_command_is_active_validator() {
+  local cmd="$1"
+  [[ -n "$cmd" ]] || return 1
+
+  # Cursor / IDE helpers and network-policy sandboxes.
+  case "$cmd" in
+    *cursorsandbox*|*Cursor\ Helper*|*extension-host*|*Extension\ Host*)
+      return 1
+      ;;
+  esac
+
+  # The health/audit inspection pipeline itself.
+  case "$cmd" in
+    *alloy-health*|*alloy-audit*|*alloy_command_is_active_validator*|*alloy_print_active_validators*)
+      return 1
+      ;;
+  esac
+  if [[ "$cmd" =~ (^|[[:space:]])(/usr/bin/)?(grep|egrep|fgrep|rg|awk)([[:space:]]|$) ]]; then
+    return 1
+  fi
+
+  # TypeScript compiler (binary path or argv0 tsc).
+  if [[ "$cmd" == *"/typescript/bin/tsc"* || "$cmd" == *"/bin/tsc "* || "$cmd" == *"/bin/tsc" ]]; then
+    return 0
+  fi
+  if [[ "$cmd" =~ (^|[[:space:]])tsc([[:space:]]|$) ]]; then
+    return 0
+  fi
+
+  # Vitest runner.
+  if [[ "$cmd" == *"/vitest/vitest.js"* || "$cmd" == *"/vitest/vitest.mjs"* || "$cmd" == *"/bin/vitest"* ]]; then
+    return 0
+  fi
+  if [[ "$cmd" =~ (^|[[:space:]])vitest([[:space:]]|$) ]]; then
+    return 0
+  fi
+
+  # Next production build (not mere `next dev`).
+  if [[ "$cmd" =~ (^|[[:space:]/])next[[:space:]]+build([[:space:]]|$) ]]; then
+    return 0
+  fi
+
+  # Playwright test runner (not hostnames like playwright.azureedge.net).
+  if [[ "$cmd" =~ (^|[[:space:]/])playwright[[:space:]]+test([[:space:]]|$) ]]; then
+    return 0
+  fi
+  if [[ "$cmd" == *"/playwright/cli.js"* || "$cmd" == *"/@playwright/test"* ]]; then
+    return 0
+  fi
+
+  # Toolkit heavy validation entrypoint.
+  if [[ "$cmd" =~ (^|[[:space:]/])alloy-validate([[:space:]]|$) ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+alloy_print_active_validators() {
+  local line pid cmd
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    pid="${line%% *}"
+    cmd="${line#* }"
+    if alloy_command_is_active_validator "$cmd"; then
+      printf '%s %s\n' "$pid" "$cmd"
+    fi
+  done < <(ps -axo pid=,command= 2>/dev/null || true)
+}
