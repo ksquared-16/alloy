@@ -8,6 +8,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { parseOperatorWorkUnitEntryHref, warmWorkUnitSlugRoute } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -219,9 +220,18 @@ function HeaderKpiCard({
     );
 
     if (interactive && kpi.drillHref) {
+        const warmDrill = () => {
+            const slug = kpi.drillHref ? parseOperatorWorkUnitEntryHref(kpi.drillHref).workUnitSlug : null;
+            if (slug) void warmWorkUnitSlugRoute(slug, "workspace_header_kpi");
+        };
         return (
             <Link
                 href={kpi.drillHref}
+                // Heavy Work Unit route — no eager viewport prefetch; warm on pointer/focus intent.
+                prefetch={false}
+                onPointerEnter={warmDrill}
+                onPointerDown={warmDrill}
+                onFocus={warmDrill}
                 className="block h-full no-underline transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine/50"
             >
                 {body}
