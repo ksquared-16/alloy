@@ -42,7 +42,7 @@ Fact kinds in scope:
 ## Canonical model rules
 
 1. **Reference the committed foundation.** Attendance facts reference `child_enrollment_agreements` (and, where relevant, the effective `child_placements` / `schedule_assignments` row), the durable child (`customer_member`), and the site/room `locations`. They do **not** reference the OCM enrollment proposal, `opportunities.location_id`, or any job-vertical table.
-2. **Own participation entity + attendance-child context.** Per [`../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6, attendance gets its **own** participation/record entity, surfaced via an **attendance-child context** (relationship_section / repeater / widget) with `{attendance_entity_type}.*` refKeys. Operators always see "Child." Do **not** reuse `inquiry_child.*`, and do **not** flatten attendance onto the child.
+2. **Own participation entity + attendance-child context.** Per [`../../archive/2026-06-runtime-convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/child_namespace_decision.md) §6, attendance gets its **own** participation/record entity, surfaced via an **attendance-child context** (relationship_section / repeater / widget) with `{attendance_entity_type}.*` refKeys. Operators always see "Child." Do **not** reuse `inquiry_child.*`, and do **not** flatten attendance onto the child.
 3. **Immutable + effective-dated.** Attendance facts are never edited in place. A correction is a **new effective-dated fact** that supersedes the prior one (prior row closed the day before, successor links via a `supersedes_*` reference), following the supersede pattern in `web/lib/childcareOperational/effectiveDating.ts`. The original fact remains in history.
 4. **Event-emitting.** Every recorded or corrected attendance fact emits an event on `workflow_events` (`emitEvent` → `workflow_events` → `workflowRun`), with a versioned payload. Downstream consequences (billing, compliance, forecasting) react to events; they do not poll mutable state.
 5. **Authored by Actions, not queues or projections.** Attendance is created/corrected through the canonical action/workflow path (see [`./actions-and-workflows.md`](./actions-and-workflows.md)). Queue rows and Projection read models are previews/derivations only; they never write attendance.
@@ -92,7 +92,7 @@ P2 builds the L4 backend foundation only (no UI, no billing, no subsidy). It hon
 - **Actor context**: `actor_type ∈ {staff, parent, guardian, emergency_contact, system}` (+ `actor_user_id` / `actor_person_id` / `actor_label`). **Source context**: `source_type ∈ {operator_action, staff_workspace, parent_portal, processing_import, system}` — future intake channels are representable today without schema change (preserves the subsidy/import reporting path).
 - A `BEFORE INSERT` validation trigger enforces org/agreement/member/site consistency, that any referenced room is a `unit` under the agreement site, and that corrections target an event on the same org + agreement. RLS uses the operational posture (org-scoped SELECT, owner/admin/ops INSERT, `service_role` all); no UPDATE/DELETE grants.
 
-**RefKey namespace** — entity type `child_attendance_events` (per [child namespace §6](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md); surfaced later via an attendance-child context). Does not reuse `inquiry_child.*`.
+**RefKey namespace** — entity type `child_attendance_events` (per [child namespace §6](../../archive/2026-06-runtime-convergence/child_namespace_decision.md); surfaced later via an attendance-child context). Does not reuse `inquiry_child.*`.
 
 **Services** — `web/lib/childcareOperational/attendance/`
 
@@ -127,7 +127,7 @@ P2.1 hardens P2 and adds **read models over actuals** — still no UI, no billin
 | Truth-flow layers (Attendance = L4) | [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md) |
 | Surface planes, progressive drawer, tabs vs actions | [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md) |
 | Committed enrollment foundation (what attendance references) | [`../core/placement-system.md`](../core/placement-system.md) |
-| Child namespace per module | [`../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) |
+| Child namespace per module | [`../../archive/2026-06-runtime-convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/child_namespace_decision.md) |
 | Billing derives from attendance (L5) | [`./billing-financials-platform.md`](./billing-financials-platform.md) |
 | Action / event spine | [`./actions-and-workflows.md`](./actions-and-workflows.md) |
 | Effective-dated supersede pattern (code) | `web/lib/childcareOperational/effectiveDating.ts` |

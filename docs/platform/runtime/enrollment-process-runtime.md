@@ -10,7 +10,7 @@ supersedes: []
 Status: **implemented + verified on staging (PR #72 + Enrollment Process V1).** This is the authoritative
 reference for how Enrollment runs at runtime. Where any other doc disagrees about ownership, this doc wins.
 For the V1 implementation record, subsystem status, and freeze gate, see the
-**[Enrollment Process V1 Implementation Handoff](./enrollment-process-v1-handoff.md)**.
+**`Enrollment Process V1 Implementation Handoff` (see `docs/sprints/completed/enrollment-process-v1/implementation-handoff.md`)**.
 
 Enrollment is the **reference implementation** of the generic platform pattern
 **Business Process → Process Instance → Stage → Work → Outcome → Materialization → Durable Operational
@@ -197,4 +197,4 @@ Open Record (config-resolved Work Unit route — not legacy drawer)
 - **Legacy pipeline queue definitions** that filter on collapsed `status_key` rather than `stage_key` are documented in `docs/sprints/archive/07_2026/platform_reset_runbook.md` Part 5/6; stage-based doctrine path is correct.
 - **Stage movement, Work Unit Header, Actions/Comms/Waitlist operator flows** — next sprint; not part of this stabilization closeout.
 
-Handoff record: [`docs/archive/2026-06-handoffs/handoffs/process-runtime-stabilization.md`](../../archive/2026-06-handoffs/handoffs/process-runtime-stabilization.md).
+Handoff record: [`docs/archive/2026-06-handoffs/process-runtime-stabilization.md`](../../archive/2026-06-handoffs/process-runtime-stabilization.md).

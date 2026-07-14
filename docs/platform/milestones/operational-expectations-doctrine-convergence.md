@@ -10,7 +10,7 @@ supersedes: []
 **Status:** Canonical convergence record (2026-07-13). Certifies that the Alloy documentation corpus
 carries **one consistent ontology** after the frozen Operational Expectations two-ledger architecture.
 **Scope:** documentation only — no architecture change, no implementation change, no new concepts. The
-frozen architecture is [`../operational-expectations-system-design.md`](../operational-expectations-system-design.md).
+frozen architecture is [`../core/operational-expectations-system-design.md`](../core/operational-expectations-system-design.md).
 
 > **What changed, in one sentence.** The word **"Expectation" is now reserved for the authored
 > Operational Expectations ledger** (intended truth); the derived truth-flow layer formerly called

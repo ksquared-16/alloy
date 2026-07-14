@@ -81,7 +81,7 @@ flowchart TB
 - Childcare billing references the **committed enrollment foundation** (`child_enrollment_agreements`, `child_placements`, `schedule_assignments`) and **attendance facts** — never the OCM proposal alone, never `opportunities.location_id`.
 - **Do not** wrap an enrolled child in a `job` to reuse job billing.
 - **Do not** introduce a parallel childcare ledger/GL or a second charges model.
-- Per [`../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6, billing data lives on its **own** billing/charge participation entity via a **billing-child context**; never extend `inquiry_child`.
+- Per [`../../archive/2026-06-runtime-convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/child_namespace_decision.md) §6, billing data lives on its **own** billing/charge participation entity via a **billing-child context**; never extend `inquiry_child`.
 
 ---
 
@@ -210,7 +210,7 @@ Code surface: vocabularies/types in `web/lib/financials/billableSource.ts`; the 
 | Truth-flow layers (Billing = L5) | [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md) |
 | Attendance facts (what billing derives from) | [`./attendance-system.md`](./attendance-system.md) |
 | Committed enrollment foundation | [`../core/placement-system.md`](../core/placement-system.md) |
-| Child namespace per module (billing-child context) | [`../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) |
+| Child namespace per module (billing-child context) | [`../../archive/2026-06-runtime-convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/child_namespace_decision.md) |
 | Action / event spine (posting path) | [`./actions-and-workflows.md`](./actions-and-workflows.md) |
 | Billing as wired today (supplemental) | [`../../archive/2026-06-product/billing-and-financials.md`](../../archive/2026-06-product/billing-and-financials.md) |
 | Financial RLS / payment-method security | [`../../audits/active/supabase-schema-alignment-audit.md`](../../audits/active/supabase-schema-alignment-audit.md) |
