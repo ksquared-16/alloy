@@ -3,10 +3,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
- * Canonical workspace/Work Unit runtime browser acceptance gate. This asserts DEPLOYED behavior on
- * the real mounted routes — the source of truth that source/unit tests cannot certify.
+ * Canonical workspace/Work Unit runtime browser acceptance gate. Asserts DEPLOYED behavior on the
+ * real mounted routes — the source of truth that source/unit tests cannot certify. The operator (or
+ * CI) runs this against a preview with an authenticated session; deterministic work does NOT depend
+ * on it, but final deployed certification does.
  *
- * Run against a preview with an authenticated session:
  *   PLAYWRIGHT_BASE_URL=<preview-url> \
  *   PLAYWRIGHT_STORAGE_STATE=./.auth/state.json \
  *   PLAYWRIGHT_CERT=1 \
@@ -19,7 +20,10 @@ import { resolve } from "node:path";
  *   WU_SLUG_A / WU_SLUG_B     work-unit slugs (default new-leads / all-leads)
  *   WORK_VIEW_TARGET          a Work View pill label to switch to (default "Active Pipeline")
  *
- * Writes a JSON result + the captured request graph to ./playwright/artifacts/.
+ * Artifacts written to ./playwright/artifacts/:
+ *   build-info.json · workspace-request-graph.json · work-unit-request-graph.json ·
+ *   work-view-switch.json · return-navigation.json · focus-panel-first-paint.json ·
+ *   certification-summary.json
  */
 
 const STORAGE_STATE = process.env.PLAYWRIGHT_STORAGE_STATE;
@@ -41,6 +45,29 @@ type Captured = {
     buildSha: string | null;
 };
 
+/** Resources the /workspace boot must NOT initiate (forbidden ownership). */
+const FORBIDDEN_WORKSPACE_FRAGMENTS = [
+    "/api/admin/operational-tasks",
+    "/api/admin/communications/templates",
+    "/api/admin/communications/status-options",
+    "/api/admin/communications/announcements",
+    "/api/admin/communications/provider",
+    "/api/admin/inbox/threads",
+    "/api/admin/processing",
+];
+
+/** Focus Panel first-paint must NOT fetch these before its useful commit. */
+const FORBIDDEN_FIRST_PAINT_FRAGMENTS = [
+    "/api/admin/view-models/drawer/person",
+    "/activity",
+    "/communications/threads",
+    "/communications/messages",
+    "/related",
+];
+
+/** Accumulates each phase's verdict for the certification summary artifact. */
+const summary: Record<string, unknown> = { cert: CERT, baseURL: process.env.PLAYWRIGHT_BASE_URL ?? null, phases: {} };
+
 function writeArtifact(name: string, data: unknown) {
     try {
         mkdirSync(ARTIFACT_DIR, { recursive: true });
@@ -50,13 +77,46 @@ function writeArtifact(name: string, data: unknown) {
     }
 }
 
+function recordPhase(name: string, verdict: unknown) {
+    (summary.phases as Record<string, unknown>)[name] = verdict;
+}
+
+function unauthenticated(pageUrl: string): boolean {
+    return /\/login|\/sign-in/.test(pageUrl);
+}
+
+test.afterAll(() => {
+    writeArtifact("certification-summary.json", summary);
+});
+
 test.describe("canonical workspace runtime — deployed acceptance", () => {
     test("build identity is provable from the running server", async ({ request, baseURL }) => {
         const res = await request.get("/api/build-info");
         expect(res.ok(), "/api/build-info must respond").toBeTruthy();
         const info = await res.json();
         writeArtifact("build-info.json", { baseURL, ...info });
+        recordPhase("build_info", { gitSha: info.gitSha ?? null, ok: Boolean(info.gitSha) });
         expect(info.gitSha, "running build must expose its commit SHA").toBeTruthy();
+    });
+
+    test("/workspace boot initiates no forbidden resources", async ({ page }) => {
+        const requested: string[] = [];
+        page.on("request", (req: Request) => requested.push(req.url()));
+
+        await page.goto("/workspace", { waitUntil: "commit" });
+        if (unauthenticated(page.url())) {
+            if (CERT) throw new Error("CERT mode: unauthenticated — set PLAYWRIGHT_STORAGE_STATE");
+            test.skip(true, "unauthenticated");
+            return;
+        }
+        await page.waitForLoadState("networkidle").catch(() => {});
+
+        const forbidden = FORBIDDEN_WORKSPACE_FRAGMENTS.flatMap((f) =>
+            requested.filter((u) => u.includes(f)),
+        );
+        writeArtifact("workspace-request-graph.json", { total: requested.length, forbidden, requested });
+        recordPhase("workspace_boot", { forbidden });
+        expect(forbidden, `forbidden /workspace boot requests: ${forbidden.join(", ")}`).toHaveLength(0);
     });
 
     test("Work Unit visible rows use the compact projection and one owner; no stale keys / 404s", async ({ page }) => {
@@ -89,7 +149,7 @@ test.describe("canonical workspace runtime — deployed acceptance", () => {
         });
 
         await page.goto(`/workspace/work-unit/${WU_A}`, { waitUntil: "commit" });
-        if (/\/login/.test(page.url())) {
+        if (unauthenticated(page.url())) {
             const msg = "No authenticated session — set PLAYWRIGHT_STORAGE_STATE.";
             if (CERT) throw new Error(`CERT mode: ${msg}`);
             test.skip(true, msg);
@@ -98,26 +158,54 @@ test.describe("canonical workspace runtime — deployed acceptance", () => {
         await page.waitForLoadState("networkidle").catch(() => {});
 
         writeArtifact("work-unit-request-graph.json", captured);
+        const runtimeRows = captured.filter((c) => c.callerSurface === "work_unit_runtime");
+        recordPhase("work_unit_rows", {
+            queue404,
+            staleKeyRequests,
+            runtimeRowModes: runtimeRows.map((r) => r.resolvedMode),
+            runtimeRowBytes: runtimeRows.map((r) => r.responseBytes),
+        });
 
-        const visibleRows = captured.filter(
-            (c) => c.callerSurface === "work_unit_runtime" || /\/api\/admin\/queues\/[^/]+\/[^/?]+/.test(c.url),
-        );
-        // No deleted/stale queue key ever requested; no queue 404.
         expect(staleKeyRequests, `stale-key requests: ${staleKeyRequests.join(", ")}`).toHaveLength(0);
         expect(queue404, `queue 404s: ${queue404.join(", ")}`).toHaveLength(0);
-        // The canonical visible-rows request must resolve the compact projection, not queue_list.
-        const runtimeRows = captured.filter((c) => c.callerSurface === "work_unit_runtime");
         for (const r of runtimeRows) {
             expect(r.resolvedMode, `visible-rows request ${r.url} must be queue_reveal`).not.toBe("queue_list");
         }
 
-        // A populated Work View must NEVER show the empty prompt while rows exist.
         const rows = page.locator("[data-work-view-id], [data-queue-row], [role='listitem']");
-        const hasRows = (await rows.count()) > 0;
-        if (hasRows) {
+        if ((await rows.count()) > 0) {
             await expect(page.getByText("Select a record to begin")).toHaveCount(0);
         }
-        expect(visibleRows.length, "at least one queue request observed").toBeGreaterThan(0);
+        expect(captured.length, "at least one queue request observed").toBeGreaterThan(0);
+    });
+
+    test("Focus Panel first paint does not fetch person VMs / activity / comms / related", async ({ page }) => {
+        const requested: string[] = [];
+        page.on("request", (req) => requested.push(req.url()));
+
+        await page.goto(`/workspace/work-unit/${WU_A}`, { waitUntil: "commit" });
+        if (unauthenticated(page.url())) {
+            if (CERT) throw new Error("CERT mode: unauthenticated");
+            test.skip(true, "unauthenticated");
+            return;
+        }
+        // Wait only for the Focus Panel's first useful commit, then snapshot the request set.
+        await page
+            .locator("[data-work-card-perspective], [data-focus-panel-resolved], .focus-panel")
+            .first()
+            .waitFor({ timeout: 15000 })
+            .catch(() => {});
+        const firstPaintRequests = [...requested];
+        const forbidden = FORBIDDEN_FIRST_PAINT_FRAGMENTS.flatMap((f) =>
+            firstPaintRequests.filter((u) => u.includes(f)),
+        );
+        writeArtifact("focus-panel-first-paint.json", {
+            firstPaintRequestCount: firstPaintRequests.length,
+            forbidden,
+            requested: firstPaintRequests,
+        });
+        recordPhase("focus_panel_first_paint", { forbidden });
+        expect(forbidden, `Focus Panel first paint fetched forbidden resources: ${forbidden.join(", ")}`).toHaveLength(0);
     });
 
     test("Work View switch resolves a subject with no stale keys, no blank panel", async ({ page }) => {
@@ -130,26 +218,29 @@ test.describe("canonical workspace runtime — deployed acceptance", () => {
         });
 
         await page.goto(`/workspace/work-unit/${WU_A}`, { waitUntil: "commit" });
-        if (/\/login/.test(page.url())) {
+        if (unauthenticated(page.url())) {
             if (CERT) throw new Error("CERT mode: unauthenticated");
             test.skip(true, "unauthenticated");
             return;
         }
         await page.waitForLoadState("networkidle").catch(() => {});
         const pill = page.getByRole("link", { name: new RegExp(SWITCH_TO, "i") }).or(page.getByText(SWITCH_TO));
+        let switched = false;
         if (await pill.count()) {
             await pill.first().click();
             await page.waitForLoadState("networkidle").catch(() => {});
             await expect(page.getByText("Select a record to begin")).toHaveCount(0);
+            switched = true;
         }
+        writeArtifact("work-view-switch.json", { switchedTo: SWITCH_TO, switched, staleKeyRequests, queue404 });
+        recordPhase("work_view_switch", { switched, staleKeyRequests, queue404 });
         expect(staleKeyRequests, `stale-key requests: ${staleKeyRequests.join(", ")}`).toHaveLength(0);
         expect(queue404, `queue 404s: ${queue404.join(", ")}`).toHaveLength(0);
-        writeArtifact("work-view-switch.json", { switchedTo: SWITCH_TO, staleKeyRequests, queue404 });
     });
 
     test("leave and return restores a selected subject (no blank Focus Panel)", async ({ page }) => {
         await page.goto(`/workspace/work-unit/${WU_A}`, { waitUntil: "commit" });
-        if (/\/login/.test(page.url())) {
+        if (unauthenticated(page.url())) {
             if (CERT) throw new Error("CERT mode: unauthenticated");
             test.skip(true, "unauthenticated");
             return;
@@ -159,10 +250,17 @@ test.describe("canonical workspace runtime — deployed acceptance", () => {
         await page.waitForLoadState("networkidle").catch(() => {});
         await page.goto(`/workspace/work-unit/${WU_A}`, { waitUntil: "commit" });
         await page.waitForLoadState("networkidle").catch(() => {});
+
         const rows = page.locator("[data-work-view-id], [data-queue-row]");
-        if ((await rows.count()) > 0) {
+        const hasRows = (await rows.count()) > 0;
+        let promptWithRows = false;
+        if (hasRows) {
+            promptWithRows = (await page.getByText("Select a record to begin").count()) > 0;
+        }
+        writeArtifact("return-navigation.json", { workUnit: WU_A, hasRows, promptWithRows, alsoTested: WU_B });
+        recordPhase("return_navigation", { hasRows, promptWithRows });
+        if (hasRows) {
             await expect(page.getByText("Select a record to begin")).toHaveCount(0);
         }
-        void WU_B;
     });
 });
