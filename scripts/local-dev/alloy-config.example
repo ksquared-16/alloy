@@ -18,6 +18,21 @@ ALLOY_CANONICAL_PORT="3000"
 ALLOY_FIRST_AGENT_PORT="3011"
 ALLOY_MAX_AGENTS="6"
 
+# Permanent slot identities (Phase 2). Slots keep these roles across initiatives.
+# alloy-agent-create uses DEFAULT_AGENT when cursor|claude is omitted.
+ALLOY_SLOT_1_ROLE="Product implementation"
+ALLOY_SLOT_1_DEFAULT_AGENT="cursor"
+ALLOY_SLOT_2_ROLE="Architecture / doctrine"
+ALLOY_SLOT_2_DEFAULT_AGENT="claude"
+ALLOY_SLOT_3_ROLE="Performance"
+ALLOY_SLOT_3_DEFAULT_AGENT="cursor"
+ALLOY_SLOT_4_ROLE="UI / UX"
+ALLOY_SLOT_4_DEFAULT_AGENT="cursor"
+ALLOY_SLOT_5_ROLE="Refactor / infrastructure"
+ALLOY_SLOT_5_DEFAULT_AGENT="claude"
+ALLOY_SLOT_6_ROLE="Experimental"
+ALLOY_SLOT_6_DEFAULT_AGENT="cursor"
+
 # App package lives under web/ (npm + package-lock.json).
 ALLOY_PM="npm"
 ALLOY_WEB_DIR="web"

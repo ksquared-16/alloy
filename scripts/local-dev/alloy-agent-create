@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Create a managed Alloy agent: auto slot/port + Phase 1 worktree + instructions.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-agent-create <initiative-name> [cursor|claude] [--slot N]
+
+Assigns the first free slot (or --slot), uses the slot's permanent default
+agent when omitted, creates the worktree via alloy-worktree-create, writes
+agent metadata, and generates concrete instruction file.
+
+Examples:
+  alloy-agent-create current-work-performance
+  alloy-agent-create architecture-pass claude
+  alloy-agent-create queue-perf --slot 3
+  alloy-agent-create queue-perf cursor --slot 3
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  local initiative="" agent="" slot=""
+  local -a positional=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --slot)
+        [[ $# -ge 2 ]] || alloy_die "--slot requires a value"
+        slot="$2"
+        shift 2
+        ;;
+      --slot=*)
+        slot="${1#--slot=}"
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      --*)
+        alloy_die "unknown option: $1"
+        ;;
+      *)
+        positional+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  [[ ${#positional[@]} -ge 1 && ${#positional[@]} -le 2 ]] || { usage >&2; exit 2; }
+  initiative="${positional[0]}"
+  if [[ ${#positional[@]} -eq 2 ]]; then
+    agent="${positional[1]}"
+  fi
+
+  alloy_load_config
+  alloy_ensure_agent_runtime_dirs
+  alloy_require_cmd git
+
+  alloy_validate_initiative "$initiative"
+
+  if [[ -n "$slot" ]]; then
+    alloy_validate_slot "$slot"
+    if alloy_find_metadata_by_slot "$slot" >/dev/null 2>&1; then
+      alloy_die "slot $slot is already assigned"
+    fi
+  else
+    slot="$(alloy_find_first_free_slot)" || alloy_die "no free slots (1-${ALLOY_MAX_AGENTS} all assigned)"
+  fi
+
+  if [[ -z "$agent" ]]; then
+    agent="$(alloy_slot_default_agent "$slot")"
+  fi
+  alloy_validate_agent "$agent"
+
+  local role port name
+  role="$(alloy_slot_role "$slot")"
+  port="$(alloy_slot_to_port "$slot")"
+  name="$(alloy_worktree_name "$slot" "$initiative")"
+
+  alloy_info "Allocating slot ${slot} (${role}) → port ${port}, agent ${agent}"
+
+  # Internally call existing Phase 1 worktree creation (do not duplicate).
+  env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+    "${SCRIPT_DIR}/alloy-worktree-create" "$slot" "$initiative" "$agent"
+
+  alloy_load_metadata "$name"
+  local instructions
+  instructions="$(alloy_generate_agent_instructions "$name")"
+  alloy_augment_metadata_agent_fields "$name" "$role" "active" "$instructions"
+  # Reload after augment
+  alloy_load_metadata "$name"
+
+  cat <<EOF
+
+Managed agent ready
+  slot:         ${slot}
+  role:         ${role}
+  agent:        ${agent}
+  port:         ${port}
+  worktree:     ${name}
+  path:         ${ALLOY_WORKTREE_PATH}
+  branch:       ${ALLOY_WORKTREE_BRANCH}
+  instructions: ${instructions}
+
+Next:
+  alloy-agent-open ${slot}
+  alloy-agent-open ${slot} --with-server
+  alloy-agent-instructions ${slot} --copy
+
+Shell shortcuts (after sourcing shell-aliases.sh):
+  awt ${slot}
+  # then: devup
+EOF
+}
+
+main "$@"

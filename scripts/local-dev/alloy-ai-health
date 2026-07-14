@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Read-only AI workstation diagnostics (ChatGPT / Cursor / Claude / memory / caches).
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-ai-health
+
+Read-only diagnostics for AI tooling load on this machine:
+  ChatGPT / browser helpers, Cursor, Claude, memory, swap, caches, CPU, process counts.
+
+Does not modify the machine. Does not start or stop agents.
+EOF
+}
+
+section() {
+  printf '\n== %s ==\n' "$1"
+}
+
+count_or_zero() {
+  local n
+  n="$(alloy_count_matching_processes "$1" 2>/dev/null || echo 0)"
+  if [[ -z "$n" ]]; then
+    echo 0
+  else
+    echo "$n"
+  fi
+}
+
+dir_line() {
+  local label="$1"
+  local path="$2"
+  if [[ -d "$path" ]]; then
+    printf '  %-28s %8s  %s\n' "$label" "$(alloy_dir_size "$path")" "$path"
+  else
+    printf '  %-28s %8s  %s\n' "$label" "missing" "$path"
+  fi
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 0 ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+
+  echo "Alloy AI health (read-only)"
+  echo "time: $(alloy_iso_now)"
+
+  section "Memory / swap / load"
+  if alloy_have_cmd memory_pressure; then
+    memory_pressure 2>/dev/null | head -n 16 || true
+  else
+    echo "memory_pressure unavailable"
+  fi
+  uptime 2>/dev/null || true
+  if alloy_have_cmd sysctl; then
+    echo "hw.memsize: $(sysctl -n hw.memsize 2>/dev/null || echo "?") bytes"
+    echo "hw.ncpu:    $(sysctl -n hw.ncpu 2>/dev/null || echo "?")"
+  fi
+  if alloy_have_cmd vm_stat; then
+    echo
+    vm_stat 2>/dev/null | head -n 14 || true
+  fi
+  if [[ -r /private/var/vm ]]; then
+    echo
+    echo "swap files:"
+    ls -lh /private/var/vm/swapfile* 2>/dev/null || echo "  (none listed)"
+  fi
+
+  section "Process counts"
+  printf '  %-22s %s\n' "Cursor" "$(count_or_zero '[Cc]ursor')"
+  printf '  %-22s %s\n' "Cursor Helper" "$(count_or_zero 'Cursor Helper')"
+  printf '  %-22s %s\n' "Claude" "$(count_or_zero '[Cc]laude')"
+  printf '  %-22s %s\n' "ChatGPT app" "$(count_or_zero 'ChatGPT|chatgpt')"
+  printf '  %-22s %s\n' "node" "$(count_or_zero '(^|/)node( |$)')"
+  printf '  %-22s %s\n' "tsc / typescript" "$(count_or_zero 'typescript/bin/tsc|(^|/)tsc( |$)')"
+  printf '  %-22s %s\n' "vitest" "$(count_or_zero 'vitest')"
+  printf '  %-22s %s\n' "next" "$(count_or_zero '(^|/)next( |$)')"
+  printf '  %-22s %s\n' "playwright" "$(count_or_zero 'playwright')"
+
+  section "Cursor processes (sample)"
+  ps axo pid=,pcpu=,pmem=,command= 2>/dev/null | grep -E '[Cc]ursor' | grep -v grep | head -n 20 || echo "(none)"
+
+  section "Claude processes (sample)"
+  ps axo pid=,pcpu=,pmem=,command= 2>/dev/null | grep -E '[Cc]laude' | grep -v grep | head -n 20 || echo "(none)"
+
+  section "ChatGPT / browser AI helpers (sample)"
+  ps axo pid=,pcpu=,pmem=,command= 2>/dev/null | grep -Ei 'ChatGPT|chatgpt|OpenAI' | grep -v grep | head -n 20 || echo "(none)"
+
+  section "Top CPU"
+  ps -arco pid,pcpu,pmem,comm 2>/dev/null | head -n 15 || \
+    ps -axo pid,pcpu,pmem,comm 2>/dev/null | sort -nrk2 | head -n 15 || true
+
+  section "Caches / app data (sizes only)"
+  dir_line "Cursor support" "$HOME/Library/Application Support/Cursor"
+  dir_line "Cursor caches" "$HOME/Library/Caches/Cursor"
+  dir_line "Claude support" "$HOME/Library/Application Support/Claude"
+  dir_line "Claude caches" "$HOME/Library/Caches/Claude"
+  dir_line "ChatGPT support" "$HOME/Library/Application Support/com.openai.chat"
+  dir_line "npm cache" "$HOME/Library/Caches/npm"
+  dir_line "npm home" "$HOME/.npm"
+  dir_line "alloy-dev runtime" "${ALLOY_RUNTIME_ROOT}"
+
+  section "Managed Alloy agents (summary)"
+  if [[ -x "${SCRIPT_DIR}/alloy-agent-status" ]]; then
+    env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE:-}" "${SCRIPT_DIR}/alloy-agent-status" || true
+  fi
+
+  echo
+  echo "No changes made. Use alloy-agent-close / alloy-dev-stop / alloy-clean report for follow-up."
+}
+
+main "$@"

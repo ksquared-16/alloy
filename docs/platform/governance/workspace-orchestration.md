@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 supersedes: []
 ---
 
@@ -69,6 +69,21 @@ Run from **repository root** or `web/` (aliases exist in both `package.json` fil
 | `npm run worktree:list -- --size` | Include `node_modules` disk sizes | No |
 | `npm run worktree:prune-safe` | **Dry-run** merged+clean worktree removal | No (default) |
 | `npm run workspace:cleanup` | **Dry-run** stale process + worktree suggestions | No (default) |
+
+### Local parallel-agent toolkit (Phase 1 + Phase 2)
+
+Installed via `npm run local-dev:install` (`scripts/local-dev/`). Operator-friction commands only — not a daemon or sprint platform.
+
+| Command | Purpose |
+|---------|---------|
+| `alloy-agent-create` | Auto slot/port + worktree + instructions |
+| `alloy-agent-open` | Open Cursor/Claude; optional `--with-server` |
+| `alloy-agent-status` | Managed agents, slots, ports, git, servers |
+| `alloy-agent-close` | Stop server + git summary; never removes worktree |
+| `alloy-agent-instructions` | Concrete prompt; `--copy` |
+| `alloy-ai-health` | Read-only AI/memory/cache/CPU diagnostics |
+
+Permanent slots (1–6) keep stable roles (Product, Architecture, Performance, UI/UX, Refactor, Experimental). Optional shell helpers: `source ~/bin/alloy-dev/shell-aliases.sh` → `awt <slot>`, `devup`. See `scripts/local-dev/README.md`.
 
 **Destructive flags (manual review required):**
 

@@ -117,7 +117,10 @@ TARGET="$(readlink "$HOME_A/bin/alloy-dev")"
 
 [[ -e "$HOME_A/bin/alloy-dev/lib/common.sh" ]] && pass "lib/common.sh resolves" || fail "lib/common.sh missing"
 [[ -e "$HOME_A/bin/alloy-dev/lib/lock.sh" ]] && pass "lib/lock.sh resolves" || fail "lib/lock.sh missing"
+[[ -e "$HOME_A/bin/alloy-dev/lib/agent.sh" ]] && pass "lib/agent.sh resolves" || fail "lib/agent.sh missing"
 [[ -e "$HOME_A/bin/alloy-dev/alloy-config.example" ]] && pass "alloy-config.example resolves" || fail "example missing"
+[[ -e "$HOME_A/bin/alloy-dev/alloy-agent-create" ]] && pass "alloy-agent-create resolves" || fail "alloy-agent-create missing"
+[[ -e "$HOME_A/bin/alloy-dev/shell-aliases.sh" ]] && pass "shell-aliases.sh resolves" || fail "shell-aliases missing"
 
 # Commands start (exit quickly via help / early config load). No network.
 if HOME="$HOME_A" env -u ALLOY_CONFIG_FILE "$HOME_A/bin/alloy-dev/alloy-health" >/tmp/alloy-health-install.out 2>/tmp/alloy-health-install.err; then
