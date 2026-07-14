@@ -86,6 +86,9 @@ export async function ratifyOperationalExpectation(
     };
 
     const outcome = await gateway.commit(context.orgId, context.actorUserId, record);
+    if (outcome.kind === "insufficient_authority") {
+        return { status: "rejected", code: "insufficient_authority", message: "The ratifier does not hold sufficient authority for this expectation." };
+    }
     if (outcome.kind === "conflict") {
         return { status: "conflict", code: "ratification_conflict", message: "This ratification key was already used with a different payload." };
     }

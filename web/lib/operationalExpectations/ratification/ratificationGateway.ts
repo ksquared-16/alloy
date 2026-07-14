@@ -33,6 +33,7 @@ export type RatificationCommitOutcome =
           ratifiedAt: string;
       }
     | { kind: "conflict" }
+    | { kind: "insufficient_authority" }
     | { kind: "error"; message: string };
 
 export interface RatificationGateway {

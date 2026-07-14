@@ -57,8 +57,10 @@ export function createSupabaseRatificationGateway(admin: Admin = createAdminClie
             });
 
             if (error) {
-                if ((error.message ?? "").includes("oe_ratification_conflict")) return { kind: "conflict" };
-                return { kind: "error", message: error.message ?? "rpc_error" };
+                const msg = error.message ?? "";
+                if (msg.includes("oe_insufficient_authority")) return { kind: "insufficient_authority" };
+                if (msg.includes("oe_ratification_conflict")) return { kind: "conflict" };
+                return { kind: "error", message: msg || "rpc_error" };
             }
             const r = (data ?? {}) as Record<string, unknown>;
             const ratificationId = String(r.ratification_id ?? "");

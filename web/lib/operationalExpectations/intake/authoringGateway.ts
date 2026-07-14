@@ -41,6 +41,11 @@ export interface AuthoringActRecord {
     validTo: string | null;
     configVersionRef: unknown;
     authoredByLabel: string | null;
+    // Held-authority resolution inputs (server-trusted). The author RPC resolves
+    // authority itself and decides standing — a caller cannot force binding.
+    authorityHolderId: string | null;
+    authorityScopeType: string;
+    authorityScopeId: string | null;
 }
 
 /** The outcome of the atomic commit RPC (row + Authoring Act, one transaction). */

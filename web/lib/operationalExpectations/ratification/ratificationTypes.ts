@@ -34,6 +34,7 @@ export interface RatifyInput {
 
 export type RatificationRejectionCode =
     | "unauthorized"
+    | "insufficient_authority"
     | "invalid_idempotency_key"
     | "invalid_expectation_ref"
     | "expectation_not_found"
