@@ -3712,7 +3712,7 @@ export async function getWorkUnitQueueItems(params: {
      * `queue_reveal` — slimmer enrichment for bootstrap / first paint (skips placement projection + optional fetches).
      * `queue_list` — default list API enrichment.
      */
-    rowEnrichment?: "queue_list" | "queue_reveal";
+    rowEnrichment?: "queue_list" | "queue_reveal" | "count_only";
     /** When set, skips departments.metadata fetch inside opportunity row loader. */
     preloadedDepartmentMetadata?: unknown | null;
 }): Promise<WorkUnitQueueItemsWithPerf> {
@@ -3802,14 +3802,20 @@ export async function getWorkUnitQueueItems(params: {
     const q = findQueueByKey(def, executableQueueKey);
     const rowListUi = resolveWorkUnitRowListUi(def, workUnitKey, workUnitMetadata);
     const rowEnrichment = params.rowEnrichment ?? "queue_list";
-    const enrichMode = rowEnrichment === "queue_reveal" ? "queue_reveal" : "queue_list";
+    const enrichMode =
+        rowEnrichment === "count_only"
+            ? "count_only"
+            : rowEnrichment === "queue_reveal"
+              ? "queue_reveal"
+              : "queue_list";
     const opportunityEnrichmentPlan =
         def.entity_type === "opportunity"
             ? buildOpportunityQueueEnrichmentPlan({
                   ui: rowListUi,
                   enrichmentMode: enrichMode,
                   executableQueueKey,
-                  skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
+                  skipOptionalEnrichmentFetches:
+                      rowEnrichment === "queue_reveal" || rowEnrichment === "count_only",
               })
             : null;
     const scopeFilter = params.recordScopeConstraints ?? null;

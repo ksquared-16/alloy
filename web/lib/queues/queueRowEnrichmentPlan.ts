@@ -1,6 +1,38 @@
 import type { QueueUiConfig, QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 
-export type QueueRowEnrichmentMode = "full" | "queue_preview" | "queue_list" | "queue_reveal";
+export type QueueRowEnrichmentMode = "full" | "queue_preview" | "queue_list" | "queue_reveal" | "count_only";
+
+/**
+ * A plan with EVERY presentation fetch disabled. Used by grouped Work-View totals: counting only
+ * needs the base-query operational fields (status/stage) the predicate evaluator reads — never
+ * persons/customers/household/activity/tasks/comms. A count must not materialize presentation rows.
+ */
+export function countOnlyQueueRowEnrichmentPlan(): QueueRowEnrichmentPlan {
+    return {
+        enrichmentMode: "count_only",
+        relationFetch: { persons: false, contacts: false, customers: false, customerMembers: false },
+        batchFetch: {
+            locations: false,
+            tourBookings: false,
+            ocmDesiredStart: false,
+            openTasks: false,
+            activityTimelineEvents: false,
+        },
+        attachCaseGrainRowContext: false,
+        skippedEnrichment: [
+            "persons",
+            "contacts",
+            "customers",
+            "customer_members",
+            "locations",
+            "tour_bookings",
+            "ocm_desired_start",
+            "open_tasks",
+            "activity_timeline_events",
+            "queue_row_context_case_grain",
+        ],
+    };
+}
 
 export type QueueRowRelationFetchPlan = {
     persons: boolean;
@@ -66,6 +98,9 @@ function wantsTasksBatch(input: BuildQueueRowEnrichmentPlanInput, fields: QueueU
 
 /** Maps configured row preview + layout runtime needs → relational/batch fetch gates. */
 export function buildQueueRowEnrichmentPlan(input: BuildQueueRowEnrichmentPlanInput): QueueRowEnrichmentPlan {
+    // Count-only short-circuit: no presentation fetches regardless of configured fields or layout
+    // runtime (a total must not enrich rows). Base-query operational fields carry the predicates.
+    if (input.enrichmentMode === "count_only") return countOnlyQueueRowEnrichmentPlan();
     const fields = input.ui.row_preview.fields;
     const isCrm = input.ui.row_preview.variant === "crm_compact";
     const layoutRuntime = input.layoutRuntimeQueueBody === true;
