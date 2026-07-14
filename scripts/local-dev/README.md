@@ -292,6 +292,27 @@ Operating rules:
 
 Phase 2 does **not** duplicate worktree, port, or validation logic — it calls Phase 1 commands.
 
+### Interpreting `alloy-ai-health` (read-only)
+
+`alloy-ai-health` reports sizes and process counts for orientation. It does **not** claim causation and does **not** delete anything.
+
+Smoke-test observations (Phase 2 Mac):
+
+| Location | Approx. size |
+|----------|----------------|
+| Cursor Application Support | ~18 GB |
+| Claude Application Support | ~7.7 GB |
+| ChatGPT Application Support | ~4.4 MB |
+
+Notes:
+
+- Large Cursor/Claude support stores and many app helper processes may contribute to local pressure.
+- Long ChatGPT conversations can still lag independently of ChatGPT cache/support size.
+- Do **not** delete Application Support directories or conversation databases automatically.
+- Future cleanup must first classify safe caches/logs separately from history, workspace databases, sessions, and project state — then require explicit human confirmation.
+
+Playwright process counts use the same argument-aware runner classification as Phase 1 validators (`playwright test` / runner executable with `test` args). Hostnames, sandbox policy JSON, browser helpers, and inspection tools are excluded.
+
 ### Permanent slot identities
 
 Slots are stable roles, not one-off sprint numbers:

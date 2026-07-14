@@ -89,6 +89,14 @@ assert_false "ignore bare playwright hostname substring" \
   alloy_command_is_active_validator \
   "curl https://playwright.azureedge.net/builds/index.json"
 
+assert_false "ignore alloy-ai-health inspector as validator" \
+  alloy_command_is_active_validator \
+  "bash /repo/scripts/local-dev/alloy-ai-health"
+
+assert_false "ignore playwright package path without test arg" \
+  alloy_command_is_active_validator \
+  "node /repo/web/node_modules/@playwright/test/cli.js --version"
+
 echo "== Installer directory symlink model =="
 
 # Source tree that includes spaces in its path.

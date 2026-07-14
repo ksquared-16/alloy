@@ -403,9 +403,45 @@ alloy_open_tool_for_agent() {
   esac
 }
 
+# Count processes whose command line matches a regex. Always prints one integer
+# (including 0). Safe under `set -o pipefail` when grep finds no matches —
+# callers must not append a second `|| echo 0`.
 alloy_count_matching_processes() {
   local pattern="$1"
-  ps axo pid=,command= 2>/dev/null | grep -E "$pattern" | grep -v grep | wc -l | tr -d ' '
+  local count=0
+  local line cmd
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    cmd="${line#* }"
+    # Never count the AI-health inspection process itself.
+    case "$cmd" in
+      *alloy-ai-health*|*alloy_count_matching_processes*)
+        continue
+        ;;
+    esac
+    if printf '%s\n' "$cmd" | grep -Eq "$pattern"; then
+      count=$((count + 1))
+    fi
+  done < <(ps axo pid=,command= 2>/dev/null || true)
+
+  printf '%s' "$count"
+}
+
+# Count only argument-aware Playwright test runners (see common.sh classifier).
+alloy_count_playwright_test_runners() {
+  local count=0
+  local line cmd
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    cmd="${line#* }"
+    if alloy_command_is_playwright_test_runner "$cmd"; then
+      count=$((count + 1))
+    fi
+  done < <(ps axo pid=,command= 2>/dev/null || true)
+
+  printf '%s' "$count"
 }
 
 alloy_copy_to_clipboard() {

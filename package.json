@@ -18,6 +18,7 @@
     "local-dev:test": "bash scripts/local-dev/tests/run-phase1-tests.sh && bash scripts/local-dev/tests/run-phase2-tests.sh",
     "local-dev:test:phase1": "bash scripts/local-dev/tests/run-phase1-tests.sh",
     "local-dev:test:phase2": "bash scripts/local-dev/tests/run-phase2-tests.sh",
+    "local-dev:test:ai-health": "bash scripts/local-dev/tests/test-ai-health.sh",
     "docs:lint": "node scripts/docs-lint.mjs",
     "docs:lint:ci": "node scripts/docs-lint.mjs --ci --base origin/staging",
     "docs:lint:baseline": "node scripts/docs-lint.mjs --write-baseline"

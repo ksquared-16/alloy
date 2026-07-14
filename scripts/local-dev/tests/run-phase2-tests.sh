@@ -36,6 +36,7 @@ assert_fail() {
 echo "== Phase 2 syntax checks =="
 for f in \
   "$ROOT"/lib/agent.sh \
+  "$ROOT"/lib/common.sh \
   "$ROOT"/shell-aliases.sh \
   "$ROOT"/alloy-agent-create \
   "$ROOT"/alloy-agent-open \
@@ -43,7 +44,8 @@ for f in \
   "$ROOT"/alloy-agent-close \
   "$ROOT"/alloy-agent-instructions \
   "$ROOT"/alloy-ai-health \
-  "$ROOT"/tests/run-phase2-tests.sh
+  "$ROOT"/tests/run-phase2-tests.sh \
+  "$ROOT"/tests/test-ai-health.sh
 do
   bash -n "$f"
   pass "bash -n $(basename "$f")"
@@ -214,6 +216,18 @@ assert_fail "no free slots" \
 # Resolve by name
 assert_ok "status by name" \
   env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-agent-status" wt1-auto-one
+
+echo
+echo "== Focused AI-health suite =="
+set +e
+bash "$ROOT/tests/test-ai-health.sh"
+ai_rc=$?
+set -e
+if [[ "$ai_rc" -eq 0 ]]; then
+  pass "focused AI-health suite"
+else
+  fail "focused AI-health suite"
+fi
 
 echo
 echo "Phase 2 results: PASS=$PASS FAIL=$FAIL"
