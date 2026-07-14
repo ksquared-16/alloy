@@ -3,8 +3,13 @@
  * count 1/5/20 → 1), correct key mapping, and known/unknown handling.
  */
 
-import { describe, it, expect, vi } from "vitest";
-import { fetchQueueViewTotalsBatched } from "@/lib/presentation/runtime/fetchQueueViewTotalsBatched";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+    fetchQueueViewTotalsBatched,
+    clearQueueViewTotalsBatchedDedupeForTests,
+} from "@/lib/presentation/runtime/fetchQueueViewTotalsBatched";
+
+beforeEach(() => clearQueueViewTotalsBatchedDedupeForTests());
 
 function mockFetchReturning(totals: Array<{ workUnitId: string; workViewId: string; count: number | null; known: boolean }>) {
     return vi.fn(
@@ -45,6 +50,24 @@ describe("fetchQueueViewTotalsBatched — one request for many targets", () => {
         const map = await fetchQueueViewTotalsBatched({ targets: targets(2), selectedSiteId: null, fetchImpl });
         expect(map.get("wu-1::v0")).toBe(7);
         expect(map.get("wu-1::v1")).toBeNull();
+    });
+
+    it("coalesces concurrent identical requests into ONE POST (dedup across consumers)", async () => {
+        const fetchImpl = mockFetchReturning([]);
+        // Runtime + sidebar + workspace surface asking for the SAME targets at once → one request.
+        await Promise.all([
+            fetchQueueViewTotalsBatched({ targets: targets(5), selectedSiteId: null, fetchImpl }),
+            fetchQueueViewTotalsBatched({ targets: targets(5), selectedSiteId: null, fetchImpl }),
+            fetchQueueViewTotalsBatched({ targets: targets(5), selectedSiteId: null, fetchImpl }),
+        ]);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it("reuses a recent identical response instead of re-POSTing within the TTL window", async () => {
+        const fetchImpl = mockFetchReturning([]);
+        await fetchQueueViewTotalsBatched({ targets: targets(3), selectedSiteId: null, fetchImpl });
+        await fetchQueueViewTotalsBatched({ targets: targets(3), selectedSiteId: null, fetchImpl });
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
 
     it("throws on HTTP failure so the caller can fall back to the per-view path", async () => {
