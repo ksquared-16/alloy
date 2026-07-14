@@ -406,6 +406,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             workViewId: runtimeCtx.workViewId,
             limit: fetchLimitRef.current,
             selectedSiteId,
+            // Canonical compact projection — same queue_reveal the operational bootstrap uses for
+            // primary-lane rows (queue is preview-only; the Focus Panel is the authoritative record).
+            rowMode: "reveal",
+            callerSurface: "work_unit_runtime",
         });
         void dedupeAdminFetch(route, workspaceDataFetchInit())
             .then(async (res) => {
