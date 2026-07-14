@@ -154,6 +154,14 @@ export type WorkspaceHeaderKpiVm = {
     status: string;
     sourceKey: string | null;
     drillHref: string | null;
+    /**
+     * True before any metrics-resolve pass has produced values for this header. The renderer
+     * shows a stable loading placeholder in the reserved slot instead of the "—" no-data glyph,
+     * so a KPI never flashes a placeholder value that then flips to a real number. Once resolved
+     * (even to genuine no-data), this is false and the real value — including a real "—" — shows.
+     * Optional: surfaces that build KPIs with values already in hand omit it (absent = resolved).
+     */
+    pending?: boolean;
 };
 
 export type WorkspaceHeaderPresentationModel = {
@@ -186,6 +194,10 @@ export function buildWorkspaceHeaderPresentation(
     const subtitle = config.subtitle?.trim() || null;
     const identityIcon = config.icon ?? null;
     const identityAccent = config.accent ?? null;
+    // A null resolved map means no metrics-resolve pass has run yet (the WU header reveals on
+    // the queue settling, before metrics warm). Every KPI is then "pending" — the renderer holds
+    // a stable loading slot rather than the "—" glyph, so values never flip placeholder→number.
+    const pending = args.resolved == null;
     const kpis = enabledWorkspaceHeaderKpis(config).map((slot) => {
         const calc = slot.sourceKey ? findOperationalCalculation(slot.sourceKey) : null;
         const label = slot.label?.trim() || calc?.label || "Metric";
@@ -202,6 +214,7 @@ export function buildWorkspaceHeaderPresentation(
             status: normalizeStatus(item?.kpi?.status),
             sourceKey: slot.sourceKey,
             drillHref: slot.sourceKey ? drillHrefForMetricKey(slot.sourceKey) : null,
+            pending,
         } satisfies WorkspaceHeaderKpiVm;
     });
     return { title, subtitle, identityIcon, identityAccent, kpis };

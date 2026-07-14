@@ -115,6 +115,15 @@ export type ComposeOpportunityDrawerViewModelParams = {
     workUnitId: string | null;
     hintOperTrustHeadline?: string | null;
     hintOperTrustUrgency?: string | null;
+    /**
+     * Skip the family-communications preview compute during first-paint composition.
+     * The preview is only an initial seed for the Activity mode embedded workspace, which
+     * fetches on demand and is prewarmed on idle (`focusPanelActivityPrewarm`) — so on the
+     * workspace inline Focus Panel path it never blocks first paint. Defaults to false so
+     * any full-drawer caller keeps the seeded preview. The workspace VM route sets it true,
+     * removing one server round-trip (`activity_comms_preview_ms`) from record-open.
+     */
+    deferCommunicationsPreview?: boolean;
 };
 
 export async function composeOpportunityDrawerViewModel(
@@ -345,19 +354,24 @@ export async function composeOpportunityDrawerViewModel(
     const currentStageKey = lifecycle_rail?.current_stage_key ?? null;
     const currentStageLabel =
         lifecycle_rail?.stages.find((s) => s.key === currentStageKey)?.label ?? null;
-    const communicationsPreviewP = (async () => {
-        const tCommsPreview0 = Date.now();
-        const preview = await resolveFamilyCommunicationWorkspacePreview(supabase, orgId, {
-            entityType: "opportunities",
-            entityId: opportunityId,
-            focusOpportunityId: opportunityId,
-            composerChannel: "email",
-            viewerUserId: gate.userId,
-            familyStageLabel: currentStageLabel,
-        });
-        phases.activity_comms_preview_ms = Date.now() - tCommsPreview0;
-        return preview;
-    })();
+    // The communications preview is a first-paint seed only; the Activity embedded workspace
+    // fetches it on demand (and prewarms on idle). Deferring it drops one server round-trip
+    // from the record-open critical path and removes a redundant comms request on the surface.
+    const communicationsPreviewP = params.deferCommunicationsPreview
+        ? Promise.resolve(null)
+        : (async () => {
+              const tCommsPreview0 = Date.now();
+              const preview = await resolveFamilyCommunicationWorkspacePreview(supabase, orgId, {
+                  entityType: "opportunities",
+                  entityId: opportunityId,
+                  focusOpportunityId: opportunityId,
+                  composerChannel: "email",
+                  viewerUserId: gate.userId,
+                  familyStageLabel: currentStageLabel,
+              });
+              phases.activity_comms_preview_ms = Date.now() - tCommsPreview0;
+              return preview;
+          })();
     const [stage_work_runtime, communicationsPreviewVm] = await Promise.all([
         projectStageWorkRuntime({
             supabase,

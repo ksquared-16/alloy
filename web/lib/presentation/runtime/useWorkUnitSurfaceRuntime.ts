@@ -654,7 +654,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         const next = buildWorkUnitHeaderPresentationForRuntime(headerConfig, {
             fallbackTitle: processLabel,
             fallbackSubtitle: workViewLabel,
-            resolved: headerMetricsResolved,
+            // This memo only runs once metrics have settled; coalesce a null resolve (e.g. a
+            // failed warm prefetch) to an empty map so the KPIs settle to genuine no-data ("—")
+            // rather than holding the pending loading slot forever.
+            resolved: headerMetricsResolved ?? {},
         });
         lastCompleteHeader.current = next;
         return next;
@@ -689,9 +692,12 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             });
             if (action.kind === "noop") return;
 
-            // Clear stale focus panel immediately — URL record segment strips via drawer sync.
-            closeDrawer();
-
+            // Do NOT clear the focus panel here. Tearing the drawer down to null drops the
+            // held-prior payload (InlineOpportunityFocusPanel returns null with no subject), so
+            // the record area flashes blank until the new lane's first row composes. Instead we
+            // keep the prior record on screen and let the first-row auto-open SWAP the subject
+            // once the new lane settles (holdPriorPayload spans the swap → no blank). The
+            // auto-open effect clears the drawer only if the new lane resolves empty.
             forceAutoOpenViewRef.current = action.workViewId;
             autoOpenedForViewRef.current = null;
 
@@ -716,7 +722,6 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             runtimeCtx.workViewId,
             workUnitId,
             orgId,
-            closeDrawer,
         ],
     );
 
@@ -830,7 +835,17 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         autoOpenedForViewRef.current = viewId;
         if (forceAutoOpen) forceAutoOpenViewRef.current = null;
 
-        if (!shouldOpen) return;
+        if (!shouldOpen) {
+            // Operator switched to a lane that settled with no openable rows: the prior record
+            // (held across the switch) belongs to the previous view and must not linger. Clear
+            // it now that we know the new lane is genuinely empty. A non-force pass (initial
+            // mount / deep-link) never force-clears an operator's open record.
+            const recordOpen = drawer.type === "opportunities" && drawer.id != null;
+            if (forceAutoOpen && rows.length === 0 && recordOpen) {
+                closeDrawer();
+            }
+            return;
+        }
 
         const first = rows[0];
         if (!first) return;
@@ -852,6 +867,9 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         departmentId,
         workUnitId,
         runtimeCtx.workViewId,
+        drawer.type,
+        drawer.id,
+        closeDrawer,
     ]);
 
     // ── Selected record: the drawer store is THE selection state (no parallel store) ────
