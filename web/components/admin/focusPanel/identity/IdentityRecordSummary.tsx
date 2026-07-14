@@ -5,7 +5,7 @@ import type { IdentityRecordVM, IdentityDisclosureDepth } from "@/lib/adminV2/ru
 import { identityRowsForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityDisclosureVM";
 import IdentityAvatar from "@/components/admin/focusPanel/identity/IdentityAvatar";
 import type { IdentityAvatarSemanticRole } from "@/lib/adminV2/runtime/focusPanel/focusPanelIdentityAvatar";
-import IdentityFieldGrid from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
+import IdentityFieldGrid, { type IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
 import IdentityRecordDetails from "@/components/admin/focusPanel/identity/IdentityRecordDetails";
 
 type Props = {
@@ -13,6 +13,7 @@ type Props = {
     depth?: IdentityDisclosureDepth;
     className?: string;
     onEditContact?: (recordId: string) => void;
+    onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onEditField?: (fieldRef: string) => void;
     onActivate?: (recordId: string) => void;
     dataAttr?: string;
@@ -23,15 +24,19 @@ export default function IdentityRecordSummary({
     depth = "summary",
     className,
     onEditContact,
+    onSaveField,
     onEditField,
     onActivate,
     dataAttr,
 }: Props) {
     const { visibleRows, detailRows } = identityRowsForDisclosureDepth(record, depth);
-    const hasEditableField = [...visibleRows, ...detailRows].some((row) =>
+    const showInlineDetails = depth === "details" || depth === "evidence";
+    const hasEditableField = visibleRows.some((row) =>
         row.cells.some((cell) => cell.editable),
     );
-    const showInlineDetails = depth === "details" || depth === "evidence";
+    const hasEditableDetailField =
+        showInlineDetails
+        && detailRows.some((row) => row.cells.some((cell) => cell.editable));
 
     return (
         <div
@@ -66,9 +71,9 @@ export default function IdentityRecordSummary({
                             </span>
                         ) : null}
                     </span>
-                    <IdentityFieldGrid rows={visibleRows} onEditField={onEditField} />
+                    <IdentityFieldGrid rows={visibleRows} personId={record.id} onSaveField={onSaveField} onEditField={onEditField} />
                 </div>
-                {onEditContact && hasEditableField ? (
+                {onEditContact && (hasEditableField || hasEditableDetailField) ? (
                     <button
                         type="button"
                         className="identity-record-summary__edit"
@@ -80,7 +85,7 @@ export default function IdentityRecordSummary({
                 ) : null}
             </div>
             {showInlineDetails && detailRows.length > 0 ? (
-                <IdentityRecordDetails rows={detailRows} onEditField={onEditField} defaultOpen />
+                <IdentityRecordDetails rows={detailRows} personId={record.id} onSaveField={onSaveField} onEditField={onEditField} defaultOpen />
             ) : null}
         </div>
     );

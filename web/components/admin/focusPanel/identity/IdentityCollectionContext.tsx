@@ -3,13 +3,14 @@
 import clsx from "clsx";
 import type { IdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import IdentityRecordSummary from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
+import type { IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
 
 type Props = {
     records: IdentityRecordVM[];
     className?: string;
     onSelectIdentity?: (recordId: string) => void;
     onEditContact?: (recordId: string) => void;
-    onEditField?: (fieldRef: string) => void;
+    onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     /** When true, rows are selectable for Details depth. */
     selectable?: boolean;
     /**
@@ -30,7 +31,7 @@ export default function IdentityCollectionContext({
     className,
     onSelectIdentity,
     onEditContact,
-    onEditField,
+    onSaveField,
     selectable = true,
     collectionSummaryOnly = false,
 }: Props) {
@@ -45,7 +46,7 @@ export default function IdentityCollectionContext({
                     depth={collectionSummaryOnly ? "summary" : "context"}
                     onActivate={selectable && onSelectIdentity ? onSelectIdentity : undefined}
                     onEditContact={onEditContact}
-                    onEditField={onEditField}
+                    onSaveField={onSaveField}
                     dataAttr={record.id}
                 />
             ))}

@@ -31,7 +31,7 @@ import {
 import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
-import { CONTACT_EDIT_FIELD_MAP } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
+import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { composeSummaryAndContextFacts } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import {
@@ -41,6 +41,11 @@ import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM, IdentityEvid
 import { inferAvatarRoleFromSectionKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelIdentityAvatar";
 import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+
+
+function householdContactFieldSaveSupported(fieldRef: string): boolean {
+    return personContactSaveKeyForIdentityFieldRef(fieldRef) !== null;
+}
 
 function initialsFor(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -115,7 +120,9 @@ function buildRecordRows(args: {
         const value = isMaskedChannel
             ? "Contact details restricted"
             : resolveIdentityFieldValue(args.subject, placement.fieldRef);
-        const saveSupported = args.isFieldSaveSupported?.(placement.fieldRef) ?? Boolean(args.editGroupKey);
+        const saveSupported =
+            args.isFieldSaveSupported?.(placement.fieldRef)
+            ?? (args.groupKey === args.editGroupKey && Boolean(args.editGroupKey));
         const editable = args.canMutate && fieldIsSaveable(policy) && saveSupported;
         inputs.push({
             placement,
@@ -186,6 +193,7 @@ function buildContactRecordVM(args: {
         purpose: "summary",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
+        isFieldSaveSupported: householdContactFieldSaveSupported,
         maskedChannels: args.maskedChannels,
     });
     const contextFactRows = buildRecordRows({
@@ -195,6 +203,7 @@ function buildContactRecordVM(args: {
         purpose: "context_facts",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
+        isFieldSaveSupported: householdContactFieldSaveSupported,
         maskedChannels: args.maskedChannels,
     });
     const detailRows = buildRecordRows({
@@ -204,6 +213,7 @@ function buildContactRecordVM(args: {
         purpose: "details",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
+        isFieldSaveSupported: householdContactFieldSaveSupported,
         maskedChannels: args.maskedChannels,
     });
     return finalizeIdentityRecordVM({

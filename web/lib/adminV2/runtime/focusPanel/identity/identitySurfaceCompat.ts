@@ -419,6 +419,12 @@ export function reconcileIdentityNestedConfigsFromMetadata(
     return out;
 }
 
+const IDENTITY_EDIT_SURFACE_GROUP_KEYS = new Set(["contact_edit", "child_edit"]);
+
+function isIdentityPresentationGroup(groupKey: string): boolean {
+    return !IDENTITY_EDIT_SURFACE_GROUP_KEYS.has(groupKey);
+}
+
 /** Resolve effective field policy with edit-surface inheritance (`child_edit` / `contact_edit`). */
 export function resolveIdentityFieldPolicy(args: {
     config: NestedSurfaceConfig;
@@ -446,6 +452,22 @@ export function resolveIdentityFieldPolicy(args: {
         if (stored) return normalizeFieldVisibility(stored);
     }
 
+    if (tier && isIdentityPresentationGroup(groupKey)) {
+        if (editGroupKey && !skipPlacementPolicy) {
+            const editGroup = config.groups.find((g) => g.key === editGroupKey);
+            const editTierPlacement = (editGroup?.fieldPlacements ?? []).find(
+                (row) =>
+                    row.fieldRef === fieldRef
+                    && storageTierMatchesPurpose(normalizeIdentityStorageTier(row.tier), tier),
+            );
+            if (editTierPlacement?.policy) return normalizeFieldVisibility(editTierPlacement.policy);
+        }
+        const legacyMode = group?.fieldModes?.[fieldRef];
+        const fromMode = fieldModeToPolicy(legacyMode);
+        if (fromMode) return fromMode;
+        return "read-only";
+    }
+
     if (editGroupKey) {
         const editGroup = config.groups.find((g) => g.key === editGroupKey);
         const editLayers = editGroup ? identityLayerFieldKeysFromGroup(editGroup) : null;
@@ -465,11 +487,13 @@ export function resolveIdentityFieldPolicy(args: {
             }
             const editPolicy = editGroup?.fieldPolicies?.[fieldRef];
             if (editPolicy) return normalizeFieldVisibility(editPolicy);
-            if (config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID && editGroupKey === "contact_edit") {
-                return "editable";
-            }
-            if (config.surfaceId === CHILDREN_SURFACE_CANONICAL_ID && editGroupKey === "child_edit") {
-                return "editable";
+            if (groupKey === editGroupKey) {
+                if (config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID && editGroupKey === "contact_edit") {
+                    return "editable";
+                }
+                if (config.surfaceId === CHILDREN_SURFACE_CANONICAL_ID && editGroupKey === "child_edit") {
+                    return "editable";
+                }
             }
         }
     }
