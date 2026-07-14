@@ -357,9 +357,11 @@ export default function AnnouncementsWorkspace() {
     }, []);
 
     const loadAudienceOptions = useCallback(async (opts?: { background?: boolean }) => {
-        if (!opts?.background) {
-            applyWarmAudienceMetadata();
-        }
+        applyWarmAudienceMetadata();
+        // The workspace warm cache is the single owner of program + location metadata. When it has
+        // already resolved (intentional warm), consume it and issue NO request — no duplicate owner.
+        if (getCommunicationsWarmAudienceMetadata() !== null) return;
+        void opts;
         try {
             const [progRes, hierarchyRes] = await Promise.all([
                 fetch(PROGRAM_OPTIONS_API, { credentials: "include" }),
@@ -385,9 +387,11 @@ export default function AnnouncementsWorkspace() {
     }, [applyWarmAudienceMetadata]);
 
     const loadStatusOptions = useCallback(async (opts?: { background?: boolean }) => {
-        if (!opts?.background) {
-            applyWarmAudienceMetadata();
-        }
+        applyWarmAudienceMetadata();
+        // Warm audience metadata already carries family + child status options (the warm cache is the
+        // single owner). On a warm hit, consume it and issue NO status-options request.
+        if (getCommunicationsWarmAudienceMetadata() !== null) return;
+        void opts;
         const fetchOpts = async (g: "family" | "child"): Promise<StatusOpt[]> => {
             try {
                 const res = await fetch(`${STATUS_OPTIONS_API}?grain=${g}`, { credentials: "include" });
