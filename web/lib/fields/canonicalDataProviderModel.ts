@@ -118,6 +118,11 @@ export type CanonicalDataProvider = {
     relationship?: RelationshipLeafBinding;
     /** Parent collection when this provider is a collection projection. */
     collectionProjection?: CollectionProjectionBinding;
+    /**
+     * When set, this provider is owned by one grain and projected onto another subject.
+     * Does not change storage, option sets, or mutation ownership.
+     */
+    projection?: import("@/lib/fields/canonicalFieldProjection").CanonicalFieldProjection;
     /** Resolver module owner path for diagnostics. */
     resolverOwner?: string;
     /** When true, provider exists only for legacy saved configs — not offered in new pickers. */

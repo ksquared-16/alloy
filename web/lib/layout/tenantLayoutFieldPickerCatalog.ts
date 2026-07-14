@@ -7,8 +7,8 @@
 
 import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
 import { isEnrollmentOperatorFieldVisible } from "@/lib/fields/childcareFieldCatalogDoctrine";
-import { isReservedCustomerMemberFieldKey } from "@/lib/fields/customerMemberFieldRegistry";
-import { isReservedInquiryChildFieldKey } from "@/lib/fields/inquiryChildFieldRegistry";
+import { isCustomerMemberNativeColumnKey } from "@/lib/fields/customerMemberFieldRegistry";
+import { isInquiryChildNativeFieldKey } from "@/lib/fields/inquiryChildFieldRegistry";
 import type { LayoutCatalogField, LayoutCatalogGroup, LayoutEntityGroupKey } from "@/lib/layout/fieldCatalog";
 import { fieldDefToCatalog } from "@/lib/layout/fieldCatalog";
 import {
@@ -83,8 +83,10 @@ export function isTenantLayoutFieldRenderable(def: TenantFieldDefinitionRow): bo
     const fieldType = (def.field_type ?? "text").trim().toLowerCase();
     if (!RENDERABLE_FIELD_TYPES.has(fieldType)) return false;
 
-    if (entityType === "inquiry_child" && isReservedInquiryChildFieldKey(fieldKey)) return false;
-    if (entityType === "customer_member" && isReservedCustomerMemberFieldKey(fieldKey)) return false;
+    // Reserved-key collision protection blocks only native columns that are not
+    // field_definitions. FC-CM-1 / inquiry_child config seeds must remain providers.
+    if (entityType === "inquiry_child" && isInquiryChildNativeFieldKey(fieldKey)) return false;
+    if (entityType === "customer_member" && isCustomerMemberNativeColumnKey(fieldKey)) return false;
 
     const refKey = tenantFieldDefinitionRefKey(def);
     if (!refKey || isFieldPickerBackendOnlyRef(refKey)) return false;

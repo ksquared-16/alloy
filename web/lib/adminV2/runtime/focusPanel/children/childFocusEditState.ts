@@ -19,6 +19,7 @@ import type {
 } from "@/lib/adminV2/runtime/focusPanel/children/childFocusFieldPolicy";
 
 const VALUE_KEYS: ChildFocusEditValueKey[] = [
+    "location_id",
     "program_category_id",
     "program_room_cohort_key",
     "schedule_type",
@@ -73,6 +74,7 @@ export function seedChildFocusEditValues(truth: Record<string, unknown>, childId
         row,
         identityBaseline: identityBaselineForRow(row),
         values: {
+            location_id: trimStr(row.location_id),
             program_category_id: trimStr(row.program_category_id),
             program_room_cohort_key: trimStr(row.program_room_cohort_key),
             schedule_type: trimStr(row.schedule_type),
@@ -115,7 +117,7 @@ export function buildChildFocusSavePatch(args: {
     }
 
     const local = {
-        location_id: "",
+        location_id: args.draft.location_id,
         program_room_cohort_key: args.draft.program_room_cohort_key,
         program_category_id: args.draft.program_category_id,
         schedule_type: args.draft.schedule_type,
@@ -125,6 +127,7 @@ export function buildChildFocusSavePatch(args: {
         custom: {},
     };
     const editorBaseline = {
+        location_id: args.baseline.location_id || null,
         program_category_id: args.baseline.program_category_id || null,
         program_room_cohort_key: args.baseline.program_room_cohort_key || null,
         schedule_type: args.baseline.schedule_type || null,
@@ -138,6 +141,9 @@ export function buildChildFocusSavePatch(args: {
     });
 
     const ocmPatch: InquiryChildOcmPatch = {};
+    if (args.editableKeys.has("location_id") && fullOcmPatch.location_id !== undefined) {
+        ocmPatch.location_id = fullOcmPatch.location_id;
+    }
     if (args.editableKeys.has("program_category_id") && fullOcmPatch.program_category_id !== undefined) {
         ocmPatch.program_category_id = fullOcmPatch.program_category_id;
     }

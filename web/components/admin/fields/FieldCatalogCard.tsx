@@ -1,7 +1,11 @@
 "use client";
 
 import FieldSurfaceAvailabilityBadges from "@/components/admin/fields/FieldSurfaceAvailabilityBadges";
-import type { SettingsFieldCatalogEntry, SettingsHubEntityKey } from "@/lib/fields/fieldCatalogForSettings";
+import {
+    childHubOwnerGrainLabel,
+    type SettingsFieldCatalogEntry,
+    type SettingsHubEntityKey,
+} from "@/lib/fields/fieldCatalogForSettings";
 import { FIELD_OWNERSHIP_LABELS } from "@/lib/fields/fieldOwnership";
 import { resolveSettingsCatalogEntryAvailability } from "@/lib/fields/fieldSurfaceAvailability";
 
@@ -9,6 +13,8 @@ type Props = {
     entry: SettingsFieldCatalogEntry;
     hubEntity?: SettingsHubEntityKey;
     sectionLabel?: string;
+    /** Compact canonical storage owner for Child hub (Profile vs Enrollment). */
+    showOwnerGrainBadge?: boolean;
     selected?: boolean;
     onSelect?: () => void;
     onConfigure?: () => void;
@@ -33,6 +39,7 @@ export default function FieldCatalogCard({
     entry,
     hubEntity,
     sectionLabel,
+    showOwnerGrainBadge = false,
     selected = false,
     onSelect,
     onConfigure,
@@ -105,6 +112,15 @@ export default function FieldCatalogCard({
                         >
                             {FIELD_OWNERSHIP_LABELS[entry.ownership]}
                         </span>
+                        {showOwnerGrainBadge ? (
+                            <span
+                                className="rounded-full border border-alloy-stone/30 bg-alloy-stone/[0.08] px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60"
+                                data-testid="field-owner-grain-badge"
+                                title="Canonical data owner"
+                            >
+                                Owner: {childHubOwnerGrainLabel(entry.entity_type)}
+                            </span>
+                        ) : null}
                     </div>
                     <p className="font-mono text-[11px] text-alloy-midnight/50">{entry.refKey}</p>
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-alloy-midnight/60">

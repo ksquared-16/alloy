@@ -4,6 +4,9 @@ import FieldCatalogCard from "@/components/admin/fields/FieldCatalogCard";
 import FieldOwnershipFilterTabs, { type FieldOwnershipFilter } from "@/components/admin/fields/FieldOwnershipFilterTabs";
 import FieldSettingsEntityHeader from "@/components/admin/fields/FieldSettingsEntityHeader";
 import {
+    CHILD_HUB_OWNERSHIP_GRAIN_LABELS,
+    CHILD_HUB_OWNERSHIP_GRAIN_ORDER,
+    groupCatalogEntriesByChildOwnershipGrain,
     groupCatalogEntriesBySection,
     orderedSectionKeys,
     sectionDisplayLabel,
@@ -48,8 +51,10 @@ export default function FieldsSettingsWorkspaceView({
     const allCounts = countFieldsByConcept(entries);
     const filtered = filterCatalogByConcept(entries, ownershipFilter);
     const filteredCounts = countFieldsByConcept(filtered);
-    const groups = groupCatalogEntriesBySection(filtered);
-    const sectionKeys = orderedSectionKeys(groups);
+    const useChildOwnershipGrains = hubEntity === "inquiry_child";
+    const sectionGroups = groupCatalogEntriesBySection(filtered);
+    const grainGroups = useChildOwnershipGrains ? groupCatalogEntriesByChildOwnershipGrain(filtered) : null;
+    const sectionKeys = orderedSectionKeys(sectionGroups);
 
     const tabCounts = {
         all: allCounts.all,
@@ -81,10 +86,56 @@ export default function FieldsSettingsWorkspaceView({
 
             {filtered.length === 0 ? (
                 <p className="text-sm text-alloy-midnight/55">No fields match this filter.</p>
+            ) : useChildOwnershipGrains && grainGroups ? (
+                <div className="space-y-6">
+                    {CHILD_HUB_OWNERSHIP_GRAIN_ORDER.map((grain) => {
+                        const sectionEntries = grainGroups.get(grain) ?? [];
+                        if (sectionEntries.length === 0) return null;
+                        const label = CHILD_HUB_OWNERSHIP_GRAIN_LABELS[grain];
+                        return (
+                            <section key={grain} data-testid={`field-ownership-grain-${grain}`}>
+                                <h2 className="mb-3 flex items-baseline gap-2 text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                    <span>{label}</span>
+                                    <span className="font-normal normal-case tracking-normal text-alloy-midnight/40">
+                                        {sectionEntries.length} field{sectionEntries.length === 1 ? "" : "s"}
+                                    </span>
+                                </h2>
+                                <div className="grid gap-3">
+                                    {sectionEntries.map((entry) => (
+                                        <FieldCatalogCard
+                                            key={entry.id}
+                                            entry={entry}
+                                            hubEntity={hubEntity}
+                                            sectionLabel={label}
+                                            showOwnerGrainBadge
+                                            selected={selectedRefKey === entry.refKey}
+                                            onSelect={() => onSelectEntry(entry)}
+                                            onConfigure={
+                                                onConfigure && entry.ownership === "custom"
+                                                    ? () => onConfigure(entry)
+                                                    : undefined
+                                            }
+                                            onDelete={
+                                                onDelete && entry.ownership === "custom" && entry.fieldDef
+                                                    ? () => onDelete(entry)
+                                                    : undefined
+                                            }
+                                            deleteSaving={deleteSavingId === entry.fieldDef?.id}
+                                            deleteDisabled={Boolean(
+                                                deleteSavingId && deleteSavingId !== entry.fieldDef?.id,
+                                            )}
+                                            canMutate={canMutate}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        );
+                    })}
+                </div>
             ) : (
                 <div className="space-y-6">
                     {sectionKeys.map((sectionKey) => {
-                        const sectionEntries = groups.get(sectionKey) ?? [];
+                        const sectionEntries = sectionGroups.get(sectionKey) ?? [];
                         if (sectionEntries.length === 0) return null;
                         const label = sectionDisplayLabel(sectionKey);
                         return (
