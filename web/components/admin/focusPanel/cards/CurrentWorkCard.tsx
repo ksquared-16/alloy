@@ -60,6 +60,9 @@ export default function CurrentWorkCard({
     const opportunityId = context.subject.id;
     const { completeOutcome, busy, error, clearError } = useWorkIntentOutcomeCompletion(opportunityId);
     const isWorkspace = presentation === "workspace";
+    // Tier-2 stage work still resolving — hold a neutral loading treatment in the region's final
+    // geometry. A pending projection must NEVER render as "No active work" (false-empty).
+    const stageWorkPending = context.stageWorkPending === true;
 
     const [completionPhase, setCompletionPhase] = useState<CompletionPhase>("working");
     const [pendingOutcomeKey, setPendingOutcomeKey] = useState<string | null>(null);
@@ -354,6 +357,28 @@ export default function CurrentWorkCard({
     const ownerLabel = null;
 
     if (isWorkspace) {
+        if (stageWorkPending) {
+            return (
+                <section
+                    className="alloy-os-currentwork-workspace"
+                    data-current-work-workspace="true"
+                    data-work-pending="true"
+                    aria-busy="true"
+                >
+                    <button
+                        type="button"
+                        className="alloy-os-currentwork-workspace__back"
+                        onClick={closeWorkspace}
+                        data-work-action="back-to-summary"
+                    >
+                        ← Back to summary
+                    </button>
+                    <p className="alloy-os-household__row-detail alloy-os-currentwork__pending" aria-label="Loading current work">
+                        Loading current work…
+                    </p>
+                </section>
+            );
+        }
         if (evidence.isEmpty) {
             return (
                 <section className="alloy-os-currentwork-workspace" data-current-work-workspace="true" data-work-empty="true">
@@ -427,7 +452,13 @@ export default function CurrentWorkCard({
     }
 
     const body =
-        evidence.isEmpty ? (
+        stageWorkPending ? (
+            <div className="alloy-os-household__summary" data-work-pending="true" aria-busy="true">
+                <p className="alloy-os-household__row-detail alloy-os-currentwork__pending" aria-label="Loading current work">
+                    Loading current work…
+                </p>
+            </div>
+        ) : evidence.isEmpty ? (
             <div className="alloy-os-household__summary" data-work-empty="true">
                 <p className="alloy-os-household__row-detail">No current work configured</p>
             </div>
@@ -466,7 +497,7 @@ export default function CurrentWorkCard({
         <div
             className="alloy-os-household alloy-os-currentwork"
             data-work-card="true"
-            data-work-card-perspective={evidence.isEmpty ? "empty" : "summary"}
+            data-work-card-perspective={stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : "summary"}
             data-current-work-surface="true"
         >
             <UniversalCard

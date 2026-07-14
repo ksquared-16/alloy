@@ -122,9 +122,13 @@ describe("filterResidualOperationalTasks", () => {
 describe("Work Intent Runtime Phase A integration contracts", () => {
     it("compose wires stage work runtime and filters tasks", () => {
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
-        expect(compose).toContain("projectStageWorkRuntime");
+        // Stage-work projection ownership moved into the thin shared slice (runs
+        // projectStageWorkRuntime internally); compose still wires the runtime + task filter.
+        expect(compose).toContain("resolveOpportunityStageWorkSlice");
         expect(compose).toContain("filterResidualOperationalTasks");
         expect(compose).toContain("stage_work_runtime");
+        const slice = read("lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice.ts");
+        expect(slice).toContain("projectStageWorkRuntime");
     });
 
     it("OpportunityDrawerOverviewBody uses layout runtime for current work", () => {

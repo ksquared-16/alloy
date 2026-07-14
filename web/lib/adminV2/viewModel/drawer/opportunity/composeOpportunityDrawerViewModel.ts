@@ -26,8 +26,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { resolveStageOperatingPlanPurpose } from "@/lib/lifecycle/resolveStageOperatingPlanPurpose";
-import { resolvePublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
-import { projectStageWorkRuntime, primaryWorkIntentProjectionFromStageWork } from "@/lib/lifecycle/projectStageWorkRuntime";
+import { resolveOpportunityStageWorkSlice } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
 import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
 import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
 import { resolveOpportunityDrawerStatusCanMutateFromGate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
@@ -63,6 +62,7 @@ import type {
     OpportunityDrawerViewModel,
     OpportunityDrawerViewModelResult,
     RemindersSummaryVm,
+    StageWorkLoadState,
 } from "@/lib/adminV2/viewModel/drawer/types";
 import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 
@@ -124,6 +124,13 @@ export type ComposeOpportunityDrawerViewModelParams = {
      * removing one server round-trip (`activity_comms_preview_ms`) from record-open.
      */
     deferCommunicationsPreview?: boolean;
+    /**
+     * Skip the stage-work projection (Current Work region) during first-paint composition and mark
+     * `workspace.stage_work` pending. The workspace VM route sets this; the client resolves the
+     * projection through the thin `…/stage-work` resource and patches the region in place. Defaults
+     * to false so any full-drawer caller keeps stage work inline.
+     */
+    deferStageWork?: boolean;
 };
 
 export async function composeOpportunityDrawerViewModel(
@@ -372,24 +379,37 @@ export async function composeOpportunityDrawerViewModel(
               phases.activity_comms_preview_ms = Date.now() - tCommsPreview0;
               return preview;
           })();
-    const [stage_work_runtime, communicationsPreviewVm] = await Promise.all([
-        projectStageWorkRuntime({
-            supabase,
-            orgId,
-            opportunityId,
-            departmentId,
-            departmentMetadata: deptMetadata,
-            builderStageKey: currentStageKey,
-            stageLabel: currentStageLabel,
-        }),
+    // Stage work (Current Work region) is heavy — two operational_tasks reads — and does NOT feed
+    // the above-fold render model built above. On the workspace inline Focus Panel path it is
+    // deferred to a thin canonical resource resolved after first paint; the VM carries a `pending`
+    // load state so the region shows a neutral loading treatment, never a false "No active work".
+    const deferStageWork = params.deferStageWork === true;
+    const [stageSlice, communicationsPreviewVm] = await Promise.all([
+        deferStageWork
+            ? Promise.resolve({
+                  stage_work_runtime: null,
+                  published_stage_inputs: null,
+                  work_intent_runtime: null,
+              })
+            : resolveOpportunityStageWorkSlice({
+                  supabase,
+                  orgId,
+                  opportunityId,
+                  departmentId,
+                  stageKey: currentStageKey,
+                  stageLabel: currentStageLabel,
+                  departmentMetadata: deptMetadata,
+              }),
         communicationsPreviewP,
     ]);
-    const published_stage_inputs = resolvePublishedStageInputsForCurrentWork({
-        departmentMetadata: deptMetadata as Record<string, unknown> | null,
-        builderStageKey: currentStageKey,
-    });
-    const work_intent_runtime = primaryWorkIntentProjectionFromStageWork(stage_work_runtime);
+    const { stage_work_runtime, published_stage_inputs, work_intent_runtime } = stageSlice;
+    const stage_work_state: StageWorkLoadState = deferStageWork
+        ? { status: "pending" }
+        : stage_work_runtime
+          ? { status: "ready", value: stage_work_runtime }
+          : { status: "empty" };
     const rawTasksSummary = parseInquirySummaryTasksFromRecord(record);
+    // Null runtime leaves tasks unfiltered (Tier 1); the client re-filters when stage work lands.
     const filteredTasksSummary = filterResidualOperationalTasks(rawTasksSummary, stage_work_runtime);
     record._inquiry_summary_tasks = filteredTasksSummary;
     if (record._overview_data && typeof record._overview_data === "object" && !Array.isArray(record._overview_data)) {
@@ -426,6 +446,7 @@ export async function composeOpportunityDrawerViewModel(
             work_intent_runtime,
             stage_work_runtime,
             published_stage_inputs,
+            stage_work: stage_work_state,
         },
         first_paint,
         header: {
@@ -469,7 +490,9 @@ export async function composeOpportunityDrawerViewModel(
             attention: buildOpportunityDrawerAttentionSummary(attentionRaw),
         },
         background_refresh: {
-            allowed: ["task_status", "scheduled_send_status", "readiness_values"],
+            allowed: deferStageWork
+                ? ["task_status", "scheduled_send_status", "readiness_values", "stage_work"]
+                : ["task_status", "scheduled_send_status", "readiness_values"],
         },
         timing: {
             compose_ms: Date.now() - composeStart,

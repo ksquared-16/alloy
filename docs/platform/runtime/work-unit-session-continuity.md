@@ -159,15 +159,27 @@ no streaming**:
   `deferCommunicationsPreview` (opt out with `?comms_preview=1`), so the record-open critical path no
   longer waits on `resolveFamilyCommunicationWorkspacePreview` (`activity_comms_preview_ms` leaves the
   path) and no redundant comms request rides record-open. The consumer is null-safe by construction.
-- **The Tier-1 boundary is the above-fold render model.** `buildOpportunityDrawerViewModelAboveFold`
-  is computed *before* `projectStageWorkRuntime` / `resolvePublishedStageInputsForCurrentWork`, so the
-  header, status control, lifecycle rail, and above-fold sections never depend on stage-work runtime.
-  That is the seam for a future thin Tier-2: a fetch keyed by the already-resolved
-  `{opportunityId, departmentId, stageKey}` (carried on the Tier-1 VM) — **not** a second full compose,
-  which would recompute Tier-1 prep and violate "no unnecessary runtime work." Until that lands,
-  stage-work stays in the first response; deferring it requires gating the Focus Panel Current-Work
-  card behind a pending state so it never flips from "No active work" to real content (the same
-  fake-value rule the header KPIs now follow — see below).
+- **Stage work is deferred to a thin Tier-2 resource (implemented).** `buildOpportunityDrawerViewModelAboveFold`
+  is computed *before* the stage-work projection, so the header, status control, lifecycle rail, and
+  above-fold sections never depend on it — that is the Tier-1 boundary. The workspace VM route sets
+  `deferStageWork` (opt out `?stage_work=1`), so first paint skips `projectStageWorkRuntime` and marks
+  `workspace.stage_work` **pending**. A thin canonical resource
+  (`GET …/drawer/opportunity/:id/stage-work`, `resolveOpportunityStageWorkSlice`) resolves ONLY the
+  Current Work projection, keyed by the already-resolved `{opportunityId, departmentId, stageKey}` the
+  Tier-1 VM carries — one cached dept-metadata read + the two `operational_tasks` reads, **not** a
+  second full compose (which would recompute Tier-1 and violate "no unnecessary runtime work").
+
+  `workspace.stage_work: StageWorkLoadState` is the contract — `pending | ready | empty | error`. The
+  Current Work region renders a neutral loading treatment while pending (never the "No active work"
+  empty state — the same fake-value rule the header KPIs follow), patches in place when ready without
+  resizing/reordering/remounting, retains the prior value on error, and resolves `empty` only from an
+  authoritative empty result. The client owner is one resource
+  (`opportunityStageWorkResource`): one cache key per `(org, record, department, stage)`, in-flight
+  dedup, prefetch and selection share the entry, a stale response for record A cannot land on record B
+  (record-scoped keys + a subject re-check before apply), a record mutation drops only that record's
+  entry, and an org switch flushes. Row pointer/focus intent warms the resource with the VM's real
+  `current_stage_key` (via the warmed Tier-1 preload), so a click reuses that exact entry — no
+  duplicate request; comms threads/activity are never warmed on row intent.
 
 ## Work View change: swap, never blank
 
@@ -199,12 +211,17 @@ Family Communication Workspace SWR revalidate firing a `force:true` fetch that *
 in-flight guard** — two consumers served from the same warm entry each issued a network hit. Fixed:
 the revalidate now coalesces onto an existing in-flight request
 (`getDrawerFamilyWorkspaceInflight(params) ?? prefetchDrawerFamilyWorkspace(params, {force:true})`) —
-`force` bypasses warm freshness, not in-flight dedup. Remaining (off the workspace critical path, on
-the `/communications` route): status-options + audience metadata are fetched by both
-`communicationsWorkspaceWarmCache` and `AnnouncementsWorkspace`; the warm cache should be the sole
-owner and the component consume it (or fall through `dedupeAdminFetch`). Inbox threads likewise have
-two owners (`inboxWarmLoadCache` vs `InboxPanel`) with divergent `limit`/`compact` URLs that defeat
-coalescing.
+`force` bypasses warm freshness, not in-flight dedup.
+
+**Status-options + audience metadata (fixed).** `communicationsWorkspaceWarmCache` is the single owner;
+`AnnouncementsWorkspace` now consumes the warm snapshot and issues NO status-options / program /
+location-hierarchy request on a warm hit (`if (getCommunicationsWarmAudienceMetadata() !== null) return`),
+fetching only on a genuine warm miss. **Work Unit first paint loads neither** — the WU surface runtime
+never references `/api/admin/inbox/threads` or `communications/status-options` and never mounts
+`InboxPanel` (guarded by test). The idle inbox warm is a **compact** preview (`compact=1`, limit 20),
+distinct from the panel's full-thread load (limit 50), and is scheduled on idle after shell mount
+(`scheduleInboxWarmLoad`), not on the WU path. Not converged (bigger refactor, off critical path): the
+compact warm and the full `InboxPanel` load remain separate payloads/URLs.
 
 ## Workspace boot ownership
 
@@ -220,6 +237,12 @@ coalescing.
 Entity labels are landing-primary but already de-risked (150ms timeout, degrade to `{}`, background
 warm) — see "Stop entity labels blocking first composition." The reveal holds one skeleton until
 config + metrics + counts settle together (no default-header flash, no partial KPI morph).
+
+**No eager Work Unit route prefetch.** A wall of process cards must not storm the router. The
+`ProcessSummaryCard` "Open process" link sets `prefetch={false}` (no viewport prefetch) and warms only
+on pointer/focus intent through the shared, in-flight-deduped `warmWorkUnitSlugRoute`. Audit: this is
+the only Next `<Link>` to a heavy Work Unit route on the workspace; other WU navigation is soft-nav
+warming, not Link prefetch.
 
 ## Queue payload reduction (compact projection)
 

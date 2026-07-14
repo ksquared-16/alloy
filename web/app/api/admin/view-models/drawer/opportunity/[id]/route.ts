@@ -49,6 +49,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             // communications preview, so it must not block the record's first paint. Opt out
             // unless a caller explicitly requests the seeded preview (`comms_preview=1`).
             deferCommunicationsPreview: sp.get("comms_preview") !== "1",
+            // Stage work (Current Work region) resolves through the thin `…/stage-work` resource
+            // after first paint. Opt out with `stage_work=1` for a full inline compose.
+            deferStageWork: sp.get("stage_work") !== "1",
         });
 
         if (!result.ok) {

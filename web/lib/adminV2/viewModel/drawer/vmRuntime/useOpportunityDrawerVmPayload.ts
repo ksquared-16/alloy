@@ -18,6 +18,18 @@ import {
     shouldSuppressFullDrawerLoading,
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import {
+    applyStageWorkSliceToVm,
+    markStageWorkErrorOnVm,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/applyStageWorkSliceToVm";
+import type { OpportunityStageWorkSlice } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
+import {
+    getOpportunityStageWorkInflight,
+    getOpportunityStageWorkWarm,
+    invalidateOpportunityStageWorkCache,
+    opportunityStageWorkCacheKey,
+    prefetchOpportunityStageWork,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource";
 import { scheduleWarmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
 import { prefetchDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
@@ -305,6 +317,9 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
             const detail = parseOpportunityQueueUpdatedDetail(ev);
             const id = (detail?.id ?? "").trim();
             if (!id || id !== oid) return;
+            // A mutation to this record can change its stage work — drop only this record's
+            // stage-work cache entry so the next resolve (revisit) is fresh. Scoped, not a flush.
+            invalidateOpportunityStageWorkCache({ opportunityId: oid });
             const actionKey = (detail?.action_key ?? "").trim();
             if (!isTourSurfaceActionKey(actionKey)) return;
 
@@ -331,6 +346,80 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
             window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated as EventListener);
         };
     }, [drawer.type, drawer.id, drawer.opportunityWorkspaceContext, displayVm?.above_fold.record, patchDisplayRecord]);
+
+    // ── Deferred stage work (Tier 2) — resolve the Current Work region after first paint ────────
+    // When the Tier-1 VM marks `workspace.stage_work` pending, resolve the thin canonical resource
+    // and patch the Current Work region in place. The pending state (never "No active work") holds
+    // the region's final geometry until this lands. Stale/cross-record guards: we only patch a VM
+    // whose subject matches the slice we fetched, so a late response for record A cannot overwrite B.
+    const stageWorkStatus = displayVm?.workspace.stage_work?.status;
+    const stageWorkOppId = displayVm?.entity.id ?? null;
+    const stageWorkStageKey = displayVm?.workspace.lifecycle_rail?.current_stage_key ?? null;
+    const stageWorkDeptId = displayVm?.workspace.department_id ?? null;
+    const stageWorkStageLabel = displayVm?.workspace.stage_context?.stage_label ?? null;
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !stageWorkOppId) return;
+        if (stageWorkStatus !== "pending") return;
+        if (String(drawer.id) !== String(stageWorkOppId)) return; // resolve only the live selection
+
+        const params = {
+            opportunityId: stageWorkOppId,
+            departmentId: stageWorkDeptId,
+            stageKey: stageWorkStageKey,
+            stageLabel: stageWorkStageLabel,
+        };
+
+        const applyIfCurrent = (slice: OpportunityStageWorkSlice) => {
+            const patch = (vm: OpportunityDrawerViewModel | null) =>
+                vm && String(vm.entity.id) === String(stageWorkOppId) ? applyStageWorkSliceToVm(vm, slice) : vm;
+            setDisplayVm(patch);
+            setActiveVm(patch);
+        };
+
+        // No resolvable stage (no current stage key) → authoritatively empty, resolved synchronously.
+        if (!opportunityStageWorkCacheKey(params)) {
+            applyIfCurrent({ stage_work_runtime: null, published_stage_inputs: null, work_intent_runtime: null });
+            return;
+        }
+
+        let cancelled = false;
+        const warm = getOpportunityStageWorkWarm(params);
+        if (warm) {
+            applyIfCurrent(warm);
+            return;
+        }
+        const pending = getOpportunityStageWorkInflight(params) ?? prefetchOpportunityStageWork(params);
+        void pending
+            .then((slice) => {
+                if (cancelled) return;
+                if (slice) {
+                    applyIfCurrent(slice);
+                } else {
+                    const markError = (vm: OpportunityDrawerViewModel | null) =>
+                        vm && String(vm.entity.id) === String(stageWorkOppId) ? markStageWorkErrorOnVm(vm) : vm;
+                    setDisplayVm(markError);
+                    setActiveVm(markError);
+                }
+            })
+            .catch(() => {
+                if (cancelled) return;
+                const markError = (vm: OpportunityDrawerViewModel | null) =>
+                    vm && String(vm.entity.id) === String(stageWorkOppId) ? markStageWorkErrorOnVm(vm) : vm;
+                setDisplayVm(markError);
+                setActiveVm(markError);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        drawer.type,
+        drawer.id,
+        stageWorkOppId,
+        stageWorkStatus,
+        stageWorkStageKey,
+        stageWorkDeptId,
+        stageWorkStageLabel,
+    ]);
 
     const holdPriorPayload =
         shouldHoldPriorDrawerContent(drawerRuntimePhase.phase) &&
