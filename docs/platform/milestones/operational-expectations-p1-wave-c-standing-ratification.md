@@ -11,10 +11,15 @@ supersedes: []
 architecture, no ontology, no new package, no new gate**.
 
 ```
-P1 Wave C: BLOCKED ON CONTRACT
-G-Standing authoring half: NOT GREEN
+P1 Wave C: LOCALLY COMPLETE
+G-Standing authoring half: GREEN
 P1 overall: IN PROGRESS / UNCERTIFIED
 ```
+
+> **Update (2026-07-14, C3 continuation).** The held-authority blocker recorded below (§7) has been
+> **resolved** by implementing the governed Authority model (catalog + effective-dated held-authority
+> assignments + one resolver). The earlier `BLOCKED / NOT GREEN` verdict was correct at that checkpoint;
+> §7–§8 now record the resolution and the **GREEN** gate. History is preserved, not rewritten.
 
 > **Authority.** P1 scope, gates, and completion criteria are authoritative in the
 > [Engineering Realization §13 · X0](./operational-expectations-engineering-realization.md); the frozen
@@ -92,7 +97,46 @@ a caller input). Cross-org ratification is rejected (service + DB trigger). Each
 emits exactly one authoritative Ratification Act carrying actor · authority · expectation · prior→new
 standing · server-assigned time; failed/invalid ratifications emit none; retry emits no duplicate.
 
-## 7. Architecture-governance escalation — held-authority mapping (BLOCKER)
+## 7. Governed Authority model — resolution of the held-authority contract
+
+**Governance decision (bounded, no new ontology).**
+```
+The Authority tuple facet is realized by a governed authority catalog
+(operational_authorities) and effective-dated holder assignments
+(operational_authority_assignments).
+
+RBAC permissions authorize COMMANDS (may the actor invoke author/ratify?).
+Authority assignments authorize SEMANTIC STANDING (may the actor bind under
+a specific authority in scope?).
+Both may be required; neither implies the other.
+```
+
+- **Catalog** (`operational_authorities`) — governed, org-scoped, unique `authority_key` per org,
+  effective lifecycle, **descriptive only** (no executable behaviour). A new expectation's `authority_key`
+  must resolve to an active catalog entry to be eligible for binding.
+- **Assignments** (`operational_authority_assignments`) — **append-only**, effective-dated grants linking
+  an authority to a holder (`human | policy | process | external` — **never `ai`**) within a scope
+  (`organization | location | business_process | subject | subject_type`); revocation is a new superseding
+  row (never a mutable boolean).
+- **One resolver** (`resolve_held_operational_authority`, DB `SECURITY DEFINER`, used by BOTH the author and
+  ratify RPCs) answers *"does actor X hold authority Y for org O in scope S at time T?"* — governed+active
+  authority, active in-scope non-revoked assignment, **exact authority-key match** (no invented hierarchy;
+  "meet or exceed" is certified as exact match, with hierarchy an explicit future extension), **fail-closed**,
+  **AI never holds**.
+- **Dominance rule:** exact match (Part II.4). Parent/dominance is **not** frozen and is **not** invented.
+- **Management** via dedicated `operational_expectations.authority.manage` / `.assign` capabilities
+  (admin-default) — distinct from `.author`/`.ratify`; managing/assigning authority does **not** confer
+  holding it, and an admin role alone is **not** held authority.
+- **Compatibility:** additive. Legacy free-text `authority_key` rows remain readable; an **unresolved legacy
+  claim can never become binding** (no governed authority + active assignment ⇒ proposed, never binding);
+  existing proposed/model history is not mutated. The `oe.ledger.author` flag remains the rollout boundary.
+- **Integration:** the author RPC now **computes standing server-side** from the resolver (held-authority
+  human/policy/process self-ratifies to `binding` on the authoring row with **one** Authoring Act and **no**
+  separate Ratification Act; else `proposed`; predicted `model`; AI `proposed`); the ratify RPC requires
+  `resolve_held_operational_authority` to return an assignment or raises `oe_insufficient_authority` — a
+  `.ratify` holder without sufficient authority is rejected.
+
+### 7.1 (Historical) the blocker as recorded at the prior checkpoint
 
 **Missing contract.** The frozen doctrine requires **authority-holding gating** and **authority
 sufficiency**:
@@ -128,18 +172,22 @@ enforced** (capability-only). Therefore **G-Standing authoring half is NOT GREEN
 
 ## 8. G-Standing (authoring half) — verdict
 
-Question: *Can any authored expectation become effectively binding without canonical Authority resolution
-or an authorized immutable ratification?* **No** — binding requires an authorized immutable ratification
-act. Also proven: AI cannot self-ratify; authoring ≠ ratification authority; service-role is not
-Authority; effective standing is deterministic + auditable; ratification preserves append-only history;
-predicted stays `model`; no consumer evaluates yet; no downstream behavior has begun.
+Question: *Can an expectation become effectively binding unless (1) its authority is governed, (2) a
+trusted holder possesses sufficient authority in scope, (3) the caller has the required invocation
+permission, and (4) the act is immutably recorded?* **No.** Standing is computed server-side from the one
+resolver over the governed catalog + assignments; the caller cannot submit standing or authority evidence;
+an ungoverned/unassigned authority yields `proposed`, never `binding`.
 
-**But** the frozen §12 authority-holding / §5 self-ratification-within-authority requirements are **not**
-enforced (no canonical held-authority mapping — §7). Per the certification rule, that unresolved required
-contract makes the gate:
+Also proven: **AI cannot self-ratify** (fail-closed in the resolver + a human-only ratify capability);
+**service role is not Authority** (authority resolves from governed assignments, not credentials);
+**admin role is not universal Authority** (admins may manage/assign but hold nothing implicitly);
+**permission-to-author is not authority-to-bind** and **permission-to-ratify is not authority to ratify
+everything** (capability + sufficient held authority are both required); authority history is
+effective-dated + immutable (append-only); effective standing is deterministic; predicted remains `model`;
+no evaluator or downstream consumer behaviour has begun.
 
 ```
-G-Standing authoring half: NOT GREEN
+G-Standing authoring half: GREEN
 ```
 
 ## 9. Static vs live evidence

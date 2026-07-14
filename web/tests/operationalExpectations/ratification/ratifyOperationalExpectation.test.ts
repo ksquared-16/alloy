@@ -106,6 +106,22 @@ describe("idempotency + immutability", () => {
     });
 });
 
+describe("authority sufficiency (Wave C — the C3 blocker closed)", () => {
+    it("a .ratify holder WITHOUT sufficient held authority is rejected (not merely capability)", async () => {
+        gw.expectations.set("exp-1", PROPOSED);
+        gw.insufficientAuthority = true; // DB resolver reports no held authority
+        const r = await ratifyOperationalExpectation(input(), CTX, gw);
+        expect(r).toMatchObject({ status: "rejected", code: "insufficient_authority" });
+        expect(gw.commits).toHaveLength(0);
+    });
+    it("with sufficient held authority the ratification proceeds to binding", async () => {
+        gw.expectations.set("exp-1", PROPOSED);
+        gw.insufficientAuthority = false;
+        const r = await ratifyOperationalExpectation(input(), CTX, gw);
+        expect(r.status).toBe("ratified");
+    });
+});
+
 describe("failure handling", () => {
     it("a failed commit surfaces a typed failure and emits no event", async () => {
         gw.failCommit = true;

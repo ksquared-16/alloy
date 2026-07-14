@@ -90,20 +90,20 @@ describe("audit + idempotency", () => {
     });
 });
 
-describe("Wave C certification blocker — authority sufficiency", () => {
-    it("CURRENT behavior: a .ratify holder can ratify regardless of the expectation's authority_key", async () => {
-        // This documents the gap (NOT an endorsement): C2 enforces the ratify
-        // CAPABILITY + org + proposed + deontic, but does NOT compare the ratifier's
-        // held authority against the expectation's authority_key. The frozen §12
-        // requires authority-holding ("a room lead cannot author a licensing
-        // requirement"); no canonical held-authority mapping exists to enforce it.
+describe("authority sufficiency — the C3 blocker is CLOSED", () => {
+    it("ratification requires held authority (not merely the .ratify capability)", async () => {
+        // Resolved: a governed authority catalog + effective-dated held-authority
+        // assignments now back a single resolver; the ratify RPC rejects a capable
+        // caller who lacks sufficient held authority. Proven here via the gateway;
+        // the DB WHERE-clauses are proven in authority/authorityModelMigration.test.ts.
+        gw.expectations.set("exp", target({}));
+        gw.insufficientAuthority = true;
+        const r = await ratifyOperationalExpectation(input(), CTX, gw);
+        expect(r).toMatchObject({ status: "rejected", code: "insufficient_authority" });
+    });
+    it("with sufficient held authority the ratification binds", async () => {
         gw.expectations.set("exp", target({}));
         const r = await ratifyOperationalExpectation(input(), CTX, gw);
-        expect(r.status).toBe("ratified"); // binds today with capability alone
+        expect(r.status).toBe("ratified");
     });
-
-    it.todo(
-        "[BLOCKER] enforce ratifier held authority ≥ expectation.authority_key — requires a canonical " +
-        "held-authority mapping that does not exist in the substrate (architecture escalation; Wave C NOT GREEN)",
-    );
 });

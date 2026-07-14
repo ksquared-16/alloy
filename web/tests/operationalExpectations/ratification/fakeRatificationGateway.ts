@@ -21,6 +21,8 @@ interface Stored {
 export class FakeRatificationGateway implements RatificationGateway {
     enabled = true;
     failCommit = false;
+    /** Simulate the DB resolver reporting the ratifier lacks sufficient held authority. */
+    insufficientAuthority = false;
     readonly expectations = new Map<string, RatificationTargetRow>();
     readonly ratifications = new Map<string, Stored>(); // key `${org}:${expectationId}`
     readonly commits: RatificationRecord[] = [];
@@ -36,6 +38,7 @@ export class FakeRatificationGateway implements RatificationGateway {
     }
 
     async commit(orgId: string, _actor: string | null, record: RatificationRecord): Promise<RatificationCommitOutcome> {
+        if (this.insufficientAuthority) return { kind: "insufficient_authority" };
         if (this.failCommit) return { kind: "error", message: "boom" };
         const key = `${orgId}:${record.expectationId}`;
         const existing = this.ratifications.get(key);
