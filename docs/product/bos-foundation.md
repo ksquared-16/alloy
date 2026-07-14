@@ -19,7 +19,7 @@ Define **BOS** as Alloy’s unified **orchestration intelligence layer**: how as
 
 ## Program status (execution)
 
-**May 2026:** **Deeper BOS capability expansion is paused.** Shipped surfaces are **assistive groundwork** — narrow, policy-gated, **human-in-the-loop**. Operational product loops take precedence — see **`docs/execution/roadmap-and-gaps.md`**.
+**May 2026:** **Deeper BOS capability expansion is paused.** Shipped surfaces are **assistive groundwork** — narrow, policy-gated, **human-in-the-loop**. Operational product loops take precedence — see **`docs/archive/2026-06-execution/roadmap-and-gaps.md`**.
 
 **UX coherence (May 2026 — partially implemented):** AdminV2 BOS surfaces unified in **`docs/sprints/archive/05_2026/bos_ux_coherence_sprint.md`** (with **`bos_ux_coherence_design.md`**). **Shipped ~2026-05-20 → 2026-05-22:** shared **`OperationalProposalCardFrame`** on Task/Workflow/Config Assist proposal cards; execution receipts on apply outcomes; routing/governance denial copy improvements. **Still open:** full active operational context seeding, attention hierarchy cleanup, demo-path contract completion. **Not** autonomous agents or recommendation-intelligence expansion.
 
@@ -307,7 +307,7 @@ See **§ Implementation inventory — Agent permission matrix** for the full rou
 | Workflows / events | `docs/archive/2026-06-superseded-system/actions-and-workflows.md` |
 | API families | `docs/archive/2026-06-superseded-system/api-contracts.md` |
 | Workspace / queues | `docs/archive/2026-06-superseded-system/workspace-system.md` |
-| Execution pause | `docs/execution/roadmap-and-gaps.md` |
+| Execution pause | `docs/archive/2026-06-execution/roadmap-and-gaps.md` |
 | Historical typed contract | `docs/archive/.../architecture/ai-agent-system-contract.md` |
 
 ## When this doc must be updated
