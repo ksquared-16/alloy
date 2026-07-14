@@ -22,8 +22,9 @@ import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClien
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { mapWithConcurrencyLimit } from "@/lib/workspace/mapWithConcurrencyLimit";
+import { fetchQueueViewTotalsBatched } from "./fetchQueueViewTotalsBatched";
 
-/** Max canonical-total count requests in flight at once (bounds the pill fan-out). */
+/** Max canonical-total count requests in flight at once (bounds the per-view FALLBACK fan-out). */
 export const WORK_VIEW_TOTALS_FETCH_CONCURRENCY = 4;
 import {
     peekWorkUnitSurfaceTotalsCache,
@@ -171,6 +172,21 @@ export function useWorkViewTotalsState(args: {
         }
 
         let cancelled = false;
+
+        const applyFreshTotals = (freshTotals: Map<string, number | null>) => {
+            if (cancelled) return;
+            settledStoreRef.current = applyWorkViewTotalsFetchResult({
+                targets: parsedTargets,
+                selectedSiteId,
+                freshTotals,
+                settledStore: settledStoreRef.current,
+            });
+            setResolved({ scopeKey, totals: freshTotals });
+            // Write-back so a return navigation resolves these badges from the session cache.
+            if (cacheContext) putWorkUnitSurfaceTotalsCache(freshTotals, populationKey, cacheContext);
+        };
+
+        // Per-view fallback (legacy path): used only if the grouped request fails.
         const fetchTotal = async (
             key: string,
             target: WorkViewTotalTarget,
@@ -192,26 +208,33 @@ export function useWorkViewTotalsState(args: {
             }
         };
 
-        // Bounded fan-out: at most WORK_VIEW_TOTALS_FETCH_CONCURRENCY count requests in flight, so a
-        // work unit with many pills never bursts an unbounded set of requests competing with the
-        // active queue. The request COUNT stays bounded by the number of inactive views (not rows).
-        void mapWithConcurrencyLimit(
-            [...byKey.entries()],
-            WORK_VIEW_TOTALS_FETCH_CONCURRENCY,
-            ([key, target]) => fetchTotal(key, target),
-        ).then((entries) => {
-            if (cancelled) return;
-            const freshTotals = new Map(entries);
-            settledStoreRef.current = applyWorkViewTotalsFetchResult({
-                targets: parsedTargets,
-                selectedSiteId,
-                freshTotals,
-                settledStore: settledStoreRef.current,
-            });
-            setResolved({ scopeKey, totals: freshTotals });
-            // Write-back so a return navigation resolves these badges from the session cache.
-            if (cacheContext) putWorkUnitSurfaceTotalsCache(freshTotals, populationKey, cacheContext);
-        });
+        void (async () => {
+            // Batched: ONE request resolves every pill's count (see /api/admin/queue-view-totals),
+            // so the browser issues a single request regardless of how many views the unit has.
+            try {
+                const targetsList = [...byKey.values()].map((t) => ({
+                    workUnitId: t.workUnitId,
+                    queueKey: t.baseQueueKey,
+                    workViewId: t.viewId,
+                }));
+                const batched = await fetchQueueViewTotalsBatched({ targets: targetsList, selectedSiteId });
+                if (cancelled) return;
+                const freshTotals = new Map<string, number | null>();
+                for (const key of byKey.keys()) freshTotals.set(key, batched.has(key) ? batched.get(key)! : null);
+                applyFreshTotals(freshTotals);
+                return;
+            } catch {
+                // Grouped endpoint unavailable — fall back to the bounded per-view fan-out so counts
+                // are never lost. Request count still bounded by inactive-view count, not rows.
+            }
+            const entries = await mapWithConcurrencyLimit(
+                [...byKey.entries()],
+                WORK_VIEW_TOTALS_FETCH_CONCURRENCY,
+                ([key, target]) => fetchTotal(key, target),
+            );
+            applyFreshTotals(new Map(entries));
+        })();
+
         return () => {
             cancelled = true;
         };
