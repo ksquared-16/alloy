@@ -42,7 +42,9 @@ for f in \
   "$ROOT"/tests/run-phase3-tests.sh \
   "$ROOT"/tests/test-agent-env-classify.sh \
   "$ROOT"/tests/test-agent-two-tier-env.sh \
-  "$ROOT"/tests/test-agent-playwright-resolve.sh
+  "$ROOT"/tests/test-agent-playwright-resolve.sh \
+  "$ROOT"/tests/test-agent-evidence-size.sh \
+  "$ROOT"/tests/test-agent-ready-next-env.sh
 do
   bash -n "$f"
   pass "bash -n $(basename "$f")"

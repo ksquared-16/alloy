@@ -15,6 +15,7 @@ usage() {
 Usage: alloy-agent-evidence <slot|name>
 
 Lists screenshots, traces, verification summaries under the slot evidence directory.
+Reports file names, sizes, and modification times only — never file contents.
 EOF
 }
 
@@ -47,13 +48,13 @@ main() {
   local f size mtime
   while IFS= read -r f; do
     [[ -n "$f" ]] || continue
-    size="$(alloy_dir_size "$f" 2>/dev/null || du -sh "$f" 2>/dev/null | awk '{print $1}')"
-    mtime="$(stat -f '%Sm' -t '%Y-%m-%d %H:%M' "$f" 2>/dev/null || stat -c '%y' "$f" 2>/dev/null | cut -c1-16)"
+    size="$(alloy_path_size_human "$f")"
+    mtime="$(alloy_file_mtime_human "$f")"
     printf '  %-12s %-24s %s\n' "$size" "$mtime" "$(basename "$f")"
   done < <(alloy_list_evidence "$name")
 
   echo
-  echo "Total directory size: $(alloy_dir_size "$dir")"
+  echo "Total directory size: $(alloy_path_size_human "$dir")"
 }
 
 main "$@"

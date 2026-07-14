@@ -35,6 +35,9 @@ alloy-agent-context 3 --copy
 alloy-agent-evidence 3
 alloy-agent-browser-stop 3                      # slot-owned browser only
 
+# After alloy-dev-start: Next.js may dirty web/next-env.d.ts — restore before READY:
+#   git restore web/next-env.d.ts
+
 # Shell shortcuts
 awt 3                                         # cd slot 3 worktree
 devup                                         # start owned localhost server

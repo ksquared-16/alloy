@@ -834,9 +834,17 @@ alloy_agent_ready_evaluate() {
   local branch dirty ahead behind
   branch="$(alloy_current_branch "$path" 2>/dev/null || echo "?")"
   [[ "$branch" == "$ALLOY_WORKTREE_BRANCH" ]] || issues+=("git: branch mismatch (on $branch, expected $ALLOY_WORKTREE_BRANCH)")
-  if alloy_worktree_is_dirty "$path"; then
-    issues+=("git: worktree dirty")
-  fi
+  local dirty_class
+  dirty_class="$(alloy_worktree_dirty_classification "$path")"
+  case "$dirty_class" in
+    clean) ;;
+    next-env-only)
+      issues+=("git: worktree dirty (Next.js regenerated ${ALLOY_WEB_DIR:-web}/next-env.d.ts after dev) — git restore ${ALLOY_WEB_DIR:-web}/next-env.d.ts")
+      ;;
+    dirty)
+      issues+=("git: worktree dirty")
+      ;;
+  esac
   ahead="$(alloy_git "$path" rev-list --count "$(alloy_base_ref)..HEAD" 2>/dev/null || echo "?")"
   behind="$(alloy_git "$path" rev-list --count "HEAD..$(alloy_base_ref)" 2>/dev/null || echo "?")"
 

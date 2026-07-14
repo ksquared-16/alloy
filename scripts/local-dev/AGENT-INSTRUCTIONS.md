@@ -58,6 +58,7 @@ Hard constraints:
 - Do NOT run `npm run dev` directly — use `alloy-dev-start` / `devup` (agent-safe `.env.local.agent` + trusted server injection; privileged values never enter the worktree).
 - Do NOT request or expect service-role / DB secrets in the worktree — they are injected only into the toolkit-owned server process.
 - Run `npm install` inside **this** worktree’s `web/` — browser tooling uses that worktree-local Playwright only (never borrow another tree’s `node_modules`).
+- If `alloy-agent-ready` reports only `web/next-env.d.ts` dirty after dev, run `git restore web/next-env.d.ts` (Next.js regeneration — not a toolkit defect).
 
 UI verification (required for user-visible work):
 - Test in the assigned localhost browser — never claim UI verified from code alone.

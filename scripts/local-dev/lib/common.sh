@@ -353,6 +353,37 @@ alloy_worktree_is_dirty() {
   [[ -n "$out" ]]
 }
 
+# Filtered porcelain (ignores agent marker files). stdout only.
+alloy_worktree_dirty_porcelain() {
+  local path="$1"
+  local out
+  out="$(alloy_git "$path" status --porcelain 2>/dev/null || true)"
+  printf '%s\n' "$out" | grep -vE '^\?\? \.env\.local\.agent$' || true
+}
+
+# stdout: clean | next-env-only | dirty
+# next-env-only: sole dirty path is ALLOY_WEB_DIR/next-env.d.ts (Next.js dev regeneration).
+alloy_worktree_dirty_classification() {
+  local path="$1"
+  local web_rel="${ALLOY_WEB_DIR:-web}/next-env.d.ts"
+  local out line file_path
+  out="$(alloy_worktree_dirty_porcelain "$path")"
+  if [[ -z "$out" ]]; then
+    printf 'clean'
+    return
+  fi
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    file_path="${line:3}"
+    if [[ "$file_path" == "$web_rel" ]]; then
+      continue
+    fi
+    printf 'dirty'
+    return
+  done <<<"$out"
+  printf 'next-env-only'
+}
+
 alloy_current_branch() {
   local path="$1"
   alloy_git "$path" rev-parse --abbrev-ref HEAD
@@ -367,13 +398,68 @@ alloy_dir_size() {
   fi
 }
 
+# Raw byte size of a regular file (BSD stat -f %z, GNU stat -c %s). Never reads contents.
+alloy_file_byte_size() {
+  local path="$1"
+  local bytes=""
+  [[ -f "$path" ]] || return 1
+  bytes="$(stat -f '%z' "$path" 2>/dev/null || stat -c '%s' "$path" 2>/dev/null || true)"
+  [[ -n "$bytes" ]] || return 1
+  printf '%s' "$bytes"
+}
+
 alloy_human_bytes() {
   local bytes="$1"
+  [[ "$bytes" =~ ^[0-9]+$ ]] || return 1
   if alloy_have_cmd numfmt; then
-    numfmt --to=iec --suffix=B "$bytes" 2>/dev/null || echo "${bytes}B"
-  else
-    echo "${bytes}B"
+    numfmt --to=iec-i --suffix=B "$bytes" 2>/dev/null && return 0
   fi
+  # Portable fallback when numfmt is unavailable (common on macOS).
+  awk -v b="$bytes" 'BEGIN {
+    split("B KB MB GB TB", u, " ");
+    i = 1; v = b + 0;
+    while (v >= 1024 && i < 5) { v /= 1024; i++ }
+    if (i == 1) printf "%d%s\n", v, u[i];
+    else printf "%.1f%s\n", v, u[i];
+  }'
+}
+
+# Human-readable size for a file or directory. Never reads file contents.
+# stdout: size string, or "unknown" when size cannot be determined.
+alloy_path_size_human() {
+  local path="$1"
+  local bytes size
+  if [[ -f "$path" ]]; then
+    if bytes="$(alloy_file_byte_size "$path" 2>/dev/null)"; then
+      alloy_human_bytes "$bytes"
+      return 0
+    fi
+    size="$(du -h "$path" 2>/dev/null | awk '{print $1; exit}')"
+    if [[ -n "$size" ]]; then
+      printf '%s' "$size"
+      return 0
+    fi
+    printf 'unknown'
+    return 1
+  fi
+  if [[ -d "$path" ]]; then
+    size="$(du -sh "$path" 2>/dev/null | awk '{print $1}')"
+    if [[ -n "$size" ]]; then
+      printf '%s' "$size"
+      return 0
+    fi
+    printf 'unknown'
+    return 1
+  fi
+  printf 'unknown'
+  return 1
+}
+
+alloy_file_mtime_human() {
+  local path="$1"
+  stat -f '%Sm' -t '%Y-%m-%d %H:%M' "$path" 2>/dev/null \
+    || stat -c '%y' "$path" 2>/dev/null | cut -c1-16 \
+    || printf 'unknown'
 }
 
 alloy_export_node_defaults() {

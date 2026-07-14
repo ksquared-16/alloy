@@ -374,4 +374,6 @@ alloy-agent-browser-stop 1
 
 Environment contract: agents see `web/.env.local.agent` (public/safe). Privileged server vars (e.g. `SUPABASE_SERVICE_ROLE_KEY`) are injected only into the toolkit-owned Next process from `ALLOY_SERVER_ENV_SOURCE` and never enter the worktree. See `VERIFICATION-SECURITY.md`.
 
+**Real-Mac certified (July 2026):** prepare → toolkit-owned server (two-tier env) → isolated manual login → READY → `/workspace` verify PASS → evidence generated. See `VERIFICATION-SECURITY.md` for certification notes and `web/next-env.d.ts` remediation.
+
 Guides: `VERIFICATION-SECURITY.md`, `AI-APP-HEALTH.md`

@@ -144,7 +144,50 @@ alloy-dev-start wt1-parallel-agent-phase-2
 alloy-agent-login 1
 alloy-agent-ready 1
 alloy-agent-verify 1 route /workspace
+alloy-agent-evidence 1
 ```
+
+## Real-Mac certification (Phase 3)
+
+Verified on a real workstation (authenticated smoke test, July 2026):
+
+| Step | Result |
+|------|--------|
+| `alloy-agent-prepare` | Sanitized `web/.env.local.agent` created |
+| `alloy-dev-start` | Toolkit-owned server on slot 1 / port 3011 |
+| Two-tier environment | Public/safe vars in worktree; `SUPABASE_SERVICE_ROLE_KEY` in owned Next process only |
+| `alloy-agent-login` | Isolated manual login; valid storage state captured |
+| `alloy-agent-ready` | READY (after restoring generated `web/next-env.d.ts` if needed) |
+| `alloy-agent-verify route /workspace` | PASS |
+| `alloy-agent-evidence` | Evidence JSON listed with file sizes |
+| Browser cleanup | Owned browser process stopped after login |
+
+Full path:
+
+```text
+prepare → toolkit-owned server (two-tier env) → isolated manual login
+→ storage-state validation → READY → focused /workspace verification PASS → evidence generated
+```
+
+No credentials, cookies, token contents, or secret values are stored in certification notes.
+
+### Known Next.js dirty state (`web/next-env.d.ts`)
+
+Running the Next dev server may regenerate `web/next-env.d.ts` (for example switching the import between `.next/types/routes.d.ts` and `.next/dev/types/routes.d.ts`). This is expected Next.js behavior — **not** a toolkit defect.
+
+- `alloy-agent-ready` reports **NOT READY** when the worktree is dirty.
+- When **only** `web/next-env.d.ts` is dirty, remediation is explicit:
+
+  ```bash
+  git restore web/next-env.d.ts
+  ```
+
+- The toolkit does **not** auto-restore user files.
+- Other dirty files still produce the generic `git: worktree dirty` warning.
+
+### Worktree dependencies
+
+Every managed worktree requires its own `web/node_modules` (`npm install` inside that worktree's `web/`). Browser helpers resolve `@playwright/test` from that worktree only — never shared or borrowed.
 
 Agents must report for user-visible changes:
 
