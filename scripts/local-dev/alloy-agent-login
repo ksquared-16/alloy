@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Manual login capture into isolated per-slot Playwright storage state.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/verify.sh
+source "${SCRIPT_DIR}/lib/verify.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-agent-login <slot|name>
+
+Opens an isolated browser on the assigned localhost /login route.
+Complete Supabase email/password sign-in manually.
+Captures storage state to ~/.local/state/alloy-dev/auth/slot<N>/storage-state.json
+
+Never prints cookies, tokens, or credentials.
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_verify_runtime_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+
+  local name
+  name="$(alloy_resolve_worktree_name "$1")"
+  alloy_load_metadata "$name"
+
+  local slot="$ALLOY_WORKTREE_SLOT"
+  local port="$PORT"
+  local path="$ALLOY_WORKTREE_PATH"
+  local web_dir base storage profile pid_path
+
+  web_dir="$(alloy_web_dir_for "$path")"
+  [[ -d "$web_dir" ]] || alloy_die "web directory missing: $web_dir"
+
+  local server
+  server="$(alloy_server_state_for "$name")"
+  case "$server" in
+    running) ;;
+    foreign-port-owner)
+      alloy_die "port ${port} has a foreign listener — stop it, then: alloy-dev-start ${name} (do not run npm run dev directly)"
+      ;;
+    *)
+      alloy_info "Dev server not toolkit-owned (${server}) — starting via alloy-dev-start..."
+      env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" "${SCRIPT_DIR}/alloy-dev-start" "$name"
+      ;;
+  esac
+
+  alloy_refuse_duplicate_browser "$slot"
+
+  alloy_require_worktree_playwright "$path"
+
+  base="$(alloy_verify_url_for_slot "$port")"
+  alloy_verify_host_allowed "$base" || alloy_die "host not allowed for verification: $base"
+
+  storage="$(alloy_auth_storage_path "$slot")"
+  profile="$(alloy_browser_profile_dir "$slot")"
+  pid_path="$(alloy_browser_pid_path "$slot")"
+  mkdir -p "$(dirname "$storage")" "$profile" "$(dirname "$pid_path")"
+
+  local qa
+  qa="$(alloy_slot_qa_identity "$slot")"
+  if [[ -n "$qa" ]]; then
+    alloy_info "QA identity alias: ${qa} (sign in with this staging/local account)"
+  else
+    alloy_warn "ALLOY_SLOT_${slot}_QA_IDENTITY not set — configure a dedicated QA email label in ~/.config/alloy-dev/config"
+  fi
+
+  alloy_info "Opening isolated browser for manual login at ${base}$(alloy_agent_login_route)..."
+
+  local login_script="${ALLOY_AGENT_LOGIN_SCRIPT:-${SCRIPT_DIR}/lib/agent-login-capture.mjs}"
+  local rc=0
+  (
+    cd "$web_dir"
+    node "$login_script" \
+      --web-dir "$web_dir" \
+      --base-url "$base" \
+      --login-route "$(alloy_agent_login_route)" \
+      --check-route "$(alloy_agent_auth_check_route)" \
+      --profile-dir "$profile" \
+      --storage-out "$storage" \
+      --pid-out "$pid_path"
+  ) || rc=$?
+
+  if [[ "$rc" -ne 0 ]]; then
+    alloy_stop_owned_browser "$slot" || true
+    rm -f "$storage" "$pid_path" 2>/dev/null || true
+    alloy_die "login capture failed (slot $slot)"
+  fi
+
+  chmod 600 "$storage"
+  local pid
+  pid="$(alloy_read_pid_file "$pid_path" 2>/dev/null || echo "")"
+  if [[ -n "$pid" ]]; then
+    alloy_write_browser_meta "$slot" "$pid" "$profile" "$name"
+  fi
+
+  # Login browser should exit after capture; clear PID if process ended.
+  alloy_stop_owned_browser "$slot" || true
+
+  local auth_status
+  auth_status="$(alloy_auth_state_status "$slot" "$port" "$web_dir")"
+
+  cat <<EOF
+Login capture complete
+  slot:    ${slot}
+  QA:      ${qa:-"(not configured)"}
+  storage: ${storage} (chmod 600)
+  auth:    ${auth_status}
+
+Verify readiness:
+  alloy-agent-ready ${slot}
+EOF
+}
+
+main "$@"

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Prepare safe worktree-local environment for agent verification.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/verify.sh
+source "${SCRIPT_DIR}/lib/verify.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-agent-prepare <slot|name> [--force]
+
+Creates or verifies web/.env.local.agent using an explicit allowlist.
+Never prints variable values. chmod 600. Refuses silent overwrite.
+
+Source defaults to canonical ALLOY_REPO/web/.env.local (override: ALLOY_ENV_SOURCE).
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  local target="" force=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *)
+        [[ -z "$target" ]] || alloy_die "unexpected argument: $1"
+        target="$1"
+        shift
+        ;;
+    esac
+  done
+  [[ -n "$target" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_verify_runtime_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+
+  local name
+  name="$(alloy_resolve_worktree_name "$target")"
+  alloy_load_metadata "$name"
+
+  alloy_info "Preparing safe env for ${name} (slot ${ALLOY_WORKTREE_SLOT})..."
+  alloy_prepare_agent_env_file "$ALLOY_WORKTREE_PATH" "$force"
+
+  alloy_generate_agent_context "$name" >/dev/null
+
+  cat <<EOF
+
+Next:
+  alloy-dev-start ${name}
+  alloy-agent-login ${ALLOY_WORKTREE_SLOT}
+  alloy-agent-ready ${ALLOY_WORKTREE_SLOT}
+EOF
+}
+
+main "$@"

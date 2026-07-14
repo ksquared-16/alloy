@@ -23,10 +23,15 @@ alloy_print_agent_row() {
   local slot="$ALLOY_WORKTREE_SLOT"
   local role="${ALLOY_AGENT_ROLE:-$(alloy_slot_role "$slot")}"
   local agent_status="${ALLOY_AGENT_STATUS:-active}"
-  local server git_summary
+  local server git_summary env_ok auth browser qa
 
   server="$(alloy_server_state_for "$name")"
   git_summary="$(alloy_git_state_summary "$ALLOY_WORKTREE_PATH")"
+  env_ok="no"
+  alloy_agent_env_ready "$ALLOY_WORKTREE_PATH" && env_ok="yes"
+  auth="$(alloy_auth_state_status "$slot" "$PORT" "$(alloy_web_dir_for "$ALLOY_WORKTREE_PATH")")"
+  browser="$(alloy_browser_state_for "$slot")"
+  qa="$(alloy_slot_qa_identity "$slot")"
 
   printf 'slot %-2s  %-28s\n' "$slot" "$name"
   printf '  role:    %s\n' "$role"
@@ -35,6 +40,10 @@ alloy_print_agent_row() {
   printf '  status:  %s\n' "$agent_status"
   printf '  server:  %s\n' "$server"
   printf '  git:     %s\n' "$git_summary"
+  printf '  env:     %s\n' "$env_ok"
+  printf '  QA:      %s\n' "${qa:-"(not configured)"}"
+  printf '  auth:    %s\n' "$auth"
+  printf '  browser: %s\n' "$browser"
   printf '  path:    %s\n' "$ALLOY_WORKTREE_PATH"
   printf '  branch:  %s\n' "$ALLOY_WORKTREE_BRANCH"
   echo
@@ -48,6 +57,11 @@ main() {
 
   alloy_load_config
   alloy_ensure_agent_runtime_dirs
+  # shellcheck source=lib/verify.sh
+  source "${SCRIPT_DIR}/lib/verify.sh"
+  alloy_ensure_verify_runtime_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+  export ALLOY_SKIP_AUTH_LIVE_CHECK=1
 
   if [[ $# -gt 1 ]]; then
     usage >&2

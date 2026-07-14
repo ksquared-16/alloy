@@ -9,23 +9,36 @@ alloy-agent-instructions <slot|name> --copy   # pbcopy
 alloy-agent-open <slot|name>                  # also copies when pbcopy exists
 ```
 
-Generated file (git-ignored in the worktree):
+Phase 3 adds **verification context**:
+
+```bash
+alloy-agent-prepare <slot>
+alloy-agent-login <slot>
+alloy-agent-context <slot> --copy
+alloy-agent-ready <slot>
+```
+
+Generated files (git-ignored in the worktree):
 
 ```text
 <worktree>/.alloy-agent-instructions.md
+<worktree>/.alloy-agent-context.md
+<worktree>/web/.env.local.agent
 ```
 
-Runtime copy:
+Auth storage (never commit):
 
 ```text
-~/.local/state/alloy-dev/instructions/<worktree-name>.md
+~/.local/state/alloy-dev/auth/slot<N>/storage-state.json
 ```
+
+See `VERIFICATION-SECURITY.md` for the full security model.
 
 ---
 
-## Generic fallbacks (Phase 1)
+## Generic fallbacks (Phase 1–3)
 
-Use only when metadata/instructions are unavailable. Prefer the generated file.
+Use only when generated files are unavailable.
 
 ### Cursor agent
 
@@ -33,27 +46,33 @@ Use only when metadata/instructions are unavailable. Prefer the generated file.
 You are working in an Alloy Git worktree for parallel local development.
 
 Hard constraints:
-- Work ONLY in this assigned worktree directory. Do not edit other worktrees or the canonical checkout unless explicitly told.
-- Use ONLY the assigned branch for this worktree.
-- Use ONLY the assigned PORT for any local app server (see .env.local.agent and alloy-agent-status).
-- At start, confirm: `pwd`, `git branch --show-current`, and `git status --short`.
-- Do NOT push.
-- Do NOT merge.
-- Do NOT delete branches.
-- Do NOT remove worktrees.
-- Do NOT stash/reset/clean user work. Preserve uncommitted and committed work.
+- Work ONLY in this assigned worktree directory.
+- Use ONLY the assigned branch and PORT (see alloy-agent-status).
+- Use ONLY your slot's QA identity and browser storage state — never production.
+- At start: confirm pwd, branch, git status --short.
+- Do NOT push, merge, delete branches, or remove worktrees.
 - Commit coherent changes locally when appropriate.
-- Run focused checks directly (single-file / narrow Vitest, lint of touched files).
-- For broad checks (full typecheck, full Vitest, Next build, Playwright, verify:module-imports), use `alloy-validate <worktree-name> <kind>` only.
-- Do NOT background heavy checks.
-- Do NOT start a second dev server for this worktree. Prefer `alloy-dev-start` / `alloy-dev-stop`.
-- Stop temporary processes you start.
-- Before finishing, report any processes you left running (dev server, validators, watchers).
+- Focused checks: single-file Vitest, lint of touched files.
+- Heavy checks: alloy-validate <worktree> <kind> only (serialized).
+- Do NOT start a second dev server or duplicate toolkit browser.
+- Do NOT run `npm run dev` directly — use `alloy-dev-start` / `devup` (agent-safe `.env.local.agent` + trusted server injection; privileged values never enter the worktree).
+- Do NOT request or expect service-role / DB secrets in the worktree — they are injected only into the toolkit-owned server process.
+- Run `npm install` inside **this** worktree’s `web/` — browser tooling uses that worktree-local Playwright only (never borrow another tree’s `node_modules`).
+- If `alloy-agent-ready` reports only `web/next-env.d.ts` dirty after dev, run `git restore web/next-env.d.ts` (Next.js regeneration — not a toolkit defect).
 
-Port map: slot N → port 3010+N (3011–3016). Canonical staging uses 3000.
-Permanent slots: 1 Product · 2 Architecture · 3 Performance · 4 UI/UX · 5 Refactor · 6 Experimental.
+UI verification (required for user-visible work):
+- Test in the assigned localhost browser — never claim UI verified from code alone.
+- Report route, steps, expected vs observed, console errors, failed requests, evidence paths.
+- Focused: alloy-agent-verify <slot> route /path
+- Full Playwright: alloy-validate <worktree> playwright only.
+- Never expose cookies, tokens, or storage-state contents.
+- Stop browsers: alloy-agent-browser-stop <slot>
+
+Port map: slot N → 3010+N (3011–3016). Login: /login (Supabase email/password).
 ```
 
 ### Claude agent
 
-Same constraints as Cursor. Prefer architecture/doctrine lane when on slot 2, or refactor/infrastructure when on slot 5, unless the human redirects.
+Same as Cursor. Prefer architecture/doctrine on slot 2, refactor/infrastructure on slot 5 unless redirected.
+
+Claude Desktop: open the exact worktree folder printed by `alloy-agent-open` if no `claude` CLI exists.
