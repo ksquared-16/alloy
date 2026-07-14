@@ -1,3 +1,10 @@
+---
+owner: runtime
+status: canonical
+last_reviewed: 2026-07-14
+supersedes: []
+---
+
 # Work Unit Session Continuity (implemented)
 
 Status: implemented (Workspace Trust Closure, July 2026). This documents the shipped contract, not a
