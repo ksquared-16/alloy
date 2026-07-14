@@ -7,7 +7,7 @@ import AdminV2WorkspaceClientProviders from "./AdminV2WorkspaceClientProviders";
 import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
 import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
-import { loadEntityLabelsMapForUser, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
+import { loadEntityLabelsMapForOrgId, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { loadOperatorLifecycleLandingCardsServer } from "@/lib/admin/loadOperatorLifecycleLandingServer";
 import { composeWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
@@ -75,7 +75,12 @@ export default async function AdminV2WorkspaceLayout({
             loadViewerTimezoneSafe(auth.user.id),
             loadOperationalTimezoneSafe(orgId),
             getAdminAccessContextCached(),
-            loadEntityLabelsMapForUser(auth.user.id).catch((): EntityLabelsBootstrapMap => ({})),
+            // Known org id (no redundant access-core resolve) + a hard timeout so a slow cold industry
+            // lookup can never block the workspace/work-unit first composition — labels degrade to
+            // last-known/default and warm in the background. (Trust Closure deployed-perf fix.)
+            loadEntityLabelsMapForOrgId(orgId, { timeoutMs: 150 }).catch(
+                (): EntityLabelsBootstrapMap => ({})
+            ),
             // First-paint lifecycle tiles for the workspace Route VM. Loads in parallel with the
             // existing bundle; graceful [] on no-access/error keeps the client refinement path intact.
             loadOperatorLifecycleLandingCardsServer(),

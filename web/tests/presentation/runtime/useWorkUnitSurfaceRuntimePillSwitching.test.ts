@@ -26,10 +26,14 @@ describe("useWorkUnitSurfaceRuntime — pill switching runtime guards", () => {
         expect(src).not.toContain("autoOpenDoneRef");
     });
 
-    it("selectWorkView clears stale focus panel before swapping views", () => {
-        expect(src).toMatch(/closeDrawer\(\)/);
+    it("selectWorkView holds the prior record across a view swap (no synchronous blank)", () => {
+        // The prior record stays on screen; the first-row auto-open swaps the subject once the
+        // new lane settles (holdPriorPayload spans the swap) — selectWorkView must NOT closeDrawer.
+        expect(src).toMatch(/Do NOT clear the focus panel here/);
         expect(src).toMatch(/forceAutoOpenViewRef\.current = action\.workViewId/);
         expect(src).toMatch(/autoOpenedForViewRef\.current = null/);
+        // The only drawer clear on switch is the empty-lane guard inside the auto-open effect.
+        expect(src).toMatch(/forceAutoOpen && rows\.length === 0/);
     });
 
     it("first-row auto-open re-arms per work view after queue settles", () => {

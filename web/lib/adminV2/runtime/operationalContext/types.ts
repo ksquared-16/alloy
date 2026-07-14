@@ -184,6 +184,12 @@ export type OperationalContext = {
      */
     stageWorkRuntime?: StageWorkRuntimeProjection | null;
     /**
+     * True while the deferred stage-work projection is still resolving (Tier-2). The Current Work
+     * region must render a neutral pending treatment in its final geometry, NOT the empty state —
+     * a null `stageWorkRuntime` during pending is "not loaded yet", not "no active work".
+     */
+    stageWorkPending?: boolean;
+    /**
      * Registry-backed record_header action slots — supporting actions for Current Work.
      * Populated by `buildOperationalContext`; cards never fetch separately.
      */

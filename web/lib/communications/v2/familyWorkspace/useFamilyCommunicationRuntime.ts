@@ -292,7 +292,13 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                     setLoading(false);
                     setServedFromWarmCache(true);
                 }
-                void prefetchDrawerFamilyWorkspace(params, { force: true }).then((fresh) => {
+                // SWR revalidate: coalesce onto an in-flight fetch when one exists so two
+                // consumers served from the same warm entry don't each issue a forced request
+                // (the `force` flag intentionally bypasses warm freshness, not in-flight dedup).
+                const revalidate =
+                    getDrawerFamilyWorkspaceInflight(params) ??
+                    prefetchDrawerFamilyWorkspace(params, { force: true });
+                void revalidate.then((fresh) => {
                     if (fresh) applyIfCurrent(fresh, resetSelection);
                 });
                 return warm;

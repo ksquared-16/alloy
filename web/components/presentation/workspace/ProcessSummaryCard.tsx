@@ -369,6 +369,10 @@ export function ProcessSummaryCard({
                     ) : (
                         <Link
                             href={drillHref}
+                            // Heavy Work Unit route — never eagerly prefetch on viewport (a wall of
+                            // process cards would storm the router). Warming is intentional only:
+                            // the deduped `warm` fires on pointer/focus intent.
+                            prefetch={false}
                             aria-label={`Open ${process.label}`}
                             data-process-cta
                             onPointerEnter={warm}
