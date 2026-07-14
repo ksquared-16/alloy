@@ -27,8 +27,21 @@ export async function getAdminOrgIdForUser(userId: string): Promise<string | nul
 const ORG_ENTITY_LABELS_SERVER_CACHE = new Map<string, { at: number; map: EntityLabelsBootstrapMap }>();
 const ORG_ENTITY_LABELS_TTL_MS = 90_000;
 
-/** Server-only: org-scoped label map with short in-process TTL (layout + routes). */
-export async function loadEntityLabelsMapForOrgId(orgId: string): Promise<EntityLabelsBootstrapMap> {
+const ENTITY_LABELS_TIMEOUT_SENTINEL = Symbol("entity-labels-timeout");
+
+/**
+ * Server-only: org-scoped label map with a short in-process TTL (layout + routes).
+ *
+ * `timeoutMs` bounds how long a caller on a first-paint critical path (the workspace layout) will
+ * WAIT for a cold resolve. Labels are org-stable terminology, so on timeout we return the last-known
+ * (stale) map — or an empty map for a genuinely cold org — and let the real resolution finish in the
+ * background to warm the cache for the next render. Entity labels therefore NEVER block first
+ * composition; a slow industry lookup degrades to known/default labels instead of holding the page.
+ */
+export async function loadEntityLabelsMapForOrgId(
+    orgId: string,
+    opts?: { timeoutMs?: number }
+): Promise<EntityLabelsBootstrapMap> {
     const key = orgId.trim();
     if (!key) return {};
     const now = Date.now();
@@ -36,11 +49,35 @@ export async function loadEntityLabelsMapForOrgId(orgId: string): Promise<Entity
     if (hit && now - hit.at < ORG_ENTITY_LABELS_TTL_MS) {
         return hit.map;
     }
+
+    const fallbackMap: EntityLabelsBootstrapMap = hit?.map ?? {};
     const supabase = createAdminClient();
-    const { effective } = await resolveEntityLabelsForOrgCached(supabase, key);
-    const map = entityLabelsMapFromEffective(effective);
-    ORG_ENTITY_LABELS_SERVER_CACHE.set(key, { at: now, map });
-    return map;
+    // Never rejects: a failed resolve degrades to the last-known/default map (labels must not throw
+    // out of first composition). A success also warms the process cache for the next render.
+    const resolvePromise: Promise<EntityLabelsBootstrapMap> = resolveEntityLabelsForOrgCached(supabase, key)
+        .then(({ effective }) => {
+            const map = entityLabelsMapFromEffective(effective);
+            ORG_ENTITY_LABELS_SERVER_CACHE.set(key, { at: Date.now(), map });
+            return map;
+        })
+        .catch(() => fallbackMap);
+
+    const timeoutMs = opts?.timeoutMs;
+    if (typeof timeoutMs === "number" && timeoutMs > 0) {
+        const raced = await Promise.race([
+            resolvePromise,
+            new Promise<typeof ENTITY_LABELS_TIMEOUT_SENTINEL>((resolve) =>
+                setTimeout(() => resolve(ENTITY_LABELS_TIMEOUT_SENTINEL), timeoutMs)
+            ),
+        ]);
+        if (raced === ENTITY_LABELS_TIMEOUT_SENTINEL) {
+            void resolvePromise; // keeps warming in the background (already catch-guarded)
+            return fallbackMap; // stale-while-revalidate: last known, else empty (client uses defaults)
+        }
+        return raced;
+    }
+
+    return resolvePromise;
 }
 
 /** Server-only: hydrated label map for admin shell (no raw entity_type flash on first paint). */

@@ -35,6 +35,15 @@ export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId:
 
     const industryId = (orgRow as { industry_id?: string } | null)?.industry_id ?? null;
 
+    // Org label OVERRIDES are independent of the industry chain — start them now so they run in
+    // parallel with the (sometimes slow) industry lookup + industry defaults instead of after them.
+    const overridesPromise = supabase
+        .from("entity_labels")
+        .select("entity_type, singular, plural")
+        .eq("org_id", orgId)
+        .order("entity_type", { ascending: true })
+        .then((r) => r.data ?? null);
+
     let industry: { key: string; label: string } | null = null;
     let defaultIndustryId: string | null = industryId;
 
@@ -86,11 +95,7 @@ export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId:
     }
     mark("industry_defaults_ms");
 
-    const { data: overrideRows } = await supabase
-        .from("entity_labels")
-        .select("entity_type, singular, plural")
-        .eq("org_id", orgId)
-        .order("entity_type", { ascending: true });
+    const overrideRows = await overridesPromise;
     mark("org_overrides_ms");
 
     const overrides: EntityLabelRow[] = (overrideRows ?? []).map((r) => ({
@@ -149,6 +154,10 @@ function entityLabelsUnstableTag(orgId: string): string {
     return `entity-labels-org:${orgId.trim()}`;
 }
 
+// In-flight de-duplication: concurrent cold resolves for the same org share ONE database resolution
+// instead of stampeding N identical (and sometimes multi-second) queries.
+const inflightEntityLabelResolves = new Map<string, Promise<EntityLabelsPayload>>();
+
 async function resolveEntityLabelsForOrgDataCached(orgId: string): Promise<EntityLabelsPayload> {
     const key = orgId.trim();
     if (!key) {
@@ -160,18 +169,24 @@ async function resolveEntityLabelsForOrgDataCached(orgId: string): Promise<Entit
             effective: [],
         };
     }
+    const existing = inflightEntityLabelResolves.get(key);
+    if (existing) return existing;
+
     const fetcher = async () => {
         logEntityLabelsCache("miss", { layer: "next_data", org_id: key, reason: "fetch" });
         const supabase = createAdminClient();
         return resolveEntityLabelsForOrg(supabase, key);
     };
-    if (typeof unstable_cache === "function" && process.env.NODE_ENV !== "test") {
-        return unstable_cache(fetcher, [`entity-labels-v1-${key}`], {
-            revalidate: ENTITY_LABELS_NEXT_REVALIDATE_S,
-            tags: [entityLabelsUnstableTag(key)],
-        })();
-    }
-    return fetcher();
+    const run =
+        typeof unstable_cache === "function" && process.env.NODE_ENV !== "test"
+            ? unstable_cache(fetcher, [`entity-labels-v1-${key}`], {
+                  revalidate: ENTITY_LABELS_NEXT_REVALIDATE_S,
+                  tags: [entityLabelsUnstableTag(key)],
+              })()
+            : fetcher();
+    const promise = Promise.resolve(run).finally(() => inflightEntityLabelResolves.delete(key));
+    inflightEntityLabelResolves.set(key, promise);
+    return promise;
 }
 
 /** Org-stable labels for shell/navigation — process + Next data cache; invalidate on label writes. */
