@@ -562,13 +562,16 @@ describe("identity editability matrix", () => {
     it("expanded tier honors the same policy as summary", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         // Parent/Guardian template is authoritative for primary_contact Details.
-        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line1", { tier: "expanded" });
-        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.address_line1", "editable");
+        config = addFieldToNestedGroup(config, "contact_edit", "person.phone", { tier: "expanded" });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.phone", "editable", {
+            tier: "details",
+        });
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
         const vm = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: true });
         const primary = vm.sections.find((s) => s.key === "primary_contact")?.items[0];
-        const address = primary?.expandedRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.address_line1");
-        expect(address?.editable).toBe(true);
+        const phone = primary?.detailRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.phone");
+        expect(phone?.policy).toBe("editable");
+        expect(phone?.editable).toBe(true);
         expect(primary?.canExpand).toBe(true);
     });
 });

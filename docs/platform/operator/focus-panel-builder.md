@@ -148,12 +148,17 @@ Builder continues to author on the grid track model (76px); runtime Preview on
 
 ## Household person edit and emergency contacts
 
-- Collection/scan surfaces expose **one person-level Edit** affordance (not per-field Edit links).
-- Edit presentation is driven by the Parent/Guardian `contact_edit` semantic map; the selected
-  person supplies values and the mutation target only.
+- **Summary** uses tier placement policy only — read-only Summary cells do not show Edit.
+- **Context / Details** editable cells use inline field edit on the shared identity field row
+  (hover/focus Edit → inline input → `savePersonContact` refresh). No full `contact_edit`
+  surface for a single field click.
+- Person-level Edit (full `contact_edit` form) appears only when visible rows at the current
+  depth include editable cells that need the complex form.
 - Seed uses authoritative family-row truth with evidence channels as fallback; synthetic display
   ids (`primary`, `secondary:…`) are not editable.
 - Save continues through `savePersonContact` → `patchLinkedPersonFromOpportunityDrawer` with truth refresh.
+- **Details view** projects only published Detail Fields (`expandedFieldKeys` / details placements);
+  empty `[]` stays empty — contact_edit defaults are not appended to Details read mode.
 
 ### Add Emergency Contact
 

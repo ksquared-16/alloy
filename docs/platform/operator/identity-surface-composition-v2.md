@@ -519,3 +519,28 @@ and Other Parent runtime sections when `roleOverride` is unset:
 - Builder published preview and work-unit runtime project through the same Household
   VM builder (`buildHouseholdIdentityCardVM` + role merge)
 - Collection is the Context projection (no mandatory separate Context screen label)
+
+
+## Disclosure-tier field policy (Focus Panel)
+
+Field **policy belongs to the placement at that disclosure tier** on the presentation group
+(`primary_contact`, `other_parent_guardian`, …). Mutation capability on `contact_edit` /
+`child_edit` does not make Summary or Context cells editable when that tier is read-only.
+
+Runtime resolves policy in order: tier placement policy → group `fieldPolicies` → read-only
+for presentation groups. `editGroupKey` still binds save support (`CONTACT_EDIT_FIELD_MAP`)
+but must not leak default `editable` from the edit surface.
+
+## Inline Context / Details editing (Household)
+
+Editable Context and Details cells use the shared `IdentityFieldValue` row with quiet
+**Edit** affordance (hidden at rest, visible on `:hover` / `:focus-within`). Clicking Edit
+opens an inline input; Save commits through existing `savePersonContact` and truth refresh.
+
+Summary scan stays read-only by default — no person-level Edit when all visible Summary
+cells are read-only. Person-level Edit remains for complex `contact_edit` forms when needed.
+
+## Atomic vs derived name fields
+
+`person.first_name` and `person.last_name` are distinct atomic fields. `person.primary_contact_name`
+/ Full Name is derived display-only and must not collapse first/last in role merge dedupe.
