@@ -50,8 +50,8 @@ export function householdAuthoringGroupLabel(groupKey: string, registryLabel?: s
 export const HOUSEHOLD_IDENTITY_FIELD_ALIASES: Record<string, string> = {
     "contact.phone": "person.phone",
     "contact.email": "person.email",
-    "contact.first_name": "person.primary_contact_name",
-    "contact.last_name": "person.primary_contact_name",
+    "contact.first_name": "person.first_name",
+    "contact.last_name": "person.last_name",
     "contact.address_line": "person.address_line1",
     "contact.address_line1": "person.address_line1",
     "contact.address_line2": "person.address_line2",

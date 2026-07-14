@@ -144,4 +144,13 @@ export const CONTACT_EDIT_FIELD_MAP: Record<string, keyof import("@/lib/adminV2/
     // Builder may place person.* refs on the Parent/Guardian edit map — bind to the same values.
     "person.email": "email",
     "person.phone": "phone",
+    "person.first_name": "first_name",
+    "person.last_name": "last_name",
 };
+
+export function personContactSaveKeyForIdentityFieldRef(
+    fieldRef: string,
+): keyof import("@/lib/adminV2/runtime/focusPanel/focusPanelMutation").PersonContactValues | null {
+    const key = CONTACT_EDIT_FIELD_MAP[fieldRef];
+    return key ?? null;
+}

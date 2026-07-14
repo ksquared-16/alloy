@@ -26,6 +26,23 @@ export type ComposedIdentityLine = {
     value: string;
 };
 
+
+function splitDisplayName(name: string): { first: string | null; last: string | null } {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return { first: null, last: null };
+    if (parts.length === 1) return { first: parts[0]!, last: null };
+    return { first: parts[0]!, last: parts.slice(1).join(" ") || null };
+}
+
+function personNameParts(subject: IdentityComposeSubject): { first: string | null; last: string | null } {
+    if (subject.kind !== "person") return { first: null, last: null };
+    const contact = subject.value;
+    const explicitFirst = contact.firstName?.trim() || null;
+    const explicitLast = contact.lastName?.trim() || null;
+    if (explicitFirst || explicitLast) return { first: explicitFirst, last: explicitLast };
+    return splitDisplayName(contact.name);
+}
+
 type Resolver = (subject: IdentityComposeSubject) => string | null;
 
 const CHILD_RESOLVERS: Record<string, Resolver> = {
@@ -87,10 +104,16 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
 };
 
 const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {
-    "contact.first_name": (subject) =>
-        subject.kind === "contact_edit" ? subject.value.first_name?.trim() || null : null,
-    "contact.last_name": (subject) =>
-        subject.kind === "contact_edit" ? subject.value.last_name?.trim() || null : null,
+    "contact.first_name": (subject) => {
+        if (subject.kind === "contact_edit") return subject.value.first_name?.trim() || null;
+        if (subject.kind === "person") return personNameParts(subject).first;
+        return null;
+    },
+    "contact.last_name": (subject) => {
+        if (subject.kind === "contact_edit") return subject.value.last_name?.trim() || null;
+        if (subject.kind === "person") return personNameParts(subject).last;
+        return null;
+    },
     "contact.email": (subject) =>
         subject.kind === "contact_edit" ? subject.value.email?.trim() || null : null,
     "contact.phone": (subject) =>
@@ -98,6 +121,16 @@ const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {
 };
 
 const PERSON_RESOLVERS: Record<string, Resolver> = {
+    "person.first_name": (subject) => {
+        if (subject.kind === "contact_edit") return subject.value.first_name?.trim() || null;
+        if (subject.kind === "person") return personNameParts(subject).first;
+        return null;
+    },
+    "person.last_name": (subject) => {
+        if (subject.kind === "contact_edit") return subject.value.last_name?.trim() || null;
+        if (subject.kind === "person") return personNameParts(subject).last;
+        return null;
+    },
     "person.primary_contact_name": (subject) => (subject.kind === "person" ? subject.value.name : null),
     "person.phone": (subject) => {
         if (subject.kind === "person") return subject.value.phone?.trim() || null;
@@ -134,6 +167,8 @@ const NAME_FIELD_REFS = new Set([
     "child.last_name",
     "child.preferred_name",
     "child.name",
+    "person.first_name",
+    "person.last_name",
     "person.primary_contact_name",
     "employee.name",
 ]);

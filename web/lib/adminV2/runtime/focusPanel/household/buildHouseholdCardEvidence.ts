@@ -76,6 +76,9 @@ function formatPhoneForDisplay(raw: unknown): string | null {
 export type HouseholdEvidenceContact = {
     personId: string;
     name: string;
+    /** When present on drawer truth; else display falls back to splitting `name`. */
+    firstName?: string | null;
+    lastName?: string | null;
     roleLabel: string | null;
     isPrimary: boolean;
     phone: string | null;
@@ -165,10 +168,23 @@ function initialsFor(name: string): string {
     return (parts[0]!.charAt(0) + parts[parts.length - 1]!.charAt(0)).toUpperCase();
 }
 
+
+function splitContactName(name: string): { firstName: string | null; lastName: string | null } {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return { firstName: null, lastName: null };
+    if (parts.length === 1) return { firstName: parts[0]!, lastName: null };
+    return { firstName: parts[0]!, lastName: parts.slice(1).join(" ") || null };
+}
+
 function toEvidenceContact(row: DrawerHouseholdContactRow): HouseholdEvidenceContact {
+    const explicitFirst = trimOrNull((row as { first_name?: string | null }).first_name);
+    const explicitLast = trimOrNull((row as { last_name?: string | null }).last_name);
+    const split = splitContactName(row.display_name);
     return {
         personId: row.person_id,
         name: row.display_name,
+        firstName: explicitFirst ?? split.firstName,
+        lastName: explicitLast ?? split.lastName,
         roleLabel: row.is_primary ? "Primary" : row.role_label,
         isPrimary: row.is_primary,
         phone: formatPhoneForDisplay(row.phone),
