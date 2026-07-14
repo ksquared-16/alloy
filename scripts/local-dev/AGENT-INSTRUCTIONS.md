@@ -76,3 +76,15 @@ Port map: slot N → 3010+N (3011–3016). Login: /login (Supabase email/passwor
 Same as Cursor. Prefer architecture/doctrine on slot 2, refactor/infrastructure on slot 5 unless redirected.
 
 Claude Desktop: open the exact worktree folder printed by `alloy-agent-open` if no `claude` CLI exists.
+
+---
+
+## Phase 4 — Engineering Manager workers
+
+When working from an Engineering Manager package (`.alloy-worker-package.md`):
+
+- Follow **constitutional**, **initiative-approved**, and **worker discretion** sections separately
+- Write structured report to the path specified in the package (`reports/<task>-result.json`)
+- Conversational "done" is not completion — the manager ingests only the JSON report
+- Use `alloy-worker-report <initiative> <task>` from the operator session after you finish
+- Remediation packages preserve approved scope — do not expand or refactor unrelated areas

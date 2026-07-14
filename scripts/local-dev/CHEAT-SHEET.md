@@ -62,6 +62,21 @@ alloy-validate wt1-my-initiative test
 alloy-validate wt1-my-initiative build
 alloy-validate wt1-my-initiative playwright
 alloy-validate wt1-my-initiative imports
+
+# Phase 4 Engineering Manager (initiative lifecycle)
+alloy-engineering-help
+alloy-initiative-create settings-fields-v2 --from ./brief.yaml
+alloy-initiative-audit settings-fields-v2
+alloy-initiative-plan settings-fields-v2
+alloy-initiative-approve settings-fields-v2 --approver Kelly
+alloy-initiative-start settings-fields-v2
+alloy-worker-open settings-fields-v2 task-001 --with-server   # paste package once
+alloy-worker-report settings-fields-v2 task-001
+alloy-initiative-review settings-fields-v2 --type ui
+alloy-initiative-remediate settings-fields-v2
+alloy-initiative-package settings-fields-v2
+alloy-initiative-status --all
+alloy-initiative-close settings-fields-v2 --promotion-recorded
 ```
 
 Ports: canonical `3000` · slots `3011`–`3016`  

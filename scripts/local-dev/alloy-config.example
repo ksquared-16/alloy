@@ -84,3 +84,6 @@ ALLOY_CLEAN_ARTIFACT_AGE_HOURS="24"
 
 # Validation lock polling (seconds).
 ALLOY_VALIDATE_POLL_SECONDS="5"
+
+# Phase 4 — Engineering Manager initiatives (local state under ALLOY_RUNTIME_ROOT/initiatives/)
+# ALLOY_INITIATIVE_LOCK_POLL_SECONDS="2"

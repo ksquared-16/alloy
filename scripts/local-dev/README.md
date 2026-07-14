@@ -1,9 +1,11 @@
-# Alloy local parallel-agent development toolkit (Phase 1 + Phase 2 + Phase 3)
+# Alloy local parallel-agent development toolkit (Phase 1 + Phase 2 + Phase 3 + Phase 4)
 
 Self-contained Bash toolkit for running up to six concurrent Cursor or Claude implementation agents in isolated Git worktrees, with deterministic ports and serialized heavyweight validation.
 
 **Phase 1** = worktrees, ports, owned dev servers, validation lock, health/audit/clean.  
-**Phase 2** = managed agent lifecycle on top of Phase 1 (create/open/status/close/instructions + AI health). No dashboards, daemons, or sprint automation.
+**Phase 2** = managed agent lifecycle on top of Phase 1 (create/open/status/close/instructions + AI health). No dashboards, daemons, or sprint automation.  
+**Phase 3** = per-slot auth, browser verification, evidence, two-tier env.  
+**Phase 4** = local Engineering Manager (initiative intake, audit, plan, worker packages, reports, review/remediation, merge-readiness packages). No auto-push/merge.
 
 This is **developer experience tooling only**. It is not sprint orchestration, a workstation-management platform, or application feature work.
 
@@ -377,3 +379,41 @@ Environment contract: agents see `web/.env.local.agent` (public/safe). Privilege
 **Real-Mac certified (July 2026):** prepare → toolkit-owned server (two-tier env) → isolated manual login → READY → `/workspace` verify PASS → evidence generated. See `VERIFICATION-SECURITY.md` for certification notes and `web/next-env.d.ts` remediation.
 
 Guides: `VERIFICATION-SECURITY.md`, `AI-APP-HEALTH.md`
+
+## 16. Phase 4 — Engineering Manager V1
+
+Local initiative lifecycle over Phase 1–3 primitives. **Not** a daemon, database, or hosted control plane.
+
+Storage: `~/.local/state/alloy-dev/initiatives/<key>/`
+
+| Command | Purpose |
+|---------|---------|
+| `alloy-engineering-help` | Top-level help |
+| `alloy-initiative-create` | Import brief (`--clipboard` / `--from`) |
+| `alloy-initiative-import` | Import from stdin |
+| `alloy-initiative-audit` | Repository + doctrine audit |
+| `alloy-initiative-plan` | Proposed spec, tasks, worker plan |
+| `alloy-initiative-approve` | Freeze approved contract (`--approver`) |
+| `alloy-initiative-start` | Create workers + packages |
+| `alloy-worker-open` | Open app + clipboard package |
+| `alloy-worker-report` | Ingest structured worker report |
+| `alloy-initiative-review` | Generate reviewer package |
+| `alloy-initiative-remediate` | Bounded remediation packages |
+| `alloy-initiative-package` | Final merge-readiness package |
+| `alloy-initiative-status` | Operator view (`--all`) |
+| `alloy-initiative-close` | Safe close (`--promotion-recorded`) |
+
+```bash
+alloy-initiative-create settings-fields-v2 --from ./brief.yaml
+alloy-initiative-audit settings-fields-v2
+alloy-initiative-plan settings-fields-v2
+alloy-initiative-approve settings-fields-v2 --approver Kelly
+alloy-initiative-start settings-fields-v2
+alloy-worker-open settings-fields-v2 task-001 --with-server   # paste once
+alloy-worker-report settings-fields-v2 task-001
+alloy-initiative-package settings-fields-v2
+```
+
+Guides: `ENGINEERING-MANAGER.md`, `INITIATIVE-CONTRACT.md`, `WORKER-PACKAGE.md`, `REVIEW-PIPELINE.md`
+
+Tests: `npm run local-dev:test:phase4` (includes Phase 1–3 regression)
