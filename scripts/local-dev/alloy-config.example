@@ -4,7 +4,7 @@
 #
 # Paths are configurable. Defaults match the Phase 1 directory model.
 
-ALLOY_REPO="$HOME/Code/Alloy"
+ALLOY_REPO="/Users/Kelly/Alloy"
 ALLOY_WORKTREE_ROOT="$HOME/Code/alloy-worktrees"
 ALLOY_RUNTIME_ROOT="$HOME/.local/state/alloy-dev"
 ALLOY_CONFIG_DIR="$HOME/.config/alloy-dev"
@@ -44,7 +44,8 @@ ALLOY_SLOT_6_QA_IDENTITY="qa-slot6-experimental@example.com"
 
 # Safe env bootstrap (alloy-agent-prepare).
 ALLOY_ENV_SOURCE="$ALLOY_REPO/web/.env.local"
-# Extra allowlisted non-secret names (space-separated). NEXT_PUBLIC_* always allowed.
+# Extra allowlisted non-secret names (space-separated). Denylist always wins.
+# NEXT_PUBLIC_* allowed after denylist pass. Built-in: PORT, NODE_ENV, NEXT_PUBLIC_APP_URL, ALLOY_AGENT_ENV.
 ALLOY_ENV_ALLOWLIST="DEV_QUEUE_ORG_ID PLAYWRIGHT_BASE_URL"
 # Set to 1 to refuse remote Supabase URLs in agent env.
 ALLOY_BLOCK_REMOTE_SUPABASE="0"

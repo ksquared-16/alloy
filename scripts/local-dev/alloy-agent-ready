@@ -32,13 +32,14 @@ main() {
   local name
   name="$(alloy_resolve_worktree_name "$1")"
 
-  local eval_out status branch ahead behind server auth browser lock
+  local eval_out status branch ahead behind server ownership auth browser lock
   eval_out="$(alloy_agent_ready_evaluate "$name")"
   status="$(printf '%s\n' "$eval_out" | awk -F= '/^READY_STATUS=/{print $2}')"
   branch="$(printf '%s\n' "$eval_out" | awk -F= '/^GIT_BRANCH=/{print $2}')"
   ahead="$(printf '%s\n' "$eval_out" | awk -F= '/^GIT_AHEAD=/{print $2}')"
   behind="$(printf '%s\n' "$eval_out" | awk -F= '/^GIT_BEHIND=/{print $2}')"
   server="$(printf '%s\n' "$eval_out" | awk -F= '/^SERVER=/{print $2}')"
+  ownership="$(printf '%s\n' "$eval_out" | awk -F= '/^SERVER_OWNERSHIP=/{print $2}')"
   auth="$(printf '%s\n' "$eval_out" | awk -F= '/^AUTH=/{print $2}')"
   browser="$(printf '%s\n' "$eval_out" | awk -F= '/^BROWSER=/{print $2}')"
   lock="$(printf '%s\n' "$eval_out" | awk -F= '/^VALIDATION_LOCK=/{print $2}')"
@@ -59,11 +60,13 @@ main() {
   echo "Application"
   echo "  port:          ${PORT}"
   echo "  server:        ${server}"
+  echo "  ownership:     ${ownership} (alloy-dev-start required; not npm run dev)"
   echo "  url:           ${NEXT_PUBLIC_APP_URL:-http://localhost:${PORT}}"
   echo
   echo "Environment"
   if alloy_agent_env_ready "$ALLOY_WORKTREE_PATH"; then
     echo "  safe env:      present (web/.env.local.agent, chmod 600)"
+    echo "  env loading:   alloy-dev-start only (not native Next.js / not npm run dev)"
   else
     echo "  safe env:      missing or wrong permissions"
   fi

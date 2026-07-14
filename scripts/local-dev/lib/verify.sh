@@ -109,52 +109,109 @@ alloy_verify_url_for_slot() {
   printf 'http://127.0.0.1:%s' "$port"
 }
 
+# ── Dev server toolkit ownership ─────────────────────────────────────────────
+
+# Human-readable ownership for ready/status (toolkit-owned | foreign-port-owner | stale | stopped | ...).
+alloy_server_ownership_label() {
+  local name="$1"
+  local state
+  state="$(alloy_server_state_for "$name")"
+  case "$state" in
+    running) printf 'toolkit-owned' ;;
+    foreign-port-owner) printf 'foreign-port-owner' ;;
+    stale) printf 'stale-pid' ;;
+    stopped) printf 'stopped' ;;
+    *) printf '%s' "$state" ;;
+  esac
+}
+
+# Refuse unless the assigned port is served by this worktree's toolkit-owned dev server.
+alloy_require_toolkit_owned_server() {
+  local name="$1"
+  local state port
+  alloy_load_metadata "$name"
+  port="$PORT"
+  state="$(alloy_server_state_for "$name")"
+  case "$state" in
+    running) return 0 ;;
+    foreign-port-owner)
+      alloy_die "port ${port} has a foreign listener — stop it, then run: alloy-dev-start ${name} (do not run npm run dev directly)"
+      ;;
+    stale)
+      alloy_die "stale dev server PID for ${name} — run: alloy-dev-stop ${name} && alloy-dev-start ${name}"
+      ;;
+    *)
+      alloy_die "dev server not toolkit-owned (${state}) — run: alloy-dev-start ${name} (web/.env.local.agent loads only through alloy-dev-start; do not run npm run dev directly)"
+      ;;
+  esac
+}
+
 # ── Safe environment classification ─────────────────────────────────────────
+
+# True when a variable name matches secret-like deny patterns.
+# Denylist always wins over allowlist, configured additions, and prefixes.
+alloy_env_name_is_denied() {
+  local name="$1"
+  [[ -n "$name" ]] || return 1
+
+  local frag
+  for frag in SECRET PASSWORD TOKEN PRIVATE SERVICE_ROLE DATABASE_URL API_KEY SIGNING CREDENTIAL; do
+    if [[ "$name" == *"$frag"* ]]; then
+      return 0
+    fi
+  done
+
+  case "$name" in
+    SUPABASE_SERVICE_ROLE_KEY|PGPASSWORD|POSTGRES_PASSWORD|GITHUB_TOKEN|\
+    OPENAI_API_KEY|ANTHROPIC_API_KEY|DATABASE_URL)
+      return 0
+      ;;
+  esac
+
+  case "$name" in
+    STRIPE_*|TWILIO_*|RESEND_*|AWS_*)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+# Built-in explicit allowlist of known-safe names (not a broad ALLOY_* wildcard).
+alloy_env_is_builtin_allowed() {
+  local name="$1"
+  case "$name" in
+    PORT|NODE_ENV|NEXT_PUBLIC_APP_URL|ALLOY_AGENT_ENV)
+      return 0
+      ;;
+  esac
+  return 1
+}
 
 # stdout: allow | deny | ambiguous
 alloy_classify_env_var() {
   local name="$1"
   [[ -n "$name" ]] || return 1
 
-  # Explicit deny patterns (fail closed on secrets).
-  case "$name" in
-    SUPABASE_SERVICE_ROLE_KEY|DATABASE_URL|*_SERVICE_ROLE_KEY|*_SECRET*|*_PASSWORD*|\
-    STRIPE_*|TWILIO_*|RESEND_*|*_PRIVATE_KEY|*_SIGNING_KEY|GITHUB_TOKEN|\
-    OPENAI_API_KEY|ANTHROPIC_API_KEY|AWS_*|PGPASSWORD|POSTGRES_PASSWORD)
-      echo deny
-      return 0
-      ;;
-  esac
-
-  if [[ "$name" == *SERVICE_ROLE* || "$name" == *SECRET* || "$name" == *PASSWORD* || "$name" == *TOKEN* ]]; then
-    # NEXT_PUBLIC_* tokens are still public by convention — only allow NEXT_PUBLIC_ prefix.
-    if [[ "$name" == NEXT_PUBLIC_* ]]; then
-      echo allow
-      return 0
-    fi
+  if alloy_env_name_is_denied "$name"; then
     echo deny
     return 0
   fi
 
-  # Public browser-safe prefixes.
-  if [[ "$name" == NEXT_PUBLIC_* ]]; then
+  if alloy_env_is_builtin_allowed "$name"; then
     echo allow
     return 0
   fi
 
-  # Toolkit / local runtime markers.
-  case "$name" in
-    PORT|NODE_ENV|ALLOY_*|NEXT_PUBLIC_APP_URL)
-      echo allow
-      return 0
-      ;;
-  esac
-
-  # Configured explicit allowlist (space-separated in ALLOY_ENV_ALLOWLIST).
   local allowed
   for allowed in ${ALLOY_ENV_ALLOWLIST:-}; do
     [[ "$name" == "$allowed" ]] && { echo allow; return 0; }
   done
+
+  if [[ "$name" == NEXT_PUBLIC_* ]]; then
+    echo allow
+    return 0
+  fi
 
   echo ambiguous
 }
@@ -555,6 +612,7 @@ alloy_generate_agent_context() {
 
 ## Allowed commands
 \`\`\`bash
+alloy-dev-start ${name}              # required — loads web/.env.local.agent (not npm run dev)
 alloy-agent-ready ${slot}
 alloy-agent-verify ${slot} authenticated-home
 alloy-agent-verify ${slot} route /workspace
@@ -565,6 +623,7 @@ alloy-agent-close ${slot}
 \`\`\`
 
 ## Prohibited
+- \`npm run dev\` directly — \`web/.env.local.agent\` loads only through \`alloy-dev-start ${name}\` / \`devup\`
 - Production URLs, credentials, cookies, tokens, storage-state contents
 - Push, merge, worktree removal without explicit human approval
 - Claiming UI verification from code inspection alone
@@ -613,10 +672,22 @@ alloy_agent_ready_evaluate() {
   ahead="$(alloy_git "$path" rev-list --count "$(alloy_base_ref)..HEAD" 2>/dev/null || echo "?")"
   behind="$(alloy_git "$path" rev-list --count "HEAD..$(alloy_base_ref)" 2>/dev/null || echo "?")"
 
-  # Application
-  local server
+  # Application — toolkit-owned dev server only (web/.env.local.agent via alloy-dev-start).
+  local server ownership
   server="$(alloy_server_state_for "$name")"
-  [[ "$server" == "running" ]] || issues+=("app: dev server not running ($server) — alloy-dev-start $name")
+  ownership="$(alloy_server_ownership_label "$name")"
+  case "$server" in
+    running) ;;
+    foreign-port-owner)
+      issues+=("app: foreign listener on port ${port} — stop foreign process; use alloy-dev-start ${name} (not npm run dev)")
+      ;;
+    stale)
+      issues+=("app: stale dev server PID — alloy-dev-stop ${name} && alloy-dev-start ${name}")
+      ;;
+    *)
+      issues+=("app: dev server not toolkit-owned (${server}) — alloy-dev-start ${name} (not npm run dev)")
+      ;;
+  esac
 
   local base url
   base="$(alloy_verify_url_for_slot "$port")"
@@ -667,6 +738,7 @@ alloy_agent_ready_evaluate() {
   printf 'GIT_AHEAD=%s\n' "$ahead"
   printf 'GIT_BEHIND=%s\n' "$behind"
   printf 'SERVER=%s\n' "$server"
+  printf 'SERVER_OWNERSHIP=%s\n' "$ownership"
   printf 'AUTH=%s\n' "$auth"
   printf 'BROWSER=%s\n' "$bstate"
   printf 'VALIDATION_LOCK=%s\n' "$lock_msg"

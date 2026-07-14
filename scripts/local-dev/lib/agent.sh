@@ -326,7 +326,7 @@ Expected:
 - Prefer focused checks (single-file Vitest, lint of touched files).
 - Heavy checks only via: \`alloy-validate ${name} typecheck|test|build|playwright|imports\`
 - Do NOT background heavy checks.
-- Do NOT start a second dev server. Prefer \`alloy-dev-start ${name}\` / \`alloy-dev-stop ${name}\`.
+- Do NOT start a second dev server. Use \`alloy-dev-start ${name}\` / \`alloy-dev-stop ${name}\` only — **never** \`npm run dev\` directly (\`web/.env.local.agent\` loads only through the toolkit).
 - Before finishing, report any processes left running.
 
 ## Operator shortcuts

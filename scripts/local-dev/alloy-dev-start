@@ -79,13 +79,16 @@ main() {
   fi
 
   cat <<EOF
-Dev server started
+Dev server started (toolkit-owned)
   worktree: ${name}
   url:      ${url}
   port:     ${port}
   PID:      ${pid}
   log:      ${log_path}
   path:     ${path}
+
+web/.env.local.agent is loaded for this process only.
+Do not run npm run dev directly — use alloy-dev-start / devup.
 EOF
 }
 

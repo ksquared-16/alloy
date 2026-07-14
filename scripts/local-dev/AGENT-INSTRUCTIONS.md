@@ -55,6 +55,7 @@ Hard constraints:
 - Focused checks: single-file Vitest, lint of touched files.
 - Heavy checks: alloy-validate <worktree> <kind> only (serialized).
 - Do NOT start a second dev server or duplicate toolkit browser.
+- Do NOT run `npm run dev` directly — use `alloy-dev-start` / `devup` (`web/.env.local.agent` loads only through the toolkit).
 
 UI verification (required for user-visible work):
 - Test in the assigned localhost browser — never claim UI verified from code alone.

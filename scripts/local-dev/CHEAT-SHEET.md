@@ -24,9 +24,10 @@ alloy-agent-status
 alloy-agent-close 3                           # stops server; never removes worktree
 
 # Phase 3 verification bootstrap
-alloy-agent-prepare 3                         # safe web/.env.local.agent (allowlist)
+alloy-agent-prepare 3                         # safe web/.env.local.agent (explicit allowlist)
+alloy-dev-start <worktree>                    # required — not npm run dev
 alloy-agent-login 3                           # manual /login → storage state
-alloy-agent-ready 3                           # READY / NOT READY
+alloy-agent-ready 3                           # READY / NOT READY (toolkit-owned server)
 alloy-agent-verify 3 authenticated-home
 alloy-agent-verify 3 route /workspace
 alloy-agent-verify 3 focused-spec playwright/tests/smoke-field-registry.spec.ts
@@ -40,7 +41,7 @@ devup                                         # start owned localhost server
 
 # Phase 1 primitives (still available)
 alloy-worktree-create 1 my-initiative cursor
-cd ~/Code/alloy-worktrees/wt1-my-initiative/web && npm install
+cd /Users/Kelly/Code/alloy-worktrees/wt1-my-initiative/web && npm install
 alloy-worktree-sync wt1-my-initiative
 alloy-worktree-remove wt1-my-initiative
 

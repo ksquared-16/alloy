@@ -10,8 +10,8 @@ This is **developer experience tooling only**. It is not sprint orchestration, a
 ## 1. Target architecture
 
 ```text
-~/Code/Alloy/                     Canonical repository (configurable)
-~/Code/alloy-worktrees/
+/Users/Kelly/Alloy/                Canonical repository (configurable)
+/Users/Kelly/Code/alloy-worktrees/
   wt1-<initiative>/
   wt2-<initiative>/
   ...
@@ -104,7 +104,7 @@ alloy-worktree-create 1 current-work-performance cursor
 Creates:
 
 - branch `agent/cursor/1-current-work-performance` from latest `origin/staging`
-- path `~/Code/alloy-worktrees/wt1-current-work-performance`
+- path `/Users/Kelly/Code/alloy-worktrees/wt1-current-work-performance`
 - runtime metadata + `.env.local.agent`
 - does **not** push; does **not** modify `staging`
 
@@ -112,7 +112,7 @@ Creates:
 
 1. Create worktree and `npm install` inside that worktree’s `web/`.
 2. Open **one** Cursor/Claude window on that worktree path only.
-3. `alloy-dev-start <name>` when UI inspection is needed.
+3. `alloy-dev-start <name>` when UI inspection is needed (**required** for agent env — do not run `npm run dev` directly; `web/.env.local.agent` loads only through the toolkit).
 4. Implement and commit locally in coherent chunks.
 5. Run focused checks directly; use `alloy-validate` for heavy checks.
 6. Sync from staging with `alloy-worktree-sync` when clean.
@@ -222,7 +222,7 @@ Never auto-delete: worktrees, branches, `node_modules`, Docker data, Cursor/Clau
 
 ## 19. Spotlight / iCloud guidance
 
-Keep canonical repo and worktrees under `~/Code/...`, outside iCloud-backed Desktop/Documents.
+Keep canonical repo at `/Users/Kelly/Alloy` and worktrees under `/Users/Kelly/Code/alloy-worktrees/`, outside iCloud-backed Desktop/Documents.
 
 Optional Spotlight exclusion (run manually after reviewing paths; Phase 1 never runs `sudo mdutil`):
 
@@ -364,9 +364,9 @@ Auth discovered: Supabase email/password at `/login` (see `web/README_ADMIN_AUTH
 
 ```bash
 alloy-agent-prepare 1
-alloy-dev-start wt1-my-initiative
+alloy-dev-start wt1-my-initiative    # toolkit-owned; loads web/.env.local.agent (not npm run dev)
 alloy-agent-login 1
-alloy-agent-ready 1
+alloy-agent-ready 1                  # requires toolkit-owned server
 alloy-agent-verify 1 route /workspace
 alloy-agent-context 1 --copy
 alloy-agent-browser-stop 1

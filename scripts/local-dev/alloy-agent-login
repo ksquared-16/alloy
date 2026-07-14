@@ -47,10 +47,16 @@ main() {
 
   local server
   server="$(alloy_server_state_for "$name")"
-  if [[ "$server" != "running" ]]; then
-    alloy_info "Dev server not running — starting owned server..."
-    env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" "${SCRIPT_DIR}/alloy-dev-start" "$name"
-  fi
+  case "$server" in
+    running) ;;
+    foreign-port-owner)
+      alloy_die "port ${port} has a foreign listener — stop it, then: alloy-dev-start ${name} (do not run npm run dev directly)"
+      ;;
+    *)
+      alloy_info "Dev server not toolkit-owned (${server}) — starting via alloy-dev-start..."
+      env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" "${SCRIPT_DIR}/alloy-dev-start" "$name"
+      ;;
+  esac
 
   alloy_refuse_duplicate_browser "$slot"
 

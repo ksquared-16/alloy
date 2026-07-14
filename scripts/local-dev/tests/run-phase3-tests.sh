@@ -39,7 +39,8 @@ for f in \
   "$ROOT"/alloy-agent-browser-stop \
   "$ROOT"/alloy-agent-context \
   "$ROOT"/alloy-agent-evidence \
-  "$ROOT"/tests/run-phase3-tests.sh
+  "$ROOT"/tests/run-phase3-tests.sh \
+  "$ROOT"/tests/test-agent-env-classify.sh
 do
   bash -n "$f"
   pass "bash -n $(basename "$f")"
@@ -238,13 +239,63 @@ assert_ok "browser stop owned" \
 wait "$BROWSER_PID" 2>/dev/null || true
 
 # classify env unit tests via sourced helpers
+bash "$ROOT/tests/test-agent-env-classify.sh" && pass "env classify suite" || fail "env classify suite"
+
 # shellcheck source=../lib/common.sh
 source "$ROOT/lib/common.sh"
+# shellcheck source=../lib/agent.sh
+source "$ROOT/lib/agent.sh"
 # shellcheck source=../lib/verify.sh
 source "$ROOT/lib/verify.sh"
 [[ "$(alloy_classify_env_var SUPABASE_SERVICE_ROLE_KEY)" == "deny" ]] && pass "classify deny secret" || fail "classify deny"
 [[ "$(alloy_classify_env_var NEXT_PUBLIC_SUPABASE_URL)" == "allow" ]] && pass "classify allow public" || fail "classify public"
 [[ "$(alloy_classify_env_var MYSTERY_CONFIG)" == "ambiguous" ]] && pass "classify ambiguous" || fail "classify ambiguous"
+
+# ALLOY explicit allow + unknown reject at prepare
+cat >"$CANON/web/.env.local" <<'EOF'
+NEXT_PUBLIC_SUPABASE_URL="https://xyzcompany.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="anon"
+ALLOY_AGENT_ENV="local-agent"
+ALLOY_UNKNOWN_FLAG="should-not-copy"
+ALLOY_FOO_TOKEN="never-copy"
+DEV_QUEUE_ORG_ID="org-demo"
+EOF
+assert_fail "unknown ALLOY_* rejected at prepare" \
+  env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-agent-prepare" 1 --force
+
+cat >"$CANON/web/.env.local" <<'EOF'
+NEXT_PUBLIC_SUPABASE_URL="https://xyzcompany.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="anon"
+ALLOY_AGENT_ENV="local-agent"
+DEV_QUEUE_ORG_ID="org-demo"
+EOF
+assert_ok "safe ALLOY_AGENT_ENV copies" \
+  env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-agent-prepare" 1 --force
+grep -q '^ALLOY_AGENT_ENV=' "$ENV_FILE" && pass "ALLOY_AGENT_ENV in agent env" || fail "ALLOY_AGENT_ENV missing"
+grep -q ALLOY_UNKNOWN_FLAG "$ENV_FILE" && fail "unknown ALLOY copied" || pass "unknown ALLOY not copied"
+grep -q ALLOY_FOO_TOKEN "$ENV_FILE" && fail "ALLOY token copied" || pass "ALLOY token not copied"
+
+# Server ownership: toolkit-owned vs foreign listener
+echo "$READY_OUT" | grep -q 'toolkit-owned' && pass "ready reports toolkit-owned" || fail "ready ownership label"
+
+env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-dev-stop" wt1-p3-one >/dev/null 2>&1 || true
+node -e "require('http').createServer((q,s)=>s.end('foreign')).listen(3011)" >/tmp/foreign-p3.log 2>&1 &
+FOREIGN_PID=$!
+sleep 0.3
+READY_FOREIGN="$(env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" ALLOY_SKIP_URL_CHECK=1 "$ROOT/alloy-agent-ready" 1 2>&1 || true)"
+echo "$READY_FOREIGN" | grep -q 'NOT_READY' && pass "foreign listener blocks READY" || fail "foreign READY ($READY_FOREIGN)"
+echo "$READY_FOREIGN" | grep -qi 'foreign' && pass "foreign listener reported" || fail "foreign message"
+assert_fail "verify refuses foreign listener" \
+  env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-agent-verify" 1 authenticated-home
+kill "$FOREIGN_PID" 2>/dev/null || true
+wait "$FOREIGN_PID" 2>/dev/null || true
+
+assert_ok "dev-start restores toolkit ownership" \
+  env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-dev-start" wt1-p3-one
+alloy_load_config
+alloy_load_metadata wt1-p3-one
+OWNERSHIP="$(alloy_server_ownership_label wt1-p3-one)"
+[[ "$OWNERSHIP" == "toolkit-owned" ]] && pass "toolkit-owned after dev-start" || fail "ownership after restart ($OWNERSHIP)"
 
 echo
 echo "Phase 3 results: PASS=$PASS FAIL=$FAIL"

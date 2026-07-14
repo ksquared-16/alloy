@@ -52,8 +52,7 @@ main() {
   web_dir="$(alloy_web_dir_for "$path")"
   [[ -d "$web_dir" ]] || alloy_die "web directory missing: $web_dir"
 
-  server="$(alloy_server_state_for "$name")"
-  [[ "$server" == "running" ]] || alloy_die "dev server not running — alloy-dev-start $name"
+  alloy_require_toolkit_owned_server "$name"
 
   base="$(alloy_verify_url_for_slot "$port")"
   alloy_verify_host_allowed "$base" || alloy_die "host not allowed: $base"

@@ -42,13 +42,25 @@ ALLOY_SLOT_1_QA_IDENTITY="qa-slot1-product@your-staging.org"
 
 - Source: canonical `web/.env.local` (override: `ALLOY_ENV_SOURCE`)
 - Target: `<worktree>/web/.env.local.agent` (chmod 600, git-ignored)
-- **Allowlist:** `NEXT_PUBLIC_*`, `PORT`, `NODE_ENV`, `ALLOY_*`, names in `ALLOY_ENV_ALLOWLIST`
-- **Denylist:** service-role keys, secrets, passwords, Stripe/Twilio/Resend, `DATABASE_URL`, tokens
-- **Ambiguous:** fail closed — add to allowlist explicitly if truly safe
+- **Built-in allowlist:** `PORT`, `NODE_ENV`, `NEXT_PUBLIC_APP_URL`, `ALLOY_AGENT_ENV`
+- **Configured additions:** `ALLOY_ENV_ALLOWLIST` (space-separated explicit names)
+- **Public prefix:** `NEXT_PUBLIC_*` (only after denylist pass)
+- **Denylist always wins** over allowlist, configured additions, and prefixes
+- **Secret-like substrings (deny):** `SECRET`, `PASSWORD`, `TOKEN`, `PRIVATE`, `SERVICE_ROLE`, `DATABASE_URL`, `API_KEY`, `SIGNING`, `CREDENTIAL`
+- **Unknown `ALLOY_*`:** ambiguous → fail closed at prepare (not implicitly allowed)
+- **Ambiguous:** fail closed — add to `ALLOY_ENV_ALLOWLIST` explicitly if truly safe
 - Values are **never printed**; only variable names in reports
 - Existing file: requires `--force` after reviewing planned name list
 
-`alloy-dev-start` loads allowed vars from `web/.env.local.agent` without overwriting developer `web/.env.local`.
+`web/.env.local.agent` is loaded **only** through `alloy-dev-start` / `devup` — not native Next.js loading and **not** `npm run dev` directly. `alloy-dev-start` exports allowed vars for the owned process without overwriting developer `web/.env.local`.
+
+## Dev server ownership
+
+Verification (`alloy-agent-ready`, `alloy-agent-verify`) requires a **toolkit-owned** dev server on the assigned port:
+
+- Start with `alloy-dev-start <worktree>` — records PID, loads `web/.env.local.agent`
+- **Do not** run `npm run dev` directly — foreign listeners are refused
+- `alloy-agent-ready` reports `ownership: toolkit-owned` or remediation for foreign/stale/stopped servers
 
 ## Forbidden secrets / data
 
@@ -79,9 +91,9 @@ Rules:
 
 ```bash
 alloy-agent-prepare <slot>
-alloy-dev-start <name>
+alloy-dev-start <name>            # toolkit-owned; loads web/.env.local.agent (not npm run dev)
 alloy-agent-login <slot>          # manual sign-in; captures storage state
-alloy-agent-ready <slot>          # READY / NOT READY + remediation
+alloy-agent-ready <slot>          # READY / NOT READY + remediation (requires toolkit-owned server)
 alloy-agent-verify <slot> route /workspace
 alloy-agent-evidence <slot>
 ```
