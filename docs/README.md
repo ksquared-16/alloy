@@ -9,7 +9,9 @@ supersedes: []
 
 **Purpose:** Authoritative navigation for engineers, implementers, and AI agents. Prefer these files over chat memory or archived sprint material.
 
-**July 2026 platform freeze:** Foundational architecture is **complete and stable**. Start here for "what platform exists today": **`platform/milestones/freeze-july-2026.md`**, **`platform/foundation/platform-manifesto.md`**, **`platform/foundation/system-overview.md`**.
+**Start here (onboarding):** **[`platform/foundation/alloy-platform-handbook.md`](platform/foundation/alloy-platform-handbook.md)** — the Alloy Platform Handbook. Teach the platform first; doctrine is the encyclopedia.
+
+**July 2026 platform freeze:** Foundational architecture is **complete and stable**. After the handbook: **`platform/milestones/freeze-july-2026.md`**, **`platform/foundation/platform-manifesto.md`**, **`platform/foundation/system-overview.md`**.
 
 **June 2026 rebaseline:** Canonical platform docs live under **`docs/platform/`**. Schema reference under **`docs/schema/`** (generated). Business Process → Stage → Record is the operator mental model; work units are documented as runtime constructs.
 
@@ -17,7 +19,7 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Cross-cutting UX model:** How every operational domain (Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance) shares one architecture — five planes, Operations/Records split, progressive drawers, tabs-vs-actions — is defined in **`platform/core/operational-ux-doctrine.md`** (the **surface axis**).
 
-**Cross-cutting truth model:** The complementary **truth-flow axis** — Configuration → Operational Intent → Operational Projections → Operational Facts (immutable) → Operational Consequences (financial) — is defined in **`platform/core/operational-truth-flow-doctrine.md`**. It locks: **Operational Projections are derived/non-authoritative** read models, while the **two authored ledgers — Operational Facts (observed, "what IS") and Operational Expectations (intended, "what SHOULD / WILL be") — are authoritative and neither is derived from the other** (the Operational Expectations two-ledger freeze; see **`platform/operational-expectations-system-design.md`**); financials derive from facts (billing generalizes before childcare billing); facts are immutable + effective-dated; childcare builds only on the committed enrollment foundation; job-vertical schedule/financial tables are off-limits to childcare.
+**Cross-cutting truth model:** The complementary **truth-flow axis** — Configuration → Operational Intent → Operational Projections → Operational Facts (immutable) → Operational Consequences (financial) — is defined in **`platform/core/operational-truth-flow-doctrine.md`**. It locks: **Operational Projections are derived/non-authoritative** read models, while the **two authored ledgers — Operational Facts (observed, "what IS") and Operational Expectations (intended, "what SHOULD / WILL be") — are authoritative and neither is derived from the other** (the Operational Expectations two-ledger freeze; see **`platform/core/operational-expectations-system-design.md`**); financials derive from facts (billing generalizes before childcare billing); facts are immutable + effective-dated; childcare builds only on the committed enrollment foundation; job-vertical schedule/financial tables are off-limits to childcare.
 
 **Canonical interaction model:** The single operator spine every domain inherits — **Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field** — plus the one universal drawer (Record of Truth / Record of Attention / Context Frame) is defined in **`platform/operator/canonical-interaction-model.md`**, with laws in **`platform/operator/interaction-grammar.md`** and the lived flow in **`platform/operator/operator-story.md`**. How that model should **look and feel** (the bridge into mockups) is **`platform/operator/alloy-visual-language.md`**.
 
@@ -33,7 +35,7 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Experience Builder V3 — Universal Surface Composition (frozen, July 2026):** The composition model that unifies every builder — `Surface → Canvas → Component → Evidence Group → Composition Item` (a **Card is one Component type**), with **Expanded = Open Surface** (nested via `openSurfaceId`) — is frozen in **`platform/operator/experience-builder-v3-universal-surface-composition.md`**. The /surfaces builders now author real, persisted configuration for it (stacked queue rows, grain/conditions, custom fields by namespace, nested surface editing for Children + Financial Configuration). **Presentation Runtime adoption starts from `platform/operator/presentation-runtime-carry-forward.md`** — what the live runtime must consume, the deferral list, and what it must NOT redesign. PRs #61/#63/#64/#68.
 
-**Operational Expectations — two-ledger architecture (frozen, July 2026):** The platform's authored operational truth is **two ledgers** — **Operational Facts** (observed) and **Operational Expectations** (intended) — with everything else (Judgment, Gap, Projection, Scheduling, Forecasting, Billing) **derived**. Architecture is frozen; implementation is sequenced P0–P8. Frozen corpus: **`platform/operational-expectations-system-design.md`** (system design + §0.5 reconciliation), **`platform/milestones/operational-expectations-architecture-closeout.md`** (freeze), **`platform/milestones/operational-expectations-doctrine-convergence.md`** (terminology sweep), **`platform/milestones/operational-expectations-engineering-realization.md`** (the implementation contract), **`platform/milestones/operational-expectations-implementation-program.md`** (execution index), and **`platform/milestones/operational-expectations-p0-substrate-reconciliation.md`** (P0 / G-Reconciliation certification).
+**Operational Expectations — two-ledger architecture (frozen, July 2026):** The platform's authored operational truth is **two ledgers** — **Operational Facts** (observed) and **Operational Expectations** (intended) — with everything else (Judgment, Gap, Projection, Scheduling, Forecasting, Billing) **derived**. Architecture is frozen; implementation is sequenced P0–P8. Frozen corpus: **`platform/core/operational-expectations-system-design.md`** (system design + §0.5 reconciliation), **`platform/milestones/operational-expectations-architecture-closeout.md`** (freeze), **`platform/milestones/operational-expectations-doctrine-convergence.md`** (terminology sweep), **`platform/milestones/operational-expectations-engineering-realization.md`** (the implementation contract), **`platform/milestones/operational-expectations-implementation-program.md`** (execution index), and **`platform/milestones/operational-expectations-p0-substrate-reconciliation.md`** (P0 / G-Reconciliation certification).
 
 ---
 
@@ -41,20 +43,22 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 A configurable operating system for service businesses. Primary documentation is **industry-agnostic**; childcare enrollment appears as a reference implementation in supplemental docs.
 
-Start here: **`platform/foundation/system-overview.md`**
+**Onboarding entry:** **[`platform/foundation/alloy-platform-handbook.md`](platform/foundation/alloy-platform-handbook.md)**  
+Then: **`platform/foundation/system-overview.md`**
 
 ---
 
 ## Load order (onboarding)
 
-**Agent load order (Cursor / AI):** matches **`.cursor/rules/alloy-project-context.mdc`** — start at `docs/README.md`, then foundation → core → operator → modules → governance → schema.
+**Agent load order (Cursor / AI):** start at `docs/README.md`, then the **Platform Handbook**, then foundation → core → operator → modules → governance → schema. (Cursor rule load order still names the encyclopedia chain after the handbook.)
 
 ### 1. Foundation
 
+0. `platform/foundation/alloy-platform-handbook.md` — **Alloy Platform Handbook** (teach the platform first)
 1. `platform/foundation/system-overview.md`
-2. `platform/../foundation/platform-capabilities.md`
+2. `platform/foundation/platform-capabilities.md`
 3. `platform/foundation/product-roadmap.md`
-4. `platform/./architecture.md`
+4. `platform/foundation/architecture.md`
 4a. `platform/foundation/os-runtime-map.md` — **OS Runtime Map** (the nine runtime layers — Kernel · Intent · Navigation · Experience · Surface · Card · Record · Entity · Operational/BOS — the three flows, the **client/server seam**, the **Effects/Integration** service, and the Architecture Evolution & Known Gaps appendix)
 5. `platform/governance/glossary.md`
 

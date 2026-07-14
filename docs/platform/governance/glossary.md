@@ -13,7 +13,7 @@ supersedes: []
 
 ## Operational Truth (two-ledger ontology)
 
-The frozen ontology has **two authored ledgers** — neither derivable from the other — and everything else is **derived**. The word **"Expectation" always means the authored ledger; "Projection" always means derived state.** See [`../operational-expectations-system-design.md`](../operational-expectations-system-design.md) and [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md).
+The frozen ontology has **two authored ledgers** — neither derivable from the other — and everything else is **derived**. The word **"Expectation" always means the authored ledger; "Projection" always means derived state.** See [`../core/operational-expectations-system-design.md`](../core/operational-expectations-system-design.md) and [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md).
 
 | Term | Meaning |
 |---|---|

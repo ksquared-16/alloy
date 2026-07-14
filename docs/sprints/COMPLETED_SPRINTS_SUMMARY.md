@@ -1,6 +1,6 @@
 # Completed sprints — summary index
 
-**Purpose:** One-page index of **shipped** sprint work. Detailed execution history lives in closeout files under `05_2026/completed/` and `06_2026/completed/`. Superseded planning cards and debug notes were moved to **`docs/archive/sprints-superseded/`** (June 2026 cleanup).
+**Purpose:** One-page index of **shipped** sprint work. Detailed execution history lives in closeout files under `archive/05_2026/` and `archive/06_2026/`. Superseded planning cards and debug notes were moved to **`docs/archive/sprints-superseded/`** (June 2026 cleanup).
 
 **Sequencing / gaps:** `docs/execution/roadmap-and-gaps.md`  
 **Active execution:** `docs/sprints/README.md`

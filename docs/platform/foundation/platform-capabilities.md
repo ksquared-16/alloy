@@ -35,7 +35,7 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 
 ## Operational truth (two-ledger ontology)
 
-The frozen [Operational Expectations architecture](../operational-expectations-system-design.md) establishes **two authored ledgers** — the platform's authoritative operational truth. Both are append-only, actor-attributed, and **neither is derived from the other**; that non-derivability is precisely why each is a *capability* rather than a projection. Everything downstream (Judgment, Gap, Projection, Scheduling, Forecasting, Current Work, Billing, Communications) is **derived** and is therefore intentionally **not** listed here as a capability. Terminology is locked in the [glossary two-ledger map](../governance/glossary.md); Law 2 is in the [truth-flow doctrine](../core/operational-truth-flow-doctrine.md).
+The frozen [Operational Expectations architecture](../core/operational-expectations-system-design.md) establishes **two authored ledgers** — the platform's authoritative operational truth. Both are append-only, actor-attributed, and **neither is derived from the other**; that non-derivability is precisely why each is a *capability* rather than a projection. Everything downstream (Judgment, Gap, Projection, Scheduling, Forecasting, Current Work, Billing, Communications) is **derived** and is therefore intentionally **not** listed here as a capability. Terminology is locked in the [glossary two-ledger map](../governance/glossary.md); Law 2 is in the [truth-flow doctrine](../core/operational-truth-flow-doctrine.md).
 
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|

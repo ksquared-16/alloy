@@ -14,12 +14,12 @@ should implement each package **without making an architectural decision**. Wher
 implementation question open, this document resolves it at the **system-design** level (§A) — the
 only place new decisions are made.
 
-> **Companion docs.** Twin ledger: [`core/operational-truth-flow-doctrine.md`](core/operational-truth-flow-doctrine.md)
+> **Companion docs.** Twin ledger: [`core/operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md)
 > (ratified five-layer axis + four laws — see **§0.5, this doc supersedes its "Expectations are
 > derived" reading**). Observed ledger: `operational-facts-platform` design.
-> Consumer #1 (parity proof): [`modules/operational-consumption-platform.md`](modules/operational-consumption-platform.md).
-> Structural sibling for a canonical ledger doc: [`modules/financial-platform-domain.md`](modules/financial-platform-domain.md).
-> Initiative record: [doctrine convergence certification](milestones/operational-expectations-doctrine-convergence.md) · [architecture closeout](milestones/operational-expectations-architecture-closeout.md) · [engineering realization plan](milestones/operational-expectations-engineering-realization.md).
+> Consumer #1 (parity proof): [`modules/operational-consumption-platform.md`](../modules/operational-consumption-platform.md).
+> Structural sibling for a canonical ledger doc: [`modules/financial-platform-domain.md`](../modules/financial-platform-domain.md).
+> Initiative record: [doctrine convergence certification](../milestones/operational-expectations-doctrine-convergence.md) · [architecture closeout](../milestones/operational-expectations-architecture-closeout.md) · [engineering realization plan](../milestones/operational-expectations-engineering-realization.md).
 
 ---
 
@@ -67,9 +67,9 @@ the constraints every package is measured against.**
 
 ## 0.5 Doctrine Reconciliation (RATIFIED 2026-07-13 — a terminology law, not an ontology question)
 
-The currently-ratified [`core/operational-truth-flow-doctrine.md`](core/operational-truth-flow-doctrine.md)
-states, as bolded **Law 2**: *"Expectations are derived / non-authoritative… They MUST NOT become
-authoritative tables that can silently disagree with Intent or Facts."* The Phase B freeze makes
+The currently-ratified [`core/operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md)
+states, as bolded **Law 2**: *Expectations used to be described as derived / non-authoritative
+("MUST NOT become authoritative tables that can silently disagree with Intent or Facts").* The Phase B freeze makes
 Operational Expectations an **authored** ledger — the semantic inverse. Ratified resolution: **the
 freeze wins; the doctrine text is brought into line.** This is a **P0-blocking sweep**, gated by
 **G-Reconciliation**. **"Expectation" is not permitted to carry two meanings** — that ambiguity is
@@ -532,7 +532,7 @@ vertical **and** the Billing parity retrofit is merged.
 
 | Gate | Proves |
 |---|---|
-| **G-Reconciliation** | The truth-flow doctrine no longer says "Expectations are derived"; derived-L3 is renamed Projection; Law 2 amended. No naming ambiguity in the repo. |
+| **G-Reconciliation** | The truth-flow doctrine no longer uses the retired Law-2 wording that treated Expectations as derived; derived-L3 is renamed Projection; Law 2 amended. No naming ambiguity in the repo. |
 | **G-Purity** | No path from evaluation/ledger to an effector; effectors only via Config binding. |
 | **G-Acyclic** | Gaps/judgments read-only; every write is an authoring act. |
 | **G-Replay-Determinism** | Replaying any historical `(valid-time, transaction-time)` reproduces recorded judgment exactly (golden replay corpus). |
@@ -549,14 +549,14 @@ vertical **and** the Billing parity retrofit is merged.
 
 ## Cross-references
 
-- [`core/operational-truth-flow-doctrine.md`](core/operational-truth-flow-doctrine.md) — the five-layer
+- [`core/operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md) — the five-layer
   axis + four laws; **must be amended per §0.5** (rename derived-L3 → Projection; Law 2).
-- [`modules/operational-consumption-platform.md`](modules/operational-consumption-platform.md) — the
+- [`modules/operational-consumption-platform.md`](../modules/operational-consumption-platform.md) — the
   L4→L5 pipeline; Billing is consumer #1 and the parity proof (D12a).
 - `operational-facts-platform` design — the observed twin ledger; the Fact Contract read seam.
-- [`rfcs/operational-expansion-phase1.md`](rfcs/operational-expansion-phase1.md) — Wave 1 (D2 Fact
+- [`rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md) — Wave 1 (D2 Fact
   Contract + D12a correction-aware consumption) that this capability generalizes.
-- [`modules/financial-platform-domain.md`](modules/financial-platform-domain.md) — structural template
+- [`modules/financial-platform-domain.md`](../modules/financial-platform-domain.md) — structural template
   for a canonical frozen-determinations ledger doc.
 
 ## When this doc must be updated

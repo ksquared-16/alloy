@@ -28,27 +28,28 @@ Do not frame Alloy as CRM-first, enrollment-first, work-unit-first, or childcare
 When starting non-trivial Alloy work, load context in this order:
 
 1. `docs/README.md`
-2. `docs/platform/foundation/system-overview.md`
-3. `docs/platform/foundation/platform-capabilities.md`
-4. `docs/platform/foundation/product-roadmap.md`
-5. `docs/platform/core/business-process-system.md`
-6. `docs/platform/core/entity-model.md`
-7. `docs/platform/core/record-system.md`
-8. `docs/platform/core/status-and-state-system.md`
-9. `docs/platform/operator/queue-system.md`
-10. `docs/platform/operator/drawer-system.md`
-11. `docs/platform/modules/documents-and-forms.md`
-12. `docs/platform/modules/actions-and-workflows.md`
-13. `docs/platform/modules/ai-platform.md`
-14. `docs/platform/governance/design-and-operational-doctrine.md`
-15. `docs/platform/governance/documentation-governance.md`
-16. Schema (when touching DB / RLS / triggers / functions / migrations):
+2. `docs/platform/foundation/alloy-platform-handbook.md` — **teach the platform first**
+3. `docs/platform/foundation/system-overview.md`
+4. `docs/platform/foundation/platform-capabilities.md`
+5. `docs/platform/foundation/product-roadmap.md`
+6. `docs/platform/core/business-process-system.md`
+7. `docs/platform/core/entity-model.md`
+8. `docs/platform/core/record-system.md`
+9. `docs/platform/core/status-and-state-system.md`
+10. `docs/platform/operator/queue-system.md`
+11. `docs/platform/operator/drawer-system.md`
+12. `docs/platform/modules/documents-and-forms.md`
+13. `docs/platform/modules/actions-and-workflows.md`
+14. `docs/platform/modules/ai-platform.md`
+15. `docs/platform/governance/design-and-operational-doctrine.md`
+16. `docs/platform/governance/documentation-governance.md`
+17. Schema (when touching DB / RLS / triggers / functions / migrations):
     - `docs/schema/schema-tables.md` through `docs/schema/schema-policies-and-security.md` (seven generated docs)
     - `docs/supabase/reference/*.csv` (generated CSV source)
 
 Add **`docs/platform/modules/communications-platform.md`** or **`docs/platform/modules/configuration-platform.md`** when the task touches those areas.
 
-For behavior-changing work, include item 14 in context. For agent/repo workflow, also read **`docs/platform/governance/agent-repo-boundaries.md`**.
+For behavior-changing work, include item 15 in context. For agent/repo workflow, also read **`docs/platform/governance/agent-repo-boundaries.md`**.
 
 **Supplemental (vertical detail):** `docs/product/crm-system.md` — enrollment pipeline reference implementation, not canonical platform framing.
 

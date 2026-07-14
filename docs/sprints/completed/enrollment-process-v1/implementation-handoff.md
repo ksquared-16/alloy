@@ -1,6 +1,6 @@
 ---
 owner: runtime
-status: canonical
+status: sprint
 last_reviewed: 2026-07-12
 supersedes: []
 ---
@@ -9,7 +9,7 @@ supersedes: []
 
 Status: **implemented + verified on staging; awaiting live browser Golden Path before freeze.**
 Canonical record for Cursor and future threads. Where any other doc disagrees about ownership, the
-pair *this doc + [`enrollment-process-runtime.md`](./enrollment-process-runtime.md)* wins.
+pair *this doc + [`enrollment-process-runtime.md`](../../../platform/runtime/enrollment-process-runtime.md)* wins.
 
 - **Staging SHA at handoff:** `3764e039a` (`origin/staging`). All Enrollment-V1 work is an ancestor of this SHA.
 - **Working branch:** `claude/ecstatic-lamport-580e6c` @ `d102efe3a` — fully merged into staging (0 unpushed commits, clean tree).
@@ -246,6 +246,6 @@ Toolchain: **Node 22** (`v22.21.1`). Validation always from `web/`.
 
 ## 10. Related canonical docs
 
-- [`enrollment-process-runtime.md`](./enrollment-process-runtime.md) — the runtime ownership reference (updated alongside this handoff).
-- [`enrollment-placement-doctrine.md`](../../system/enrollment-placement-doctrine.md) — placement/waitlist doctrine.
+- [`enrollment-process-runtime.md`](../../../platform/runtime/enrollment-process-runtime.md) — the runtime ownership reference (updated alongside this handoff).
+- [`enrollment-placement-doctrine.md`](../../../system/enrollment-placement-doctrine.md) — placement/waitlist doctrine.
 - Sprint: `docs/sprints/archive/07_2026/enrollment_alignment_closeout.md`.

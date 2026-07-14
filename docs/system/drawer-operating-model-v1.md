@@ -18,8 +18,8 @@ supersedes: []
 
 - [`adminv2-runtime-performance-doctrine.md`](./adminv2-runtime-performance-doctrine.md) — composed reveal, no partial above-fold pop-in
 - [`drawer-view-model-runtime-contract.md`](./drawer-view-model-runtime-contract.md) — VM compose → preload → apply → pin
-- [`../../archive/2026-06-runtime-convergence/platform_convergence/layout_contract_v1.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_contract_v1.md) — LayoutDoc ownership boundaries
-- [`../../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) — entity cutover order and flags
+- [`../../archive/2026-06-runtime-convergence/layout_contract_v1.md`](../archive/2026-06-runtime-convergence/layout_contract_v1.md) — LayoutDoc ownership boundaries
+- [`../../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md) — entity cutover order and flags
 
 ---
 
@@ -684,6 +684,6 @@ Queue rows inherit **date formatting**, **empty-collapse**, **child merge**, and
 
 - VM runtime: [`drawer-view-model-runtime-contract.md`](./drawer-view-model-runtime-contract.md)
 - Performance: [`adminv2-runtime-performance-doctrine.md`](./adminv2-runtime-performance-doctrine.md)
-- Layout cutover: [`../../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md)
+- Layout cutover: [`../../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md)
 - Record truth vs previews: [`record-system.md`](../platform/core/record-system.md)
 - Settings layouts plane: [`configuration-system.md`](./configuration-system.md)
