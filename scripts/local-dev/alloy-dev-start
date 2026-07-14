@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Start the assigned Next dev server for an Alloy agent worktree.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-dev-start <worktree-name>
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local name="$1"
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local port="$PORT"
+  local url="${NEXT_PUBLIC_APP_URL:-http://localhost:${port}}"
+  local web_dir pid_path log_path existing_pid
+  web_dir="$(alloy_web_dir_for "$path")"
+  pid_path="$(alloy_pid_path "$name")"
+  log_path="$(alloy_log_path "$name")"
+
+  [[ -d "$path" ]] || alloy_die "worktree path missing: $path"
+  [[ -d "$web_dir" ]] || alloy_die "web directory missing: $web_dir"
+
+  if [[ -f "$pid_path" ]]; then
+    existing_pid="$(alloy_read_pid_file "$pid_path" || true)"
+    if [[ -n "${existing_pid:-}" ]] && alloy_pid_alive "$existing_pid"; then
+      if alloy_pid_belongs_to_worktree "$existing_pid" "$path"; then
+        alloy_die "dev server already running for $name (PID $existing_pid). Refusing duplicate start."
+      fi
+      alloy_die "PID file exists for live PID $existing_pid that does not belong to $path. Inspect: $pid_path"
+    fi
+    alloy_remove_dead_pid_file "$name" || true
+  fi
+
+  alloy_refuse_occupied_port "$port" "dev-start for $name"
+
+  alloy_export_node_defaults
+  export PORT="$port"
+  export NEXT_PUBLIC_APP_URL="$url"
+
+  alloy_info "Starting ${ALLOY_DEV_COMMAND} in ${web_dir} on port ${port}..."
+  (
+    cd "$web_dir"
+    export PORT="$port"
+    export NEXT_PUBLIC_APP_URL="$url"
+    export NODE_OPTIONS
+    # Track the launcher PID; command runs in this worktree directory.
+    nohup bash -c "$ALLOY_DEV_COMMAND" >>"$log_path" 2>&1 &
+    echo $! >"$pid_path"
+  )
+
+  local pid
+  pid="$(alloy_read_pid_file "$pid_path")"
+  sleep 1
+  if ! alloy_pid_alive "$pid"; then
+    rm -f "$pid_path"
+    alloy_die "dev server failed to stay alive. Inspect log: $log_path"
+  fi
+
+  cat <<EOF
+Dev server started
+  worktree: ${name}
+  url:      ${url}
+  port:     ${port}
+  PID:      ${pid}
+  log:      ${log_path}
+  path:     ${path}
+EOF
+}
+
+main "$@"

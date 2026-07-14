@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# Safe cleanup: report-only by default; narrow confirmed actions optional.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-clean report
+  alloy-clean artifacts          # generated only; requires confirmation
+  alloy-clean git-prune          # dry-run first; requires confirmation
+  alloy-clean package-cache-verify
+
+Phase 1 defaults to report-only. Never deletes worktrees, branches,
+node_modules, Docker data, Cursor/Claude data, or AI history automatically.
+EOF
+}
+
+collect_roots() {
+  local roots=()
+  [[ -d "${ALLOY_REPO:-}" ]] && roots+=("$ALLOY_REPO")
+  [[ -d "${ALLOY_WORKTREE_ROOT:-}" ]] && roots+=("$ALLOY_WORKTREE_ROOT")
+  printf '%s\n' "${roots[@]}"
+}
+
+find_named_dirs() {
+  local name="$1"
+  local root
+  while IFS= read -r root; do
+    [[ -n "$root" ]] || continue
+    find "$root" -maxdepth 5 -type d -name "$name" 2>/dev/null || true
+  done < <(collect_roots)
+}
+
+report_dead_pids() {
+  local f pid
+  shopt -s nullglob
+  for f in "$ALLOY_PIDS_DIR"/*.pid; do
+    pid="$(tr -d '[:space:]' <"$f")"
+    if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+      printf 'dead-pid\t%s\t%s\n' "$f" "${pid:-empty}"
+    fi
+  done
+  shopt -u nullglob
+}
+
+report_stale_metadata() {
+  local name
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    # shellcheck disable=SC1090
+    source "$(alloy_metadata_path "$name")"
+    if [[ ! -d "${ALLOY_WORKTREE_PATH:-}" ]]; then
+      printf 'stale-metadata\t%s\t%s\n' "$name" "${ALLOY_WORKTREE_PATH:-}"
+    fi
+  done < <(alloy_list_metadata_names)
+}
+
+cmd_report() {
+  local age="${ALLOY_CLEAN_ARTIFACT_AGE_HOURS}"
+  echo "Alloy clean report (read-only). Artifact age threshold: ${age}h"
+  echo
+
+  echo "## Generated .next"
+  find_named_dirs ".next" | while read -r d; do printf '%8s  %s\n' "$(alloy_dir_size "$d")" "$d"; done
+  echo
+  echo "## coverage"
+  find_named_dirs "coverage" | while read -r d; do printf '%8s  %s\n' "$(alloy_dir_size "$d")" "$d"; done
+  echo
+  echo "## test-results"
+  find_named_dirs "test-results" | while read -r d; do printf '%8s  %s\n' "$(alloy_dir_size "$d")" "$d"; done
+  echo
+  echo "## playwright-report"
+  find_named_dirs "playwright-report" | while read -r d; do printf '%8s  %s\n' "$(alloy_dir_size "$d")" "$d"; done
+  echo
+  echo "## Dead PID files"
+  report_dead_pids || true
+  echo
+  echo "## Stale worktree metadata"
+  report_stale_metadata || true
+  echo
+  echo "## Inactive worktree node_modules (sizes only; never auto-deleted)"
+  local name
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    # shellcheck disable=SC1090
+    source "$(alloy_metadata_path "$name")"
+    local nm="${ALLOY_WORKTREE_PATH}/${ALLOY_WEB_DIR}/node_modules"
+    local state="unknown"
+    if [[ -f "$(alloy_pid_path "$name")" ]] && kill -0 "$(alloy_read_pid_file "$(alloy_pid_path "$name")" 2>/dev/null || echo)" 2>/dev/null; then
+      state="dev-running"
+    else
+      state="inactive"
+    fi
+    if [[ -d "$nm" && "$state" == "inactive" ]]; then
+      printf '%8s  [%s] %s\n' "$(alloy_dir_size "$nm")" "$name" "$nm"
+    fi
+  done < <(alloy_list_metadata_names)
+  echo
+  echo "## Package cache sizes"
+  [[ -d "$HOME/.npm" ]] && printf '%8s  %s\n' "$(alloy_dir_size "$HOME/.npm")" "$HOME/.npm"
+  [[ -d "$HOME/Library/Caches/npm" ]] && printf '%8s  %s\n' "$(alloy_dir_size "$HOME/Library/Caches/npm")" "$HOME/Library/Caches/npm"
+  echo
+  echo "## Docker disk usage"
+  if alloy_have_cmd docker; then
+    docker system df 2>/dev/null || echo "docker df unavailable"
+  else
+    echo "docker not installed"
+  fi
+  echo
+  echo "No deletions performed."
+}
+
+cmd_artifacts() {
+  local candidates=()
+  local d
+  while IFS= read -r d; do
+    [[ -n "$d" ]] || continue
+    candidates+=("$d")
+  done < <({
+    find_named_dirs ".next"
+    find_named_dirs "coverage"
+    find_named_dirs "test-results"
+    find_named_dirs "playwright-report"
+  })
+
+  # Also dead PID files (admin records only)
+  local f pid
+  shopt -s nullglob
+  for f in "$ALLOY_PIDS_DIR"/*.pid; do
+    pid="$(tr -d '[:space:]' <"$f")"
+    if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+      candidates+=("$f")
+    fi
+  done
+  shopt -u nullglob
+
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    echo "No artifact candidates found."
+    exit 0
+  fi
+
+  echo "Candidates for deletion (generated artifacts / dead PID files only):"
+  local c
+  for c in "${candidates[@]}"; do
+    if [[ -d "$c" ]]; then
+      printf '  DIR  %8s  %s\n' "$(alloy_dir_size "$c")" "$c"
+    else
+      printf '  FILE          %s\n' "$c"
+    fi
+  done
+
+  alloy_confirm "Delete these generated artifacts only?"
+
+  for c in "${candidates[@]}"; do
+    if [[ -d "$c" ]]; then
+      case "$(basename "$c")" in
+        .next|coverage|test-results|playwright-report)
+          rm -rf "$c"
+          echo "removed $c"
+          ;;
+        *)
+          alloy_warn "skipped unexpected directory: $c"
+          ;;
+      esac
+    elif [[ "$c" == *.pid ]]; then
+      rm -f "$c"
+      echo "removed $c"
+    else
+      alloy_warn "skipped unexpected path: $c"
+    fi
+  done
+}
+
+cmd_git_prune() {
+  alloy_verify_canonical_repo
+  echo "Dry-run:"
+  git -C "$ALLOY_REPO" worktree prune -n -v
+  alloy_confirm "Run git worktree prune (removes stale administrative entries only; does not delete branch checkouts that still exist)?"
+  git -C "$ALLOY_REPO" worktree prune -v
+  echo "Done."
+}
+
+cmd_package_cache_verify() {
+  if ! alloy_have_cmd npm; then
+    alloy_die "npm not available"
+  fi
+  echo "Running npm cache verify (no broad cache deletion)..."
+  npm cache verify
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -lt 1 ]]; then
+    usage
+    [[ $# -ge 1 ]] || exit 2
+    exit 0
+  fi
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+
+  case "$1" in
+    report) cmd_report ;;
+    artifacts) cmd_artifacts ;;
+    git-prune) cmd_git_prune ;;
+    package-cache-verify) cmd_package_cache_verify ;;
+    *) usage >&2; exit 2 ;;
+  esac
+}
+
+main "$@"

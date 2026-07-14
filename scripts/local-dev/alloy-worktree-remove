@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Safely remove an Alloy agent worktree and its local branch (non-force).
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-worktree-remove <worktree-name>
+
+Requires an explicit interactive confirmation.
+Uses git worktree remove (never --force) and git branch -d (never -D).
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local name="$1"
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_require_cmd git
+  alloy_verify_canonical_repo
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local branch="$ALLOY_WORKTREE_BRANCH"
+  local port="$PORT"
+  local meta_path pid_path log_path pid
+  meta_path="$(alloy_metadata_path "$name")"
+  pid_path="$(alloy_pid_path "$name")"
+  log_path="$(alloy_log_path "$name")"
+
+  [[ -d "$path" ]] || alloy_die "metadata/path disagree: path missing ($path). No data removed."
+
+  local current
+  current="$(alloy_current_branch "$path")"
+  [[ "$current" == "$branch" ]] || \
+    alloy_die "metadata/branch disagree: expected '$branch', found '$current'. No data removed."
+
+  if alloy_worktree_is_dirty "$path"; then
+    alloy_die "worktree is dirty; commit or discard changes manually first. No data removed."
+  fi
+
+  if [[ -f "$pid_path" ]]; then
+    pid="$(alloy_read_pid_file "$pid_path" || true)"
+    if [[ -n "${pid:-}" ]] && alloy_pid_alive "$pid"; then
+      if alloy_pid_belongs_to_worktree "$pid" "$path"; then
+        alloy_die "dev server appears running (PID $pid). Run: alloy-dev-stop $name"
+      fi
+      alloy_die "PID file exists for live PID $pid that does not clearly belong to this worktree. Inspect manually."
+    fi
+  fi
+
+  alloy_info "Fetching ${ALLOY_BASE_REMOTE}..."
+  alloy_repo_fetch "$ALLOY_REPO"
+  local base
+  base="$(alloy_base_ref)"
+
+  # Unmerged commits relative to latest origin/staging?
+  local ahead
+  ahead="$(alloy_git "$path" rev-list --count "${base}..${branch}")"
+  if [[ "$ahead" != "0" ]]; then
+    cat >&2 <<EOF
+error: branch '${branch}' has ${ahead} commit(s) not present in ${base}.
+
+No data was removed.
+Merge or otherwise land the work with approval, or keep the worktree.
+EOF
+    exit 1
+  fi
+
+  cat <<EOF
+Planned removal:
+  worktree: ${name}
+  path:     ${path}
+  branch:   ${branch}
+  port:     ${port}
+  metadata: ${meta_path}
+  pid file: ${pid_path}
+  log file: ${log_path}
+
+Actions:
+  1) git worktree remove ${path}   (never --force)
+  2) git branch -d ${branch}       (never -D)
+  3) remove runtime metadata/logs for this worktree only
+EOF
+
+  alloy_confirm "Remove this worktree and delete the local branch if fully merged?"
+
+  alloy_git "$ALLOY_REPO" worktree remove "$path"
+  if ! alloy_git "$ALLOY_REPO" branch -d "$branch"; then
+    cat >&2 <<EOF
+error: git branch -d failed (branch not fully merged from git's perspective).
+The worktree directory was removed by git worktree remove, but the branch remains.
+Inspect with: git -C ${ALLOY_REPO} branch -vv | grep ${branch}
+EOF
+    rm -f "$meta_path" "$pid_path"
+    # keep log for forensics
+    exit 1
+  fi
+
+  rm -f "$meta_path" "$pid_path" "$log_path"
+  alloy_info "Removed worktree ${name}."
+}
+
+main "$@"

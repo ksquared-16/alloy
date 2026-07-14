@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Serialized heavyweight validation across all Alloy agent worktrees.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/lock.sh
+source "${SCRIPT_DIR}/lib/lock.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-validate <worktree-name> <kind>
+  alloy-validate <worktree-name> command -- <command...>
+
+Kinds (serialized globally):
+  typecheck | test | build | playwright | imports
+
+Focused package tests remain outside this lock, e.g.:
+  cd <worktree>/web && npx vitest run path/to/file.test.ts
+
+Heavyweight examples (use this command):
+  alloy-validate wt1-example typecheck
+  alloy-validate wt1-example test
+  alloy-validate wt1-example build
+EOF
+}
+
+resolve_kind_command() {
+  local kind="$1"
+  case "$kind" in
+    typecheck) printf '%s' "$ALLOY_TYPECHECK_COMMAND" ;;
+    test) printf '%s' "$ALLOY_TEST_COMMAND" ;;
+    build) printf '%s' "$ALLOY_BUILD_COMMAND" ;;
+    playwright) printf '%s' "$ALLOY_PLAYWRIGHT_COMMAND" ;;
+    imports)
+      if [[ -z "${ALLOY_IMPORTS_COMMAND:-}" || "$ALLOY_IMPORTS_COMMAND" == unsupported ]]; then
+        alloy_die "imports verification is unsupported in config"
+      fi
+      printf '%s' "$ALLOY_IMPORTS_COMMAND"
+      ;;
+    *) alloy_die "unknown kind '$kind' (typecheck|test|build|playwright|imports|command)" ;;
+  esac
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+
+  local name="$1"
+  local kind="$2"
+  shift 2
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local web_dir cmd
+  local -a cmd_args=()
+  local use_argv=0
+  web_dir="$(alloy_web_dir_for "$path")"
+  [[ -d "$web_dir" ]] || alloy_die "web directory missing: $web_dir"
+
+  if [[ "$kind" == "command" ]]; then
+    if [[ "${1:-}" != "--" ]]; then
+      alloy_die "usage: alloy-validate <worktree-name> command -- <command...>"
+    fi
+    shift
+    [[ $# -ge 1 ]] || alloy_die "missing command after --"
+    use_argv=1
+    cmd_args=("$@")
+    cmd="${cmd_args[*]}"
+  else
+    [[ $# -eq 0 ]] || alloy_die "unexpected args after kind (use 'command --' for custom commands)"
+    cmd="$(resolve_kind_command "$kind")"
+  fi
+
+  alloy_validate_acquire_lock "$name" "$kind" "$cmd"
+
+  local vlog
+  vlog="$(alloy_validate_log_path)"
+  alloy_export_node_defaults
+  export CI="${CI:-1}"
+
+  {
+    printf '[%s] START worktree=%s kind=%s pid=%s cmd=%s\n' \
+      "$(alloy_iso_now)" "$name" "$kind" "$$" "$cmd"
+  } | tee -a "$vlog"
+
+  local rc=0
+  (
+    cd "$web_dir"
+    if [[ "$use_argv" -eq 1 ]]; then
+      env CI=1 NODE_OPTIONS="$NODE_OPTIONS" "${cmd_args[@]}"
+    else
+      env CI=1 NODE_OPTIONS="$NODE_OPTIONS" bash -lc "$cmd"
+    fi
+  ) || rc=$?
+
+  {
+    printf '[%s] FINISH worktree=%s kind=%s rc=%s\n' \
+      "$(alloy_iso_now)" "$name" "$kind" "$rc"
+  } | tee -a "$vlog"
+
+  # EXIT trap releases lock
+  exit "$rc"
+}
+
+main "$@"
