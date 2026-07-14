@@ -53,11 +53,12 @@ main() {
   [[ -d "$web_dir" ]] || alloy_die "web directory missing: $web_dir"
 
   alloy_require_toolkit_owned_server "$name"
+  alloy_require_worktree_playwright "$path"
 
   base="$(alloy_verify_url_for_slot "$port")"
   alloy_verify_host_allowed "$base" || alloy_die "host not allowed: $base"
 
-  auth="$(alloy_auth_state_status "$slot" "$port")"
+  auth="$(alloy_auth_state_status "$slot" "$port" "$web_dir")"
   case "$auth" in
     valid|present) ;;
     *) alloy_die "auth not ready ($auth) — alloy-agent-login $slot" ;;
@@ -79,7 +80,7 @@ main() {
 
   alloy_refuse_duplicate_browser "$slot"
 
-  local -a node_args=(--base-url "$base" --storage "$storage" --evidence "$evidence")
+  local -a node_args=(--web-dir "$web_dir" --base-url "$base" --storage "$storage" --evidence "$evidence")
   local -a pos_args=("$verify_target")
   [[ -n "$verify_arg" ]] && pos_args+=("$verify_arg")
 

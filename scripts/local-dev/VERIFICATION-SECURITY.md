@@ -85,6 +85,21 @@ Verification (`alloy-agent-ready`, `alloy-agent-verify`) requires a **toolkit-ow
 - **Do not** run `npm run dev` directly — foreign listeners are refused
 - `alloy-agent-ready` reports agent-safe vs trusted source readiness (names only) and `ownership: toolkit-owned`
 
+## Dependency model (Playwright)
+
+Every managed worktree must have its **own** `web/node_modules`:
+
+```bash
+cd /Users/Kelly/Code/alloy-worktrees/<wtN-initiative>/web
+npm install
+```
+
+Phase 3 browser helpers (`alloy-agent-login`, auth check, `alloy-agent-verify`) load `@playwright/test` from that worktree’s `web` package context via `createRequire` anchored at `web/package.json`.
+
+- Dependencies are **never** shared or silently borrowed from the canonical checkout, a sibling worktree, the toolkit `scripts/local-dev` tree, or a global install.
+- Missing Playwright fails **before** opening a browser with remediation: `cd <worktree>/web && npm install`
+- The toolkit does **not** auto-install dependencies.
+
 ## Forbidden secrets / data
 
 Never copy, print, commit, or expose:

@@ -60,6 +60,8 @@ main() {
 
   alloy_refuse_duplicate_browser "$slot"
 
+  alloy_require_worktree_playwright "$path"
+
   base="$(alloy_verify_url_for_slot "$port")"
   alloy_verify_host_allowed "$base" || alloy_die "host not allowed for verification: $base"
 
@@ -83,6 +85,7 @@ main() {
   (
     cd "$web_dir"
     node "$login_script" \
+      --web-dir "$web_dir" \
       --base-url "$base" \
       --login-route "$(alloy_agent_login_route)" \
       --check-route "$(alloy_agent_auth_check_route)" \
@@ -93,7 +96,7 @@ main() {
 
   if [[ "$rc" -ne 0 ]]; then
     alloy_stop_owned_browser "$slot" || true
-    rm -f "$storage" 2>/dev/null || true
+    rm -f "$storage" "$pid_path" 2>/dev/null || true
     alloy_die "login capture failed (slot $slot)"
   fi
 
@@ -108,7 +111,7 @@ main() {
   alloy_stop_owned_browser "$slot" || true
 
   local auth_status
-  auth_status="$(alloy_auth_state_status "$slot" "$port")"
+  auth_status="$(alloy_auth_state_status "$slot" "$port" "$web_dir")"
 
   cat <<EOF
 Login capture complete

@@ -131,7 +131,29 @@ alloy_verify_url_for_slot() {
   printf 'http://127.0.0.1:%s' "$port"
 }
 
-# ── Dev server toolkit ownership ─────────────────────────────────────────────
+# ── Worktree-local Playwright preflight ─────────────────────────────────────
+
+# Fail before opening a browser when <worktree>/web cannot resolve @playwright/test.
+# Never installs dependencies; never borrows from another worktree or global.
+alloy_require_worktree_playwright() {
+  local worktree_path="$1"
+  local web_dir pkg helper
+  web_dir="$(alloy_web_dir_for "$worktree_path")"
+  pkg="${web_dir}/package.json"
+
+  if [[ ! -f "$pkg" ]]; then
+    alloy_die "web/package.json missing at ${web_dir} — run: cd ${web_dir} && npm install"
+  fi
+
+  helper="${ALLOY_LOCAL_DEV_ROOT}/lib/playwright-from-web.mjs"
+  if [[ ! -f "$helper" ]]; then
+    alloy_die "Playwright resolution helper missing: $helper"
+  fi
+
+  if ! node "$helper" --preflight --web-dir "$web_dir" >/dev/null; then
+    alloy_die "@playwright/test not available in this worktree's web package — run: cd ${web_dir} && npm install (do not use a global install or another worktree's node_modules)"
+  fi
+}
 
 # Human-readable ownership for ready/status (toolkit-owned | foreign-port-owner | stale | stopped | ...).
 alloy_server_ownership_label() {
@@ -493,6 +515,7 @@ alloy_load_trusted_server_env_exports() {
 alloy_auth_state_status() {
   local slot="$1"
   local port="$2"
+  local web_dir="${3:-}"
   local path
   path="$(alloy_auth_storage_path "$slot")"
 
@@ -515,7 +538,7 @@ alloy_auth_state_status() {
   fi
 
   # Optional live check via helper script (sets ALLOY_AUTH_CHECK_RESULT).
-  local base url rc
+  local base url
   base="$(alloy_verify_url_for_slot "$port")"
   url="${base}$(alloy_agent_auth_check_route)"
   if [[ -n "${ALLOY_SKIP_AUTH_LIVE_CHECK:-}" ]]; then
@@ -525,10 +548,14 @@ alloy_auth_state_status() {
 
   local check_script="${ALLOY_AGENT_AUTH_CHECK_SCRIPT:-${ALLOY_LOCAL_DEV_ROOT}/lib/agent-auth-check.mjs}"
   if [[ -f "$check_script" ]]; then
+    local -a check_args=(--storage "$path" --url "$url")
+    if [[ -n "$web_dir" ]]; then
+      check_args+=(--web-dir "$web_dir")
+    elif [[ -n "${ALLOY_WORKTREE_PATH:-}" ]]; then
+      check_args+=(--web-dir "$(alloy_web_dir_for "$ALLOY_WORKTREE_PATH")")
+    fi
     ALLOY_AUTH_CHECK_RESULT="$(
-      node "$check_script" \
-        --storage "$path" \
-        --url "$url" 2>/dev/null || echo "failed"
+      node "$check_script" "${check_args[@]}" 2>/dev/null || echo "failed"
     )" || true
     case "${ALLOY_AUTH_CHECK_RESULT}" in
       ok) printf 'valid'; return ;;
@@ -692,7 +719,7 @@ alloy_generate_agent_context() {
 
   env_ready="no"
   alloy_agent_env_ready "$path" && env_ready="yes"
-  auth_status="$(alloy_auth_state_status "$slot" "$port")"
+  auth_status="$(alloy_auth_state_status "$slot" "$port" "$(alloy_web_dir_for "$path")")"
   browser_state="$(alloy_browser_state_for "$slot")"
   staging_sha="$(alloy_git "$ALLOY_REPO" rev-parse "${ALLOY_BASE_REMOTE}/${ALLOY_BASE_BRANCH}" 2>/dev/null || echo unknown)"
 
@@ -864,7 +891,7 @@ alloy_agent_ready_evaluate() {
   local qa auth
   qa="$(alloy_slot_qa_identity "$slot")"
   [[ -n "$qa" ]] || issues+=("auth: QA identity alias not configured (ALLOY_SLOT_${slot}_QA_IDENTITY)")
-  auth="$(alloy_auth_state_status "$slot" "$port")"
+  auth="$(alloy_auth_state_status "$slot" "$port" "$(alloy_web_dir_for "$path")")"
   case "$auth" in
     missing) issues+=("auth: storage state missing — alloy-agent-login $slot") ;;
     expired|invalid|invalid-permissions) issues+=("auth: storage state $auth — alloy-agent-login $slot") ;;

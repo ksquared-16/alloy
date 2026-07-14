@@ -327,6 +327,7 @@ Expected:
 - Heavy checks only via: \`alloy-validate ${name} typecheck|test|build|playwright|imports\`
 - Do NOT background heavy checks.
 - Do NOT start a second dev server. Use \`alloy-dev-start ${name}\` / \`alloy-dev-stop ${name}\` only — **never** \`npm run dev\` directly (two-tier env: agent-safe \`web/.env.local.agent\` + trusted server injection; privileged values never enter the worktree).
+- Ensure \`npm install\` has been run in **this** worktree's \`web/\` — login/verify use that worktree-local Playwright only.
 - Before finishing, report any processes left running.
 
 ## Operator shortcuts

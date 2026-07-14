@@ -29,7 +29,7 @@ alloy_print_agent_row() {
   git_summary="$(alloy_git_state_summary "$ALLOY_WORKTREE_PATH")"
   env_ok="no"
   alloy_agent_env_ready "$ALLOY_WORKTREE_PATH" && env_ok="yes"
-  auth="$(alloy_auth_state_status "$slot" "$PORT")"
+  auth="$(alloy_auth_state_status "$slot" "$PORT" "$(alloy_web_dir_for "$ALLOY_WORKTREE_PATH")")"
   browser="$(alloy_browser_state_for "$slot")"
   qa="$(alloy_slot_qa_identity "$slot")"
 

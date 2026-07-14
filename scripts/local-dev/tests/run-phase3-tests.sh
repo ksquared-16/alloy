@@ -41,11 +41,20 @@ for f in \
   "$ROOT"/alloy-agent-evidence \
   "$ROOT"/tests/run-phase3-tests.sh \
   "$ROOT"/tests/test-agent-env-classify.sh \
-  "$ROOT"/tests/test-agent-two-tier-env.sh
+  "$ROOT"/tests/test-agent-two-tier-env.sh \
+  "$ROOT"/tests/test-agent-playwright-resolve.sh
 do
   bash -n "$f"
   pass "bash -n $(basename "$f")"
 done
+node --check "$ROOT/lib/playwright-from-web.mjs"
+pass "syntax playwright-from-web.mjs"
+node --check "$ROOT/lib/agent-login-capture.mjs"
+pass "syntax agent-login-capture.mjs"
+node --check "$ROOT/lib/agent-auth-check.mjs"
+pass "syntax agent-auth-check.mjs"
+node --check "$ROOT/lib/agent-verify.mjs"
+pass "syntax agent-verify.mjs"
 
 TMP="$(mktemp -d /tmp/alloy-p3.XXXXXX)"
 RUNTIME=""
@@ -77,6 +86,7 @@ mkdir -p "$CANON/web"
 cat >"$CANON/web/package.json" <<'EOF'
 {"name":"fixture-web","private":true,"scripts":{"dev":"node -e \"require('http').createServer((q,s)=>{s.end('ok')}).listen(Number(process.env.PORT||3000))\""}}
 EOF
+printf 'node_modules/\n' >"$CANON/web/.gitignore"
 printf 'fixture\n' >"$CANON/README.md"
 git -C "$CANON" add . && git -C "$CANON" commit -m "base" >/dev/null
 git -C "$CANON" push -u origin staging >/dev/null
@@ -173,6 +183,15 @@ assert_ok "overwrite with --force" \
 
 # Git ignore
 git -C "$WT" status --porcelain | grep -q '.env.local.agent' && fail "agent env tracked" || pass "agent env git-ignored"
+
+# Worktree-local Playwright (fake) so preflight passes without a real browser.
+mkdir -p "$WT/web/node_modules/@playwright/test"
+cat >"$WT/web/node_modules/@playwright/test/package.json" <<'EOF'
+{"name":"@playwright/test","version":"0.0.0-fixture","main":"index.js"}
+EOF
+cat >"$WT/web/node_modules/@playwright/test/index.js" <<'EOF'
+module.exports = { chromium: { launch: async () => ({ close: async () => {} }), launchPersistentContext: async () => ({ close: async () => {}, pages: () => [], newPage: async () => ({}), browser: () => null, storageState: async () => {} }) } };
+EOF
 
 assert_ok "dev-start" \
   env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-dev-start" wt1-p3-one

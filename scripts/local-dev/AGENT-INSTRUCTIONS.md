@@ -57,6 +57,7 @@ Hard constraints:
 - Do NOT start a second dev server or duplicate toolkit browser.
 - Do NOT run `npm run dev` directly — use `alloy-dev-start` / `devup` (agent-safe `.env.local.agent` + trusted server injection; privileged values never enter the worktree).
 - Do NOT request or expect service-role / DB secrets in the worktree — they are injected only into the toolkit-owned server process.
+- Run `npm install` inside **this** worktree’s `web/` — browser tooling uses that worktree-local Playwright only (never borrow another tree’s `node_modules`).
 
 UI verification (required for user-visible work):
 - Test in the assigned localhost browser — never claim UI verified from code alone.

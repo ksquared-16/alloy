@@ -12,6 +12,7 @@ const { values } = parseArgs({
     "profile-dir": { type: "string" },
     "storage-out": { type: "string" },
     "pid-out": { type: "string" },
+    "web-dir": { type: "string" },
     fail: { type: "string" },
   },
   strict: false,

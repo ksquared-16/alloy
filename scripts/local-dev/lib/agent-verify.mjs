@@ -2,15 +2,17 @@
 /**
  * Focused agent verification — one worker, assigned localhost, storage state.
  * Captures console errors, failed requests, optional screenshot on failure.
+ * Playwright is loaded from the managed worktree's web/ package context.
  */
-import { chromium } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { loadPlaywrightFromWeb } from "./playwright-from-web.mjs";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
+    "web-dir": { type: "string" },
     "base-url": { type: "string" },
     storage: { type: "string" },
     evidence: { type: "string" },
@@ -18,15 +20,24 @@ const { values, positionals } = parseArgs({
   },
 });
 
+const webDir = values["web-dir"];
 const baseUrl = values["base-url"]?.replace(/\/$/, "");
 const storage = values.storage;
 const evidenceDir = values.evidence;
 const target = positionals[0];
 const targetArg = positionals[1];
 
-if (!baseUrl || !storage || !evidenceDir || !target) {
-  console.error("error: missing required arguments");
+if (!webDir || !baseUrl || !storage || !evidenceDir || !target) {
+  console.error("error: missing required arguments (--web-dir, --base-url, --storage, --evidence, target)");
   process.exit(2);
+}
+
+let chromium;
+try {
+  ({ chromium } = loadPlaywrightFromWeb(webDir));
+} catch (err) {
+  console.error(`error: ${err.message}`);
+  process.exit(1);
 }
 
 await mkdir(evidenceDir, { recursive: true });

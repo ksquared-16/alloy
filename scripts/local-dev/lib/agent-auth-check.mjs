@@ -3,20 +3,31 @@
  * Verify Playwright storage state against an authenticated route.
  * Prints only: ok | login | unauthorized | failed
  * Never prints cookies, tokens, or storage contents.
+ * Playwright is loaded from the managed worktree's web/ package context.
  */
-import { chromium } from "@playwright/test";
 import { parseArgs } from "node:util";
+import { loadPlaywrightFromWeb } from "./playwright-from-web.mjs";
 
 const { values } = parseArgs({
   options: {
+    "web-dir": { type: "string" },
     storage: { type: "string" },
     url: { type: "string" },
   },
 });
 
+const webDir = values["web-dir"];
 const storage = values.storage;
 const url = values.url;
-if (!storage || !url) {
+if (!webDir || !storage || !url) {
+  process.stdout.write("failed");
+  process.exit(1);
+}
+
+let chromium;
+try {
+  ({ chromium } = loadPlaywrightFromWeb(webDir));
+} catch {
   process.stdout.write("failed");
   process.exit(1);
 }

@@ -4,7 +4,12 @@ import { parseArgs } from "node:util";
 import { readFileSync } from "node:fs";
 
 const { values } = parseArgs({
-  options: { storage: { type: "string" }, url: { type: "string" } },
+  options: {
+    storage: { type: "string" },
+    url: { type: "string" },
+    "web-dir": { type: "string" },
+  },
+  strict: false,
 });
 
 const storage = values.storage;

@@ -110,7 +110,7 @@ Creates:
 
 ## 7. Local implementation lifecycle
 
-1. Create worktree and `npm install` inside that worktree’s `web/`.
+1. Create worktree and `npm install` inside that worktree’s `web/` (required — browser tooling uses that worktree-local Playwright only; never share `node_modules`).
 2. Open **one** Cursor/Claude window on that worktree path only.
 3. `alloy-dev-start <name>` when UI inspection is needed (**required** — two-tier env: agent-safe `.env.local.agent` + trusted server injection from `ALLOY_SERVER_ENV_SOURCE`; do not run `npm run dev`).
 4. Implement and commit locally in coherent chunks.

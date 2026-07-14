@@ -42,6 +42,7 @@ devup                                         # start owned localhost server
 # Phase 1 primitives (still available)
 alloy-worktree-create 1 my-initiative cursor
 cd /Users/Kelly/Code/alloy-worktrees/wt1-my-initiative/web && npm install
+# required per worktree — browser helpers use this worktree-local Playwright only
 alloy-worktree-sync wt1-my-initiative
 alloy-worktree-remove wt1-my-initiative
 

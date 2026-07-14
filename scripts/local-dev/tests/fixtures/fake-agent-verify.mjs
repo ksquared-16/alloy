@@ -10,6 +10,7 @@ const { values, positionals } = parseArgs({
     evidence: { type: "string" },
     "base-url": { type: "string" },
     storage: { type: "string" },
+    "web-dir": { type: "string" },
     screenshot: { type: "string" },
     reject: { type: "string" },
   },
