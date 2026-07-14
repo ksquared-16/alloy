@@ -385,6 +385,56 @@ alloy_web_dir_for() {
   printf '%s/%s' "$worktree_path" "$ALLOY_WEB_DIR"
 }
 
+# True when a process command line is an active Playwright *test runner*
+# (not hostnames, sandbox policy JSON, browsers, or inspection tools).
+alloy_command_is_playwright_test_runner() {
+  local cmd="$1"
+  [[ -n "$cmd" ]] || return 1
+
+  case "$cmd" in
+    *cursorsandbox*|*Cursor\ Helper*|*extension-host*|*Extension\ Host*)
+      return 1
+      ;;
+  esac
+  case "$cmd" in
+    *Claude\ Helper*|*Chrome\ Helper*|*browser\ helper*|*headless_shell*)
+      return 1
+      ;;
+  esac
+  case "$cmd" in
+    *alloy-health*|*alloy-audit*|*alloy-ai-health*|*alloy_command_is_playwright_test_runner*|*alloy_count_playwright_test_runners*)
+      return 1
+      ;;
+  esac
+  if [[ "$cmd" =~ (^|[[:space:]])(/usr/bin/)?(grep|egrep|fgrep|rg|awk|curl|wget)([[:space:]]|$) ]]; then
+    return 1
+  fi
+
+  # Download CDNs / URLs are never local test runners.
+  if [[ "$cmd" == *playwright.azureedge.net* || "$cmd" == *https://*playwright* || "$cmd" == *http://*playwright* ]]; then
+    return 1
+  fi
+
+  # Policy JSON / allowlists mentioning playwright.
+  if [[ "$cmd" == *networkAllowlist* || "$cmd" == *policy-json* || "$cmd" == *"--policy"* ]]; then
+    return 1
+  fi
+
+  # Explicit `playwright test` argv form (npm/npx/bin).
+  if [[ "$cmd" =~ (^|[[:space:]/])playwright[[:space:]]+test([[:space:]]|$) ]]; then
+    return 0
+  fi
+
+  # Packaged runner executables require a `test` argument (not bare package-path match).
+  if [[ "$cmd" == *"/playwright/cli.js"* || "$cmd" == *"/@playwright/test"* ]]; then
+    if [[ "$cmd" =~ [[:space:]]test([[:space:]]|$) ]]; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 # True when a process command line is an Alloy heavyweight validator (not sandboxes / inspectors).
 alloy_command_is_active_validator() {
   local cmd="$1"
@@ -397,9 +447,9 @@ alloy_command_is_active_validator() {
       ;;
   esac
 
-  # The health/audit inspection pipeline itself.
+  # The health/audit/AI-health inspection pipeline itself.
   case "$cmd" in
-    *alloy-health*|*alloy-audit*|*alloy_command_is_active_validator*|*alloy_print_active_validators*)
+    *alloy-health*|*alloy-audit*|*alloy-ai-health*|*alloy_command_is_active_validator*|*alloy_print_active_validators*|*alloy_command_is_playwright_test_runner*)
       return 1
       ;;
   esac
@@ -428,11 +478,8 @@ alloy_command_is_active_validator() {
     return 0
   fi
 
-  # Playwright test runner (not hostnames like playwright.azureedge.net).
-  if [[ "$cmd" =~ (^|[[:space:]/])playwright[[:space:]]+test([[:space:]]|$) ]]; then
-    return 0
-  fi
-  if [[ "$cmd" == *"/playwright/cli.js"* || "$cmd" == *"/@playwright/test"* ]]; then
+  # Playwright test runners (shared classifier).
+  if alloy_command_is_playwright_test_runner "$cmd"; then
     return 0
   fi
 

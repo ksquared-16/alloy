@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Read-only AI workstation diagnostics (ChatGPT / Cursor / Claude / memory / caches).
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-ai-health
+
+Read-only diagnostics for AI tooling load on this machine:
+  ChatGPT / browser helpers, Cursor, Claude, memory, swap, caches, CPU, process counts.
+
+Does not modify the machine. Does not start or stop agents.
+Does not delete Application Support directories, conversation databases, or caches.
+EOF
+}
+
+section() {
+  printf '\n== %s ==\n' "$1"
+}
+
+# Print exactly one aligned "label  count" row. Count helpers must emit a single integer.
+print_count_row() {
+  local label="$1"
+  local count="$2"
+  count="$(printf '%s' "$count" | tr -d '[:space:]')"
+  if [[ -z "$count" || ! "$count" =~ ^[0-9]+$ ]]; then
+    count=0
+  fi
+  printf '  %-22s %s\n' "$label" "$count"
+}
+
+dir_line() {
+  local label="$1"
+  local path="$2"
+  if [[ -d "$path" ]]; then
+    printf '  %-28s %8s  %s\n' "$label" "$(alloy_dir_size "$path")" "$path"
+  else
+    printf '  %-28s %8s  %s\n' "$label" "missing" "$path"
+  fi
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 0 ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+
+  echo "Alloy AI health (read-only)"
+  echo "time: $(alloy_iso_now)"
+
+  section "Memory / swap / load"
+  if alloy_have_cmd memory_pressure; then
+    memory_pressure 2>/dev/null | head -n 16 || true
+  else
+    echo "memory_pressure unavailable"
+  fi
+  uptime 2>/dev/null || true
+  if alloy_have_cmd sysctl; then
+    echo "hw.memsize: $(sysctl -n hw.memsize 2>/dev/null || echo "?") bytes"
+    echo "hw.ncpu:    $(sysctl -n hw.ncpu 2>/dev/null || echo "?")"
+  fi
+  if alloy_have_cmd vm_stat; then
+    echo
+    vm_stat 2>/dev/null | head -n 14 || true
+  fi
+  if [[ -r /private/var/vm ]]; then
+    echo
+    echo "swap files:"
+    ls -lh /private/var/vm/swapfile* 2>/dev/null || echo "  (none listed)"
+  fi
+
+  section "Process counts"
+  print_count_row "Cursor" "$(alloy_count_matching_processes '[Cc]ursor')"
+  print_count_row "Cursor Helper" "$(alloy_count_matching_processes 'Cursor Helper')"
+  print_count_row "Claude" "$(alloy_count_matching_processes '[Cc]laude')"
+  print_count_row "ChatGPT app" "$(alloy_count_matching_processes 'ChatGPT|chatgpt')"
+  print_count_row "node" "$(alloy_count_matching_processes '(^|/)node( |$)')"
+  print_count_row "tsc / typescript" "$(alloy_count_matching_processes 'typescript/bin/tsc|(^|/)tsc( |$)')"
+  print_count_row "vitest" "$(alloy_count_matching_processes 'vitest')"
+  print_count_row "next" "$(alloy_count_matching_processes '(^|/)next( |$)')"
+  # Argument-aware Playwright test runners only (not hostnames / policy JSON / browsers).
+  print_count_row "playwright" "$(alloy_count_playwright_test_runners)"
+
+  section "Cursor processes (sample)"
+  ps axo pid=,pcpu=,pmem=,command= 2>/dev/null | grep -E '[Cc]ursor' | grep -v grep | head -n 20 || echo "(none)"
+
+  section "Claude processes (sample)"
+  ps axo pid=,pcpu=,pmem=,command= 2>/dev/null | grep -E '[Cc]laude' | grep -v grep | head -n 20 || echo "(none)"
+
+  section "ChatGPT / browser AI helpers (sample)"
+  ps axo pid=,pcpu=,pmem=,command= 2>/dev/null | grep -Ei 'ChatGPT|chatgpt|OpenAI' | grep -v grep | head -n 20 || echo "(none)"
+
+  section "Top CPU"
+  ps -arco pid,pcpu,pmem,comm 2>/dev/null | head -n 15 || \
+    ps -axo pid,pcpu,pmem,comm 2>/dev/null | sort -nrk2 | head -n 15 || true
+
+  section "Caches / app data (sizes only)"
+  dir_line "Cursor support" "$HOME/Library/Application Support/Cursor"
+  dir_line "Cursor caches" "$HOME/Library/Caches/Cursor"
+  dir_line "Claude support" "$HOME/Library/Application Support/Claude"
+  dir_line "Claude caches" "$HOME/Library/Caches/Claude"
+  dir_line "ChatGPT support" "$HOME/Library/Application Support/com.openai.chat"
+  dir_line "npm cache" "$HOME/Library/Caches/npm"
+  dir_line "npm home" "$HOME/.npm"
+  dir_line "alloy-dev runtime" "${ALLOY_RUNTIME_ROOT}"
+
+  section "Interpretation notes"
+  cat <<'EOF'
+  Sizes above are observational only — this command does not claim causation.
+
+  Smoke-test observations (operator machine, Phase 2):
+  - Cursor Application Support ~18 GB
+  - Claude Application Support ~7.7 GB
+  - ChatGPT Application Support ~4.4 MB
+
+  Large Cursor/Claude support stores and many app helper processes may contribute
+  to local memory/disk pressure. Long ChatGPT conversations can still lag
+  independently of ChatGPT cache/support size.
+
+  alloy-ai-health is strictly read-only. It never deletes Application Support,
+  conversation databases, sessions, workspace state, or caches.
+
+  Any future cleanup must first classify safe caches/logs separately from
+  history, workspace databases, sessions, and project state — and require
+  explicit human confirmation.
+EOF
+
+  section "Managed Alloy agents (summary)"
+  if [[ -x "${SCRIPT_DIR}/alloy-agent-status" ]]; then
+    env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE:-}" "${SCRIPT_DIR}/alloy-agent-status" || true
+  fi
+
+  echo
+  echo "No changes made. Use alloy-agent-close / alloy-dev-stop / alloy-clean report for follow-up."
+}
+
+main "$@"

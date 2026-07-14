@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Alloy local-dev Phase 1 toolkit as one directory symlink.
+# Install Alloy local-dev toolkit (Phase 1 + Phase 2) as one directory symlink.
 # No sudo, no PATH mutation, never overwrites existing config.
 set -euo pipefail
 
@@ -18,6 +18,12 @@ COMMANDS=(
   alloy-health
   alloy-audit
   alloy-clean
+  alloy-agent-create
+  alloy-agent-open
+  alloy-agent-status
+  alloy-agent-close
+  alloy-agent-instructions
+  alloy-ai-health
 )
 
 alloy_looks_like_toolkit_install() {
@@ -90,7 +96,8 @@ main() {
     "${ALLOY_RUNTIME_ROOT}/logs" \
     "${ALLOY_RUNTIME_ROOT}/locks"
 
-  chmod +x "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/lib/"*.sh "${SCRIPT_DIR}/tests/"*.sh 2>/dev/null || true
+  chmod +x "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/shell-aliases.sh" \
+    "${SCRIPT_DIR}/lib/"*.sh "${SCRIPT_DIR}/tests/"*.sh 2>/dev/null || true
   local cmd
   for cmd in "${COMMANDS[@]}"; do
     chmod +x "${SCRIPT_DIR}/${cmd}"
@@ -131,10 +138,15 @@ main() {
   fi
 
   echo
+  echo "Optional shell shortcuts:"
+  echo "  source ${install_path}/shell-aliases.sh"
+  echo "  # then: awt 1   /   devup   /   astatus   /   ahealth"
+  echo
   echo "Next:"
   echo "  1) Edit ${config_file} (set ALLOY_REPO)"
   echo "  2) alloy-audit"
   echo "  3) alloy-health"
+  echo "  4) alloy-agent-create <initiative>"
 }
 
 main "$@"

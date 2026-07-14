@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Open Cursor or Claude on a managed Alloy agent worktree.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-agent-open <worktree-name|slot> [--with-server]
+
+Opens the assigned tool (Cursor or Claude) on the managed worktree path.
+Optional --with-server starts the owned dev server (never duplicates).
+
+Examples:
+  alloy-agent-open 2
+  alloy-agent-open wt2-architecture-pass --with-server
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  local target="" with_server=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --with-server) with_server=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *)
+        [[ -z "$target" ]] || alloy_die "unexpected argument: $1"
+        target="$1"
+        shift
+        ;;
+    esac
+  done
+  [[ -n "$target" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_agent_runtime_dirs
+
+  local name
+  name="$(alloy_resolve_worktree_name "$target")"
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local agent="$ALLOY_AGENT"
+  local slot="$ALLOY_WORKTREE_SLOT"
+  local port="$PORT"
+  local role="${ALLOY_AGENT_ROLE:-$(alloy_slot_role "$slot")}"
+  local server_state
+
+  [[ -d "$path" ]] || alloy_die "worktree path missing: $path"
+
+  # Ensure instructions exist for paste/copy workflows.
+  if [[ ! -f "$(alloy_instructions_path "$path")" ]]; then
+    alloy_generate_agent_instructions "$name" >/dev/null
+  fi
+
+  if [[ "$with_server" -eq 1 ]]; then
+    server_state="$(alloy_server_state_for "$name")"
+    if [[ "$server_state" == "running" ]]; then
+      alloy_info "dev server already running on port ${port} (no duplicate started)"
+    else
+      env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+        "${SCRIPT_DIR}/alloy-dev-start" "$name"
+    fi
+  fi
+
+  alloy_set_agent_status "$name" "active"
+  alloy_load_metadata "$name"
+  alloy_open_tool_for_agent "$agent" "$path"
+
+  # Best-effort: copy concrete prompt for immediate paste.
+  if alloy_have_cmd pbcopy || alloy_have_cmd xclip; then
+    local prompt
+    prompt="$(cat "$(alloy_instructions_path "$path")")"
+    alloy_copy_to_clipboard "$prompt" || true
+    alloy_info "Instruction prompt copied to clipboard."
+  fi
+
+  server_state="$(alloy_server_state_for "$name")"
+
+  cat <<EOF
+Opened ${agent}
+  slot:     ${slot}
+  role:     ${role}
+  worktree: ${name}
+  path:     ${path}
+  port:     ${port}
+  server:   ${server_state}
+EOF
+}
+
+main "$@"

@@ -1,6 +1,9 @@
-# Alloy local parallel-agent development toolkit (Phase 1)
+# Alloy local parallel-agent development toolkit (Phase 1 + Phase 2)
 
 Self-contained Bash toolkit for running up to six concurrent Cursor or Claude implementation agents in isolated Git worktrees, with deterministic ports and serialized heavyweight validation.
+
+**Phase 1** = worktrees, ports, owned dev servers, validation lock, health/audit/clean.  
+**Phase 2** = managed agent lifecycle on top of Phase 1 (create/open/status/close/instructions + AI health). No dashboards, daemons, or sprint automation.
 
 This is **developer experience tooling only**. It is not sprint orchestration, a workstation-management platform, or application feature work.
 
@@ -264,6 +267,8 @@ Operating rules:
 
 ## Commands
 
+### Phase 1
+
 | Command | Purpose |
 |---------|---------|
 | `alloy-worktree-create` | create slotted worktree from `origin/staging` |
@@ -273,3 +278,72 @@ Operating rules:
 | `alloy-validate` | serialized heavy checks |
 | `alloy-health` / `alloy-audit` | daily vs deep read-only reports |
 | `alloy-clean` | report-first cleanup helpers |
+
+### Phase 2 — managed agents
+
+| Command | Purpose |
+|---------|---------|
+| `alloy-agent-create` | first free slot + port; calls `alloy-worktree-create`; agent metadata + instructions |
+| `alloy-agent-open` | open Cursor/Claude; optional `--with-server`; never duplicates servers |
+| `alloy-agent-status` | managed agents, slots, ports, git state, server state |
+| `alloy-agent-close` | stop server + git summary; **never** removes worktree |
+| `alloy-agent-instructions` | concrete Cursor/Claude prompt; `--copy` via pbcopy |
+| `alloy-ai-health` | read-only ChatGPT/Cursor/Claude/memory/swap/cache/CPU diagnostics |
+
+Phase 2 does **not** duplicate worktree, port, or validation logic — it calls Phase 1 commands.
+
+### Interpreting `alloy-ai-health` (read-only)
+
+`alloy-ai-health` reports sizes and process counts for orientation. It does **not** claim causation and does **not** delete anything.
+
+Smoke-test observations (Phase 2 Mac):
+
+| Location | Approx. size |
+|----------|----------------|
+| Cursor Application Support | ~18 GB |
+| Claude Application Support | ~7.7 GB |
+| ChatGPT Application Support | ~4.4 MB |
+
+Notes:
+
+- Large Cursor/Claude support stores and many app helper processes may contribute to local pressure.
+- Long ChatGPT conversations can still lag independently of ChatGPT cache/support size.
+- Do **not** delete Application Support directories or conversation databases automatically.
+- Future cleanup must first classify safe caches/logs separately from history, workspace databases, sessions, and project state — then require explicit human confirmation.
+
+Playwright process counts use the same argument-aware runner classification as Phase 1 validators (`playwright test` / runner executable with `test` args). Hostnames, sandbox policy JSON, browser helpers, and inspection tools are excluded.
+
+### Permanent slot identities
+
+Slots are stable roles, not one-off sprint numbers:
+
+| Slot | Role | Default AI | Port |
+|------|------|------------|------|
+| 1 | Product implementation | Cursor | 3011 |
+| 2 | Architecture / doctrine | Claude | 3012 |
+| 3 | Performance | Cursor | 3013 |
+| 4 | UI / UX | Cursor | 3014 |
+| 5 | Refactor / infrastructure | Claude | 3015 |
+| 6 | Experimental | Cursor | 3016 |
+
+Override labels/defaults in `~/.config/alloy-dev/config` (`ALLOY_SLOT_N_ROLE`, `ALLOY_SLOT_N_DEFAULT_AGENT`).
+
+### Shell shortcuts
+
+```bash
+source ~/bin/alloy-dev/shell-aliases.sh
+awt 1          # cd into slot 1 worktree
+devup          # start owned server for current worktree
+astatus        # alloy-agent-status
+ahealth        # alloy-ai-health
+```
+
+### Typical Phase 2 flow
+
+```bash
+alloy-agent-create architecture-pass          # auto slot (e.g. 2→Claude→3012)
+alloy-agent-open 2 --with-server              # open tool + server; prompt copied
+# work…
+alloy-agent-status
+alloy-agent-close 2                           # stop server; keep worktree
+```
