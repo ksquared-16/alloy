@@ -12,11 +12,18 @@ import {
     grantsPrivilegeTo,
     insertPolicyForRolePresent,
     readMigrationsOrderedTouching,
+    stripSqlComments,
 } from "../../operationalLedger/ledgerSchemaScan";
 
 const MIGRATIONS_DIR = join(__dirname, "../../../../supabase/migrations");
 const WAVE_B = "20260719000000_operational_expectations_authoring_intake_p1_wave_b.sql";
+const WAVE_B_CLOSE = "20260720000000_operational_expectations_author_permission_and_idempotency.sql";
 const sql = readFileSync(join(MIGRATIONS_DIR, WAVE_B), "utf8");
+// The EFFECTIVE (last-defined) authoring RPC + the dedicated permission seed.
+const closeSql = readFileSync(join(MIGRATIONS_DIR, WAVE_B_CLOSE), "utf8");
+// Comment-stripped executable DDL — for ABSENCE assertions (a phrase in a comment
+// must not read as executable SQL).
+const closeExec = stripSqlComments(closeSql);
 
 describe("Wave B migration — additive idempotency substrate", () => {
     it("adds idempotency_key + payload_fingerprint with ADD COLUMN IF NOT EXISTS (additive)", () => {
@@ -69,17 +76,71 @@ describe("Wave B migration — atomic authoring RPC (row + Authoring Act, one tx
         expect(/\blineage_root_id\b/i.test(insertBlock![1])).toBe(false);
     });
 
-    it("is hardened: SET search_path, FOR UPDATE concurrency, no dynamic SQL", () => {
+    it("the initial RPC is hardened: SET search_path, no dynamic SQL, no client recorded time", () => {
         expect(/SET search_path = public/i.test(sql)).toBe(true);
-        expect(/FOR UPDATE/i.test(sql)).toBe(true); // idempotency lock → concurrent retries converge
-        // No dynamic SQL construction (EXECUTE format/quote_*).
         expect(/EXECUTE\s+format\s*\(|EXECUTE\s+['"]/i.test(sql)).toBe(false);
-        // Conflict is raised BEFORE the row INSERT (index of conflict < index of insert).
-        const conflictAt = sql.search(/oe_idempotency_conflict/i);
-        const insertAt = sql.search(/INSERT INTO public\.operational_expectations/i);
-        expect(conflictAt).toBeGreaterThan(-1);
-        expect(insertAt).toBeGreaterThan(-1);
-        expect(conflictAt).toBeLessThan(insertAt);
+    });
+});
+
+describe("Wave B closure — dedicated authoring capability (RBAC)", () => {
+    it("seeds operational_expectations.author into the permission catalog", () => {
+        expect(/INSERT INTO public\.permissions[\s\S]*?'operational_expectations\.author'/i.test(closeSql)).toBe(true);
+        expect(/INSERT INTO public\.permission_keys[\s\S]*?'operational_expectations\.author'/i.test(closeSql)).toBe(true);
+        expect(/INSERT INTO public\.permission_definitions[\s\S]*?'operational_expectations\.author'/i.test(closeSql)).toBe(true);
+    });
+
+    it("grants it by default ONLY to the org admin role (idempotent, per-org)", () => {
+        expect(/INSERT INTO public\.role_permission_grants[\s\S]*?'admin', 'operational_expectations\.author'[\s\S]*?FROM public\.orgs/i.test(closeSql)).toBe(true);
+        expect(/WHERE NOT EXISTS/i.test(closeSql)).toBe(true);
+        // Not granted to workflows.write holders or every role (executable DDL only).
+        expect(/workflows\.write/i.test(closeExec)).toBe(false);
+    });
+});
+
+describe("Wave B closure — concurrent-idempotency hardened RPC (effective definition)", () => {
+    it("CREATE OR REPLACE keeps SECURITY DEFINER + SET search_path + service_role-only", () => {
+        expect(/CREATE OR REPLACE FUNCTION public\.author_operational_expectation/i.test(closeSql)).toBe(true);
+        expect(/SECURITY DEFINER/i.test(closeSql)).toBe(true);
+        expect(/SET search_path = public/i.test(closeSql)).toBe(true);
+        expect(/REVOKE ALL ON FUNCTION public\.author_operational_expectation[\s\S]*?FROM PUBLIC/i.test(closeSql)).toBe(true);
+        expect(/GRANT EXECUTE ON FUNCTION public\.author_operational_expectation[\s\S]*?TO service_role/i.test(closeSql)).toBe(true);
+        expect(/TO authenticated/i.test(closeSql)).toBe(false);
+    });
+
+    it("uses insert-with-conflict-catch (unique_violation → reload winner), not FOR UPDATE on an absent key", () => {
+        expect(/EXCEPTION WHEN unique_violation THEN/i.test(closeSql)).toBe(true);
+        // On conflict it reloads the winner by (org_id, idempotency_key).
+        expect(/SELECT \* INTO v_existing[\s\S]*?WHERE org_id = p_org_id AND idempotency_key = v_key/i.test(closeSql)).toBe(true);
+        // No FOR UPDATE over the not-yet-existing key (executable DDL only).
+        expect(/FOR UPDATE/i.test(closeExec)).toBe(false);
+    });
+
+    it("distinguishes identical retry (disposition existing) from conflicting reuse (typed conflict)", () => {
+        expect(/'disposition', 'created'/i.test(closeSql)).toBe(true);
+        expect(/'disposition', 'existing'/i.test(closeSql)).toBe(true);
+        // Divergent fingerprint → typed conflict; identical → return existing.
+        expect(/payload_fingerprint IS DISTINCT FROM v_fingerprint[\s\S]*?oe_idempotency_conflict/i.test(closeSql)).toBe(true);
+    });
+
+    it("inserts the ledger row AND exactly one Authoring Act; the conflict path inserts NEITHER a second row nor a second event", () => {
+        // Exactly one INSERT INTO mutation_events (the created path).
+        const outboxInserts = (closeSql.match(/INSERT INTO public\.mutation_events/gi) ?? []).length;
+        expect(outboxInserts).toBe(1);
+        const ledgerInserts = (closeSql.match(/INSERT INTO public\.operational_expectations/gi) ?? []).length;
+        expect(ledgerInserts).toBe(1);
+        // The conflict path only SELECTs the existing outbox event (no re-insert).
+        expect(/SELECT mutation_id INTO v_event_id[\s\S]*?FROM public\.mutation_events/i.test(closeSql)).toBe(true);
+    });
+
+    it("still leaves recorded time + lineage root to the Wave A trigger (not caller-suppliable)", () => {
+        const insertBlock = closeSql.match(/INSERT INTO public\.operational_expectations\s*\(([\s\S]*?)\)\s*VALUES/i);
+        expect(insertBlock).not.toBeNull();
+        expect(/\bauthored_at\b/i.test(insertBlock![1])).toBe(false);
+        expect(/\blineage_root_id\b/i.test(insertBlock![1])).toBe(false);
+    });
+
+    it("has no dynamic SQL", () => {
+        expect(/EXECUTE\s+format\s*\(|EXECUTE\s+['"]/i.test(closeSql)).toBe(false);
     });
 });
 

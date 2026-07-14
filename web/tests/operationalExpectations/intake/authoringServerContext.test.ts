@@ -40,6 +40,17 @@ describe("resolveAuthoringContext", () => {
         if (!r.ok) expect(r.result).toMatchObject({ status: "rejected", code: "unauthorized" });
     });
 
+    it("rejects a caller with workflows.write but WITHOUT operational_expectations.author", () => {
+        const r = resolveAuthoringContext(access({ permissionKeys: ["workflows.write", "workflows.read"] }));
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.result).toMatchObject({ status: "rejected", code: "unauthorized" });
+    });
+
+    it("admits a caller holding the dedicated operational_expectations.author capability", () => {
+        const r = resolveAuthoringContext(access({ permissionKeys: ["operational_expectations.author"] }));
+        expect(r.ok).toBe(true);
+    });
+
     it("admits a capable caller and derives a TRUSTED context from the access bundle", () => {
         const r = resolveAuthoringContext(access({ orgId: "org-trusted", userId: "user-trusted" }));
         expect(r.ok).toBe(true);
@@ -51,7 +62,7 @@ describe("resolveAuthoringContext", () => {
         }
     });
 
-    it("the authoring capability is an already-governed permission key", () => {
-        expect(OE_AUTHOR_PERMISSION_KEY).toBe("workflows.write");
+    it("the authoring capability is the dedicated operational_expectations.author key", () => {
+        expect(OE_AUTHOR_PERMISSION_KEY).toBe("operational_expectations.author");
     });
 });

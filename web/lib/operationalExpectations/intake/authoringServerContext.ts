@@ -7,14 +7,13 @@
  * resolver is split out so the permission gate is unit-testable without the auth
  * cache.
  *
- * PERMISSION: the frozen corpus does not (yet) name a dedicated authoring
- * capability, so Wave B enforces the closest ALREADY-GOVERNED capability —
- * `workflows.write` — because Operational Expectations is the authored intent layer
- * over operational processes/workflows (which the unified gap→effector binding
- * generalizes). This is an INTERIM binding; a dedicated
- * `operational_expectations.author` capability is a governed follow-up (an
- * implementation-contract gap, flagged — not a broad admin bypass). Possession of
- * service-role credentials is DB infrastructure, never application authorization.
+ * PERMISSION: authoring an Operational Expectation requires the DEDICATED governed
+ * capability `operational_expectations.author` (seeded into the RBAC catalog +
+ * granted by default only to the org `admin` role — migration
+ * 20260720000000_operational_expectations_author_permission_and_idempotency.sql).
+ * It is a SEPARATE capability from workflow authoring: `workflows.write` does NOT
+ * grant it. Possession of service-role credentials is DB infrastructure, never
+ * application authorization.
  */
 
 import type { AdminAccessContextResult } from "@/lib/admin/getAdminAccessContext";
@@ -23,8 +22,8 @@ import type {
     AuthoringResult,
 } from "@/lib/operationalExpectations/intake/authoringTypes";
 
-/** Interim governed capability required to author an Operational Expectation. */
-export const OE_AUTHOR_PERMISSION_KEY = "workflows.write";
+/** The dedicated governed capability required to author an Operational Expectation. */
+export const OE_AUTHOR_PERMISSION_KEY = "operational_expectations.author";
 
 export type ResolvedAuthoringContext =
     | { ok: true; context: AuthoringContext }

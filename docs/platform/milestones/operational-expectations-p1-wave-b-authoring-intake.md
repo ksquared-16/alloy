@@ -70,10 +70,13 @@ Production entry `authorOperationalExpectationServer(input) → AuthoringResult`
   behind the service-role RPC `author_operational_expectation` (`SECURITY DEFINER`, `SET search_path =
   public`, `REVOKE … FROM PUBLIC`, `GRANT EXECUTE … TO service_role`). service_role is **infrastructure**,
   not the product authoring contract — DB credentials are never application authorization.
-- **Permission:** the intake enforces the already-governed capability **`workflows.write`** from the
-  resolved access context (`resolveAuthoringContext`). A caller with server execution access but without
-  the capability is rejected. This is an **interim** binding; a dedicated `operational_expectations.author`
-  capability is a governed follow-up (implementation-contract gap, flagged — not a broad admin bypass).
+- **Permission:** the intake enforces the **dedicated governed capability
+  `operational_expectations.author`** from the resolved access context (`resolveAuthoringContext`). It is
+  seeded into the RBAC catalog (`permissions` / `permission_keys` / `permission_definitions`) and granted
+  by default **only to the org `admin` role** — a distinct capability from workflow authoring, so
+  `workflows.write` does **not** grant it. A caller with server execution access (or `workflows.write`)
+  but without this capability is rejected. Establishing this base permission is Wave B's own; Wave C owns
+  only Authority→Standing resolution + ratification.
 - Org + actor + permission are server-trusted; predecessor reads are tenant-checked; raw DB errors are
   never exposed (typed `failed`). An unauthenticated caller is rejected `unauthorized`.
 
@@ -100,8 +103,11 @@ error). OFF → typed `disabled`, nothing written. A rollout control, not a perm
 ## 6. Idempotency, recorded time, Authoring Act
 
 - **Idempotency**: additive `idempotency_key` + `payload_fingerprint` + a partial unique index
-  `(org_id, idempotency_key)`. Same key + same payload → the existing act (one row); same key + different
-  payload → `conflict`; concurrent retries converge on one row (DB uniqueness + `FOR UPDATE`).
+  `(org_id, idempotency_key)`. The RPC uses **insert-with-conflict-catch**: it attempts the atomic insert
+  and, on `unique_violation`, reloads the committed winner — so two concurrent transactions for a new key
+  yield **exactly one row + one Authoring Act** (the loser returns the winner's result, `disposition:
+  existing`), same key + same payload → the existing act, and same key + different `payload_fingerprint`
+  → a typed `conflict`. It does not rely on `FOR UPDATE` over a not-yet-existing key.
 - **Recorded time**: `authored_at` remains **server-assigned** (Wave A trigger) and immutable; the intake
   never inserts it. Valid time (`valid_from`) is author-supplied and validated.
 - **Authoring Act (atomic + sole authoritative event)**: `author_operational_expectation` inserts the
