@@ -3,17 +3,20 @@ import { describe, expect, it } from "vitest";
 import { attachOpportunityQueueRowsWithRowContext } from "@/lib/workUnits/attachQueueRowContextToItems";
 
 /**
- * Payload-reduction measurement for the compact `queue_reveal` projection.
+ * Payload-reduction OPPORTUNITY measurement — the wire cost of the drawer-grade
+ * `_queue_row_context` object (a nested lifecycle/subject/placement/related-subject summary
+ * intended for the Focus Panel, not the queue preview).
  *
- * The single largest per-row payload contribution is the drawer-grade
- * `_queue_row_context` object — a nested lifecycle/subject/placement/related-subject
- * summary intended for the Focus Panel, not the queue preview. `queue_reveal` omits it
- * for case-grain rows (see queueRowEnrichmentPlan.ts `attachCaseGrainRowContext`).
+ * IMPORTANT — corrected framing (this fixture was previously mislabeled as deployed
+ * `queue_reveal` evidence): `queue_reveal` only omits `_queue_row_context` for NON-layout-runtime
+ * rows. The real deployed Work Unit surface uses LAYOUT-RUNTIME rows, for which
+ * `attachCaseGrainRowContext = enrichmentMode !== "queue_reveal" || layoutRuntime` is TRUE — so
+ * `queue_reveal` RETAINS the context and the payload does NOT shrink (~29.6KB observed deployed).
  *
- * This test measures the wire delta on a representative enriched case-grain row and
- * guards against re-inflation: the reveal row must stay materially smaller than the
- * list row. It is also the "before/after fixture bytes + property count" evidence
- * requested by the Workspace Trust Closure sprint (item 6).
+ * So this measurement is the reduction ACHIEVABLE by a genuine compact projection that strips the
+ * context for layout-runtime rows too — NOT the reduction the current `queue_reveal` delivers on the
+ * deployed surface. Stripping the context on the layout-runtime path requires verifying the
+ * layout-runtime row renderer against real rows (browser gate) and is not shipped here.
  */
 
 /** A representative enriched opportunity case-grain preview row (`enrichOpportunityRows` shape). */
