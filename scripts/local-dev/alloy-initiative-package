@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-initiative-package <initiative-key>
+
+Produces the final human-readable review package under final/.
+Never pushes or merges.
+
+See: scripts/local-dev/ENGINEERING-MANAGER.md
+EOF
+}
+
+classify_promotion() {
+  local key="$1"
+  local base="$2"
+  local blockers=0
+
+  # Check tasks complete
+  local tid st
+  for tid in $(alloy_engineering_list_tasks "$key"); do
+    st="$(alloy_engineering_task_status "$(alloy_engineering_task_path "$key" "$tid")")"
+    [[ "$st" == "complete" ]] || blockers=$((blockers + 1))
+  done
+
+  # Check review
+  local review_status="missing"
+  if [[ -f "$base/reviews/task-002-review.json" ]]; then
+    review_status="$(node -e "console.log(require('${base}/reviews/task-002-review.json').status)")"
+    [[ "$review_status" == "fail" || "$review_status" == "blocked" ]] && blockers=$((blockers + 1))
+  else
+    blockers=$((blockers + 1))
+  fi
+
+  local open_decisions
+  open_decisions="$(alloy_engineering_human_decisions_count "$key")"
+  [[ "$open_decisions" != "0" ]] && echo "BLOCKED_ON_HUMAN_DECISION" && return
+
+  [[ "$blockers" -gt 0 ]] && echo "NOT_READY" && return
+
+  local risks
+  risks="$(node -e "
+    const r = require('${base}/reports/task-001-result.json');
+    console.log((r.risks||[]).length);
+  " 2>/dev/null || echo 1)"
+  if [[ "$risks" != "0" ]]; then
+    echo "READY_WITH_KNOWN_RISKS"
+  else
+    echo "READY"
+  fi
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  local base final_dir pkg_path rec_class branch_map
+  base="$(alloy_initiative_dir "$key")"
+  final_dir="$base/final"
+  mkdir -p "$final_dir"
+  pkg_path="$final_dir/review-package.md"
+  rec_class="$(classify_promotion "$key" "$base")"
+  alloy_engineering_io validate-promotion-class "$rec_class"
+
+  local state_json
+  state_json="$(cat "$base/state.json")"
+
+  {
+    printf '# Final review package — %s\n\n' "$key"
+    printf 'Generated: %s\n\n' "$(alloy_iso_now)"
+    printf '## Approved objective\n\n'
+    node -e "console.log(require('${base}/initiative.json').initiative.objective)"
+    printf '\n## Approved specification hash\n\n'
+    node -e "console.log(require('${base}/state.json').approved_spec_hash||'(not approved)')"
+    printf '\n## Scope delivered\n\n'
+    if [[ -f "$base/reports/task-001-result.json" ]]; then
+      node -e "for (const f of (require('${base}/reports/task-001-result.json').files_changed||[])) console.log('- ' + f)"
+    else
+      printf '(no implementation report)\n'
+    fi
+    printf '\n## Tasks and statuses\n\n'
+    local tid
+    for tid in $(alloy_engineering_list_tasks "$key"); do
+      printf -- '- %s: %s\n' "$tid" "$(alloy_engineering_task_status "$(alloy_engineering_task_path "$key" "$tid")")"
+    done
+    printf '\n## Branch / commit map\n\n'
+    node -e "
+      const d = require('${base}/state.json');
+      for (const [tid, w] of Object.entries(d.workers||{})) {
+        const r = (d.reports||{})[tid];
+        console.log('- ' + tid + ': branch ' + w.branch + ' @ ' + (r?r.commit:'(no report)'));
+      }
+    " 2>/dev/null || true
+    printf '\n## Acceptance results\n\n'
+    [[ -f "$final_dir/acceptance-results.json" ]] && cat "$final_dir/acceptance-results.json" || printf '(run validation and ingest reports)\n'
+    printf '\n## Review status\n\n'
+    [[ -f "$base/reviews/task-002-review.json" ]] && \
+      node -e "const r=require('${base}/reviews/task-002-review.json'); console.log(r.status, r.findings)" || printf '(pending)\n'
+    printf '\n## Remediation history\n\n'
+    printf 'Rounds: %s\n' "$(node -e "console.log(require('${base}/state.json').remediation_round||0)")"
+    printf '\n## Cost summary\n\n'
+    node -e "console.log(JSON.stringify(require('${base}/state.json').cost_summary,null,2))"
+    printf '\n## Promotion recommendation\n\n'
+    printf '**%s**\n\n' "$rec_class"
+    printf '## Push / PR commands (NOT executed)\n\n'
+    node -e "
+      const d = require('${base}/state.json');
+      const w = d.workers['task-001'];
+      if (!w) { console.log('(no worker assignment)'); process.exit(0); }
+      console.log('git -C ' + w.path + ' push -u origin ' + w.branch);
+      console.log('gh pr create --base staging --head ' + w.branch);
+    " 2>/dev/null || true
+    printf '\n---\n\n'
+    printf '**Push and merge still require explicit human approval.**\n'
+  } >"$pkg_path"
+
+  cat >"$final_dir/promotion-recommendation.md" <<EOF
+classification: $rec_class
+generated_at: "$(alloy_iso_now)"
+push_merge_requires_approval: true
+EOF
+
+  cat >"$final_dir/commit-map.md" <<EOF
+# Commit map — $key
+
+$(node -e "
+  const d = require('${base}/state.json');
+  for (const [tid, w] of Object.entries(d.workers||{})) {
+    const r = (d.reports||{})[tid];
+    console.log('## ' + tid);
+    console.log('- worktree: ' + w.path);
+    console.log('- branch: ' + w.branch);
+    console.log('- commit: ' + (r?r.commit:'pending'));
+    console.log('');
+  }
+" 2>/dev/null || echo "(no workers)")
+EOF
+
+  if [[ "$rec_class" == "READY" || "$rec_class" == "READY_WITH_KNOWN_RISKS" ]]; then
+    local cur
+    cur="$(alloy_initiative_current_state "$key")"
+    if [[ "$cur" == "reviewing" || "$cur" == "remediation_required" ]]; then
+      alloy_initiative_transition "$key" "merge_ready" 2>/dev/null || true
+    fi
+    alloy_initiative_transition "$key" "awaiting_promotion_approval" 2>/dev/null || true
+  fi
+
+  node -e "
+    const fs = require('fs');
+    const p = '${base}/state.json';
+    const d = JSON.parse(fs.readFileSync(p,'utf8'));
+    d.promotion = { classification: '${rec_class}', packaged_at: '$(alloy_iso_now)' };
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  "
+
+  alloy_info "Final package: $pkg_path"
+  alloy_info "Recommendation: $rec_class"
+}
+
+main "$@"
