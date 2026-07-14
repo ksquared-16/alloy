@@ -849,6 +849,196 @@ begin
 end;
 $function$
 "
+public,execute_enrollment_status_mutation,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_ocm_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb",jsonb,"CREATE OR REPLACE FUNCTION public.execute_enrollment_status_mutation(p_org_id uuid, p_ocm_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+declare
+    v_mutation_id  uuid := gen_random_uuid();
+    v_previous_key text;
+    v_opportunity_id uuid;
+begin
+    -- Lock and read current state
+    select outcome_status_key, opportunity_id
+    into v_previous_key, v_opportunity_id
+    from opportunity_customer_members
+    where id = p_ocm_id
+      and org_id = p_org_id
+    for update;
+
+    if not found then
+        raise exception 'ocm_not_found';
+    end if;
+
+    if v_previous_key = p_new_status_key then
+        raise exception 'no_state_change';
+    end if;
+
+    -- Write canonical state (enrollment_status domain only)
+    update opportunity_customer_members
+    set outcome_status_key = p_new_status_key,
+        updated_at         = now()
+    where id     = p_ocm_id
+      and org_id = p_org_id;
+
+    -- Outbox record
+    insert into mutation_events (
+        id, org_id, mutation_id,
+        command_key, domain,
+        subject_id, subject_type,
+        previous_state, new_state,
+        operator_id, origin,
+        context_payload
+    ) values (
+        gen_random_uuid(), p_org_id, v_mutation_id,
+        'update_child_enrollment_status', 'enrollment_status',
+        p_ocm_id, 'opportunity_customer_member',
+        v_previous_key, p_new_status_key,
+        p_operator_id, p_origin,
+        p_context_payload
+    );
+
+    return jsonb_build_object(
+        'ok',             true,
+        'mutation_id',    v_mutation_id,
+        'previous_state', v_previous_key,
+        'new_state',      p_new_status_key,
+        'opportunity_id', v_opportunity_id
+    );
+end;
+$function$
+"
+public,execute_lead_status_mutation,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_opportunity_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb",jsonb,"CREATE OR REPLACE FUNCTION public.execute_lead_status_mutation(p_org_id uuid, p_opportunity_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+    v_old_status_key text;
+    v_mutation_id    uuid := gen_random_uuid();
+begin
+    -- Read current state (will error if not found / wrong org)
+    select status_key into v_old_status_key
+    from opportunities
+    where id = p_opportunity_id and org_id = p_org_id
+    for update;
+
+    if not found then
+        raise exception 'opportunity_not_found';
+    end if;
+
+    if v_old_status_key = p_new_status_key then
+        raise exception 'no_state_change';
+    end if;
+
+    -- Write state
+    update opportunities
+    set status_key = p_new_status_key,
+        updated_at = now()
+    where id = p_opportunity_id and org_id = p_org_id;
+
+    -- Write outbox (same transaction — atomicity guaranteed)
+    insert into mutation_events (
+        org_id, mutation_id, command_key, domain,
+        subject_id, subject_type,
+        previous_state, new_state,
+        operator_id, origin, context_payload,
+        committed_at, effective_at
+    ) values (
+        p_org_id, v_mutation_id, 'update_lead_status', 'lead_status',
+        p_opportunity_id, 'opportunity',
+        v_old_status_key, p_new_status_key,
+        p_operator_id, p_origin, p_context_payload,
+        now(), now()
+    );
+
+    return jsonb_build_object(
+        'ok',             true,
+        'mutation_id',    v_mutation_id,
+        'previous_state', v_old_status_key,
+        'new_state',      p_new_status_key
+    );
+end;
+$function$
+"
+public,execute_processing_identity_group,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_actor text, p_idempotency_key text, p_operations jsonb",jsonb,"CREATE OR REPLACE FUNCTION public.execute_processing_identity_group(p_org_id uuid, p_actor text, p_idempotency_key text, p_operations jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_refs   jsonb := '{}'::jsonb;
+    v_op     jsonb;
+    v_op_id  text;
+    v_key    text;
+    v_pl     jsonb;
+    v_new_id uuid;
+    v_person uuid;
+    v_house  uuid;
+    v_role   text;
+BEGIN
+    FOR v_op IN SELECT * FROM jsonb_array_elements(p_operations)
+    LOOP
+        v_op_id := v_op ->> 'op_id';
+        v_key   := v_op ->> 'command_key';
+        v_pl    := v_op -> 'payload';
+
+        IF v_key = 'create_person' THEN
+            INSERT INTO persons (org_id, first_name, last_name, email, phone)
+            VALUES (
+                p_org_id,
+                v_pl ->> 'first_name',
+                v_pl ->> 'last_name',
+                v_pl ->> 'email',
+                v_pl ->> 'phone'
+            )
+            RETURNING id INTO v_new_id;
+
+        ELSIF v_key = 'create_household' THEN
+            INSERT INTO customers (org_id, name)
+            VALUES (p_org_id, coalesce(v_pl ->> 'household_name', 'Household'))
+            RETURNING id INTO v_new_id;
+
+        ELSIF v_key = 'link_person_to_household' THEN
+            v_person := public.processing_resolve_ref(v_pl ->> 'person_id', v_refs)::uuid;
+            v_house  := public.processing_resolve_ref(v_pl ->> 'household_id', v_refs)::uuid;
+            v_role   := coalesce(v_pl ->> 'role_type', 'primary_contact');
+            INSERT INTO customer_persons (org_id, customer_id, person_id, role_type)
+            VALUES (p_org_id, v_house, v_person, v_role)
+            ON CONFLICT (org_id, customer_id, person_id, role_type) DO UPDATE SET role_type = EXCLUDED.role_type
+            RETURNING id INTO v_new_id;
+
+        ELSIF v_key IN ('create_child', 'link_child_to_household') THEN
+            v_house := public.processing_resolve_ref(v_pl ->> 'household_id', v_refs)::uuid;
+            INSERT INTO customer_members (
+                org_id, customer_id, person_id, display_name, first_name, last_name, dob, relationship
+            )
+            VALUES (
+                p_org_id,
+                v_house,
+                NULLIF(public.processing_resolve_ref(v_pl ->> 'person_id', v_refs), '')::uuid,
+                coalesce(v_pl ->> 'display_name', 'Child'),
+                v_pl ->> 'first_name',
+                v_pl ->> 'last_name',
+                NULLIF(v_pl ->> 'dob', '')::date,
+                coalesce(v_pl ->> 'relationship', 'child')
+            )
+            RETURNING id INTO v_new_id;
+
+        ELSE
+            RAISE EXCEPTION 'unsupported_atomic_group_command:%', v_key;
+        END IF;
+
+        v_refs := jsonb_set(v_refs, ARRAY[v_op_id], to_jsonb(v_new_id::text));
+    END LOOP;
+
+    RETURN jsonb_build_object('ok', true, 'refs', v_refs);
+END;
+$function$
+"
 public,fn_job_split_bps,function,plpgsql,VOLATILE,false,p_job_number integer,record,"CREATE OR REPLACE FUNCTION public.fn_job_split_bps(p_job_number integer)
  RETURNS TABLE(contractor_bps integer, alloy_bps integer)
  LANGUAGE plpgsql
@@ -1078,18 +1268,19 @@ begin
 end;
 $function$
 "
-public,has_org_role,function,sql,STABLE,false,"_org_id uuid, _roles text[]",boolean,"CREATE OR REPLACE FUNCTION public.has_org_role(_org_id uuid, _roles text[])
+public,has_org_role,function,sql,STABLE,true,"_org_id uuid, _roles text[]",boolean,"CREATE OR REPLACE FUNCTION public.has_org_role(_org_id uuid, _roles text[])
  RETURNS boolean
  LANGUAGE sql
- STABLE
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.user_roles ur
-    WHERE ur.user_id = auth.uid()
-      AND ur.org_id = _org_id
-      AND ur.role = ANY(_roles)
-  );
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.user_roles ur
+        WHERE ur.user_id = auth.uid()
+          AND ur.org_id = _org_id
+          AND ur.role = ANY(_roles)
+    );
 $function$
 "
 public,is_admin,function,sql,STABLE,false,,boolean,"CREATE OR REPLACE FUNCTION public.is_admin()
@@ -1386,6 +1577,333 @@ begin
 end;
 $function$
 "
+public,processing_commit_attempts_append_only_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.processing_commit_attempts_append_only_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'processing_commit_attempts is append-only; record a new attempt instead';
+END;
+$function$
+"
+public,processing_commit_plans_immutable_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.processing_commit_plans_immutable_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    IF NEW.version IS DISTINCT FROM OLD.version
+        OR NEW.content_hash IS DISTINCT FROM OLD.content_hash
+        OR NEW.case_id IS DISTINCT FROM OLD.case_id
+        OR NEW.org_id IS DISTINCT FROM OLD.org_id
+        OR NEW.built_at IS DISTINCT FROM OLD.built_at THEN
+        RAISE EXCEPTION 'processing_commit_plans core columns are immutable; create a new version instead';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,processing_facts_immutable_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.processing_facts_immutable_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'processing_facts rows are immutable; append a corrected fact instead';
+END;
+$function$
+"
+public,processing_plan_operations_immutable_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.processing_plan_operations_immutable_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'processing_plan_operations rows are immutable; build a new plan version instead';
+END;
+$function$
+"
+public,processing_resolve_ref,function,plpgsql,IMMUTABLE,false,"p_val text, p_refs jsonb",text,"CREATE OR REPLACE FUNCTION public.processing_resolve_ref(p_val text, p_refs jsonb)
+ RETURNS text
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    IF p_val IS NULL THEN
+        RETURN NULL;
+    END IF;
+    IF left(p_val, 1) = '@' THEN
+        RETURN p_refs ->> substring(p_val FROM 2);
+    END IF;
+    RETURN p_val;
+END;
+$function$
+"
+public,reconcile_consumption_correction,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_actor_user_id uuid, p_plan jsonb",jsonb,"CREATE OR REPLACE FUNCTION public.reconcile_consumption_correction(p_org_id uuid, p_actor_user_id uuid, p_plan jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_ce            jsonb := p_plan->'correction_event';
+    v_prior_fact_id uuid := NULLIF(p_plan->>'prior_fact_id','')::uuid;
+    v_source_family text := v_ce->>'source_family';
+    v_prior_event_id uuid;
+    v_e1            uuid;
+    v_existing_e1   uuid;
+    v_obl           jsonb;
+    v_charge        jsonb;
+    v_reso          text;
+    v_obl_id        uuid;
+    v_prev_event    uuid;
+    v_prev_charge   uuid;
+    v_new_charge_id uuid;
+    v_new_keys      text[] := ARRAY[]::text[];
+    v_reparented    uuid[] := ARRAY[]::uuid[];
+    v_upserted      uuid[] := ARRAY[]::uuid[];
+    v_superseded    uuid[] := ARRAY[]::uuid[];
+    v_retired       uuid[] := ARRAY[]::uuid[];
+    v_created_chg   uuid[] := ARRAY[]::uuid[];
+    v_orphan        record;
+    v_retire_id     text;
+    v_chg           uuid;
+BEGIN
+    -- 1. Lock the prior consumption event by its fact anchor (source_entity_id).
+    SELECT id INTO v_prior_event_id
+    FROM consumption_events
+    WHERE org_id = p_org_id
+      AND source_entity_id = v_prior_fact_id
+      AND (v_source_family IS NULL OR source_family = v_source_family)
+    ORDER BY created_at ASC
+    LIMIT 1
+    FOR UPDATE;
+
+    IF v_prior_event_id IS NULL THEN
+        RAISE EXCEPTION 'reconcile_consumption:no_prior_event';
+    END IF;
+
+    -- Lock its obligations (serializes concurrent corrections of this lineage).
+    PERFORM 1 FROM resolved_obligations
+    WHERE org_id = p_org_id AND consumption_event_id = v_prior_event_id
+    FOR UPDATE;
+
+    -- 2. Upsert the correction's OWN consumption event by (org_id, idempotency_key).
+    SELECT id INTO v_existing_e1
+    FROM consumption_events
+    WHERE org_id = p_org_id AND idempotency_key = (v_ce->>'idempotency_key')
+    FOR UPDATE;
+
+    IF v_existing_e1 IS NOT NULL THEN
+        UPDATE consumption_events SET
+            status            = COALESCE(v_ce->>'status', status),
+            context           = COALESCE(v_ce->'context', context),
+            corrects_event_id = v_prior_event_id,
+            updated_by        = p_actor_user_id
+        WHERE id = v_existing_e1;
+        v_e1 := v_existing_e1;
+    ELSE
+        INSERT INTO consumption_events (
+            org_id, location_id, event_type_id, source_family, event_key,
+            source_entity_type, source_entity_id, subject_type, subject_id,
+            occurs_on, effective_on, status, context, idempotency_key,
+            corrects_event_id, created_by
+        ) VALUES (
+            p_org_id,
+            NULLIF(v_ce->>'location_id','')::uuid,
+            NULLIF(v_ce->>'event_type_id','')::uuid,
+            v_ce->>'source_family',
+            v_ce->>'event_key',
+            v_ce->>'source_entity_type',
+            (v_ce->>'source_entity_id')::uuid,
+            v_ce->>'subject_type',
+            NULLIF(v_ce->>'subject_id','')::uuid,
+            (v_ce->>'occurs_on')::date,
+            NULLIF(v_ce->>'effective_on','')::date,
+            COALESCE(v_ce->>'status','resolved'),
+            COALESCE(v_ce->'context','{}'::jsonb),
+            v_ce->>'idempotency_key',
+            v_prior_event_id,
+            p_actor_user_id
+        ) RETURNING id INTO v_e1;
+    END IF;
+
+    -- 3. Reparent + upsert each new obligation by (org_id, resolution_key).
+    FOR v_obl IN SELECT * FROM jsonb_array_elements(COALESCE(p_plan->'new_obligations','[]'::jsonb))
+    LOOP
+        v_reso := v_obl->>'resolution_key';
+        v_new_keys := array_append(v_new_keys, v_reso);
+        v_charge := v_obl->'charge';
+        v_new_charge_id := NULL;
+
+        SELECT id, consumption_event_id, draft_charge_id
+        INTO v_obl_id, v_prev_event, v_prev_charge
+        FROM resolved_obligations
+        WHERE org_id = p_org_id AND resolution_key = v_reso
+        FOR UPDATE;
+
+        -- Charge reconciliation is decided UNDER LOCK from the obligation's OWN
+        -- draft charge (v_prev_charge, read via the FOR UPDATE above) — never from a
+        -- pre-lock plan hint. This is the idempotency parity fix: recalc the live
+        -- DRAFT in place, else create one; concurrent same-lineage corrections
+        -- therefore converge (the 2nd sees the 1st's draft_charge_id and recalcs it)
+        -- and cannot orphan a duplicate draft. The plan carries only PRICED fields
+        -- (financials-owned via childcareChargeService); the RPC owns which charge
+        -- the reconciliation touches. No pricing here. (Audit F1/F2.)
+        IF v_charge IS NOT NULL AND jsonb_typeof(v_charge) = 'object'
+           AND NULLIF(v_charge->>'amount_cents','') IS NOT NULL THEN
+            v_new_charge_id := NULL;
+            IF v_prev_charge IS NOT NULL THEN
+                UPDATE charges SET
+                    amount_cents = (v_charge->>'amount_cents')::bigint,
+                    occurs_on    = NULLIF(v_charge->>'occurs_on','')::date,
+                    billable_on  = NULLIF(v_charge->>'billable_on','')::date,
+                    service_date = NULLIF(v_charge->>'service_date','')::date,
+                    metadata     = COALESCE(v_charge->'metadata', metadata)
+                WHERE id = v_prev_charge AND org_id = p_org_id AND status = 'draft';
+                IF FOUND THEN
+                    v_new_charge_id := v_prev_charge;
+                END IF;
+            END IF;
+            IF v_new_charge_id IS NULL THEN
+                INSERT INTO charges (
+                    org_id, job_id, billable_source_type, billable_source_id,
+                    charge_type, charge_category, status, currency_code, amount_cents,
+                    service_date, occurs_on, billable_on, charge_template_id, service_id,
+                    description, metadata
+                ) VALUES (
+                    p_org_id, NULL,
+                    COALESCE(v_charge->>'billable_source_type','enrollment_agreement'),
+                    NULLIF(v_charge->>'billable_source_id','')::uuid,
+                    COALESCE(v_charge->>'charge_type','fee'), v_charge->>'charge_category', 'draft',
+                    COALESCE(v_charge->>'currency_code','USD'), (v_charge->>'amount_cents')::bigint,
+                    NULLIF(v_charge->>'service_date','')::date, NULLIF(v_charge->>'occurs_on','')::date,
+                    NULLIF(v_charge->>'billable_on','')::date, NULLIF(v_charge->>'charge_template_id','')::uuid,
+                    NULLIF(v_charge->>'service_id','')::uuid, v_charge->>'description',
+                    COALESCE(v_charge->'metadata','{}'::jsonb)
+                ) RETURNING id INTO v_new_charge_id;
+                v_created_chg := array_append(v_created_chg, v_new_charge_id);
+            END IF;
+        ELSE
+            v_new_charge_id := v_prev_charge;
+        END IF;
+
+        IF v_obl_id IS NOT NULL THEN
+            UPDATE resolved_obligations SET
+                consumption_event_id = v_e1,
+                charge_template_id   = NULLIF(v_obl->>'charge_template_id','')::uuid,
+                service_id           = NULLIF(v_obl->>'service_id','')::uuid,
+                amount_cents         = NULLIF(v_obl->>'amount_cents','')::bigint,
+                currency_code        = COALESCE(v_obl->>'currency_code','USD'),
+                responsibility_key   = v_obl->>'responsibility_key',
+                occurs_on            = NULLIF(v_obl->>'occurs_on','')::date,
+                billable_on          = NULLIF(v_obl->>'billable_on','')::date,
+                period_start         = NULLIF(v_obl->>'period_start','')::date,
+                period_end           = NULLIF(v_obl->>'period_end','')::date,
+                status               = COALESCE(v_obl->>'status', status),
+                review_required      = COALESCE((v_obl->>'review_required')::boolean, review_required),
+                explanation          = COALESCE(v_obl->'explanation', explanation),
+                obligation_kind      = v_obl->>'obligation_kind',
+                draft_charge_id      = v_new_charge_id,
+                superseded_by_event_id = NULL,
+                review_status        = CASE WHEN (v_obl->>'review_status_stale')::boolean IS TRUE
+                                            THEN 'stale' ELSE review_status END,
+                updated_by           = p_actor_user_id
+            WHERE id = v_obl_id;
+            IF v_prev_event IS DISTINCT FROM v_e1 THEN
+                v_reparented := array_append(v_reparented, v_obl_id);
+            END IF;
+            v_upserted := array_append(v_upserted, v_obl_id);
+        ELSE
+            INSERT INTO resolved_obligations (
+                org_id, consumption_event_id, charge_template_id, service_id,
+                amount_cents, currency_code, responsibility_key, occurs_on, billable_on,
+                period_start, period_end, status, review_required, explanation,
+                draft_charge_id, resolution_key, obligation_kind, review_status, created_by
+            ) VALUES (
+                p_org_id, v_e1, NULLIF(v_obl->>'charge_template_id','')::uuid,
+                NULLIF(v_obl->>'service_id','')::uuid, NULLIF(v_obl->>'amount_cents','')::bigint,
+                COALESCE(v_obl->>'currency_code','USD'), v_obl->>'responsibility_key',
+                NULLIF(v_obl->>'occurs_on','')::date, NULLIF(v_obl->>'billable_on','')::date,
+                NULLIF(v_obl->>'period_start','')::date, NULLIF(v_obl->>'period_end','')::date,
+                COALESCE(v_obl->>'status','previewed'), COALESCE((v_obl->>'review_required')::boolean, false),
+                COALESCE(v_obl->'explanation','{}'::jsonb), v_new_charge_id, v_reso,
+                v_obl->>'obligation_kind',
+                CASE WHEN COALESCE((v_obl->>'review_required')::boolean,false) THEN 'review_required' ELSE 'pending' END,
+                p_actor_user_id
+            ) RETURNING id INTO v_obl_id;
+            v_upserted := array_append(v_upserted, v_obl_id);
+        END IF;
+    END LOOP;
+
+    -- 4. Supersede orphans: prior obligations whose resolution_key is absent from
+    --    the corrected pass. Collect their draft charges for retirement.
+    FOR v_orphan IN
+        SELECT id, resolution_key, draft_charge_id
+        FROM resolved_obligations
+        WHERE org_id = p_org_id
+          AND consumption_event_id = v_prior_event_id
+          AND (resolution_key IS NULL OR NOT (resolution_key = ANY (v_new_keys)))
+    LOOP
+        UPDATE resolved_obligations SET
+            status                 = 'superseded',
+            superseded_by_event_id = v_e1,
+            review_status          = 'stale',
+            updated_by             = p_actor_user_id
+        WHERE id = v_orphan.id;
+        v_superseded := array_append(v_superseded, v_orphan.id);
+        IF v_orphan.draft_charge_id IS NOT NULL THEN
+            v_retired := array_append(v_retired, v_orphan.draft_charge_id);
+        END IF;
+    END LOOP;
+
+    -- Union in any explicitly-planned retire ids (idempotent; draft-only guard).
+    IF p_plan->'retire_charge_ids' IS NOT NULL THEN
+        FOR v_retire_id IN SELECT jsonb_array_elements_text(p_plan->'retire_charge_ids')
+        LOOP
+            IF NOT (v_retire_id::uuid = ANY (v_retired)) THEN
+                v_retired := array_append(v_retired, v_retire_id::uuid);
+            END IF;
+        END LOOP;
+    END IF;
+
+    -- 5. Retire draft charges in place (draft -> void). Posted/non-draft => 0 rows.
+    FOREACH v_chg IN ARRAY v_retired
+    LOOP
+        UPDATE charges SET
+            status    = 'void',
+            voided_at = now(),
+            metadata  = COALESCE(metadata,'{}'::jsonb) || jsonb_build_object(
+                'retirement', jsonb_build_object(
+                    'reason', 'obligation_superseded',
+                    'actor_user_id', p_actor_user_id,
+                    'superseded_by_consumption_event_id', v_e1,
+                    'retired_at', now()
+                ))
+        WHERE id = v_chg
+          AND org_id = p_org_id
+          AND billable_source_type = 'enrollment_agreement'
+          AND status = 'draft';
+    END LOOP;
+
+    -- 6. Retire the prior event.
+    UPDATE consumption_events SET status = 'superseded', updated_by = p_actor_user_id
+    WHERE id = v_prior_event_id AND org_id = p_org_id;
+
+    RETURN jsonb_build_object(
+        'ok', true,
+        'consumption_event_id', v_e1,
+        'prior_consumption_event_id', v_prior_event_id,
+        'obligation_ids', to_jsonb(v_upserted),
+        'reparented_obligation_ids', to_jsonb(v_reparented),
+        'superseded_obligation_ids', to_jsonb(v_superseded),
+        'retired_charge_ids', to_jsonb(v_retired),
+        'created_charge_ids', to_jsonb(v_created_chg)
+    );
+END;
+$function$
+"
 public,round_to_nearest_5_cents,function,plpgsql,VOLATILE,false,p_cents integer,integer,"CREATE OR REPLACE FUNCTION public.round_to_nearest_5_cents(p_cents integer)
  RETURNS integer
  LANGUAGE plpgsql
@@ -1478,6 +1996,26 @@ begin
   new.full_name := nullif(trim(concat_ws(' ', new.first_name, new.last_name)), '');
   return new;
 end;
+$function$
+"
+public,set_program_offering_variants_updated_at,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.set_program_offering_variants_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$function$
+"
+public,set_program_offerings_updated_at,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.set_program_offerings_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
 $function$
 "
 public,set_updated_at,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.set_updated_at()
@@ -2241,6 +2779,46 @@ BEGIN
 END;
 $function$
 "
+public,validate_financial_policy_scope,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_financial_policy_scope()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    loc_org uuid;
+    svc_org uuid;
+    plan_org uuid;
+BEGIN
+    IF NEW.location_id IS NOT NULL THEN
+        SELECT l.org_id INTO loc_org FROM public.locations l WHERE l.id = NEW.location_id;
+        IF loc_org IS NULL THEN
+            RAISE EXCEPTION 'financial policy scope: location_id % not found', NEW.location_id USING ERRCODE = '23503';
+        END IF;
+        IF loc_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'financial policy scope: location org mismatch' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+    IF NEW.service_id IS NOT NULL THEN
+        SELECT s.org_id INTO svc_org FROM public.financial_services s WHERE s.id = NEW.service_id;
+        IF svc_org IS NULL THEN
+            RAISE EXCEPTION 'financial policy scope: service_id % not found', NEW.service_id USING ERRCODE = '23503';
+        END IF;
+        IF svc_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'financial policy scope: service org mismatch' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+    IF NEW.rate_plan_id IS NOT NULL THEN
+        SELECT p.org_id INTO plan_org FROM public.childcare_rate_plans p WHERE p.id = NEW.rate_plan_id;
+        IF plan_org IS NULL THEN
+            RAISE EXCEPTION 'financial policy scope: rate_plan_id % not found', NEW.rate_plan_id USING ERRCODE = '23503';
+        END IF;
+        IF plan_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'financial policy scope: rate plan org mismatch' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
 public,validate_form_packet_items_form_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_form_packet_items_form_org()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2485,6 +3063,71 @@ BEGIN
     END IF;
     IF NEW.org_id IS DISTINCT FROM person_org THEN
         RAISE EXCEPTION 'opportunity_persons: org_id mismatch (row %, person %)', NEW.org_id, person_org;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_person_child_relationship_roles_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_person_child_relationship_roles_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    rel_org uuid;
+    rel_status text;
+BEGIN
+    SELECT r.org_id, r.status INTO rel_org, rel_status
+    FROM public.person_child_relationships r WHERE r.id = NEW.relationship_id;
+    IF rel_org IS NULL THEN
+        RAISE EXCEPTION 'person_child_relationship_roles: relationship_id % not found', NEW.relationship_id;
+    END IF;
+    IF NEW.org_id IS DISTINCT FROM rel_org THEN
+        RAISE EXCEPTION 'person_child_relationship_roles: org_id mismatch with relationship';
+    END IF;
+    IF rel_status = 'inactive' AND NEW.is_active = true THEN
+        RAISE EXCEPTION 'person_child_relationship_roles: cannot activate role on inactive relationship';
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_person_child_relationships_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_person_child_relationships_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    cust_org uuid;
+    member_org uuid;
+    member_customer uuid;
+    person_org uuid;
+BEGIN
+    SELECT c.org_id INTO cust_org FROM public.customers c WHERE c.id = NEW.customer_id;
+    IF cust_org IS NULL THEN
+        RAISE EXCEPTION 'person_child_relationships: customer_id % not found', NEW.customer_id;
+    END IF;
+    IF NEW.org_id IS DISTINCT FROM cust_org THEN
+        RAISE EXCEPTION 'person_child_relationships: org_id mismatch with customer';
+    END IF;
+
+    SELECT cm.org_id, cm.customer_id INTO member_org, member_customer
+    FROM public.customer_members cm WHERE cm.id = NEW.customer_member_id;
+    IF member_org IS NULL THEN
+        RAISE EXCEPTION 'person_child_relationships: customer_member_id % not found', NEW.customer_member_id;
+    END IF;
+    IF NEW.org_id IS DISTINCT FROM member_org THEN
+        RAISE EXCEPTION 'person_child_relationships: org_id mismatch with customer_member';
+    END IF;
+    IF NEW.customer_id IS DISTINCT FROM member_customer THEN
+        RAISE EXCEPTION 'person_child_relationships: customer_id mismatch with customer_member';
+    END IF;
+
+    SELECT p.org_id INTO person_org FROM public.persons p WHERE p.id = NEW.person_id;
+    IF person_org IS NULL THEN
+        RAISE EXCEPTION 'person_child_relationships: person_id % not found', NEW.person_id;
+    END IF;
+    IF NEW.org_id IS DISTINCT FROM person_org THEN
+        RAISE EXCEPTION 'person_child_relationships: org_id mismatch with person';
     END IF;
 
     RETURN NEW;

@@ -1,6 +1,19 @@
 # Processing Identity Resolution — Doctrine Reconciliation
 
-**Baseline:** `origin/staging` @ `65afc8527`. This table lists documentation that must change **if this architecture is approved**. Per repo governance (`documentation-governance.md`): freeze before documenting — this sprint lives under `docs/sprints/archive/07_2026/`; canonical `docs/platform/` edits happen only at closeout, when decisions are frozen. **No doctrine is edited now.**
+**Status:** Closeout reconciliation record. **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
+
+**Design baseline:** `origin/staging` @ `65afc8527`. The table below is the original design-time reconciliation ledger; the closeout disposition is now recorded here and in the affected canonical docs.
+
+## Closeout disposition
+
+- Updated: `docs/platform/foundation/architecture.md`, `platform-capabilities.md`, `product-roadmap.md`, `release-history.md`.
+- Updated: `docs/platform/core/entity-model.md`, `record-system.md` (additive inbound-identity supplements; conceptual entity model unchanged).
+- Updated: `docs/platform/modules/documents-and-forms.md`.
+- Updated: `docs/platform/governance/implementation-patterns.md` (optional V1 pattern supplement), `glossary.md`.
+- Annotated: `docs/platform/core/business-process-system.md` (Manual Create Lead intake contract post-D4), `product-roadmap.md` verification debt (partial lead-capture parity).
+- Verified with no new Processing event keys required: `docs/platform/foundation/platform-event-catalog.md`; executor operation results are attempt audit data, not new `workflow_events`. Closeout audit confirmed no catalog edit for V1.
+- Preserved without broad rewrite: `system-overview.md` (one-line identity bullet only), `design-and-operational-doctrine.md`, Business Process doctrine beyond the Create Lead intake note, and unrelated product/form historical docs. Processing resolves inbound identity and hands off; it does not redefine Business Process ownership.
+- Generated schema references were regenerated against the isolated certified stack. The sprint-owned processing entries were already current; unrelated communication-schema regressions from the older branch baseline were intentionally not committed.
 
 | Document | Current statement | Runtime evidence | Required change | Architecture phase |
 |---|---|---|---|---|
@@ -13,7 +26,7 @@
 | `docs/platform/core/status-and-state-system.md` | Four status domains; `person_status`/`account_status` registered | `person_status`/`account_status` declared with **no handler** **[C]** | Register `person_status` handler (used by identity commits); clarify Processing case status vs entity status | B2, D1 |
 | `docs/platform/core/entity-model.md` / `record-system.md` | `persons` canonical; `contacts` legacy; person-first | `persons` has **no uniqueness/no org FK**; `contacts` has global uniques **[C]** | Add `persons.org_id` FK + normalized-key **non-unique** indexes (Decision C: email/phone are signals, **not** unique keys); add `customer_members` natural-key unique; retire global `contacts` uniques; state Parent/Guardian = roles not entities (Decision A) | B0, D0 |
 | `docs/audits/person-vs-contact-audit.md` (follow-up #1) | "Enumerate every route that inserts contacts without person threading" | gutters + backend leads still write contacts **[C]** | Close the follow-up as sources cut over; mark inbound parity done | E4 |
-| `docs/platform/foundation/platform-event-catalog.md` | `intake_case_*` events catalogued | not all emitted; new commit/resolution events needed **[C]** | Add resolution/commit/exception event keys; reconcile which `intake_case_*` are emitted | B3, D2 |
+| `docs/platform/foundation/platform-event-catalog.md` | `intake_case_*` events catalogued | **Closeout verified:** V1 emits no new `workflow_events` keys; executor labels are attempt audit only **[C→verified no change]** | No V1 catalog edit; future resolution/commit exception keys remain optional | B3, D2 |
 | `docs/platform/foundation/product-roadmap.md` / `platform-capabilities.md` | "Record identity resolution — next separate sprint"; DCP In Progress | this sprint delivers it **[C]** | On closeout: move to Complete; summarize in `release-history.md` | closeout |
 | `docs/platform/governance/glossary.md` / `docs/platform/governance/glossary.md` | Person/Customer/Contact/Opportunity defined; **Intake/Processing/Processing Case/Identity Resolution/DCP not defined** | terms used in sprint docs + code, absent from canonical glossary **[C]** | Add canonical glossary entries: Intake, Processing, Processing Case, Intake Envelope, Identity Subject, Candidate Match, Resolution, Commit Plan, Identity Resolution, DCP, Merge | closeout |
 | `docs/platform/modules/communications-identity-platform.md` | comms identity = sender/channel resolution | separate domain; naming-collision risk with record identity **[C]** | Add a disambiguation note: comms identity ≠ record identity resolution | B (README already states) |
@@ -40,4 +53,6 @@ The proposed architecture is checked against Alloy doctrine and is consistent:
 
 ## Governance note
 
-At closeout: summarize into `docs/platform/foundation/release-history.md` and flip the Documents & forms capability (`platform-capabilities.md`, DCP → shipped); if a new canonical doctrine emerges (e.g. a Processing/Identity-Resolution platform doc), create it under `docs/platform/` and register it in `docs/README.md` load order. Update this sprint's `README.md` status table as artifacts move from design to delivered.
+**Canonical doc disposition update (final closeout):** Identity-review gate documented in `record-system.md`, `documents-and-forms.md`, `glossary.md`, `platform-capabilities.md`, `release-history.md`, and `implementation-patterns.md`. No new `workflow_events` keys. Event catalog unchanged.
+
+At closeout the local doctrine updates are complete; remaining work is staging reconciliation before promotion.

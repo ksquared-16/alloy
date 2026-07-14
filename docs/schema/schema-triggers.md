@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **Trigger count:** 201
+**Generated:** 2026-07-13 · **Trigger count:** 229
 
 | Table | Trigger | Event | Function |
 |-------|---------|-------|----------|
@@ -42,13 +42,20 @@
 | `childcare_schedule_rules` | `trg_childcare_schedule_rules_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_childcare_schedule_rules_updated_at BEFORE UPDATE ON childcar |
 | `childcare_schedule_rules` | `trg_validate_childcare_schedule_rules_scope` | INSERT BEFORE | CREATE TRIGGER trg_validate_childcare_schedule_rules_scope BEFORE INSERT OR UPDA |
 | `childcare_schedule_rules` | `trg_validate_childcare_schedule_rules_scope` | UPDATE BEFORE | CREATE TRIGGER trg_validate_childcare_schedule_rules_scope BEFORE INSERT OR UPDA |
+| `commercial_policies` | `trg_commercial_policies_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_commercial_policies_updated_at BEFORE UPDATE ON commercial_po |
+| `communication_identities` | `trg_comm_identities_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_comm_identities_updated_at BEFORE UPDATE ON communication_ide |
+| `communication_identity_grants` | `trg_comm_identity_grants_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_comm_identity_grants_updated_at BEFORE UPDATE ON communicatio |
+| `communication_identity_location_bindings` | `trg_comm_identity_loc_bindings_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_comm_identity_loc_bindings_updated_at BEFORE UPDATE ON commun |
 | `communication_messages` | `trg_comm_messages_bump_thread_last_message` | INSERT AFTER | CREATE TRIGGER trg_comm_messages_bump_thread_last_message AFTER INSERT ON commun |
+| `communication_provider_accounts` | `trg_comm_provider_accounts_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_comm_provider_accounts_updated_at BEFORE UPDATE ON communicat |
 | `communication_scheduled_sends` | `trg_comm_sched_sends_org_scope` | INSERT BEFORE | CREATE TRIGGER trg_comm_sched_sends_org_scope BEFORE INSERT OR UPDATE OF org_id, |
 | `communication_scheduled_sends` | `trg_comm_sched_sends_org_scope` | UPDATE BEFORE | CREATE TRIGGER trg_comm_sched_sends_org_scope BEFORE INSERT OR UPDATE OF org_id, |
 | `communication_scheduled_sends` | `trg_comm_sched_sends_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_comm_sched_sends_updated_at BEFORE UPDATE ON communication_sc |
 | `communication_template_versions` | `trg_sync_communication_template_version_legacy` | INSERT BEFORE | CREATE TRIGGER trg_sync_communication_template_version_legacy BEFORE INSERT OR U |
 | `communication_template_versions` | `trg_sync_communication_template_version_legacy` | UPDATE BEFORE | CREATE TRIGGER trg_sync_communication_template_version_legacy BEFORE INSERT OR U |
 | `config_layout_assist_proposals` | `trg_config_layout_assist_proposals_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_config_layout_assist_proposals_updated_at BEFORE UPDATE ON co |
+| `consumption_event_types` | `trg_consumption_event_types_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_consumption_event_types_updated_at BEFORE UPDATE ON consumpti |
+| `consumption_events` | `trg_consumption_events_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_consumption_events_updated_at BEFORE UPDATE ON consumption_ev |
 | `contacts` | `trg_contacts_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_contacts_updated_at BEFORE UPDATE ON contacts FOR EACH ROW EX |
 | `customer_members` | `trg_customer_members_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_customer_members_updated_at BEFORE UPDATE ON customer_members |
 | `customer_person_role_types` | `trg_customer_person_role_types_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_customer_person_role_types_updated_at BEFORE UPDATE ON custom |
@@ -63,6 +70,11 @@
 | `discounts` | `trg_discounts_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_discounts_updated_at BEFORE UPDATE ON discounts FOR EACH ROW  |
 | `documents` | `trg_documents_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_documents_updated_at BEFORE UPDATE ON documents FOR EACH ROW  |
 | `entity_labels` | `trg_entity_labels_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_entity_labels_updated_at BEFORE UPDATE ON entity_labels FOR E |
+| `financial_charge_templates` | `trg_financial_charge_templates_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_financial_charge_templates_updated_at BEFORE UPDATE ON financ |
+| `financial_policies` | `trg_financial_policies_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_financial_policies_updated_at BEFORE UPDATE ON financial_poli |
+| `financial_policies` | `trg_validate_financial_policy_scope` | INSERT BEFORE | CREATE TRIGGER trg_validate_financial_policy_scope BEFORE INSERT OR UPDATE ON fi |
+| `financial_policies` | `trg_validate_financial_policy_scope` | UPDATE BEFORE | CREATE TRIGGER trg_validate_financial_policy_scope BEFORE INSERT OR UPDATE ON fi |
+| `financial_services` | `trg_financial_services_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_financial_services_updated_at BEFORE UPDATE ON financial_serv |
 | `form_definition_versions` | `trg_form_definition_versions_immutability` | UPDATE BEFORE | CREATE TRIGGER trg_form_definition_versions_immutability BEFORE UPDATE ON form_d |
 | `form_definition_versions` | `trg_form_definition_versions_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_form_definition_versions_updated_at BEFORE UPDATE ON form_def |
 | `form_definition_versions` | `trg_sync_form_definition_versions_org_id` | INSERT BEFORE | CREATE TRIGGER trg_sync_form_definition_versions_org_id BEFORE INSERT OR UPDATE  |
@@ -135,6 +147,12 @@
 | `payment_allocations` | `trg_payment_allocations_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_payment_allocations_updated_at BEFORE UPDATE ON payment_alloc |
 | `payments` | `payments_post_to_ledger` | UPDATE AFTER | CREATE TRIGGER payments_post_to_ledger AFTER UPDATE OF posted_at, paid_at ON pay |
 | `payments` | `trg_payments_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_payments_updated_at BEFORE UPDATE ON payments FOR EACH ROW EX |
+| `person_child_relationship_roles` | `trg_person_child_relationship_roles_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_person_child_relationship_roles_updated_at BEFORE UPDATE ON p |
+| `person_child_relationship_roles` | `trg_validate_person_child_relationship_roles_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_person_child_relationship_roles_consistency BEFORE I |
+| `person_child_relationship_roles` | `trg_validate_person_child_relationship_roles_consistency` | UPDATE BEFORE | CREATE TRIGGER trg_validate_person_child_relationship_roles_consistency BEFORE I |
+| `person_child_relationships` | `trg_person_child_relationships_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_person_child_relationships_updated_at BEFORE UPDATE ON person |
+| `person_child_relationships` | `trg_validate_person_child_relationships_consistency` | INSERT BEFORE | CREATE TRIGGER trg_validate_person_child_relationships_consistency BEFORE INSERT |
+| `person_child_relationships` | `trg_validate_person_child_relationships_consistency` | UPDATE BEFORE | CREATE TRIGGER trg_validate_person_child_relationships_consistency BEFORE INSERT |
 | `person_relationship_type_settings` | `trg_person_relationship_type_settings_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_person_relationship_type_settings_updated_at BEFORE UPDATE ON |
 | `persons` | `trg_assign_org_record_number_persons` | INSERT BEFORE | CREATE TRIGGER trg_assign_org_record_number_persons BEFORE INSERT ON persons FOR |
 | `persons` | `trg_set_person_full_name` | INSERT BEFORE | CREATE TRIGGER trg_set_person_full_name BEFORE INSERT OR UPDATE OF first_name, l |
@@ -157,9 +175,19 @@
 | `pricing_services` | `trg_pricing_services_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_pricing_services_updated_at BEFORE UPDATE ON pricing_services |
 | `pricing_square_footage_tiers` | `trg_pricing_sqft_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_pricing_sqft_updated_at BEFORE UPDATE ON pricing_square_foota |
 | `processing_cases` | `trg_processing_cases_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_processing_cases_updated_at BEFORE UPDATE ON processing_cases |
+| `processing_commit_attempts` | `trg_processing_commit_attempts_append_only` | DELETE BEFORE | CREATE TRIGGER trg_processing_commit_attempts_append_only BEFORE DELETE OR UPDAT |
+| `processing_commit_attempts` | `trg_processing_commit_attempts_append_only` | UPDATE BEFORE | CREATE TRIGGER trg_processing_commit_attempts_append_only BEFORE DELETE OR UPDAT |
+| `processing_commit_plans` | `trg_processing_commit_plans_immutable` | UPDATE BEFORE | CREATE TRIGGER trg_processing_commit_plans_immutable BEFORE UPDATE ON processing |
+| `processing_facts` | `trg_processing_facts_immutable` | DELETE BEFORE | CREATE TRIGGER trg_processing_facts_immutable BEFORE DELETE OR UPDATE ON process |
+| `processing_facts` | `trg_processing_facts_immutable` | UPDATE BEFORE | CREATE TRIGGER trg_processing_facts_immutable BEFORE DELETE OR UPDATE ON process |
+| `processing_plan_operations` | `trg_processing_plan_operations_immutable` | DELETE BEFORE | CREATE TRIGGER trg_processing_plan_operations_immutable BEFORE DELETE OR UPDATE  |
+| `processing_plan_operations` | `trg_processing_plan_operations_immutable` | UPDATE BEFORE | CREATE TRIGGER trg_processing_plan_operations_immutable BEFORE DELETE OR UPDATE  |
+| `program_offering_variants` | `program_offering_variants_updated_at` | UPDATE BEFORE | CREATE TRIGGER program_offering_variants_updated_at BEFORE UPDATE ON program_off |
+| `program_offerings` | `program_offerings_updated_at` | UPDATE BEFORE | CREATE TRIGGER program_offerings_updated_at BEFORE UPDATE ON program_offerings F |
 | `quotes` | `trg_quotes_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_quotes_updated_at BEFORE UPDATE ON quotes FOR EACH ROW EXECUT |
 | `record_drawer_layouts` | `trg_record_drawer_layouts_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_record_drawer_layouts_updated_at BEFORE UPDATE ON record_draw |
 | `recurrence_plans` | `trg_recurrence_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_recurrence_updated_at BEFORE UPDATE ON recurrence_plans FOR E |
+| `resolved_obligations` | `trg_resolved_obligations_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_resolved_obligations_updated_at BEFORE UPDATE ON resolved_obl |
 | `role_definitions` | `trg_role_definitions_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_role_definitions_updated_at BEFORE UPDATE ON role_definitions |
 | `role_permission_grants` | `trg_role_permission_grants_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_role_permission_grants_updated_at BEFORE UPDATE ON role_permi |
 | `schedule_assignments` | `trg_schedule_assignments_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_schedule_assignments_updated_at BEFORE UPDATE ON schedule_ass |

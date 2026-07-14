@@ -1,6 +1,8 @@
 # Processing Identity Resolution — Data Model (V1, refined)
 
-**Baseline:** `origin/staging` @ `65afc8527`. **Design only — no migrations authored.** Evidence: **[C]** confirmed, **[P]** proposed. Reflects the frozen decisions ([open-decisions](processing-identity-resolution-open-decisions.md)).
+**Status:** **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
+
+**Design baseline:** `origin/staging` @ `65afc8527`. The seven-table model is implemented by migrations `20260716130000` through `20260717130000`, with D4/D5 source-kind and D2/RLS hardening migrations through `20260718140000`. Generated column, constraint, index, function, trigger, and policy detail lives in `docs/schema/`; this artifact owns the conceptual model and V1 decisions. Evidence: **[C]** confirmed, **[P]** design-time proposal.
 
 **Refinement stance.** The prior draft proposed 13 new `processing_*` tables. That is premature proliferation. This revision **folds to 7 typed tables** — typed where state is durable, queryable, business-critical, or audit lineage; **governed JSON** where the shape is intentionally flexible (candidate/signal breakdowns, mappings, per-op results). Rule: *durable/queryable/audited → table; flexible/derived → JSON.*
 
@@ -49,7 +51,7 @@
 
 ---
 
-## 3. ERD (proposed)
+## 3. ERD (implemented V1 conceptual model)
 
 ```mermaid
 erDiagram
@@ -83,13 +85,13 @@ All are org-scoped, RLS via `has_org_role(org_id, …)` + `service_role` bypass 
 
 | Table | Responsibility | Key columns | Keys / uniqueness | Mutability | Idempotency | Retention | Phase gate |
 |---|---|---|---|---|---|---|---|
-| **processing_facts** | One extracted+normalized value with evidence | `id, org_id, case_id, source_id, fact_type, raw_value, normalized_value, confidence, validation_state, evidence(jsonb), role_hint, produced_by, extractor_version, generation_id, corrected_from(id?), created_at` | PK id; idx(case_id, generation_id) | **immutable**; correction = new row | per `generation_id` | `retention_class` (purge with case) | **Foundation** |
-| **processing_resolutions** | One subject + its candidates + decision | `id, org_id, case_id, generation_id, subject_role, provisional{name,emails[],phones[],dob}(jsonb), candidates(jsonb: [{matched_type,matched_id,band,score,signals[],contradictions[],reasons[]}]), decision_action, selected_candidate_id?, decided_by, operator_id?, policy_version?, created_at` | PK id; idx(case_id); idx(selected_candidate matched_id) | mutable until plan built | per `generation_id` | with case | **Pre-shadow** |
-| **processing_commit_plans** | Versioned immutable diff | `id, org_id, case_id, version, content_hash, requires_approval, requires_privileged_approval, reversible, built_at, superseded_by?` | PK id; unique(case_id, version); idx(case_id) | **immutable**; new version supersedes | version+hash | long-retain (audit) | **Pre-commit** |
-| **processing_plan_operations** | One typed op → semantic command | `id, org_id, plan_id, op_kind, command_key, target_type, target_id?, before(jsonb), after(jsonb), depends_on(uuid[]), atomic_group?, precondition_record_version?, compensation(jsonb?), op_order, resolution_id?, mapping(jsonb?)` | PK id; idx(plan_id, op_order) | **immutable** in plan | plan-scoped | with plan | **Pre-commit** |
-| **processing_approvals** | Approver bound to one plan version | `id, org_id, case_id, plan_id, plan_content_hash, approver_id, approval_kind(standard/privileged), decision(approved/declined), decided_at` | PK id; idx(plan_id) | **immutable**; void if plan superseded | — | long-retain (audit) | **Pre-commit** |
-| **processing_commit_attempts** | One execution run + per-op results | `id, org_id, case_id, plan_id, attempt_no, outcome(committed/partial/failed), operations(jsonb: op_id→{status,record_id,mutation_id,error}), compensation(jsonb), started_at, finished_at` | PK id; unique(plan_id, attempt_no) | **append-only** | attempt_no | long-retain (audit) | **Pre-commit** |
-| **processing_exceptions** | Operator-actionable blocker/duplicate/partial | `id, org_id, case_id, exception_type(warning/blocker/conflict/duplicate/merge_candidate/stale_plan/partial_commit), severity, code, message, subject_ref?(jsonb), evidence_ids(uuid[]), resolved_at?, created_at` | PK id; idx(org_id, exception_type, resolved_at) | append; resolvable | — | with case | **Pre-commit** |
+| **processing_facts** | One extracted+normalized value with evidence | `id, org_id, case_id, source_id, subject_ref, fact_type, semantic_key, raw_value, normalized_value, data_type, extraction_method, evidence, extraction_confidence, validation_state, mapping_state, role_hint, produced_by, extractor_version, generation_id, corrected_from, retention_class, created_at` | PK; case/generation, org/case, subject indexes | update/delete guarded; correction = new row | generation + source lineage | first-class class | **B2** |
+| **processing_resolutions** | One subject + candidates + decision | `id, org_id, case_id, generation_id, input_facts_hash, subject_ref, subject_role, provisional, candidates, decision_action, selected_candidate_id, decided_by, operator_id, policy_version, resolver_version, stale_at, superseded_by, retention_class, created_at` | unique(case, subject, generation); case/input-hash indexes | decision/supersede lifecycle | generation + facts hash | first-class class | **B3** |
+| **processing_commit_plans** | Versioned immutable diff | `id, org_id, case_id, version, content_hash, source_resolution_versions, preconditions, atomic_groups, downstream_effect_preview, requires_approval, requires_privileged_approval, reversible, status, built_at, superseded_by, superseded_at, retention_class, created_at` | unique(case, version); case index | guarded; only supersede lifecycle may change | version + hash | first-class class | **D1** |
+| **processing_plan_operations** | One typed op → semantic command | `id, org_id, plan_id, op_id, op_order, op_kind, command_key, command_version, target_type, target_id, payload, before_snapshot, after_values, reason, evidence_refs, resolution_refs, risk, depends_on, atomic_group, precondition_record_version, included, optional, reversibility, expected_side_effects, mapping, created_at` | unique(plan, op_id); plan index | update/delete guarded | plan + op id | with plan | **D1** |
+| **processing_approvals** | Approver bound to one exact plan | `id, org_id, case_id, plan_id, plan_version, plan_content_hash, approving_actor, approval_authority, decision, included_operation_ids, approved_at, invalidated_at, invalidation_reason, retention_class, created_at` | one active approval per plan; case/plan indexes | append/invalidate through service | plan version + hash | first-class class | **D1** |
+| **processing_commit_attempts** | One execution run + per-op results | `id, org_id, case_id, plan_id, plan_version, plan_content_hash, attempt_no, execution_idempotency_key, actor_id, outcome, operations, compensation, events, preflight_failures, retention_class, started_at, finished_at, created_at` | unique(plan, attempt); idempotency/case indexes | update/delete guarded | execution key + attempt | first-class class | **D2** |
+| **processing_exceptions** | Operator-actionable blocker/duplicate/partial | `id, org_id, case_id, exception_type, severity, code, message, subject_ref, evidence_ids, resolved_at, created_at` | open-exception index | append; resolvable | code/case semantics | with case | **D2** |
 
 **Deferred (Phase F):** `identity_merges` — `id, org_id, source_entity_type, source_entity_id, target_entity_id, merged_by, merged_at, reversal_of?, alias_active`; append; alias redirect; permanent retention.
 
@@ -109,12 +111,10 @@ All are org-scoped, RLS via `has_org_role(org_id, …)` + `service_role` bypass 
 | `persons` normalized cols + non-unique idx; `org_id` FK | ✅ | | | |
 | `processing_facts` | ✅ | | | |
 | `processing_resolutions` | | ✅ | | |
-| `form_submissions.submission_idempotency_key` | | ✅ | | |
 | `processing_commit_plans` / `_plan_operations` | | | ✅ | |
 | `processing_approvals` / `_commit_attempts` / `_exceptions` | | | ✅ | |
-| `customer_members` natural-key unique (after de-dup) | | | ✅ | |
-| `opportunities`/`workflow_events` idempotency keys | | | ✅ | |
-| retire global `contacts` uniques | | | (Phase E) | |
+| Additional source-specific idempotency constraints | | | | Future adapters |
+| retire global `contacts` uniques | | | | Future compatibility retirement |
 | `identity_merges` | | | | Phase F |
 
 **Not required in V1:** separate `processing_subjects`/`candidates`/`signals`/`recommendations`/`mappings` tables (folded); OCR bbox columns (reserved in `evidence` jsonb, unpopulated — no OCR **[C]**); DCP field-catalog re-model (reuse `PROCESSING_BUILDER_CANONICAL_FIELDS`/`systemFieldRegistry` **[C]**).
@@ -123,10 +123,10 @@ All are org-scoped, RLS via `has_org_role(org_id, …)` + `service_role` bypass 
 
 ## 6. Constraints, RLS, retention summary
 
-- **Uniqueness (Decision C):** NO person-level email/phone unique; non-unique normalized indexes for generation; `customer_members` natural-key unique; org-scoped idempotency keys on opportunities/submissions/events; retire global `contacts` uniques.
+- **Uniqueness (Decision C):** no person-level email/phone unique. V1 adds case-source idempotency, case/subject/generation resolution uniqueness, case/version plan uniqueness, plan/op uniqueness, one active approval per plan, and plan/attempt uniqueness. Additional source constraints and global `contacts` cleanup remain future work.
 - **RLS:** all `processing_*` via `has_org_role` + service bypass; B0 fixes (`persons.org_id` FK, org-scope `admin_ops_full_access`) are prerequisites.
-- **Immutability triggers:** `processing_facts`, `processing_commit_plans`, `processing_plan_operations`, `processing_approvals`, `processing_commit_attempts`.
-- **Retention:** governed by **retention classes** (§7), not one global window. `retention_class` is a **first-class column from the foundation**; the purge job that enforces it is a later phase. No retention model exists today **[C]**.
+- **Immutability triggers:** facts, plan operations, and commit attempts reject update/delete; Commit Plans reject material update while allowing supersede lifecycle fields. Approval invalidation is service-owned and constrained to one active approval per plan.
+- **Retention:** governed by **retention classes** (§7), not one global window. `retention_class` is a first-class column; the purge job that enforces it is future work.
 
 ---
 

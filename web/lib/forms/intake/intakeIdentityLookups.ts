@@ -7,7 +7,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { phoneLookupVariants } from "./intakePersonMatch";
+import { phoneLookupVariantsCompat as phoneLookupVariants } from "@/lib/identity";
 
 export async function listPersonIdsByEmail(
     supabase: SupabaseClient,

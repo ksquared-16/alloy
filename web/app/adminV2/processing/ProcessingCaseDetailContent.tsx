@@ -17,6 +17,7 @@ import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveS
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
 import ReviewDecideCard, { DECISION_TO_ACTION, type RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
 import ClassificationPanel from "@/app/adminV2/processing/ClassificationPanel";
+import IdentityReviewPanel from "@/app/adminV2/processing/IdentityReviewPanel";
 import type { StoredProcessingExtraction } from "@/lib/pos/processingCase/extraction/types";
 import { isExtractionStale } from "@/lib/pos/processingCase/extraction/processingCaseExtractionDb";
 import type { StoredDocumentFormPreview } from "@/lib/pos/processingCase/structure/types";
@@ -705,6 +706,9 @@ export default function ProcessingCaseDetailContent({
 
                 {/* Core POS moment: what Alloy understood + what it recommends */}
                 {!isClosed ? <ReviewDecideCard view={rec} loading={recLoading} /> : null}
+
+                {/* D3 — identity review → plan → approval → explicit commit (canonical operator workflow). */}
+                <IdentityReviewPanel caseId={caseId} />
 
                 <section className="mb-5">
                     <Eyebrow>Evidence</Eyebrow>

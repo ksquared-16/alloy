@@ -1,41 +1,32 @@
 /**
  * Pure helpers for safer person matching (Card 8). DB queries live in applyFormIntakeSafe.
+ * Normalization delegates to `lib/identity` compatibility adapters (B1a).
  */
 
+import {
+    normalizeIntakeEmailCompat,
+    normalizeIntakePhoneCompat,
+    normalizeNamePartCompat,
+    phoneLookupVariantsCompat,
+} from "@/lib/identity";
+
 export function normalizeIntakeEmail(email: string | null | undefined): string | null {
-    if (typeof email !== "string") return null;
-    const t = email.trim().toLowerCase();
-    return t.length ? t : null;
+    return normalizeIntakeEmailCompat(email);
 }
 
 /**
- * Digits-only canonical for intake matching + inserts.
+ * Digits-only form for intake matching + inserts (legacy; not E.164).
  * US: strips leading country code 1 when the number is 11 digits.
  */
 export function normalizeIntakePhone(phone: string | null | undefined): string | null {
-    if (typeof phone !== "string") return null;
-    const digits = phone.replace(/\D/g, "");
-    if (!digits.length) return null;
-    if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
-    return digits;
+    return normalizeIntakePhoneCompat(phone);
 }
 
 /**
  * Exact-match variants for `persons.phone` lookups — CRM rows may store formatted strings.
  */
 export function phoneLookupVariants(canonicalDigits: string): string[] {
-    const out = new Set<string>();
-    if (!canonicalDigits.length) return [];
-    out.add(canonicalDigits);
-    if (canonicalDigits.length === 10) {
-        const c = canonicalDigits;
-        out.add(`+1${c}`);
-        out.add(`1${c}`);
-        out.add(`(${c.slice(0, 3)}) ${c.slice(3, 6)}-${c.slice(6)}`);
-        out.add(`${c.slice(0, 3)}-${c.slice(3, 6)}-${c.slice(6)}`);
-        out.add(`${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6)}`);
-    }
-    return [...out];
+    return phoneLookupVariantsCompat(canonicalDigits);
 }
 
 export type PersonMatchDecision =
@@ -46,7 +37,7 @@ export type PersonMatchDecision =
     | { kind: "no_match" };
 
 function normalizeNamePart(value: string | null | undefined): string {
-    return typeof value === "string" ? value.trim().toLowerCase().replace(/\s+/g, " ") : "";
+    return normalizeNamePartCompat(value);
 }
 
 /** True when submitted guardian name exactly matches the matched person record (case-insensitive). */

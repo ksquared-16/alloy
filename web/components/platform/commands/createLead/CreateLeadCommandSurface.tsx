@@ -31,6 +31,8 @@ import {
 import { executeCreateLeadCommand } from "@/lib/platform/commands/createLead/executeCreateLeadCommand";
 import {
     buildCreateLeadSuccess,
+    createLeadProcessingCaseId,
+    isCreateLeadProcessingReview,
     type CreateLeadSuccess,
 } from "@/lib/platform/commands/createLead/createLeadSuccess";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
@@ -92,6 +94,13 @@ export function CreateLeadCommandSurface(props: CreateLeadCommandSurfaceProps) {
                             "I couldn’t create the lead. Review the information and try again."
                     );
                 }
+                if (isCreateLeadProcessingReview(result)) {
+                    const processingCaseId = createLeadProcessingCaseId(result);
+                    if (!processingCaseId) {
+                        throw new Error("Processing review started but no case id was returned.");
+                    }
+                    return { mode: "processing_review" as const, processing_case_id: processingCaseId };
+                }
                 const success = buildCreateLeadSuccess({ result, knownInputs: payload });
                 if (!success.createdRecordId) {
                     throw new Error("Lead was created but no opportunity id was returned.");
@@ -108,7 +117,7 @@ export function CreateLeadCommandSurface(props: CreateLeadCommandSurfaceProps) {
                     workUnitId: success.workUnitId,
                 });
                 onRefresh?.(success);
-                return { opportunity_id: success.createdRecordId };
+                return { mode: "committed" as const, opportunity_id: success.createdRecordId };
             }}
             onCreated={(opportunityId) =>
                 onOpenCreatedRecord(opportunityId, lastSuccessRef.current?.focusPanelHref)

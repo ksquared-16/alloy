@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **RLS policy count:** 581
+**Generated:** 2026-07-13 · **RLS policy count:** 709
 
 ## Posture
 
@@ -293,12 +293,113 @@
 |--------|---------|-------|--------------------------------|
 | `admin_ops_full_access` | ALL | {public} | — |
 
+### `commercial_addons`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `commercial_addons_all_service_role` | ALL | {service_role} | — |
+| `commercial_addons_delete_org` | DELETE | {authenticated} | — |
+| `commercial_addons_insert_org` | INSERT | {authenticated} | — |
+| `commercial_addons_select_org` | SELECT | {authenticated} | — |
+| `commercial_addons_update_org` | UPDATE | {authenticated} | — |
+
+### `commercial_categories`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `commercial_categories_all_service_role` | ALL | {service_role} | — |
+| `commercial_categories_delete_org` | DELETE | {authenticated} | — |
+| `commercial_categories_insert_org` | INSERT | {authenticated} | — |
+| `commercial_categories_select_org` | SELECT | {authenticated} | — |
+| `commercial_categories_update_org` | UPDATE | {authenticated} | — |
+
+### `commercial_deposits`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `commercial_deposits_all_service_role` | ALL | {service_role} | — |
+| `commercial_deposits_delete_org` | DELETE | {authenticated} | — |
+| `commercial_deposits_insert_org` | INSERT | {authenticated} | — |
+| `commercial_deposits_select_org` | SELECT | {authenticated} | — |
+| `commercial_deposits_update_org` | UPDATE | {authenticated} | — |
+
+### `commercial_fees`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `commercial_fees_all_service_role` | ALL | {service_role} | — |
+| `commercial_fees_delete_org` | DELETE | {authenticated} | — |
+| `commercial_fees_insert_org` | INSERT | {authenticated} | — |
+| `commercial_fees_select_org` | SELECT | {authenticated} | — |
+| `commercial_fees_update_org` | UPDATE | {authenticated} | — |
+
+### `commercial_policies`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `commercial_policies_all_service_role` | ALL | {service_role} | — |
+| `commercial_policies_delete_org` | DELETE | {authenticated} | — |
+| `commercial_policies_insert_org` | INSERT | {authenticated} | — |
+| `commercial_policies_select_org` | SELECT | {authenticated} | — |
+| `commercial_policies_update_org` | UPDATE | {authenticated} | — |
+
+### `commercial_products`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `commercial_products_all_service_role` | ALL | {service_role} | — |
+| `commercial_products_delete_org` | DELETE | {authenticated} | — |
+| `commercial_products_insert_org` | INSERT | {authenticated} | — |
+| `commercial_products_select_org` | SELECT | {authenticated} | — |
+| `commercial_products_update_org` | UPDATE | {authenticated} | — |
+
+### `commercial_revenue_categories`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `commercial_revenue_categories_all_service_role` | ALL | {service_role} | — |
+| `commercial_revenue_categories_delete_org` | DELETE | {authenticated} | — |
+| `commercial_revenue_categories_insert_org` | INSERT | {authenticated} | — |
+| `commercial_revenue_categories_select_org` | SELECT | {authenticated} | — |
+| `commercial_revenue_categories_update_org` | UPDATE | {authenticated} | — |
+
+### `commercial_tuition_rates`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `commercial_tuition_rates_all_service_role` | ALL | {service_role} | — |
+| `commercial_tuition_rates_delete_org` | DELETE | {authenticated} | — |
+| `commercial_tuition_rates_insert_org` | INSERT | {authenticated} | — |
+| `commercial_tuition_rates_select_org` | SELECT | {authenticated} | — |
+| `commercial_tuition_rates_update_org` | UPDATE | {authenticated} | — |
+
 ### `communication_delivery_events`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
 | `communication_delivery_events_select_org` | SELECT | {authenticated} | — |
 | `communication_delivery_events_service_all` | ALL | {authenticated} | — |
+
+### `communication_identities`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_identities_select_org` | SELECT | {authenticated} | — |
+| `communication_identities_service_all` | ALL | {authenticated} | — |
+
+### `communication_identity_grants`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_identity_grants_select_org` | SELECT | {authenticated} | — |
+| `communication_identity_grants_service_all` | ALL | {authenticated} | — |
+
+### `communication_identity_location_bindings`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_identity_loc_bindings_select_org` | SELECT | {authenticated} | — |
+| `communication_identity_loc_bindings_service_all` | ALL | {authenticated} | — |
 
 ### `communication_message_reads`
 
@@ -334,6 +435,13 @@
 |--------|---------|-------|--------------------------------|
 | `communication_preferences_select_org` | SELECT | {authenticated} | — |
 | `communication_preferences_service_all` | ALL | {authenticated} | — |
+
+### `communication_provider_accounts`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `communication_provider_accounts_select_org` | SELECT | {authenticated} | — |
+| `communication_provider_accounts_service_all` | ALL | {authenticated} | — |
 
 ### `communication_provider_bindings`
 
@@ -388,6 +496,24 @@
 | `config_layout_assist_proposals_service_all` | ALL | {service_role} | — |
 | `config_layout_assist_proposals_update_admin` | UPDATE | {authenticated} | — |
 
+### `consumption_event_types`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `consumption_event_types_all_service_role` | ALL | {service_role} | — |
+| `consumption_event_types_insert_org` | INSERT | {authenticated} | — |
+| `consumption_event_types_select_authenticated` | SELECT | {authenticated} | — |
+| `consumption_event_types_update_org` | UPDATE | {authenticated} | — |
+
+### `consumption_events`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `consumption_events_all_service_role` | ALL | {service_role} | — |
+| `consumption_events_insert_org` | INSERT | {authenticated} | — |
+| `consumption_events_select_org` | SELECT | {authenticated} | — |
+| `consumption_events_update_org` | UPDATE | {authenticated} | — |
+
 ### `contact_tags`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -398,7 +524,8 @@
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
-| `admin_ops_full_access` | ALL | {public} | — |
+| `contacts_all_service_role` | ALL | {service_role} | — |
+| `contacts_delete_by_org_role` | DELETE | {authenticated} | — |
 | `contacts_insert_by_org_role` | INSERT | {public} | — |
 | `contacts_select_by_org_role` | SELECT | {public} | — |
 | `contacts_update_by_org_role` | UPDATE | {public} | — |
@@ -483,7 +610,11 @@
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
-| `admin_ops_full_access` | ALL | {public} | — |
+| `customers_all_service_role` | ALL | {service_role} | — |
+| `customers_delete_org` | DELETE | {authenticated} | — |
+| `customers_insert_org` | INSERT | {authenticated} | — |
+| `customers_select_org` | SELECT | {authenticated} | — |
+| `customers_update_org` | UPDATE | {authenticated} | — |
 
 ### `departments`
 
@@ -641,6 +772,36 @@
 | `field_values_insert_by_org_role` | INSERT | {public} | — |
 | `field_values_select_by_org_role` | SELECT | {public} | — |
 | `field_values_update_by_org_role` | UPDATE | {public} | — |
+
+### `financial_charge_templates`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `financial_charge_templates_all_service_role` | ALL | {service_role} | — |
+| `financial_charge_templates_delete_org` | DELETE | {authenticated} | — |
+| `financial_charge_templates_insert_org` | INSERT | {authenticated} | — |
+| `financial_charge_templates_select_org` | SELECT | {authenticated} | — |
+| `financial_charge_templates_update_org` | UPDATE | {authenticated} | — |
+
+### `financial_policies`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `financial_policies_all_service_role` | ALL | {service_role} | — |
+| `financial_policies_delete_org` | DELETE | {authenticated} | — |
+| `financial_policies_insert_org` | INSERT | {authenticated} | — |
+| `financial_policies_select_org` | SELECT | {authenticated} | — |
+| `financial_policies_update_org` | UPDATE | {authenticated} | — |
+
+### `financial_services`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `financial_services_all_service_role` | ALL | {service_role} | — |
+| `financial_services_delete_org` | DELETE | {authenticated} | — |
+| `financial_services_insert_org` | INSERT | {authenticated} | — |
+| `financial_services_select_org` | SELECT | {authenticated} | — |
+| `financial_services_update_org` | UPDATE | {authenticated} | — |
 
 ### `form_definition_versions`
 
@@ -936,6 +1097,12 @@
 | `metric_visualizations_all_service_role` | ALL | {service_role} | — |
 | `metric_visualizations_select_authenticated` | SELECT | {authenticated} | — |
 
+### `mutation_events`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `mutation_events_service_role_only` | ALL | {public} | — |
+
 ### `operational_tasks`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -949,19 +1116,31 @@
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
-| `admin_ops_full_access` | ALL | {public} | — |
+| `opportunities_all_service_role` | ALL | {service_role} | — |
+| `opportunities_delete_org` | DELETE | {authenticated} | — |
+| `opportunities_insert_org` | INSERT | {authenticated} | — |
+| `opportunities_select_org` | SELECT | {authenticated} | — |
+| `opportunities_update_org` | UPDATE | {authenticated} | — |
 
 ### `opportunity_customer_members`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
-| `admin_ops_full_access` | ALL | {public} | — |
+| `opportunity_customer_members_all_service_role` | ALL | {service_role} | — |
+| `opportunity_customer_members_delete_org` | DELETE | {authenticated} | — |
+| `opportunity_customer_members_insert_org` | INSERT | {authenticated} | — |
+| `opportunity_customer_members_select_org` | SELECT | {authenticated} | — |
+| `opportunity_customer_members_update_org` | UPDATE | {authenticated} | — |
 
 ### `opportunity_persons`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
-| `admin_ops_full_access` | ALL | {public} | — |
+| `opportunity_persons_all_service_role` | ALL | {service_role} | — |
+| `opportunity_persons_delete_org` | DELETE | {authenticated} | — |
+| `opportunity_persons_insert_org` | INSERT | {authenticated} | — |
+| `opportunity_persons_select_org` | SELECT | {authenticated} | — |
+| `opportunity_persons_update_org` | UPDATE | {authenticated} | — |
 
 ### `opportunity_tags`
 
@@ -1043,6 +1222,22 @@
 |--------|---------|-------|--------------------------------|
 | `permissions_all_service_role` | ALL | {public} | — |
 | `permissions_select_authenticated` | SELECT | {authenticated} | — |
+
+### `person_child_relationship_roles`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `person_child_relationship_roles_select_org` | SELECT | {authenticated} | — |
+| `person_child_relationship_roles_service_role_all` | ALL | {service_role} | — |
+| `person_child_relationship_roles_write_org` | ALL | {authenticated} | — |
+
+### `person_child_relationships`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `person_child_relationships_select_org` | SELECT | {authenticated} | — |
+| `person_child_relationships_service_role_all` | ALL | {service_role} | — |
+| `person_child_relationships_write_org` | ALL | {authenticated} | — |
 
 ### `person_locations`
 
@@ -1226,6 +1421,20 @@
 | `pricing_sqft_read` | SELECT | {public} | — |
 | `pricing_sqft_write` | ALL | {public} | — |
 
+### `process_instances`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `process_instances_select_org` | SELECT | {authenticated} | — |
+| `process_instances_write_org` | ALL | {authenticated} | — |
+
+### `processing_approvals`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `processing_approvals_all_service_role` | ALL | {service_role} | — |
+| `processing_approvals_select_org` | SELECT | {authenticated} | — |
+
 ### `processing_case_sources`
 
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
@@ -1243,6 +1452,71 @@
 | `processing_cases_insert_by_org_role` | INSERT | {authenticated} | — |
 | `processing_cases_select_by_org_role` | SELECT | {authenticated} | — |
 | `processing_cases_update_by_org_role` | UPDATE | {authenticated} | — |
+
+### `processing_commit_attempts`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `processing_commit_attempts_all_service_role` | ALL | {service_role} | — |
+| `processing_commit_attempts_select_org` | SELECT | {authenticated} | — |
+
+### `processing_commit_plans`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `processing_commit_plans_all_service_role` | ALL | {service_role} | — |
+| `processing_commit_plans_select_org` | SELECT | {authenticated} | — |
+
+### `processing_exceptions`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `processing_exceptions_all_service_role` | ALL | {service_role} | — |
+| `processing_exceptions_select_org` | SELECT | {authenticated} | — |
+
+### `processing_facts`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `processing_facts_all_service_role` | ALL | {service_role} | — |
+| `processing_facts_insert_org` | INSERT | {authenticated} | — |
+| `processing_facts_select_org` | SELECT | {authenticated} | — |
+
+### `processing_plan_operations`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `processing_plan_operations_all_service_role` | ALL | {service_role} | — |
+| `processing_plan_operations_select_org` | SELECT | {authenticated} | — |
+
+### `processing_resolutions`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `processing_resolutions_all_service_role` | ALL | {service_role} | — |
+| `processing_resolutions_insert_org` | INSERT | {authenticated} | — |
+| `processing_resolutions_select_org` | SELECT | {authenticated} | — |
+| `processing_resolutions_update_org` | UPDATE | {authenticated} | — |
+
+### `program_offering_variants`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `program_offering_variants_all_service_role` | ALL | {service_role} | — |
+| `program_offering_variants_delete_org` | DELETE | {public} | — |
+| `program_offering_variants_insert_org` | INSERT | {public} | — |
+| `program_offering_variants_select_org` | SELECT | {public} | — |
+| `program_offering_variants_update_org` | UPDATE | {public} | — |
+
+### `program_offerings`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `program_offerings_all_service_role` | ALL | {service_role} | — |
+| `program_offerings_delete_org` | DELETE | {authenticated} | — |
+| `program_offerings_insert_org` | INSERT | {authenticated} | — |
+| `program_offerings_select_org` | SELECT | {authenticated} | — |
+| `program_offerings_update_org` | UPDATE | {authenticated} | — |
 
 ### `quotes`
 
@@ -1289,6 +1563,15 @@
 | Policy | Command | Roles | USING / WITH CHECK (truncated) |
 |--------|---------|-------|--------------------------------|
 | `admin_ops_full_access` | ALL | {public} | — |
+
+### `resolved_obligations`
+
+| Policy | Command | Roles | USING / WITH CHECK (truncated) |
+|--------|---------|-------|--------------------------------|
+| `resolved_obligations_all_service_role` | ALL | {service_role} | — |
+| `resolved_obligations_insert_org` | INSERT | {authenticated} | — |
+| `resolved_obligations_select_org` | SELECT | {authenticated} | — |
+| `resolved_obligations_update_org` | UPDATE | {authenticated} | — |
 
 ### `role_definitions`
 

@@ -1,6 +1,8 @@
 # Processing Identity Resolution — Test Strategy
 
-**Baseline:** `origin/staging` @ `65afc8527`. Repo test stack: vitest (`web/vitest.config.ts`) + Playwright (`web/playwright.config.ts`); Python `backend/tests/`. **Repo caveat:** the vitest baseline is ~750 red — gate every slice on `typecheck:build` green + *new* failures only, using an isolated-worktree regression diff (repo convention).
+**Status:** **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
+
+**Design baseline:** `origin/staging` @ `65afc8527`. Final local certification uses an isolated Supabase stack, a fresh 263-migration replay, 17 database checks, real authenticated JWT RLS tests, real executor RPC integration, serial Processing suites, production typecheck, test typecheck, and production build. Browser smoke remains a staging-reconciliation activity because this worktree contains no Processing Playwright specs.
 
 **Determinism mandate:** because extraction/matching are deterministic (no OCR/LLM/AI in the commit path), every unit and scenario test is fully deterministic and reproducible — no model mocking required for the core engine.
 
@@ -66,12 +68,12 @@ Each is a deterministic end-to-end fixture (envelope → resolution → plan →
 24. **Cross-tenant collision attempt** → envelope org A referencing org B record → candidate generation/commit denied by org scope + RLS.
 25. **Source replay with same idempotency key** → no second case, no second mutation.
 
-## 4. Shadow-mode comparison tests
+## 4. Historical C1 comparison tests
 
-- **Harness:** for a corpus of real (anonymized) form submissions, run legacy `applyFormIntakeSafe` outcome and the engine's proposed plan side-by-side **without executing** the engine plan.
+- **Harness:** C1 compared legacy outcomes with canonical proposals before D5 cutover.
 - **Assert:** for each submission, record `{legacy_outcome, proposed_candidates, proposed_recommendation, proposed_plan}` and a divergence class: `agree | engine-prevents-duplicate | engine-would-create-duplicate | different-link | different-review`.
 - **Gates (Phase C exit):** `engine-would-create-duplicate == 0`; `agree + engine-prevents-duplicate ≥ target%`; every `different-*` triaged with a rule/normalizer explanation.
-- **No production effect:** shadow writes only `processing_*` proposal rows (never identity tables); a kill-flag discards them.
+- **Current authority:** comparison helpers are audit-only. Public forms now use Processing exclusively; `applyFormIntakeSafe` is throw-only and no kill/source flag exists.
 
 ## 5. Regression & safety nets
 
@@ -81,13 +83,11 @@ Each is a deterministic end-to-end fixture (envelope → resolution → plan →
 - **Backfill validation:** the D0 de-duplication backfill emits a collision report; tests assert no forced merges (collisions quarantined, not auto-resolved).
 - **Performance:** import-scale (Phase F) — candidate-generation latency under N-record batch within budget; alarm on p95 regression.
 
-## 6. Validation commands (per slice)
+## 6. Final certification commands
 
 ```
-cd web && npm run typecheck:build          # must pass every slice
-cd web && npx vitest run tests/identity     # B1
-cd web && npx vitest run tests/processing   # B3, C1, D1 (plan), D2 (executor)
-cd web && npx vitest run tests/commands     # D0
-cd web && npx playwright test <processing>  # D3 review (+ user-owned live walkthrough)
+./scripts/processing/processingIdentityCertStack.sh reset
+npm run cert:processing-identity-full
 ```
-Gate on `typecheck:build` + no *new* vitest failures vs an isolated-worktree baseline diff (repo convention; ~750 pre-existing reds are not this sprint's).
+
+The orchestrator runs the database certification, serial Processing tests, `npm run typecheck`, `npm run typecheck:tests`, and `npm run build`. The promotion regression inventory is maintained in `processing-identity-resolution-regression-checklist.md`.

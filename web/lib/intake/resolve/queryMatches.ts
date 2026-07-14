@@ -60,12 +60,17 @@ export async function listPersonsByExactName(
     return (data ?? []) as PersonRecordSnapshot[];
 }
 
+/**
+ * Org-scoped child person pool by name. DOB is intentionally NOT applied at query
+ * time so same-name / null-DOB / conflicting-DOB children surface for review.
+ * Evaluation classifies DOB agreement.
+ */
 export async function listOrgChildPersonMatches(
     supabase: SupabaseClient,
     orgId: string,
     firstName: string,
     lastName: string,
-    dob: string | null,
+    _dob: string | null,
 ): Promise<PersonRecordSnapshot[]> {
     const first = trim(firstName);
     const last = trim(lastName);
@@ -79,9 +84,6 @@ export async function listOrgChildPersonMatches(
 
     if (last) {
         query = query.ilike("last_name", last);
-    }
-    if (dob) {
-        query = query.eq("date_of_birth", dob);
     }
     query = query.limit(15);
 
@@ -97,7 +99,24 @@ export type HouseholdChildMemberRow = {
     first_name?: string | null;
     last_name?: string | null;
     dob?: string | null;
+    display_name?: string | null;
 };
+
+/** Prefer structured name parts; fall back to splitting display_name. */
+export function memberNameParts(row: {
+    first_name?: string | null;
+    last_name?: string | null;
+    display_name?: string | null;
+}): { first_name: string | null; last_name: string | null } {
+    const first = trim(row.first_name);
+    const last = trim(row.last_name);
+    if (first || last) return { first_name: first || null, last_name: last || null };
+    const display = trim(row.display_name);
+    if (!display) return { first_name: null, last_name: null };
+    const parts = display.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return { first_name: parts[0]!, last_name: null };
+    return { first_name: parts[0]!, last_name: parts.slice(1).join(" ") };
+}
 
 export async function listHouseholdChildMembers(
     supabase: SupabaseClient,
@@ -106,7 +125,7 @@ export async function listHouseholdChildMembers(
 ): Promise<HouseholdChildMemberRow[]> {
     const { data, error } = await supabase
         .from("customer_members")
-        .select("id, person_id, customer_id, first_name, last_name, dob")
+        .select("id, person_id, customer_id, first_name, last_name, dob, display_name")
         .eq("org_id", orgId)
         .eq("customer_id", customerId)
         .eq("relationship", "child")
@@ -120,14 +139,17 @@ export async function listHouseholdChildMembers(
             first_name?: string | null;
             last_name?: string | null;
             dob?: string | null;
+            display_name?: string | null;
         };
+        const names = memberNameParts(r);
         return {
             person_id: r.person_id,
             customer_member_id: r.id,
             customer_id: r.customer_id,
-            first_name: r.first_name,
-            last_name: r.last_name,
+            first_name: names.first_name,
+            last_name: names.last_name,
             dob: r.dob,
+            display_name: r.display_name ?? null,
         };
     });
 }

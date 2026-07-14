@@ -51,7 +51,7 @@ describe("intakeWorkloadDiagnostics Test 2B", () => {
         const oneD = diagnostics.find((d) => d.id === TEST_1D);
 
         expect(oneC?.lane).toBe("needsReview");
-        expect(oneC?.headline).toContain("New enrollment inquiry created");
+        expect(oneC?.headline).toContain("New enrollment lead created");
         expect(oneD?.lane).toBe("recentlySubmitted");
         expect(oneD?.headline).toContain("Existing family matched");
 

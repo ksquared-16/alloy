@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-12 · **Column count:** 2568
+**Generated:** 2026-07-13 · **Column count:** 3098
 
 Columns for `public` schema tables, grouped alphabetically by table.
 
@@ -37,6 +37,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `is_active` | boolean | NO | true |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
+| `metadata` | jsonb | NO | '{}'::jsonb |
 
 ## `action_links`
 
@@ -387,6 +388,10 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `charge_category` | text | YES | — |
 | `billable_source_type` | text | YES | — |
 | `billable_source_id` | uuid | YES | — |
+| `occurs_on` | date | YES | — |
+| `billable_on` | date | YES | — |
+| `charge_template_id` | uuid | YES | — |
+| `service_id` | uuid | YES | — |
 
 ## `child_attendance_events`
 
@@ -534,6 +539,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `updated_by` | uuid | YES | — |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
+| `service_id` | uuid | YES | — |
 
 ## `childcare_rate_rules`
 
@@ -650,6 +656,174 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `position` | integer | NO | 0 |
 | `is_active` | boolean | NO | true |
 
+## `commercial_addons`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `location_id` | uuid | YES | — |
+| `program_key` | text | YES | — |
+| `name` | text | NO | — |
+| `description` | text | YES | — |
+| `addon_type` | text | NO | — |
+| `amount_cents` | integer | NO | — |
+| `cadence_key` | text | NO | — |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+| `effective_start` | date | YES | — |
+| `effective_end` | date | YES | — |
+| `revenue_category` | text | YES | — |
+| `package_unit_count` | integer | YES | — |
+| `package_unit_type` | text | YES | — |
+| `package_expires_days` | integer | YES | — |
+
+## `commercial_categories`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `key` | text | NO | — |
+| `label` | text | NO | — |
+| `sort_order` | integer | NO | 100 |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+
+## `commercial_deposits`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `location_id` | uuid | YES | — |
+| `program_key` | text | YES | — |
+| `name` | text | NO | — |
+| `description` | text | YES | — |
+| `amount_cents` | integer | NO | — |
+| `is_refundable` | boolean | NO | true |
+| `apply_to_balance` | boolean | NO | false |
+| `due_timing` | text | NO | 'at_enrollment'::text |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+| `effective_start` | date | YES | — |
+| `effective_end` | date | YES | — |
+| `revenue_category` | text | YES | — |
+
+## `commercial_fees`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `location_id` | uuid | YES | — |
+| `program_key` | text | YES | — |
+| `name` | text | NO | — |
+| `description` | text | YES | — |
+| `fee_type` | text | NO | — |
+| `amount_cents` | integer | NO | — |
+| `is_required` | boolean | NO | true |
+| `cadence_key` | text | YES | — |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+| `effective_start` | date | YES | — |
+| `effective_end` | date | YES | — |
+| `revenue_category` | text | YES | — |
+
+## `commercial_policies`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `scope_type` | text | NO | — |
+| `location_id` | uuid | YES | — |
+| `program_key` | text | YES | — |
+| `offering_id` | uuid | YES | — |
+| `variant_id` | uuid | YES | — |
+| `policy_type` | text | NO | — |
+| `label` | text | YES | — |
+| `description` | text | YES | — |
+| `value` | jsonb | NO | '{}'::jsonb |
+| `effective_start` | date | NO | '2000-01-01'::date |
+| `effective_end` | date | YES | — |
+| `is_active` | boolean | NO | true |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `commercial_products`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `location_id` | uuid | YES | — |
+| `program_key` | text | YES | — |
+| `name` | text | NO | — |
+| `description` | text | YES | — |
+| `commercial_type` | text | NO | — |
+| `category_id` | uuid | YES | — |
+| `amount_cents` | integer | NO | — |
+| `cadence_key` | text | YES | — |
+| `revenue_category` | text | YES | — |
+| `effective_start` | date | YES | — |
+| `effective_end` | date | YES | — |
+| `behavior` | jsonb | NO | '{}'::jsonb |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `source_table` | text | YES | — |
+| `source_id` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+| `revenue_category_id` | uuid | YES | — |
+
+## `commercial_revenue_categories`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `label` | text | NO | — |
+| `gl_code` | text | YES | — |
+| `sort_order` | integer | NO | 100 |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+| `mapped_gl_account_id` | uuid | YES | — |
+
+## `commercial_tuition_rates`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `location_id` | uuid | YES | — |
+| `rate_cents` | integer | NO | — |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+| `not_offered` | boolean | NO | false |
+| `cadence_key` | text | NO | — |
+| `payer_type` | text | NO | 'private_pay'::text |
+| `variant_id` | uuid | NO | — |
+| `effective_start` | date | YES | — |
+| `effective_end` | date | YES | — |
+| `revenue_category_id` | uuid | YES | — |
+
 ## `communication_delivery_events`
 
 | Column | Type | Nullable | Default |
@@ -669,6 +843,67 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `received_at` | timestamp with time zone | NO | now() |
 | `raw_payload` | jsonb | NO | '{}'::jsonb |
 | `metadata` | jsonb | NO | '{}'::jsonb |
+
+## `communication_identities`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `provider_account_id` | uuid | NO | — |
+| `channel` | text | NO | — |
+| `identity_type` | text | NO | — |
+| `canonical_address` | text | NO | — |
+| `normalized_address` | text | NO | — |
+| `display_name` | text | YES | — |
+| `inbound_enabled` | boolean | NO | true |
+| `outbound_enabled` | boolean | NO | true |
+| `verification_state` | text | NO | 'unverified'::text |
+| `status` | text | NO | 'active'::text |
+| `health_status` | text | NO | 'unknown'::text |
+| `capabilities` | jsonb | NO | '{}'::jsonb |
+| `provider_resource_ref` | text | YES | — |
+| `scope` | text | NO | 'tenant'::text |
+| `is_default_for_scope` | boolean | NO | false |
+| `legacy_binding_id` | uuid | YES | — |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `communication_identity_grants`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `identity_id` | uuid | NO | — |
+| `user_id` | uuid | NO | — |
+| `can_send` | boolean | NO | false |
+| `can_receive` | boolean | NO | false |
+| `can_configure` | boolean | NO | false |
+| `can_manage` | boolean | NO | false |
+| `can_override_default` | boolean | NO | false |
+| `can_use_across_locations` | boolean | NO | false |
+| `status` | text | NO | 'active'::text |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `communication_identity_location_bindings`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `identity_id` | uuid | NO | — |
+| `location_id` | uuid | NO | — |
+| `channel` | text | NO | — |
+| `priority` | integer | NO | 100 |
+| `is_default` | boolean | NO | false |
+| `inbound_routing_enabled` | boolean | NO | true |
+| `outbound_sending_enabled` | boolean | NO | true |
+| `status` | text | NO | 'active'::text |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
 
 ## `communication_message_reads`
 
@@ -734,6 +969,8 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `opened_at` | timestamp with time zone | YES | — |
 | `clicked_at` | timestamp with time zone | YES | — |
 | `replied_at` | timestamp with time zone | YES | — |
+| `communication_identity_id` | uuid | YES | — |
+| `communication_provider_account_id` | uuid | YES | — |
 
 ## `communication_preference_events`
 
@@ -763,6 +1000,26 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `source` | text | YES | — |
 | `method` | text | YES | — |
 | `updated_by_user_id` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `communication_provider_accounts`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `provider_type` | text | NO | — |
+| `display_label` | text | YES | — |
+| `status` | text | NO | 'active'::text |
+| `verification_state` | text | NO | 'unverified'::text |
+| `health_status` | text | NO | 'unknown'::text |
+| `secret_ref` | text | NO | 'unconfigured'::text |
+| `capabilities` | jsonb | NO | '{}'::jsonb |
+| `config` | jsonb | NO | '{}'::jsonb |
+| `provider_account_ref` | text | YES | — |
+| `legacy_binding_id` | uuid | YES | — |
+| `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
 
@@ -920,6 +1177,52 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `rejected_at` | timestamp with time zone | YES | — |
 | `failed_at` | timestamp with time zone | YES | — |
 | `rolled_back_at` | timestamp with time zone | YES | — |
+
+## `consumption_event_types`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | YES | — |
+| `event_key` | text | NO | — |
+| `label` | text | NO | — |
+| `source_family` | text | NO | — |
+| `description` | text | YES | — |
+| `charge_template_key` | text | YES | — |
+| `default_responsibility_key` | text | YES | — |
+| `is_active` | boolean | NO | true |
+| `effective_start` | date | NO | '2000-01-01'::date |
+| `effective_end` | date | YES | — |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `consumption_events`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `location_id` | uuid | YES | — |
+| `event_type_id` | uuid | YES | — |
+| `source_family` | text | NO | — |
+| `event_key` | text | NO | — |
+| `source_entity_type` | text | NO | — |
+| `source_entity_id` | uuid | NO | — |
+| `subject_type` | text | YES | — |
+| `subject_id` | uuid | YES | — |
+| `occurs_on` | date | NO | — |
+| `effective_on` | date | YES | — |
+| `status` | text | NO | 'recorded'::text |
+| `context` | jsonb | NO | '{}'::jsonb |
+| `idempotency_key` | text | NO | — |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+| `corrects_event_id` | uuid | YES | — |
 
 ## `contact_tags`
 
@@ -1138,7 +1441,6 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `vertical_id` | uuid | YES | — |
 | `name` | text | NO | — |
 | `customer_type` | text | YES | — |
-| `status` | text | NO | 'active'::text |
 | `stripe_customer_id` | text | YES | — |
 | `external_source` | text | YES | — |
 | `external_id` | text | YES | — |
@@ -1579,6 +1881,82 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
 
+## `financial_charge_templates`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `service_id` | uuid | YES | — |
+| `template_key` | text | NO | — |
+| `label` | text | NO | — |
+| `description` | text | YES | — |
+| `charge_category` | text | NO | — |
+| `trigger_type` | text | NO | — |
+| `trigger_key` | text | YES | — |
+| `amount_strategy` | text | NO | — |
+| `amount_cents` | bigint | YES | — |
+| `currency_code` | text | NO | 'USD'::text |
+| `occurs_on_strategy` | text | NO | 'now'::text |
+| `billable_on_strategy` | text | NO | 'immediate'::text |
+| `billable_offset_days` | integer | YES | — |
+| `default_gl_mapping_key` | text | YES | — |
+| `default_responsibility_key` | text | YES | — |
+| `review_required` | boolean | NO | false |
+| `is_active` | boolean | NO | true |
+| `effective_start` | date | NO | — |
+| `effective_end` | date | YES | — |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `financial_policies`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `scope_type` | text | NO | — |
+| `location_id` | uuid | YES | — |
+| `service_id` | uuid | YES | — |
+| `rate_plan_id` | uuid | YES | — |
+| `policy_type` | text | NO | — |
+| `label` | text | YES | — |
+| `description` | text | YES | — |
+| `value` | jsonb | NO | '{}'::jsonb |
+| `is_active` | boolean | NO | true |
+| `effective_start` | date | NO | — |
+| `effective_end` | date | YES | — |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+## `financial_services`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `service_key` | text | NO | — |
+| `label` | text | NO | — |
+| `service_type` | text | NO | — |
+| `unit` | text | YES | — |
+| `description` | text | YES | — |
+| `is_active` | boolean | NO | true |
+| `sort_order` | integer | NO | 100 |
+| `source_key` | text | NO | 'config'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
 ## `form_definition_versions`
 
 | Column | Type | Nullable | Default |
@@ -1678,6 +2056,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `operator_reviewed_at` | timestamp with time zone | YES | — |
 | `operator_reviewed_by_user_id` | uuid | YES | — |
 | `operator_review_notes` | text | YES | — |
+| `packet_instance_id` | uuid | YES | — |
 
 ## `form_public_links`
 
@@ -2249,6 +2628,26 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
 
+## `mutation_events`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `mutation_id` | uuid | NO | gen_random_uuid() |
+| `command_key` | text | NO | — |
+| `domain` | text | NO | — |
+| `subject_id` | uuid | NO | — |
+| `subject_type` | text | NO | — |
+| `previous_state` | text | YES | — |
+| `new_state` | text | NO | — |
+| `operator_id` | text | YES | — |
+| `origin` | text | NO | 'operator'::text |
+| `override_reason` | text | YES | — |
+| `context_payload` | jsonb | YES | — |
+| `committed_at` | timestamp with time zone | NO | now() |
+| `effective_at` | timestamp with time zone | NO | now() |
+
 ## `operational_tasks`
 
 | Column | Type | Nullable | Default |
@@ -2281,7 +2680,6 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `name` | text | YES | — |
 | `pipeline_id` | uuid | YES | — |
 | `pipeline_stage_id` | uuid | YES | — |
-| `status` | text | YES | — |
 | `source` | text | YES | — |
 | `lost_reason` | text | YES | — |
 | `assigned_to` | text | YES | — |
@@ -2314,6 +2712,8 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `quote_override_total` | numeric | YES | — |
 | `quote_override_reason` | text | YES | — |
 | `work_unit_id` | uuid | YES | — |
+| `stage_key` | text | YES | — |
+| `close_reason_key` | text | YES | — |
 
 ## `opportunity_customer_members`
 
@@ -2323,18 +2723,19 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `org_id` | uuid | NO | — |
 | `opportunity_id` | uuid | NO | — |
 | `customer_member_id` | uuid | NO | — |
-| `desired_program_type` | text | YES | — |
-| `desired_schedule_type` | text | YES | — |
+| `schedule_type` | text | YES | — |
 | `fit_status` | text | YES | — |
 | `notes` | text | YES | — |
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
 | `outcome_status_key` | text | YES | — |
-| `desired_start_date` | date | YES | — |
+| `start_date` | date | YES | — |
 | `location_id` | uuid | YES | — |
 | `program_room_cohort_key` | text | YES | — |
-| `desired_program_category_id` | uuid | YES | — |
+| `program_category_id` | uuid | YES | — |
+| `stage_key` | text | YES | — |
+| `close_reason_key` | text | YES | — |
 
 ## `opportunity_persons`
 
@@ -2510,6 +2911,34 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `is_active` | boolean | NO | true |
 | `created_at` | timestamp with time zone | NO | now() |
 
+## `person_child_relationship_roles`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `relationship_id` | uuid | NO | — |
+| `role_key` | text | NO | — |
+| `is_active` | boolean | NO | true |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+
+## `person_child_relationships`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `customer_id` | uuid | NO | — |
+| `customer_member_id` | uuid | NO | — |
+| `person_id` | uuid | NO | — |
+| `relationship_type` | text | YES | — |
+| `priority` | integer | YES | — |
+| `status` | text | NO | 'active'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+
 ## `person_locations`
 
 | Column | Type | Nullable | Default |
@@ -2570,7 +2999,6 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `email` | text | YES | — |
 | `phone` | text | YES | — |
 | `date_of_birth` | date | YES | — |
-| `status` | text | YES | — |
 | `status_key` | text | YES | — |
 | `external_source` | text | YES | — |
 | `external_id` | text | YES | — |
@@ -2625,7 +3053,7 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `program_room_cohort_key` | text | NO | — |
 | `program_room_group_label` | text | YES | — |
 | `wait_since` | timestamp with time zone | YES | — |
-| `desired_start_date` | date | YES | — |
+| `start_date` | date | YES | — |
 | `status` | text | NO | 'active'::text |
 | `seed_key` | text | YES | — |
 | `metadata` | jsonb | NO | '{}'::jsonb |
@@ -2830,6 +3258,44 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `dimension_value_id` | uuid | YES | — |
 | `tier_key` | text | NO | — |
 
+## `process_instances`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `process_key` | text | NO | — |
+| `subject_type` | text | NO | — |
+| `subject_id` | uuid | NO | — |
+| `context_type` | text | YES | — |
+| `context_id` | uuid | YES | — |
+| `stage_key` | text | YES | — |
+| `state` | text | YES | — |
+| `close_reason_key` | text | YES | — |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+
+## `processing_approvals`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `case_id` | uuid | NO | — |
+| `plan_id` | uuid | NO | — |
+| `plan_version` | integer | NO | — |
+| `plan_content_hash` | text | NO | — |
+| `approving_actor` | uuid | NO | — |
+| `approval_authority` | text | NO | 'standard'::text |
+| `decision` | text | NO | 'approved'::text |
+| `included_operation_ids` | jsonb | NO | '[]'::jsonb |
+| `approved_at` | timestamp with time zone | NO | now() |
+| `invalidated_at` | timestamp with time zone | YES | — |
+| `invalidation_reason` | text | YES | — |
+| `retention_class` | text | NO | 'audit_authoritative'::text |
+| `created_at` | timestamp with time zone | NO | now() |
+
 ## `processing_case_sources`
 
 | Column | Type | Nullable | Default |
@@ -2843,6 +3309,9 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `linked_at` | timestamp with time zone | NO | now() |
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
+| `idempotency_key` | text | YES | — |
+| `trust_context` | jsonb | NO | '{}'::jsonb |
+| `envelope_snapshot` | jsonb | YES | — |
 
 ## `processing_cases`
 
@@ -2857,6 +3326,189 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
 | `archived_at` | timestamp with time zone | YES | — |
+| `retention_class` | text | NO | 'uncommitted_submission'::text |
+| `case_subject_kind` | text | YES | — |
+| `primary_customer_id` | uuid | YES | — |
+| `primary_opportunity_id` | uuid | YES | — |
+
+## `processing_commit_attempts`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `case_id` | uuid | NO | — |
+| `plan_id` | uuid | NO | — |
+| `plan_version` | integer | NO | — |
+| `plan_content_hash` | text | NO | — |
+| `attempt_no` | integer | NO | — |
+| `execution_idempotency_key` | text | NO | — |
+| `actor_id` | uuid | NO | — |
+| `outcome` | text | NO | — |
+| `operations` | jsonb | NO | '[]'::jsonb |
+| `compensation` | jsonb | NO | '[]'::jsonb |
+| `events` | jsonb | NO | '[]'::jsonb |
+| `preflight_failures` | jsonb | NO | '[]'::jsonb |
+| `retention_class` | text | NO | 'audit_authoritative'::text |
+| `started_at` | timestamp with time zone | NO | now() |
+| `finished_at` | timestamp with time zone | NO | now() |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `processing_commit_plans`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `case_id` | uuid | NO | — |
+| `version` | integer | NO | — |
+| `content_hash` | text | NO | — |
+| `source_resolution_versions` | jsonb | NO | '[]'::jsonb |
+| `preconditions` | jsonb | NO | '[]'::jsonb |
+| `atomic_groups` | jsonb | NO | '[]'::jsonb |
+| `downstream_effect_preview` | jsonb | NO | '[]'::jsonb |
+| `requires_approval` | boolean | NO | true |
+| `requires_privileged_approval` | boolean | NO | false |
+| `reversible` | boolean | NO | true |
+| `status` | text | NO | 'draft'::text |
+| `built_at` | timestamp with time zone | NO | now() |
+| `superseded_by` | uuid | YES | — |
+| `superseded_at` | timestamp with time zone | YES | — |
+| `retention_class` | text | NO | 'audit_authoritative'::text |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `processing_exceptions`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `case_id` | uuid | NO | — |
+| `exception_type` | text | NO | — |
+| `severity` | text | NO | 'warning'::text |
+| `code` | text | NO | — |
+| `message` | text | NO | — |
+| `subject_ref` | jsonb | YES | — |
+| `evidence_ids` | jsonb | NO | '[]'::jsonb |
+| `resolved_at` | timestamp with time zone | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `processing_facts`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `case_id` | uuid | NO | — |
+| `source_id` | uuid | YES | — |
+| `subject_ref` | text | YES | — |
+| `fact_type` | text | NO | — |
+| `semantic_key` | text | YES | — |
+| `raw_value` | text | YES | — |
+| `normalized_value` | text | YES | — |
+| `data_type` | text | YES | — |
+| `extraction_method` | text | YES | — |
+| `evidence` | jsonb | NO | '{}'::jsonb |
+| `extraction_confidence` | numeric | YES | — |
+| `validation_state` | text | YES | — |
+| `mapping_state` | text | YES | — |
+| `role_hint` | text | YES | — |
+| `produced_by` | text | YES | — |
+| `extractor_version` | text | YES | — |
+| `generation_id` | uuid | NO | — |
+| `corrected_from` | uuid | YES | — |
+| `retention_class` | text | NO | 'uncommitted_submission'::text |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `processing_plan_operations`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `plan_id` | uuid | NO | — |
+| `op_id` | text | NO | — |
+| `op_order` | integer | NO | — |
+| `op_kind` | text | NO | — |
+| `command_key` | text | NO | — |
+| `command_version` | text | NO | — |
+| `target_type` | text | NO | — |
+| `target_id` | uuid | YES | — |
+| `payload` | jsonb | NO | '{}'::jsonb |
+| `before_snapshot` | jsonb | YES | — |
+| `after_values` | jsonb | YES | — |
+| `reason` | text | YES | — |
+| `evidence_refs` | jsonb | NO | '[]'::jsonb |
+| `resolution_refs` | jsonb | NO | '[]'::jsonb |
+| `risk` | text | NO | 'low'::text |
+| `depends_on` | jsonb | NO | '[]'::jsonb |
+| `atomic_group` | text | YES | — |
+| `precondition_record_version` | text | YES | — |
+| `included` | boolean | NO | true |
+| `optional` | boolean | NO | false |
+| `reversibility` | text | NO | 'reversible'::text |
+| `expected_side_effects` | jsonb | NO | '[]'::jsonb |
+| `mapping` | jsonb | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `processing_resolutions`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `case_id` | uuid | NO | — |
+| `generation_id` | uuid | NO | — |
+| `input_facts_hash` | text | NO | — |
+| `subject_ref` | text | NO | — |
+| `subject_role` | text | NO | — |
+| `provisional` | jsonb | NO | '{}'::jsonb |
+| `candidates` | jsonb | NO | '[]'::jsonb |
+| `decision_action` | text | YES | — |
+| `selected_candidate_id` | text | YES | — |
+| `decided_by` | text | NO | 'engine'::text |
+| `operator_id` | uuid | YES | — |
+| `policy_version` | text | YES | — |
+| `resolver_version` | text | NO | — |
+| `stale_at` | timestamp with time zone | YES | — |
+| `superseded_by` | uuid | YES | — |
+| `retention_class` | text | NO | 'uncommitted_submission'::text |
+| `created_at` | timestamp with time zone | NO | now() |
+
+## `program_offering_variants`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `offering_id` | uuid | NO | — |
+| `label` | text | YES | — |
+| `quantity_type` | text | YES | — |
+| `quantity_value` | numeric | YES | — |
+| `sort_order` | integer | NO | 100 |
+| `is_active` | boolean | NO | true |
+| `status` | text | NO | 'active'::text |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
+
+## `program_offerings`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `program_key` | text | NO | — |
+| `label` | text | NO | — |
+| `attendance_type` | text | NO | — |
+| `status` | text | NO | 'active'::text |
+| `effective_start` | date | YES | — |
+| `effective_end` | date | YES | — |
+| `sort_order` | integer | NO | 100 |
+| `is_active` | boolean | NO | true |
+| `metadata` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | YES | — |
 
 ## `quotes`
 
@@ -2950,6 +3602,39 @@ Columns for `public` schema tables, grouped alphabetically by table.
 | `metadata` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | YES | — |
+
+## `resolved_obligations`
+
+| Column | Type | Nullable | Default |
+|--------|------|----------|--------|
+| `id` | uuid | NO | gen_random_uuid() |
+| `org_id` | uuid | NO | — |
+| `location_id` | uuid | YES | — |
+| `consumption_event_id` | uuid | NO | — |
+| `charge_template_id` | uuid | YES | — |
+| `service_id` | uuid | YES | — |
+| `amount_cents` | bigint | YES | — |
+| `currency_code` | text | NO | 'USD'::text |
+| `responsibility_key` | text | YES | — |
+| `occurs_on` | date | YES | — |
+| `billable_on` | date | YES | — |
+| `status` | text | NO | 'previewed'::text |
+| `review_required` | boolean | NO | false |
+| `explanation` | jsonb | NO | '{}'::jsonb |
+| `draft_charge_id` | uuid | YES | — |
+| `resolution_key` | text | YES | — |
+| `created_by` | uuid | YES | — |
+| `updated_by` | uuid | YES | — |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+| `obligation_kind` | text | YES | — |
+| `period_start` | date | YES | — |
+| `period_end` | date | YES | — |
+| `review_status` | text | NO | 'pending'::text |
+| `reviewed_at` | timestamp with time zone | YES | — |
+| `reviewed_by` | uuid | YES | — |
+| `suppression_reason` | text | YES | — |
+| `superseded_by_event_id` | uuid | YES | — |
 
 ## `role_definitions`
 

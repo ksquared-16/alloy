@@ -58,6 +58,23 @@ vi.mock("@/lib/admin/actions/applyCreateLeadLayoutRuntimePersistence", () => ({
     }),
 }));
 
+vi.mock("@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter")>();
+    return {
+        ...actual,
+        ingestCreateLeadThroughProcessing: vi.fn().mockResolvedValue({
+            ok: true,
+            processingCaseId: "proc-case-multi",
+            sourceId: "src-1",
+            idempotencyKey: "idem-1",
+            created: true,
+            readiness: "needs_plan_review",
+        }),
+    };
+});
+
+import { ingestCreateLeadThroughProcessing } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
+
 const MULTI_MEMBER_PASTE = [
     "Sarah & Rudy Emerson 1222344321 sarah@emerson.net",
     "Children: Jet DOB 2/4/2026 and Chet DOB 10/10/2023",
@@ -70,7 +87,7 @@ beforeEach(() => {
 });
 
 describe("create lead multi-member commit server path", () => {
-    it("calls household member commit when selection payload is present", async () => {
+    it("forwards household commit selection to Processing intake (no direct member commit at intake)", async () => {
         const household = groupFactsIntoHouseholdCandidates(
             extractFactsFromText({ text: MULTI_MEMBER_PASTE }).facts,
         );
@@ -128,17 +145,19 @@ describe("create lead multi-member commit server path", () => {
         );
 
         expect(result.ok).toBe(true);
-        expect(findOrCreatePersonInOrgWithMeta).toHaveBeenCalledTimes(1);
-        expect(applyCreateLeadChildParticipation).toHaveBeenCalledTimes(1);
-        expect(applyCreateLeadHouseholdMemberCommit).toHaveBeenCalledTimes(1);
-        expect(applyCreateLeadHouseholdMemberCommit).toHaveBeenCalledWith(
+        if (result.ok) expect(result.mode).toBe("processing_review");
+        expect(ingestCreateLeadThroughProcessing).toHaveBeenCalledWith(
             supabase,
             expect.objectContaining({
-                customerId: "customer-1",
-                opportunityId: "opp-1",
-                primaryPersonId: "parent-person-1",
+                merged: expect.objectContaining({
+                    household_commit_v1: expect.any(String),
+                    processing_intake_household_v1: expect.any(String),
+                }),
             }),
         );
+        expect(findOrCreatePersonInOrgWithMeta).not.toHaveBeenCalled();
+        expect(applyCreateLeadChildParticipation).not.toHaveBeenCalled();
+        expect(applyCreateLeadHouseholdMemberCommit).not.toHaveBeenCalled();
     });
 });
 

@@ -1,6 +1,6 @@
 # Processing Identity Resolution — Decision Register (V1 FROZEN)
 
-**Baseline:** `origin/staging` @ `65afc8527`. **Status:** Decision-finalization pass complete. This register is now **implementation-authoritative** — Cursor implements these; it does not re-decide them.
+**Status:** Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed. V1 decisions remain frozen. The reusable eligibility gate (`confirmed_existing` | `confirmed_new` | `needs_review` | `conflicted` | `unresolved`) is mandatory for plan build / approve / execute and is locally certified.
 
 **Status legend:** 🔒 **Frozen for V1** · 🧩 **Deferred behind an abstraction** (Processing does not depend on the unresolved detail) · 👤 **Requires product-owner approval** (default stated; safe to proceed on default).
 
@@ -97,6 +97,8 @@ Evidence: **[C]** confirmed in repo, **[D]** doctrine, **[P]** proposed.
 **Three tiers.** (1) **Recommendation eligibility** — engine may *propose* create when min-evidence met. (2) **Operator-approval eligibility** — operator may approve when min-evidence met and no unresolved blocking contradiction (or overrides with a recorded reason). (3) **Policy auto-commit eligibility** — **none for creation in V1** (Decision J).
 
 **Edge cases.** No strong candidate → create_new if min-evidence else `request_information`/`unresolved`. Multiple plausible → no auto-select; `review_required`. Contradictory → `Conflicted`; hold. Missing required facts → `needs_information`. Operator declares new despite a possible match → allowed with recorded override + a **potential-duplicate exception** logged for later merge review.
+
+**Canonical eligibility gate (implemented).** `web/lib/pos/processingIdentity/operator/identityResolutionEligibility.ts` evaluates each subject to `confirmed_existing` | `confirmed_new` | `needs_review` | `conflicted` | `unresolved` and fails closed on plan build / approve / execute. Same-household same-name child with incomplete DOB is `possible_match` → `needs_review`, never silent `create_child`. Create-new overrides persist reason + rejected candidates on `processing_resolutions.provisional`.
 
 **Status.** 🔒 Frozen for V1 (product-owner finalized). **Blocks:** D1 (Commit Plan + approval — recommendation generation).
 

@@ -107,7 +107,7 @@ export async function findExistingIntakeOpportunity(
         .select("id")
         .eq("org_id", params.orgId)
         .eq("primary_person_id", params.personId)
-        .eq("status", "open");
+        .eq("status_key", "open");
 
     if (params.locationId) {
         query = query.eq("location_id", params.locationId);

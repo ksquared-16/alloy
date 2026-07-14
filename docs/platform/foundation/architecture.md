@@ -45,7 +45,7 @@ supersedes: []
 | **Focus Panel Runtime** | Canonical record execution surface (cards, Current Work, embeds) | [`../operator/focus-panel-architecture-vocabulary.md`](../operator/focus-panel-architecture-vocabulary.md) |
 | **VM Runtime** | Entity compose, cache, reveal for Opportunity / Person / Child | [`../operator/drawer-system.md`](../operator/drawer-system.md) |
 | **Business Process Runtime** | Landing catalog → stage queues → record focus | [`../core/business-process-system.md`](../core/business-process-system.md) |
-| **Processing Runtime** | Digital Mailroom operational workspace | [`../modules/documents-and-forms.md`](../modules/documents-and-forms.md) |
+| **Processing Runtime** | Digital Mailroom operational workspace plus inbound identity resolution, review, approval, and commit execution | [`../modules/documents-and-forms.md`](../modules/documents-and-forms.md) |
 | **Communications Runtime** | Command Center + Activity embed | [`../modules/communications-platform.md`](../modules/communications-platform.md) |
 | **Configuration Runtime** | Settings control plane (`/settings/*`) | [`../modules/configuration-platform.md`](../modules/configuration-platform.md) |
 | **Current Work Runtime** | Stage work completion inside Focus Panel | `../../sprints/archive/07_2026/alloy-operator-workspace/implementation-closeout.md` (historical: `../../sprints/archive/07_2026/alloy-operator-workspace/implementation-closeout.md`) |
@@ -87,6 +87,7 @@ Four-plane settings model: Fields · Field grouping · Layouts · Actions — se
 - **CRM scope:** Department + site visibility via `user_access_profiles`
 - **Writes:** Privileged mutations through server routes with service role where required
 - **Events:** Append-oriented `workflow_events` → `workflowRun.ts`
+- **Inbound identity:** `processing_cases` + facts/resolutions + immutable Commit Plans/approvals/attempts; registered semantic commands own physical record mutation
 
 ---
 

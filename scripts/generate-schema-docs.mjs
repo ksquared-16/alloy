@@ -13,40 +13,51 @@ const REF = path.join(ROOT, "docs/supabase/reference");
 const OUT = path.join(ROOT, "docs/schema");
 
 function parseCsv(text) {
-  const lines = text.trim().split("\n");
-  const headers = parseCsvLine(lines[0]);
-  return lines.slice(1).map((line) => {
-    const vals = parseCsvLine(line);
-    const row = {};
-    headers.forEach((h, i) => {
-      row[h] = vals[i] ?? "";
-    });
-    return row;
-  });
-}
-
-function parseCsvLine(line) {
-  const out = [];
+  const rows = [];
+  const headers = [];
   let cur = "";
   let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
+  let row = [];
+  const pushCell = () => {
+    row.push(cur);
+    cur = "";
+  };
+  const pushRow = () => {
+    if (headers.length === 0) {
+      headers.push(...row);
+    } else if (row.length) {
+      const obj = {};
+      headers.forEach((h, i) => {
+        obj[h] = row[i] ?? "";
+      });
+      rows.push(obj);
+    }
+    row = [];
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
     if (c === '"') {
-      if (inQuotes && line[i + 1] === '"') {
+      if (inQuotes && text[i + 1] === '"') {
         cur += '"';
         i++;
       } else {
         inQuotes = !inQuotes;
       }
     } else if (c === "," && !inQuotes) {
-      out.push(cur);
-      cur = "";
+      pushCell();
+    } else if ((c === "\n" || c === "\r") && !inQuotes) {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      pushCell();
+      pushRow();
     } else {
       cur += c;
     }
   }
-  out.push(cur);
-  return out;
+  if (cur.length || row.length) {
+    pushCell();
+    pushRow();
+  }
+  return rows;
 }
 
 function readCsv(name) {

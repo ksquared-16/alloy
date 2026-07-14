@@ -1,0 +1,333 @@
+/**
+ * Deterministic recommendation builder (D3 §34).
+ *
+ * Sits between resolution decisions and the Commit Plan. Produces REGISTERED
+ * semantic operations only (never arbitrary mutations). Supports create / update /
+ * link / attach / create-participation / no-op / request-information /
+ * escalate-duplicate / propose-merge. Merge is escalation-only and is NOT emitted
+ * as an executable plan operation (Decision H) — it is surfaced as an escalation.
+ */
+
+import { IDENTITY_COMMAND_KEYS } from "../commands/commandKeys";
+import type { PlanOperationInput } from "../plan/buildCommitPlan";
+import type { ProcessingResolutionRow } from "../processingResolutionsDb";
+
+export type SubjectRole = "household" | "parent" | "child" | "lead" | "participation";
+
+export type SubjectDecision =
+    | "create"
+    | "link"
+    | "update"
+    | "no_op"
+    | "request_information"
+    | "escalate_duplicate"
+    | "propose_merge";
+
+export type ResolvedSubject = {
+    /** Stable ref (becomes op id + "@ref" for dependents), e.g. "parent:0". */
+    ref: string;
+    role: SubjectRole;
+    decision: SubjectDecision;
+    /** Existing record id for link/update. */
+    selectedRecordId?: string | null;
+    /** Provisional values (create/update payload). */
+    values?: Record<string, unknown>;
+    evidenceRefs?: string[];
+    resolutionRef?: string;
+    /** Subject refs this subject depends on (e.g. child depends on household). */
+    dependsOn?: string[];
+    optional?: boolean;
+    /** For household links: which household subject ref this subject attaches to. */
+    householdRef?: string;
+    /** For participation: child + lead subject refs. */
+    childRef?: string;
+    leadRef?: string;
+    /** For escalate_duplicate / propose_merge. */
+    duplicate?: { entityType: "person" | "customer" | "customer_member"; survivorId: string; duplicateId: string };
+    preconditionRecordVersion?: string | null;
+};
+
+export type IdentityResolutionSet = { subjects: ResolvedSubject[] };
+
+export type Escalation = {
+    kind: "duplicate" | "merge_proposal";
+    entityType: string;
+    survivorId: string;
+    duplicateId: string;
+    reason: string;
+    subjectRef: string;
+};
+
+export type RecommendationResult = {
+    operations: PlanOperationInput[];
+    escalations: Escalation[];
+    requestInformation: boolean;
+    /** Subject refs left unresolved (no executable op). */
+    unresolvedSubjects: string[];
+};
+
+function refFor(sub: ResolvedSubject): string {
+    return sub.ref;
+}
+
+/** Build the deterministic recommendation set from operator resolution decisions. */
+export function buildRecommendations(set: IdentityResolutionSet): RecommendationResult {
+    const operations: PlanOperationInput[] = [];
+    const escalations: Escalation[] = [];
+    const unresolvedSubjects: string[] = [];
+    let requestInformation = false;
+
+    // Stable ordering: households → parents → children → leads → participation,
+    // ref as tie-breaker, so the same set always yields the same plan.
+    const roleOrder: Record<SubjectRole, number> = {
+        household: 0,
+        parent: 1,
+        child: 2,
+        lead: 3,
+        participation: 4,
+    };
+    const subjects = [...set.subjects].sort(
+        (a, b) => roleOrder[a.role] - roleOrder[b.role] || a.ref.localeCompare(b.ref),
+    );
+
+    for (const sub of subjects) {
+        const evidenceRefs = sub.evidenceRefs ?? [];
+        const resolutionRefs = sub.resolutionRef ? [sub.resolutionRef] : [];
+        const common = { ref: refFor(sub), evidenceRefs, resolutionRefs, optional: sub.optional };
+
+        if (sub.decision === "request_information") {
+            requestInformation = true;
+            unresolvedSubjects.push(sub.ref);
+            continue;
+        }
+        if (sub.decision === "escalate_duplicate" || sub.decision === "propose_merge") {
+            if (sub.duplicate) {
+                escalations.push({
+                    kind: sub.decision === "propose_merge" ? "merge_proposal" : "duplicate",
+                    entityType: sub.duplicate.entityType,
+                    survivorId: sub.duplicate.survivorId,
+                    duplicateId: sub.duplicate.duplicateId,
+                    reason: String(sub.values?.reason ?? "operator flagged duplicate"),
+                    subjectRef: sub.ref,
+                });
+            }
+            unresolvedSubjects.push(sub.ref);
+            continue;
+        }
+        if (sub.decision === "no_op") {
+            operations.push({
+                ...common,
+                opKind: "no_op",
+                commandKey: updateKeyForRole(sub.role),
+                targetId: sub.selectedRecordId ?? null,
+                payload: { [idFieldForRole(sub.role)]: sub.selectedRecordId ?? "" },
+                reason: "already up to date",
+            });
+            continue;
+        }
+
+        switch (sub.role) {
+            case "household":
+                if (sub.decision === "create") {
+                    operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createHousehold, payload: { household_name: String(sub.values?.household_name ?? "Household") }, after: { name: sub.values?.household_name }, reason: "new household" });
+                } else if (sub.decision === "link" && sub.selectedRecordId) {
+                    operations.push({
+                        ...common,
+                        opKind: "no_op",
+                        commandKey: IDENTITY_COMMAND_KEYS.createHousehold,
+                        targetId: sub.selectedRecordId,
+                        payload: { household_id: sub.selectedRecordId },
+                        reason: "reuse existing household",
+                    });
+                }
+                break;
+            case "parent":
+                if (sub.decision === "create") {
+                    operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createPerson, payload: personPayload(sub), after: personPayload(sub), reason: "no candidate matched" });
+                } else if (sub.decision === "update") {
+                    operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updatePerson, targetId: sub.selectedRecordId ?? null, payload: { person_id: sub.selectedRecordId, ...personPayload(sub) }, before: {}, after: personPayload(sub), preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update matched person" });
+                } else if (sub.decision === "link" && sub.selectedRecordId) {
+                    operations.push({
+                        ...common,
+                        opKind: "no_op",
+                        commandKey: IDENTITY_COMMAND_KEYS.updatePerson,
+                        targetId: sub.selectedRecordId,
+                        payload: { person_id: sub.selectedRecordId, ...personPayload(sub) },
+                        reason: "reuse matched person",
+                    });
+                }
+                if (sub.householdRef) {
+                    const personRef = sub.decision === "link" && sub.selectedRecordId ? sub.selectedRecordId : `@${sub.ref}`;
+                    operations.push({
+                        ref: `${sub.ref}:link`,
+                        opKind: "link",
+                        commandKey: IDENTITY_COMMAND_KEYS.linkPersonToHousehold,
+                        payload: { person_id: personRef, household_id: `@${sub.householdRef}` },
+                        dependsOnRefs: dedupeRefs([sub.decision === "create" ? sub.ref : undefined, sub.householdRef]),
+                        evidenceRefs,
+                        resolutionRefs,
+                        reason: "link guardian to household",
+                    });
+                }
+                break;
+            case "child":
+                if (sub.decision === "create") {
+                    operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createChild, payload: { household_id: `@${sub.householdRef}`, display_name: String(sub.values?.display_name ?? "Child"), dob: sub.values?.dob ?? null }, after: { display_name: sub.values?.display_name, dob: sub.values?.dob }, dependsOnRefs: sub.householdRef ? [sub.householdRef] : [], reason: "new child" });
+                } else if (sub.decision === "update") {
+                    operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updateChild, targetId: sub.selectedRecordId ?? null, payload: { child_id: sub.selectedRecordId, display_name: sub.values?.display_name, dob: sub.values?.dob }, after: { display_name: sub.values?.display_name }, preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update matched child" });
+                } else if (sub.decision === "link" && sub.selectedRecordId) {
+                    operations.push({
+                        ...common,
+                        opKind: "no_op",
+                        commandKey: IDENTITY_COMMAND_KEYS.updateChild,
+                        targetId: sub.selectedRecordId,
+                        payload: { child_id: sub.selectedRecordId },
+                        reason: "reuse existing child",
+                    });
+                }
+                break;
+            case "lead":
+                if (sub.decision === "create") {
+                    operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createLead, payload: { household_id: `@${sub.householdRef}`, primary_person_id: sub.values?.primary_person_id ?? `@${sub.dependsOn?.[0] ?? ""}`, name: String(sub.values?.name ?? "Lead") }, after: { name: sub.values?.name }, dependsOnRefs: sub.dependsOn ?? (sub.householdRef ? [sub.householdRef] : []), reason: "new lead" });
+                } else if (sub.decision === "update") {
+                    operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updateLead, targetId: sub.selectedRecordId ?? null, payload: { lead_id: sub.selectedRecordId, name: sub.values?.name }, after: { name: sub.values?.name }, preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update lead" });
+                }
+                break;
+            case "participation":
+                operations.push({ ...common, opKind: "workflow", commandKey: IDENTITY_COMMAND_KEYS.createProcessParticipation, payload: { child_id: `@${sub.childRef}`, lead_id: `@${sub.leadRef}`, participation: sub.values ?? {} }, dependsOnRefs: dedupeRefs([sub.childRef, sub.leadRef]), reason: "enrollment participation" });
+                break;
+        }
+    }
+
+    return { operations, escalations, requestInformation, unresolvedSubjects };
+}
+
+function personPayload(sub: ResolvedSubject): Record<string, unknown> {
+    const v = sub.values ?? {};
+    return { first_name: v.first_name ?? null, last_name: v.last_name ?? null, email: v.email ?? null, phone: v.phone ?? null };
+}
+
+function updateKeyForRole(role: SubjectRole): string {
+    switch (role) {
+        case "child":
+            return IDENTITY_COMMAND_KEYS.updateChild;
+        case "lead":
+            return IDENTITY_COMMAND_KEYS.updateLead;
+        default:
+            return IDENTITY_COMMAND_KEYS.updatePerson;
+    }
+}
+
+function idFieldForRole(role: SubjectRole): string {
+    switch (role) {
+        case "child":
+            return "child_id";
+        case "lead":
+            return "lead_id";
+        default:
+            return "person_id";
+    }
+}
+
+function dedupeRefs(refs: (string | undefined)[]): string[] {
+    return Array.from(new Set(refs.filter((r): r is string => Boolean(r))));
+}
+
+/**
+ * Map a persisted resolution decision action (intake vocabulary) to a subject
+ * decision. Only actionable decisions become executable subjects; review/reject/
+ * undecided rows are intentionally left out (they produce no operation, so a plan
+ * cannot be built until the operator resolves them).
+ */
+function decisionForAction(action: string | null): SubjectDecision | null {
+    switch (action) {
+        case "link_existing":
+            return "link";
+        case "create_new":
+            return "create";
+        case "update_existing":
+            return "update";
+        case "request_information":
+            return "request_information";
+        case "escalate_duplicate":
+            return "escalate_duplicate";
+        case "propose_merge":
+            return "propose_merge";
+        default:
+            // reject / review_required / route_for_review / null → not actionable yet
+            return null;
+    }
+}
+
+function roleFromSubjectRole(role: string): SubjectRole {
+    switch (role) {
+        case "household":
+        case "family":
+            return "household";
+        case "child":
+            return "child";
+        case "lead":
+            return "lead";
+        case "participation":
+            return "participation";
+        default:
+            return "parent";
+    }
+}
+
+export function pickLatestResolutionPerSubject(rows: ProcessingResolutionRow[]): ProcessingResolutionRow[] {
+    const byRef = new Map<string, ProcessingResolutionRow>();
+    for (const row of rows) {
+        if (row.superseded_by) continue;
+        const existing = byRef.get(row.subject_ref);
+        if (!existing || row.created_at > existing.created_at) {
+            byRef.set(row.subject_ref, row);
+        }
+    }
+    return Array.from(byRef.values());
+}
+
+/**
+ * Deterministically derive the recommendation input from durable resolution rows
+ * (D3 §34). Household is linked to parents/children; the lead depends on the
+ * household and the first parent. This is the canonical projection the operator
+ * approves — it never invents arbitrary mutations, only registered semantic ops.
+ */
+export function deriveResolutionSetFromResolutions(
+    rows: ProcessingResolutionRow[],
+): IdentityResolutionSet {
+    const activeRows = pickLatestResolutionPerSubject(rows);
+    const householdRow = activeRows.find((r) => roleFromSubjectRole(r.subject_role) === "household");
+    const householdRef = householdRow?.subject_ref;
+    const parentRows = activeRows.filter((r) => roleFromSubjectRole(r.subject_role) === "parent");
+
+    const subjects: ResolvedSubject[] = [];
+    for (const row of activeRows) {
+        const role = roleFromSubjectRole(row.subject_role);
+        const decision = decisionForAction(row.decision_action);
+        if (!decision) continue;
+
+        const base: ResolvedSubject = {
+            ref: row.subject_ref,
+            role,
+            decision,
+            selectedRecordId: row.selected_candidate_id,
+            values: row.provisional ?? {},
+            resolutionRef: row.id,
+        };
+
+        if (role === "parent" || role === "child") {
+            base.householdRef = householdRef;
+        }
+        subjects.push(base);
+    }
+
+    const actionableParentRef = subjects.find((s) => s.role === "parent")?.ref;
+    for (const sub of subjects) {
+        if (sub.role === "lead") {
+            sub.householdRef = householdRef;
+            sub.dependsOn = dedupeRefs([actionableParentRef, householdRef]);
+        }
+    }
+    return { subjects };
+}

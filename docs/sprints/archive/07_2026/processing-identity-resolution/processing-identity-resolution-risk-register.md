@@ -1,6 +1,8 @@
 # Processing Identity Resolution — Risk Register
 
-**Baseline:** `origin/staging` @ `65afc8527`. L = likelihood, I = impact (both L/M/H). Each risk: detection, prevention, mitigation, rollback/recovery. Evidence-tagged where it names a confirmed defect.
+**Status:** Closeout risk register. **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
+
+**Design baseline:** `origin/staging` @ `65afc8527`. L = likelihood, I = impact (both L/M/H). Local certification reduced the RLS, replay, stale-plan, executor, and D4/D5 dual-authority risks; staging reconciliation must revalidate them after integration.
 
 | ID | Risk | L | I | Detection | Prevention | Mitigation | Rollback / recovery |
 |---|---|---|---|---|---|---|---|
@@ -18,18 +20,18 @@
 | **R-REPLAY** | Source replay duplicates case/mutation | M | M | replay counter | `uq_pcs_primary_source_once` **[C]**; envelope idempotency_key; `mutation_id` | dedupe on key | n/a (prevented) |
 | **R-SCHEMA-MIG** | Schema migration complexity / collisions on adding uniqueness | H | M | backfill collision report | additive-first; backfill de-dup **before** unique; quarantine not force-merge | manual collision resolution queue | drop constraint, keep additive tables |
 | **R-WF-BYPASS** | Existing workflow bypass (commit raw-writes instead of commands) | M | H | direct-write guard test (test-strategy §5) | executor invokes `command_key` only; no raw `.from(identity).insert` in Processing | code review + lint rule | revert executor slice |
-| **R-LEGACY-SURV** | Legacy path survives after cutover (both write) | M | H | per-source "retired path unreachable" test | flag-gate cutover; delete legacy writer at phase exit; remove dead code | fallback flag off | re-enable legacy flag |
+| **R-LEGACY-SURV** | Legacy path survives after cutover (both write) | L | H | E1 static boundary tests; source inventory | D4/D5 direct-write paths removed; `applyFormIntakeSafe` throw-only | stop promotion if a runtime caller is found | deployment/Git rollback; do not restore dual authority |
 | **R-DOC-DRIFT** | Documentation drift (doctrine vs runtime) | M | L | doctrine-reconciliation table tracking | update docs at each phase exit (governance) | reconciliation sprint follow-up | n/a |
-| **R-FLAG-FRAG** | Feature-flag fragmentation | M | M | flag inventory review | one flag per capability/source; remove at phase exit | flag cleanup pass | n/a |
+| **R-FLAG-FRAG** | Feature-flag fragmentation | L | M | flag inventory review | V1 runtime has no Processing Identity feature/source/org/env toggles | reject new toggle during reconciliation | n/a |
 | **R-IMPORT-SCALE** | Performance at import scale | M | M | import p95 latency alarm | batch envelopes; capped candidate generation; indexes on normalized keys | throttle import; async processing | pause import adapter |
 | **R-CAND-LATENCY** | Candidate-search latency on hot paths | M | M | resolver p95 metric | normalized-key indexes; caps; caching per generation | degrade to review-required on timeout | n/a |
 | **R-PII-RETENTION** | Sensitive evidence retention (PII in facts/documents/payload, no TTL today **[C]**) | M | H | retention audit; PII-in-logs scan | `retention_class` + purge job; redaction in prompts **[C]**; PII out of logs | purge on window; hard-delete on request | documented purge path |
 | **R-INBOUND-SMS-DUP** | Inbound SMS double-insert on Twilio retry (no `external_sid` dedup **[C]**) | M | L | duplicate-message count | add provider `external_sid` unique (comms-owned) | dedupe on ingest | backfill de-dup |
 | **R-DUAL-SUBSTRATE** | Child participation dual-substrate (OCM vs `process_instances`) commits to the wrong one **[C]** | L | H | integration test asserting the command's target; drift audit | **Resolved via abstraction (Decision B):** Processing emits `create_process_participation`; the `add_participation` command owns OCM↔`process_instances` translation, so Processing is immune to the substrate flip | fix inside one command, not Processing | n/a (design gate) |
 
-## Top-5 risks to close first
-1. **R-CROSS-TENANT** — a security prerequisite (Slice B0); the engine must not amplify the non-org-scoped `admin_ops_full_access` and `persons` no-org-FK defects.
-2. **R-DUP-CREATE / R-FALSE-NEG** — the core value; requires normalizer convergence (B1a/B1b) + uniqueness (D0) + shadow proof (C1).
-3. **R-CROSS-TENANT (B0)** and **R-DUP-CREATE** are the two that gate any production cutover; R-DUAL-SUBSTRATE is now downgraded (resolved via the Decision B command abstraction).
-4. **R-PARTIAL-COMMIT** — atomic groups + compensation (executor, D2) must be right before any real cutover (D4/D5).
-5. **R-MERGE-BLAST** — keep merge strictly privileged and reversible; never a link side effect.
+## Promotion watchlist
+1. **R-CROSS-TENANT** — re-run authenticated JWT RLS coverage after staging reconciliation and migration apply.
+2. **R-DUP-CREATE / R-FALSE-NEG** — smoke new/existing/shared-contact/conflicting-DOB cases on staging.
+3. **R-PARTIAL-COMMIT / R-STALE-PLAN** — verify retry and fail-closed behavior on the reconciled executor.
+4. **R-LEGACY-SURV** — confirm Create Lead and public forms still have one authoritative path after conflict resolution.
+5. **R-MERGE-BLAST** — merge remains propose-only; any merge execution is future work and a separate release.

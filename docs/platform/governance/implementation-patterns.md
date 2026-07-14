@@ -43,6 +43,24 @@ Avoid: component-local mutations that skip events for domains already on spine.
 
 ---
 
+## Processing inbound identity
+
+For source data that may create or link people, households, children, or leads:
+
+1. Source adapter opens/reuses one org-scoped Processing Case.
+2. Persist immutable facts and evidence lineage.
+3. Generate capped org-scoped candidates and durable resolutions.
+4. Operator resolves conflicts/corrections.
+5. Build a deterministic immutable Commit Plan containing registered semantic commands.
+6. Bind approval to the exact plan version and content hash.
+7. Execute explicitly through the Processing executor.
+
+**Identity-review gate (authority).** Plausible identity matches, ambiguity, and contradictions create a **blocking operator-review requirement**. Record creation is never the silent fallback for unresolved identity. Subject eligibility states: `confirmed_existing`, `confirmed_new`, `needs_review`, `conflicted`, `unresolved`. Confirmed-new despite plausible candidates requires an explicit create-new override with operator reason + rejected-candidate audit. Source adapters (Create Lead, Public Forms, future portal/OCR/import/API) may recommend and preselect trusted deterministic matches but may not bypass this gate. Plan build, approval, and execution each re-validate eligibility.
+
+Create Lead and public lead-capture forms are the V1 reference paths. Do not add a parallel direct writer, source-specific matcher, replay escape hatch, client-side privileged write, or feature-flag fallback. Revisions invalidate approval; stale plans fail closed; queue/case previews never become record authority.
+
+---
+
 ## Config-driven UI
 
 - Layouts: `field_placements_v1` + effective preview resolver

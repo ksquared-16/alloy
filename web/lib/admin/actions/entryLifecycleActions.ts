@@ -1,30 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import {
     assertAllowedStatusKey,
     fetchEffectiveStatusDefinitions,
     resolveConfiguredDefaultCreateStatusKey,
 } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
-import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
-import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
-import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
-import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { NEW_LEAD_STATUS_KEY, DEFAULT_LEAD_CASE_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
-import { ENROLLMENT_INTAKE_PERSON_STATUS_KEY } from "@/lib/admin/person/enrollmentPersonDefaultStatus";
-import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
-import { applyCreateLeadHouseholdMemberCommit } from "@/lib/admin/actions/executeCreateLeadHouseholdCommit";
-import { applyCreateLeadLayoutRuntimePersistence } from "@/lib/admin/actions/applyCreateLeadLayoutRuntimePersistence";
 import { readCreateLeadCommitSelectionFromPayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
 import {
     primaryIncludedParent,
-    primaryIncludedChild,
 } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { linkedPersonIdFromCommitRecord } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
-import { buildHouseholdLeadDisplayName } from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
+import { ingestCreateLeadThroughProcessing } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 
 export type EntryLifecycleActionError = { ok: false; error: string; status: number };
 
@@ -62,15 +52,18 @@ export async function executeCreateLeadAction(
 ): Promise<
     | {
           ok: true;
-          opportunity_id: string;
-          person_id: string;
-          customer_id: string;
-          /** Work unit the lead was assigned to (lifecycle binding / context). Drives post-create queue/count refresh + focus-panel routing. */
+          /** D4: canonical Processing review — records created only after operator commit. */
+          mode: "processing_review";
+          processing_case_id: string;
+          readiness: string;
+          idempotency_key: string;
           work_unit_id: string | null;
-          /** Case status written to the opportunity. */
           status_key: string;
-          /** Process stage written to the opportunity. */
           stage_key: string;
+          /** Populated only after operator executes an approved plan (not at intake). */
+          opportunity_id?: string;
+          person_id?: string;
+          customer_id?: string;
       }
     | EntryLifecycleActionError
 > {
@@ -154,22 +147,6 @@ export async function executeCreateLeadAction(
         };
     }
 
-    let personId = linkedPrimaryPersonId;
-    if (!personId) {
-        const person = await findOrCreatePersonInOrgWithMeta(supabase, {
-            org_id: ctx.orgId,
-            first_name: firstName,
-            last_name: lastName,
-            email,
-            phone,
-            default_status_key_on_create: ENROLLMENT_INTAKE_PERSON_STATUS_KEY,
-        });
-        personId = person?.id?.trim() || null;
-    }
-    if (!personId) {
-        return { ok: false, error: "Could not create or resolve person.", status: 400 };
-    }
-
     // Never silently create a duplicate when resolver found an exact match but operator did not confirm link.
     if (
         !linkedPrimaryPersonId &&
@@ -183,141 +160,26 @@ export async function executeCreateLeadAction(
         };
     }
 
-    const householdDisplayName = buildHouseholdLeadDisplayName({
-        firstName,
-        lastName,
-        fallback: email || phone || "New lead",
+    const ingested = await ingestCreateLeadThroughProcessing(supabase, {
+        orgId: ctx.orgId,
+        actorId: ctx.userId ?? "unknown",
+        merged: input.merged,
+        context: input.context,
+        workUnitId,
+        statusKey: statusKeyForLead,
+        locationId,
+        verticalId,
     });
-    const { customer_id: customerId } = await ensureCustomerForPersonNative(supabase, personId, {
-        org_id: ctx.orgId,
-        vertical_id: verticalId,
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        phone,
-        household_name: householdDisplayName,
-    });
-    if (!customerId?.trim()) {
-        return { ok: false, error: "Could not create household for this lead.", status: 400 };
-    }
-    await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: ctx.orgId });
-
-    const displayName = householdDisplayName;
-    const intakeNotes = trim(input.merged.intake_notes) || null;
-    const oppPayload: Record<string, unknown> = {
-        org_id: ctx.orgId,
-        customer_id: customerId,
-        primary_person_id: personId,
-        primary_contact_id: null,
-        name: displayName,
-        source: trim(input.merged.source) || "manual",
-        status_key: statusKeyForLead,
-        // Explicit persisted process stage at intake (S4 status collapse): a new lead enters the
-        // Lead stage. Stage is no longer derived from status — it is written here and by outcomes.
-        stage_key: "lead",
-        work_unit_id: workUnitId,
-        metadata: {
-            created_via: "create_lead",
-            ...(departmentId ? { department_id: departmentId } : {}),
-            ...(intakeNotes ? { intake_notes: intakeNotes } : {}),
-        },
-    };
-    if (verticalId) oppPayload.vertical_id = verticalId;
-    if (locationId) oppPayload.location_id = locationId;
-
-    await normalizeOpportunityWritePayload(supabase, oppPayload, "executeAdminAction:create_lead");
-    const { data: oppRow, error: oppErr } = await supabase.from("opportunities").insert(oppPayload).select("id").single();
-    if (oppErr || !oppRow) {
-        return { ok: false, error: oppErr?.message ?? "Failed to create lead.", status: 400 };
-    }
-    const opportunityId = (oppRow as { id: string }).id;
-
-    const { error: opErr } = await supabase.from("opportunity_persons").insert({
-        org_id: ctx.orgId,
-        opportunity_id: opportunityId,
-        person_id: personId,
-        role_type: "family_member",
-        metadata: { source: "create_lead", role: "primary_guardian" },
-    });
-    if (opErr && opErr.code !== "23505") {
-        return { ok: false, error: opErr.message ?? "Failed to link person to lead.", status: 400 };
-    }
-
-    try {
-        const primaryChildRecord = householdCommit ? primaryIncludedChild(householdCommit) : null;
-        const linkedChildPersonId = linkedPersonIdFromCommitRecord(primaryChildRecord);
-        if (
-            primaryChildRecord?.include_in_commit &&
-            (primaryChildRecord.resolution?.state === "conflict" || primaryChildRecord.resolution?.action === "reject")
-        ) {
-            return {
-                ok: false,
-                error: primaryChildRecord.resolution?.reasons[0] ?? "Child record resolution conflict.",
-                status: 400,
-            };
-        }
-        await applyCreateLeadChildParticipation(supabase, {
-            orgId: ctx.orgId,
-            opportunityId,
-            customerId,
-            merged: input.merged,
-            existingPersonId: linkedChildPersonId,
-        });
-    } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to persist child enrollment fields.";
-        return { ok: false, error: message, status: 400 };
-    }
-
-    if (householdCommit) {
-        try {
-            await applyCreateLeadHouseholdMemberCommit(supabase, {
-                orgId: ctx.orgId,
-                customerId,
-                opportunityId,
-                merged: input.merged,
-                selection: householdCommit,
-                primaryPersonId: personId,
-            });
-        } catch (e) {
-            const message = e instanceof Error ? e.message : "Failed to persist additional household members.";
-            return { ok: false, error: message, status: 400 };
-        }
-    }
-
-    try {
-        await applyCreateLeadLayoutRuntimePersistence(supabase, {
-            orgId: ctx.orgId,
-            customerId,
-            opportunityId,
-            primaryPersonId: personId,
-            merged: input.merged,
-            selection: householdCommit,
-        });
-    } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to persist layout runtime contact/address data.";
-        return { ok: false, error: message, status: 400 };
-    }
-
-    try {
-        await emitStatusChangedEvent({
-            supabase,
-            orgId: ctx.orgId,
-            entityType: "opportunities",
-            entityId: opportunityId,
-            oldStatusKey: null,
-            newStatusKey: statusKeyForLead,
-            metadata: { customer_id: customerId, primary_person_id: personId },
-            actorUserId: ctx.userId,
-        });
-    } catch (e) {
-        console.error("[executeCreateLeadAction] emitStatusChangedEvent", e);
+    if (!ingested.ok) {
+        return { ok: false, error: ingested.error, status: ingested.status };
     }
 
     return {
         ok: true,
-        opportunity_id: opportunityId,
-        person_id: personId,
-        customer_id: customerId,
+        mode: "processing_review",
+        processing_case_id: ingested.processingCaseId,
+        readiness: ingested.readiness,
+        idempotency_key: ingested.idempotencyKey,
         work_unit_id: workUnitId,
         status_key: statusKeyForLead,
         stage_key: "lead",

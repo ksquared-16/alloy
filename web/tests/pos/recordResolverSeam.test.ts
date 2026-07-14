@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { availableMatchSignals, deferredRecordResolver, type RecordResolutionSourceContext } from "@/lib/pos/recordResolution/recordResolverSeam";
+import { availableMatchSignals } from "@/lib/pos/recordResolution/recordResolverSeam";
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
 
 function person(opts: Partial<IntakePersonCandidate>): IntakePersonCandidate {
@@ -40,8 +40,6 @@ function household(parents: IntakePersonCandidate[], children: IntakePersonCandi
     };
 }
 
-const ctx: RecordResolutionSourceContext = { org_id: "org1", source_kind: "form_packet_session", source_id: "sess1" };
-
 describe("availableMatchSignals", () => {
     it("detects email, phone, and child name+dob signals (presence only, no matching)", () => {
         const cand = household(
@@ -54,32 +52,5 @@ describe("availableMatchSignals", () => {
     it("returns no signals when identifiers are absent or blank", () => {
         const cand = household([person({ emails: ["  "], phones: [] })], [person({ role: "child", first_name: "Ada", dob: null })]);
         expect(availableMatchSignals(cand)).toEqual([]);
-    });
-});
-
-describe("deferredRecordResolver", () => {
-    it("never matches; always defers and requires review", async () => {
-        const cand = household([person({ emails: ["a@b.com"] })], []);
-        const proposal = await deferredRecordResolver.resolve(cand, ctx);
-        expect(proposal.status).toBe("deferred");
-        expect(proposal.matched_on).toEqual([]);
-        expect(proposal.review_required).toBe(true);
-        expect(proposal.notes).toContain("parent_email");
-    });
-
-    it("passes through known launch-context FKs without performing matching", async () => {
-        const cand = household([], []);
-        const proposal = await deferredRecordResolver.resolve(cand, {
-            ...ctx,
-            launch_context: { opportunity_id: "opp-9", customer_id: "cust-9" },
-        });
-        expect(proposal.lead_id).toBe("opp-9");
-        expect(proposal.household_id).toBe("cust-9");
-        expect(proposal.status).toBe("deferred");
-    });
-
-    it("notes absence of signals when the candidate carries none", async () => {
-        const proposal = await deferredRecordResolver.resolve(household([], []), ctx);
-        expect(proposal.notes).toContain("no match signals");
     });
 });

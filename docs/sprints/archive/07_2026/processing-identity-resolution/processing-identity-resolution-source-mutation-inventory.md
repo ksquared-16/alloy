@@ -1,10 +1,12 @@
 # Processing Identity Resolution — Source-to-Mutation Inventory
 
-**Baseline:** `origin/staging` @ `65afc8527`. Read-only. **[C]** = confirmed by file read; **[I]** = inferred.
+**Status:** Reconciled source inventory. **Implemented locally · Locally certified · Reconciled onto latest `origin/staging` · Awaiting PR merge to staging · Not deployed.**
+
+**Audit baseline:** `origin/staging` @ `65afc8527`. **[C]** = confirmed by file read; **[I]** = inferred. Rows not explicitly marked “V1 authoritative” remain historical inventory/future-source observations.
 
 **Scope note:** Alloy has two runtimes — the Next.js app (`web/`) and a Python backend (`backend/`, legacy leads + inbound SMS + GHL). Both are inventoried. `scripts/` seeds are excluded except where noted.
 
-**Central finding:** the **Processing Case is opened in parallel to identity writes, never as a gate.** For every case-opening source, business records are already written (or unaffected) by the time `openProcessingCaseFromSource` runs; the case merely references the source by `kind+id`. No inbound source commits identity *through* a Processing Case approval step today.
+**Closeout finding:** Manual Create Lead and public lead-capture forms now have exactly one identity mutation authority: Processing Case → facts/resolutions → Commit Plan → approval → explicit executor commit. Both write zero authoritative identity records before approval. Other rows remain independent existing/future source families; they do not duplicate D4/D5 authority.
 
 ---
 
@@ -13,7 +15,7 @@
 | # | Source / path | Entry point | Server handler (file:symbol) | Processing Case? | Matching | Direct identity writes (tables) | Downstream | Idempotency | Status | Dup risk |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | Public form **draft create** | `app/forms/embed/[token]` | `app/api/public/forms/[token]/submissions/route.ts:POST` | No | derives launch FKs from link metadata | `form_submissions` (draft) — no identity | — | packet returns existing draft; origin-allowlist | active | none |
-| 2 | Public form **submit** (lead_capture) | embed client | `app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts:POST` → `lib/forms/intake/applyFormIntakeSafe.ts` | **Yes, marker-gated** (`maybeOpenProcessingCaseFromFormSubmissionSafe`/`…PacketCompletionSafe`) | email→phone, ambiguity→no-write, name-mismatch→review | `persons, customers, customer_persons, opportunities, opportunity_persons, customer_members` | intake lifecycle events; packet projections; parallel case | opportunity dedup (person+child+location); no cross-resubmit key | active | moderate |
+| 2 | Public form **submit** (lead_capture) | embed client | public submit route → `ingestPublicFormThroughProcessing` | **Yes — authoritative** | canonical resolver; review required for ambiguity/conflict | **No identity writes at submit**; commit only through approved plan/executor | Processing review + explicit commit | one case per submission source | **V1 authoritative** | guarded |
 | 3 | Public **staff** form submit | operator forms UI | `app/api/admin/forms/submissions/[submissionId]/submit/route.ts:POST` | **Yes, marker-gated** | none (no lead-capture) | `form_submissions` only | case | idempotent case | active | none |
 | 4 | Public **tour booking** | `app/tour-booking/[token]` | `app/api/public/tour-booking/[token]/book/route.ts` → `tourBookingService.createTourBooking` | No | operates on existing opportunity's person | `tour_bookings` (+ schedule) — no new identity | booking event | rate-limited, token+location | active | low |
 | 5 | **Gutters lead** | `components/gutters/GutterLeadForm.tsx` | `app/api/leads/gutters/route.ts:POST` | No | contact by email→phone | **`contacts` + `opportunities`** (contact-first) | `gutter_lead_submitted` | contact deduped; **opportunity not idempotent** | active — **LEGACY_COMPAT** | **high** |
@@ -25,7 +27,7 @@
 | 11 | **book-v2 confirm** | BookV2 / PaymentClient | `app/api/book-v2/confirm/route.ts:POST` | No | quote-id reuse + `identityRowMatchesSubmission` | `persons, customers, customer_persons, opportunities, jobs, schedules, customer_subscriptions, customer_payment_methods, discount_redemptions` | `booking_confirmed` + workflows | **idempotent on `booking_attempt_id`**; promo dedup | active | low |
 | 12 | **backend /leads/cleaning** | `app/book` (v1), `app/services/cleaning/quote` | `backend/app/routes/leads.py:submit_cleaning_lead` | No | GHL-map→email→phone | **`contacts, opportunities, external_mappings`** + GHL | GHL sync, tags, photos | contact deduped; `find_or_create_opportunity` (mapping+recent window) | active — **LEGACY/transitional** | moderate |
 | 13 | backend /leads/pros | pros form | `backend/app/routes/leads.py:submit_pros_application` | No | GHL dedupe | **none in Supabase** (GHL only) | GHL tags | GHL upsert | active | none (external) |
-| 14 | **Manual Create Lead** | `CreateLeadCommandSurface.tsx` | `app/api/admin/actions/execute/route.ts:POST` → `createLeadAction` → `entryLifecycleActions.executeCreateLeadAction` (+`executeCreateLeadHouseholdCommit`) | No | `findOrCreatePersonInOrgWithMeta` + intake-resolver review guards (exact+review_required → 400) | **`persons, customers, customer_persons, contacts, opportunities, opportunity_persons, customer_members, process_instances, locations, field_values`** | status-changed event; Enrollment process instance per child | person/link deduped (23505-tolerant); **opportunity not idempotent** | active (admin) | **high** |
+| 14 | **Manual Create Lead** | `CreateLeadCommandSurface.tsx` | registered `create_lead` action → `ingestCreateLeadThroughProcessing` | **Yes — authoritative** | canonical resolver; operator decision | **No identity writes at intake**; commit only through approved plan/executor | Processing review + explicit commit | deterministic source key; executor idempotency | **V1 authoritative** | guarded |
 | 15 | Add family/related person | person drawer | `lib/admin/person/upsertAndLinkPersonForAdmin.ts` (`executeRelationshipAction`) | No | email/phone dedup + name fallback | `persons, customer_persons, opportunity_persons` | — | dedup + 23505-tolerant | active | low |
 | 16 | Admin CRUD (persons) | admin drawer | `app/api/admin/persons/route.ts:POST` | No | **blind insert, no dedup** | `persons` | — | **none** | active (admin) | high if scripted |
 | 17 | Admin CRUD (customer-members) | admin drawer | `app/api/admin/customer-members/route.ts:POST/[id]` | No | `findOrCreateChildPersonInOrg` then blind member insert | `customer_members` (+ hard delete `[id]:192`) | — | member not idempotent | active (admin) | moderate |
@@ -48,9 +50,9 @@
 | #5 gutters lead | **Must retire** | contact-first, LEGACY_COMPAT header, non-idempotent opportunity; superseded by person-first quote-start |
 | #12 backend `submit_cleaning_lead` | **Must retire** | contact-first + GHL; header: keep "until redirected to /book-v2" |
 | #26 `applyFormLeadCaptureIntake.ts` | **Dead code** | no live caller (tests + a type import only); retire after person-uniqueness decision |
-| #2 `applyFormIntakeSafe` | **Must wrap** | writes full identity graph before the parallel case; the central pre-resolution commit; **first shadow target (C1)**; reviewed-commit cutover (D5) follows the Manual Create Lead cutover (D4) per Decision I |
+| #2 `applyFormIntakeSafe` | **Retired** | throw-only boundary; public lead-capture identity flows through Processing |
 | #8/#9 book-v2 quote-start | **Must wrap** | `findOrCreatePersonInOrg` first-match, no ambiguity guard → silent mis-attach on shared email/phone; must share the ambiguity-aware matcher |
-| #14 manual Create Lead | **Legitimate operational** (add idempotency) | operator-initiated household creation; opportunity lacks idempotency key |
+| #14 manual Create Lead | **Processing authoritative** | intake creates case/facts/resolutions only; approved plan + explicit executor commit owns identity writes |
 | #6 vendor application | **Legitimate operational** | application funnel with own `vendors.status='pending'` gate; add idempotency |
 | #11 book-v2 confirm | **Legitimate operational** | well-guarded by `booking_attempt_id` + identity-match; leave in place, share resolver |
 | #16 admin persons POST | **Must wrap if bulk caller exists** | blind insert, no dedup/onConflict |
@@ -61,7 +63,9 @@
 
 ---
 
-## 3. Record mutation authority map
+## 3. Record mutation authority map (audit baseline)
+
+This table preserves the pre-sprint inventory. For D4/D5, the closeout authority above supersedes the historical Create Lead and `applyFormIntakeSafe` entries.
 
 | Record | Physical model | Creation paths | Update paths | Intended authority | Actual authority | Problems |
 |---|---|---|---|---|---|---|
@@ -78,17 +82,17 @@
 
 ---
 
-## 4. Sources already routing through Processing / `lib/intake`
+## 4. Processing authority and future source boundaries
 
-**Open a Processing Case** (only these): public form submit (#2/#3), packet completion (#19), admin document upload (#18, opt-in). Source kinds `upload`, `email_attachment`, `import`, `recreated_document` are **type-allowed but unwired** — `processingImportIntent.ts` is metadata vocabulary; no importer emits an `import`-kind case at runtime. **[C]**
+**Authoritative identity sources:** Manual Create Lead (#14) and public lead-capture submit (#2). Both route through Processing and require approval plus explicit commit.
 
-**Use `lib/intake` resolver** (proposals only, no commit): manual Create Lead (#14) via `parseCreateLeadIntakeText` → `matchIdentity` → `buildProposals` → `applyResolutionToCommitSelection`; and the read-only `POST /api/admin/intake/record-resolution` route (`resolveIntakeRecordResolution`, writes nothing). **[C]**
+**Processing cases without identity authority:** staff form submit (#3), packet completion (#19), and admin document upload (#18) may open or enrich cases but do not create identity records through these paths.
 
-**Crucial:** even for the four case-opening sources, the case does **not gate** identity writes. `applyFormIntakeSafe` has written `persons/customers/opportunities` before the case opens; the case only references the submission.
+**Future/independent source families:** gutters, backend cleaning leads, book-v2, vendor, imports, communications-derived intake, and document/packet identity resolution remain separate future source work. They neither call nor bypass the D4/D5 source adapters.
 
 ---
 
-## 5. Idempotency posture
+## 5. Idempotency posture (audit baseline)
 
 | Present | Absent (gaps) |
 |---|---|
