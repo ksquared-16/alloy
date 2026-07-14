@@ -23,13 +23,21 @@ export function resolveWorkViewBaseQueueKey(
     explicitQueueKey: string | null | undefined,
     queueDefinition: unknown,
 ): string | null {
-    const compat = workView?.compat_queue_key?.trim();
-    if (compat) return compat;
-    const explicit = explicitQueueKey?.trim();
-    if (explicit) return explicit;
     const bundle = queueDefinition != null ? tryLoadWorkUnitQueueDefinitionBundle(queueDefinition) : null;
+    const existsOnUnit = (key: string): boolean =>
+        !bundle || bundle.def.queues.some((q) => q.key === key);
+    // A bound compat lane is only usable when it actually exists on THIS unit's definition. A stale
+    // `compat_queue_key` — e.g. a deleted lifecycle stage like `lifecycle_qualification`, or an
+    // aggregate key like `pipeline_total` that lives on a sibling unit — must NOT be returned: the
+    // server throws "Unknown queue key" (404). When the def is loaded and the key is absent, degrade
+    // to the unit's all-records lane; the server still applies the view's predicates via `work_view_id`.
+    const compat = workView?.compat_queue_key?.trim();
+    if (compat && existsOnUnit(compat)) return compat;
+    const explicit = explicitQueueKey?.trim();
+    if (explicit && existsOnUnit(explicit)) return explicit;
     if (bundle) return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def));
-    return null;
+    // No definition to validate against — best-effort passthrough (runtime gates on config readiness).
+    return compat || explicit || null;
 }
 
 export type WorkViewRuntimeContext = {
