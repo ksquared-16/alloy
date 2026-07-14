@@ -150,6 +150,7 @@ describe("atomic-reveal readiness contract", () => {
         rightRailSettled: true,
         queueLoading: false,
         openedFromCache: false,
+        selectionCommitted: true,
     };
 
     it("cold entry is NOT composition-ready until the primary queue has settled (one reveal)", () => {
@@ -188,5 +189,26 @@ describe("atomic-reveal readiness contract", () => {
         const r = resolveWorkUnitReadiness({ ...base, hasIdentity: false });
         expect(r.shellReady).toBe(false);
         expect(r.coldCompositionReady).toBe(false);
+    });
+
+    it("a populated view does NOT reveal until its subject is committed (no empty-panel flash)", () => {
+        // Rows settled but the default subject has not opened yet → hold the reveal one render.
+        const r = resolveWorkUnitReadiness({ ...base, selectionCommitted: false });
+        expect(r.coldCompositionReady).toBe(false);
+        expect(r.retainedCompositionReady).toBe(false);
+    });
+
+    it("a cached return does NOT reveal until the retained subject is committed", () => {
+        const r = resolveWorkUnitReadiness({ ...base, openedFromCache: true, selectionCommitted: false });
+        expect(r.retainedCompositionReady).toBe(false);
+        expect(r.coldCompositionReady).toBe(false);
+    });
+
+    it("once the subject commits, the reveal proceeds (cold and cached alike)", () => {
+        expect(resolveWorkUnitReadiness({ ...base, selectionCommitted: true }).coldCompositionReady).toBe(true);
+        expect(
+            resolveWorkUnitReadiness({ ...base, openedFromCache: true, selectionCommitted: true })
+                .retainedCompositionReady,
+        ).toBe(true);
     });
 });
