@@ -1,6 +1,13 @@
+---
+owner: runtime
+status: canonical
+last_reviewed: 2026-07-14
+supersedes: []
+---
+
 # Operational Configuration Experience — Canonical Product Specification
 
-**Status:** Canonical product spec (design only — no code, no React)
+**Status:** Canonical product spec (design only — no code, no React). Reference-implementation spec for [`configuration-workspace-platform-doctrine.md`](../platform/operator/configuration-workspace-platform-doctrine.md) (Locations).
 **Lens:** Product & Design (Head of Product / Head of Design), not engineering
 **Companion:** `docs/system/operational-configuration-platform-phase-b-blueprint.md` (engineering blueprint — component hierarchy, state, provider bindings). This document deliberately contains none of that; it specifies *the experience*.
 **Becomes:** the canonical Settings experience for Alloy.

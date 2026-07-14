@@ -136,7 +136,8 @@ The frozen [Operational Expectations architecture](../core/operational-expectati
 
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|
-| Settings four-plane V1 | **Complete** | Fields, grouping, layouts, actions | May 2026 |
+| Settings four-plane V1 | **Complete** | Fields, grouping, layouts, actions (control plane) | May 2026 |
+| Configuration Workspace Platform | **In Progress** | Object-centric configuration experience every domain inherits; canonical doctrine `platform/operator/configuration-workspace-platform-doctrine.md` | Reference impl = Locations (Phase B); prototype landed |
 | Field policy enforcement | **Complete** | Opportunity/job subset | Forms parity open |
 | Record Experience Builder | **Planned** | Deferred from parity sprint | |
 | Placement priority | **Complete** | Opt-in ordered cohort ranking layer | Childcare waitlist is one use; off by default |

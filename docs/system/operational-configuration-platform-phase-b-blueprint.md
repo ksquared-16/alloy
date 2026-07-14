@@ -1,6 +1,13 @@
+---
+owner: runtime
+status: canonical
+last_reviewed: 2026-07-14
+supersedes: []
+---
+
 # Operational Configuration Platform — Phase B Blueprint
 
-**Status:** Canonical implementation blueprint (design only; no code in this document)
+**Status:** Canonical implementation blueprint (design only; no code in this document). Reference-implementation blueprint for [`configuration-workspace-platform-doctrine.md`](../platform/operator/configuration-workspace-platform-doctrine.md) (Locations).
 **Worktree:** `config-platform-phase-b-a3acc7`
 **Depends on:** Phase A canonical provider/resolver layer (merged to `staging`, PR #191)
 **Governs:** `docs/system/configuration-workspace-v1-doctrine.md`, `docs/system/configuration-ownership-doctrine.md`, `docs/system/settings-v2-doctrine.md`, `docs/platform/modules/configuration-platform.md`
