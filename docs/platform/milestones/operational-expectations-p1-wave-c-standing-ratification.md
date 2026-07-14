@@ -11,7 +11,7 @@ supersedes: []
 architecture, no ontology, no new package, no new gate**.
 
 ```
-P1 Wave C: LOCALLY COMPLETE
+P1 Wave C: LOCALLY CERTIFIED (live Postgres)
 G-Standing authoring half: GREEN
 P1 overall: IN PROGRESS / UNCERTIFIED
 ```
@@ -190,12 +190,28 @@ no evaluator or downstream consumer behaviour has begun.
 G-Standing authoring half: GREEN
 ```
 
-## 9. Static vs live evidence
+## 9. Evidence — static, gateway, and LIVE Postgres
 
-DB behavior (append-only, service-role-only RPC, atomic record + Ratification Act, one-per-expectation,
-same-org+proposed+deontic guard, server-assigned time) is **statically proven** (migration scan) — **no
-live Postgres in CI**; orchestration is proven through the fake gateway. **No live-database concurrency or
-RLS certification is claimed.**
+- **Live Postgres (real database, 2026-07-14, PG 14.17)** — the OE migration set replays cleanly from a
+  minimal Supabase-compatible base, and 39 assertions exercise the **actual** DDL/triggers/RLS/`SECURITY
+  DEFINER` functions/transactions: catalog uniqueness + cross-org + no-executable-rule; assignment
+  ungoverned/AI-holder rejection + append-only + effective-dating + scope isolation + revocation; the
+  resolver over real rows/timestamps; self-ratifying authoring (held→binding+evidence+one Authoring Act+no
+  Ratification Act, no-authority/ungoverned/predicted/AI paths, forgery resistance, db-assigned time,
+  idempotency); explicit ratification (sufficient→binding+immutable row+one Ratification Act,
+  insufficient→`oe_insufficient_authority` with no row/no event, immutability, idempotency); and a security
+  audit (`pg_proc`/`information_schema`/`pg_class` + role-exercise) proving every function is `SECURITY
+  DEFINER`+`search_path=public`, EXECUTE denied to PUBLIC/anon/authenticated (only `service_role`), RLS
+  enabled, no authenticated INSERT/anon read, zero dynamic SQL. Reproducible:
+  `supabase/tests/operational_expectations/` (README + harness).
+- **Static migration scan** — cumulative-history proofs of the same invariants (CI-runnable, no DB).
+- **Gateway simulation** — TS orchestration (self-ratification result, insufficient-authority rejection).
+- **Not claimed:** full 250-migration replay from empty (needs the Docker Supabase stack); live *concurrent*
+  transactions were reasoned about + statically enforced (insert-with-conflict-catch), not stress-run.
+- **Management app-boundary note:** the `operational_expectations.authority.manage`/`.assign` capabilities
+  + their service-role RPCs are delivered; the app-boundary permission check for a management **service**
+  is the contract for a bounded management surface (the standing/ratification path — the certification
+  target — is fully enforced).
 
 ## 10. What Wave C does not do
 
