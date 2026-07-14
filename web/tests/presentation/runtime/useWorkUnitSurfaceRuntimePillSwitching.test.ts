@@ -33,7 +33,7 @@ describe("useWorkUnitSurfaceRuntime — pill switching runtime guards", () => {
         expect(src).toMatch(/forceAutoOpenViewRef\.current = action\.workViewId/);
         expect(src).toMatch(/autoOpenedForViewRef\.current = null/);
         // The only drawer clear on switch is the empty-lane guard inside the auto-open effect.
-        expect(src).toMatch(/forceAutoOpen && rows\.length === 0/);
+        expect(src).toMatch(/rows\.length === 0 && \(forceAutoOpen \|\| recordOpen\)/);
     });
 
     it("first-row auto-open re-arms per work view after queue settles", () => {

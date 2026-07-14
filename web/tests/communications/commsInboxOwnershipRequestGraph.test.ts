@@ -44,9 +44,15 @@ describe("idle inbox warm is a compact preview, not the full panel load", () => 
         const warm = read("lib/adminV2/inboxWarmLoadCache.ts");
         expect(warm).toContain("compact=1");
         expect(warm).toMatch(/MODAL_THREAD_LIMIT\s*=\s*20/); // compact preview count, not the panel's full 50
-        // The core preload schedules the warm on idle (schedule*), it is not an eager first-paint fetch.
+    });
+
+    it("the idle core preload no longer eagerly warms inbox threads or communications on /workspace", () => {
+        // Deployed regression fix: the shell-mount idle preload fired inbox/threads ×4 +
+        // status-options/templates ×2 unconditionally. These are now interaction-triggered
+        // (TopNavBar warms on Inbox/Comms/Processing open). The unread-count badge is unaffected.
         const registry = read("lib/adminV2/coreSurfacePreloadRegistry.ts");
-        expect(registry).toContain("scheduleInboxWarmLoad");
-        expect(registry).toContain("scheduleCommunicationsWorkspaceWarm");
+        expect(registry).not.toContain("scheduleInboxWarmLoad");
+        expect(registry).not.toContain("scheduleCommunicationsWorkspaceWarm");
+        expect(registry).not.toContain("scheduleProcessingQueueWarm");
     });
 });

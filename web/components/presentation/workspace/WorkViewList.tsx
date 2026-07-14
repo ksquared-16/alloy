@@ -7,6 +7,7 @@
  */
 
 import Link from "next/link";
+import { parseOperatorWorkUnitEntryHref, warmWorkUnitSlugRoute } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import type { WorkViewLinkModel } from "@/lib/presentation/runtime";
 import type { ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import { grainCountUnitLabel, type WorkViewGrainBucket } from "@/lib/lifecycle/stageGrainV1";
@@ -21,6 +22,12 @@ import {
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { ProcessCardGlyph } from "./ProcessCardGlyph";
+
+/** Intent-only warm for a work-view row's Work Unit route (deduped, in-flight guarded). */
+function warmWorkViewRoute(href: string | null | undefined): void {
+    const slug = href ? parseOperatorWorkUnitEntryHref(href).workUnitSlug : null;
+    if (slug) void warmWorkUnitSlugRoute(slug, "workspace_work_view_row");
+}
 
 function positive(n: number | null | undefined): number | null {
     return typeof n === "number" && n > 0 ? n : null;
@@ -222,6 +229,13 @@ export function WorkViewList({
                     {view.href ? (
                         <Link
                             href={view.href}
+                            // Heavy Work Unit route — never eagerly prefetch on viewport (a wall of
+                            // work-view rows across every process card would storm the router, and
+                            // re-render re-prefetch doubles it). Warm only on pointer/focus intent.
+                            prefetch={false}
+                            onPointerEnter={() => warmWorkViewRoute(view.href)}
+                            onPointerDown={() => warmWorkViewRoute(view.href)}
+                            onFocus={() => warmWorkViewRoute(view.href)}
                             aria-label={rowAriaLabel(view)}
                             className={`${ROW_BODY_CLASS} motion-control no-underline ${hoverClass} focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-midnight/25`}
                         >

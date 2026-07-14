@@ -16,12 +16,9 @@
  */
 
 import { prefetchWorkspaceNavTree } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
-import { scheduleInboxWarmLoad } from "@/lib/adminV2/inboxWarmLoadCache";
-import { scheduleCommunicationsWorkspaceWarm } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { scheduleOipAnalyticsWarm } from "@/lib/metrics/oipWorkspaceWarmCache";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
-import { scheduleProcessingQueueWarm } from "@/lib/pos/processingQueueWarmCache";
 import { perfAlloyOsRuntimeMark } from "@/lib/perf/adminV2PerfLog";
 
 export type CoreSurfaceKey =
@@ -57,10 +54,12 @@ export const CORE_SURFACE_PRELOAD_REGISTRY: readonly CoreSurfacePreloadEntry[] =
     {
         key: "communications",
         label: "Communications",
-        warm: () => {
-            scheduleCommunicationsWorkspaceWarm();
-            scheduleInboxWarmLoad();
-        },
+        // No eager warm on shell mount. The full communications warm (status-options, templates,
+        // announcements, bindings, conversations, audience metadata) and the inbox thread warm
+        // (5-folder loop) are NOT needed to make /workspace usable and were the bulk of the boot
+        // request storm. They are interaction-triggered instead: TopNavBar warms comms on
+        // Comms/quick-message open and inbox on Inbox open. The persistent unread-count badge
+        // (useInboxUnreadNavCount) still loads a COUNT only — never threads.
     },
     {
         key: "work_items",
@@ -74,10 +73,8 @@ export const CORE_SURFACE_PRELOAD_REGISTRY: readonly CoreSurfacePreloadEntry[] =
     {
         key: "processing",
         label: "Processing",
-        // Processing modal code is statically imported in the top nav; this warms the shared
-        // Incoming queue cache once on idle so opening Processing paints from cache instead of
-        // running the (heavy) queue endpoint twice on mount. Internally deduped + stale-guarded.
-        warm: () => scheduleProcessingQueueWarm(),
+        // No eager warm on shell mount. Processing is interaction-triggered — TopNavBar warms the
+        // Incoming queue on Processing open (onOpenProcessing → warmProcessingQueueCache).
     },
 ];
 

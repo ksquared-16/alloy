@@ -89,6 +89,9 @@ export async function warmWorkUnitSurfaceSession(args: {
                 workViewId: runtimeCtx.workViewId,
                 limit: WORK_UNIT_QUEUE_ROWS_FETCH_MIN,
                 selectedSiteId,
+                // Match the runtime fetch so the prewarm populates the SAME compact projection.
+                rowMode: "reveal",
+                callerSurface: "work_unit_prewarm",
             });
             const rowsJson = await dedupeAdminFetch(rowsRoute, fetchInit)
                 .then((res) => (res.ok ? res.json() : null))

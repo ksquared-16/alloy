@@ -73,3 +73,25 @@ export function shouldAutoOpenFirstRowForView(args: {
     if (args.routeRecordId && args.forceAutoOpenViewId !== viewId) return false;
     return true;
 }
+
+/**
+ * Resolve WHICH record the auto-open should select, given the settled rows and the operator's
+ * retained selection. Precedence (a URL record id is handled upstream by
+ * `shouldAutoOpenFirstRowForView`, which suppresses auto-open when a deep-link record is present):
+ *
+ *   1. retained selected record — only when it is still present in the current rows;
+ *   2. the first current row;
+ *   3. null — only when there are no rows (genuinely empty).
+ *
+ * A stale retained record no longer in the view is ignored (falls through to the first row), so a
+ * mutation that removes the selected row lands on the next valid row rather than a blank panel.
+ */
+export function resolveAutoOpenRecordId(
+    rowRecordIds: readonly string[],
+    retainedRecordId: string | null,
+): string | null {
+    if (rowRecordIds.length === 0) return null;
+    const retained = retainedRecordId?.trim() || null;
+    if (retained && rowRecordIds.includes(retained)) return retained;
+    return rowRecordIds[0] ?? null;
+}

@@ -86,6 +86,7 @@ import {
     computeWorkUnitSurfaceInitialSeed,
     resolveWorkUnitReadiness,
     validatedBaseQueueKeyForUnit,
+    workUnitQueueFetchIdentity,
     workUnitSurfaceQueueLane,
     type WorkUnitSurfaceInitialSeed,
 } from "./workUnitSurfaceSeed";
@@ -93,7 +94,12 @@ import {
     fetchWorkUnitSurfaceConfigBundle,
     queueRowSurfaceIdForDepartment,
 } from "./workUnitSurfaceConfigFetch";
-import { peekRetainedWorkView, putRetainedWorkView } from "./workUnitOperatorContext";
+import {
+    peekRetainedSelection,
+    peekRetainedWorkView,
+    putRetainedSelection,
+    putRetainedWorkView,
+} from "./workUnitOperatorContext";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
 import {
@@ -102,6 +108,7 @@ import {
     type WorkUnitHeaderPresentationModel,
 } from "./workUnitHeaderSurfaceConfig";
 import {
+    resolveAutoOpenRecordId,
     resolveSelectWorkViewAction,
     shouldAutoOpenFirstRowForView,
 } from "./workUnitPillSwitching";
@@ -388,15 +395,35 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // prefetched navigation launches NO duplicate rows request. One-shot: any later lane/view/site
     // change or mutation nonce still refetches.
     const skipFreshQueueFetchRef = useRef(seed.queueFresh === true);
+    // One active-queue request per distinct fetch scope. On cold entry the effect re-fires as
+    // `cacheContext` (orgId / scopeFingerprint) and `runtimeCtx.workViewId` settle asynchronously —
+    // the deployed trace showed the SAME lane loading 3×, each a server-cache miss. This guard
+    // collapses those cosmetic re-fires to one fetch while still refetching on a genuine scope change
+    // (org / access scope / view / site / queue / mutation nonce), preserving tenant isolation.
+    const lastQueueFetchIdentityRef = useRef<string | null>(null);
 
     useEffect(() => {
         // Wait for config settle: the lane validation above needs the queue definition, and a
         // rows fetch racing org/config bootstrap 404s transiently.
         if (!workUnitId || !fetchQueueKey || !configSettled) return;
+        const fetchIdentity = workUnitQueueFetchIdentity({
+            orgId: cacheContext.orgId,
+            scopeFingerprint: cacheContext.scopeFingerprint,
+            workUnitId,
+            fetchQueueKey,
+            workViewId: runtimeCtx.workViewId,
+            selectedSiteId,
+            refreshNonce: queueRefreshNonce,
+        });
         if (skipFreshQueueFetchRef.current) {
+            // Seeded fresh (prefetch / very recent return): don't refetch, but record the identity so
+            // the settling re-fires for this same scope also short-circuit.
             skipFreshQueueFetchRef.current = false;
+            lastQueueFetchIdentityRef.current = fetchIdentity;
             return;
         }
+        if (lastQueueFetchIdentityRef.current === fetchIdentity) return;
+        lastQueueFetchIdentityRef.current = fetchIdentity;
         const seq = ++queueRequestSeq.current;
         setQueueLoading(true);
         setQueueError(null);
@@ -406,6 +433,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             workViewId: runtimeCtx.workViewId,
             limit: fetchLimitRef.current,
             selectedSiteId,
+            // Canonical compact projection — same queue_reveal the operational bootstrap uses for
+            // primary-lane rows (queue is preview-only; the Focus Panel is the authoritative record).
+            rowMode: "reveal",
+            callerSurface: "work_unit_runtime",
         });
         void dedupeAdminFetch(route, workspaceDataFetchInit())
             .then(async (res) => {
@@ -841,15 +872,32 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             // it now that we know the new lane is genuinely empty. A non-force pass (initial
             // mount / deep-link) never force-clears an operator's open record.
             const recordOpen = drawer.type === "opportunities" && drawer.id != null;
-            if (forceAutoOpen && rows.length === 0 && recordOpen) {
-                closeDrawer();
+            if (rows.length === 0 && (forceAutoOpen || recordOpen)) {
+                if (recordOpen) closeDrawer();
+                // Genuinely empty view — drop the retained record so a later return does not
+                // resurrect a record that is no longer in this view (clear only after empty).
+                putRetainedSelection(orgId, workUnitId, {
+                    workViewId: viewId,
+                    queueKey: fetchQueueKey,
+                    selectedRecordId: null,
+                });
             }
             return;
         }
 
-        const first = rows[0];
-        if (!first) return;
-        const warm = resolveQueueRowWarmTarget(first, {
+        // Precedence: an explicit URL record already suppressed auto-open above; otherwise restore
+        // the operator's RETAINED record when it is still in this view's rows (return-navigation),
+        // else the first row. A stale retained record not in the rows falls through to the first row.
+        const retained = peekRetainedSelection(orgId, workUnitId);
+        const retainedRecordId =
+            retained && retained.workViewId === viewId ? retained.selectedRecordId : null;
+        const targetId = resolveAutoOpenRecordId(
+            rows.map((r) => r.entityId),
+            retainedRecordId,
+        );
+        const target = rows.find((r) => r.entityId === targetId) ?? rows[0];
+        if (!target) return;
+        const warm = resolveQueueRowWarmTarget(target, {
             departmentId,
             workUnitId,
             workViewId: viewId,
@@ -857,7 +905,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         if (warm) {
             prefetchOpportunityDrawerOnRowIntent(warm.id, warm.context, warm.seed);
         }
-        openRecord(first);
+        openRecord(target);
     }, [
         queueLoading,
         queueResult,
@@ -866,6 +914,8 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         openRecord,
         departmentId,
         workUnitId,
+        orgId,
+        fetchQueueKey,
         runtimeCtx.workViewId,
         drawer.type,
         drawer.id,
@@ -875,6 +925,19 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // ── Selected record: the drawer store is THE selection state (no parallel store) ────
     const selectedRecordId =
         drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
+
+    // Retain the operator's live record selection (session-scoped, per work unit) so a return to
+    // this Work Unit restores it. Only a real (non-null) selection is retained here — clearing on a
+    // genuinely-empty view happens in the auto-open effect above; a transient null during the
+    // return-mount window must NOT clobber the retained record before auto-open can read it.
+    useEffect(() => {
+        if (!workUnitId || !selectedRecordId) return;
+        putRetainedSelection(orgId, workUnitId, {
+            workViewId: runtimeCtx.workViewId ?? null,
+            queueKey: fetchQueueKey,
+            selectedRecordId,
+        });
+    }, [orgId, workUnitId, fetchQueueKey, runtimeCtx.workViewId, selectedRecordId]);
 
     // ── Right Rail actions: the configured action lane for this work unit ────────────────
     // The runtime is the single owner of surface data fetching. Load the resolved actions

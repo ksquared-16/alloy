@@ -140,6 +140,10 @@ export async function GET(
         const attentionBucketKey = (request.nextUrl.searchParams.get("attention_bucket") ?? "").trim() || null;
         const rowMode = (request.nextUrl.searchParams.get("row_mode") ?? "").trim().toLowerCase();
         const rowEnrichment = rowMode === "preview" || rowMode === "reveal" ? "queue_reveal" : "queue_list";
+        // Deployed instrumentation: surface which caller requested which mode, and how the server
+        // resolved it — so a trace shows at a glance whether the canonical surface is on queue_reveal.
+        const callerSurface = (request.nextUrl.searchParams.get("caller_surface") ?? "").trim() || "unknown";
+        const requestedMode = rowMode || "unset";
         const workViewIdParam =
             (request.nextUrl.searchParams.get("work_view_id") ?? request.nextUrl.searchParams.get("work_view") ?? "").trim()
             || null;
@@ -177,6 +181,9 @@ export async function GET(
                 server_cache_hit: true,
                 row_enrichment: rowEnrichment,
                 enrichment_mode: cached.rowsPerf.enrichment_mode ?? rowEnrichment,
+                requested_mode: requestedMode,
+                resolved_mode: rowEnrichment,
+                caller_surface: callerSurface,
                 row_count: Array.isArray(cached.result.items) ? cached.result.items.length : 0,
                 payload_kb: Math.round(payload_kb * 10) / 10,
                 count_mode: queueRowsCountModeLabel(omitTotalCount, countAccuracy),
@@ -264,6 +271,9 @@ export async function GET(
             server_cache_hit: false,
             row_enrichment: rowEnrichment,
             enrichment_mode: rowsPerf.enrichment_mode ?? rowEnrichment,
+            requested_mode: requestedMode,
+            resolved_mode: rowEnrichment,
+            caller_surface: callerSurface,
             enrichment_queries_run: rowsPerf.enrichment_queries_run,
             skipped_enrichment: rowsPerf.skipped_enrichment,
             ...rowsPerfForLog,

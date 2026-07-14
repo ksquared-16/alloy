@@ -65,6 +65,15 @@ export function queueRowsRouteForView(args: {
     workViewId: string | null;
     limit: number;
     selectedSiteId: string | null;
+    /**
+     * Compact projection for the canonical Work Unit surface (rows + prewarm). `reveal` sends
+     * `row_mode=reveal` so the server returns the SAME `queue_reveal` projection the operational
+     * bootstrap uses for primary-lane rows — no drawer-grade context, no optional enrichment.
+     * Omitted for count-only totals fetches (mode is irrelevant to a count).
+     */
+    rowMode?: "reveal" | "preview";
+    /** Caller surface for server instrumentation (requested_mode/resolved_mode/caller_surface). */
+    callerSurface?: string;
 }): string {
     const qs = new URLSearchParams({
         limit: String(args.limit),
@@ -72,6 +81,8 @@ export function queueRowsRouteForView(args: {
         count_mode: "exact",
     });
     if (args.workViewId) qs.set("work_view_id", args.workViewId);
+    if (args.rowMode) qs.set("row_mode", args.rowMode);
+    if (args.callerSurface) qs.set("caller_surface", args.callerSurface);
     return appendWorkspaceSiteToUrl(
         `/api/admin/queues/${encodeURIComponent(args.workUnitId)}/${encodeURIComponent(args.baseQueueKey)}?${qs.toString()}`,
         args.selectedSiteId,

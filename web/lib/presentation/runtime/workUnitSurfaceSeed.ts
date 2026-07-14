@@ -38,6 +38,33 @@ export function validatedBaseQueueKeyForUnit(base: string | null, queueDefinitio
 }
 
 /**
+ * Stable identity of one active-queue fetch scope. The runtime's rows effect re-fires as the cache
+ * context (org / access scope) and active Work View settle asynchronously on cold entry; two fires
+ * with the SAME identity are the same logical request and must not both hit the network. Tenant and
+ * scope dimensions (org, scopeFingerprint) are included so a genuine org/scope change still refetches
+ * (isolation preserved); `limit` is excluded (fetch-sizing, not a content dimension).
+ */
+export function workUnitQueueFetchIdentity(args: {
+    orgId: string | null | undefined;
+    scopeFingerprint: string | null | undefined;
+    workUnitId: string;
+    fetchQueueKey: string;
+    workViewId: string | null | undefined;
+    selectedSiteId: string | null | undefined;
+    refreshNonce: string | number;
+}): string {
+    return [
+        args.orgId ?? "_",
+        args.scopeFingerprint ?? "_",
+        args.workUnitId,
+        args.fetchQueueKey,
+        args.workViewId ?? "_",
+        args.selectedSiteId ?? "_",
+        args.refreshNonce,
+    ].join("|");
+}
+
+/**
  * The queue-rows cache lane must key identically at read (mount seed) and write (rows effect): base
  * lane key + active Work View + selected site. `limit` is intentionally excluded — a fetch-sizing
  * detail, not a content dimension (a wider limit is a superset the SWR pass corrects).
