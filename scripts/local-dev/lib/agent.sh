@@ -334,9 +334,26 @@ Expected:
 \`\`\`bash
 awt ${slot}                 # cd into this slot's worktree
 devup                       # start this worktree's owned server (from inside it)
+alloy-agent-prepare ${slot}
+alloy-agent-login ${slot}
+alloy-agent-ready ${slot}
+alloy-agent-verify ${slot} authenticated-home
+alloy-agent-context ${slot} --copy
+alloy-agent-browser-stop ${slot}
 alloy-agent-status
 alloy-agent-close ${slot}   # stop server + git summary; never removes worktree
 \`\`\`
+
+## UI verification (required for user-visible changes)
+
+- Use assigned localhost \`${url}\` only — never production.
+- Use QA identity for slot ${slot} only (configure \`ALLOY_SLOT_${slot}_QA_IDENTITY\`).
+- Perform real browser verification; never claim UI verified from code inspection alone.
+- Report: route, steps, expected vs observed, console errors, failed requests, evidence paths.
+- Focused checks: \`alloy-agent-verify ${slot} route /path\`
+- Full Playwright: \`alloy-validate ${name} playwright\` only (serialized).
+- Never expose cookies, tokens, or storage-state contents.
+- Stop temporary browsers: \`alloy-agent-browser-stop ${slot}\`
 
 ## Role focus (${role})
 
@@ -372,19 +389,23 @@ alloy_open_tool_for_agent() {
   case "$agent" in
     cursor)
       if alloy_have_cmd cursor; then
-        # Open folder in Cursor; do not wait on the GUI process.
         cursor "$path" >/dev/null 2>&1 &
+        return 0
+      fi
+      if alloy_have_cmd code; then
+        code "$path" >/dev/null 2>&1 &
         return 0
       fi
       if [[ "$(uname -s)" == "Darwin" ]] && [[ -d "/Applications/Cursor.app" ]]; then
         open -a "Cursor" "$path"
         return 0
       fi
-      alloy_die "Cursor CLI/app not found. Install Cursor or add 'cursor' to PATH."
+      alloy_warn "Cursor CLI not found. Open this folder manually in Cursor:"
+      alloy_info "  ${path}"
+      return 0
       ;;
     claude)
       if alloy_have_cmd claude; then
-        # Launch Claude Code in the worktree when the CLI exists.
         (
           cd "$path"
           nohup claude >/dev/null 2>&1 &
@@ -395,7 +416,9 @@ alloy_open_tool_for_agent() {
         open -a "Claude" "$path"
         return 0
       fi
-      alloy_die "Claude CLI/app not found. Install Claude Code or Claude.app."
+      alloy_warn "Claude CLI not found. Open this folder manually in Claude Desktop:"
+      alloy_info "  ${path}"
+      return 0
       ;;
     *)
       alloy_die "unsupported agent for open: $agent"

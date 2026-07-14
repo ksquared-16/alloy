@@ -1,4 +1,4 @@
-# Alloy local parallel-agent development toolkit (Phase 1 + Phase 2)
+# Alloy local parallel-agent development toolkit (Phase 1 + Phase 2 + Phase 3)
 
 Self-contained Bash toolkit for running up to six concurrent Cursor or Claude implementation agents in isolated Git worktrees, with deterministic ports and serialized heavyweight validation.
 
@@ -347,3 +347,29 @@ alloy-agent-open 2 --with-server              # open tool + server; prompt copie
 alloy-agent-status
 alloy-agent-close 2                           # stop server; keep worktree
 ```
+
+### Phase 3 — verification bootstrap
+
+| Command | Purpose |
+|---------|---------|
+| `alloy-agent-prepare` | Safe allowlisted `web/.env.local.agent` (chmod 600; never prints values) |
+| `alloy-agent-login` | Isolated browser → manual `/login` → storage state per slot |
+| `alloy-agent-ready` | READY / NOT READY checklist with remediation |
+| `alloy-agent-verify` | Focused route/home verify (one worker; evidence on failure) |
+| `alloy-agent-browser-stop` | Stop slot-owned browser only |
+| `alloy-agent-context` | Generated verification context; `--copy` |
+| `alloy-agent-evidence` | List screenshots/summaries under local evidence dir |
+
+Auth discovered: Supabase email/password at `/login` (see `web/README_ADMIN_AUTH.md`).
+
+```bash
+alloy-agent-prepare 1
+alloy-dev-start wt1-my-initiative
+alloy-agent-login 1
+alloy-agent-ready 1
+alloy-agent-verify 1 route /workspace
+alloy-agent-context 1 --copy
+alloy-agent-browser-stop 1
+```
+
+Guides: `VERIFICATION-SECURITY.md`, `AI-APP-HEALTH.md`

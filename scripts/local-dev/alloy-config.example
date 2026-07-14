@@ -33,6 +33,28 @@ ALLOY_SLOT_5_DEFAULT_AGENT="claude"
 ALLOY_SLOT_6_ROLE="Experimental"
 ALLOY_SLOT_6_DEFAULT_AGENT="cursor"
 
+# Phase 3 — per-slot QA identity aliases (email/label only; never passwords).
+# Provision six dedicated local/staging portal users manually (see VERIFICATION-SECURITY.md).
+ALLOY_SLOT_1_QA_IDENTITY="qa-slot1-product@example.com"
+ALLOY_SLOT_2_QA_IDENTITY="qa-slot2-architecture@example.com"
+ALLOY_SLOT_3_QA_IDENTITY="qa-slot3-performance@example.com"
+ALLOY_SLOT_4_QA_IDENTITY="qa-slot4-ui@example.com"
+ALLOY_SLOT_5_QA_IDENTITY="qa-slot5-refactor@example.com"
+ALLOY_SLOT_6_QA_IDENTITY="qa-slot6-experimental@example.com"
+
+# Safe env bootstrap (alloy-agent-prepare).
+ALLOY_ENV_SOURCE="$ALLOY_REPO/web/.env.local"
+# Extra allowlisted non-secret names (space-separated). NEXT_PUBLIC_* always allowed.
+ALLOY_ENV_ALLOWLIST="DEV_QUEUE_ORG_ID PLAYWRIGHT_BASE_URL"
+# Set to 1 to refuse remote Supabase URLs in agent env.
+ALLOY_BLOCK_REMOTE_SUPABASE="0"
+
+# Auth routes (discovered: Supabase email/password at /login).
+ALLOY_AGENT_LOGIN_ROUTE="/login"
+ALLOY_AGENT_AUTH_CHECK_ROUTE="/workspace"
+# Optional extra hosts for verify allowlist (space-separated hostnames).
+ALLOY_VERIFY_ALLOWED_HOSTS=""
+
 # App package lives under web/ (npm + package-lock.json).
 ALLOY_PM="npm"
 ALLOY_WEB_DIR="web"

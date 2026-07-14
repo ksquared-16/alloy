@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Alloy local-dev toolkit (Phase 1 + Phase 2) as one directory symlink.
+# Install Alloy local-dev toolkit (Phase 1 + Phase 2 + Phase 3) as one directory symlink.
 # No sudo, no PATH mutation, never overwrites existing config.
 set -euo pipefail
 
@@ -24,6 +24,13 @@ COMMANDS=(
   alloy-agent-close
   alloy-agent-instructions
   alloy-ai-health
+  alloy-agent-prepare
+  alloy-agent-login
+  alloy-agent-ready
+  alloy-agent-verify
+  alloy-agent-browser-stop
+  alloy-agent-context
+  alloy-agent-evidence
 )
 
 alloy_looks_like_toolkit_install() {

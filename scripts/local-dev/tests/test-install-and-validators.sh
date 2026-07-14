@@ -128,6 +128,8 @@ TARGET="$(readlink "$HOME_A/bin/alloy-dev")"
 [[ -e "$HOME_A/bin/alloy-dev/lib/agent.sh" ]] && pass "lib/agent.sh resolves" || fail "lib/agent.sh missing"
 [[ -e "$HOME_A/bin/alloy-dev/alloy-config.example" ]] && pass "alloy-config.example resolves" || fail "example missing"
 [[ -e "$HOME_A/bin/alloy-dev/alloy-agent-create" ]] && pass "alloy-agent-create resolves" || fail "alloy-agent-create missing"
+[[ -e "$HOME_A/bin/alloy-dev/alloy-agent-prepare" ]] && pass "alloy-agent-prepare resolves" || fail "alloy-agent-prepare missing"
+[[ -e "$HOME_A/bin/alloy-dev/lib/verify.sh" ]] && pass "lib/verify.sh resolves" || fail "lib/verify.sh missing"
 [[ -e "$HOME_A/bin/alloy-dev/shell-aliases.sh" ]] && pass "shell-aliases.sh resolves" || fail "shell-aliases missing"
 
 # Commands start (exit quickly via help / early config load). No network.

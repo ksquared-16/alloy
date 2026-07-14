@@ -23,6 +23,17 @@ alloy-agent-instructions 3 --copy
 alloy-agent-status
 alloy-agent-close 3                           # stops server; never removes worktree
 
+# Phase 3 verification bootstrap
+alloy-agent-prepare 3                         # safe web/.env.local.agent (allowlist)
+alloy-agent-login 3                           # manual /login → storage state
+alloy-agent-ready 3                           # READY / NOT READY
+alloy-agent-verify 3 authenticated-home
+alloy-agent-verify 3 route /workspace
+alloy-agent-verify 3 focused-spec playwright/tests/smoke-field-registry.spec.ts
+alloy-agent-context 3 --copy
+alloy-agent-evidence 3
+alloy-agent-browser-stop 3                      # slot-owned browser only
+
 # Shell shortcuts
 awt 3                                         # cd slot 3 worktree
 devup                                         # start owned localhost server

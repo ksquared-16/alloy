@@ -52,6 +52,13 @@ main() {
   export PORT="$port"
   export NEXT_PUBLIC_APP_URL="$url"
 
+  # Load safe agent env (web/.env.local.agent) without printing values.
+  if [[ -f "${SCRIPT_DIR}/lib/verify.sh" ]]; then
+    # shellcheck source=lib/verify.sh
+    source "${SCRIPT_DIR}/lib/verify.sh"
+    alloy_load_agent_env_exports "$path" || true
+  fi
+
   alloy_info "Starting ${ALLOY_DEV_COMMAND} in ${web_dir} on port ${port}..."
   (
     cd "$web_dir"
