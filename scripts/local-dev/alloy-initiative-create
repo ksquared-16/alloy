@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-initiative-create <key> --clipboard
+  alloy-initiative-create <key> --from /path/to/initiative.yaml
+
+Creates a new initiative from an Initiative Brief (YAML).
+Validates required fields strictly. Does not overwrite existing initiatives.
+
+See: scripts/local-dev/INITIATIVE-CONTRACT.md
+EOF
+}
+
+import_intake() {
+  local key="$1"
+  local raw_path="$2"
+  local content json_path intake_md base
+
+  if [[ ! -f "$raw_path" ]]; then
+    alloy_die "intake file not found: $raw_path"
+  fi
+
+  content="$(cat "$raw_path")"
+  if alloy_engineering_forbidden_patterns_in_content "$content"; then
+    alloy_warn "intake contains shell-like tokens — treated as data only (never executed)"
+  fi
+
+  base="$(alloy_initiative_dir "$key")"
+  if [[ -e "$base" ]]; then
+    alloy_die "initiative already exists: $key (refusing silent overwrite)"
+  fi
+
+  alloy_initiative_init_dirs "$key"
+  cp "$raw_path" "$base/initiative.yaml"
+  json_path="$base/initiative.json"
+  alloy_yaml_to_json "$base/initiative.yaml" "$json_path"
+
+  # Ensure key matches directory
+  local intake_key
+  intake_key="$(node -e "console.log(require('${json_path}').initiative.key)")"
+  if [[ "$intake_key" != "$key" ]]; then
+    alloy_die "initiative.key '${intake_key}' does not match argument '${key}'"
+  fi
+
+  alloy_engineering_io validate-intake "$json_path"
+
+  {
+    printf '# Initiative intake — %s\n\n' "$key"
+    printf 'Imported: %s\n\n' "$(alloy_iso_now)"
+    printf '%s\n' "$content"
+  } >"$base/intake.md"
+
+  local title staging_sha state_json
+  title="$(node -e "console.log(require('${json_path}').initiative.title)")"
+  staging_sha="$(alloy_staging_sha)"
+  state_json="$(node -e "
+    const intake = require('${json_path}');
+    console.log(JSON.stringify({
+      key: '${key}',
+      title: intake.initiative.title,
+      state: 'draft',
+      created_at: '$(alloy_iso_now)',
+      updated_at: '$(alloy_iso_now)',
+      staging_baseline_sha: '${staging_sha}',
+      approved_spec_hash: null,
+      approver: null,
+      approved_at: null,
+      remediation_round: 0,
+      human_decisions: [],
+      workers: {},
+      validation: { fingerprints: [] },
+      cost_summary: {
+        workers_used: 0,
+        heavy_validations: 0,
+        ui_verification_runs: 0,
+        remediation_rounds: 0,
+        push_count: 0,
+        pr_count: 0,
+        vercel_preview_triggered: false
+      },
+      promotion: null
+    }));
+  ")"
+  alloy_engineering_io write-json "$base/state.json" "$state_json"
+
+  alloy_info "Initiative created: $key"
+  alloy_info "  path: $base"
+  alloy_info "  state: draft"
+  alloy_info "  staging baseline: ${staging_sha:0:12}"
+  alloy_info ""
+  alloy_info "Next: alloy-initiative-audit $key"
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge  2 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  shift
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_key_valid "$key" || alloy_die "invalid initiative key: $key"
+
+  local mode="" from_path="" tmp
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --clipboard) mode="clipboard"; shift ;;
+      --from) [[ $# -ge 2 ]] || alloy_die "--from requires path"; from_path="$2"; mode="file"; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+
+  case "$mode" in
+    clipboard)
+      alloy_require_cmd pbpaste
+      tmp="$(mktemp)"
+      pbpaste >"$tmp"
+      import_intake "$key" "$tmp"
+      rm -f "$tmp"
+      ;;
+    file)
+      import_intake "$key" "$from_path"
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"
