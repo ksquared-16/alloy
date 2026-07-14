@@ -1,0 +1,155 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-07-13
+supersedes: []
+---
+
+# Platform Decisions
+
+**Purpose:** Concise register of consequential, durable, cross-platform decisions.
+
+| Artifact | Role |
+|----------|------|
+| **Canonical doctrine** | How Alloy works today |
+| **RFCs** | Proposals and ratification paths |
+| **Release history** | Shipped capability milestones |
+| **Sprint / audit / archive** | Execution and investigation history |
+| **This register** | Durable decisions and their rationale |
+
+Detailed behavior always lives in the **canonical owner** documents linked below — not here.
+
+## Entry format
+
+```text
+## YYYY-MM — Decision title
+
+**Decision:** what was decided.
+**Why:** why it was necessary.
+**Consequences:** what future work must respect.
+**Canonical owners:** links to detailed doctrine.
+**Status:** Active | Superseded
+**Superseded by:** link when applicable.
+```
+
+---
+
+## 2026-07 — Documentation Platform v1.0 frozen
+
+**Decision:**  
+Documentation is **production infrastructure**. Active doctrine has **one canonical owner** per concept. Feature work that changes platform behavior updates its owning canonical document in the **same change**. Sprint, audit, closeout, and archive material do **not** redefine current doctrine. No additional **broad** documentation reorganization is planned.
+
+**Why:**  
+Canonical ownership, governance, docs-lint/CI, handbook onboarding, history separation, curation, and repository certification are complete. The repository must maintain documentation **incrementally** with feature work rather than periodically rebuilding it.
+
+**Consequences:**  
+- New docs fit established lifecycle and placement rules.  
+- Documentation regressions are CI-governed.  
+- Future cleanup is ordinary maintenance — not a new platform initiative.
+
+**Canonical owners:**  
+- [`../governance/documentation-governance.md`](../governance/documentation-governance.md)  
+- [`alloy-platform-handbook.md`](./alloy-platform-handbook.md)  
+- [`../milestones/documentation-rebaseline-v2-certification.md`](../milestones/documentation-rebaseline-v2-certification.md)  
+- `docs/sprints/completed/documentation-rebaseline-v2/00-closeout.md` *(initiative history — not current doctrine)*  
+- [`../../README.md`](../../README.md)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — Business Process is the operator-facing execution model
+
+**Decision:**  
+Operators think in **Business Process → Stage / Work View → Record**. Work units and queue definitions remain **implementation/runtime** constructs. **Status does not replace** stage, work, or outcome.
+
+**Why:**  
+Alloy is an operations OS, not a CRM-first, work-unit-first, or queue-as-truth product. The operator model must stay stable across domains.
+
+**Consequences:**  
+Surfaces, language, and new domains orient to Business Processes first. Runtime constructs may exist underneath but must not become the primary nouns in product or platform docs.
+
+**Canonical owners:**  
+- [`../core/business-process-system.md`](../core/business-process-system.md)  
+- [`../core/status-and-state-system.md`](../core/status-and-state-system.md)  
+- [`../modules/business-process-execution-platform.md`](../modules/business-process-execution-platform.md)  
+- [`alloy-platform-handbook.md`](./alloy-platform-handbook.md) (Ch. 2–3)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — One truth and one owner per platform concern
+
+**Decision:**  
+Every durable concern has **one canonical owner**. Queue rows are **previews**; record/entity resolvers provide authoritative detail. Configuration **steers** behavior and presentation; **code owns** invariants and executable semantics. Status belongs to a **named subject grain**.
+
+**Why:**  
+Parallel doctrine and dual sources of truth produce operator distrust and implementation churn. Ownership must be discoverable and enforced.
+
+**Consequences:**  
+Do not introduce a second owner for an already-owned concern. Prefer config and vertical presets over industry-specific branches in shared modules. Treat queue payloads as selection, not truth.
+
+**Canonical owners:**  
+- [`../core/entity-model.md`](../core/entity-model.md)  
+- [`../core/record-system.md`](../core/record-system.md)  
+- [`../core/status-and-state-system.md`](../core/status-and-state-system.md)  
+- [`../core/data/status-architecture.md`](../core/data/status-architecture.md)  
+- [`../modules/configuration-platform.md`](../modules/configuration-platform.md)  
+- [`../operator/queue-system.md`](../operator/queue-system.md)  
+- [`../governance/design-and-operational-doctrine.md`](../governance/design-and-operational-doctrine.md)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — Runtime is stable infrastructure
+
+**Decision:**  
+Runtime work proceeds by **correcting ownership domains**, not rediscovering or multiplying runtimes. **One runtime owner** per concern. Compatibility paths are **migration mechanisms** and must be deleted after parity. Primary operational surfaces reveal as **stable, complete** experiences (coordinated reveal; no false empties).
+
+**Why:**  
+Architecture discovery is finished for OS Runtime / Presentation Runtime. Remaining work is product completion and ownership cleanup inside the locked model.
+
+**Consequences:**  
+Do not invent parallel reveal engines, shells, or ownership trees. Prefetch is allowed; partial above-fold reveal is not. Update ownership maps when moving runtimes.
+
+**Canonical owners:**  
+- [`../runtime/operational-runtime-doctrine.md`](../runtime/operational-runtime-doctrine.md)  
+- [`os-runtime-map.md`](./os-runtime-map.md)  
+- [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md)  
+- [`../governance/runtime-ownership-migration-map.md`](../governance/runtime-ownership-migration-map.md)  
+- [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — AI remains human-in-the-loop
+
+**Decision:**  
+BOS may **assist, recommend, explain, and prepare**. Authoritative or irreversible decisions remain governed by **validated platform actions** and **human confirmation**. AI does **not** create parallel mutation paths.
+
+**Why:**  
+Alloy’s trust model requires the same records, permissions, workflows, events, and audit paths for AI-assisted work as for human operators.
+
+**Consequences:**  
+No privileged client-side service-role shortcuts “for AI.” Recommendations stay grounded in platform commands and config. Product pauses on agent expansion do not change this law.
+
+**Canonical owners:**  
+- [`../modules/ai-platform.md`](../modules/ai-platform.md)  
+- [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)  
+- [`../../system/bos-identity-doctrine.md`](../../system/bos-identity-doctrine.md)  
+- [`../../product/bos-foundation.md`](../../product/bos-foundation.md)
+
+**Status:** Active  
+
+**Superseded by:** —

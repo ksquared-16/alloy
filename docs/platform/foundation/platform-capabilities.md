@@ -29,6 +29,7 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | Current Work Runtime | **Complete** | Config-driven stage work in Focus Panel | PR #95 |
 | TypeScript canonical typecheck | **Complete** | Split build/full graphs; 8 GB heap; CI both jobs | `typescript-performance.md` |
 | Workspace orchestration | **Complete** | Repo dev entry coordination | PR #143 |
+| Documentation Platform v1.0 | **Complete** | Handbook, governance, docs-lint/CI, curation, certification, Platform Decisions register | Production infrastructure; incremental maintenance thereafter |
 | Platform simplification (legacy drawer) | **Complete** | Legacy drawer deleted; canonical surfaces | PR #144–#148 |
 
 ---

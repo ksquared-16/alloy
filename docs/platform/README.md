@@ -9,7 +9,8 @@ supersedes: []
 
 Canonical Alloy platform doctrine. Start at [`../README.md`](../README.md) for the full library map.
 
-**Teach first:** [`foundation/alloy-platform-handbook.md`](./foundation/alloy-platform-handbook.md) — Alloy Platform Handbook.
+**Teach first:** [`foundation/alloy-platform-handbook.md`](./foundation/alloy-platform-handbook.md) — Alloy Platform Handbook.  
+**Durable decisions:** [`foundation/platform-decisions.md`](./foundation/platform-decisions.md).
 
 | Folder | Owns |
 |--------|------|

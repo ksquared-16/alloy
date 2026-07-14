@@ -53,7 +53,7 @@ For behavior-changing work, include item 15 in context. For agent/repo workflow,
 
 **Supplemental (vertical detail):** `docs/product/crm-system.md` — enrollment pipeline reference implementation, not canonical platform framing.
 
-**Transitional expanded references:** `docs/system/*`, `docs/core/*`, `docs/execution/*` — prefer `docs/platform/*` when both exist.
+**Transitional expanded references:** `docs/system/*`, archived `docs/archive/2026-06-execution/*` — prefer `docs/platform/*` for current doctrine.
 
 Use `docs/sprints/**` and `docs/audits/**` only when the task touches that area. Treat `docs/archive/**` as historical or imported context, not current truth unless an active doc confirms it.
 

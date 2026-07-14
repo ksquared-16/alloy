@@ -30,7 +30,7 @@ Navigation: **Business Process → Stage → Record** — see **`docs/platform/c
 
 - **Case vs child lifecycle (May 2026):** **`opportunities`** = **household coordination case** (tours, comms, forms, follow-up). **`opportunity_customer_members.outcome_status_key`** = **per-child enrollment lifecycle SoT** (siblings may differ). **`opportunities.status_key`** remains in use for case-level pipeline filters and legacy lanes but **must not** be treated as authoritative for every child’s waitlist/enrollment state. Queue **grain** in `work_units.queue_definition` declares whether a lane lists **case** or **child/candidate** rows. Closeout: **`docs/sprints/archive/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`**.
 - **Table:** `opportunities` with org scoping, `customer_id`, `work_unit_id`, status keys, person/contact fields depending on migration age.
-- **Orchestrator + specialists (AdminV2 command bar):** Bottom **`AICommandSurfaceShell`** routes to **Task Assist**, **Workflow Assist**, and **Config/Layout Assist** (**partial** apply). **Assistive groundwork shipped; agent expansion paused** — see **`docs/product/bos-foundation.md`**, **`docs/execution/roadmap-and-gaps.md`**. **Does not execute** side effects itself. Drawer **communications** tab: **`TaskAssistOpportunityLauncher`** + threads. Flag: **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**. **`metadata.next_follow_up_at`** auto-sync from tasks is **not** in V1.1.
+- **Orchestrator + specialists (AdminV2 command bar):** Bottom **`AICommandSurfaceShell`** routes to **Task Assist**, **Workflow Assist**, and **Config/Layout Assist** (**partial** apply). **Assistive groundwork shipped; agent expansion paused** — see **`docs/product/bos-foundation.md`**, **`docs/archive/2026-06-execution/roadmap-and-gaps.md`**. **Does not execute** side effects itself. Drawer **communications** tab: **`TaskAssistOpportunityLauncher`** + threads. Flag: **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**. **`metadata.next_follow_up_at`** auto-sync from tasks is **not** in V1.1.
 - **Admin:** `GET/PATCH /api/admin/opportunities/[id]`, entity drawer type `opportunities`, status definitions include **`opportunities`** and related types (`web/lib/admin/statusDefinitionsAdminEntityTypes.ts`).
 - **Queues:** `QueueService` supports opportunity preview lists with field/sort allowlists and work-unit scoping tests (`web/tests/queues/QueueServiceOpportunityScoping.test.ts`). **Workspace site header filter** narrows queue rows via **`workspace_site_id`** intersected with permission scope (`resolveQueueRecordScopeConstraints`).
 - **Opportunity drawer location:** When `location_id` is set, drawer header shows **Location: [site label]** from hydrated **`_location_label`** / **`_location_name`** (see **`opportunityOverviewRelationshipReadLabel`**).
@@ -208,7 +208,7 @@ Canonical documentation: **`docs/product/communications.md`** (threads, enqueue,
 | Pipeline | Stages, queues, drawer, workflows | KPI/report definitions aligned with queues; staleness UX |
 | Conversion | Customers/members/jobs | Packaged childcare enrollment handoff vs book-v2-shaped confirm |
 
-**Structural note:** `schedules.job_id` is required — “opportunity-only tour” needs a documented lightweight-job pattern unless storage changes. Tracking: **`docs/execution/roadmap-and-gaps.md`**.
+**Structural note:** `schedules.job_id` is required — “opportunity-only tour” needs a documented lightweight-job pattern unless storage changes. Tracking: **`docs/archive/2026-06-execution/roadmap-and-gaps.md`**.
 
 ---
 

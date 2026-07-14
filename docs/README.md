@@ -11,6 +11,8 @@ supersedes: []
 
 **Start here (onboarding):** **[`platform/foundation/alloy-platform-handbook.md`](platform/foundation/alloy-platform-handbook.md)** — the Alloy Platform Handbook. Teach the platform first; doctrine is the encyclopedia.
 
+**Platform Decisions:** **[`platform/foundation/platform-decisions.md`](platform/foundation/platform-decisions.md)** — durable cross-platform decisions and rationale (not a substitute for doctrine).
+
 **July 2026 platform freeze:** Foundational architecture is **complete and stable**. After the handbook: **`platform/milestones/freeze-july-2026.md`**, **`platform/foundation/platform-manifesto.md`**, **`platform/foundation/system-overview.md`**.
 
 **June 2026 rebaseline:** Canonical platform docs live under **`docs/platform/`**. Schema reference under **`docs/schema/`** (generated). Business Process → Stage → Record is the operator mental model; work units are documented as runtime constructs.
@@ -55,6 +57,7 @@ Then: **`platform/foundation/system-overview.md`**
 ### 1. Foundation
 
 0. `platform/foundation/alloy-platform-handbook.md` — **Alloy Platform Handbook** (teach the platform first)
+0a. `platform/foundation/platform-decisions.md` — **Platform Decisions** (durable cross-platform decisions + rationale)
 1. `platform/foundation/system-overview.md`
 2. `platform/foundation/platform-capabilities.md`
 3. `platform/foundation/product-roadmap.md`
