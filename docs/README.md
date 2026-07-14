@@ -9,7 +9,9 @@ supersedes: []
 
 **Purpose:** Authoritative navigation for engineers, implementers, and AI agents. Prefer these files over chat memory or archived sprint material.
 
-**July 2026 platform freeze:** Foundational architecture is **complete and stable**. Start here for "what platform exists today": **`platform/milestones/freeze-july-2026.md`**, **`platform/foundation/platform-manifesto.md`**, **`platform/foundation/system-overview.md`**.
+**Start here (onboarding):** **[`platform/foundation/alloy-platform-handbook.md`](platform/foundation/alloy-platform-handbook.md)** — the Alloy Platform Handbook. Teach the platform first; doctrine is the encyclopedia.
+
+**July 2026 platform freeze:** Foundational architecture is **complete and stable**. After the handbook: **`platform/milestones/freeze-july-2026.md`**, **`platform/foundation/platform-manifesto.md`**, **`platform/foundation/system-overview.md`**.
 
 **June 2026 rebaseline:** Canonical platform docs live under **`docs/platform/`**. Schema reference under **`docs/schema/`** (generated). Business Process → Stage → Record is the operator mental model; work units are documented as runtime constructs.
 
@@ -41,20 +43,22 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 A configurable operating system for service businesses. Primary documentation is **industry-agnostic**; childcare enrollment appears as a reference implementation in supplemental docs.
 
-Start here: **`platform/foundation/system-overview.md`**
+**Onboarding entry:** **[`platform/foundation/alloy-platform-handbook.md`](platform/foundation/alloy-platform-handbook.md)**  
+Then: **`platform/foundation/system-overview.md`**
 
 ---
 
 ## Load order (onboarding)
 
-**Agent load order (Cursor / AI):** matches **`.cursor/rules/alloy-project-context.mdc`** — start at `docs/README.md`, then foundation → core → operator → modules → governance → schema.
+**Agent load order (Cursor / AI):** start at `docs/README.md`, then the **Platform Handbook**, then foundation → core → operator → modules → governance → schema. (Cursor rule load order still names the encyclopedia chain after the handbook.)
 
 ### 1. Foundation
 
+0. `platform/foundation/alloy-platform-handbook.md` — **Alloy Platform Handbook** (teach the platform first)
 1. `platform/foundation/system-overview.md`
-2. `platform/../foundation/platform-capabilities.md`
+2. `platform/foundation/platform-capabilities.md`
 3. `platform/foundation/product-roadmap.md`
-4. `platform/./architecture.md`
+4. `platform/foundation/architecture.md`
 4a. `platform/foundation/os-runtime-map.md` — **OS Runtime Map** (the nine runtime layers — Kernel · Intent · Navigation · Experience · Surface · Card · Record · Entity · Operational/BOS — the three flows, the **client/server seam**, the **Effects/Integration** service, and the Architecture Evolution & Known Gaps appendix)
 5. `platform/governance/glossary.md`
 

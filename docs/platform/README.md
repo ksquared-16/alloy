@@ -7,7 +7,9 @@ supersedes: []
 
 # Platform documentation
 
-Canonical Alloy platform doctrine. Start at [`../README.md`](../README.md) for load order.
+Canonical Alloy platform doctrine. Start at [`../README.md`](../README.md) for the full library map.
+
+**Teach first:** [`foundation/alloy-platform-handbook.md`](./foundation/alloy-platform-handbook.md) — Alloy Platform Handbook.
 
 | Folder | Owns |
 |--------|------|

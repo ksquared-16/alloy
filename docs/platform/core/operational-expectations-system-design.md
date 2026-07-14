@@ -68,8 +68,8 @@ the constraints every package is measured against.**
 ## 0.5 Doctrine Reconciliation (RATIFIED 2026-07-13 — a terminology law, not an ontology question)
 
 The currently-ratified [`core/operational-truth-flow-doctrine.md`](./operational-truth-flow-doctrine.md)
-states, as bolded **Law 2**: *"Expectations are derived / non-authoritative… They MUST NOT become
-authoritative tables that can silently disagree with Intent or Facts."* The Phase B freeze makes
+states, as bolded **Law 2**: *Expectations used to be described as derived / non-authoritative
+("MUST NOT become authoritative tables that can silently disagree with Intent or Facts").* The Phase B freeze makes
 Operational Expectations an **authored** ledger — the semantic inverse. Ratified resolution: **the
 freeze wins; the doctrine text is brought into line.** This is a **P0-blocking sweep**, gated by
 **G-Reconciliation**. **"Expectation" is not permitted to carry two meanings** — that ambiguity is
@@ -532,7 +532,7 @@ vertical **and** the Billing parity retrofit is merged.
 
 | Gate | Proves |
 |---|---|
-| **G-Reconciliation** | The truth-flow doctrine no longer says "Expectations are derived"; derived-L3 is renamed Projection; Law 2 amended. No naming ambiguity in the repo. |
+| **G-Reconciliation** | The truth-flow doctrine no longer uses the retired Law-2 wording that treated Expectations as derived; derived-L3 is renamed Projection; Law 2 amended. No naming ambiguity in the repo. |
 | **G-Purity** | No path from evaluation/ledger to an effector; effectors only via Config binding. |
 | **G-Acyclic** | Gaps/judgments read-only; every write is an authoring act. |
 | **G-Replay-Determinism** | Replaying any historical `(valid-time, transaction-time)` reproduces recorded judgment exactly (golden replay corpus). |

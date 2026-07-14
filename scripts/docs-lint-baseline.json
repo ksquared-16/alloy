@@ -1,10 +1,9 @@
 {
-  "generatedAt": "2026-07-14T03:27:14.372Z",
+  "generatedAt": "2026-07-14T04:01:20.077Z",
   "summary": {
     "generated-boundary": 21,
     "broken-link": 634,
-    "orphan-canonical": 76,
-    "retired-doctrine-term": 2
+    "orphan-canonical": 74
   },
   "note": "Pre-existing documentation debt baseline for report-only CI enforcement"
 }
