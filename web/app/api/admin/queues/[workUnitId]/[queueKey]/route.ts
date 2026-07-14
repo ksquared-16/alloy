@@ -20,6 +20,7 @@ import {
     fetchDepartmentMetadataForWorkUnit,
     resolveActiveWorkViewRuntimeContext,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import { projectQueuePreviewRowContexts } from "@/lib/queues/queuePreviewRowContextProjection";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
 import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
 import { buildWorkUnitQueueScopeCacheKey } from "@/lib/workspace/workUnitQueueScopeCacheKey";
@@ -253,6 +254,18 @@ export async function GET(
                 pageOffset: offset,
                 omitTotalCount,
             });
+        }
+
+        // Wire-only compact projection for the canonical visible-row (queue_reveal) surface: the
+        // deployed CondensedQueueRow reads only a narrow slice of `_queue_row_context`, so we strip the
+        // Focus-Panel-only / predicate-only / detail fields from the serialized context here — AFTER
+        // work-view filtering has consumed the base-query facts it needs. Counts, filtering, and
+        // `computeWorkViewOperationalSignals` run on base rows before this point and are untouched.
+        if (rowEnrichment === "queue_reveal" && Array.isArray(responseResult.items)) {
+            responseResult = {
+                ...responseResult,
+                items: projectQueuePreviewRowContexts(responseResult.items),
+            };
         }
 
         writeWorkUnitQueueItemsServerCache(cacheKey, { result: responseResult, rowsPerf });

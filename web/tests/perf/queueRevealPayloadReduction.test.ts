@@ -15,8 +15,16 @@ import { attachOpportunityQueueRowsWithRowContext } from "@/lib/workUnits/attach
  *
  * So this measurement is the reduction ACHIEVABLE by a genuine compact projection that strips the
  * context for layout-runtime rows too — NOT the reduction the current `queue_reveal` delivers on the
- * deployed surface. Stripping the context on the layout-runtime path requires verifying the
- * layout-runtime row renderer against real rows (browser gate) and is not shipped here.
+ * deployed surface.
+ *
+ * UPDATE: that genuine compact projection now ships — see
+ * `tests/queues/queuePreviewRowContextProjection.test.ts` and
+ * `lib/queues/queuePreviewRowContextProjection.ts`. It narrows the serialized `_queue_row_context`
+ * on the `queue_reveal` visible-row response to exactly the fields the deployed `CondensedQueueRow`
+ * reads (measured 26% context bytes / 17 props on a representative 2-child row), keeping every
+ * rendered field. This fixture remains the ceiling case (full context omission on a non-layout row);
+ * the shipped projection narrows the layout-runtime context in place rather than omitting it, because
+ * the deployed row reads a narrow slice of it.
  */
 
 /** A representative enriched opportunity case-grain preview row (`enrichOpportunityRows` shape). */
