@@ -1,0 +1,264 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-initiative-plan <initiative-key>
+
+Generates proposed specification, contracts, task graph, and worker plan.
+Does not approve the plan — use alloy-initiative-approve.
+
+Transitions: planning → awaiting_plan_approval
+
+See: scripts/local-dev/ENGINEERING-MANAGER.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  alloy_initiative_acquire_lock "$key"
+  local state
+  state="$(alloy_initiative_current_state "$key")"
+  [[ "$state" == "planning" || "$state" == "awaiting_plan_approval" || "$state" == "blocked" ]] \
+    || alloy_die "cannot plan in state: $state (expected planning)"
+
+  local base intake_json plan_dir spec_path
+  base="$(alloy_initiative_dir "$key")"
+  intake_json="$base/initiative.json"
+  plan_dir="$base/plan"
+
+  # Read intake fields via node
+  local objective title has_ui
+  objective="$(node -e "console.log(require('${intake_json}').initiative.objective)")"
+  title="$(node -e "console.log(require('${intake_json}').initiative.title)")"
+  has_ui="$(node -e "
+    const d = require('${intake_json}');
+    const vt = d.verification_targets || [];
+    const rr = d.reference_routes || [];
+    process.stdout.write(vt.length || rr.length ? 'yes' : 'no');
+  ")"
+
+  spec_path="$plan_dir/specification.md"
+  {
+    printf '# Specification — %s\n\n' "$title"
+    printf 'Initiative: `%s`\n' "$key"
+    printf 'Generated: %s\n\n' "$(alloy_iso_now)"
+    printf '## Objective\n\n%s\n\n' "$objective"
+    printf '## Operator outcome\n\n'
+    node -e "for (const x of require('${intake_json}').operator_outcome) console.log('- ' + x)"
+    printf '\n## In scope\n\n'
+    node -e "for (const x of require('${intake_json}').product_direction) console.log('- ' + x)"
+    printf '\n## Out of scope\n\n'
+    node -e "for (const x of (require('${intake_json}').out_of_scope||[])) console.log('- ' + x); if(!(require('${intake_json}').out_of_scope||[]).length) console.log('- (none declared)')"
+    printf '\n## Constitutional constraints\n\n'
+    alloy_engineering_constitutional_truth | sed 's/^/- /'
+    printf '\n## Approved product direction\n\n'
+    node -e "for (const x of require('${intake_json}').product_direction) console.log('- ' + x)"
+    printf '\n## Unresolved questions\n\n'
+    node -e "
+      const gates = require('${intake_json}').human_approval.required_gates || [];
+      if (!gates.length) console.log('- (none — pending audit review)');
+      for (const g of gates) console.log('- ' + g);
+    "
+    if [[ "$has_ui" == "yes" ]]; then
+      printf '\n## Surface anatomy\n\n'
+      printf 'User-visible surfaces require explicit visual contract (see visual-contract.yaml).\n'
+    fi
+    printf '\n## Validation strategy\n\n'
+    printf -- '- Workers: focused checks during implementation\n'
+    printf -- '- Integration: `alloy-validate` once on designated integration candidate\n'
+    printf -- '- UI: Phase 3 `alloy-agent-verify` per assigned slot\n'
+    printf '\n## Integration order\n\n'
+    printf '1. Core implementation (slot 1)\n'
+    printf '2. Architecture review (slot 2) when material design changes\n'
+    printf '3. UI verification (slot 4) for user-visible work\n'
+    printf '4. Performance pass (slot 3) when hot paths touched\n'
+    printf '\n## Risks\n\n'
+    node -e "for (const x of (require('${intake_json}').known_risks||['See audit/risks.yaml'])) console.log('- ' + x)"
+  } >"$spec_path"
+
+  # Product contract
+  cat >"$plan_dir/product-contract.yaml" <<EOF
+generated_at: "$(alloy_iso_now)"
+initiative_key: "$key"
+objective: $(node -e "console.log(JSON.stringify(require('${intake_json}').initiative.objective))")
+operator_outcome:
+$(node -e "for (const x of require('${intake_json}').operator_outcome) console.log('  - ' + JSON.stringify(x))")
+in_scope:
+$(node -e "for (const x of require('${intake_json}').product_direction) console.log('  - ' + JSON.stringify(x))")
+out_of_scope:
+$(node -e "for (const x of (require('${intake_json}').out_of_scope||[])) console.log('  - ' + JSON.stringify(x))")
+constitutional_constraints:
+$(alloy_engineering_constitutional_truth | sed 's/^- /  - /')
+EOF
+
+  # Visual contract
+  local visual_basis="not_applicable"
+  if [[ "$has_ui" == "yes" ]]; then
+    if node -e "process.exit((require('${intake_json}').visual_references||[]).length?0:1)" 2>/dev/null; then
+      visual_basis="exact_reference"
+    elif node -e "process.exit((require('${intake_json}').reference_routes||[]).length?0:1)" 2>/dev/null; then
+      visual_basis="pattern_reference"
+    else
+      visual_basis="bounded_exploration"
+      alloy_engineering_record_human_decision "$key" \
+        "Visual basis not declared in intake" \
+        "UI work cannot start without exact_reference, pattern_reference, or bounded_exploration" \
+        "Add visual_references|Add reference_routes|Authorize bounded_exploration in intake" \
+        "Authorize bounded_exploration with explicit constraints" \
+        "task-001" "false"
+    fi
+  fi
+
+  cat >"$plan_dir/visual-contract.yaml" <<EOF
+basis: $visual_basis
+approved_image_paths:
+$(node -e "for (const x of (require('${intake_json}').visual_references||[])) console.log('  - ' + JSON.stringify(x))")
+reference_routes:
+$(node -e "for (const x of (require('${intake_json}').reference_routes||[])) console.log('  - ' + JSON.stringify(x))")
+reference_components: []
+required_layout_anatomy: []
+density_expectations: compact
+approved_semantic_token_roles: []
+forbidden_styles_patterns:
+  - inventing new configuration shell when Configuration Runtime pattern exists
+fixed_verification_viewports:
+  - 1280x800
+interaction_expectations: []
+responsive_expectations: follow existing Alloy admin patterns
+overflow_scroll_constraints: preserve existing drawer/queue scroll contracts
+EOF
+  alloy_engineering_io validate-visual "$plan_dir/visual-contract.yaml"
+
+  # Acceptance
+  cat >"$plan_dir/acceptance.yaml" <<EOF
+generated_at: "$(alloy_iso_now)"
+behavioral_criteria:
+$(node -e "for (const x of require('${intake_json}').acceptance) console.log('  - ' + JSON.stringify(x))")
+data_test_fixtures:
+$(node -e "for (const x of (require('${intake_json}').test_data_requirements||[])) console.log('  - ' + JSON.stringify(x))")
+verification_routes:
+$(node -e "for (const x of (require('${intake_json}').verification_targets||require('${intake_json}').reference_routes||[])) console.log('  - ' + JSON.stringify(x))")
+EOF
+
+  cat >"$plan_dir/verification-plan.yaml" <<EOF
+generated_at: "$(alloy_iso_now)"
+focused_checks_per_worker: true
+heavy_validation_command: alloy-validate
+integration_candidate: task-001
+ui_verification:
+  required: $([[ "$has_ui" == "yes" ]] && echo true || echo false)
+  tool: alloy-agent-verify
+routes:
+$(node -e "for (const x of (require('${intake_json}').verification_targets||[])) console.log('  - ' + JSON.stringify(x))")
+EOF
+
+  # Task graph — minimal V1: one implementation task + optional review tasks
+  cat >"$plan_dir/task-graph.yaml" <<EOF
+generated_at: "$(alloy_iso_now)"
+tasks:
+  - task-001
+  - task-002
+integration_order:
+  - task-001
+  - task-002
+EOF
+
+  cat >"$base/tasks/task-001.yaml" <<EOF
+task_id: task-001
+title: "Primary implementation"
+objective: "$(node -e "console.log(require('${intake_json}').initiative.objective.replace(/\"/g,''))")"
+role: "$(alloy_slot_role 1)"
+dependencies: []
+allowed_scope:
+$(node -e "for (const x of require('${intake_json}').product_direction.slice(0,5)) console.log('  - ' + JSON.stringify(x))")
+prohibited_scope:
+$(node -e "for (const x of (require('${intake_json}').out_of_scope||['unrelated refactors'])) console.log('  - ' + JSON.stringify(x))")
+constitutional_references:
+  - docs/platform/governance/design-and-operational-doctrine.md
+initiative_decisions:
+$(node -e "for (const x of require('${intake_json}').product_direction.slice(0,3)) console.log('  - ' + JSON.stringify(x))")
+likely_code_areas:
+$(node -e "for (const x of (require('${intake_json}').known_files||['web/'])) console.log('  - ' + JSON.stringify(x))")
+acceptance:
+$(node -e "for (const x of require('${intake_json}').acceptance) console.log('  - ' + JSON.stringify(x))")
+focused_checks:
+  - cd web && npx vitest run <relevant-tests>
+ui_verification:
+  required: $([[ "$has_ui" == "yes" ]] && echo true || echo false)
+  routes:
+$(node -e "for (const x of (require('${intake_json}').verification_targets||[])) console.log('    - ' + JSON.stringify(x))")
+required_outputs:
+  - implementation commit
+  - reports/task-001-result.json
+status: ready
+EOF
+
+  cat >"$base/tasks/task-002.yaml" <<EOF
+task_id: task-002
+title: "Architecture / doctrine review"
+objective: "Review task-001 for doctrine alignment and integration risk"
+role: "$(alloy_slot_role 2)"
+dependencies:
+  - task-001
+allowed_scope:
+  - review artifacts only
+prohibited_scope:
+  - implementation changes
+constitutional_references:
+  - docs/platform/governance/design-and-operational-doctrine.md
+initiative_decisions: []
+likely_code_areas: []
+acceptance:
+  - structured review report with pass|pass_with_findings|fail
+focused_checks: []
+ui_verification:
+  required: false
+  routes: []
+required_outputs:
+  - reviews/task-002-review.json
+status: blocked
+EOF
+
+  cat >"$plan_dir/worker-plan.yaml" <<EOF
+generated_at: "$(alloy_iso_now)"
+assignments:
+  - task_id: task-001
+    slot: 1
+    agent: $(alloy_slot_default_agent 1)
+    role: "$(alloy_slot_role 1)"
+  - task_id: task-002
+    slot: 2
+    agent: $(alloy_slot_default_agent 2)
+    role: "$(alloy_slot_role 2)"
+notes:
+  - Smallest appropriate worker set chosen; not all six slots required.
+EOF
+
+  if [[ "$state" == "planning" ]]; then
+    alloy_initiative_transition "$key" "awaiting_plan_approval"
+  fi
+
+  alloy_info "Plan generated for $key"
+  alloy_info "  specification: $spec_path"
+  alloy_info "  tasks:         task-001, task-002"
+  alloy_info "  state:         $(alloy_initiative_current_state "$key")"
+  alloy_info ""
+  alloy_info "Review plan artifacts, then: alloy-initiative-approve $key --approver Kelly"
+}
+
+main "$@"

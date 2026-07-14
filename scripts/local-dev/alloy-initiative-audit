@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-initiative-audit <initiative-key>
+
+Inspects repository, doctrine, tests, worker availability, and UI readiness.
+Writes audit artifacts under the initiative directory.
+Transitions: draft → auditing (on success).
+
+See: scripts/local-dev/ENGINEERING-MANAGER.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  alloy_initiative_acquire_lock "$key"
+  local state
+  state="$(alloy_initiative_current_state "$key")"
+  if [[ "$state" == "draft" ]]; then
+    alloy_initiative_transition "$key" "auditing"
+  elif [[ "$state" != "auditing" && "$state" != "planning" && "$state" != "blocked" ]]; then
+    alloy_warn "audit re-run in state: $state"
+  fi
+
+  local base intake_json staging_sha repo_md code_md risks_path
+  base="$(alloy_initiative_dir "$key")"
+  intake_json="$base/initiative.json"
+  staging_sha="$(alloy_staging_sha)"
+
+  repo_md="$base/audit/repository.md"
+  {
+    printf '# Repository audit — %s\n\n' "$key"
+    printf 'Generated: %s\n\n' "$(alloy_iso_now)"
+    printf '## Staging baseline\n\n'
+    printf -- '- Remote: `%s`\n' "$(alloy_base_ref)"
+    printf -- '- SHA: `%s`\n\n' "$staging_sha"
+    printf '## Canonical repository\n\n'
+    printf -- '- Path: `%s`\n\n' "$ALLOY_REPO"
+    printf '## Worktree availability\n\n'
+    local slot i name
+    for ((i = 1; i <= ALLOY_MAX_AGENTS; i++)); do
+      if name="$(alloy_find_metadata_by_slot "$i" 2>/dev/null)"; then
+        alloy_load_metadata "$name"
+        printf -- '- Slot %s: **occupied** — %s (%s)\n' "$i" "$name" "${ALLOY_WORKTREE_BRANCH:-?}"
+      else
+        printf -- '- Slot %s: **free** — %s / port %s\n' "$i" "$(alloy_slot_role "$i")" "$(alloy_slot_to_port "$i")"
+      fi
+    done
+    printf '\n## Initiative references\n\n'
+    node -e "
+      const d = require('${intake_json}');
+      const print = (label, arr) => {
+        if (!arr || !arr.length) return;
+        console.log('### ' + label);
+        for (const x of arr) console.log('- ' + x);
+        console.log('');
+      };
+      print('known_files', d.known_files);
+      print('known_docs', d.known_docs);
+      print('known_risks', d.known_risks);
+      print('reference_routes', d.reference_routes);
+      print('verification_targets', d.verification_targets);
+    " 2>/dev/null || true
+    printf '\n## UI / browser readiness\n\n'
+    if node -e "const d=require('${intake_json}'); process.exit((d.verification_targets||[]).length?0:1)" 2>/dev/null; then
+      printf 'UI verification targets declared — Phase 3 browser tooling required per slot.\n'
+      printf 'Check: `alloy-agent-ready <slot>` before worker UI verification.\n'
+    else
+      printf 'No explicit UI verification targets in intake.\n'
+    fi
+  } >"$repo_md"
+
+  alloy_engineering_write_documentation_manifest "$key"
+
+  code_md="$base/audit/code-manifest.yaml"
+  {
+    printf 'generated_at: "%s"\n' "$(alloy_iso_now)"
+    printf 'staging_sha: "%s"\n' "$staging_sha"
+    printf 'search_roots:\n'
+    printf '  - web/\n'
+    printf '  - scripts/local-dev/\n'
+    printf 'initiative_known_files:\n'
+    node -e "
+      const d = require('${intake_json}');
+      for (const f of (d.known_files || [])) {
+        const p = '${ALLOY_REPO}/' + f;
+        const fs = require('fs');
+        console.log('  - path: \"' + f + '\"');
+        console.log('    exists: ' + (fs.existsSync(p) ? 'true' : 'false'));
+      }
+    " 2>/dev/null || printf '  []\n'
+    printf 'related_tests:\n'
+    node -e "
+      const {execSync} = require('child_process');
+      const d = require('${intake_json}');
+      const terms = [...(d.known_files||[]), ...(d.known_docs||[])].join(' ');
+      if (!terms.trim()) { console.log('  []'); process.exit(0); }
+      try {
+        const out = execSync('rg -l \"' + terms.split(/\\s+/).slice(0,3).join('|') + '\" web/tests 2>/dev/null || true', {encoding:'utf8', cwd:'${ALLOY_REPO}'}).trim();
+        if (!out) { console.log('  []'); } else {
+          for (const l of out.split('\\n').slice(0,20)) console.log('  - \"' + l + '\"');
+        }
+      } catch { console.log('  []'); }
+    " 2>/dev/null || printf '  []\n'
+  } >"$code_md"
+
+  risks_path="$base/audit/risks.yaml"
+  {
+    printf 'generated_at: "%s"\n' "$(alloy_iso_now)"
+    printf 'items:\n'
+    node -e "
+      const d = require('${intake_json}');
+      for (const r of (d.known_risks || [])) console.log('  - \"' + r.replace(/\"/g,'') + '\"');
+      if (!(d.known_risks||[]).length) console.log('  - \"No explicit risks in intake — review audit manifests.\"');
+    "
+    printf 'conflicts:\n'
+    printf '  - note: "Historical sprint docs must not override canonical platform doctrine."\n'
+  } >"$risks_path"
+
+  # Update staging baseline in state
+  node -e "
+    const fs = require('fs');
+    const p = '${base}/state.json';
+    const d = JSON.parse(fs.readFileSync(p,'utf8'));
+    d.staging_baseline_sha = '${staging_sha}';
+    d.updated_at = '$(alloy_iso_now)';
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  "
+
+  if [[ "$(alloy_initiative_current_state "$key")" == "auditing" ]]; then
+    alloy_initiative_transition "$key" "planning"
+  fi
+
+  alloy_info "Audit complete for $key"
+  alloy_info "  repository:    $repo_md"
+  alloy_info "  documentation: $base/audit/documentation-manifest.yaml"
+  alloy_info "  code:          $code_md"
+  alloy_info "  risks:         $risks_path"
+  alloy_info "  state:         $(alloy_initiative_current_state "$key")"
+  alloy_info ""
+  alloy_info "Next: alloy-initiative-plan $key"
+}
+
+main "$@"
