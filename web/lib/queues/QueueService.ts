@@ -1154,7 +1154,7 @@ async function enrichOpportunityRows(params: {
      * CRM compact children always load from `customer_members` (relationship `child`, `is_active`)
      * via `opportunities.customer_id`. `enrichment` still controls other payload shaping / perf logging.
      */
-    enrichment?: "full" | "queue_preview" | "queue_list" | "queue_reveal";
+    enrichment?: "full" | "queue_preview" | "queue_list" | "queue_reveal" | "count_only";
     /** Bootstrap / reveal: skip tour_bookings + OCM desired-start batch fetches. */
     skipOptionalEnrichmentFetches?: boolean;
     /**
