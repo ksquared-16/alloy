@@ -9,6 +9,13 @@ source "${SCRIPT_DIR}/lib/common.sh"
 usage() {
   cat <<'EOF'
 Usage: alloy-dev-start <worktree-name>
+
+Starts a toolkit-owned Next dev server:
+  1) loads sanitized web/.env.local.agent (agent-visible)
+  2) injects trusted server vars from ALLOY_SERVER_ENV_SOURCE into the
+     owned process only (never written to the worktree)
+
+Do not run npm run dev directly — that bypasses trusted injection.
 EOF
 }
 
@@ -52,12 +59,27 @@ main() {
   export PORT="$port"
   export NEXT_PUBLIC_APP_URL="$url"
 
-  # Load safe agent env (web/.env.local.agent) without printing values.
-  if [[ -f "${SCRIPT_DIR}/lib/verify.sh" ]]; then
-    # shellcheck source=lib/verify.sh
-    source "${SCRIPT_DIR}/lib/verify.sh"
+  # Two-tier environment: agent-safe file + trusted server injection (process only).
+  # shellcheck source=lib/verify.sh
+  source "${SCRIPT_DIR}/lib/verify.sh"
+
+  # Fail before Next starts when trusted source / required names are absent.
+  alloy_trusted_server_env_preflight
+
+  if [[ -f "$(alloy_agent_web_env_path "$path")" ]]; then
+    if ! alloy_agent_env_lacks_privileged "$path"; then
+      alloy_die "web/.env.local.agent contains privileged variable names — re-run alloy-agent-prepare (never copy service-role into the worktree)"
+    fi
     alloy_load_agent_env_exports "$path" || true
+  else
+    alloy_warn "web/.env.local.agent missing — starting with trusted server env only (run alloy-agent-prepare for agent-safe public vars)"
   fi
+
+  # Trusted overlay into this process tree only — never persisted to worktree/metadata.
+  alloy_load_trusted_server_env_exports
+  local trusted_count="${ALLOY_TRUSTED_ENV_LOADED_COUNT:-0}"
+  local trusted_source
+  trusted_source="$(alloy_server_env_source_path)"
 
   alloy_info "Starting ${ALLOY_DEV_COMMAND} in ${web_dir} on port ${port}..."
   (
@@ -65,7 +87,7 @@ main() {
     export PORT="$port"
     export NEXT_PUBLIC_APP_URL="$url"
     export NODE_OPTIONS
-    # Track the launcher PID; command runs in this worktree directory.
+    # Inherited env includes agent-safe + trusted server vars (not on argv).
     nohup bash -c "$ALLOY_DEV_COMMAND" >>"$log_path" 2>&1 &
     echo $! >"$pid_path"
   )
@@ -87,7 +109,12 @@ Dev server started (toolkit-owned)
   log:      ${log_path}
   path:     ${path}
 
-web/.env.local.agent is loaded for this process only.
+Environment (two-tier):
+  agent-safe:     web/.env.local.agent (public/safe only)
+  trusted source: ${trusted_source}
+  trusted vars:   ${trusted_count} names injected into owned process only
+  not persisted:  privileged values are never written to the worktree
+
 Do not run npm run dev directly — use alloy-dev-start / devup.
 EOF
 }

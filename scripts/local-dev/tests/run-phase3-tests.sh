@@ -40,7 +40,8 @@ for f in \
   "$ROOT"/alloy-agent-context \
   "$ROOT"/alloy-agent-evidence \
   "$ROOT"/tests/run-phase3-tests.sh \
-  "$ROOT"/tests/test-agent-env-classify.sh
+  "$ROOT"/tests/test-agent-env-classify.sh \
+  "$ROOT"/tests/test-agent-two-tier-env.sh
 do
   bash -n "$f"
   pass "bash -n $(basename "$f")"
@@ -91,6 +92,14 @@ MYSTERY_CONFIG="should-fail-ambiguous"
 PORT=3000
 EOF
 
+# Trusted server source (stable; not mutated by agent-prepare classification fixtures)
+TRUSTED_SRC="$TMP/trusted-server.env"
+cat >"$TRUSTED_SRC" <<'EOF'
+NEXT_PUBLIC_SUPABASE_URL="https://xyzcompany.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="anon"
+SUPABASE_SERVICE_ROLE_KEY="secret-service-role-never-copy"
+EOF
+
 cat >"$CONFIG_DIR/config" <<EOF
 ALLOY_REPO="$CANON"
 ALLOY_WORKTREE_ROOT="$WTROOT"
@@ -106,6 +115,7 @@ ALLOY_PM="npm"
 ALLOY_WEB_DIR="web"
 ALLOY_DEV_COMMAND='node -e "require(\"http\").createServer((q,s)=>{s.end(\"ok\")}).listen(Number(process.env.PORT||3000))"'
 ALLOY_ENV_SOURCE="$CANON/web/.env.local"
+ALLOY_SERVER_ENV_SOURCE="$TRUSTED_SRC"
 ALLOY_ENV_ALLOWLIST="DEV_QUEUE_ORG_ID"
 ALLOY_SLOT_1_QA_IDENTITY="qa-slot1@test.com"
 ALLOY_AGENT_LOGIN_SCRIPT="$FIXTURES/fake-agent-login-capture.mjs"

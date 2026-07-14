@@ -69,8 +69,30 @@ alloy_agent_auth_check_route() {
   printf '%s' "${ALLOY_AGENT_AUTH_CHECK_ROUTE:-/workspace}"
 }
 
+# Sanitized agent-visible env source (alloy-agent-prepare). Never includes privileged values.
 alloy_env_source_path() {
   printf '%s' "${ALLOY_ENV_SOURCE:-${ALLOY_REPO}/web/.env.local}"
+}
+
+# Trusted server env source — injected only into toolkit-owned Next process (alloy-dev-start).
+# Distinct from ALLOY_ENV_SOURCE. Never copied into the worktree.
+alloy_server_env_source_path() {
+  printf '%s' "${ALLOY_SERVER_ENV_SOURCE:-${ALLOY_REPO}/web/.env.local}"
+}
+
+# Minimal required server-side names proven by Alloy admin paths (createAdminClient).
+# Extend via ALLOY_SERVER_ENV_REQUIRED (space-separated). Names only — never values.
+alloy_required_server_env_names() {
+  local -a names=("SUPABASE_SERVICE_ROLE_KEY")
+  local extra
+  for extra in ${ALLOY_SERVER_ENV_REQUIRED:-}; do
+    [[ -n "$extra" ]] || continue
+    names+=("$extra")
+  done
+  local n
+  for n in "${names[@]}"; do
+    printf '%s\n' "$n"
+  done | sort -u
 }
 
 # ── Host allowlist (localhost + optional staging hostnames) ─────────────────
@@ -355,6 +377,117 @@ alloy_load_agent_env_exports() {
   done <"$target"
 }
 
+# True when env file has a non-empty assignment for name. Never prints the value.
+alloy_env_file_has_nonempty() {
+  local file="$1"
+  local name="$2"
+  local value
+  value="$(alloy_read_env_value "$file" "$name" 2>/dev/null || true)"
+  [[ -n "${value:-}" ]]
+}
+
+# True when agent-visible env lacks privileged / denied names (fail closed for worktree hygiene).
+alloy_agent_env_lacks_privileged() {
+  local worktree_path="$1"
+  local target name
+  target="$(alloy_agent_web_env_path "$worktree_path")"
+  [[ -f "$target" ]] || return 0
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    if alloy_env_name_is_denied "$name"; then
+      return 1
+    fi
+  done < <(alloy_parse_env_file_names "$target")
+  return 0
+}
+
+# Preflight trusted server source: source exists + required names present (names only).
+# Does not load or print values. Exit non-zero with safe remediation.
+alloy_trusted_server_env_preflight() {
+  local source missing=()
+  source="$(alloy_server_env_source_path)"
+
+  if [[ ! -f "$source" ]]; then
+    alloy_die "trusted server env source missing: ${source} (set ALLOY_SERVER_ENV_SOURCE to your canonical web/.env.local). Privileged values are injected only into the toolkit-owned server process — never into the worktree."
+  fi
+
+  local name
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    if ! alloy_env_file_has_nonempty "$source" "$name"; then
+      missing+=("$name")
+    fi
+  done < <(alloy_required_server_env_names)
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    alloy_die "trusted server env missing required variable names: ${missing[*]} — add them to ${source} (ALLOY_SERVER_ENV_SOURCE). Values are never printed; alloy-dev-start injects them into the owned Next process only."
+  fi
+
+  return 0
+}
+
+# Report trusted-server readiness as KEY=value lines (names/status only; never values).
+alloy_trusted_server_env_status() {
+  local worktree_path="${1:-}"
+  local source present_names=() missing_names=()
+  source="$(alloy_server_env_source_path)"
+
+  if [[ -f "$source" ]]; then
+    printf 'TRUSTED_SOURCE=configured\n'
+    printf 'TRUSTED_SOURCE_PATH=%s\n' "$source"
+  else
+    printf 'TRUSTED_SOURCE=missing\n'
+    printf 'TRUSTED_SOURCE_PATH=%s\n' "$source"
+  fi
+
+  local name
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    if [[ -f "$source" ]] && alloy_env_file_has_nonempty "$source" "$name"; then
+      present_names+=("$name")
+    else
+      missing_names+=("$name")
+    fi
+  done < <(alloy_required_server_env_names)
+
+  printf 'TRUSTED_REQUIRED_PRESENT=%s\n' "${present_names[*]:-}"
+  printf 'TRUSTED_REQUIRED_MISSING=%s\n' "${missing_names[*]:-}"
+  printf 'TRUSTED_REQUIRED_COUNT=%s\n' "${#present_names[@]}"
+
+  if [[ -n "$worktree_path" ]]; then
+    local agent_env
+    agent_env="$(alloy_agent_web_env_path "$worktree_path")"
+    if [[ -f "$agent_env" ]] && alloy_agent_env_lacks_privileged "$worktree_path"; then
+      printf 'TRUSTED_NOT_IN_WORKTREE=yes\n'
+    elif [[ -f "$agent_env" ]]; then
+      printf 'TRUSTED_NOT_IN_WORKTREE=no\n'
+    else
+      printf 'TRUSTED_NOT_IN_WORKTREE=n/a\n'
+    fi
+  fi
+}
+
+# Export all assignments from the trusted server source into the current shell only.
+# Used solely by alloy-dev-start before spawning the owned Next process.
+# Never writes to the worktree, metadata, logs, or stdout. Values are not printed.
+alloy_load_trusted_server_env_exports() {
+  local source key value count=0
+  source="$(alloy_server_env_source_path)"
+  [[ -f "$source" ]] || return 1
+
+  while IFS= read -r key; do
+    [[ -n "$key" ]] || continue
+    value="$(alloy_read_env_value "$source" "$key" || true)"
+    [[ -n "${value:-}" ]] || continue
+    # Assign without echoing value (export name=value form; value stays in shell memory).
+    export "${key}=${value}"
+    count=$((count + 1))
+  done < <(alloy_parse_env_file_names "$source")
+
+  ALLOY_TRUSTED_ENV_LOADED_COUNT="$count"
+  return 0
+}
+
 # ── Auth storage state ───────────────────────────────────────────────────────
 
 alloy_auth_state_status() {
@@ -588,10 +721,17 @@ alloy_generate_agent_context() {
 ## Verification readiness
 | Check | Status |
 |-------|--------|
-| Safe env (web/.env.local.agent) | ${env_ready} |
+| Agent-safe env (web/.env.local.agent) | ${env_ready} |
+| Trusted server source | configured via ALLOY_SERVER_ENV_SOURCE (injected by alloy-dev-start only; never in worktree) |
 | Auth storage | ${auth_status} |
 | Owned browser | ${browser_state} |
 | Evidence dir | $(alloy_evidence_dir "$name") |
+
+## Environment contract (two-tier)
+- Agent-visible: \`web/.env.local.agent\` — public/safe vars only (inspect freely)
+- Toolkit-owned server: \`alloy-dev-start\` injects trusted local server vars (e.g. service role) into the Next process only
+- Privileged values never enter the worktree, metadata, instructions, or this context file
+- \`npm run dev\` bypasses trusted injection and is prohibited
 
 ## Auth model (discovered)
 - Login route: \`${url}$(alloy_agent_login_route)\` — Supabase email/password (\`/login\`)
@@ -612,7 +752,7 @@ alloy_generate_agent_context() {
 
 ## Allowed commands
 \`\`\`bash
-alloy-dev-start ${name}              # required — loads web/.env.local.agent (not npm run dev)
+alloy-dev-start ${name}              # required — agent-safe + trusted server injection (not npm run dev)
 alloy-agent-ready ${slot}
 alloy-agent-verify ${slot} authenticated-home
 alloy-agent-verify ${slot} route /workspace
@@ -623,8 +763,9 @@ alloy-agent-close ${slot}
 \`\`\`
 
 ## Prohibited
-- \`npm run dev\` directly — \`web/.env.local.agent\` loads only through \`alloy-dev-start ${name}\` / \`devup\`
+- \`npm run dev\` directly — bypasses trusted server injection; use \`alloy-dev-start ${name}\` / \`devup\`
 - Production URLs, credentials, cookies, tokens, storage-state contents
+- Reading or requesting privileged server secrets (service role, DB URLs) from the worktree — they are not there
 - Push, merge, worktree removal without explicit human approval
 - Claiming UI verification from code inspection alone
 - Second dev server or duplicate toolkit browser for this slot
@@ -698,9 +839,25 @@ alloy_agent_ready_evaluate() {
     fi
   fi
 
-  # Environment
+  # Environment — agent-safe worktree file vs trusted server injection source.
   if ! alloy_agent_env_ready "$path"; then
     issues+=("env: web/.env.local.agent missing or wrong permissions — alloy-agent-prepare $slot")
+  elif ! alloy_agent_env_lacks_privileged "$path"; then
+    issues+=("env: privileged names found in web/.env.local.agent — re-run alloy-agent-prepare $slot --force")
+  fi
+
+  local trusted_source
+  trusted_source="$(alloy_server_env_source_path)"
+  if [[ ! -f "$trusted_source" ]]; then
+    issues+=("env: trusted server source missing (${trusted_source}) — set ALLOY_SERVER_ENV_SOURCE")
+  else
+    local req_name
+    while IFS= read -r req_name; do
+      [[ -n "$req_name" ]] || continue
+      if ! alloy_env_file_has_nonempty "$trusted_source" "$req_name"; then
+        issues+=("env: required server variable name missing in trusted source: ${req_name}")
+      fi
+    done < <(alloy_required_server_env_names)
   fi
 
   # Auth
@@ -739,6 +896,36 @@ alloy_agent_ready_evaluate() {
   printf 'GIT_BEHIND=%s\n' "$behind"
   printf 'SERVER=%s\n' "$server"
   printf 'SERVER_OWNERSHIP=%s\n' "$ownership"
+  # Environment status (names/readiness only — never values).
+  if alloy_agent_env_ready "$path"; then
+    printf 'AGENT_ENV=present\n'
+  else
+    printf 'AGENT_ENV=missing\n'
+  fi
+  if alloy_agent_env_ready "$path" && alloy_agent_env_lacks_privileged "$path"; then
+    printf 'AGENT_ENV_PRIVILEGED=absent\n'
+  elif alloy_agent_env_ready "$path"; then
+    printf 'AGENT_ENV_PRIVILEGED=present\n'
+  else
+    printf 'AGENT_ENV_PRIVILEGED=n/a\n'
+  fi
+  if [[ -f "$(alloy_server_env_source_path)" ]]; then
+    printf 'TRUSTED_SOURCE=configured\n'
+  else
+    printf 'TRUSTED_SOURCE=missing\n'
+  fi
+  local _ts _rn
+  _ts="$(alloy_server_env_source_path)"
+  if [[ -f "$_ts" ]]; then
+    while IFS= read -r _rn; do
+      [[ -n "$_rn" ]] || continue
+      if alloy_env_file_has_nonempty "$_ts" "$_rn"; then
+        printf 'TRUSTED_REQUIRED_OK=%s\n' "$_rn"
+      else
+        printf 'TRUSTED_REQUIRED_MISSING=%s\n' "$_rn"
+      fi
+    done < <(alloy_required_server_env_names)
+  fi
   printf 'AUTH=%s\n' "$auth"
   printf 'BROWSER=%s\n' "$bstate"
   printf 'VALIDATION_LOCK=%s\n' "$lock_msg"

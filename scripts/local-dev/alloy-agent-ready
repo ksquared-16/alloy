@@ -49,6 +49,15 @@ main() {
   local staging_sha
   staging_sha="$(alloy_git "$ALLOY_REPO" rev-parse "${ALLOY_BASE_REMOTE}/${ALLOY_BASE_BRANCH}" 2>/dev/null || echo unknown)"
 
+  local agent_env_mode trusted_source
+  agent_env_mode="missing"
+  if alloy_agent_env_ready "$ALLOY_WORKTREE_PATH"; then
+    agent_env_mode="600"
+  elif [[ -f "$(alloy_agent_web_env_path "$ALLOY_WORKTREE_PATH")" ]]; then
+    agent_env_mode="wrong-permissions"
+  fi
+  trusted_source="$(alloy_server_env_source_path)"
+
   echo "Agent ready check — ${name} (slot ${slot})"
   echo "Result: ${status}"
   echo
@@ -64,12 +73,28 @@ main() {
   echo "  url:           ${NEXT_PUBLIC_APP_URL:-http://localhost:${PORT}}"
   echo
   echo "Environment"
-  if alloy_agent_env_ready "$ALLOY_WORKTREE_PATH"; then
-    echo "  safe env:      present (web/.env.local.agent, chmod 600)"
-    echo "  env loading:   alloy-dev-start only (not native Next.js / not npm run dev)"
+  echo "  agent-safe env:     $([[ -f "$(alloy_agent_web_env_path "$ALLOY_WORKTREE_PATH")" ]] && echo present || echo missing) (web/.env.local.agent)"
+  echo "  agent-safe perms:   ${agent_env_mode}"
+  echo "  trusted source:     $([[ -f "$trusted_source" ]] && echo configured || echo missing) (${trusted_source})"
+  local req_ok=() req_miss=()
+  local rn
+  while IFS= read -r rn; do
+    [[ -n "$rn" ]] || continue
+    if [[ -f "$trusted_source" ]] && alloy_env_file_has_nonempty "$trusted_source" "$rn"; then
+      req_ok+=("$rn")
+    else
+      req_miss+=("$rn")
+    fi
+  done < <(alloy_required_server_env_names)
+  echo "  required server:    present=[${req_ok[*]:-}] missing=[${req_miss[*]:-}]"
+  if alloy_agent_env_ready "$ALLOY_WORKTREE_PATH" && alloy_agent_env_lacks_privileged "$ALLOY_WORKTREE_PATH"; then
+    echo "  trusted in worktree: no (privileged names absent from agent-safe file)"
+  elif [[ -f "$(alloy_agent_web_env_path "$ALLOY_WORKTREE_PATH")" ]]; then
+    echo "  trusted in worktree: YES — privileged names leaked into agent-safe file"
   else
-    echo "  safe env:      missing or wrong permissions"
+    echo "  trusted in worktree: n/a"
   fi
+  echo "  env loading:        alloy-dev-start only (agent-safe + trusted injection; not npm run dev)"
   echo
   echo "Authentication"
   echo "  QA identity:   $(alloy_slot_qa_identity "$slot")"

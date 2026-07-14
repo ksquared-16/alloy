@@ -42,13 +42,19 @@ ALLOY_SLOT_4_QA_IDENTITY="qa-slot4-ui@example.com"
 ALLOY_SLOT_5_QA_IDENTITY="qa-slot5-refactor@example.com"
 ALLOY_SLOT_6_QA_IDENTITY="qa-slot6-experimental@example.com"
 
-# Safe env bootstrap (alloy-agent-prepare).
+# Safe env bootstrap (alloy-agent-prepare) — agent-visible sanitized file only.
 ALLOY_ENV_SOURCE="$ALLOY_REPO/web/.env.local"
 # Extra allowlisted non-secret names (space-separated). Denylist always wins.
 # NEXT_PUBLIC_* allowed after denylist pass. Built-in: PORT, NODE_ENV, NEXT_PUBLIC_APP_URL, ALLOY_AGENT_ENV.
 ALLOY_ENV_ALLOWLIST="DEV_QUEUE_ORG_ID PLAYWRIGHT_BASE_URL"
 # Set to 1 to refuse remote Supabase URLs in agent env.
 ALLOY_BLOCK_REMOTE_SUPABASE="0"
+
+# Trusted server env — injected only into toolkit-owned Next process by alloy-dev-start.
+# Never copied into the worktree. Distinct from ALLOY_ENV_SOURCE.
+ALLOY_SERVER_ENV_SOURCE="$ALLOY_REPO/web/.env.local"
+# Optional extra required server variable names (space-separated). Built-in minimum: SUPABASE_SERVICE_ROLE_KEY.
+ALLOY_SERVER_ENV_REQUIRED=""
 
 # Auth routes (discovered: Supabase email/password at /login).
 ALLOY_AGENT_LOGIN_ROUTE="/login"

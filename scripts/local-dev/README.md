@@ -112,7 +112,7 @@ Creates:
 
 1. Create worktree and `npm install` inside that worktree’s `web/`.
 2. Open **one** Cursor/Claude window on that worktree path only.
-3. `alloy-dev-start <name>` when UI inspection is needed (**required** for agent env — do not run `npm run dev` directly; `web/.env.local.agent` loads only through the toolkit).
+3. `alloy-dev-start <name>` when UI inspection is needed (**required** — two-tier env: agent-safe `.env.local.agent` + trusted server injection from `ALLOY_SERVER_ENV_SOURCE`; do not run `npm run dev`).
 4. Implement and commit locally in coherent chunks.
 5. Run focused checks directly; use `alloy-validate` for heavy checks.
 6. Sync from staging with `alloy-worktree-sync` when clean.
@@ -364,12 +364,14 @@ Auth discovered: Supabase email/password at `/login` (see `web/README_ADMIN_AUTH
 
 ```bash
 alloy-agent-prepare 1
-alloy-dev-start wt1-my-initiative    # toolkit-owned; loads web/.env.local.agent (not npm run dev)
+alloy-dev-start wt1-my-initiative    # toolkit-owned; agent-safe + trusted server injection (not npm run dev)
 alloy-agent-login 1
-alloy-agent-ready 1                  # requires toolkit-owned server
+alloy-agent-ready 1                  # requires toolkit-owned server; reports two-tier env readiness
 alloy-agent-verify 1 route /workspace
 alloy-agent-context 1 --copy
 alloy-agent-browser-stop 1
 ```
+
+Environment contract: agents see `web/.env.local.agent` (public/safe). Privileged server vars (e.g. `SUPABASE_SERVICE_ROLE_KEY`) are injected only into the toolkit-owned Next process from `ALLOY_SERVER_ENV_SOURCE` and never enter the worktree. See `VERIFICATION-SECURITY.md`.
 
 Guides: `VERIFICATION-SECURITY.md`, `AI-APP-HEALTH.md`

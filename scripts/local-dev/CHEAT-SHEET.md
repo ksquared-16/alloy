@@ -25,9 +25,9 @@ alloy-agent-close 3                           # stops server; never removes work
 
 # Phase 3 verification bootstrap
 alloy-agent-prepare 3                         # safe web/.env.local.agent (explicit allowlist)
-alloy-dev-start <worktree>                    # required — not npm run dev
+alloy-dev-start <worktree>                    # required — agent-safe + trusted server injection (not npm run dev)
 alloy-agent-login 3                           # manual /login → storage state
-alloy-agent-ready 3                           # READY / NOT READY (toolkit-owned server)
+alloy-agent-ready 3                           # READY / NOT READY (toolkit-owned + two-tier env)
 alloy-agent-verify 3 authenticated-home
 alloy-agent-verify 3 route /workspace
 alloy-agent-verify 3 focused-spec playwright/tests/smoke-field-registry.spec.ts
