@@ -25,7 +25,7 @@ import {
     loadOperatorLifecycleLandingCards,
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
-import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { warmOperatorWorkUnitNavEntry } from "@/lib/admin/warmOperatorWorkUnitNavEntry";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import {
@@ -292,14 +292,14 @@ function SidebarNav({
                                     className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK}`}
                                     title={lifecycle.label}
                                     onMouseEnter={() =>
-                                        warmOperatorWorkUnitEntryFromHref(
+                                        warmOperatorWorkUnitNavEntry(
                                             lifecycle.entryHref,
                                             null,
                                             "sidebar_lifecycle_hover",
                                         )
                                     }
                                     onFocus={() =>
-                                        warmOperatorWorkUnitEntryFromHref(
+                                        warmOperatorWorkUnitNavEntry(
                                             lifecycle.entryHref,
                                             null,
                                             "sidebar_lifecycle_focus",
@@ -359,14 +359,14 @@ function SidebarNav({
                                                     className={EXPANDED_QUEUE_LINK}
                                                     title={entry.label}
                                                     onMouseEnter={() =>
-                                                        warmOperatorWorkUnitEntryFromHref(
+                                                        warmOperatorWorkUnitNavEntry(
                                                             entry.href,
                                                             null,
                                                             "sidebar_queue_hover",
                                                         )
                                                     }
                                                     onFocus={() =>
-                                                        warmOperatorWorkUnitEntryFromHref(
+                                                        warmOperatorWorkUnitNavEntry(
                                                             entry.href,
                                                             null,
                                                             "sidebar_queue_focus",

@@ -58,7 +58,7 @@ import { bustOperatorRuntimeReadCaches } from "@/lib/admin/operatorRuntimeReadCa
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import { resolveQueueRowWarmTarget } from "@/lib/presentation/runtime/queueRowWarmTarget";
-import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { warmOperatorWorkUnitNavEntry } from "@/lib/admin/warmOperatorWorkUnitNavEntry";
 import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkUnitRightRailResolvedActions } from "@/lib/workspace/fetchWorkUnitRightRailResolvedActions";
@@ -93,7 +93,6 @@ import {
     fetchWorkUnitSurfaceConfigBundle,
     queueRowSurfaceIdForDepartment,
 } from "./workUnitSurfaceConfigFetch";
-import { warmOperatorWorkUnitSurfaceFromHref } from "./warmWorkUnitSurfaceSession";
 import { peekRetainedWorkView, putRetainedWorkView } from "./workUnitOperatorContext";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
@@ -736,25 +735,12 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 selectedSiteId,
             });
             if (href) {
-                warmOperatorWorkUnitEntryFromHref(href, selectedSiteId, "work_view_pill_intent");
-                // Warm the target unit's surface session into the SAME cache the runtime seeds from,
-                // under this session's org/user/scope so navigation consumes the prefetch.
-                warmOperatorWorkUnitSurfaceFromHref(href, selectedSiteId, {
-                    orgId,
-                    userId: principalUserId,
-                    scopeFingerprint: accessScopeFingerprint,
-                });
+                // One canonical prewarm for every affordance: identity + bootstrap + the PRV2 surface
+                // session (keyed by the live workspace scope) so navigation consumes the prefetch.
+                warmOperatorWorkUnitNavEntry(href, selectedSiteId, "work_view_pill_intent");
             }
         },
-        [
-            savedViews,
-            canonicalLocationByViewId,
-            selectedSiteId,
-            runtimeCtx.workViewId,
-            orgId,
-            principalUserId,
-            accessScopeFingerprint,
-        ],
+        [savedViews, canonicalLocationByViewId, selectedSiteId, runtimeCtx.workViewId],
     );
 
     const openRecord = useCallback(
