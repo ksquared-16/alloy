@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-initiative-review <initiative-key> [--type architecture|doctrine|ui|performance|test|documentation|integration]
+
+Generates reviewer packages for assigned review tasks.
+Implementation worker must not be the sole reviewer for material UI/architecture work.
+
+See: scripts/local-dev/REVIEW-PIPELINE.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  shift
+  local review_type="architecture"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --type) [[ $# -ge 2 ]] || alloy_die "--type requires value"; review_type="$2"; shift 2 ;;
+      --type=*) review_type="${1#--type=}"; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  local state
+  state="$(alloy_initiative_current_state "$key")"
+  [[ "$state" == "reviewing" || "$state" == "validating" || "$state" == "remediation_required" ]] \
+    || alloy_warn "review in state: $state"
+
+  local base reviews_dir
+  base="$(alloy_initiative_dir "$key")"
+  reviews_dir="$base/reviews"
+
+  # Find review task (task-002 or any non-implementation task)
+  local review_task="task-002"
+  local review_id="review-$(date -u +%Y%m%d%H%M%S)"
+  local pkg_path="$reviews_dir/${review_task}-review-package.md"
+
+  {
+    printf '# Review package — %s\n\n' "$key"
+    printf 'Review ID: `%s`\n' "$review_id"
+    printf 'Type: %s\n' "$review_type"
+    printf 'Generated: %s\n\n' "$(alloy_iso_now)"
+    printf '## Scope\n\n'
+    printf 'Review task-001 implementation against approved specification.\n'
+    printf 'Specification hash: `%s`\n\n' "$(node -e "console.log(require('${base}/state.json').approved_spec_hash||'unapproved')")"
+    printf '## Implementation report\n\n'
+    if [[ -f "$base/reports/task-001-result.json" ]]; then
+      node -e "const r=require('${base}/reports/task-001-result.json'); console.log('- summary:', r.summary); console.log('- commit:', r.commit); console.log('- files:', (r.files_changed||[]).join(', '));"
+    else
+      printf '(task-001 report not yet ingested)\n'
+    fi
+    printf '\n## Review checklist\n\n'
+    case "$review_type" in
+      architecture|doctrine)
+        printf -- '- Doctrine alignment with constitutional constraints\n'
+        printf -- '- No parallel systems introduced\n'
+        printf -- '- Ownership boundaries respected\n'
+        ;;
+      ui)
+        printf -- '- Visual contract basis honored\n'
+        printf -- '- Configuration Runtime pattern preserved for settings surfaces\n'
+        printf -- '- Measurable acceptance criteria met\n'
+        ;;
+      *)
+        printf -- '- Focused checks recorded\n'
+        printf -- '- Integration risk assessed\n'
+        ;;
+    esac
+    printf '\n## Report schema\n\n'
+    printf 'Write: `%s/reviews/%s-review.json`\n' "$base" "$review_task"
+    printf '```json\n'
+    cat <<'JSON'
+{
+  "review_id": "...",
+  "initiative_key": "...",
+  "task_ids": ["task-001"],
+  "review_type": "...",
+  "status": "pass|pass_with_findings|fail|blocked",
+  "findings": [],
+  "severity": "info|minor|major|blocker",
+  "evidence": [],
+  "required_remediation": [],
+  "unresolved_decisions": []
+}
+JSON
+    printf '```\n'
+  } >"$pkg_path"
+
+  # Template review JSON if report exists from reviewer
+  local template_review="$reviews_dir/${review_task}-review.json"
+  if [[ ! -f "$template_review" ]]; then
+    node -e "
+      const fs = require('fs');
+      fs.writeFileSync('${template_review}', JSON.stringify({
+        review_id: '${review_id}',
+        initiative_key: '${key}',
+        task_ids: ['task-001'],
+        review_type: '${review_type}',
+        status: 'blocked',
+        findings: ['Awaiting reviewer report'],
+        severity: 'info',
+        evidence: [],
+        required_remediation: [],
+        unresolved_decisions: []
+      }, null, 2) + '\n');
+    "
+  fi
+
+  alloy_engineering_update_task_status "$key" "$review_task" "reviewing"
+
+  alloy_info "Review package: $pkg_path"
+  alloy_info "Submit review to: $template_review"
+  alloy_info "Ingest with: alloy-initiative-review $key --ingest $review_task (manual edit template first)"
+}
+
+main "$@"

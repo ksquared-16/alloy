@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-worker-report <initiative-key> <task-id> [--report-path /path/to/report.json]
+
+Ingests and validates a structured worker report. Never executes reported commands.
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+
+  local key="$1" task_id="$2"
+  shift 2
+  local report_path=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --report-path) [[ $# -ge 2 ]] || alloy_die "--report-path requires value"; report_path="$2"; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  local default_report worktree_name path branch
+  default_report="$(alloy_engineering_report_path "$key" "$task_id")"
+  [[ -n "$report_path" ]] || report_path="$default_report"
+  [[ -f "$report_path" ]] || alloy_die "report not found: $report_path (conversational completion not accepted)"
+
+  alloy_engineering_io validate-report "$report_path"
+
+  worktree_name="$(node -e "
+    const w = require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'];
+    if (!w) process.exit(1);
+    console.log(w.worktree_name);
+  " 2>/dev/null)" || alloy_die "task not assigned"
+
+  alloy_load_metadata "$worktree_name"
+  path="$ALLOY_WORKTREE_PATH"
+  branch="$ALLOY_WORKTREE_BRANCH"
+
+  local reported_commit reported_status
+  reported_commit="$(node -e "console.log(require('${report_path}').commit)")"
+  reported_status="$(node -e "console.log(require('${report_path}').status)")"
+
+  if [[ "$reported_status" == "implemented" ]]; then
+    if ! alloy_git "$path" cat-file -e "${reported_commit}^{commit}" 2>/dev/null; then
+      alloy_die "reported commit does not exist in worktree: $reported_commit"
+    fi
+    local actual_branch
+    actual_branch="$(alloy_current_branch "$path")"
+    [[ "$actual_branch" == "$branch" ]] || alloy_warn "worktree branch mismatch: expected $branch got $actual_branch"
+  fi
+
+  # Validate evidence paths
+  node -e "
+    const fs = require('fs');
+    const r = require('${report_path}');
+    const ui = r.ui_verification || {};
+    if (ui.required && ui.status === 'passed') {
+      for (const e of (ui.evidence || [])) {
+        if (!fs.existsSync(e)) {
+          console.error('missing evidence path: ' + e);
+          process.exit(1);
+        }
+      }
+    }
+  " || alloy_die "evidence validation failed"
+
+  # Copy to canonical report path if needed
+  if [[ "$report_path" != "$default_report" ]]; then
+    cp "$report_path" "$default_report"
+  fi
+
+  local new_task_status="reported"
+  case "$reported_status" in
+    implemented) new_task_status="reported" ;;
+    blocked|failed) new_task_status="blocked" ;;
+    needs_decision)
+      new_task_status="blocked"
+      alloy_engineering_record_human_decision "$key" \
+        "Worker needs decision ($task_id)" \
+        "Implementation cannot proceed without product/architecture input" \
+        "Provide direction|Narrow scope|Defer task" \
+        "Escalate to operator" \
+        "$task_id" "false"
+      ;;
+  esac
+
+  alloy_engineering_update_task_status "$key" "$task_id" "$new_task_status"
+
+  # Unblock dependent tasks when complete
+  if [[ "$reported_status" == "implemented" ]]; then
+    alloy_engineering_update_task_status "$key" "$task_id" "complete"
+    local tid
+    for tid in $(alloy_engineering_list_tasks "$key"); do
+      if ! alloy_engineering_dependencies_blocking "$key" "$tid"; then
+        local st
+        st="$(alloy_engineering_task_status "$(alloy_engineering_task_path "$key" "$tid")")"
+        [[ "$st" == "blocked" ]] && alloy_engineering_update_task_status "$key" "$tid" "ready"
+      fi
+    done
+  fi
+
+  local state
+  state="$(alloy_initiative_current_state "$key")"
+  if [[ "$state" == "implementing" ]]; then
+    alloy_initiative_transition "$key" "validating" 2>/dev/null || true
+    alloy_initiative_transition "$key" "reviewing" 2>/dev/null || true
+  fi
+
+  node -e "
+    const fs = require('fs');
+    const p = '$(alloy_initiative_dir "$key")/state.json';
+    const d = JSON.parse(fs.readFileSync(p,'utf8'));
+    d.reports = d.reports || {};
+    d.reports['${task_id}'] = { ingested_at: '$(alloy_iso_now)', status: '${reported_status}', commit: '${reported_commit}' };
+    d.updated_at = '$(alloy_iso_now)';
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  "
+
+  alloy_info "Report ingested: $task_id → $reported_status"
+  alloy_info "  commit: ${reported_commit:0:12}"
+  alloy_info "  task status: $(alloy_engineering_task_status "$(alloy_engineering_task_path "$key" "$task_id")")"
+}
+
+main "$@"
