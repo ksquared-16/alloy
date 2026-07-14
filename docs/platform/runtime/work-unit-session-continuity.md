@@ -116,19 +116,27 @@ foreign keys across the loaded rows and issues **one bounded `IN (…)` query pe
 bounded by entity class, never by row count; `queue_reveal` mode narrows the batch set further.
 `enrichment_queries_run` names the plan. No per-row fetch loop exists.
 
-**Canonical-total fan-out.** Per-view counts come from the rows route with each view's `work_view_id`
-predicate (the only source that agrees with the rendered rows). This is inherently one evaluation per
-view. It is bounded so it never dominates: cached (a return resolves every badge from memory, 0
-requests), fresh-skipped on a very recent return/prefetch, excludes the active view (its count comes
-from the rendered rows response), and **capped to `WORK_VIEW_TOTALS_FETCH_CONCURRENCY` in flight** so
-a many-pill unit never bursts. Request count is bounded by inactive-view count, not row count.
+**Canonical totals are batched into ONE request.** `POST /api/admin/queue-view-totals` resolves the
+counts for every pill in a single request: authorization, record scope, and viewer timezone are
+prepared once; each distinct work unit's access check and department metadata are memoized per
+request; each distinct `(workUnitId, queueKey)` lane is fetched once; and every requested view's
+count is computed from that one base page by `aggregateWorkViewTotals` → `computeOperationalProjection`
+— the SAME predicate evaluator (`filterQueueRowsForWorkView`) the single queue route uses, so counts
+are identical by construction (verified by parity tests). Include-all views use the lane's exact
+count; a capped base page marks a filtered count `known:false` (shown as no badge, never a wrong
+number). The browser therefore issues **one** totals request regardless of pill count (1/5/20 views
+→ 1 request), and internal DB work is one base fetch per distinct lane, not one per view.
 
-**Designed next step (not yet implemented — needs deploy/DB verification):** a batched view-totals
-endpoint that resolves auth/scope/dept-metadata once, fetches the shared base lane once per
-`(workUnitId, baseQueueKey)` group, and applies each view's filter in memory
-(`applyWorkViewFilterToQueueItemsResult`, the same pure function the single route uses, so counts
-match by construction) — collapsing N per-view requests into one. Left as a follow-up because count
-parity must be certified against real data before replacing the per-view path.
+The client seeds these from the session cache on return (0 requests), fresh-skips a very recent
+return/prefetch, and falls back to the bounded per-view path (capped to
+`WORK_VIEW_TOTALS_FETCH_CONCURRENCY`) only if the grouped endpoint fails — so counts are never lost.
+Count parity against real data still needs deployed certification before the per-view fallback is
+removed.
+
+**Prefetch convergence.** Every Work Unit navigation affordance (sidebar links, shell soft-nav, Work
+View pills) calls one shared prewarm — `warmOperatorWorkUnitNavEntry` — which warms both the route
+identity/bootstrap and the PRV2 surface session, keyed by the live workspace scope published through
+`currentWorkspaceScope`. No affordance retains an obsolete prewarm path.
 
 ## Not implemented here (out of runnable reach)
 
