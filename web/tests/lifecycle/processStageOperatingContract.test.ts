@@ -48,6 +48,7 @@ import {
     stageOperatingContractHasBlockingErrors,
 } from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
 import { availableOutcomesConfigSource } from "@/lib/lifecycle/workTemplateConfigSource";
+import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 const root = resolve(__dirname, "../..");
@@ -316,7 +317,7 @@ describe("Process Stage operating contract — statuses (16–21)", () => {
     it("21. Close without status fails to build a rule (no invented closed)", () => {
         const rule = buildOutcomeRuleFromAutomation(
             "family_declined",
-            { kind: "close_record", status_key: null, completes_work: true },
+            { kind: "close_record", status_key: undefined, completes_work: true },
             0,
         );
         expect(rule).toBeNull();
@@ -515,7 +516,7 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
                 } as never,
             }),
             templateConfig: resolved!.templateConfig,
-            actionRefLookup: resolved!.actionRegistry,
+            actionRegistry: resolved!.actionRegistry,
         });
         expect(surface.execution?.executionMode).toBe("outcome_led");
         expect(surface.execution?.prominentCta).toBe("record_outcome");
@@ -538,6 +539,7 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
             processStages: [{ key: "lead", label: "Lead" }],
             stageWorkRuntime: null,
             recordHeaderActions: {
+                ...emptyResolvedActionsBySlot(),
                 primary: [
                     {
                         key: "quick_message",
@@ -562,7 +564,7 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
                 businessProcess: { key: "enrollment", label: "Enrollment", stageKey: "lead" },
             }),
             templateConfig: resolved!.templateConfig,
-            actionRefLookup: resolved!.actionRegistry,
+            actionRegistry: resolved!.actionRegistry,
         });
         expect(surface.execution?.executionMode).toBe("direct_action");
         expect(surface.primaryAction?.actionRef).toBe("quick_message");
