@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Gracefully stop the owned Alloy agent dev server.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-dev-stop <worktree-name>
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local name="$1"
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local pid_path pid
+  pid_path="$(alloy_pid_path "$name")"
+
+  if [[ ! -f "$pid_path" ]]; then
+    alloy_info "no PID file for $name (already stopped)"
+    exit 0
+  fi
+
+  pid="$(alloy_read_pid_file "$pid_path" || true)"
+  if [[ -z "${pid:-}" ]] || ! alloy_pid_alive "$pid"; then
+    rm -f "$pid_path"
+    alloy_info "removed dead PID record for $name"
+    exit 0
+  fi
+
+  if ! alloy_pid_belongs_to_worktree "$pid" "$path"; then
+    alloy_die "refusing to kill PID $pid — does not appear to belong to worktree $path"
+  fi
+
+  alloy_info "Sending SIGTERM to PID $pid ($name)..."
+  # Prefer terminating children first (e.g. npm → node), then the recorded PID.
+  if alloy_have_cmd pkill; then
+    pkill -TERM -P "$pid" 2>/dev/null || true
+  fi
+  kill -TERM "$pid" 2>/dev/null || true
+
+  local i child
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    if ! alloy_pid_alive "$pid"; then
+      rm -f "$pid_path"
+      alloy_info "stopped $name (PID $pid)"
+      exit 0
+    fi
+    sleep 0.5
+  done
+
+  cat >&2 <<EOF
+error: process PID $pid still alive after SIGTERM.
+PID file left in place: ${pid_path}
+
+Manual force-kill (only if you have verified ownership):
+  kill -KILL ${pid}
+  rm -f ${pid_path}
+
+alloy-dev-stop does not send SIGKILL automatically.
+EOF
+  exit 1
+}
+
+main "$@"

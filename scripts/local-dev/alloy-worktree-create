@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# Create an isolated Alloy agent worktree from origin/staging.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-worktree-create <slot> <initiative-name> <cursor|claude>
+
+Example:
+  alloy-worktree-create 1 current-work-performance cursor
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 3 ]] || { usage >&2; exit 2; }
+
+  local slot="$1"
+  local initiative="$2"
+  local agent="$3"
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_require_cmd git
+
+  alloy_validate_slot "$slot"
+  alloy_validate_initiative "$initiative"
+  alloy_validate_agent "$agent"
+  alloy_verify_canonical_repo
+
+  local name branch port path existing
+  name="$(alloy_worktree_name "$slot" "$initiative")"
+  branch="$(alloy_branch_name "$agent" "$slot" "$initiative")"
+  port="$(alloy_slot_to_port "$slot")"
+  path="${ALLOY_WORKTREE_ROOT}/${name}"
+
+  if existing="$(alloy_find_metadata_by_slot "$slot" 2>/dev/null)"; then
+    alloy_die "slot $slot already assigned to active worktree metadata: $existing"
+  fi
+  if [[ -f "$(alloy_metadata_path "$name")" ]]; then
+    alloy_die "metadata already exists for $name"
+  fi
+  if [[ -e "$path" ]]; then
+    alloy_die "worktree path already exists: $path"
+  fi
+  alloy_refuse_occupied_port "$port" "create"
+
+  mkdir -p "$ALLOY_WORKTREE_ROOT"
+
+  alloy_info "Fetching ${ALLOY_BASE_REMOTE} in ${ALLOY_REPO}..."
+  alloy_repo_fetch "$ALLOY_REPO"
+
+  local base
+  base="$(alloy_base_ref)"
+  alloy_git "$ALLOY_REPO" rev-parse --verify "$base" >/dev/null \
+    || alloy_die "missing base ref $base (fetch failed or branch absent)"
+
+  if alloy_git "$ALLOY_REPO" show-ref --verify --quiet "refs/heads/${branch}"; then
+    alloy_die "local branch already exists: $branch"
+  fi
+  if alloy_git "$ALLOY_REPO" worktree list --porcelain | grep -Fq "worktree ${path}"; then
+    alloy_die "git already tracks worktree path: $path"
+  fi
+
+  alloy_info "Creating worktree $name from $base..."
+  alloy_git "$ALLOY_REPO" worktree add -b "$branch" "$path" "$base"
+
+  alloy_write_kv_file "$(alloy_metadata_path "$name")" \
+    "ALLOY_WORKTREE_NAME=\"$name\"" \
+    "ALLOY_WORKTREE_SLOT=\"$slot\"" \
+    "ALLOY_WORKTREE_PATH=\"$path\"" \
+    "ALLOY_WORKTREE_BRANCH=\"$branch\"" \
+    "ALLOY_AGENT=\"$agent\"" \
+    "PORT=\"$port\"" \
+    "NEXT_PUBLIC_APP_URL=\"http://localhost:${port}\"" \
+    "ALLOY_CREATED_AT=\"$(alloy_iso_now)\""
+
+  # Non-secret agent env for local Next; also covered by repo .gitignore (.env.*).
+  cat >"${path}/.env.local.agent" <<EOF
+ALLOY_WORKTREE_NAME="${name}"
+ALLOY_AGENT="${agent}"
+PORT="${port}"
+NEXT_PUBLIC_APP_URL="http://localhost:${port}"
+EOF
+  # Ensure Git ignores it in both worktree-local and common excludes.
+  local git_dir common_dir
+  git_dir="$(alloy_git "$path" rev-parse --git-dir)"
+  common_dir="$(alloy_git "$path" rev-parse --git-common-dir)"
+  mkdir -p "${git_dir}/info" "${common_dir}/info"
+  local exclude_file
+  for exclude_file in "${git_dir}/info/exclude" "${common_dir}/info/exclude"; do
+    if ! grep -Fq '.env.local.agent' "$exclude_file" 2>/dev/null; then
+      printf '%s\n' '.env.local.agent' >>"$exclude_file"
+    fi
+  done
+
+  cat <<EOF
+
+Created worktree:
+  name:    ${name}
+  slot:    ${slot}
+  agent:   ${agent}
+  branch:  ${branch}
+  path:    ${path}
+  port:    ${port}
+  url:     http://localhost:${port}
+  base:    ${base}
+
+Dependencies are NOT installed automatically.
+Install in this worktree only (do not symlink another worktree's node_modules):
+
+  cd ${path}/${ALLOY_WEB_DIR}
+  ${ALLOY_PM} install
+
+Then:
+
+  alloy-dev-start ${name}
+
+Open one Cursor/Claude window on ${path} only (not the parent alloy-worktrees folder).
+Do not push or merge from agents without explicit approval.
+EOF
+}
+
+main "$@"
