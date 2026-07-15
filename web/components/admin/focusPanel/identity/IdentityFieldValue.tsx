@@ -119,27 +119,51 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                     aria-label={cell.label}
                 />
             ) : (
-                <span
-                    className="identity-field-value__value"
-                    title={cell.value ? String(cell.value) : undefined}
-                >
-                    {cell.value ?? "—"}
+                <span className="identity-field-value__value-row">
+                    {canInlineEdit && inlineEdit ? (
+                        <button
+                            type="button"
+                            className="identity-field-value__value identity-field-value__value--clickable"
+                            title={cell.value ? String(cell.value) : undefined}
+                            onClick={inlineEdit.onStartEdit}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    inlineEdit.onStartEdit();
+                                }
+                            }}
+                        >
+                            {cell.value ?? "—"}
+                        </button>
+                    ) : (
+                        <span
+                            className="identity-field-value__value"
+                            title={cell.value ? String(cell.value) : undefined}
+                        >
+                            {cell.value ?? "—"}
+                        </span>
+                    )}
+                    {canInlineEdit && inlineEdit ? (
+                        <button
+                            type="button"
+                            className="identity-field-value__edit"
+                            onClick={inlineEdit.onStartEdit}
+                            aria-label={`Edit ${cell.label}`}
+                        >
+                            Edit
+                        </button>
+                    ) : canLegacyEdit ? (
+                        <button
+                            type="button"
+                            className="identity-field-value__edit"
+                            onClick={onEdit}
+                            aria-label={`Edit ${cell.label}`}
+                        >
+                            Edit
+                        </button>
+                    ) : null}
                 </span>
             )}
-            {canInlineEdit && inlineEdit && !inlineEdit.isEditing ? (
-                <button
-                    type="button"
-                    className="identity-field-value__edit"
-                    onClick={inlineEdit.onStartEdit}
-                    aria-label={`Edit ${cell.label}`}
-                >
-                    Edit
-                </button>
-            ) : canLegacyEdit ? (
-                <button type="button" className="identity-field-value__edit" onClick={onEdit} aria-label={`Edit ${cell.label}`}>
-                    Edit
-                </button>
-            ) : null}
             {inlineEdit?.isEditing ? (
                 <span className="identity-field-value__inline-actions">
                     <button

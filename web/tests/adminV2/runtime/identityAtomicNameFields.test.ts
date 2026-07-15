@@ -123,11 +123,22 @@ describe("atomic household name fields", () => {
         expect(personContactSaveKeyForIdentityFieldRef("person.full_name")).toBeNull();
     });
 
+
+    it("maps person.address_line1 to a saveable contact patch key", () => {
+        expect(personContactSaveKeyForIdentityFieldRef("person.address_line1")).toBe("address_line1");
+        expect(isIdentityFieldSaveSupported("person.address_line1")).toBe(true);
+        expect(personContactSaveKeyForIdentityFieldRef("person.address_line")).toBe("address_line1");
+    });
+
     it("IdentityFieldValue uses hover affordance class for inline edit", () => {
         const src = readFileSync(
             join(process.cwd(), "components/admin/focusPanel/identity/IdentityFieldValue.tsx"),
             "utf8",
         );
         expect(src).toContain("identity-field-value--inline-editable");
+        expect(src).toContain("identity-field-value__value--clickable");
+        expect(src).toContain("onStartEdit");
+        const css = readFileSync(join(process.cwd(), "app/adminV2/components/alloyOsRuntime.css"), "utf8");
+        expect(css).toMatch(/identity-field-value--inline-editable[\s\S]*opacity:\s*0/);
     });
 });

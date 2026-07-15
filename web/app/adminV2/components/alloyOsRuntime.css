@@ -4652,6 +4652,12 @@ html[data-alloy-os-runtime-split="true"]
   --alloy-os-avatar-fg: #64748b;
 }
 /* Children keep deterministic tone buckets; role attribute scopes the family. */
+
+.alloy-os-card-avatar[data-avatar-tone][data-avatar-role="primary_contact"],
+.alloy-os-card-avatar[data-avatar-tone][data-avatar-role="other_parent_guardian"] {
+  --alloy-os-avatar-bg: color-mix(in srgb, var(--color-alloy-blue, #00458C) 16%, #fff);
+  --alloy-os-avatar-fg: var(--color-alloy-blue, #00458C);
+}
 .alloy-os-card-avatar[data-avatar-role="child"] {
   /* tone CSS vars remain authoritative for child palette */
 }
@@ -6710,23 +6716,46 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .identity-record-summary__activate,
 .identity-expanded-details__toggle,
 
-.identity-field-value--inline-editable {
-  position: relative;
+.identity-field-value__value-row {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .identity-field-value--inline-editable .identity-field-value__edit {
-  opacity: 0.55;
+  opacity: 0;
   pointer-events: auto;
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  position: static;
+  transform: none;
   padding: 0 2px;
+  flex-shrink: 0;
+  transition: opacity 120ms ease;
 }
 
 .identity-field-value--inline-editable:hover .identity-field-value__edit,
 .identity-field-value--inline-editable:focus-within .identity-field-value__edit {
   opacity: 1;
+}
+
+.identity-field-value__value--clickable {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.identity-field-value--inline-editable:hover .identity-field-value__value--clickable,
+.identity-field-value--inline-editable:focus-within .identity-field-value__value--clickable {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .identity-field-value__input {
@@ -6888,46 +6917,6 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 
-.identity-field-value--inline-editable {
-  position: relative;
-}
-
-.identity-field-value--inline-editable .identity-field-value__edit {
-  opacity: 0.55;
-  pointer-events: auto;
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 0 2px;
-}
-
-.identity-field-value--inline-editable:hover .identity-field-value__edit,
-.identity-field-value--inline-editable:focus-within .identity-field-value__edit {
-  opacity: 1;
-}
-
-.identity-field-value__input {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  border: 1px solid var(--alloy-os-border, #e5e7eb);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font: inherit;
-  font-size: 11.5px;
-}
-
-.identity-field-value__inline-actions {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.identity-field-value__edit--cancel {
-  color: var(--alloy-os-text-secondary, #6b7280);
-}
-
 .identity-record-summary__edit,
 .identity-field-value__edit {
   color: var(--alloy-os-accent, #24634f);
@@ -7039,7 +7028,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 /* Person-level Edit — one quiet affordance per identity block (not per field). */
 .identity-record-summary__edit {
-  opacity: 0.55;
+  opacity: 0;
   transition: opacity 120ms ease;
 }
 .identity-record-summary:hover .identity-record-summary__edit,

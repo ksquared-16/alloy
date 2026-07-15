@@ -18,6 +18,16 @@ describe("Household person-level edit affordance", () => {
         expect(src).toContain("onEditContact");
     });
 
+    it("hides collection person-level Edit when inline onSaveField is available", () => {
+        const src = readFileSync(
+            join(ROOT, "components/admin/focusPanel/identity/IdentityRecordSummary.tsx"),
+            "utf8",
+        );
+        expect(src).toContain("showPersonLevelEdit");
+        expect(src).toContain("isCollectionDepth");
+        expect(src).toContain("onSaveField && isCollectionDepth");
+    });
+
     it("IdentityFieldValue only shows Edit when onEdit is provided (field-scoped)", () => {
         const src = readFileSync(
             join(ROOT, "components/admin/focusPanel/identity/IdentityFieldValue.tsx"),

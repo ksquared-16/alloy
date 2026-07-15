@@ -58,6 +58,28 @@ describe("semantic identity avatar resolver", () => {
         }
     });
 
+    it("IdentityRecordSummary forwards semantic avatar role through IdentityAvatar", () => {
+        const summary = readFileSync(
+            join(process.cwd(), "components/admin/focusPanel/identity/IdentityRecordSummary.tsx"),
+            "utf8",
+        );
+        const avatar = readFileSync(
+            join(process.cwd(), "components/admin/focusPanel/identity/IdentityAvatar.tsx"),
+            "utf8",
+        );
+        const cardAvatar = readFileSync(
+            join(process.cwd(), "components/admin/focusPanel/CardAvatar.tsx"),
+            "utf8",
+        );
+        expect(summary).toContain("IdentityAvatar");
+        expect(summary).toContain("record.avatar?.role");
+        expect(avatar).toContain("CardAvatar");
+        expect(cardAvatar).toContain('data-avatar-role={avatar.role}');
+        const css = readFileSync(join(process.cwd(), "app/adminV2/components/alloyOsRuntime.css"), "utf8");
+        expect(css).toContain('[data-avatar-role="other_parent_guardian"]');
+        expect(css).toContain('[data-avatar-tone][data-avatar-role="other_parent_guardian"]');
+    });
+
     it("Builder VM and runtime share the same resolver + role inference", () => {
         const vm = readFileSync(
             join(process.cwd(), "lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM.ts"),

@@ -158,4 +158,40 @@ describe("identity tier field policy isolation", () => {
             expect(detailEmail.editable).toBe(true);
         }
     });
+
+    it("marks person.address_line1 editable when details tier policy is editable and canMutate", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line1", { tier: "expanded" });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.address_line1", "editable", {
+            tier: "details",
+        });
+
+        const groups: HouseholdEvidenceGroup[] = [
+            {
+                key: "primary_contact",
+                title: "Primary",
+                contacts: [
+                    {
+                        personId: "p-1",
+                        name: "Kelly Kurzman",
+                        roleLabel: "Primary",
+                        isPrimary: true,
+                        phone: "480-111-2222",
+                        email: "kelly@example.com",
+                        initials: "KK",
+                        addressLine1: "142 Oak Street",
+                    },
+                ],
+                children: [],
+                count: 1,
+            },
+        ];
+
+        const vm = buildHouseholdIdentityCardVM({ config, groups, canMutate: true });
+        const record = vm.sections[0]!.items[0]!;
+        const addressCell = record.detailRows.flatMap((r) => r.cells).find((c) => c.fieldRef === "person.address_line1");
+        expect(addressCell?.policy).toBe("editable");
+        expect(addressCell?.editable).toBe(true);
+    });
+
 });

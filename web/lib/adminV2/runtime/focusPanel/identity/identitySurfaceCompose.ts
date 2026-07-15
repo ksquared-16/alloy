@@ -53,13 +53,15 @@ function composedPersonFullName(subject: IdentityComposeSubject): string | null 
 }
 
 function personAddressLine1(subject: IdentityComposeSubject): string | null {
-    if (subject.kind !== "person") return null;
-    return subject.value.addressLine1?.trim() || null;
+    if (subject.kind === "person") return subject.value.addressLine1?.trim() || null;
+    if (subject.kind === "contact_edit") return subject.value.address_line1?.trim() || null;
+    return null;
 }
 
 function personAddressLine2(subject: IdentityComposeSubject): string | null {
-    if (subject.kind !== "person") return null;
-    return subject.value.addressLine2?.trim() || null;
+    if (subject.kind === "person") return subject.value.addressLine2?.trim() || null;
+    if (subject.kind === "contact_edit") return subject.value.address_line2?.trim() || null;
+    return null;
 }
 
 function personNameParts(subject: IdentityComposeSubject): { first: string | null; last: string | null } {
@@ -146,6 +148,10 @@ const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {
         subject.kind === "contact_edit" ? subject.value.email?.trim() || null : null,
     "contact.phone": (subject) =>
         subject.kind === "contact_edit" ? subject.value.phone?.trim() || null : null,
+    "contact.address_line1": (subject) => personAddressLine1(subject),
+    "contact.address_line2": (subject) => personAddressLine2(subject),
+    "contact.address_line": (subject) => personAddressLine1(subject),
+    "contact.address": (subject) => personAddressLine1(subject),
     "contact.full_name": (subject) => composedPersonFullName(subject),
 };
 

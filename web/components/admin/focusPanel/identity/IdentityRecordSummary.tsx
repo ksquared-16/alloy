@@ -39,6 +39,12 @@ export default function IdentityRecordSummary({
         showInlineDetails
         && detailRows.some((row) => row.cells.some((cell) => cell.editable));
 
+    const isCollectionDepth = depth === "summary" || depth === "context";
+    const showPersonLevelEdit =
+        Boolean(onEditContact)
+        && (hasEditableField || hasEditableDetailField)
+        && !(onSaveField && isCollectionDepth);
+
     return (
         <div
             className={clsx("identity-record-summary", className)}
@@ -91,12 +97,12 @@ export default function IdentityRecordSummary({
                     </span>
                     <IdentityFieldGrid rows={visibleRows} personId={record.id} onSaveField={onSaveField} onEditField={onEditField} />
                 </div>
-                {onEditContact && (hasEditableField || hasEditableDetailField) ? (
+                {showPersonLevelEdit ? (
                     <button
                         type="button"
                         className="identity-record-summary__edit"
                         data-household-edit-contact={record.id}
-                        onClick={() => onEditContact(record.id)}
+                        onClick={() => onEditContact!(record.id)}
                     >
                         Edit
                     </button>
