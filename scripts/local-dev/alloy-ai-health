@@ -54,6 +54,10 @@ main() {
 
   alloy_load_config
   alloy_ensure_runtime_dirs
+  # shellcheck source=lib/verify.sh
+  source "${SCRIPT_DIR}/lib/verify.sh"
+  alloy_ensure_verify_runtime_dirs
+  export ALLOY_SKIP_AUTH_LIVE_CHECK=1
 
   echo "Alloy AI health (read-only)"
   echo "time: $(alloy_iso_now)"
@@ -90,6 +94,9 @@ main() {
   print_count_row "next" "$(alloy_count_matching_processes '(^|/)next( |$)')"
   # Argument-aware Playwright test runners only (not hostnames / policy JSON / browsers).
   print_count_row "playwright" "$(alloy_count_playwright_test_runners)"
+  # shellcheck source=lib/verify.sh
+  source "${SCRIPT_DIR}/lib/verify.sh"
+  print_count_row "toolkit browsers" "$(alloy_count_toolkit_browsers)"
 
   section "Cursor processes (sample)"
   ps axo pid=,pcpu=,pmem=,command= 2>/dev/null | grep -E '[Cc]ursor' | grep -v grep | head -n 20 || echo "(none)"
@@ -103,6 +110,17 @@ main() {
   section "Top CPU"
   ps -arco pid,pcpu,pmem,comm 2>/dev/null | head -n 15 || \
     ps -axo pid,pcpu,pmem,comm 2>/dev/null | sort -nrk2 | head -n 15 || true
+
+  section "Toolkit-owned browsers (per slot)"
+  local slot bstate profile
+  for ((slot = 1; slot <= ALLOY_MAX_AGENTS; slot++)); do
+    bstate="$(alloy_browser_state_for "$slot")"
+    profile="$(alloy_browser_profile_dir "$slot")"
+    if [[ "$bstate" != "stopped" ]]; then
+      printf '  slot %-2s  %-10s  profile: %s\n' "$slot" "$bstate" "$profile"
+    fi
+  done
+  echo "  (stale sessions reported only — not killed automatically)"
 
   section "Caches / app data (sizes only)"
   dir_line "Cursor support" "$HOME/Library/Application Support/Cursor"

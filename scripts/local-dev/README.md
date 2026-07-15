@@ -1,4 +1,4 @@
-# Alloy local parallel-agent development toolkit (Phase 1 + Phase 2)
+# Alloy local parallel-agent development toolkit (Phase 1 + Phase 2 + Phase 3)
 
 Self-contained Bash toolkit for running up to six concurrent Cursor or Claude implementation agents in isolated Git worktrees, with deterministic ports and serialized heavyweight validation.
 
@@ -10,8 +10,8 @@ This is **developer experience tooling only**. It is not sprint orchestration, a
 ## 1. Target architecture
 
 ```text
-~/Code/Alloy/                     Canonical repository (configurable)
-~/Code/alloy-worktrees/
+/Users/Kelly/Alloy/                Canonical repository (configurable)
+/Users/Kelly/Code/alloy-worktrees/
   wt1-<initiative>/
   wt2-<initiative>/
   ...
@@ -104,15 +104,15 @@ alloy-worktree-create 1 current-work-performance cursor
 Creates:
 
 - branch `agent/cursor/1-current-work-performance` from latest `origin/staging`
-- path `~/Code/alloy-worktrees/wt1-current-work-performance`
+- path `/Users/Kelly/Code/alloy-worktrees/wt1-current-work-performance`
 - runtime metadata + `.env.local.agent`
 - does **not** push; does **not** modify `staging`
 
 ## 7. Local implementation lifecycle
 
-1. Create worktree and `npm install` inside that worktree’s `web/`.
+1. Create worktree and `npm install` inside that worktree’s `web/` (required — browser tooling uses that worktree-local Playwright only; never share `node_modules`).
 2. Open **one** Cursor/Claude window on that worktree path only.
-3. `alloy-dev-start <name>` when UI inspection is needed.
+3. `alloy-dev-start <name>` when UI inspection is needed (**required** — two-tier env: agent-safe `.env.local.agent` + trusted server injection from `ALLOY_SERVER_ENV_SOURCE`; do not run `npm run dev`).
 4. Implement and commit locally in coherent chunks.
 5. Run focused checks directly; use `alloy-validate` for heavy checks.
 6. Sync from staging with `alloy-worktree-sync` when clean.
@@ -222,7 +222,7 @@ Never auto-delete: worktrees, branches, `node_modules`, Docker data, Cursor/Clau
 
 ## 19. Spotlight / iCloud guidance
 
-Keep canonical repo and worktrees under `~/Code/...`, outside iCloud-backed Desktop/Documents.
+Keep canonical repo at `/Users/Kelly/Alloy` and worktrees under `/Users/Kelly/Code/alloy-worktrees/`, outside iCloud-backed Desktop/Documents.
 
 Optional Spotlight exclusion (run manually after reviewing paths; Phase 1 never runs `sudo mdutil`):
 
@@ -347,3 +347,33 @@ alloy-agent-open 2 --with-server              # open tool + server; prompt copie
 alloy-agent-status
 alloy-agent-close 2                           # stop server; keep worktree
 ```
+
+### Phase 3 — verification bootstrap
+
+| Command | Purpose |
+|---------|---------|
+| `alloy-agent-prepare` | Safe allowlisted `web/.env.local.agent` (chmod 600; never prints values) |
+| `alloy-agent-login` | Isolated browser → manual `/login` → storage state per slot |
+| `alloy-agent-ready` | READY / NOT READY checklist with remediation |
+| `alloy-agent-verify` | Focused route/home verify (one worker; evidence on failure) |
+| `alloy-agent-browser-stop` | Stop slot-owned browser only |
+| `alloy-agent-context` | Generated verification context; `--copy` |
+| `alloy-agent-evidence` | List screenshots/summaries under local evidence dir |
+
+Auth discovered: Supabase email/password at `/login` (see `web/README_ADMIN_AUTH.md`).
+
+```bash
+alloy-agent-prepare 1
+alloy-dev-start wt1-my-initiative    # toolkit-owned; agent-safe + trusted server injection (not npm run dev)
+alloy-agent-login 1
+alloy-agent-ready 1                  # requires toolkit-owned server; reports two-tier env readiness
+alloy-agent-verify 1 route /workspace
+alloy-agent-context 1 --copy
+alloy-agent-browser-stop 1
+```
+
+Environment contract: agents see `web/.env.local.agent` (public/safe). Privileged server vars (e.g. `SUPABASE_SERVICE_ROLE_KEY`) are injected only into the toolkit-owned Next process from `ALLOY_SERVER_ENV_SOURCE` and never enter the worktree. See `VERIFICATION-SECURITY.md`.
+
+**Real-Mac certified (July 2026):** prepare → toolkit-owned server (two-tier env) → isolated manual login → READY → `/workspace` verify PASS → evidence generated. See `VERIFICATION-SECURITY.md` for certification notes and `web/next-env.d.ts` remediation.
+
+Guides: `VERIFICATION-SECURITY.md`, `AI-APP-HEALTH.md`

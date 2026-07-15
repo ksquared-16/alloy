@@ -111,6 +111,20 @@ cmd_report() {
     echo "docker not installed"
   fi
   echo
+  echo "## Verification evidence (local-only; never auto-deleted)"
+  if [[ -d "${ALLOY_RUNTIME_ROOT}/evidence" ]]; then
+    find "${ALLOY_RUNTIME_ROOT}/evidence" -mindepth 1 -maxdepth 2 -type d 2>/dev/null \
+      | while IFS= read -r d; do
+          printf '%8s  %s\n' "$(alloy_dir_size "$d")" "$d"
+        done || true
+  else
+    echo "(none)"
+  fi
+  echo
+  echo "## Auth/browser local state (never auto-deleted)"
+  [[ -d "${ALLOY_RUNTIME_ROOT}/auth" ]] && printf '%8s  %s\n' "$(alloy_dir_size "${ALLOY_RUNTIME_ROOT}/auth")" "${ALLOY_RUNTIME_ROOT}/auth"
+  [[ -d "${ALLOY_RUNTIME_ROOT}/browser-profiles" ]] && printf '%8s  %s\n' "$(alloy_dir_size "${ALLOY_RUNTIME_ROOT}/browser-profiles")" "${ALLOY_RUNTIME_ROOT}/browser-profiles"
+  echo
   echo "No deletions performed."
 }
 

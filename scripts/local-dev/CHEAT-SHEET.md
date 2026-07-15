@@ -23,13 +23,29 @@ alloy-agent-instructions 3 --copy
 alloy-agent-status
 alloy-agent-close 3                           # stops server; never removes worktree
 
+# Phase 3 verification bootstrap
+alloy-agent-prepare 3                         # safe web/.env.local.agent (explicit allowlist)
+alloy-dev-start <worktree>                    # required — agent-safe + trusted server injection (not npm run dev)
+alloy-agent-login 3                           # manual /login → storage state
+alloy-agent-ready 3                           # READY / NOT READY (toolkit-owned + two-tier env)
+alloy-agent-verify 3 authenticated-home
+alloy-agent-verify 3 route /workspace
+alloy-agent-verify 3 focused-spec playwright/tests/smoke-field-registry.spec.ts
+alloy-agent-context 3 --copy
+alloy-agent-evidence 3
+alloy-agent-browser-stop 3                      # slot-owned browser only
+
+# After alloy-dev-start: Next.js may dirty web/next-env.d.ts — restore before READY:
+#   git restore web/next-env.d.ts
+
 # Shell shortcuts
 awt 3                                         # cd slot 3 worktree
 devup                                         # start owned localhost server
 
 # Phase 1 primitives (still available)
 alloy-worktree-create 1 my-initiative cursor
-cd ~/Code/alloy-worktrees/wt1-my-initiative/web && npm install
+cd /Users/Kelly/Code/alloy-worktrees/wt1-my-initiative/web && npm install
+# required per worktree — browser helpers use this worktree-local Playwright only
 alloy-worktree-sync wt1-my-initiative
 alloy-worktree-remove wt1-my-initiative
 

@@ -107,6 +107,11 @@ git -C "$CANON" add .
 git -C "$CANON" commit -m "fixture base" >/dev/null
 git -C "$CANON" push -u origin staging >/dev/null
 
+TRUSTED_SRC="$TMP/trusted-server.env"
+cat >"$TRUSTED_SRC" <<'EOF'
+SUPABASE_SERVICE_ROLE_KEY="fixture-service-role-phase1-never-real"
+EOF
+
 cat >"$CONFIG_DIR/config" <<EOF
 ALLOY_REPO="$CANON"
 ALLOY_WORKTREE_ROOT="$WTROOT"
@@ -121,6 +126,7 @@ ALLOY_MAX_AGENTS="6"
 ALLOY_PM="npm"
 ALLOY_WEB_DIR="web"
 ALLOY_DEV_COMMAND='node -e "require(\"http\").createServer((q,s)=>{s.end(\"ok\")}).listen(Number(process.env.PORT||3000))"'
+ALLOY_SERVER_ENV_SOURCE="$TRUSTED_SRC"
 ALLOY_TYPECHECK_COMMAND='node -e "console.log(\"tc-ok\")"'
 ALLOY_TEST_COMMAND='node -e "console.log(\"test-ok\")"'
 ALLOY_BUILD_COMMAND='npm run build'
