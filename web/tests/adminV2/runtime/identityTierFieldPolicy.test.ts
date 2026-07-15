@@ -24,7 +24,7 @@ describe("identity tier field policy isolation", () => {
             tier: "summary",
         });
         config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.phone", "editable", {
-            tier: "context_facts",
+            tier: "context_fact",
         });
 
         expect(
@@ -89,12 +89,12 @@ describe("identity tier field policy isolation", () => {
 
     it("isolates Summary vs Context Facts policy and label for the same Email field", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "contact_edit", "person.email", { tier: "context_facts" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.email", { tier: "context_fact" });
         config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.email", "read-only", {
             tier: "summary",
         });
         config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.email", "editable", {
-            tier: "context_facts",
+            tier: "context_fact",
         });
         config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.email", "editable", {
             tier: "details",

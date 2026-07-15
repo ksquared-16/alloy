@@ -134,7 +134,7 @@ describe("household runtime disclosure", () => {
     it("details depth shows context facts in visible rows plus detail-only fields", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         config = addFieldToNestedGroup(config, "contact_edit", "person.address_line", { tier: "expanded" });
-        config = addFieldToNestedGroup(config, "contact_edit", "person.phone", { tier: "context_facts" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.phone", { tier: "context_fact" });
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
         const card = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
         const primary = card.sections.find((section) => section.key === "primary_contact")?.items[0]!;

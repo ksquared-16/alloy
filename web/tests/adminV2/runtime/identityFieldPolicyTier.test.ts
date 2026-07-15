@@ -19,7 +19,7 @@ describe("tier-specific identity field policy", () => {
             tier: "summary",
         });
         config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.phone", "editable", {
-            tier: "context_facts",
+            tier: "context_fact",
         });
 
         expect(
