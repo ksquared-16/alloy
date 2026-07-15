@@ -211,14 +211,20 @@ describe("Process Stage operating contract — outcome editor (6–10)", () => {
         expect(issues.some((issue) => issue.code === "legacy_work_completion_invalid")).toBe(true);
     });
 
-    it("10. Editor copy uses Outcomes not Results", () => {
+    it("10. Editor copy uses Outcomes not Results and Outcome Led execution mode", () => {
         const editor = read(
             "components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor.tsx",
         );
         expect(editor).toContain("Available Outcomes");
         expect(editor).not.toContain("Available Results");
-        expect(editor).toContain("No direct action");
-        expect(editor).toContain("Select an action");
+        expect(editor).toContain("Direct Action");
+        expect(editor).toContain("Outcome Led");
+        expect(editor).toContain("LifecycleStageOutcomeDefinitionsEditor");
+
+        const planEditor = read(
+            "components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx",
+        );
+        expect(planEditor).not.toContain("LifecycleStageOutcomeDefinitionsEditor");
     });
 
     it("blocking authoring validation is caught by the stage save flow", () => {
@@ -445,15 +451,19 @@ describe("Process Stage operating contract — follow-up work (22–25)", () => 
                     due_policy: { anchor: "stage_entered_at", offset_value: 2, offset_unit: "days", direction: "after" },
                 },
             ],
-            attention_enabled: true,
-            attention_reason: "Follow-up needed",
+            attention_items: [
+                {
+                    reason: "Follow-up needed",
+                    due_policy: { anchor: "outcome_recorded_at", offset_value: 0, offset_unit: "days", direction: "after" },
+                },
+            ],
         });
         const draft = readComposableOutcomeBehaviorDraft("needs_follow_up", rules);
         expect(draft.follow_up_work.map((row) => row.template_key)).toEqual([
             "follow_up_after_tour",
             "availability_follow_up",
         ]);
-        expect(draft.attention_enabled).toBe(true);
+        expect(draft.attention_items.map((row) => row.reason)).toEqual(["Follow-up needed"]);
     });
 });
 

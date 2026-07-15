@@ -6,7 +6,10 @@ import {
     duePolicyFromLegacyDays,
     effectiveFollowUpDuePolicy,
     formatFollowUpDuePolicySummary,
+    formatScheduleTimingSummary,
+    policyFromScheduleTimingUi,
     resolveFollowUpWorkDueAt,
+    scheduleTimingUiFromPolicy,
 } from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
 import {
     buildOutcomeRuleFromAutomation,
@@ -99,6 +102,82 @@ describe("stage follow-up work due policy", () => {
         );
         expect(summary).toContain("Check Tour Availability");
         expect(summary).toContain("2 day");
+    });
+
+    it("supports hours, weeks, and months offset units", () => {
+        const hours = resolveFollowUpWorkDueAt({
+            policy: {
+                anchor: "outcome_recorded_at",
+                offset_value: 2,
+                offset_unit: "hours",
+                direction: "after",
+            },
+            outcomeRecordedAt: recordedAt,
+        });
+        expect(hours.ok && hours.dueAt).toBe("2026-07-10T17:00:00.000Z");
+
+        const weeks = resolveFollowUpWorkDueAt({
+            policy: {
+                anchor: "outcome_recorded_at",
+                offset_value: 1,
+                offset_unit: "weeks",
+                direction: "after",
+            },
+            outcomeRecordedAt: recordedAt,
+        });
+        expect(weeks.ok && weeks.dueAt).toBe("2026-07-17T15:00:00.000Z");
+
+        const months = resolveFollowUpWorkDueAt({
+            policy: {
+                anchor: "outcome_recorded_at",
+                offset_value: 1,
+                offset_unit: "months",
+                direction: "after",
+            },
+            outcomeRecordedAt: recordedAt,
+        });
+        expect(months.ok && months.dueAt).toBe("2026-08-10T15:00:00.000Z");
+    });
+
+    it("round-trips schedule timing UI for immediate vs before/after value+unit", () => {
+        const immediate = scheduleTimingUiFromPolicy({
+            anchor: "outcome_recorded_at",
+            offset_value: 0,
+            offset_unit: "days",
+            direction: "after",
+        });
+        expect(immediate.mode).toBe("immediate");
+        expect(formatScheduleTimingSummary(policyFromScheduleTimingUi(immediate))).toBe("Immediately");
+
+        const before = policyFromScheduleTimingUi({
+            mode: "before",
+            offset_value: 2,
+            offset_unit: "hours",
+            anchor: "scheduled_event_start",
+        });
+        expect(before).toEqual({
+            anchor: "scheduled_event_start",
+            offset_value: 2,
+            offset_unit: "hours",
+            direction: "before",
+        });
+        expect(formatScheduleTimingSummary(before)).toContain("2 hours before");
+    });
+
+    it("outcome behavior editor exposes follow-up and attention timing with units", () => {
+        const behavior = readFileSync(
+            resolve(__dirname, "../../components/adminV2/settings/lifecycle/LifecycleStageOutcomeBehaviorEditor.tsx"),
+            "utf8",
+        );
+        expect(behavior).toContain("Create follow-up work");
+        expect(behavior).toContain("Create attention");
+        expect(behavior).toContain("FOLLOW_UP_OFFSET_UNIT_OPTIONS");
+        expect(behavior).toContain("ScheduleTimingControls");
+        expect(behavior).toContain("stage-outcome-follow-up-add-");
+        expect(behavior).toContain("stage-outcome-attention-add-");
+        expect(behavior).toContain("Immediately");
+        expect(behavior).toContain("Before");
+        expect(behavior).toContain("After");
     });
 });
 
