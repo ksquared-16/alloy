@@ -18,7 +18,6 @@ import {
     buildHouseholdIdentityCardVM,
 } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
 import { identityRowsForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityDisclosureVM";
-import { composeSummaryAndContextFacts } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 
@@ -96,14 +95,16 @@ describe("household runtime disclosure", () => {
         expect(other.summaryRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef)).toContain("person.phone");
     });
 
-    it("context reuses parent summary VMs with incremental facts only", () => {
+    it("context rows equal contextFactRows without summary merge", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         config = addFieldToNestedGroup(config, "primary_contact", "person.phone");
         config = addFieldToNestedGroup(config, "primary_contact", "person.address_line", { tier: "context" });
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
         const card = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
         const primary = card.sections.find((section) => section.key === "primary_contact")?.items[0]!;
-        expect(primary.contextRows).toEqual(composeSummaryAndContextFacts(primary.summaryRows, primary.contextFactRows));
+        expect(primary.contextRows).toEqual(primary.contextFactRows);
+        expect(primary.summaryRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef)).toContain("person.phone");
+        expect(primary.contextRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef)).not.toContain("person.phone");
     });
 
     it("address in details is absent from summary and context", () => {
@@ -128,6 +129,21 @@ describe("household runtime disclosure", () => {
             "142 Oak Street",
         );
         expect(other?.detailRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef)).toContain("person.address_line1");
+    });
+
+    it("details depth shows context facts in visible rows plus detail-only fields", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.phone", { tier: "context_facts" });
+        const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
+        const card = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
+        const primary = card.sections.find((section) => section.key === "primary_contact")?.items[0]!;
+        const detailsView = identityRowsForDisclosureDepth(primary, "details");
+        const visibleRefs = detailsView.visibleRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
+        const detailRefs = detailsView.detailRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
+        expect(visibleRefs).toContain("person.phone");
+        expect(detailRefs).toContain("person.address_line1");
+        expect(detailRefs).not.toContain("person.phone");
     });
 
     it("card source wires selection into IdentityDisclosureSurface", () => {
@@ -206,10 +222,16 @@ describe("identity inline edit wiring", () => {
         expect(summary).toContain("personId={record.id}");
     });
 
-    it("collection drill affordance is present when onActivate is wired", () => {
+    it("collection drill affordance sits below the field grid when onActivate is wired", () => {
         const summary = readSrc("components/admin/focusPanel/identity/IdentityRecordSummary.tsx");
         expect(summary).toContain("data-identity-open-details");
         expect(summary).toContain("Details →");
+        const gridIdx = summary.indexOf("<IdentityFieldGrid");
+        const detailsIdx = summary.indexOf("identity-record-summary__open-details");
+        expect(gridIdx).toBeGreaterThan(-1);
+        expect(detailsIdx).toBeGreaterThan(gridIdx);
+        const titleInner = summary.match(/identity-record-summary__title">([\s\S]*?)<\/span>/)?.[1] ?? "";
+        expect(titleInner).not.toContain("identity-record-summary__open-details");
     });
 
     it("ChildrenCard wires onSaveField when mutation is available", () => {

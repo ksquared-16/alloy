@@ -4639,11 +4639,13 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-card-avatar[data-avatar-tone="5"] { --alloy-os-avatar-bg: #f1f5f9; --alloy-os-avatar-fg: #64748b; }
 
 /* Semantic identity roles — color conveys type/role, never gender or ops status. */
-.alloy-os-card-avatar[data-avatar-role="primary_contact"] {
+.alloy-os-card-avatar[data-avatar-role="primary_contact"],
+.alloy-os-card-avatar[data-avatar-role="primary_contact"][data-avatar-tone] {
   --alloy-os-avatar-bg: color-mix(in srgb, var(--color-alloy-blue, #00458C) 16%, #fff);
   --alloy-os-avatar-fg: var(--color-alloy-blue, #00458C);
 }
-.alloy-os-card-avatar[data-avatar-role="other_parent_guardian"] {
+.alloy-os-card-avatar[data-avatar-role="other_parent_guardian"],
+.alloy-os-card-avatar[data-avatar-role="other_parent_guardian"][data-avatar-tone] {
   --alloy-os-avatar-bg: color-mix(in srgb, var(--color-alloy-blue, #00458C) 16%, #fff);
   --alloy-os-avatar-fg: var(--color-alloy-blue, #00458C);
 }
@@ -4653,11 +4655,6 @@ html[data-alloy-os-runtime-split="true"]
 }
 /* Children keep deterministic tone buckets; role attribute scopes the family. */
 
-.alloy-os-card-avatar[data-avatar-tone][data-avatar-role="primary_contact"],
-.alloy-os-card-avatar[data-avatar-tone][data-avatar-role="other_parent_guardian"] {
-  --alloy-os-avatar-bg: color-mix(in srgb, var(--color-alloy-blue, #00458C) 16%, #fff);
-  --alloy-os-avatar-fg: var(--color-alloy-blue, #00458C);
-}
 .alloy-os-card-avatar[data-avatar-role="child"] {
   /* tone CSS vars remain authoritative for child palette */
 }
@@ -6790,8 +6787,9 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .identity-record-summary__open-details {
-  flex: 0 0 auto;
-  padding: 0 2px;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
   color: var(--alloy-os-text-secondary, #6b7280);
   font-size: 10px;
   font-weight: 600;

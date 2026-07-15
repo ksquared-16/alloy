@@ -39,7 +39,6 @@ function dedupeIdentityFieldRefList(fieldRefs: readonly string[]): string[] {
     return out;
 }
 
-import { sanitizeContextFactKeys } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import type {
     IdentitySectionConfig,
     IdentitySurfaceConfig,
@@ -158,23 +157,14 @@ export const generateDefaultPlacementsForGroup = generateDefaultIdentityFieldPla
  * Migrate legacy config into configuration buckets + normalized placements.
  *
  * - selectedFieldKeys → Summary Fields
- * - contextFieldKeys → Context Facts (summary duplicates stripped unless explicitly configured per tier)
+ * - contextFieldKeys → Context Facts (may overlap Summary keys independently)
  * - expandedFieldKeys → Detail Fields
  */
 export function migrateIdentityDisclosureGroup(group: NestedSurfaceGroupConfig): NestedSurfaceGroupConfig {
     const reconciled = reconcileFieldModesToPolicies(group);
     const layers = identityLayerFieldKeysFromGroup(reconciled);
-    const sanitizedContextFactKeys = sanitizeContextFactKeys(
-        layers.summary,
-        reconciled.contextFieldKeys ?? layers.contextFacts,
-    );
-    const overlapContextFactKeys = (reconciled.fieldPlacements ?? [])
-        .filter((placement) => normalizeIdentityStorageTier(placement.tier) === "context_fact")
-        .map((placement) => placement.fieldRef)
-        .filter((fieldRef) => layers.summary.includes(fieldRef));
     const contextFactKeys = dedupeIdentityFieldRefList([
-        ...sanitizedContextFactKeys,
-        ...overlapContextFactKeys,
+        ...(reconciled.contextFieldKeys ?? layers.contextFacts),
     ]);
     const placementSeed = {
         ...reconciled,

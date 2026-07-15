@@ -100,7 +100,6 @@ export function generateDefaultIdentityFieldPlacements(
         existing.map((placement) => [`${normalizeIdentityStorageTier(placement.tier)}:${placement.fieldRef}`, placement]),
     );
     const summaryKeys = options?.summaryKeys ?? group.selectedFieldKeys;
-    const summarySet = new Set(summaryKeys);
     const contextFactKeys = options?.contextFactKeys ?? group.contextFieldKeys ?? [];
     const expandedKeys = options?.expandedKeys ?? group.expandedFieldKeys ?? [];
     const placements: IdentityFieldPlacement[] = [];

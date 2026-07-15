@@ -77,7 +77,7 @@ describe("semantic identity avatar resolver", () => {
         expect(cardAvatar).toContain('data-avatar-role={avatar.role}');
         const css = readFileSync(join(process.cwd(), "app/adminV2/components/alloyOsRuntime.css"), "utf8");
         expect(css).toContain('[data-avatar-role="other_parent_guardian"]');
-        expect(css).toContain('[data-avatar-tone][data-avatar-role="other_parent_guardian"]');
+        expect(css).toContain('[data-avatar-role="other_parent_guardian"][data-avatar-tone]');
     });
 
     it("Builder VM and runtime share the same resolver + role inference", () => {

@@ -4,6 +4,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
 
 import {
+    composeContextCollectionRows,
+    composeContextFactsIntoDetails,
     composeSummaryAndContextFacts,
     sanitizeContextFactKeys,
 } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
@@ -126,37 +128,46 @@ describe("configuration / compatibility", () => {
         expect(group.contextFieldKeys).toEqual([]);
     });
 
-    it("strips summary duplicates from legacy contextFieldKeys on migrate", () => {
+    it("keeps summary-overlapping contextFieldKeys on migrate", () => {
         const group = migrateIdentityDisclosureGroup({
             key: "primary_contact",
             selectedFieldKeys: ["person.phone", "person.email"],
             contextFieldKeys: ["person.phone", "person.address_line"],
         });
-        expect(group.contextFieldKeys).toEqual(["person.address_line"]);
+        expect(group.contextFieldKeys).toEqual(["person.phone", "person.address_line"]);
     });
 });
 
 describe("context projection", () => {
-    it("context contains all summary rows", () => {
+    it("deprecated composeSummaryAndContextFacts returns context facts only", () => {
         const merged = composeSummaryAndContextFacts(
             [row("person.phone", "Phone"), row("person.email", "Email", 2)],
-            [],
+            [row("person.role_label", "Role", 3)],
         );
-        expect(merged.flatMap((r) => r.cells).map((c) => c.fieldRef)).toEqual(["person.phone", "person.email"]);
+        expect(merged.flatMap((r) => r.cells).map((c) => c.fieldRef)).toEqual(["person.role_label"]);
     });
 
-    it("context appends context facts", () => {
-        const merged = composeSummaryAndContextFacts(
-            [row("child.display_name", "Name")],
-            [row("inquiry_child.program", "Program", 2)],
-        );
+    it("context collection preserves fact order", () => {
+        const merged = composeContextCollectionRows([
+            row("inquiry_child.program", "Program", 2),
+            row("inquiry_child.room", "Room", 3),
+        ]);
         expect(merged.flatMap((r) => r.cells).map((c) => c.fieldRef)).toEqual([
-            "child.display_name",
             "inquiry_child.program",
+            "inquiry_child.room",
         ]);
     });
 
-    it("duplicate field refs render once with context facts winning", () => {
+    it("details projection keeps context facts in leading rows and detail-only refs separate", () => {
+        const leading = composeContextFactsIntoDetails(
+            [row("person.phone", "Fact Phone")],
+            [row("person.address_line1", "Address"), row("person.phone", "Detail Phone", 2)],
+        );
+        expect(leading.leadingRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).toEqual(["person.phone"]);
+        expect(leading.detailOnlyRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).toEqual(["person.address_line1"]);
+    });
+
+    it("same field ref may differ between summary and context facts at runtime", () => {
         const summaryRow: IdentityFieldRowVM = {
             row: 1,
             cells: [{
@@ -183,24 +194,24 @@ describe("context projection", () => {
                 width: "full",
             }],
         };
-        const merged = composeSummaryAndContextFacts([summaryRow], [factRow]);
-        expect(merged).toHaveLength(1);
-        expect(merged[0]!.cells[0]!.label).toBe("Fact Phone");
-        expect(merged[0]!.cells[0]!.editable).toBe(true);
+        const collection = composeContextCollectionRows([factRow]);
+        expect(collection).toHaveLength(1);
+        expect(collection[0]!.cells[0]!.label).toBe("Fact Phone");
+        expect(collection[0]!.cells[0]!.editable).toBe(true);
+        expect(summaryRow.cells[0]!.label).toBe("Summary Phone");
     });
 
-    it("empty context facts result in context equal to summary", () => {
-        const summary = [row("person.phone", "Phone")];
-        expect(composeSummaryAndContextFacts(summary, [])).toEqual(summary);
+    it("empty context facts yield empty context collection", () => {
+        expect(composeContextCollectionRows([])).toEqual([]);
     });
 
-    it("sanitizeContextFactKeys removes summary overlap", () => {
-        expect(sanitizeContextFactKeys(["a", "b"], ["a", "c"])).toEqual(["c"]);
+    it("sanitizeContextFactKeys keeps overlapping keys", () => {
+        expect(sanitizeContextFactKeys(["a", "b"], ["a", "c"])).toEqual(["a", "c"]);
     });
 });
 
 describe("household", () => {
-    it("parent summaries appear and context reuses them with incremental facts", () => {
+    it("parent context shows context facts only (summary fields stay on summary)", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         config = addFieldToNestedGroup(config, "contact_edit", "person.address_line", { tier: "expanded" });
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
@@ -209,8 +220,7 @@ describe("household", () => {
         const summaryRefs = primary.summaryRows.flatMap((r) => r.cells).map((c) => c.fieldRef);
         const contextRefs = primary.contextRows.flatMap((r) => r.cells).map((c) => c.fieldRef);
         expect(summaryRefs).toContain("person.phone");
-        expect(contextRefs).toContain("person.phone");
-        expect(contextRefs.filter((r) => r === "person.phone")).toHaveLength(1);
+        expect(contextRefs).not.toContain("person.phone");
         expect(contextRefs).not.toContain("person.address_line1");
     });
 
@@ -227,7 +237,7 @@ describe("household", () => {
 });
 
 describe("children", () => {
-    it("summary appears in context automatically; facts only in contextFactRows", () => {
+    it("context rows mirror contextFactRows; summary stays separate", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = addFieldToNestedGroup(config, "roster", "child.display_name", { tier: "summary" });
         config = addFieldToNestedGroup(config, "roster", "inquiry_child.program", { tier: "context" });
@@ -256,8 +266,8 @@ describe("children", () => {
         expect(vm.summaryRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).toContain("child.display_name");
         expect(vm.contextFactRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).toContain("inquiry_child.program");
         expect(vm.contextFactRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).not.toContain("child.display_name");
+        expect(vm.contextRows).toEqual(vm.contextFactRows);
         expect(vm.contextRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).toEqual([
-            "child.display_name",
             "inquiry_child.program",
         ]);
     });
@@ -292,7 +302,7 @@ describe("children", () => {
 });
 
 describe("employee / person proof", () => {
-    it("uses shared summary + context facts composition", () => {
+    it("context collection excludes summary-only fields", () => {
         let config = defaultNestedSurfaceConfig("employee_surface");
         config = addFieldToNestedGroup(config, "identity", "person.phone", { tier: "summary" });
         config = addFieldToNestedGroup(config, "identity", "person.role_label", { tier: "context" });
@@ -305,8 +315,8 @@ describe("employee / person proof", () => {
                 phone: "555-0000",
             },
         });
-        expect(vm.contextRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).toContain("person.phone");
-        expect(vm.contextFactRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).not.toContain("person.phone");
+        expect(vm.contextRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).not.toContain("person.phone");
+        expect(vm.contextRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).toContain("person.role_label");
     });
 });
 

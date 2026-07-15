@@ -34,7 +34,7 @@ import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focus
 import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { resolveIdentityPlacementLabelMode } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
-import { composeSummaryAndContextFacts } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
+import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import {
     enabledEvidenceSections,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -164,7 +164,7 @@ function finalizeIdentityRecordVM(args: {
     detailRows: IdentityFieldRowVM[];
     evidenceCollections?: IdentityRecordVM["evidenceCollections"];
 }): IdentityRecordVM {
-    const contextRows = composeSummaryAndContextFacts(args.summaryRows, args.contextFactRows);
+    const contextRows = composeContextCollectionRows(args.contextFactRows);
     return {
         id: args.id,
         title: args.title,
@@ -176,8 +176,8 @@ function finalizeIdentityRecordVM(args: {
         detailRows: args.detailRows,
         detailsRows: args.detailRows,
         expandedRows: args.detailRows,
-        canShowDetails: args.detailRows.length > 0,
-        canExpand: args.detailRows.length > 0,
+        canShowDetails: args.detailRows.length > 0 || args.contextFactRows.length > 0,
+        canExpand: args.detailRows.length > 0 || args.contextFactRows.length > 0,
         evidenceCollections: args.evidenceCollections,
     };
 }

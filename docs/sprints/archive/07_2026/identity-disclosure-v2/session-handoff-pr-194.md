@@ -115,6 +115,13 @@ Finish [PR #194](https://github.com/ksquared-16/alloy/pull/194) after rebasing o
 - no stale configuration after publish/reload
 
 
+## Disclosure model (2026-07-15)
+
+- **Summary does not feed Collection** — Context runtime uses Context Facts only.
+- **Context Facts** = shortened Details / Collection projection.
+- **Details** = Context Facts + Detail Fields (context leading, detail-only refs in the detail block).
+- **Details →** affordance renders below the field stack on Summary and Context cards.
+
 ## QA fixes (2026-07-15)
 
 - **Details inline edit restore:** `IdentityDisclosureSurface` passes disclosure depth into
