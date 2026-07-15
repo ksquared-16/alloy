@@ -29,8 +29,22 @@ export class FakeAuthoringGateway implements AuthoringGateway {
     readonly events: string[] = [];
     private seq = 0;
 
+    /**
+     * Held authorities the fake DB resolver would find, keyed `${holderId}:${authorityKey}`.
+     * Empty by default → nothing self-ratifies (Wave B behavior preserved).
+     */
+    readonly heldAuthorities = new Set<string>();
+
     async isAuthoringEnabled(): Promise<boolean> {
         return this.enabled;
+    }
+
+    /** Mirror the author RPC's server-side standing computation. */
+    private computeStanding(act: AuthoringActRecord): "proposed" | "binding" | "model" {
+        if (act.modality === "predicted") return "model";
+        if (act.authorClass === "ai") return "proposed";
+        if (act.authorityHolderId && this.heldAuthorities.has(`${act.authorityHolderId}:${act.authorityKey}`)) return "binding";
+        return "proposed";
     }
 
     async loadPredecessor(predecessorId: string): Promise<PredecessorRow | null> {
@@ -51,7 +65,7 @@ export class FakeAuthoringGateway implements AuthoringGateway {
                 transitionType: act.transitionType,
                 supersedesExpectationId: act.supersedesExpectationId,
                 lineageRootId: act.supersedesExpectationId ?? existing.expectationId,
-                standing: act.standing,
+                standing: this.computeStanding(act),
                 authoredAt: "2026-07-19T00:00:00.000Z",
             };
         }
@@ -69,7 +83,7 @@ export class FakeAuthoringGateway implements AuthoringGateway {
             transitionType: act.transitionType,
             supersedesExpectationId: act.supersedesExpectationId,
             lineageRootId: act.supersedesExpectationId ?? expectationId,
-            standing: act.standing,
+            standing: this.computeStanding(act),
             authoredAt: "2026-07-19T00:00:00.000Z",
         };
     }

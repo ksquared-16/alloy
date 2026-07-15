@@ -112,6 +112,11 @@ export async function authorOperationalExpectation(
         validTo: input.temporalFrame.validTo ?? null,
         configVersionRef: input.configVersionRef ?? null,
         authoredByLabel: context.actorLabel ?? null,
+        // Held-authority resolution: the holder is the trusted actor (human) —
+        // the author RPC resolves authority server-side and decides binding.
+        authorityHolderId: context.actorUserId,
+        authorityScopeType: "subject_type",
+        authorityScopeId: input.subjects[0]?.kind ?? null,
     };
 
     const outcome = await gateway.commit(context.orgId, context.actorUserId, act);

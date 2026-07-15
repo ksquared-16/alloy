@@ -906,6 +906,17 @@ Interface without a program-level change (§22).
   self-ratifies**.
 - **Certification Evidence.** G-Standing. **Completion Definition.** No unratified deontic binds;
   every act attributable; the ledger is the audit log.
+- **Representation (P1 Wave C — clarification, not new architecture).** The already-frozen **Authority**
+  tuple facet is *represented concretely* by: (1) **governed authority definitions** (an org-scoped
+  catalog of valid authorities), (2) **effective-dated held-authority assignments** (append-only grants of
+  an authority to a holder — human/policy/process/external, never AI — within a scope), and (3) a
+  **single canonical held-authority resolver** answering "does actor X hold authority Y for org O in
+  scope S at time T". RBAC permission authorizes *commands*; a held-authority assignment authorizes
+  *semantic Standing* — both may be required, neither implies the other. Self-ratifying authoring (§5)
+  and ratifier authority-sufficiency (§12) resolve through this one resolver. This is the implementation
+  **representation** of the frozen Authority facet; it introduces **no** new operational primitive,
+  modality, ledger, engine, event bus, state authority, or process runtime, and does not alter the
+  ontology, package boundaries, gates, or dependency graph.
 
 ---
 

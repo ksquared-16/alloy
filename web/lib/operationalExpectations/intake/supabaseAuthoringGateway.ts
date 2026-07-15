@@ -55,6 +55,9 @@ function actToRpcPayload(act: AuthoringActRecord): Record<string, unknown> {
         valid_to: act.validTo,
         config_version_ref: act.configVersionRef ?? null,
         authored_by_label: act.authoredByLabel,
+        authority_holder_id: act.authorityHolderId,
+        authority_scope_type: act.authorityScopeType,
+        authority_scope_id: act.authorityScopeId,
     };
 }
 
