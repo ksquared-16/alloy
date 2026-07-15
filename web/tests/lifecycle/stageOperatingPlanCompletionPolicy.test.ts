@@ -104,15 +104,17 @@ describe("completion_policy", () => {
 });
 
 describe("outcome automation", () => {
-    it("serializes Qualified → move to qualification into outcome_rules[]", () => {
-        const rules = upsertOutcomeAutomationRule([], "qualified", {
+    it("serializes Family Enrolling → Decision to Enrolling transition into outcome_rules[]", () => {
+        const rules = upsertOutcomeAutomationRule([], "family_enrolling", {
             kind: "move_to_stage",
-            stage_key: "qualification",
+            transition_ref: "decision_to_enrolling",
         });
-        expect(rules[0]?.when_outcome_key).toBe("qualified");
-        expect(rules[0]?.targets.some((t) => t.kind === "move_to_stage" && t.stage_key === "qualification")).toBe(
-            true,
-        );
+        expect(rules[0]?.when_outcome_key).toBe("family_enrolling");
+        expect(
+            rules[0]?.targets.some(
+                (t) => t.kind === "move_to_stage" && t.transition_ref === "decision_to_enrolling",
+            ),
+        ).toBe(true);
     });
 
     it("serializes Closed Lost → close status rule", () => {
@@ -122,15 +124,16 @@ describe("outcome automation", () => {
         );
     });
 
-    it("serializes repeat work with due days", () => {
+    it("serializes follow-up work with due days", () => {
         const rule = buildOutcomeRuleFromAutomation(
             "left_message",
             { kind: "repeat_work", repeat_template_key: "contact_family", repeat_due_days: 2 },
             0,
         );
-        expect(rule?.targets).toEqual([
-            { kind: "reopen_work", template_key: "contact_family", due_days: 2 },
-        ]);
+        expect(rule?.targets[0]?.kind).toBe("create_next_work");
+        expect(rule?.targets[0]?.template_key).toBe("contact_family");
+        expect(rule?.targets[0]?.due_days).toBe(2);
+        expect(rule?.targets[0]?.follow_up_due_policy?.offset_unit).toBe("days");
     });
 
     it("reads mark needs attention automation from rules", () => {
@@ -148,7 +151,28 @@ describe("outcome automation", () => {
     });
 
     it("filters attempt-conditional rules at runtime", () => {
-        const plan = defaultStageOperatingPlanForEnrollmentStage("lead")!;
+        const plan = {
+            ...defaultStageOperatingPlanForEnrollmentStage("lead")!,
+            outcome_rules: [
+                {
+                    rule_key: "unable_repeat",
+                    when_outcome_key: "unable_to_reach",
+                    when_attempt_count_lt: 3,
+                    targets: [{ kind: "reopen_work" as const, template_key: "contact_family", due_days: 2 }],
+                },
+                {
+                    rule_key: "unable_attention",
+                    when_outcome_key: "unable_to_reach",
+                    when_attempt_count_gte: 3,
+                    targets: [
+                        {
+                            kind: "create_needs_attention" as const,
+                            attention_reason: "Unable to reach after 3 attempts",
+                        },
+                    ],
+                },
+            ],
+        };
         const belowMax = outcomeRulesForKey(plan, "unable_to_reach", { attemptCount: 2 });
         const atMax = outcomeRulesForKey(plan, "unable_to_reach", { attemptCount: 3 });
         expect(belowMax.some((r) => r.targets.some((t) => t.kind === "reopen_work"))).toBe(true);
@@ -157,16 +181,16 @@ describe("outcome automation", () => {
 });
 
 describe("Lead stage representability", () => {
-    it("default Lead stage includes Review Lead + Contact Family with completion policy", () => {
+    it("default Lead stage is Direct Action Contact Family with Available Outcomes", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("lead")!;
-        expect(plan.work_templates.map((t) => t.template_key)).toEqual(["review_lead", "contact_family"]);
+        expect(plan.work_templates.map((t) => t.template_key)).toEqual(["contact_family"]);
         expect(plan.work_templates[0]?.primary).toBe(true);
-        expect(plan.work_templates[1]?.completion_policy?.min_attempts).toBe(3);
-        expect(plan.outcomes.filter((o) => o.work_template_key === "contact_family").length).toBeGreaterThan(3);
-        expect(plan.attention_rules.length).toBeGreaterThanOrEqual(4);
+        expect(plan.work_templates[0]?.execution_mode).toBe("direct_action");
+        expect(plan.work_templates[0]?.outcome_refs?.length).toBeGreaterThanOrEqual(5);
+        expect(plan.attention_rules.length).toBeGreaterThanOrEqual(2);
     });
 
-    it("persists editor draft with completion policy and outcome rules", () => {
+    it("persists editor draft with outcome rules", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("lead")!;
         const persisted = stageOperatingPlanDraftToPersisted(
             {
@@ -179,7 +203,7 @@ describe("Lead stage representability", () => {
             },
             "lead",
         );
-        expect(persisted?.work_templates[1]?.completion_policy?.window_days).toBe(7);
+        expect(persisted?.work_templates[0]?.execution_mode).toBe("direct_action");
         expect(persisted?.outcome_rules.some((r) => r.when_outcome_key === "left_message")).toBe(true);
     });
 });
@@ -195,7 +219,7 @@ describe("business process editor UI wiring", () => {
             "utf8",
         );
         expect(editor).toContain("LifecycleStageWorkCompletionPolicyEditor");
-        expect(editor).toContain("LifecycleStageOutcomeAutomationEditor");
+        expect(editor).toContain("LifecycleStageWorkTemplateActionsEditor");
         expect(completion).toContain("Completion policy");
     });
 
@@ -206,7 +230,7 @@ describe("business process editor UI wiring", () => {
     });
 
     it("executeStageOperatingOutcome supports reopen_work target", () => {
-        const execute = readFileSync(join(webRoot, "lib/lifecycle/executeStageOperatingOutcome.ts"), "utf8");
+        const execute = readFileSync(join(webRoot, "lib/lifecycle/stageOutcomeRuleTargetExecutor.ts"), "utf8");
         expect(execute).toContain('case "reopen_work"');
         expect(execute).toContain("reopenStageWorkWithDueDate");
     });

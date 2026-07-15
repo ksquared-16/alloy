@@ -29,19 +29,26 @@ describe("LifecycleStageWorkTemplateActionsEditor", () => {
         expect(source).toContain("Using stage recommendations");
     });
 
-    it("labels Available Outcomes and keeps stage outcome definitions separate", () => {
+    it("authors Available Outcomes and Outcome Definitions on the Work Template", () => {
         const editor = read("components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor.tsx");
         expect(editor).toContain("Available Outcomes");
         expect(editor).not.toContain("Available Results");
-        expect(editor).toContain("No direct action");
-        expect(editor).toContain("Select an action");
+        expect(editor).toContain("Direct Action");
+        expect(editor).toContain("Outcome Led");
+        expect(editor).toContain("Execution Mode");
+        expect(editor).toContain("LifecycleStageOutcomeDefinitionsEditor");
         expect(editor).not.toContain("Completion Outcomes");
         expect(editor).not.toContain("work-template-alternate-paths");
         expect(editor).toContain("work-template-transitions-note");
 
         const definitions = read("components/adminV2/settings/lifecycle/LifecycleStageOutcomeDefinitionsEditor.tsx");
         expect(definitions).toContain("Outcome Definitions");
-        expect(definitions).toContain("Define stage outcomes once");
+        expect(definitions).toContain("workTemplateKey");
+        expect(definitions).toContain("Define what operators can record for this work");
+
+        const operatingPlan = read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx");
+        expect(operatingPlan).not.toContain("LifecycleStageOutcomeDefinitionsEditor");
+        expect(operatingPlan).toContain("LifecycleStageOutgoingTransitionsEditor");
     });
 });
 

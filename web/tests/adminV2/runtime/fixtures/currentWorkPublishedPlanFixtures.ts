@@ -37,10 +37,11 @@ export function applyEnrollmentLeadWorkTemplateActions(plan: StageOperatingPlanV
                     { action_ref: "send_form" },
                 ],
                 outcome_refs: [
-                    { outcome_ref: "reached_qualified" },
+                    { outcome_ref: "reached_family" },
                     { outcome_ref: "left_message" },
-                    { outcome_ref: "awaiting_response" },
-                    { outcome_ref: "unable_to_reach" },
+                    { outcome_ref: "needs_follow_up" },
+                    { outcome_ref: "interested" },
+                    { outcome_ref: "not_interested" },
                 ],
             };
         }),

@@ -3,22 +3,21 @@
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 
 import AlloyConfigPicker, { type AlloyConfigPickerOption } from "@/components/adminV2/settings/shared/AlloyConfigPicker";
+import LifecycleStageOutcomeDefinitionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeDefinitionsEditor";
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import type { StageCompletionOutcomeV1, StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { StageOperatingPlanEditorDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
+import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
 import {
     addWorkTemplateHelpfulAction,
     markWorkTemplateHelpfulActionsEmpty,
-    markWorkTemplateOutcomeRefsEmpty,
     removeWorkTemplateHelpfulAction,
     reorderWorkTemplateHelpfulActions,
-    reorderWorkTemplateOutcomeRefs,
     setWorkTemplateNoDirectAction,
-    setWorkTemplateOutcomeRefs,
     setWorkTemplatePrimaryActionRef,
     setWorkTemplateSelectDirectAction,
     workTemplateExecutionMode,
     workTemplateHelpfulActionRefs,
-    workTemplateOutcomeRefs,
     workTemplatePrimaryActionRef,
 } from "@/lib/lifecycle/stageWorkTemplateActionRefs";
 import {
@@ -26,7 +25,6 @@ import {
     type WorkTemplateActionOption,
 } from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
 import {
-    availableOutcomesConfigSource,
     helpfulActionsConfigSource,
     primaryActionConfigSource,
     workTemplateConfigSourceLabel,
@@ -48,6 +46,10 @@ type Props = {
     stageDefinition?: { journey_segment?: string } | null;
     processDefinition?: { primary_entity?: string } | null;
     onChange: (work: StageWorkTemplateV1) => void;
+    /** Stage draft + transitions enable Outcome Definitions in this Work Template surface. */
+    stageDraft?: StageOperatingPlanEditorDraft;
+    transitionOptions?: StageOutcomeTransitionOption[];
+    onStageDraftChange?: (draft: StageOperatingPlanEditorDraft) => void;
 };
 
 function optionByRef(options: WorkTemplateActionOption[], ref: string): WorkTemplateActionOption | null {
@@ -182,6 +184,9 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     stageDefinition,
     processDefinition,
     onChange,
+    stageDraft,
+    transitionOptions = [],
+    onStageDraftChange,
 }: Props) {
     const options = resolveWorkTemplateActionOptions({
         actionRegistry: configuredActions,
@@ -200,7 +205,6 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     const executionMode = workTemplateExecutionMode(work);
     const primaryRef = workTemplatePrimaryActionRef(work) ?? "";
     const helpfulRefs = workTemplateHelpfulActionRefs(work);
-    const outcomeRefsList = workTemplateOutcomeRefs(work);
     const radioName = `work-template-primary-mode-${work.template_key}`;
 
     const primaryOptions = toPickerOptions(options.primaryActionOptions.filter((row) => row.supported));
@@ -209,17 +213,14 @@ export default function LifecycleStageWorkTemplateActionsEditor({
             (row) => row.supported && !helpfulRefs.includes(row.ref) && row.ref !== primaryRef,
         ),
     );
-    const outcomeAddOptions: AlloyConfigPickerOption[] = options.outcomeOptions
-        .filter((row) => !outcomeRefsList.includes(row.ref))
-        .map((row) => ({ value: row.ref, label: row.label, group: "Stage outcomes" }));
 
     return (
         <div className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3" data-testid={`work-template-actions-${work.template_key}`}>
             <section data-testid={`work-template-primary-action-${work.template_key}`}>
                 <div className="mb-1 space-y-0.5">
-                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Primary Action</h4>
+                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Execution Mode</h4>
                     <p className="text-[10px] text-alloy-midnight/50">
-                        Optional. Use a direct action when operators launch one tool; leave empty for outcome-led work.
+                        Direct Action launches a tool. Outcome Led has no Primary Action — Record Outcome is primary.
                     </p>
                     <ConfigSourceBadge source={primaryActionConfigSource(work)} />
                     <p className="text-[10px] text-alloy-midnight/45" data-testid={`work-template-execution-mode-${work.template_key}`}>
@@ -228,23 +229,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                 </div>
 
                 <fieldset className="space-y-2" data-testid={`work-template-primary-mode-${work.template_key}`}>
-                    <legend className="sr-only">Primary Action mode</legend>
-                    <label className="flex cursor-pointer items-start gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5">
-                        <input
-                            type="radio"
-                            name={radioName}
-                            className="mt-0.5"
-                            checked={executionMode === "outcome_led"}
-                            onChange={() => onChange(setWorkTemplateNoDirectAction(work))}
-                            data-testid={`work-template-primary-none-${work.template_key}`}
-                        />
-                        <span>
-                            <span className="block text-[11px] font-medium text-alloy-midnight">No direct action</span>
-                            <span className="block text-[10px] text-alloy-midnight/50">
-                                Record Outcome will be the main operator action.
-                            </span>
-                        </span>
-                    </label>
+                    <legend className="sr-only">Execution Mode</legend>
                     <label className="flex cursor-pointer items-start gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5">
                         <input
                             type="radio"
@@ -255,7 +240,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                             data-testid={`work-template-primary-select-${work.template_key}`}
                         />
                         <span className="min-w-0 flex-1">
-                            <span className="block text-[11px] font-medium text-alloy-midnight">Select an action</span>
+                            <span className="block text-[11px] font-medium text-alloy-midnight">Direct Action</span>
                             <span className="mb-1.5 block text-[10px] text-alloy-midnight/50">
                                 Operators launch this action first, then may record an outcome.
                             </span>
@@ -268,6 +253,22 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                                     testId={`work-template-primary-picker-${work.template_key}`}
                                 />
                             :   null}
+                        </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5">
+                        <input
+                            type="radio"
+                            name={radioName}
+                            className="mt-0.5"
+                            checked={executionMode === "outcome_led"}
+                            onChange={() => onChange(setWorkTemplateNoDirectAction(work))}
+                            data-testid={`work-template-primary-none-${work.template_key}`}
+                        />
+                        <span>
+                            <span className="block text-[11px] font-medium text-alloy-midnight">Outcome Led</span>
+                            <span className="block text-[10px] text-alloy-midnight/50">
+                                No Primary Action. Record Outcome is the main operator action.
+                            </span>
                         </span>
                     </label>
                 </fieldset>
@@ -342,70 +343,28 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                 className="rounded border border-alloy-forge/10 bg-alloy-midnight/[0.02] px-2 py-1.5 text-[10px] text-alloy-midnight/55"
                 data-testid={`work-template-transitions-note-${work.template_key}`}
             >
-                Other transitions are owned by the process stage configuration and appear on Current Work when
-                outgoing transitions are configured. They are not authored on this Work Template.
+                Outgoing transitions are owned by this stage and appear on Current Work when configured.
+                Outcome automation moves records through those transitions — never by destination text alone.
             </p>
 
             <section data-testid={`work-template-outcome-refs-${work.template_key}`}>
-                <div className="mb-1 space-y-0.5">
+                <div className="mb-2 space-y-0.5">
                     <h4 className="text-[11px] font-semibold text-alloy-midnight">Available Outcomes</h4>
                     <p className="text-[10px] text-alloy-midnight/50">
-                        Choose which stage outcomes operators can record for this work.
+                        Define outcomes for this work, then configure automation under each definition.
                     </p>
-                    <ConfigSourceBadge
-                        source={availableOutcomesConfigSource(work)}
-                        fallbackHint="Configure this section to take explicit control."
+                </div>
+                {stageDraft && onStageDraftChange ?
+                    <LifecycleStageOutcomeDefinitionsEditor
+                        draft={stageDraft}
+                        transitionOptions={transitionOptions}
+                        workTemplateKey={work.template_key}
+                        onChange={onStageDraftChange}
                     />
-                </div>
-                <div className="mb-2 flex items-center justify-end gap-2">
-                    <button
-                        type="button"
-                        className="text-[10px] text-alloy-midnight/50 hover:text-alloy-bend-pine"
-                        onClick={() => onChange(markWorkTemplateOutcomeRefsEmpty(work))}
-                    >
-                        Clear all
-                    </button>
-                    <div className="w-44">
-                        <AlloyConfigPicker
-                            label="Add available outcome"
-                            value=""
-                            options={outcomeAddOptions}
-                            onChange={(ref) => {
-                                if (!ref) return;
-                                onChange(setWorkTemplateOutcomeRefs(work, [...outcomeRefsList, ref]));
-                            }}
-                            compact
-                            clearable={false}
-                            searchable={outcomeAddOptions.length > 6}
-                            testId={`work-template-outcome-ref-add-${work.template_key}`}
-                            placeholder="+ Add"
-                        />
-                    </div>
-                </div>
-                <OrderedActionRows
-                    title="Available Outcomes"
-                    refs={outcomeRefsList}
-                    resolveLabel={(ref) => options.outcomeOptions.find((row) => row.ref === ref)?.label ?? ref.replace(/_/g, " ")}
-                    resolveInvalid={(ref) =>
-                        options.outcomeOptions.some((row) => row.ref === ref) ? null : "Unknown outcome"
-                    }
-                    onRemove={(ref) =>
-                        onChange(setWorkTemplateOutcomeRefs(work, outcomeRefsList.filter((row) => row !== ref)))
-                    }
-                    onMoveUp={(index) => {
-                        const next = [...outcomeRefsList];
-                        if (index <= 0) return;
-                        [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
-                        onChange(reorderWorkTemplateOutcomeRefs(work, next));
-                    }}
-                    onMoveDown={(index) => {
-                        const next = [...outcomeRefsList];
-                        if (index >= next.length - 1) return;
-                        [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
-                        onChange(reorderWorkTemplateOutcomeRefs(work, next));
-                    }}
-                    testIdPrefix={`work-template-outcome-ref-${work.template_key}`}
-                />
+                :   <p className="text-[10px] text-alloy-midnight/45">
+                        Outcome authoring requires the stage operating plan editor draft.
+                    </p>
+                }
             </section>
         </div>
     );

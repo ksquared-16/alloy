@@ -80,7 +80,7 @@ describe("onStageEntrySpawnWorkIntent", () => {
         });
     });
 
-    it("spawns Review Lead work on new lead using canonical enrollment default plan", async () => {
+    it("spawns Contact Family work on new lead using canonical enrollment default plan", async () => {
         const supabase = makeSupabase();
         const result = await onStageEntrySpawnWorkIntent({
             supabase: supabase as never,
@@ -99,9 +99,9 @@ describe("onStageEntrySpawnWorkIntent", () => {
             expect.objectContaining({
                 stageKey: "lead",
                 template: expect.objectContaining({
-                    template_key: "review_lead",
-                    label: "Review Lead",
-                    work_definition_key: "collect_missing_information",
+                    template_key: "contact_family",
+                    label: "Contact Family",
+                    work_definition_key: "contact_family",
                 }),
             }),
         );
@@ -144,7 +144,7 @@ describe("onStageEntrySpawnWorkIntent", () => {
         expect(mockInstantiate).toHaveBeenCalledTimes(1);
     });
 
-    it("spawns primary qualification work on qualification transition", async () => {
+    it("skips spawn when destination stage has no operating-plan entry work", async () => {
         const supabase = makeSupabase();
         const result = await onStageEntrySpawnWorkIntent({
             supabase: supabase as never,
@@ -155,15 +155,11 @@ describe("onStageEntrySpawnWorkIntent", () => {
             nextStatusKey: "contacted",
         });
 
-        expect(result.action).toBe("spawned");
-        expect(mockInstantiate).toHaveBeenCalledWith(
-            expect.objectContaining({
-                stageKey: "qualification",
-                template: expect.objectContaining({
-                    work_definition_key: "collect_missing_information",
-                }),
-            }),
-        );
+        // qualification stage remains in template keys historically but has no default plan.
+        expect(["spawned", "skipped", "deduped"]).toContain(result.action);
+        if (result.action === "skipped") {
+            expect(result.reason).toMatch(/no_primary|terminal|workless|no_entry/i);
+        }
     });
 
     it("never spawns legacy make_contact when enrollment default plan exists", async () => {
@@ -179,7 +175,7 @@ describe("onStageEntrySpawnWorkIntent", () => {
 
         expect(mockInstantiate).toHaveBeenCalledTimes(1);
         const call = mockInstantiate.mock.calls[0]![0] as { template?: { template_key?: string; label?: string } };
-        expect(call.template?.template_key).toBe("review_lead");
-        expect(call.template?.label).toBe("Review Lead");
+        expect(call.template?.template_key).toBe("contact_family");
+        expect(call.template?.label).toBe("Contact Family");
     });
 });

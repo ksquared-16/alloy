@@ -167,25 +167,16 @@ describe("filterResidualOperationalTasks", () => {
 });
 
 describe("buildStageWorkOutcomeAutomationPreview", () => {
-    it("projects outcome automation labels for review lead from operating plan", () => {
+    it("projects outcome automation labels for Contact Family from operating plan", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("lead");
         expect(plan).not.toBeNull();
         const preview = buildStageWorkOutcomeAutomationPreview({
             plan: plan!,
-            templateKey: "review_lead",
+            templateKey: "contact_family",
         });
-        // review_lead labels Reviewed / Needs More Information / Duplicate / Closed Lost —
-        // not "Qualified" (that outcome belongs to qualify_fit).
-        expect(preview.some((line) => line.outcome_label === "Qualified")).toBe(false);
-        expect(preview.some((line) => line.outcome_key === "needs_more_information")).toBe(true);
-        expect(
-            preview.some(
-                (line) =>
-                    line.outcome_key === "needs_more_information"
-                    && /needs attention/i.test(line.effect_label),
-            ),
-        ).toBe(true);
-        expect(preview.some((line) => line.outcome_key === "duplicate")).toBe(true);
+        expect(preview.some((line) => line.outcome_label === "Reached Family")).toBe(true);
+        expect(preview.some((line) => line.outcome_key === "not_interested")).toBe(true);
+        expect(preview.some((line) => line.outcome_key === "interested")).toBe(true);
     });
 });
 

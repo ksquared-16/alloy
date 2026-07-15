@@ -44,7 +44,7 @@ function enrollmentContactRuntime(): StageWorkRuntimeProjection {
             purpose: defaults.purpose ?? "",
             journey_segment: defaults.journey_segment,
             work_templates: [{ ...contactTemplate, primary: true }],
-            outcomes: defaults.outcomes.filter((o) => o.work_template_key === "contact_family"),
+            outcomes: defaults.outcomes,
             outcome_rules: defaults.outcome_rules,
             attention_rules: defaults.attention_rules,
         },
@@ -162,10 +162,11 @@ describe("Work Template Current Work runtime", () => {
             context: baseContext({ stageWorkRuntime: enrollmentContactRuntime(), publishedStageInputs }),
         });
         expect(vm.completionOutcomes.map((o) => o.outcome_key)).toEqual([
-            "reached_qualified",
+            "reached_family",
             "left_message",
-            "awaiting_response",
-            "unable_to_reach",
+            "needs_follow_up",
+            "interested",
+            "not_interested",
         ]);
     });
 
@@ -202,13 +203,21 @@ describe("Work Template Current Work runtime", () => {
     it("two work templates in one stage can expose different outcome sets", () => {
         const defaults = applyEnrollmentLeadWorkTemplateActions(defaultStageOperatingPlanForEnrollmentStage("lead")!);
         const contactTemplate = defaults.work_templates.find((t) => t.template_key === "contact_family")!;
-        const reviewTemplate = defaults.work_templates.find((t) => t.template_key === "review_lead")!;
         const plan = stageOperatingPlanDraftToPersisted(
             {
                 purpose: defaults.purpose ?? "",
                 journey_segment: defaults.journey_segment,
                 work_templates: [
-                    { ...reviewTemplate, primary: false, outcome_refs: [{ outcome_ref: "review_qualified" }] },
+                    {
+                        template_key: "secondary_follow_up",
+                        label: "Secondary Follow-up",
+                        required: false,
+                        primary: false,
+                        due_policy: { kind: "offset_days", days: 1 },
+                        owner_strategy: "record_owner",
+                        work_definition_key: "contact_family",
+                        outcome_refs: [{ outcome_ref: "needs_follow_up" }],
+                    },
                     { ...contactTemplate, primary: true },
                 ],
                 outcomes: defaults.outcomes,
@@ -217,13 +226,13 @@ describe("Work Template Current Work runtime", () => {
             },
             "lead",
         )!;
-        const reviewRuntime: StageWorkRuntimeProjection = {
+        const secondaryRuntime: StageWorkRuntimeProjection = {
             ...enrollmentContactRuntime(),
             primary: {
                 ...enrollmentContactRuntime().primary!,
-                template_key: "review_lead",
-                label: "Review Lead",
-                outcomes: plan.outcomes.filter((o) => o.work_template_key === "review_lead"),
+                template_key: "secondary_follow_up",
+                label: "Secondary Follow-up",
+                outcomes: plan.outcomes.filter((o) => o.outcome_key === "needs_follow_up"),
             },
         };
         const publishedStageInputs = resolvePublishedStageInputsForCurrentWork({
@@ -232,8 +241,8 @@ describe("Work Template Current Work runtime", () => {
         })!;
         publishedStageInputs.operatingPlan = plan;
         const vm = buildCurrentWorkSurfaceVM({
-            context: baseContext({ stageWorkRuntime: reviewRuntime, publishedStageInputs }),
+            context: baseContext({ stageWorkRuntime: secondaryRuntime, publishedStageInputs }),
         });
-        expect(vm.completionOutcomes.map((o) => o.outcome_key)).toEqual(["review_qualified"]);
+        expect(vm.completionOutcomes.map((o) => o.outcome_key)).toEqual(["needs_follow_up"]);
     });
 });

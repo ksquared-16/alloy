@@ -10,7 +10,7 @@ export type StageFollowUpDueAnchor =
     | "stage_entered_at"
     | "field_value";
 
-export type StageFollowUpDueOffsetUnit = "minutes" | "hours" | "days";
+export type StageFollowUpDueOffsetUnit = "minutes" | "hours" | "days" | "weeks" | "months";
 
 export type StageFollowUpMissingAnchorBehavior =
     | "create_without_due_date"
@@ -47,7 +47,56 @@ const ANCHORS = new Set<StageFollowUpDueAnchor>([
     "field_value",
 ]);
 
-const OFFSET_UNITS = new Set<StageFollowUpDueOffsetUnit>(["minutes", "hours", "days"]);
+const OFFSET_UNITS = new Set<StageFollowUpDueOffsetUnit>(["minutes", "hours", "days", "weeks", "months"]);
+
+export const FOLLOW_UP_OFFSET_UNIT_OPTIONS: Array<{ value: StageFollowUpDueOffsetUnit; label: string }> = [
+    { value: "minutes", label: "Minutes" },
+    { value: "hours", label: "Hours" },
+    { value: "days", label: "Days" },
+    { value: "weeks", label: "Weeks" },
+    { value: "months", label: "Months" },
+];
+
+export type ScheduleTimingUiMode = "immediate" | "before" | "after";
+
+export type ScheduleTimingUi = {
+    mode: ScheduleTimingUiMode;
+    offset_value: number;
+    offset_unit: StageFollowUpDueOffsetUnit;
+    anchor: StageFollowUpDueAnchor;
+};
+
+export function scheduleTimingUiFromPolicy(policy: StageFollowUpWorkDuePolicyV1): ScheduleTimingUi {
+    const offset_value = policy.offset_value ?? 0;
+    const offset_unit = policy.offset_unit ?? "days";
+    const anchor = policy.anchor ?? "outcome_recorded_at";
+    if (offset_value <= 0 && anchor === "outcome_recorded_at") {
+        return { mode: "immediate", offset_value: 0, offset_unit, anchor: "outcome_recorded_at" };
+    }
+    return {
+        mode: policy.direction === "before" ? "before" : "after",
+        offset_value: Math.max(1, offset_value),
+        offset_unit,
+        anchor,
+    };
+}
+
+export function policyFromScheduleTimingUi(timing: ScheduleTimingUi): StageFollowUpWorkDuePolicyV1 {
+    if (timing.mode === "immediate") {
+        return {
+            anchor: "outcome_recorded_at",
+            offset_value: 0,
+            offset_unit: "days",
+            direction: "after",
+        };
+    }
+    return {
+        anchor: timing.anchor,
+        offset_value: Math.max(1, timing.offset_value || 1),
+        offset_unit: timing.offset_unit,
+        direction: timing.mode,
+    };
+}
 
 const MISSING_BEHAVIORS = new Set<StageFollowUpMissingAnchorBehavior>([
     "create_without_due_date",
@@ -119,6 +168,28 @@ export function effectiveFollowUpDuePolicy(
     return duePolicyFromLegacyDays(legacyDueDays);
 }
 
+/** Convert a positive duration to milliseconds (months ≈ 30 days). */
+export function durationOffsetToMs(
+    offsetValue: number,
+    offsetUnit: StageFollowUpDueOffsetUnit = "days",
+): number {
+    const value = Math.max(0, Math.floor(offsetValue));
+    if (value <= 0) return 0;
+    switch (offsetUnit) {
+        case "minutes":
+            return value * 60 * 1000;
+        case "hours":
+            return value * 60 * 60 * 1000;
+        case "weeks":
+            return value * 7 * 24 * 60 * 60 * 1000;
+        case "months":
+            return value * 30 * 24 * 60 * 60 * 1000;
+        case "days":
+        default:
+            return value * 24 * 60 * 60 * 1000;
+    }
+}
+
 function applyOffset(base: Date, policy: StageFollowUpWorkDuePolicyV1): Date {
     const result = new Date(base);
     const value = policy.offset_value ?? 0;
@@ -135,6 +206,14 @@ function applyOffset(base: Date, policy: StageFollowUpWorkDuePolicyV1): Date {
         case "hours":
             result.setUTCHours(result.getUTCHours() + sign * value);
             break;
+        case "weeks":
+            result.setUTCDate(result.getUTCDate() + sign * value * 7);
+            break;
+        case "months": {
+            const month = result.getUTCMonth() + sign * value;
+            result.setUTCMonth(month);
+            break;
+        }
         case "days":
         default:
             result.setUTCDate(result.getUTCDate() + sign * value);
@@ -200,11 +279,18 @@ export function formatFollowUpDuePolicySummary(
     const offset = policy.offset_value ?? 0;
     const unit = policy.offset_unit ?? "days";
     const direction = policy.direction ?? "after";
-    const unitLabel = offset === 1 ? unit.replace(/s$/, "") : unit;
+    const unitLabel =
+        offset === 1 ?
+            unit === "minutes" ? "minute"
+            : unit === "hours" ? "hour"
+            : unit === "days" ? "day"
+            : unit === "weeks" ? "week"
+            : "month"
+        : unit;
 
     const anchorLabel: Record<StageFollowUpDueAnchor, string> = {
         outcome_recorded_at: "outcome is recorded",
-        scheduled_event_start: "scheduled tour",
+        scheduled_event_start: "scheduled event",
         stage_entered_at: "stage entry",
         field_value: policy.field_ref?.trim() ? policy.field_ref.replace(/_/g, " ") : "selected date field",
     };
@@ -218,6 +304,27 @@ export function formatFollowUpDuePolicySummary(
         return `Create "${workLabel}" ${offset} ${unitLabel} before ${when}`;
     }
     return `Create "${workLabel}" ${offset} ${unitLabel} after ${when}`;
+}
+
+export function formatScheduleTimingSummary(policy: StageFollowUpWorkDuePolicyV1): string {
+    const offset = policy.offset_value ?? 0;
+    const unit = policy.offset_unit ?? "days";
+    if (offset <= 0 && policy.anchor === "outcome_recorded_at") return "Immediately";
+    const unitLabel =
+        offset === 1 ?
+            unit === "minutes" ? "minute"
+            : unit === "hours" ? "hour"
+            : unit === "days" ? "day"
+            : unit === "weeks" ? "week"
+            : "month"
+        : unit;
+    const direction = policy.direction === "before" ? "before" : "after";
+    const when =
+        policy.anchor === "scheduled_event_start" ? "scheduled event"
+        : policy.anchor === "stage_entered_at" ? "stage entry"
+        : policy.anchor === "field_value" ? "selected date"
+        : "outcome";
+    return `${offset} ${unitLabel} ${direction} ${when}`;
 }
 
 export const FOLLOW_UP_DUE_ANCHOR_OPTIONS: Array<{ value: StageFollowUpDueAnchor; label: string }> = [

@@ -5,11 +5,18 @@ import {
     STAGE_ATTENTION_RULE_CATALOG,
     catalogEntryForAttentionKind,
     defaultAttentionRuleLabel,
-    isStageAttentionRuleEvaluatorSupported,
     newAttentionRuleDraft,
     normalizeAttentionRuleKind,
     stageAttentionRuleUnsupportedReason,
 } from "@/lib/lifecycle/stageAttentionRuleCatalog";
+import {
+    attentionDurationLegacyDayMirror,
+    normalizeAttentionThresholdDuration,
+} from "@/lib/lifecycle/stageAttentionThresholdDuration";
+import {
+    FOLLOW_UP_OFFSET_UNIT_OPTIONS,
+    type StageFollowUpDueOffsetUnit,
+} from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
 import type {
     StageAttentionRuleV1,
     StageAttentionSeverity,
@@ -111,9 +118,65 @@ function AttentionRuleForm({
                         ))}
                     </select>
                 </label>
+                {entry?.supportsDuration ?
+                    <div className="grid grid-cols-[1fr_auto] gap-2 sm:col-span-2">
+                        <label className="block space-y-0.5">
+                            <span className="text-[10px] font-medium text-alloy-midnight/60">After</span>
+                            <input
+                                type="number"
+                                min={0}
+                                className="config-runtime-input text-xs"
+                                data-testid={`stage-attention-duration-value-${rule.rule_key}`}
+                                value={
+                                    normalizeAttentionThresholdDuration(rule, entry.defaultThreshold)
+                                        .offset_value
+                                }
+                                onChange={(e) => {
+                                    const offset_value = Math.max(0, Number(e.target.value) || 0);
+                                    const offset_unit =
+                                        normalizeAttentionThresholdDuration(rule, entry.defaultThreshold)
+                                            .offset_unit;
+                                    const threshold_duration = { offset_value, offset_unit };
+                                    onUpdate(index, {
+                                        threshold_duration,
+                                        threshold: attentionDurationLegacyDayMirror(threshold_duration),
+                                    });
+                                }}
+                            />
+                        </label>
+                        <label className="block space-y-0.5">
+                            <span className="text-[10px] font-medium text-alloy-midnight/60">Unit</span>
+                            <select
+                                className="config-runtime-select text-xs"
+                                data-testid={`stage-attention-duration-unit-${rule.rule_key}`}
+                                value={
+                                    normalizeAttentionThresholdDuration(rule, entry.defaultThreshold)
+                                        .offset_unit
+                                }
+                                onChange={(e) => {
+                                    const offset_unit = e.target.value as StageFollowUpDueOffsetUnit;
+                                    const offset_value =
+                                        normalizeAttentionThresholdDuration(rule, entry.defaultThreshold)
+                                            .offset_value;
+                                    const threshold_duration = { offset_value, offset_unit };
+                                    onUpdate(index, {
+                                        threshold_duration,
+                                        threshold: attentionDurationLegacyDayMirror(threshold_duration),
+                                    });
+                                }}
+                            >
+                                {FOLLOW_UP_OFFSET_UNIT_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+                :   null}
                 {entry?.supportsThreshold ?
                     <label className="block space-y-0.5">
-                        <span className="text-[10px] font-medium text-alloy-midnight/60">Days threshold</span>
+                        <span className="text-[10px] font-medium text-alloy-midnight/60">Minimum attempts</span>
                         <input
                             type="number"
                             min={0}
@@ -196,8 +259,18 @@ export default function LifecycleStageAttentionRulesEditor({
                 if (patch.kind) {
                     const entry = catalogEntryForAttentionKind(patch.kind);
                     if (entry && !rule.label?.trim()) next.label = entry.label;
-                    if (entry && entry.supportsThreshold && next.threshold == null) {
+                    if (entry?.supportsDuration) {
+                        next.threshold_duration = next.threshold_duration ?? {
+                            offset_value: entry.defaultThreshold,
+                            offset_unit: "days",
+                        };
+                        next.threshold = attentionDurationLegacyDayMirror(next.threshold_duration);
+                    } else if (entry?.supportsThreshold && next.threshold == null) {
                         next.threshold = entry.defaultThreshold;
+                        delete next.threshold_duration;
+                    } else if (entry && !entry.supportsDuration && !entry.supportsThreshold) {
+                        delete next.threshold;
+                        delete next.threshold_duration;
                     }
                 }
                 return next;

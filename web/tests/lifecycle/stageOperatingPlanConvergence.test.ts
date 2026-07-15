@@ -154,7 +154,7 @@ describe("stageOperatingPlanConvergence", () => {
 });
 
 describe("business process editor convergence wiring", () => {
-    it("operating plan editor exposes work items, outcomes, and attention", async () => {
+    it("operating plan editor exposes work items, transitions, and attention; outcomes live on Work Templates", async () => {
         const { readFileSync } = await import("node:fs");
         const { resolve } = await import("node:path");
         const editor = readFileSync(
@@ -163,9 +163,17 @@ describe("business process editor convergence wiring", () => {
         );
         expect(editor).toContain("Work items");
         expect(editor).toContain("Primary");
-        expect(editor).toContain("LifecycleStageOutcomeDefinitionsEditor");
+        expect(editor).not.toContain("LifecycleStageOutcomeDefinitionsEditor");
+        expect(editor).toContain("LifecycleStageWorkTemplateActionsEditor");
         expect(editor).toContain("LifecycleStageOutgoingTransitionsEditor");
         expect(editor).toContain("LifecycleStageAttentionRulesEditor");
+
+        const workTemplate = readFileSync(
+            resolve(__dirname, "../../components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor.tsx"),
+            "utf8",
+        );
+        expect(workTemplate).toContain("LifecycleStageOutcomeDefinitionsEditor");
+        expect(workTemplate).toContain("Available Outcomes");
     });
 
     it("attention rules editor supports configured rule types", async () => {

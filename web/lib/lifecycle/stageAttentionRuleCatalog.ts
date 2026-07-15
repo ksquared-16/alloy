@@ -8,7 +8,10 @@ export type StageAttentionRuleCatalogEntry = {
     kind: StageAttentionRuleKind;
     label: string;
     description: string;
+    /** Legacy: numeric threshold without units (attempts or days). */
     supportsThreshold: boolean;
+    /** Elapsed-time rules use shared value + unit duration controls. */
+    supportsDuration: boolean;
     defaultThreshold: number;
     defaultSeverity: StageAttentionSeverity;
     /** When false, rule may be saved but is not evaluated by stage-plan attention runtime. */
@@ -22,7 +25,8 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         kind: "work_overdue",
         label: "Work overdue",
         description: "Required work passed its due date without a successful outcome.",
-        supportsThreshold: true,
+        supportsThreshold: false,
+        supportsDuration: true,
         defaultThreshold: 1,
         defaultSeverity: "medium",
     },
@@ -30,7 +34,8 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         kind: "stage_age_exceeded",
         label: "Stage age exceeded",
         description: "Record has remained in this stage longer than expected.",
-        supportsThreshold: true,
+        supportsThreshold: false,
+        supportsDuration: true,
         defaultThreshold: 7,
         defaultSeverity: "medium",
     },
@@ -39,14 +44,16 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         label: "Missing requirements",
         description: "Active stage requirements (fields, facts, or work) are incomplete.",
         supportsThreshold: false,
+        supportsDuration: false,
         defaultThreshold: 0,
         defaultSeverity: "high",
     },
     {
         kind: "no_contact_attempt",
         label: "No contact attempt",
-        description: "No successful contact work completed within the threshold.",
+        description: "Fewer successful contact attempts than required after the stage window.",
         supportsThreshold: true,
+        supportsDuration: false,
         defaultThreshold: 3,
         defaultSeverity: "medium",
     },
@@ -54,7 +61,8 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         kind: "waiting_on_family",
         label: "Waiting on family",
         description: "Progress blocked waiting for family response or action.",
-        supportsThreshold: true,
+        supportsThreshold: false,
+        supportsDuration: true,
         defaultThreshold: 3,
         defaultSeverity: "low",
         evaluatorSupported: false,
@@ -65,7 +73,8 @@ export const STAGE_ATTENTION_RULE_CATALOG: StageAttentionRuleCatalogEntry[] = [
         kind: "waiting_on_provider",
         label: "Waiting on provider",
         description: "Progress blocked waiting for internal staff action.",
-        supportsThreshold: true,
+        supportsThreshold: false,
+        supportsDuration: true,
         defaultThreshold: 2,
         defaultSeverity: "low",
         evaluatorSupported: false,
@@ -109,12 +118,21 @@ export function stageAttentionRuleUnsupportedReason(kind: StageAttentionRuleKind
 
 export function newAttentionRuleDraft(index: number, kind: StageAttentionRuleKind = "work_overdue"): StageAttentionRuleV1 {
     const entry = catalogEntryForAttentionKind(kind)!;
-    return {
+    const draft: StageAttentionRuleV1 = {
         rule_key: `attention_${index + 1}`,
         kind,
         label: entry.label,
         severity: entry.defaultSeverity,
-        threshold: entry.supportsThreshold ? entry.defaultThreshold : undefined,
         targets: [],
     };
+    if (entry.supportsDuration) {
+        draft.threshold_duration = {
+            offset_value: entry.defaultThreshold,
+            offset_unit: "days",
+        };
+        draft.threshold = entry.defaultThreshold;
+    } else if (entry.supportsThreshold) {
+        draft.threshold = entry.defaultThreshold;
+    }
+    return draft;
 }

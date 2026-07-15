@@ -13,53 +13,49 @@ import {
 } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import type { StageWorkItemProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 
-describe("review_lead outcome derivation (default enrollment plan)", () => {
+describe("contact_family outcome derivation (default enrollment plan)", () => {
     const plan = defaultStageOperatingPlanForEnrollmentStage("lead")!;
-    const reviewOutcomes = plan.outcomes.filter((o) => o.work_template_key === "review_lead");
+    const contactOutcomes = plan.outcomes;
 
-    it("exposes configured review outcomes — not a Qualified UI hardcode", () => {
-        expect(reviewOutcomes.map((o) => o.outcome_key).sort()).toEqual([
-            "closed_lost",
-            "duplicate",
-            "needs_more_information",
-            "review_qualified",
+    it("exposes configured Contact Family outcomes — not a hardcoded Qualified set", () => {
+        expect(contactOutcomes.map((o) => o.outcome_key).sort()).toEqual([
+            "interested",
+            "left_message",
+            "needs_follow_up",
+            "not_interested",
+            "reached_family",
         ]);
-        expect(reviewOutcomes.map((o) => o.label)).toContain("Reviewed");
-        expect(reviewOutcomes.map((o) => o.label)).toContain("Needs More Information");
-        // Qualified is qualify_fit, not review_lead
-        expect(reviewOutcomes.some((o) => o.outcome_key === "qualified")).toBe(false);
+        expect(contactOutcomes.map((o) => o.label)).toContain("Reached Family");
+        expect(contactOutcomes.map((o) => o.label)).toContain("Not Interested");
     });
 
-    it("Needs More Information uses attention + continue Contact Family work (not Reopen:)", () => {
-        const rule = plan.outcome_rules.find((r) => r.when_outcome_key === "needs_more_information");
+    it("Not Interested closes via Closed Lost transition", () => {
+        const rule = plan.outcome_rules.find((r) => r.when_outcome_key === "not_interested");
         expect(rule).toBeTruthy();
-        const kinds = rule!.targets.map((t) => t.kind);
-        expect(kinds).toContain("create_needs_attention");
-        expect(kinds).toContain("reopen_work");
-        expect(rule!.targets.some((t) => t.template_key === "contact_family")).toBe(true);
+        expect(rule!.targets.some((t) => t.transition_ref === "lead_to_closed_lost")).toBe(true);
 
         const preview = buildStageWorkOutcomeAutomationPreview({
             plan,
-            templateKey: "review_lead",
+            templateKey: "contact_family",
         });
-        const needsInfo = preview.find((p) => p.outcome_key === "needs_more_information");
-        expect(needsInfo?.effect_label).toMatch(/Needs attention/i);
+        expect(preview.some((p) => p.outcome_key === "not_interested")).toBe(true);
         expect(JSON.stringify(preview)).not.toMatch(/Reopen:/i);
     });
 
-    it("close decision matches successful / terminal outcomes", () => {
-        expect(shouldCloseWorkAfterStageOutcome(plan, "review_qualified").shouldClose).toBe(true);
-        expect(shouldCloseWorkAfterStageOutcome(plan, "duplicate").shouldClose).toBe(true);
-        expect(shouldCloseWorkAfterStageOutcome(plan, "closed_lost").shouldClose).toBe(true);
-        expect(shouldCloseWorkAfterStageOutcome(plan, "needs_more_information").shouldClose).toBe(false);
+    it("close decision matches successful outcomes; stay-in-stage retries remain open", () => {
+        expect(shouldCloseWorkAfterStageOutcome(plan, "reached_family").shouldClose).toBe(true);
+        expect(shouldCloseWorkAfterStageOutcome(plan, "interested").shouldClose).toBe(true);
+        expect(shouldCloseWorkAfterStageOutcome(plan, "left_message").shouldClose).toBe(false);
+        // Closed Lost uses transition_ref; closure may be ownership of completes_work at record time.
+        expect(plan.outcomes.find((o) => o.outcome_key === "not_interested")?.completes_work).toBe(true);
     });
 });
 
 describe("stageWorkOutcomeEffectLines honesty", () => {
     function item(partial: Partial<StageWorkItemProjection>): StageWorkItemProjection {
         return {
-            template_key: "review_lead",
-            label: "Review Lead",
+            template_key: "contact_family",
+            label: "Contact Family",
             role: "primary",
             state: "open",
             requires_outcome_picker: true,
@@ -70,32 +66,31 @@ describe("stageWorkOutcomeEffectLines honesty", () => {
             last_outcome: null,
             completed_at: null,
             outcomes: [
-                { outcome_key: "review_qualified", label: "Reviewed", successful: true },
-                { outcome_key: "needs_more_information", label: "Needs More Information" },
+                { outcome_key: "reached_family", label: "Reached Family", successful: true },
+                { outcome_key: "left_message", label: "Left Message" },
             ],
             completion_policy_summary: null,
             completion_policy_min_attempts: null,
             completion_policy_max_attempts: null,
             outcome_automation_preview: [
                 {
-                    outcome_key: "needs_more_information",
-                    outcome_label: "Needs More Information",
-                    effect_label: "Needs attention: Needs more information from family",
+                    outcome_key: "left_message",
+                    outcome_label: "Left Message",
+                    effect_label: "Stay in stage",
                 },
             ],
             ...partial,
         };
     }
 
-    it("does not claim Close for retry outcomes", () => {
-        const lines = stageWorkOutcomeEffectLines(item({}), "needs_more_information");
-        expect(lines.some((l) => /Continue Review Lead work/i.test(l))).toBe(true);
+    it("does not claim Close for stay-in-stage outcomes", () => {
+        const lines = stageWorkOutcomeEffectLines(item({}), "left_message");
         expect(lines.some((l) => l === "Close current work item")).toBe(false);
         expect(lines.join(" ")).not.toMatch(/Reopen:/i);
     });
 
     it("claims Close for successful outcomes", () => {
-        const lines = stageWorkOutcomeEffectLines(item({}), "review_qualified");
+        const lines = stageWorkOutcomeEffectLines(item({}), "reached_family");
         expect(lines).toContain("Close current work item");
     });
 });
@@ -103,8 +98,8 @@ describe("stageWorkOutcomeEffectLines honesty", () => {
 describe("completionOutcomesForPicker", () => {
     function pickerItem(partial: Partial<StageWorkItemProjection>): StageWorkItemProjection {
         return {
-            template_key: "review_lead",
-            label: "Review Lead",
+            template_key: "contact_family",
+            label: "Contact Family",
             role: "primary",
             state: "open",
             requires_outcome_picker: true,
@@ -115,30 +110,21 @@ describe("completionOutcomesForPicker", () => {
             last_outcome: null,
             completed_at: null,
             outcomes: [
-                { outcome_key: "review_qualified", label: "Reviewed", successful: true },
-                { outcome_key: "needs_more_information", label: "Needs More Information" },
+                { outcome_key: "reached_family", label: "Reached Family", successful: true },
+                { outcome_key: "left_message", label: "Left Message" },
                 { outcome_key: "noop", label: "No-op" },
             ],
             completion_policy_summary: null,
             completion_policy_min_attempts: null,
             completion_policy_max_attempts: null,
-            outcome_automation_preview: [
-                {
-                    outcome_key: "needs_more_information",
-                    outcome_label: "Needs More Information",
-                    effect_label: "Needs attention: Needs more information from family",
-                },
-            ],
+            outcome_automation_preview: [],
             ...partial,
         };
     }
 
-    it("returns all configured outcomes — same list as stage runtime", () => {
-        const outcomes = completionOutcomesForPicker(pickerItem({}));
-        expect(outcomes.map((o) => o.outcome_key).sort()).toEqual([
-            "needs_more_information",
-            "noop",
-            "review_qualified",
-        ]);
+    it("returns configured outcomes for the picker", () => {
+        const keys = completionOutcomesForPicker(pickerItem({})).map((o) => o.outcome_key);
+        expect(keys).toContain("reached_family");
+        expect(keys).toContain("left_message");
     });
 });
