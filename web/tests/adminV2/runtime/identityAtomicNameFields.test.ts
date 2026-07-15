@@ -7,6 +7,8 @@ import {
     normalizeHouseholdIdentityFieldRef,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
 import { resolveIdentityFieldValue } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
+import { isIdentityFieldSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
+import { personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { buildHouseholdIdentityCardVM } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
 import { defaultNestedSurfaceConfig, HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 
@@ -74,6 +76,51 @@ describe("atomic household name fields", () => {
         });
         const refs = vm.sections[0]!.items[0]!.summaryRows.flatMap((row) => row.cells.map((c) => c.fieldRef));
         expect(refs.filter((r) => r === "person.first_name" || r === "person.last_name").length).toBeGreaterThanOrEqual(0);
+    });
+
+    it("person.full_name resolves from first+last and refreshes when parts change", () => {
+        const subject = {
+            kind: "person" as const,
+            value: {
+                personId: "p-1",
+                name: "Kelly Kurzman",
+                firstName: "Kelly",
+                lastName: "Kurzman",
+                roleLabel: null,
+                isPrimary: true,
+                phone: null,
+                email: null,
+                initials: "KK",
+            },
+        };
+        expect(resolveIdentityFieldValue(subject, "person.full_name")).toBe("Kelly Kurzman");
+        subject.value.firstName = "Sam";
+        subject.value.lastName = "";
+        expect(resolveIdentityFieldValue(subject, "person.full_name")).toBe("Sam");
+        subject.value.firstName = "";
+        subject.value.lastName = "Lee";
+        expect(resolveIdentityFieldValue(subject, "person.full_name")).toBe("Lee");
+    });
+
+    it("person.full_name stays distinct from primary_contact_name and is not editable", () => {
+        const subject = {
+            kind: "person" as const,
+            value: {
+                personId: "p-1",
+                name: "Evidence Name",
+                firstName: "Kelly",
+                lastName: "Kurzman",
+                roleLabel: null,
+                isPrimary: true,
+                phone: null,
+                email: null,
+                initials: "KK",
+            },
+        };
+        expect(resolveIdentityFieldValue(subject, "person.full_name")).toBe("Kelly Kurzman");
+        expect(resolveIdentityFieldValue(subject, "person.primary_contact_name")).toBe("Evidence Name");
+        expect(isIdentityFieldSaveSupported("person.full_name")).toBe(false);
+        expect(personContactSaveKeyForIdentityFieldRef("person.full_name")).toBeNull();
     });
 
     it("IdentityFieldValue uses hover affordance class for inline edit", () => {

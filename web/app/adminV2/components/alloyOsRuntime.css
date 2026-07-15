@@ -2753,6 +2753,10 @@ html[data-alloy-os-runtime="on"]
   color: var(--alloy-os-text-secondary, #4b5563);
   white-space: nowrap;
 }
+.alloy-os-card-pill--neutral {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
 .alloy-os-card-pill--positive {
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 14%, #fff);
   color: var(--alloy-os-bend-pine, #00a283);

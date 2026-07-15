@@ -34,6 +34,7 @@ export default function IdentityRecordSummary({
     const hasEditableField = visibleRows.some((row) =>
         row.cells.some((cell) => cell.editable),
     );
+    const isPrimaryBadge = record.badge ? /^primary$/i.test(record.badge.trim()) : false;
     const hasEditableDetailField =
         showInlineDetails
         && detailRows.some((row) => row.cells.some((cell) => cell.editable));
@@ -66,7 +67,13 @@ export default function IdentityRecordSummary({
                             record.title
                         )}
                         {record.badge ? (
-                            <span className="alloy-os-card-pill alloy-os-card-pill--neutral identity-record-summary__badge">
+                            <span
+                                className={clsx(
+                                    "alloy-os-card-pill",
+                                    isPrimaryBadge ? "alloy-os-card-pill--positive" : "alloy-os-card-pill--neutral",
+                                    "identity-record-summary__badge",
+                                )}
+                            >
                                 {record.badge}
                             </span>
                         ) : null}

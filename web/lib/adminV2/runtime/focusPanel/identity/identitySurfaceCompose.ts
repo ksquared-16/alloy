@@ -34,6 +34,24 @@ function splitDisplayName(name: string): { first: string | null; last: string | 
     return { first: parts[0]!, last: parts.slice(1).join(" ") || null };
 }
 
+function composedPersonFullName(subject: IdentityComposeSubject): string | null {
+    if (subject.kind === "person") {
+        const { first, last } = personNameParts(subject);
+        if (first && last) return `${first} ${last}`;
+        if (first) return first;
+        if (last) return last;
+        return subject.value.name?.trim() || null;
+    }
+    if (subject.kind === "contact_edit") {
+        const full = [subject.value.first_name, subject.value.last_name]
+            .map((part) => part?.trim())
+            .filter(Boolean)
+            .join(" ");
+        return full || null;
+    }
+    return null;
+}
+
 function personNameParts(subject: IdentityComposeSubject): { first: string | null; last: string | null } {
     if (subject.kind !== "person") return { first: null, last: null };
     const contact = subject.value;
@@ -118,6 +136,7 @@ const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {
         subject.kind === "contact_edit" ? subject.value.email?.trim() || null : null,
     "contact.phone": (subject) =>
         subject.kind === "contact_edit" ? subject.value.phone?.trim() || null : null,
+    "contact.full_name": (subject) => composedPersonFullName(subject),
 };
 
 const PERSON_RESOLVERS: Record<string, Resolver> = {
@@ -131,6 +150,7 @@ const PERSON_RESOLVERS: Record<string, Resolver> = {
         if (subject.kind === "person") return personNameParts(subject).last;
         return null;
     },
+    "person.full_name": (subject) => composedPersonFullName(subject),
     "person.primary_contact_name": (subject) => (subject.kind === "person" ? subject.value.name : null),
     "person.phone": (subject) => {
         if (subject.kind === "person") return subject.value.phone?.trim() || null;

@@ -49,6 +49,7 @@ export const IDENTITY_UNSUPPORTED_SAVE_REFS = new Set<string>([
     "child.display_name",
     "child.name",
     "child.dob_age",
+    "person.full_name",
 ]);
 
 export function contactMutationValueKeyForRef(refKey: string): ContactMutationValueKey | undefined {
