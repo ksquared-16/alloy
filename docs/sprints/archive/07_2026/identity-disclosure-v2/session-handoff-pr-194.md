@@ -117,6 +117,12 @@ Finish [PR #194](https://github.com/ksquared-16/alloy/pull/194) after rebasing o
 
 ## QA fixes (2026-07-15)
 
+- **Details inline edit restore:** `IdentityDisclosureSurface` passes disclosure depth into
+  `IdentityRecordSummary` so detail-tier edit detection works; detail grids receive
+  `personId`. Collection rows show persistent **Details →**; field Edit is visible at rest.
+- **Children save parity:** `ChildrenCard` wires `onSaveField` through collection + Details
+  (`saveInquiryChild` + canonical child mutation bindings), matching Household inline grammar.
+
 - **Other parent avatar:** `other_parent_guardian` avatar accent now matches Primary Contact (Alloy blue); Guardian badge stays neutral; Primary pill remains Bend Pine.
 - **View Household focus:** Elevated grid cell `z-index` raised above the depth scrim so the household drill-in is not grayed/blocked.
 

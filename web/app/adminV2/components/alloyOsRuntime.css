@@ -6715,8 +6715,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .identity-field-value--inline-editable .identity-field-value__edit {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.55;
+  pointer-events: auto;
   position: absolute;
   right: 0;
   top: 50%;
@@ -6727,7 +6727,6 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .identity-field-value--inline-editable:hover .identity-field-value__edit,
 .identity-field-value--inline-editable:focus-within .identity-field-value__edit {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .identity-field-value__input {
@@ -6759,6 +6758,22 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .identity-record-summary__activate {
   padding: 0;
   text-align: left;
+}
+
+.identity-record-summary__open-details {
+  flex: 0 0 auto;
+  padding: 0 2px;
+  color: var(--alloy-os-text-secondary, #6b7280);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.identity-record-summary__open-details:hover,
+.identity-record-summary__open-details:focus-visible {
+  color: var(--alloy-os-accent, #24634f);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .identity-record-summary__activate:hover,
@@ -6878,8 +6893,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .identity-field-value--inline-editable .identity-field-value__edit {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.55;
+  pointer-events: auto;
   position: absolute;
   right: 0;
   top: 50%;
@@ -6890,7 +6905,6 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .identity-field-value--inline-editable:hover .identity-field-value__edit,
 .identity-field-value--inline-editable:focus-within .identity-field-value__edit {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .identity-field-value__input {
@@ -7025,18 +7039,13 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 /* Person-level Edit — one quiet affordance per identity block (not per field). */
 .identity-record-summary__edit {
-  opacity: 0;
+  opacity: 0.55;
   transition: opacity 120ms ease;
 }
 .identity-record-summary:hover .identity-record-summary__edit,
 .identity-record-summary:focus-within .identity-record-summary__edit,
 .identity-record-summary__edit:focus-visible {
   opacity: 1;
-}
-@media (hover: none) {
-  .identity-record-summary__edit {
-    opacity: 1;
-  }
 }
 
 .alloy-os-card-edit__opaque {

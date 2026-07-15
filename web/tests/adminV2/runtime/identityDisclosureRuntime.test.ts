@@ -184,3 +184,26 @@ describe("children runtime disclosure", () => {
         expect(children).toContain("enterEvidence");
     });
 });
+describe("identity inline edit wiring", () => {
+    it("IdentityDisclosureSurface delegates details through summary depth with personId", () => {
+        const surface = readSrc("components/admin/focusPanel/identity/IdentityDisclosureSurface.tsx");
+        const summary = readSrc("components/admin/focusPanel/identity/IdentityRecordSummary.tsx");
+        expect(surface).toContain("depth={depth}");
+        expect(surface).not.toMatch(/<IdentityRecordDetails[^>]*onSaveField/);
+        expect(summary).toContain("personId={record.id}");
+    });
+
+    it("collection drill affordance is present when onActivate is wired", () => {
+        const summary = readSrc("components/admin/focusPanel/identity/IdentityRecordSummary.tsx");
+        expect(summary).toContain("data-identity-open-details");
+        expect(summary).toContain("Details →");
+    });
+
+    it("ChildrenCard wires onSaveField when mutation is available", () => {
+        const children = readSrc("components/admin/focusPanel/cards/ChildrenCard.tsx");
+        expect(children).toContain("saveChildIdentityField");
+        expect(children).toContain("onSaveField={saveChildIdentityField}");
+        expect(children).toContain("saveInquiryChild");
+    });
+});
+

@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-15
 supersedes: [./identity-surface-composition.md]
 ---
 
@@ -531,14 +531,25 @@ Runtime resolves policy in order: tier placement policy → group `fieldPolicies
 for presentation groups. `editGroupKey` still binds save support (`CONTACT_EDIT_FIELD_MAP`)
 but must not leak default `editable` from the edit surface.
 
-## Inline Context / Details editing (Household)
+## Inline editing by disclosure tier (Household + Children)
 
-Editable Context and Details cells use the shared `IdentityFieldValue` row with quiet
-**Edit** affordance (hidden at rest, visible on `:hover` / `:focus-within`). Clicking Edit
-opens an inline input; Save commits through existing `savePersonContact` and truth refresh.
+Editable policy is **per tier**, not global to the card:
 
-Summary scan stays read-only by default — no person-level Edit when all visible Summary
-cells are read-only. Person-level Edit remains for complex `contact_edit` forms when needed.
+- **Collection (`context`)** — Summary + Context Facts only. Inline Edit works when those
+  tiers are editable under published policy. Detail Fields do not appear until an identity
+  is selected.
+- **Details (after drill)** — Detail-tier fields render with the same inline grammar. Save
+  commits through canonical mutation bindings (`savePersonContact` for household contacts;
+  `saveInquiryChild` for child roster fields).
+
+Collection rows expose a persistent **Details →** control (not hover-only) beside the name
+when identities are selectable. Field-level **Edit** stays quiet but discoverable at rest
+(~55% opacity, full opacity on hover/focus) so touch and keyboard paths work without
+hover-only discovery.
+
+Summary scan stays read-only by default when all visible Summary cells are read-only.
+Person-level Edit remains for complex `contact_edit` / `ChildFocusEdit` when inline save
+is unsupported.
 
 ## Atomic vs derived name fields
 

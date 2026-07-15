@@ -56,13 +56,24 @@ export default function IdentityRecordSummary({
                 <div className="identity-record-summary__title-block min-w-0">
                     <span className="identity-record-summary__title">
                         {onActivate ? (
-                            <button
-                                type="button"
-                                className="identity-record-summary__activate"
-                                onClick={() => onActivate(record.id)}
-                            >
-                                {record.title}
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    className="identity-record-summary__activate"
+                                    onClick={() => onActivate(record.id)}
+                                >
+                                    {record.title}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="identity-record-summary__open-details"
+                                    data-identity-open-details={record.id}
+                                    onClick={() => onActivate(record.id)}
+                                    aria-label={`Open details for ${record.title}`}
+                                >
+                                    Details →
+                                </button>
+                            </>
                         ) : (
                             record.title
                         )}
