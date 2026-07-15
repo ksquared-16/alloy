@@ -785,6 +785,7 @@ export default function LifecycleActivationBoard({
         setStageSaveError(null);
         setStatusesError(null);
 
+        try {
         const handle = workspaceHandleRef.current;
         const fieldRules = handle?.isFieldDirty() ? handle.getFieldDraftRules() : null;
         const queueName =
@@ -821,7 +822,6 @@ export default function LifecycleActivationBoard({
             ...(v2Draft ? { stage_v2_draft: v2Draft } : {}),
         };
 
-        try {
             const res = await fetch(LIFECYCLE_STAGE_RUNTIME_CONFIG_PATH, {
                 ...workspaceDataFetchInit(),
                 method: "POST",

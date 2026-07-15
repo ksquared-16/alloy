@@ -47,7 +47,7 @@ Everything else — queue layout, drawer presentation, org SLA defaults — **pr
 | Who appears in stage | **Stage Membership** + status rollups | Operating Plan does not define membership |
 | What fields must exist | **Stage Requirements** (`lifecycle_builder_stage_field_rules_v1`) | Success Criteria / Attention **consume** readiness evaluation |
 | What work to do | **Operating Plan** (`work_templates`) | Spawns `operational_work` tasks |
-| What “done” means | **Operating Plan** (`outcomes`, `outcome_rules`) + Stage Requirements gates | Outcome picker + advancement validation |
+| What “done” means | **Operating Plan** (`outcomes`, `outgoing_transitions`, `outcome_rules`) + Stage Requirements gates | Outcome picker + advancement validation |
 | When to escalate | **Operating Plan** (`attention_rules`) + org `opportunity_attention_rules` | Unified attention evaluator (target) |
 | Row presentation | **Layouts** (`queue_record_layout`) | Presentation only |
 | Action buttons | **Process Actions** | Complements Expected Work; does not replace it |
@@ -65,7 +65,8 @@ Operator UI labels map to metadata as follows:
 | Purpose | `purpose` |
 | Journey | `journey_segment` (`family` \| `child`) |
 | Expected Work | `work_templates[]` |
-| Success Criteria | `outcomes[]`, `outcome_rules[]` |
+| Outgoing Transitions | `outgoing_transitions[]` |
+| Outcome Definitions | `outcomes[]`, `outcome_rules[]` |
 | Attention | `attention_rules[]` |
 
 Code entry points: `web/lib/lifecycle/stageOperatingPlanV1.ts`, `defaultEnrollmentStageOperatingPlans.ts`, `executeStageOperatingOutcome.ts`.
@@ -146,13 +147,15 @@ Code entry points: `web/lib/lifecycle/stageOperatingPlanV1.ts`, `defaultEnrollme
 
 ### Success Criteria
 
-**Operator configures:** Human completion choices (`outcomes`) and side-effect rules (`outcome_rules`). Optional gates on Stage Requirements readiness.
+**Operator configures:** Stage-owned Outcome Definitions (`outcomes`), stage-owned outgoing transitions, and composable after-recording effects (`outcome_rules`). Work Templates select Available Outcomes by identity. Optional gates consume Stage Requirements readiness.
 
 **Stored:** `outcomes[]`, `outcome_rules[]`
 
 **Doctrine:** Success Criteria means:
 
-- **Possible outcomes** — what the operator can declare when completing work
+- **Possible outcomes** — what the operator can declare when completing work; definitions are edited once per stage
+- **Composable behavior** — Stay in stage or Move through transition, zero or many follow-up Work Templates, and optional attention
+- **Transition authority** — new outcome rules store `transition_ref`; the transition object owns destination, canonical status, availability, and status-derived close semantics
 - **Advancement validation** — required fields + required tasks before certain outcomes or transitions
 - **Readiness gates** — merged view from Operating Plan + **Stage Requirements**
 - **Progress %** — derived display only: `(satisfied required fields + completed required tasks) / total`
@@ -171,7 +174,7 @@ Code entry points: `web/lib/lifecycle/stageOperatingPlanV1.ts`, `defaultEnrollme
 
 - Drawer **Work Intent card** — outcome picker on primary stage work (`completeStageWorkWithOutcome`); retry-aware close semantics (`shouldCloseWorkAfterStageOutcome`).
 - My Tasks Complete → `stage-work-outcomes` API → `executeStageOperatingOutcome` (unchanged).
-- `move_to_stage` target remains a **no-op** (movement via status/disposition + membership).
+- `move_to_stage` executes persisted stage movement. For plans with `outgoing_transitions`, runtime resolves `transition_ref` against the stage-owned object and applies its destination and optional canonical status. Legacy `stage_key`/status targets remain executable only for old plans.
 - Readiness lives in **Stage Requirements** separately; outcome gates not fully merged.
 
 ---
@@ -236,7 +239,7 @@ Layouts              → presentation only
 | Purpose | ✓ | **Drawer lifecycle rail** (`workspace.stage_context.purpose`) | Queue lane subtitle partial |
 | Journey | ✓ | Outcome subject only | Queue grain not tied to plan |
 | Expected Work | ✓ | **Stage-entry spawn + Work Intent card** | Due policy engine partial |
-| Success Criteria | ✓ | **Drawer outcome picker** (retry vs close) | No readiness gates; `move_to_stage` no-op |
+| Outcome Definitions + transitions | ✓ | **Outcome picker + transition execution** | Readiness gates remain partial |
 | Attention | ✓ | Org rules + outcome-triggered flags | Stage rules not evaluated |
 
 **Parallel systems still drive runtime:** Stage Membership, Stage Requirements, Process Actions, org `opportunity_attention_rules`, hardcoded queue/BOS catalogs.
@@ -399,7 +402,7 @@ Immediate operator trust; UI-only where possible.
 
 - **`evaluateStageReadiness`** — merge Stage Requirements + required task completion
 - **Outcome gates** — block/warn on “Qualified”, “Enrollment complete”, etc.
-- **Implement `move_to_stage`** — real advancement with membership preconditions
+- **Harden transition readiness** — apply membership preconditions to the shipped `transition_ref` execution path
 - **Progress %** as derived metric only
 
 **Value:** “Success Criteria” matches advancement behavior.
@@ -438,7 +441,7 @@ Immediate operator trust; UI-only where possible.
 | V1 13-stage vs 6 operator-stage mapping | Explicit map in runtime; document in Ready Check |
 | Stage Requirements registry quality | E3 field visibility convergence; readiness gates depend on clean palette |
 | Duplicate attention systems | Tier 3 merges stage rules + org rules; deprecate hardcoded `STAGE_NEEDS_ATTENTION` |
-| `move_to_stage` vs status-driven membership | Implement movement as validated status/disposition + membership, not queue hacks |
+| Transition vs status-driven membership | Resolve stage-owned transition identity into validated status/disposition + membership, not queue hacks |
 | Performance of readiness/attention per queue row | Gate `readiness_attention_bridge_v1`; drawer attach evaluates first |
 
 **Dependencies before Tier 2 gates:** E3 field cleanup (shipped), Stage Requirements persistence convergence (F2 — deferred).

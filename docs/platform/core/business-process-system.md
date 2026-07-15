@@ -57,7 +57,8 @@ A business process defines:
 - **Stages** — ordered steps in the operator journey
 - **Stage operating plans** — purpose, expected work, success/off-track criteria — see `docs/system/operating-plan-runtime-doctrine.md`
 - **Stage membership** — subject grain + scope (`membership_criteria_v1`); membership itself is the persisted `stage_key`, written by outcome execution
-- **Outcomes** — work completion outcomes and their rule targets (the only mutation path for durable status)
+- **Outgoing transitions** — stage-owned, stable identities for destination, availability, and optional canonical status/close effects
+- **Outcome Definitions** — stage-owned completion choices; Work Templates select Available Outcomes and outcomes compose movement, follow-up work, and attention
 - **Required information & actions** — per-stage configuration
 - **Layout assignments** — published layouts per stage slot — see `../operator/business-process-layout-assignments.md`
 
@@ -313,7 +314,9 @@ Stage work surfaced in **Current Work** is the authoritative Business Process ex
 - **Actions express operator intent** — Work Templates own placement and ordering; the Action Registry owns execution capability.
 - **Target resolution** comes from process/work/runtime configuration, not duplicate grain-specific action keys in the editor.
 - **Intent vs execution** — Work Templates store intent-level `action_ref` values (e.g. `move_to_waitlist`). Runtime resolves execution keys (`waitlist_child`, `move_to_waitlist`, …) from process subject configuration. Legacy saved aliases continue to execute. Multi-subject picker UI is deferred; `resolveActionIntentExecution` exposes `requiresSubjectPicker` when applicable subjects exceed one.
-- **Result Definitions** (stage-owned) vs **Available Results** (Work Template refs) — templates reference canonical stage outcomes; they do not duplicate definitions.
+- **Outcome Definitions** are stage-owned and edited once. **Available Outcomes** on each Work Template are references to those definitions; templates do not duplicate them. Legacy `work_template_key` remains readable but is not required for new outcomes.
+- **Transition authority** — `stage_operating_plan_v1.outgoing_transitions` owns stable `transition_ref`, source, destination, label, availability, and optional canonical resulting status. Outcomes reference only `transition_ref`; destination/status text in a newly authored outcome rule is invalid.
+- **Outcome behavior is composable** — work completion stays on the outcome definition; after recording may stay or move through one transition, create zero or many follow-up Work Template instances, and optionally create attention. Selecting a configured closed status on the transition derives close semantics; there is no separate Close Record behavior.
 - **Explicit vs fallback** — `undefined` on a Work Template bucket allows legacy runtime fallback; `[]` means explicitly configured empty.
 - **Current Work Recent Activity** reuses the same canonical activity projection as the Focus Panel Timeline card, with a small preview adapter for prioritization and limits.
 
