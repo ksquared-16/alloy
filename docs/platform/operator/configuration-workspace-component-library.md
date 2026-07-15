@@ -1,0 +1,120 @@
+---
+owner: operator
+status: canonical
+last_reviewed: 2026-07-14
+supersedes: []
+---
+
+# Configuration Workspace Component Library
+
+**Status:** Canonical. The primitive vocabulary of the Configuration Workspace Platform.
+**Companion:** `configuration-workspace-platform-doctrine.md` (behavior) and `configuration-workspace-visual-language.md` (appearance).
+
+> These are **platform concepts**, not React components. A domain implements them however its stack requires; what is canonical is the concept, its responsibility, and its contract with the operator.
+
+Every configuration domain composes its experience from this fixed set of primitives. A domain that needs a new primitive must add it here first — the library is the shared language, and a one-off widget outside it is an anti-pattern.
+
+---
+
+## Structural primitives
+
+### Configuration Workspace
+The root of a configuration experience for one object type. Owns the three-zone layout (object list · object detail · command rail), URL-addressable selection state, and responsive collapse. It is the container every other primitive lives inside. One per object type (Locations, Programs, Offerings…).
+
+### Configuration Sidebar (Object List)
+The persistent selector for objects of the current type. Responsibilities: search, filter, "Add", and an unmistakable **selected** state. Swaps to a child object's siblings when the operator drills into a nested object. It is a selector, never a page.
+
+### Configuration Object Header
+Names the object being operated: object name (dominant), status badge, one row of identifying facts, and the object's primary action + overflow. The answer to "what am I configuring?" Every object workspace has exactly one.
+
+### Workspace Tab Bar
+The object's **owned concerns** as tabs, led by Overview. Route-addressable. Tabs name concerns in business language, never features or subsystems.
+
+### Workspace Section
+A calm, self-contained block for one concern: a plain headline, quiet supporting detail, and one clear affordance. Sections are structured rows within a card, not a mosaic of boxes. Sections are where inline editing happens.
+
+### Command Rail
+The object-scoped rail holding Quick Actions and (where useful) the object's Attention/Setup. Restrained by doctrine — a short action list and one or two status cards, never a dashboard.
+
+---
+
+## Operational-summary primitives
+
+### Operational Summary (Glance)
+The read-only "is this object healthy?" surface. Presents derived state (capacity, availability, counts) with **utilization first, inventory second**, each number a link to where it is configured. Shows honest unknowns, never fabricated zeros.
+
+### Attention Panel
+The live, ranked list answering "is anything wrong or improvable right now?" Items are graded Fix / Improve / Good, each one-tap actionable and self-clearing. Empty state: "Everything looks good." No timestamp, no global health badge. This **is** the health model.
+
+### Setup Progress
+The onboarding completeness surface: a percentage donut plus a per-owned-area checklist, each linking to finish. Prominent while incomplete; **collapses to a single line at 100%**. Distinct from Attention by responsibility and by placement (rail vs body).
+
+### Configuration Health Banner
+A per-object or per-section rollup of substrate resolution status into a single calm statement ("All good" / "Needs setup"). A compact form of Attention for tight spaces (e.g. a nested object's rail). Never a "last checked" heartbeat.
+
+---
+
+## Object-and-list primitives
+
+### Configuration Object List
+The set of object rows within the Sidebar (or a grid, for a no-selection tab). Each row carries object identity + status + a one-line derived signal ("Holds 11 · 2 open"), and marks incomplete objects ("Needs setup") honestly.
+
+### Configuration Status Badge
+The object's active/inactive (or domain-equivalent) state as a soft, dotted chip. Calm, small, meaningful — Bend-Pine for good/active, Stone for inactive, ember reserved for problem states.
+
+### Configuration Empty State
+The primer shown when an object or concern has nothing configured: a one-line reason, the first step, and the matching Add/Set action. For a brand-new object, a short setup checklist. Never a blank form.
+
+---
+
+## Editing primitives
+
+### Inline Property
+The default editing unit: a value the operator can change in place (a number, a toggle, a short list) that validates beside itself and saves optimistically. Wraps any concern the object already displays so editing never navigates away.
+
+### Focused Editor
+A dedicated section/tab for one rich concern (capacity + ratios, a weekly schedule) — a small set of business fields plus a **Consequence Sentence**, plus one save. A focused editor is still not a form.
+
+### Consequence Sentence
+A live, plain-language line restating the substrate's computed result as a business outcome ("Right now this room holds 11 children — limited by staffing ratios"), updating as the operator edits. The bridge that keeps the engine invisible while making its effect legible.
+
+### Effective-From Save
+The save affordance that quietly carries an effective date ("Save changes · Effective from Today ▾"). A future date produces a **Scheduled ribbon** with Undo. Encapsulates versioning so the operator never meets it.
+
+### Inherited Value
+A value shown with a quiet owner tag ("Uses Downtown Campus hours") plus a one-gesture override ("Set different hours for this room"). Removing the override returns to inherited silently. The sole presentation of inheritance — never precedence.
+
+### Basis Popover (ⓘ)
+The affordance that reveals a derived number's plain-language basis ("21 open = 124 capacity − 103 enrolled"). Keeps math out of the surface while keeping it available on demand.
+
+### Configuration Dialog
+A centered modal for exactly two jobs: **create** an object, or **confirm** a destructive act. States the business consequence. Never used to manage an existing object; never contains version/scope/precedence language.
+
+---
+
+## Contextual primitives
+
+### Configuration Timeline (Change History)
+An on-demand, plain-language history of what changed and when ("Capacity was 12, changed to 14 on May 20 by Sarah J."), lives behind an "Advanced / History" disclosure. Never exposes `effective_start`, `supersedes`, or version ids.
+
+### Configuration Activity Feed
+The object's recent changes as a short list — actor · plain summary · relative time · deep-link. A read surface, not an audit console.
+
+---
+
+## Composition rules
+
+- A configuration experience is **assembled from these primitives only.** New visual needs extend the library, not the domain.
+- Primitives depend on the **object model and resolved view models**, never on raw database rows. Only server loaders touch the substrate.
+- Every primitive obeys the platform laws: the engine stays invisible, unknown is never zero, inheritance is quiet, editing is in-place, and the two status systems stay separate.
+- The **reference implementations** of every primitive are in the Locations prototype (`web/app/adminV2/settings/prototypes/operational-configuration`); a new domain adapts those, it does not reinvent them.
+
+## Related docs
+
+- `configuration-workspace-platform-doctrine.md` — the behavior these primitives implement.
+- `configuration-workspace-visual-language.md` — how they look.
+- `../../system/operational-configuration-platform-phase-b-blueprint.md` — the reference-implementation mapping of primitives to the Locations build.
+
+## When this doc must be updated
+
+A primitive is added, merged, split, or retired; or a primitive's responsibility/contract changes.

@@ -9,7 +9,7 @@ supersedes: []
 
 **Status:** Master implementation roadmap (Realization Phase), 2026-07-13. Architecture is **frozen**.
 This document does **not** reopen ontology, re-argue semantics, or redesign the capability. It
-translates the frozen [system design](../operational-expectations-system-design.md) into an
+translates the frozen [system design](../core/operational-expectations-system-design.md) into an
 **executable engineering program**: packages, dependencies, milestones, certification, migration,
 risk, rollout, and the recommended Cursor sequence.
 
@@ -45,7 +45,7 @@ The governing execution program derived from this plan (Platform Realization) is
 [implementation program](./operational-expectations-implementation-program.md).
 
 > **Authority chain.** The [architecture closeout](./operational-expectations-architecture-closeout.md)
-> froze the capability; the [system design](../operational-expectations-system-design.md) resolved the
+> froze the capability; the [system design](../core/operational-expectations-system-design.md) resolved the
 > three open implementation questions at the design level (§A) and defined packages **P0–P8** (§14),
 > the dependency order (§15), the risk areas (§16), and the certification gates (§17); the
 > [doctrine convergence certification](./operational-expectations-doctrine-convergence.md) swept the
@@ -906,6 +906,17 @@ Interface without a program-level change (§22).
   self-ratifies**.
 - **Certification Evidence.** G-Standing. **Completion Definition.** No unratified deontic binds;
   every act attributable; the ledger is the audit log.
+- **Representation (P1 Wave C — clarification, not new architecture).** The already-frozen **Authority**
+  tuple facet is *represented concretely* by: (1) **governed authority definitions** (an org-scoped
+  catalog of valid authorities), (2) **effective-dated held-authority assignments** (append-only grants of
+  an authority to a holder — human/policy/process/external, never AI — within a scope), and (3) a
+  **single canonical held-authority resolver** answering "does actor X hold authority Y for org O in
+  scope S at time T". RBAC permission authorizes *commands*; a held-authority assignment authorizes
+  *semantic Standing* — both may be required, neither implies the other. Self-ratifying authoring (§5)
+  and ratifier authority-sufficiency (§12) resolve through this one resolver. This is the implementation
+  **representation** of the frozen Authority facet; it introduces **no** new operational primitive,
+  modality, ledger, engine, event bus, state authority, or process runtime, and does not alter the
+  ontology, package boundaries, gates, or dependency graph.
 
 ---
 
@@ -1442,7 +1453,7 @@ to the published interface · Gate: §13 contracts · Owner: owning package eng.
 ## Cross-references
 
 - [Architecture closeout](./operational-expectations-architecture-closeout.md) — froze the capability.
-- [System design](../operational-expectations-system-design.md) — packages P0–P8, §A resolutions,
+- [System design](../core/operational-expectations-system-design.md) — packages P0–P8, §A resolutions,
   §15 dependencies, §16 risks, §17 gates. **The direct upstream of this plan.**
 - [Doctrine convergence certification](./operational-expectations-doctrine-convergence.md) — the P0
   doctrine sweep, carve-outs, follow-ups.

@@ -15,7 +15,7 @@ no ontology, no new concept**; it records reconciliation evidence over the froze
 > [Engineering Realization §13 · §19 (P0)](./operational-expectations-engineering-realization.md).
 > The doctrine sweep this certification depends on was performed by the
 > [Doctrine Convergence Certification](./operational-expectations-doctrine-convergence.md); the
-> frozen architecture is the [System Design §0.5](../operational-expectations-system-design.md) and
+> frozen architecture is the [System Design §0.5](../core/operational-expectations-system-design.md) and
 > the [Architecture Closeout](./operational-expectations-architecture-closeout.md). Where anything
 > here appears to decide, it is recording an already-frozen decision.
 
@@ -160,6 +160,6 @@ guard prevents regression.
 
 - [Engineering Realization §13 · §19 (P0)](./operational-expectations-engineering-realization.md) — the P0 contract & checklists.
 - [Doctrine Convergence Certification](./operational-expectations-doctrine-convergence.md) — the doctrine sweep this builds on.
-- [System Design §0.5](../operational-expectations-system-design.md) — the ratified reconciliation.
+- [System Design §0.5](../core/operational-expectations-system-design.md) — the ratified reconciliation.
 - [Architecture Closeout](./operational-expectations-architecture-closeout.md) — the freeze.
 - [`../foundation/platform-capabilities.md`](../foundation/platform-capabilities.md) — the two ledgers registered.

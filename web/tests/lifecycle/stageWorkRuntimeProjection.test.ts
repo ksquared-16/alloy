@@ -278,9 +278,13 @@ describe("buildQueueCurrentWorkSummary", () => {
 describe("Work Runtime Convergence integration contracts", () => {
     it("compose wires stage_work_runtime and filters follow-ups", () => {
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
-        expect(compose).toContain("projectStageWorkRuntime");
+        // Ownership moved: the stage-work projection is resolved through the thin shared slice
+        // (which internally runs projectStageWorkRuntime). The behavioral wiring is unchanged.
+        expect(compose).toContain("resolveOpportunityStageWorkSlice");
         expect(compose).toContain("stage_work_runtime");
         expect(compose).toContain("filterResidualOperationalTasks");
+        const slice = read("lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice.ts");
+        expect(slice).toContain("projectStageWorkRuntime");
     });
 
     it("default lead layout uses Current Work widget", () => {

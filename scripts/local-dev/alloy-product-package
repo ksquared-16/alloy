@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-product-package <key>
+
+Produces product/final/product-review-package.md for Kelly review.
+Transitions: approved → packaged
+
+Recommendation classes:
+  READY_FOR_PRODUCT_APPROVAL | BLOCKED_ON_PRODUCT_DECISION |
+  INSUFFICIENT_REFERENCE | CONFLICTS_WITH_CANONICAL_DOCTRINE | APPROVED
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_product_require_node
+  alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+
+  alloy_initiative_acquire_lock "$key"
+  local state
+  state="$(alloy_product_current_state "$key")"
+  [[ "$state" == "approved" || "$state" == "packaged" ]] \
+    || alloy_die "cannot package in state: $state (approve first)"
+
+  local base contract_dir final_dir blocking approved recommendation
+  base="$(alloy_product_dir "$key")"
+  contract_dir="$base/contract"
+  final_dir="$base/final"
+  mkdir -p "$final_dir"
+
+  blocking="$(alloy_product_blocking_decisions_count "$key")"
+  approved="$(alloy_product_approved "$key" && echo yes || echo no)"
+
+  if [[ "$approved" == "yes" ]]; then
+    recommendation="APPROVED"
+  elif [[ "$blocking" -gt 0 ]]; then
+    recommendation="BLOCKED_ON_PRODUCT_DECISION"
+  elif [[ ! -f "$contract_dir/visual-contract.yaml" ]]; then
+    recommendation="INSUFFICIENT_REFERENCE"
+  else
+    recommendation="READY_FOR_PRODUCT_APPROVAL"
+  fi
+
+  {
+    printf '# Product Review Package — %s\n\n' "$key"
+    printf 'Generated: %s\n\n' "$(alloy_iso_now)"
+    printf '**Recommendation:** `%s`\n\n' "$recommendation"
+    printf '%s\n\n' '---'
+    printf '## Original direction\n\n'
+    sed -n '1,40p' "$base/brief.yaml" 2>/dev/null || true
+    printf '\n## Product Contract\n\n'
+    sed -n '1,80p' "$contract_dir/product-contract.md" 2>/dev/null || true
+    printf '\n## Reference surfaces / mockups\n\n'
+    if [[ -f "$base/audit/surface-manifest.yaml" ]]; then
+      printf 'See `product/audit/surface-manifest.yaml` and `visual-reference-manifest.yaml`.\n'
+    fi
+    printf '\n## UX / visual contract\n\n'
+    cat "$contract_dir/ux-contract.yaml" 2>/dev/null || printf 'Not generated.\n'
+    printf '\n## Scope\n\n'
+    cat "$contract_dir/scope.yaml" 2>/dev/null || true
+    printf '\n## Acceptance criteria\n\n'
+    cat "$contract_dir/acceptance.yaml" 2>/dev/null || true
+    printf '\n## Unresolved decisions\n\n'
+    env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" "${SCRIPT_DIR}/alloy-product-decisions" "$key" 2>/dev/null || true
+    printf '\n## Known risks\n\n'
+    sed -n '/^risks:/,$p' "$base/audit/risks.yaml" 2>/dev/null | head -20 || true
+    printf '\n## Engineering may decide\n\n'
+    printf -- '- Internal hook decomposition within conventions\n'
+    printf -- '- Test helper organization\n'
+    printf -- '- File naming within module conventions\n'
+    printf '\n## Engineering may NOT change\n\n'
+    printf -- '- Approved operator outcomes\n'
+    printf -- '- Approved scope and non-goals\n'
+    printf -- '- Approved visual basis and UX contract\n'
+    printf -- '- Product-owned decisions (immutable for revision)\n'
+    printf '\n## Provenance\n\n'
+    printf -- '- Human direction: Product Brief intake\n'
+    printf -- '- Audit-grounded findings: product/audit/*\n'
+    printf -- '- Deterministic recommendations: Product Runtime V1\n'
+    printf -- '- Unresolved assumptions: Human Decision Queue\n'
+    printf '\n## Cost summary (V1 counts)\n\n'
+    node -e "const d=require('${base}/state.json'); console.log(JSON.stringify(d.cost_summary||{},null,2));"
+  } >"$final_dir/product-review-package.md"
+
+  if [[ "$state" == "approved" ]]; then
+    alloy_product_transition "$key" "packaged"
+  fi
+
+  alloy_info "Product review package: $final_dir/product-review-package.md"
+  alloy_info "  recommendation: $recommendation"
+  alloy_info ""
+  alloy_info "Next: alloy-product-handoff $key (after approval)"
+}
+
+main "$@"

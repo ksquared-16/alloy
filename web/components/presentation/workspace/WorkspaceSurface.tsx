@@ -9,6 +9,10 @@
  */
 
 import { useWorkspaceSurfaceRuntime } from "@/lib/presentation/runtime";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
+import { workspaceScrollScope } from "@/lib/presentation/runtime/workUnitOperatorContext";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -52,15 +56,22 @@ function WorkspaceSurfaceSkeleton() {
 
 export function WorkspaceSurface() {
     const model = useWorkspaceSurfaceRuntime();
+    const { orgId } = useWorkspaceOrg();
+    const siteFilter = useWorkspaceSiteFilter();
+    const workspaceScrollRef = useRetainedScroll(workspaceScrollScope(orgId, siteFilter?.selectedSiteId ?? null));
 
     return (
         <div
+            ref={workspaceScrollRef}
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workspaceSurface)}
             // `surface-enter` choreography: when `model.ready` clears the gate the class is added
             // to this container, sliding the Workspace surface in FROM THE LEFT — returning to the
             // process overview (spatially opposite the Work Unit's drill-in from the right). The
             // skeleton state carries no enter.
-            className={`flex flex-col gap-6${model.ready ? " motion-surface-enter-back" : ""}`}
+            // `min-h-0 flex-1 overflow-y-auto` makes this the retained workspace scrollport: a
+            // scrollbar appears only when the process overview overflows, and the operator's scroll
+            // position is restored on return (RETAINED-TRUTH §scroll).
+            className={`flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto${model.ready ? " motion-surface-enter-back" : ""}`}
         >
             {!model.ready ? (
                 <WorkspaceSurfaceSkeleton />

@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { setCurrentWorkspaceScope } from "@/lib/workspace/currentWorkspaceScope";
 
 type WorkspaceOrgValue = {
   orgName: string | null;
@@ -35,6 +36,11 @@ export function WorkspaceOrgProvider({
   children: ReactNode;
 }) {
   const fp = typeof accessScopeFingerprint === "string" && accessScopeFingerprint.trim() ? accessScopeFingerprint.trim() : "scope:unknown";
+  // Publish the live workspace scope for non-React prewarm affordances (sidebar / shell nav) so their
+  // Work Unit surface prewarm keys match the runtime's session-cache scope exactly.
+  useEffect(() => {
+    setCurrentWorkspaceScope({ orgId: orgId ?? null, userId: principalUserId ?? null, scopeFingerprint: fp });
+  }, [orgId, principalUserId, fp]);
   return (
     <WorkspaceOrgContext.Provider
       value={{ orgName, orgId: orgId ?? null, principalUserId: principalUserId ?? null, accessScopeFingerprint: fp }}

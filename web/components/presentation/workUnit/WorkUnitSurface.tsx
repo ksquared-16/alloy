@@ -164,13 +164,19 @@ export function WorkUnitSurface() {
         console.info(`[alloy] WorkUnitSurface · build ${BUILD_SHA}`);
     }, []);
 
+    // Reveal on the atomic composition (cold) OR on a retained composition seeded from the session
+    // cache (return navigation). A seeded return shows its prior config + rows immediately — header
+    // KPIs settle into their reserved slots without holding the boundary — so it never flashes the
+    // cold skeleton just because OIP metrics are not yet warm.
+    const revealReady = model.readiness.coldCompositionReady || model.readiness.retainedCompositionReady;
+
     // Surface Hold: remember the last-established model so a Work Unit re-establish (config
     // re-settle on a host change) can keep the prior surface visible instead of a full skeleton.
     const lastEstablishedRef = useRef<WorkUnitSurfaceModel | null>(null);
-    if (model.ready) lastEstablishedRef.current = model;
+    if (revealReady) lastEstablishedRef.current = model;
 
     const mode = resolveWorkUnitSurfaceRenderMode({
-        ready: model.ready,
+        ready: revealReady,
         hasPriorEstablished: lastEstablishedRef.current != null,
     });
     const shownModel = mode === "live" ? model : lastEstablishedRef.current;

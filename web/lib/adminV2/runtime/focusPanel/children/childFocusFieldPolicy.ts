@@ -30,6 +30,7 @@ import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPic
 
 /** Editable child focus values sent through the inquiry-child save path. */
 export type ChildFocusEditValues = {
+    location_id: string;
     program_category_id: string;
     program_room_cohort_key: string;
     schedule_type: string;

@@ -26,8 +26,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { resolveStageOperatingPlanPurpose } from "@/lib/lifecycle/resolveStageOperatingPlanPurpose";
-import { resolvePublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
-import { projectStageWorkRuntime, primaryWorkIntentProjectionFromStageWork } from "@/lib/lifecycle/projectStageWorkRuntime";
+import { resolveOpportunityStageWorkSlice } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
 import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
 import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
 import { resolveOpportunityDrawerStatusCanMutateFromGate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
@@ -63,6 +62,7 @@ import type {
     OpportunityDrawerViewModel,
     OpportunityDrawerViewModelResult,
     RemindersSummaryVm,
+    StageWorkLoadState,
 } from "@/lib/adminV2/viewModel/drawer/types";
 import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 
@@ -115,6 +115,22 @@ export type ComposeOpportunityDrawerViewModelParams = {
     workUnitId: string | null;
     hintOperTrustHeadline?: string | null;
     hintOperTrustUrgency?: string | null;
+    /**
+     * Skip the family-communications preview compute during first-paint composition.
+     * The preview is only an initial seed for the Activity mode embedded workspace, which
+     * fetches on demand and is prewarmed on idle (`focusPanelActivityPrewarm`) — so on the
+     * workspace inline Focus Panel path it never blocks first paint. Defaults to false so
+     * any full-drawer caller keeps the seeded preview. The workspace VM route sets it true,
+     * removing one server round-trip (`activity_comms_preview_ms`) from record-open.
+     */
+    deferCommunicationsPreview?: boolean;
+    /**
+     * Skip the stage-work projection (Current Work region) during first-paint composition and mark
+     * `workspace.stage_work` pending. The workspace VM route sets this; the client resolves the
+     * projection through the thin `…/stage-work` resource and patches the region in place. Defaults
+     * to false so any full-drawer caller keeps stage work inline.
+     */
+    deferStageWork?: boolean;
 };
 
 export async function composeOpportunityDrawerViewModel(
@@ -181,6 +197,7 @@ export async function composeOpportunityDrawerViewModel(
         });
     }
 
+    phases.base_subject_ms = phases.opportunity_select_ms + phases.record_layout_ms;
     const tVisible0 = Date.now();
     const record = await buildOpportunityDrawerVisiblePayload(
         supabase,
@@ -189,9 +206,21 @@ export async function composeOpportunityDrawerViewModel(
         { hintDepartmentId: ctxDept }
     );
     phases.visible_entity_ms = Date.now() - tVisible0;
+    // Bubble the visible-payload sub-phases so the dominant first-useful cost is measurable in the
+    // response `phases_ms` (drawer_primary_* = the parallel FK batch, children_* = child orientation).
+    const visiblePrimaryPhase = (record as { _drawer_primary_phase_ms?: Record<string, number> })._drawer_primary_phase_ms;
+    if (visiblePrimaryPhase) for (const [k, v] of Object.entries(visiblePrimaryPhase)) phases[`visible_${k}`] = v;
+    const childrenShellPhase = (record as { _children_shell_phase_ms?: Record<string, number> })._children_shell_phase_ms;
+    if (childrenShellPhase) {
+        for (const [k, v] of Object.entries(childrenShellPhase)) phases[`children_${k}`] = v;
+        phases.children_orientation_ms = Object.values(childrenShellPhase).reduce((a, b) => a + b, 0);
+    }
 
-    await attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record);
-
+    // `departmentId` derives from the work-unit row + the step-1 visible record (NOT the household
+    // attach), so the household-persons attach and the dept-metadata / status-definitions fetches are
+    // independent — run them in ONE parallel batch instead of three serial awaits on the first-paint
+    // critical path. The household attach mutates `record` in place and completes before the batch
+    // resolves, so all downstream code sees the fully-attached record.
     const wuData = wuRes.data as {
         id?: string;
         department_id?: string | null;
@@ -205,7 +234,12 @@ export async function composeOpportunityDrawerViewModel(
     const queueDefinition = queueDefinitionFromWorkUnit(wuData);
 
     const tPrep0 = Date.now();
-    const [deptMetadata, statusDefsPack] = await Promise.all([
+    const tHousehold0 = Date.now();
+    const [, deptMetadata, statusDefsPack] = await Promise.all([
+        attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record).then((r) => {
+            phases.household_persons_ms = Date.now() - tHousehold0;
+            return r;
+        }),
         departmentId ?
             fetchDepartmentMetadataForActivity(supabase, orgId, departmentId)
         :   Promise.resolve(null),
@@ -273,6 +307,8 @@ export async function composeOpportunityDrawerViewModel(
     Object.assign(record, resolved.record_patches);
     Object.assign(phases, resolved.phases_ms);
     phases.first_paint_resolve_ms = Date.now() - tDeps0;
+    // Everything after first-paint deps resolve is render-model assembly + serialization (no I/O).
+    const tSerialize0 = Date.now();
 
     const reminders = remindersFromFirstPaintData(resolved.data) ?? EMPTY_REMINDERS;
     const resolvedActions = headerActionsFromFirstPaintData(resolved.data);
@@ -345,37 +381,55 @@ export async function composeOpportunityDrawerViewModel(
     const currentStageKey = lifecycle_rail?.current_stage_key ?? null;
     const currentStageLabel =
         lifecycle_rail?.stages.find((s) => s.key === currentStageKey)?.label ?? null;
-    const communicationsPreviewP = (async () => {
-        const tCommsPreview0 = Date.now();
-        const preview = await resolveFamilyCommunicationWorkspacePreview(supabase, orgId, {
-            entityType: "opportunities",
-            entityId: opportunityId,
-            focusOpportunityId: opportunityId,
-            composerChannel: "email",
-            viewerUserId: gate.userId,
-            familyStageLabel: currentStageLabel,
-        });
-        phases.activity_comms_preview_ms = Date.now() - tCommsPreview0;
-        return preview;
-    })();
-    const [stage_work_runtime, communicationsPreviewVm] = await Promise.all([
-        projectStageWorkRuntime({
-            supabase,
-            orgId,
-            opportunityId,
-            departmentId,
-            departmentMetadata: deptMetadata,
-            builderStageKey: currentStageKey,
-            stageLabel: currentStageLabel,
-        }),
+    // The communications preview is a first-paint seed only; the Activity embedded workspace
+    // fetches it on demand (and prewarms on idle). Deferring it drops one server round-trip
+    // from the record-open critical path and removes a redundant comms request on the surface.
+    const communicationsPreviewP = params.deferCommunicationsPreview
+        ? Promise.resolve(null)
+        : (async () => {
+              const tCommsPreview0 = Date.now();
+              const preview = await resolveFamilyCommunicationWorkspacePreview(supabase, orgId, {
+                  entityType: "opportunities",
+                  entityId: opportunityId,
+                  focusOpportunityId: opportunityId,
+                  composerChannel: "email",
+                  viewerUserId: gate.userId,
+                  familyStageLabel: currentStageLabel,
+              });
+              phases.activity_comms_preview_ms = Date.now() - tCommsPreview0;
+              return preview;
+          })();
+    // Stage work (Current Work region) is heavy — two operational_tasks reads — and does NOT feed
+    // the above-fold render model built above. On the workspace inline Focus Panel path it is
+    // deferred to a thin canonical resource resolved after first paint; the VM carries a `pending`
+    // load state so the region shows a neutral loading treatment, never a false "No active work".
+    const deferStageWork = params.deferStageWork === true;
+    const [stageSlice, communicationsPreviewVm] = await Promise.all([
+        deferStageWork
+            ? Promise.resolve({
+                  stage_work_runtime: null,
+                  published_stage_inputs: null,
+                  work_intent_runtime: null,
+              })
+            : resolveOpportunityStageWorkSlice({
+                  supabase,
+                  orgId,
+                  opportunityId,
+                  departmentId,
+                  stageKey: currentStageKey,
+                  stageLabel: currentStageLabel,
+                  departmentMetadata: deptMetadata,
+              }),
         communicationsPreviewP,
     ]);
-    const published_stage_inputs = resolvePublishedStageInputsForCurrentWork({
-        departmentMetadata: deptMetadata as Record<string, unknown> | null,
-        builderStageKey: currentStageKey,
-    });
-    const work_intent_runtime = primaryWorkIntentProjectionFromStageWork(stage_work_runtime);
+    const { stage_work_runtime, published_stage_inputs, work_intent_runtime } = stageSlice;
+    const stage_work_state: StageWorkLoadState = deferStageWork
+        ? { status: "pending" }
+        : stage_work_runtime
+          ? { status: "ready", value: stage_work_runtime }
+          : { status: "empty" };
     const rawTasksSummary = parseInquirySummaryTasksFromRecord(record);
+    // Null runtime leaves tasks unfiltered (Tier 1); the client re-filters when stage work lands.
     const filteredTasksSummary = filterResidualOperationalTasks(rawTasksSummary, stage_work_runtime);
     record._inquiry_summary_tasks = filteredTasksSummary;
     if (record._overview_data && typeof record._overview_data === "object" && !Array.isArray(record._overview_data)) {
@@ -412,6 +466,7 @@ export async function composeOpportunityDrawerViewModel(
             work_intent_runtime,
             stage_work_runtime,
             published_stage_inputs,
+            stage_work: stage_work_state,
         },
         first_paint,
         header: {
@@ -455,7 +510,9 @@ export async function composeOpportunityDrawerViewModel(
             attention: buildOpportunityDrawerAttentionSummary(attentionRaw),
         },
         background_refresh: {
-            allowed: ["task_status", "scheduled_send_status", "readiness_values"],
+            allowed: deferStageWork
+                ? ["task_status", "scheduled_send_status", "readiness_values", "stage_work"]
+                : ["task_status", "scheduled_send_status", "readiness_values"],
         },
         timing: {
             compose_ms: Date.now() - composeStart,
@@ -463,5 +520,8 @@ export async function composeOpportunityDrawerViewModel(
         },
     };
 
+    // `phases` is referenced by viewModel.timing.phases_ms — these post-literal writes still surface.
+    phases.serialization_ms = Date.now() - tSerialize0;
+    phases.total_ms = Date.now() - composeStart;
     return finishCompose({ ok: true, viewModel });
 }

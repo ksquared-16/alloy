@@ -11,6 +11,7 @@ import {
     resolveCanonicalProviderForConsumer,
 } from "@/lib/fields/consumerCanonicalProviderAssembly";
 import type { CanonicalDataProvider } from "@/lib/fields/canonicalDataProviderModel";
+import { reconcileLegacyChildEnrollmentAlias } from "@/lib/fields/canonicalFieldProjection";
 import { categoryDisplayLabel } from "@/lib/fields/fieldCatalogForSettings";
 import { deriveFieldCapability } from "@/lib/fields/fieldCapabilityEngine";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
@@ -39,7 +40,8 @@ const IDENTITY_PRESENTATION_METADATA_ALIASES: Readonly<Record<string, string>> =
 };
 
 function metadataLookupRefKey(refKey: string): string {
-    return IDENTITY_PRESENTATION_METADATA_ALIASES[refKey.trim()] ?? refKey.trim();
+    const presentation = IDENTITY_PRESENTATION_METADATA_ALIASES[refKey.trim()] ?? refKey.trim();
+    return reconcileLegacyChildEnrollmentAlias(presentation);
 }
 
 function formatFallbackLabel(refKey: string): string {

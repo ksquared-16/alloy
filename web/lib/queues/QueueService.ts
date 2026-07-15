@@ -1154,7 +1154,7 @@ async function enrichOpportunityRows(params: {
      * CRM compact children always load from `customer_members` (relationship `child`, `is_active`)
      * via `opportunities.customer_id`. `enrichment` still controls other payload shaping / perf logging.
      */
-    enrichment?: "full" | "queue_preview" | "queue_list" | "queue_reveal";
+    enrichment?: "full" | "queue_preview" | "queue_list" | "queue_reveal" | "count_only";
     /** Bootstrap / reveal: skip tour_bookings + OCM desired-start batch fetches. */
     skipOptionalEnrichmentFetches?: boolean;
     /**
@@ -1406,7 +1406,14 @@ async function enrichOpportunityRows(params: {
         }
     }
     const ocmPlacementByOpportunityId = indexOcmPlacementByOpportunityAndMember(ocmPlacementRows);
-    const locationProgramCategories = await loadLocationProgramCategoriesForOrg(supabase, orgId);
+    // Program-category labels only feed program strings on `_crm_compact_children` / `_requested_program`
+    // (stripped from the condensed reveal wire) or placement/location display. The condensed rail skips
+    // locations + ocmDesiredStart, so this org-wide lookup is pure waste there — gate it. (Previously an
+    // unconditional serial await inside enrichment, part of the ~222ms gap.)
+    const needsProgramCategoryLabels = batch.locations || batch.ocmDesiredStart || enrichment === "full";
+    const locationProgramCategories = needsProgramCategoryLabels
+        ? await loadLocationProgramCategoriesForOrg(supabase, orgId)
+        : [];
     const placementOptionLabelLookup =
         ocmPlacementRows.length > 0
             ? await buildChildcarePlacementOptionLabelLookup(supabase, orgId, ocmPlacementRows)
@@ -3712,7 +3719,7 @@ export async function getWorkUnitQueueItems(params: {
      * `queue_reveal` — slimmer enrichment for bootstrap / first paint (skips placement projection + optional fetches).
      * `queue_list` — default list API enrichment.
      */
-    rowEnrichment?: "queue_list" | "queue_reveal";
+    rowEnrichment?: "queue_list" | "queue_reveal" | "count_only";
     /** When set, skips departments.metadata fetch inside opportunity row loader. */
     preloadedDepartmentMetadata?: unknown | null;
 }): Promise<WorkUnitQueueItemsWithPerf> {
@@ -3802,14 +3809,20 @@ export async function getWorkUnitQueueItems(params: {
     const q = findQueueByKey(def, executableQueueKey);
     const rowListUi = resolveWorkUnitRowListUi(def, workUnitKey, workUnitMetadata);
     const rowEnrichment = params.rowEnrichment ?? "queue_list";
-    const enrichMode = rowEnrichment === "queue_reveal" ? "queue_reveal" : "queue_list";
+    const enrichMode =
+        rowEnrichment === "count_only"
+            ? "count_only"
+            : rowEnrichment === "queue_reveal"
+              ? "queue_reveal"
+              : "queue_list";
     const opportunityEnrichmentPlan =
         def.entity_type === "opportunity"
             ? buildOpportunityQueueEnrichmentPlan({
                   ui: rowListUi,
                   enrichmentMode: enrichMode,
                   executableQueueKey,
-                  skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
+                  skipOptionalEnrichmentFetches:
+                      rowEnrichment === "queue_reveal" || rowEnrichment === "count_only",
               })
             : null;
     const scopeFilter = params.recordScopeConstraints ?? null;

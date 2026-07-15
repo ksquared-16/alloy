@@ -228,6 +228,36 @@ describe("resolveWorkViewBaseQueueKey (all-records base for predicate-only views
     it("returns null only when there is no lane and no queue definition", () => {
         expect(resolveWorkViewBaseQueueKey({ compat_queue_key: undefined }, null, null)).toBeNull();
     });
+
+    // Deployed regression: New Leads → Active Pipeline threw `Unknown queue key: lifecycle_qualification`.
+    // A stale compat lane (deleted "Qualification" stage) must NOT reach the server — degrade to the
+    // unit's all-records lane; the view's predicates still apply via work_view_id.
+    it("degrades a STALE compat lane not present on the unit to the all-records lane (no 404)", () => {
+        expect(
+            resolveWorkViewBaseQueueKey(
+                { compat_queue_key: "lifecycle_qualification" },
+                null,
+                RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
+            ),
+        ).toBe("pipeline_total");
+    });
+
+    it("degrades a STALE explicit queue not present on the unit to the all-records lane", () => {
+        expect(
+            resolveWorkViewBaseQueueKey(
+                { compat_queue_key: undefined },
+                "lifecycle_qualification",
+                RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
+            ),
+        ).toBe("pipeline_total");
+    });
+
+    it("without a definition to validate, a stale compat lane is a best-effort passthrough", () => {
+        // Runtime gates on config readiness, so this only occurs pre-config; no def = cannot validate.
+        expect(
+            resolveWorkViewBaseQueueKey({ compat_queue_key: "lifecycle_qualification" }, null, null),
+        ).toBe("lifecycle_qualification");
+    });
 });
 
 describe("resolveActiveWorkViewRuntimeContext resolves an all-records base for predicate-only views", () => {

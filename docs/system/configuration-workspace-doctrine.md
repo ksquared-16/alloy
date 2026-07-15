@@ -1,13 +1,16 @@
 ---
 owner: runtime
-status: frozen
-last_reviewed: 2026-07-12
+status: superseded
+last_reviewed: 2026-07-14
 supersedes: []
+superseded_by: [docs/platform/operator/configuration-workspace-platform-doctrine.md]
 ---
 
 # Alloy Configuration Workspace Doctrine
 
-**Status:** Active — July 2026  
+> **Superseded by** [`configuration-workspace-platform-doctrine.md`](../platform/operator/configuration-workspace-platform-doctrine.md). The configuration-workspace *experience* is now owned by the Configuration Workspace Platform doctrine; its reference implementation is **Locations**, not Data Model. Retained for history — its still-valid ownership rules are carried forward into the platform doctrine and `configuration-ownership-doctrine.md`.
+
+**Status:** Superseded — July 2026 (was: Active).  
 **Reference implementation:** Settings → **Data Model** (`/settings/fields`)
 
 The Data Model workspace is the **canonical reference** for how Alloy Configuration workspaces should look, feel, and behave. Future configuration areas — Surface Builder, Business Processes, Processing, Documents, Communications, Automation — should adopt this grammar unless a domain-specific exception is documented.

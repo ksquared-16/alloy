@@ -698,6 +698,11 @@ export default function AICommandSurfaceShell({
   const [configLayoutAssistCaps, setConfigLayoutAssistCaps] = useState<ConfigLayoutAssistCapabilitiesV1 | null>(
     null
   );
+  // The AI-assist capability probes (workflow-assist + config-layout-assist) are DESTINATION-triggered:
+  // /workspace boot must not fetch AI capabilities (the operator hasn't touched the command surface).
+  // Flip on first engagement — typing a command, expanding the thread, or a focus-command-bar event —
+  // which is well before any assist action can be submitted, so the capability is ready in time.
+  const [hasEngagedCommandSurface, setHasEngagedCommandSurface] = useState(false);
   const [viewportH, setViewportH] = useState(900);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -1684,7 +1689,14 @@ export default function AICommandSurfaceShell({
     [proposeWorkflowAssistBody]
   );
 
+  // Engagement detector: any real interaction with the command surface arms the capability probes.
   useEffect(() => {
+    if (hasEngagedCommandSurface) return;
+    if (commandText.trim().length > 0 || threadExpanded) setHasEngagedCommandSurface(true);
+  }, [commandText, threadExpanded, hasEngagedCommandSurface]);
+
+  useEffect(() => {
+    if (!hasEngagedCommandSurface) return; // destination-triggered — not on /workspace boot
     let cancelled = false;
     const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       async () => {
@@ -1707,9 +1719,10 @@ export default function AICommandSurfaceShell({
       cancelled = true;
       cancelDefer();
     };
-  }, []);
+  }, [hasEngagedCommandSurface]);
 
   useEffect(() => {
+    if (!hasEngagedCommandSurface) return; // destination-triggered — not on /workspace boot
     let cancelled = false;
     const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
       async () => {
@@ -1727,7 +1740,7 @@ export default function AICommandSurfaceShell({
       cancelled = true;
       cancelDefer();
     };
-  }, []);
+  }, [hasEngagedCommandSurface]);
 
   const runSubmittedCommandRef = useRef<(cmd: string) => Promise<void>>(async () => { });
   const runBosAssistHandoffRef = useRef<
@@ -2050,6 +2063,7 @@ export default function AICommandSurfaceShell({
   useEffect(() => {
     const onFocusBar = (ev: Event) => {
       const detail = (ev as CustomEvent<AdminV2FocusCommandBarDetail>).detail ?? {};
+      setHasEngagedCommandSurface(true); // arm the capability probes on real command-surface engagement
       shellRootRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       if (detail.preferMode && globalAssistant) {
         globalAssistant.setCommandSurfaceMode(detail.preferMode);

@@ -34,34 +34,26 @@ describe("Card 3 — deferred primary lane rows", () => {
         expect(perf).toContain("deferred_rows_source");
     });
 
-    it("WU page loads rows after shell when bootstrap returns rows_deferred", () => {
-        const page = read(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-        );
-        expect(page).toContain("rows_deferred");
-        expect(page).toContain("primaryRowsDeferred");
-        expect(page).toContain("runBootstrapPrimaryRowFetch(wu, qs)");
-        expect(page).toMatch(/setLoading\(false\)[\s\S]*?runBootstrapPrimaryRowFetch/);
-    });
+    // (Obsolete tests removed: the legacy `.../dept/[departmentId]/work-unit/[workUnitId]/page.tsx`
+    // that consumed inline bootstrap primary_lane rows for above-fold reveal was replaced by the PRV2
+    // runtime — the file no longer exists. The PRV2 Work Unit surface fetches its own view-scoped rows
+    // and never reads the bootstrap payload, so the bootstrap must NOT compute a primary lane nothing
+    // consumes. That is why the canonical client now defers — see the next test.)
 
-    it("needs-attention inline hydrate still uses attention bucket from URL", () => {
-        const page = read(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
-        );
-        expect(page).toContain("attention_bucket");
-        expect(page).toMatch(/needs_attention/);
-    });
-
-    it("non-defer callers still receive inline primary_lane items", () => {
+    it("non-defer callers still receive inline primary_lane items (server path preserved)", () => {
         const src = read("lib/workspace/loadWorkUnitOperationalBootstrap.ts");
         expect(src).toMatch(
             /} else \{[\s\S]*?items: result\.items as unknown\[\]/
         );
     });
 
-    it("client bootstrap session defaults to defer_bundle=false for above-fold reveal", () => {
+    it("client bootstrap session now DEFERS the primary lane (no duplicate row computation)", () => {
+        // Deployed staging proved the non-deferred bootstrap computed the primary lane (~1073ms) that
+        // the PRV2 runtime then re-fetched — a pure duplicate. The rows are not consumed for render, so
+        // the canonical client defers them (runtime owns the single fetch: cold=one, warm=zero).
         const session = read("lib/adminV2/workUnitBootstrapClientSession.ts");
-        expect(session).toContain('defer_bundle: "false"');
+        expect(session).toContain('defer_bundle: "true"');
+        expect(session).not.toContain('defer_bundle: "false"');
         expect(session).toContain("buildCanonicalWorkUnitOperationalBootstrapUrl");
     });
 

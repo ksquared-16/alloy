@@ -8,6 +8,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { parseOperatorWorkUnitEntryHref, warmWorkUnitSlugRoute } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -185,8 +186,20 @@ function HeaderKpiCard({
                 <span
                     className={`block font-bold leading-none tracking-[-0.03em] tabular-nums text-alloy-midnight ${compact ? "text-[18px]" : "text-[26px]"}`}
                     {...{ [valueAttr]: true }}
+                    data-kpi-pending={kpi.pending ? "true" : undefined}
+                    aria-busy={kpi.pending || undefined}
+                    aria-label={kpi.pending ? `${kpi.label} loading` : undefined}
                 >
-                    {kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE}
+                    {kpi.pending ? (
+                        // Stable loading slot: hold a muted, value-height placeholder while metrics
+                        // resolve so the tile never shows a "—" that then flips to a number.
+                        <span
+                            aria-hidden
+                            className={`inline-block animate-pulse rounded-md bg-alloy-midnight/10 align-middle ${compact ? "h-[18px] w-10" : "h-[26px] w-14"}`}
+                        />
+                    ) : (
+                        kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE
+                    )}
                 </span>
                 <span className={`flex items-center gap-1.5 ${compact ? "mt-1" : "mt-2"}`}>
                     <span
@@ -207,9 +220,18 @@ function HeaderKpiCard({
     );
 
     if (interactive && kpi.drillHref) {
+        const warmDrill = () => {
+            const slug = kpi.drillHref ? parseOperatorWorkUnitEntryHref(kpi.drillHref).workUnitSlug : null;
+            if (slug) void warmWorkUnitSlugRoute(slug, "workspace_header_kpi");
+        };
         return (
             <Link
                 href={kpi.drillHref}
+                // Heavy Work Unit route — no eager viewport prefetch; warm on pointer/focus intent.
+                prefetch={false}
+                onPointerEnter={warmDrill}
+                onPointerDown={warmDrill}
+                onFocus={warmDrill}
                 className="block h-full no-underline transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine/50"
             >
                 {body}

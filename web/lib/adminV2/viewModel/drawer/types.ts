@@ -53,7 +53,8 @@ export type OpportunityDrawerFirstPaintContract = DrawerFirstPaintContract<
 export type DrawerViewModelBackgroundRefreshKind =
     | "task_status"
     | "scheduled_send_status"
-    | "readiness_values";
+    | "readiness_values"
+    | "stage_work";
 
 export type StatusOptionVm = {
     status_key: string;
@@ -114,6 +115,20 @@ export type AttentionSummaryVm = {
     reason_count: number;
 };
 
+/**
+ * Load state for the deferred stage-work projection (Current Work region).
+ *
+ * `stage_work_runtime` is heavy (two `operational_tasks` reads) and does not feed the above-fold
+ * render model, so the Tier-1 compose returns it `pending` and a thin canonical resource resolves
+ * it after first paint. The Current Work region MUST distinguish `pending` (neutral loading, never
+ * "No active work") from `empty` (authoritatively no active work). `error` retains any prior value.
+ */
+export type StageWorkLoadState =
+    | { status: "pending" }
+    | { status: "ready"; value: StageWorkRuntimeProjection }
+    | { status: "empty" }
+    | { status: "error"; retained?: StageWorkRuntimeProjection };
+
 export type OpportunityDrawerViewModel = {
     generation: string;
     structureSettled: true;
@@ -144,6 +159,12 @@ export type OpportunityDrawerViewModel = {
         stage_work_runtime: StageWorkRuntimeProjection | null;
         /** Published builder stage config for Current Work (operating plan + catalog + field rules). */
         published_stage_inputs?: PublishedStageInputsForCurrentWork | null;
+        /**
+         * Deferred-load state for the Current Work region. When absent (legacy / full compose that
+         * resolved inline) consumers fall back to `stage_work_runtime` presence. When `pending` the
+         * Current Work region shows a neutral loading treatment, NOT the empty state.
+         */
+        stage_work?: StageWorkLoadState;
     };
     first_paint: OpportunityDrawerFirstPaintContract;
     header: {

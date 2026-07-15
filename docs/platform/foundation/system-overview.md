@@ -15,6 +15,8 @@ supersedes: []
 
 Alloy is a configurable operating system for service businesses. Childcare is the first primary market; platform layers remain industry-agnostic. Operators run high-context workflows from one workspace: records, queues, communications, workflows, documents, scheduling, and AI-assisted action — scoped by org, permissions, and configuration.
 
+**Onboarding:** [`alloy-platform-handbook.md`](./alloy-platform-handbook.md) teaches the platform; this overview and the rest of `docs/platform/` are the encyclopedia. Durable cross-platform decisions: [`platform-decisions.md`](./platform-decisions.md).
+
 ---
 
 ## Operator hierarchy (June 2026)
@@ -56,6 +58,7 @@ Work units, departments, and internal routing constructs support this model but 
 
 | Topic | Doc |
 |-------|-----|
+| Platform Decisions | `platform-decisions.md` |
 | Business Process Execution Platform | `../modules/business-process-execution-platform.md` |
 | Business processes | `../core/business-process-system.md` |
 | Status and state | `../core/status-and-state-system.md` |

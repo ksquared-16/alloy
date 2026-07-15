@@ -26,6 +26,7 @@ import {
     type OperationalFactEventEnvelope,
     type OperationalFactStreamDescriptor,
 } from "@/lib/operationalFacts/factContract";
+import { assertLedgerSubstrateConforms } from "@/lib/operationalLedger/ledgerSubstrateConformance";
 
 /** Runtime observations of a fact stream, supplied by the caller. */
 export interface FactStreamProbes {
@@ -106,16 +107,44 @@ export async function assertFactStreamConforms(
     const checks: FactConformanceCheck[] = [];
     const warnings: string[] = [];
 
-    // -- Storage half ---------------------------------------------------------
-    const updateOutcome = await probes.attemptMutation("update");
-    const deleteOutcome = await probes.attemptMutation("delete");
-    checks.push({
-        property: "append_only",
-        half: "storage",
-        passed: updateOutcome.rejected && deleteOutcome.rejected,
-        detail: `UPDATE rejected=${updateOutcome.rejected}${updateOutcome.message ? ` (${updateOutcome.message})` : ""}; DELETE rejected=${deleteOutcome.rejected}${deleteOutcome.message ? ` (${deleteOutcome.message})` : ""}`,
-    });
+    // -- Storage half — the GENERIC append-only ledger invariants (append_only,
+    //    no_updated_at, org_scoped_rls, lineage_self_reference,
+    //    no_self_reference_guard) are the shared, platform-owned definition. A
+    //    fact stream is an append-only ledger; it reuses that ONE definition
+    //    rather than re-stating the rules (which is how Facts and Expectations
+    //    stay from drifting apart). The fact-specific `corrects_event_id` self-FK
+    //    is the ledger's lineage column.
+    const substrateChecks = await assertLedgerSubstrateConforms(
+        {
+            tableName: descriptor.tableName,
+            orgColumn: descriptor.orgColumn,
+            lineageColumn: descriptor.correctsColumn,
+            effectiveTimeColumn: descriptor.effectiveTimeColumn,
+            recordedTimeColumn: descriptor.recordedTimeColumn,
+            appendOnly: true,
+        },
+        {
+            attemptMutation: probes.attemptMutation,
+            hasUpdatedAt: probes.hasUpdatedAt,
+            orgScopedRls: probes.orgScopedRls,
+            lineageSelfReference: probes.correctsSelfReference,
+            noSelfReferenceGuard: probes.noSelfReferenceGuard,
+        },
+    );
+    // Preserve the historical Fact-facing property name: the neutral core emits
+    // `lineage_self_reference`; Facts' report has always exposed
+    // `corrects_self_reference`. Keep that external key stable (compat alias) —
+    // neutral naming internally, no externally observable change for Facts.
+    for (const c of substrateChecks) {
+        checks.push(
+            c.property === "lineage_self_reference"
+                ? { ...c, property: "corrects_self_reference" }
+                : { ...c },
+        );
+    }
 
+    // -- Fact-specific storage half: the entry-type vocabulary (original |
+    //    correction | reversal) — Facts' correction identity, not a shared rule.
     const vocabHasAll = OPERATIONAL_FACT_ENTRY_TYPES.every((t) =>
         probes.entryTypeVocabulary.includes(t),
     );
@@ -127,34 +156,6 @@ export async function assertFactStreamConforms(
         half: "storage",
         passed: vocabHasAll && vocabNoExtras,
         detail: `vocabulary=[${probes.entryTypeVocabulary.join(",")}] expected=[${OPERATIONAL_FACT_ENTRY_TYPES.join(",")}]`,
-    });
-
-    checks.push({
-        property: "corrects_self_reference",
-        half: "storage",
-        passed: probes.correctsSelfReference === true,
-        detail: `self-FK on ${descriptor.correctsColumn}=${probes.correctsSelfReference}`,
-    });
-
-    checks.push({
-        property: "no_self_reference_guard",
-        half: "storage",
-        passed: probes.noSelfReferenceGuard === true,
-        detail: `no-self-reference CHECK present=${probes.noSelfReferenceGuard}`,
-    });
-
-    checks.push({
-        property: "org_scoped_rls",
-        half: "storage",
-        passed: probes.orgScopedRls === true,
-        detail: `org-scoped SELECT policy on ${descriptor.orgColumn}=${probes.orgScopedRls}`,
-    });
-
-    checks.push({
-        property: "no_updated_at",
-        half: "storage",
-        passed: probes.hasUpdatedAt === false,
-        detail: `append-only stream must have no updated_at; hasUpdatedAt=${probes.hasUpdatedAt}`,
     });
 
     // -- Consumer-facing half -------------------------------------------------

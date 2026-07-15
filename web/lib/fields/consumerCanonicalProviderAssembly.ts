@@ -11,6 +11,7 @@ import {
     publishableQueueRowRefKeys,
 } from "@/lib/fields/canonicalDataProviderRegistry";
 import type { CanonicalDataConsumerSurface, CanonicalDataProvider, CanonicalDataProviderFilter } from "@/lib/fields/canonicalDataProviderModel";
+import { filterProvidersByConsumerCapability } from "@/lib/fields/capabilityProviderParity";
 import { consumerSupportsProviderInPicker } from "@/lib/fields/consumerProviderCapabilities";
 import { dedupeCanonicalPickerProviders } from "@/lib/fields/canonicalProviderDedup";
 import {
@@ -19,6 +20,7 @@ import {
     type PlatformFieldDefinition,
 } from "@/lib/fields/platformFieldCatalog";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import { enrichProvidersWithChildEnrollmentProjections } from "@/lib/fields/canonicalFieldProjection";
 
 export type ConsumerProviderAssemblyFilter = {
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
@@ -97,9 +99,16 @@ function assembleConsumerProviders(
         isWaitlist: filter.isWaitlist ?? false,
         includeLegacyOnly: filter.includeLegacyOnly ?? consumer !== "focus_panel",
     });
-    return dedupeCanonicalPickerProviders(
+    const assembled = dedupeCanonicalPickerProviders(
         mergePlatformCatalogProviders(base, filter, consumer),
         consumer,
+    );
+    return enrichProvidersWithChildEnrollmentProjections(
+        filterProvidersByConsumerCapability(
+            assembled,
+            consumer,
+            filter.tenantFieldDefinitions,
+        ),
     );
 }
 

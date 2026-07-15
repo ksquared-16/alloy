@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-worker-open <initiative-key> <task-id> [--with-server] [--dry-run]
+
+Opens Cursor/Claude on the assigned worktree and copies the worker package
+to the clipboard. Manual paste into the new worker session is required.
+
+See: scripts/local-dev/WORKER-PACKAGE.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+
+  local key="$1" task_id="$2"
+  shift 2
+  local with_server=0 dry_run=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --with-server) with_server=1; shift ;;
+      --dry-run) dry_run=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+
+  alloy_load_config
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  local worktree_name path agent slot port role pkg_md
+  worktree_name="$(node -e "
+    const w = require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'];
+    if (!w) process.exit(1);
+    console.log(w.worktree_name);
+  " 2>/dev/null)" || alloy_die "task not assigned: $task_id"
+
+  alloy_load_metadata "$worktree_name"
+  path="$ALLOY_WORKTREE_PATH"
+  agent="$ALLOY_AGENT"
+  slot="$ALLOY_WORKTREE_SLOT"
+  port="$PORT"
+  role="$(node -e "console.log(require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'].role)")"
+
+  pkg_md="$(alloy_engineering_worker_package_md_path "$path")"
+  [[ -f "$pkg_md" ]] || alloy_die "worker package missing — run alloy-worker-package $key $task_id"
+
+  local ui_required=0
+  if grep -q 'required: true' "$pkg_md" 2>/dev/null; then ui_required=1; fi
+
+  local app_opened="no" clipboard="no" server_state="not_checked"
+  if [[ "$dry_run" -eq 1 ]]; then
+    alloy_info "[dry-run] would open $agent on $path"
+    app_opened="dry-run"
+  else
+    if [[ "$with_server" -eq 1 || "$ui_required" -eq 1 ]]; then
+      server_state="$(alloy_server_state_for "$worktree_name")"
+      if [[ "$server_state" != "running" ]]; then
+        env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+          "${SCRIPT_DIR}/alloy-dev-start" "$worktree_name"
+        server_state="$(alloy_server_state_for "$worktree_name")"
+      fi
+    fi
+    ALLOY_AGENT_OPEN_DRY_RUN=0 alloy_engineering_open_worker_app "$agent" "$path" && app_opened="yes" || app_opened="failed"
+    alloy_set_agent_status "$worktree_name" "active"
+  fi
+
+  if [[ "$dry_run" -eq 0 ]]; then
+    if alloy_have_cmd pbcopy || alloy_have_cmd xclip || [[ -n "${ALLOY_CERTIFY_CLIPBOARD_FILE:-}" ]]; then
+      alloy_engineering_copy_to_clipboard "$(cat "$pkg_md")" && clipboard="yes"
+    else
+      clipboard="unavailable"
+    fi
+  else
+    clipboard="dry-run"
+  fi
+
+  cat <<EOF
+
+Worker delivery summary
+  initiative:     $key
+  task:           $task_id
+  role:           $role
+  slot:           $slot
+  folder opened:  $path
+  app launch:     $app_opened
+  package copy:   clipboard-only ($clipboard)
+  server:         $server_state
+
+Paste once into the new worker session.
+The package was copied to the clipboard — it was NOT automatically delivered into the app.
+EOF
+}
+
+main "$@"

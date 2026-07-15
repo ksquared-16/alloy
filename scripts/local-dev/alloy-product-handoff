@@ -1,0 +1,304 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-product-handoff <key>
+
+Creates product/final/engineering-handoff.yaml and initializes Engineering Runtime.
+Requires approved Product Contract with valid hash and zero blocking decisions.
+
+Transitions: packaged|approved → handed_off
+
+This is the only normal bridge from Product Runtime into Engineering Runtime.
+EOF
+}
+
+build_handoff_yaml() {
+  local key="$1" handoff_path="$2"
+  local base brief_json contract_hash staging_sha now
+  base="$(alloy_product_dir "$key")"
+  brief_json="$base/brief.json"
+  contract_hash="$(alloy_product_contract_hash "$key")"
+  staging_sha="$(alloy_staging_sha)"
+  now="$(alloy_iso_now)"
+
+  node -e "
+    const fs = require('fs');
+    const brief = require('${brief_json}');
+    const state = require('${base}/state.json');
+    const handoff = {
+      initiative_key: '${key}',
+      product_revision: state.revision || 1,
+      approved_contract_hash: '${contract_hash}',
+      objective: brief.product.summary,
+      operator_outcomes: brief.operator_outcomes || [],
+      business_outcomes: brief.business_outcomes || [],
+      in_scope: brief.scope?.in_scope || [],
+      out_of_scope: brief.scope?.out_of_scope || [],
+      constitutional_constraints: brief.architecture_constraints || [
+        'docs/platform/governance/design-and-operational-doctrine.md',
+        'Scope tenant reads/writes by org_id',
+        'Queues are preview/selection only'
+      ],
+      product_decisions: [],
+      ux_visual_contract_refs: [
+        'product/contract/ux-contract.yaml',
+        'product/contract/visual-contract.yaml'
+      ],
+      behavioral_acceptance: brief.acceptance || [],
+      verification_targets: brief.reference_routes || [],
+      test_data_requirements: brief.test_data_requirements || [],
+      known_risks: brief.known_risks || [],
+      engineering_discretion: [
+        'Internal hook decomposition within conventions',
+        'Test helper organization',
+        'File naming within module conventions'
+      ],
+      forbidden_interpretations: [
+        'Do not expand scope beyond approved in_scope',
+        'Do not invent visual styling without approved visual basis',
+        'Do not reinterpret operator outcomes',
+        'Do not push, merge, or create PRs without human approval'
+      ],
+      human_approval_gates: brief.human_approval?.required_gates || [],
+      reference_manifests: [
+        'product/audit/doctrine-manifest.yaml',
+        'product/audit/surface-manifest.yaml',
+        'product/audit/visual-reference-manifest.yaml'
+      ],
+      handoff_at: '${now}',
+      staging_baseline_sha: '${staging_sha}'
+    };
+    const decisionsDir = '${base}/decisions';
+    if (fs.existsSync(decisionsDir)) {
+      for (const f of fs.readdirSync(decisionsDir).filter(n => n.endsWith('.yaml') && n.startsWith('decision-'))) {
+        const text = fs.readFileSync(require('path').join(decisionsDir, f), 'utf8');
+        const get = (k) => {
+          const m = text.match(new RegExp('^' + k + ': (.+)$', 'm'));
+          return m ? m[1].replace(/^\"|\"$/g, '') : '';
+        };
+        if (get('status') === 'decided') {
+          handoff.product_decisions.push({
+            decision_id: get('decision_id') || f.replace('.yaml',''),
+            question: get('question'),
+            decision: get('decision'),
+            decided_by: get('decided_by'),
+            immutable: true
+          });
+        }
+      }
+    }
+    const yaml = [
+      'initiative_key: ' + JSON.stringify(handoff.initiative_key),
+      'product_revision: ' + handoff.product_revision,
+      'approved_contract_hash: ' + JSON.stringify(handoff.approved_contract_hash),
+      'objective: ' + JSON.stringify(handoff.objective),
+      'operator_outcomes:',
+      ...handoff.operator_outcomes.map(v => '  - ' + JSON.stringify(v)),
+      'business_outcomes:',
+      ...handoff.business_outcomes.map(v => '  - ' + JSON.stringify(v)),
+      'in_scope:',
+      ...handoff.in_scope.map(v => '  - ' + JSON.stringify(v)),
+      'out_of_scope:',
+      ...handoff.out_of_scope.map(v => '  - ' + JSON.stringify(v)),
+      'constitutional_constraints:',
+      ...handoff.constitutional_constraints.map(v => '  - ' + JSON.stringify(v)),
+      'product_decisions:',
+      handoff.product_decisions.length
+        ? handoff.product_decisions.map(d => '  - decision_id: ' + JSON.stringify(d.decision_id) + '\\n    decision: ' + JSON.stringify(d.decision) + '\\n    immutable: true').join('\\n')
+        : '  []',
+      'ux_visual_contract_refs:',
+      ...handoff.ux_visual_contract_refs.map(v => '  - ' + JSON.stringify(v)),
+      'behavioral_acceptance:',
+      ...handoff.behavioral_acceptance.map(v => '  - ' + JSON.stringify(v)),
+      'verification_targets:',
+      ...handoff.verification_targets.map(v => '  - ' + JSON.stringify(v)),
+      'test_data_requirements:',
+      ...handoff.test_data_requirements.map(v => '  - ' + JSON.stringify(v)),
+      'known_risks:',
+      ...handoff.known_risks.map(v => '  - ' + JSON.stringify(v)),
+      'engineering_discretion:',
+      ...handoff.engineering_discretion.map(v => '  - ' + JSON.stringify(v)),
+      'forbidden_interpretations:',
+      ...handoff.forbidden_interpretations.map(v => '  - ' + JSON.stringify(v)),
+      'human_approval_gates:',
+      ...handoff.human_approval_gates.map(v => '  - ' + JSON.stringify(v)),
+      'reference_manifests:',
+      ...handoff.reference_manifests.map(v => '  - ' + JSON.stringify(v)),
+      'handoff_at: ' + JSON.stringify(handoff.handoff_at),
+      'staging_baseline_sha: ' + JSON.stringify(handoff.staging_baseline_sha),
+    ].join('\\n') + '\\n';
+    fs.writeFileSync('${handoff_path}', yaml);
+    fs.writeFileSync('${base}/final/handoff-manifest.json', JSON.stringify(handoff, null, 2) + '\\n');
+  "
+}
+
+create_engineering_from_handoff() {
+  local key="$1"
+  local eng_base brief_json_path staging_sha
+  eng_base="$(alloy_initiative_dir "$key")"
+  brief_json_path="$(alloy_product_dir "$key")/brief.json"
+  staging_sha="$(alloy_staging_sha)"
+
+  if [[ -f "$eng_base/state.json" ]]; then
+    alloy_info "Engineering initiative already exists — recording product handoff reference"
+    node -e "
+      const fs = require('fs');
+      const p = '${eng_base}/state.json';
+      const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+      const handoff = JSON.parse(fs.readFileSync('$(alloy_product_dir "$key")/final/handoff-manifest.json', 'utf8'));
+      d.product_contract_hash = handoff.approved_contract_hash;
+      d.approved_product_contract_hash = handoff.approved_contract_hash;
+      d.product_revision = handoff.product_revision;
+      d.product_handoff_at = handoff.handoff_at;
+      d.updated_at = '$(alloy_iso_now)';
+      fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+      fs.copyFileSync('$(alloy_product_dir "$key")/final/handoff-manifest.json', '${eng_base}/product-handoff.json');
+    "
+    return 0
+  fi
+
+  alloy_initiative_init_dirs "$key"
+
+  HANDOFF_KEY="$key" ENG_BASE="$eng_base" BRIEF_PATH="$brief_json_path" \
+    HANDOFF_MANIFEST="$(alloy_product_dir "$key")/final/handoff-manifest.json" \
+    STAGING_SHA="$staging_sha" NOW="$(alloy_iso_now)" \
+    node - <<'NODE'
+const fs = require('fs');
+const key = process.env.HANDOFF_KEY;
+const engBase = process.env.ENG_BASE;
+const briefPath = process.env.BRIEF_PATH;
+const handoffPath = process.env.HANDOFF_MANIFEST;
+const stagingSha = process.env.STAGING_SHA;
+const now = process.env.NOW;
+
+const brief = require(briefPath);
+const handoff = JSON.parse(fs.readFileSync(handoffPath, 'utf8'));
+const intake = {
+  initiative: { key, title: brief.product.title, objective: brief.product.summary },
+  operator_outcome: brief.operator_outcomes || [],
+  product_direction: brief.product_direction || [],
+  acceptance: brief.acceptance || [],
+  constraints: handoff.constitutional_constraints || [],
+  human_approval: brief.human_approval || { required_gates: [] },
+  reference_routes: brief.reference_routes || [],
+  known_docs: brief.reference_docs || [],
+  known_files: brief.reference_files || [],
+  verification_targets: brief.reference_routes || [],
+};
+fs.writeFileSync(`${engBase}/initiative.json`, JSON.stringify(intake, null, 2) + '\n');
+
+function toYaml(obj, indent = 0) {
+  const pad = ' '.repeat(indent);
+  let out = '';
+  for (const [k, v] of Object.entries(obj)) {
+    if (Array.isArray(v)) {
+      out += `${pad}${k}:\n`;
+      for (const item of v) out += `${pad}  - ${JSON.stringify(item)}\n`;
+    } else if (v && typeof v === 'object') {
+      out += `${pad}${k}:\n` + toYaml(v, indent + 2);
+    } else {
+      out += `${pad}${k}: ${JSON.stringify(v)}\n`;
+    }
+  }
+  return out;
+}
+fs.writeFileSync(`${engBase}/initiative.yaml`, toYaml(intake));
+fs.writeFileSync(`${engBase}/intake.md`, `# Engineering intake from Product handoff\n\nProduct Contract hash: ${handoff.approved_contract_hash}\n`);
+fs.writeFileSync(`${engBase}/product-handoff.json`, JSON.stringify(handoff, null, 2) + '\n');
+fs.writeFileSync(`${engBase}/state.json`, JSON.stringify({
+  key,
+  title: brief.product.title,
+  state: 'draft',
+  created_at: now,
+  updated_at: now,
+  staging_baseline_sha: stagingSha,
+  approved_spec_hash: null,
+  product_contract_hash: handoff.approved_contract_hash,
+  approved_product_contract_hash: handoff.approved_contract_hash,
+  product_revision: handoff.product_revision,
+  product_handoff_at: handoff.handoff_at,
+  approver: null,
+  approved_at: null,
+  remediation_round: 0,
+  human_decisions: [],
+  workers: {},
+  validation: { fingerprints: [] },
+  cost_summary: {
+    chatgpt_product_handoffs: 1,
+    workers_used: 0,
+    heavy_validations: 0,
+    ui_verification_runs: 0,
+    remediation_rounds: 0,
+    push_count: 0,
+    pr_count: 0,
+    vercel_preview_triggered: false,
+  },
+  promotion: null,
+}, null, 2) + '\n');
+NODE
+
+  alloy_engineering_io validate-intake "$eng_base/initiative.json"
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_product_require_node
+  alloy_engineering_require_node
+  alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+
+  alloy_initiative_acquire_lock "$key"
+  local state
+  state="$(alloy_product_current_state "$key")"
+  [[ "$state" == "packaged" || "$state" == "approved" ]] \
+    || alloy_die "cannot hand off in state: $state (approve and package first)"
+
+  alloy_product_approved "$key" || alloy_die "Product Contract not approved"
+  [[ "$(alloy_product_blocking_decisions_count "$key")" == "0" ]] \
+    || alloy_die "blocking product decisions remain"
+
+  local approved_hash stored_hash
+  approved_hash="$(alloy_product_contract_hash "$key")"
+  stored_hash="$(node -e "console.log(require('$(alloy_product_state_path "$key")').approved_contract_hash||'')")"
+  [[ "$approved_hash" == "$stored_hash" ]] || alloy_die "contract hash mismatch — reapprove before handoff"
+
+  local handoff_path
+  handoff_path="$(alloy_product_handoff_path "$key")"
+  build_handoff_yaml "$key" "$handoff_path"
+  create_engineering_from_handoff "$key"
+
+  local now
+  now="$(alloy_iso_now)"
+  node -e "
+    const fs = require('fs');
+    const p = '$(alloy_product_state_path "$key")';
+    const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+    d.handoff_at = '${now}';
+    d.updated_at = '${now}';
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  "
+
+  if [[ "$state" == "packaged" || "$state" == "approved" ]]; then
+    alloy_product_transition "$key" "handed_off"
+  fi
+
+  alloy_info "Product → Engineering handoff complete: $key"
+  alloy_info "  handoff: $handoff_path"
+  alloy_info "  contract hash: ${approved_hash:0:16}..."
+  alloy_info ""
+  alloy_info "Next: alloy-initiative-audit $key"
+}
+
+main "$@"

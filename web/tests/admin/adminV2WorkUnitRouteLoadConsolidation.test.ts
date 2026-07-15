@@ -29,7 +29,7 @@ describe("workUnitBootstrapClientSession", () => {
             selectedSiteId: "site-9",
             focusQueue: "tour_scheduled",
         });
-        expect(url).toContain("defer_bundle=false");
+        expect(url).toContain("defer_bundle=true"); // bootstrap defers primary lane; runtime owns the fetch
         expect(url).toContain("focus_queue=tour_scheduled");
         expect(url).toContain("workspace_site_id=site-9");
     });

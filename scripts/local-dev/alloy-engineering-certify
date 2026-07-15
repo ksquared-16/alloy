@@ -1,0 +1,485 @@
+#!/usr/bin/env bash
+# Real-Mac certification harness for Alloy Engineering V1.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/lock.sh
+source "${SCRIPT_DIR}/lib/lock.sh"
+# shellcheck source=lib/engineering-certify.sh
+source "${SCRIPT_DIR}/lib/engineering-certify.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-engineering-certify [--keep] [--verbose] [--with-fixture-worktree]
+
+Runs a disposable, isolated certification of the Engineering Manager lifecycle.
+Uses temporary state under /tmp by default — never touches operator initiatives.
+
+Options:
+  --keep                  Retain certification artifacts after success
+  --verbose               Log each assertion
+  --with-fixture-worktree Also create a real alloy worktree in the fixture repo
+
+Exit code 0 only when all gates pass.
+EOF
+}
+
+certify_failure_gates() {
+  set +e
+  certify_log "=== failure-path gates ==="
+  local tmp intake bad intake_shell
+
+  # Intake failures
+  tmp="$(mktemp)"
+  printf 'not: [valid: yaml' >"$tmp"
+  certify_assert_fail "malformed YAML rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" cert-bad --from "$tmp"
+
+  printf 'initiative:\n  title: x\n' >"$tmp"
+  certify_assert_fail "malformed intake missing field rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" cert-missing --from "$tmp"
+
+  intake_shell="$(mktemp)"
+  cat >"$intake_shell" <<'YAML'
+initiative:
+  key: cert-shell
+  title: Shell test
+  objective: never executed
+operator_outcome:
+  - "bash rm -rf /tmp"
+product_direction:
+  - x
+acceptance:
+  - x
+constraints:
+  - x
+human_approval:
+  required_gates: []
+YAML
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" cert-shell --from "$intake_shell" >/dev/null
+  certify_assert "shell-looking content stored as data" test -f "${CERT_INITIATIVE_ROOT}/cert-shell/initiative.yaml"
+  rm -f "$intake_shell"
+
+  certify_happy_intake >"$tmp"
+  certify_assert_fail "mismatched initiative key rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" mismatch-arg --from "$tmp"
+
+  certify_intake_for_key cert-dup >"$CERT_ROOT/intake-valid.yaml"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" cert-dup --from "$CERT_ROOT/intake-valid.yaml" >/dev/null
+  certify_assert_fail "duplicate initiative rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" cert-dup --from "$CERT_ROOT/intake-valid.yaml"
+
+  certify_ui_blocked_intake >"$tmp"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" cert-ui-blocked --from "$tmp" >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-audit" cert-ui-blocked >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-plan" cert-ui-blocked >/dev/null
+  local decisions
+  decisions="$(alloy_engineering_human_decisions_count cert-ui-blocked 2>/dev/null || echo 0)"
+  certify_assert "UI initiative without visual basis creates human decision" \
+    test "${decisions:-0}" -ge 1
+
+  node -e "require('fs').writeFileSync('${CERT_ROOT}/conflict-visual.json', JSON.stringify({basis:'exact_reference',conflicting_bases:['exact_reference','pattern_reference']}));"
+  certify_assert_fail "conflicting visual bases rejected" \
+    node "$SCRIPT_DIR/lib/engineering-io.mjs" validate-visual-exclusivity "$CERT_ROOT/conflict-visual.json"
+
+  printf 'basis: pattern_reference\n' >"$CERT_ROOT/ok-visual.yaml"
+  certify_assert "exactly one valid visual basis accepted" \
+    node "$SCRIPT_DIR/lib/engineering-io.mjs" validate-visual-exclusivity "$CERT_ROOT/ok-visual.yaml"
+
+  # State failures
+  certify_assert_fail "approve before plan rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-approve" cert-dup --approver Test
+
+  certify_intake_for_key cert-nostart >"$tmp"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" cert-nostart --from "$tmp" >/dev/null
+  certify_assert_fail "start before approval rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-start" cert-nostart
+
+  certify_assert_fail "illegal transition rejected" \
+    node "$SCRIPT_DIR/lib/engineering-io.mjs" validate-transition draft implementing
+
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-audit" cert-nostart >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-plan" cert-nostart >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-approve" cert-nostart --approver Test >/dev/null
+  local hash1
+  hash1="$(node -e "console.log(require('${CERT_INITIATIVE_ROOT}/cert-nostart/state.json').approved_spec_hash)")"
+  echo " # touch" >>"${CERT_INITIATIVE_ROOT}/cert-nostart/plan/specification.md"
+  certify_assert_fail "spec change without reason rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-approve" cert-nostart --approver Test
+  # restore hash for later
+  node -e "const fs=require('fs');const p='${CERT_INITIATIVE_ROOT}/cert-nostart/state.json';const d=JSON.parse(fs.readFileSync(p));d.approved_spec_hash='${hash1}';fs.writeFileSync(p,JSON.stringify(d,null,2)+'\n');"
+
+  # Occupied slot in cert runtime only (slot 1 — first assignment in default worker plan)
+  mkdir -p "$CERT_RUNTIME/metadata"
+  cat >"$CERT_RUNTIME/metadata/wt1-cert-occupied.env" <<META
+ALLOY_WORKTREE_NAME="wt1-cert-occupied"
+ALLOY_WORKTREE_SLOT="1"
+ALLOY_WORKTREE_PATH="$CERT_FIXTURE_REPO_FAIL"
+ALLOY_WORKTREE_BRANCH="agent/cursor/1-occupied"
+ALLOY_AGENT="cursor"
+PORT="3911"
+NEXT_PUBLIC_APP_URL="http://localhost:3911"
+META
+  certify_intake_for_key cert-slot6 >"$tmp"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" cert-slot6 --from "$tmp" >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-audit" cert-slot6 >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-plan" cert-slot6 >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-approve" cert-slot6 --approver Test >/dev/null
+  certify_assert_fail "occupied slot rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-start" cert-slot6
+  rm -f "$CERT_RUNTIME/metadata/wt1-cert-occupied.env"
+
+  # Dry-run / app / clipboard
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-start" cert-nostart --dry-run >/dev/null
+  local wt_count
+  wt_count="$(git -C "$CERT_CANON" worktree list 2>/dev/null | wc -l | tr -d ' ')"
+  certify_assert "dry-run does not create real worktree" test "${wt_count:-1}" -le 1
+
+  : >"$CERT_APP_LAUNCH_LOG"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-start" cert-nostart --dry-run >/dev/null
+  alloy_engineering_certify_fixture_bind cert-nostart "$CERT_FIXTURE_REPO_FAIL"
+  certify_assert_fail "gate review before required report rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" cert-nostart --mode gate
+  certify_assert_fail "final review before validation rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" cert-nostart --mode final
+  certify_cmd_env "$SCRIPT_DIR/alloy-worker-open" cert-nostart task-001 --dry-run >/dev/null
+  certify_assert "app-open dry-run does not launch app" test ! -s "$CERT_APP_LAUNCH_LOG"
+  : >"$CERT_CLIPBOARD_FILE"
+  certify_cmd_env "$SCRIPT_DIR/alloy-worker-open" cert-nostart task-001 2>&1 | tee /tmp/alloy-certify-open.out >/dev/null || true
+  certify_assert "clipboard file received package copy" test -s "$CERT_CLIPBOARD_FILE"
+  certify_assert "delivery reports clipboard-only" grep -q "clipboard-only" /tmp/alloy-certify-open.out
+
+  # Reports
+  certify_assert_fail "conversational completion without report rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-worker-report" cert-nostart task-001
+
+  mkdir -p "$CERT_ROOT/cert-fixtures"
+  printf '{"bad":true}' >"$CERT_ROOT/cert-fixtures/malformed-report.json"
+  certify_assert_fail "malformed report rejected" \
+    node "$SCRIPT_DIR/lib/engineering-io.mjs" validate-report "$CERT_ROOT/cert-fixtures/malformed-report.json"
+
+  local commit
+  commit="$(git -C "$CERT_FIXTURE_REPO" rev-parse HEAD)"
+  node -e "
+    const fs=require('fs');
+    fs.writeFileSync('${CERT_ROOT}/cert-fixtures/wrong-commit.json', JSON.stringify({
+      initiative_key:'cert-nostart', task_id:'task-001', worker_slot:1, worker_role:'x',
+      status:'implemented', summary:'x', commit:'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+      files_changed:[], focused_checks:[],
+      ui_verification:{required:false,status:'not_run',routes:[],identity_alias:'x',evidence:[],console_errors:[],failed_requests:[]},
+      risks:[],questions:[],processes_left_running:[]
+    }));
+  "
+  certify_assert_fail "nonexistent commit rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-worker-report" cert-nostart task-001 --report-path "$CERT_ROOT/cert-fixtures/wrong-commit.json"
+
+  node -e "
+    const fs=require('fs');
+    fs.writeFileSync('${CERT_ROOT}/cert-fixtures/wrong-id.json', JSON.stringify({
+      initiative_key:'other', task_id:'task-999', worker_slot:1, worker_role:'x',
+      status:'implemented', summary:'x', commit:'${commit}',
+      files_changed:[], focused_checks:[],
+      ui_verification:{required:false,status:'not_run',routes:[],identity_alias:'x',evidence:[],console_errors:[],failed_requests:[]},
+      risks:[],questions:[],processes_left_running:[]
+    }));
+  "
+  certify_assert_fail "wrong task/initiative identity rejected" \
+    node "$SCRIPT_DIR/lib/engineering-io.mjs" validate-report "$CERT_ROOT/cert-fixtures/wrong-id.json" cert-nostart task-001
+
+  node -e "
+    const fs=require('fs');
+    fs.writeFileSync('${CERT_ROOT}/cert-fixtures/ui-no-evidence.json', JSON.stringify({
+      initiative_key:'cert-nostart', task_id:'task-001', worker_slot:1, worker_role:'x',
+      status:'implemented', summary:'x', commit:'${commit}',
+      files_changed:[], focused_checks:[],
+      ui_verification:{required:true,status:'passed',routes:['/x'],identity_alias:'x',evidence:[],console_errors:[],failed_requests:[]},
+      risks:[],questions:[],processes_left_running:[]
+    }));
+  "
+  certify_assert_fail "UI verification without evidence rejected" \
+    node "$SCRIPT_DIR/lib/engineering-io.mjs" validate-report "$CERT_ROOT/cert-fixtures/ui-no-evidence.json" cert-nostart task-001
+
+  # Review / remediation
+  mkdir -p "${CERT_INITIATIVE_ROOT}/cert-nostart/reviews"
+  node -e "
+    const fs=require('fs');
+    fs.writeFileSync('${CERT_INITIATIVE_ROOT}/cert-nostart/reviews/task-002-review.json', JSON.stringify({
+      review_id:'r-fail', initiative_key:'cert-nostart', task_ids:['task-001'],
+      review_type:'architecture', review_mode:'gate', status:'fail', findings:['gap'],
+      severity:'major', evidence:[], required_remediation:['Fix gap'], unresolved_decisions:[]
+    }));
+  "
+  local spec_hash_before
+  spec_hash_before="$(node -e "console.log(require('${CERT_INITIATIVE_ROOT}/cert-nostart/state.json').approved_spec_hash)")"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-remediate" cert-nostart >/dev/null
+  local round spec_hash_after
+  round="$(node -e "console.log(require('${CERT_INITIATIVE_ROOT}/cert-nostart/state.json').remediation_round)")"
+  spec_hash_after="$(node -e "console.log(require('${CERT_INITIATIVE_ROOT}/cert-nostart/state.json').approved_spec_hash)")"
+  certify_assert "remediation round increments" test "$round" -ge 1
+  certify_assert "approved contract hash unchanged in remediation" test "$spec_hash_before" = "$spec_hash_after"
+  certify_assert "remediation package exists" test -f "${CERT_INITIATIVE_ROOT}/cert-nostart/remediation/round-${round}-task-001.md"
+  certify_assert "remediation prohibits unrelated scope" grep -q "Unrelated refactors" "${CERT_INITIATIVE_ROOT}/cert-nostart/remediation/round-${round}-task-001.md"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-package" cert-nostart >/dev/null 2>&1 || true
+  local promo_fail
+  promo_fail="$(node -e "console.log((require('${CERT_INITIATIVE_ROOT}/cert-nostart/state.json').promotion||{}).classification||'NOT_READY')")"
+  certify_assert "failed review prevents READY" test "$promo_fail" != "READY"
+
+  alloy_engineering_record_human_decision cert-nostart \
+    "Certify block test" "blocks promotion" "a|b" "a" "task-001" "false"
+  certify_assert "unresolved human decision recorded" \
+    test "$(alloy_engineering_human_decisions_count cert-nostart)" -ge 1
+
+  # Cost / validation fingerprint
+  local fp1 fp2
+  fp1="$(alloy_engineering_validation_fingerprint_record cert-nostart typecheck "$commit" "tsc" "pass")"
+  fp2="$(alloy_engineering_validation_fingerprint_record cert-nostart typecheck "$commit" "tsc" "pass")"
+  certify_assert "duplicate validation fingerprint detected" test "$fp1" = "duplicate" -o "$fp2" = "duplicate"
+
+  alloy_validate_acquire_lock "cert" "typecheck" "certify-lock-test"
+  certify_assert "validation lock held in fixture mode" alloy_validate_lock_held
+  alloy_validate_release_lock
+
+  rm -f "$tmp"
+  return 0
+}
+
+certify_happy_path() {
+  set +e
+  certify_log "=== happy-path lifecycle ==="
+  # Clear fixture agent metadata from failure-path exercises so slots are free.
+  rm -f "$CERT_RUNTIME/metadata"/*.env 2>/dev/null || true
+  local intake="$CERT_ROOT/happy-intake.yaml"
+  certify_happy_intake >"$intake"
+
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" "$CERT_KEY" --from "$intake"
+  certify_assert "initial state is draft" \
+    test "$(alloy_initiative_current_state "$CERT_KEY")" = "draft"
+
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-audit" "$CERT_KEY" >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-plan" "$CERT_KEY" >/dev/null
+  certify_assert "state awaiting_plan_approval" \
+    test "$(alloy_initiative_current_state "$CERT_KEY")" = "awaiting_plan_approval"
+
+  local cert_base
+  cert_base="$(alloy_initiative_dir "$CERT_KEY")"
+  certify_assert "certification artifacts exclude settings-fields-v2" \
+    bash -c '! grep -R -q "settings-fields-v2" "$1"' _ "$cert_base"
+  certify_assert "certification artifacts exclude stale settings route" \
+    bash -c '! grep -R -q "/admin/settings/fields" "$1"' _ "$cert_base"
+  certify_assert "sample documentation does not leak without explicit import" \
+    bash -c '! grep -R -q "Settings Fields V2" "$1"' _ "$cert_base"
+  certify_assert "documentation manifest records relevance reasons" \
+    grep -q "relevance_reason:" "$cert_base/audit/documentation-manifest.yaml"
+  certify_assert "documentation manifest records provenance and confidence" \
+    bash -c 'grep -q "source:" "$1" && grep -q "confidence:" "$1"' _ \
+      "$cert_base/audit/documentation-manifest.yaml"
+  certify_assert "code manifest records bounded search terms" \
+    grep -q "terms:" "$cert_base/audit/code-manifest.yaml"
+  certify_assert "code manifest records confidence" \
+    grep -q "confidence:" "$cert_base/audit/code-manifest.yaml"
+  certify_assert "task graph contains full task objects" \
+    bash -c 'for f in task_id title objective role task_kind dependencies status allowed_scope prohibited_scope constitutional_references initiative_decisions likely_code_areas acceptance focused_checks ui_verification required_outputs integration_risks generation_basis confidence; do grep -q "$f:" "$1" || exit 1; done' _ \
+      "$cert_base/plan/task-graph.yaml"
+  certify_assert "worker plan records assignment rationale" \
+    bash -c 'for f in reason_selected prerequisites expected_inputs expected_outputs review_relationship ui_auth_readiness_required estimated_context_sources cost_rationale reason_not_selected; do grep -q "$f:" "$1" || exit 1; done' _ \
+      "$cert_base/plan/worker-plan.yaml"
+  certify_assert "specification separates evidence classes" \
+    bash -c 'for h in "A. Intake facts" "B. Audit findings" "C. Proposed decisions" "D. Unknowns" "E. Standard operating policy"; do grep -q "$h" "$1" || exit 1; done' _ \
+      "$cert_base/plan/specification.md"
+  certify_assert "specification has no duplicated list markers" \
+    bash -c '! grep -qE "^- +-" "$1"' _ "$cert_base/plan/specification.md"
+  certify_assert "specification has no contradictory unresolved copy" \
+    bash -c '! grep -q "none — pending audit review" "$1"' _ "$cert_base/plan/specification.md"
+
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-approve" "$CERT_KEY" --approver "Certify Operator" >/dev/null
+  local approved_hash approved_at
+  approved_hash="$(node -e "console.log(require('$(alloy_initiative_dir "$CERT_KEY")/state.json').approved_spec_hash||'')")"
+  approved_at="$(node -e "console.log(require('$(alloy_initiative_dir "$CERT_KEY")/state.json').approved_at||'')")"
+  certify_assert "approval hash recorded" test -n "$approved_hash"
+  certify_assert "approval timestamp recorded" test -n "$approved_at"
+
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-start" "$CERT_KEY" --dry-run >/dev/null
+  alloy_engineering_certify_fixture_bind "$CERT_KEY" "$CERT_FIXTURE_REPO"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" "$CERT_KEY" --mode advisory --type architecture >/dev/null
+  certify_assert "advisory review is valid during implementation" \
+    grep -q "Mode: advisory" "$cert_base/reviews/task-002-review-package.md"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-package" "$CERT_KEY" >/dev/null
+  certify_assert "advisory review cannot produce READY" \
+    test "$(node -e "console.log(require('${cert_base}/state.json').promotion.classification)")" != "READY"
+
+  local impl_pkg review_pkg
+  impl_pkg="$(alloy_initiative_dir "$CERT_KEY")/worker-packages/task-001-package.md"
+  review_pkg="$(alloy_initiative_dir "$CERT_KEY")/reviews/task-002-review-package.md"
+  certify_assert "implementation worker package exists" test -f "$impl_pkg"
+  certify_assert "review worker package exists" test -f "$review_pkg"
+  certify_assert "worktree package mirror exists" test -f "$(alloy_engineering_worker_package_md_path "$CERT_FIXTURE_REPO")"
+  certify_assert "package contains required sections" certify_package_contains_required_sections "$impl_pkg"
+  certify_assert "package prohibits push/merge" grep -qE "Do NOT push|Push / merge prohibition" "$impl_pkg"
+
+  git -C "$CERT_FIXTURE_REPO" commit --allow-empty -q -m "cert implementation"
+  local commit evidence
+  commit="$(git -C "$CERT_FIXTURE_REPO" rev-parse HEAD)"
+  evidence="$CERT_RUNTIME/evidence/${CERT_KEY}/task-001"
+  mkdir -p "$evidence"
+  echo "ok" >"$evidence/shot.txt"
+
+  node -e "
+    const fs=require('fs');
+    fs.writeFileSync('$(alloy_initiative_dir "$CERT_KEY")/reports/task-001-result.json', JSON.stringify({
+      initiative_key:'${CERT_KEY}', task_id:'task-001', worker_slot:1, worker_role:'Product implementation',
+      status:'implemented', summary:'cert pass', commit:'${commit}', files_changed:['README'],
+      focused_checks:['vitest mock'], 
+      ui_verification:{required:false,status:'not_run',routes:[],identity_alias:'cert@test',evidence:[],console_errors:[],failed_requests:[]},
+      risks:[],questions:[],processes_left_running:[]
+    },null,2));
+  "
+  certify_cmd_env "$SCRIPT_DIR/alloy-worker-report" "$CERT_KEY" task-001 >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" "$CERT_KEY" --mode final --type integration >/dev/null
+
+  node -e "
+    const fs=require('fs');
+    fs.writeFileSync('$(alloy_initiative_dir "$CERT_KEY")/reviews/task-002-review.json', JSON.stringify({
+      review_id:'r-pass', initiative_key:'${CERT_KEY}', task_ids:['task-001'],
+      review_type:'architecture', review_mode:'final', status:'pass', findings:[],
+      severity:'info', evidence:[], required_remediation:[], unresolved_decisions:[]
+    }));
+  "
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" "$CERT_KEY" --ingest task-002 >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-package" "$CERT_KEY" >/dev/null
+  local promo
+  promo="$(node -e "console.log((require('$(alloy_initiative_dir "$CERT_KEY")/state.json').promotion||{}).classification||'')")"
+  certify_assert "final recommendation READY" test "$promo" = "READY"
+
+  local push_count pr_count vercel
+  push_count="$(node -e "console.log(require('$(alloy_initiative_dir "$CERT_KEY")/state.json').cost_summary.push_count||0)")"
+  pr_count="$(node -e "console.log(require('$(alloy_initiative_dir "$CERT_KEY")/state.json').cost_summary.pr_count||0)")"
+  vercel="$(node -e "console.log(require('$(alloy_initiative_dir "$CERT_KEY")/state.json').cost_summary.vercel_preview_triggered||false)")"
+  certify_assert "push count zero" test "$push_count" = "0"
+  certify_assert "PR count zero" test "$pr_count" = "0"
+  certify_assert "Vercel preview not triggered" test "$vercel" = "false"
+  certify_assert "final package has promotion disclaimer" \
+    grep -q "Push and merge still require" "$(alloy_initiative_dir "$CERT_KEY")/final/review-package.md"
+  certify_assert "final package labels conclusion provenance" \
+    grep -q "Conclusion provenance" "$(alloy_initiative_dir "$CERT_KEY")/final/review-package.md"
+
+  local reports_before
+  reports_before="$(find "$(alloy_initiative_dir "$CERT_KEY")/reports" -type f | wc -l | tr -d ' ')"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-close" "$CERT_KEY" --promotion-recorded >/dev/null
+  certify_assert "close preserves reports" \
+    test "$(find "$(alloy_initiative_dir "$CERT_KEY")/reports" -type f | wc -l | tr -d ' ')" -eq "$reports_before"
+  certify_assert "close state is closed" test "$(alloy_initiative_current_state "$CERT_KEY")" = "closed"
+
+  certify_write_artifact_quality "$cert_base"
+  certify_assert "artifact quality inspection summary generated" \
+    test -f "$CERT_ROOT/certification-artifact-quality.md"
+  certify_assert "all retained certification artifacts exclude legacy sample key" \
+    bash -c '! grep -R -q "settings-fields-v2" "$1"' _ "$CERT_ROOT"
+  certify_assert "all retained certification artifacts exclude unrelated sample route" \
+    bash -c '! grep -R -q "/admin/settings/fields" "$1"' _ "$CERT_ROOT"
+  certify_write_manifest "$CERT_ROOT/certification-manifest.yaml"
+  return 0
+}
+
+main() {
+  CERT_KEEP=0
+  CERT_VERBOSE=0
+  local with_wt=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --keep) CERT_KEEP=1; shift ;;
+      --verbose) CERT_VERBOSE=1; shift ;;
+      --with-fixture-worktree) with_wt=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) certify_die "unknown option: $1" ;;
+    esac
+  done
+  CERT_WITH_FIXTURE_WORKTREE=$with_wt
+
+  CERT_ROOT="$(mktemp -d /tmp/alloy-engineering-cert.XXXXXX)"
+  CERT_RUNTIME="$CERT_ROOT/runtime"
+  CERT_INITIATIVE_ROOT="$CERT_RUNTIME/initiatives"
+  CERT_CANON="$CERT_ROOT/canonical"
+  CERT_FIXTURE_REPO="$CERT_ROOT/fixture-repo"
+  CERT_FIXTURE_REPO_FAIL="$CERT_ROOT/fixture-repo-fail"
+  CERT_CONFIG_DIR="$CERT_ROOT/config"
+  CERT_CONFIG_FILE="$CERT_CONFIG_DIR/config"
+  CERT_CLIPBOARD_FILE="$CERT_ROOT/clipboard.out"
+  CERT_APP_LAUNCH_LOG="$CERT_ROOT/app-launch.log"
+  CERT_PROD_RUNTIME="${HOME}/.local/state/alloy-dev"
+  CERT_PROD_INITIATIVE_ROOT="$CERT_PROD_RUNTIME/initiatives"
+
+  mkdir -p "$CERT_RUNTIME/metadata" "$CERT_RUNTIME/pids" "$CERT_RUNTIME/logs" "$CERT_RUNTIME/locks" \
+    "$CERT_INITIATIVE_ROOT" "$CERT_CONFIG_DIR"
+
+  CERT_ORIGIN="$CERT_ROOT/origin.git"
+  git init --bare -q "$CERT_ORIGIN"
+  certify_setup_canonical_repo "$CERT_CANON" "$CERT_ORIGIN"
+  mkdir -p "$CERT_CANON/scripts/local-dev/lib"
+  printf '# certification command fixture entry point\n' >"$CERT_CANON/scripts/local-dev/alloy-engineering-certify"
+  printf '# certification helper fixture entry point\n' >"$CERT_CANON/scripts/local-dev/lib/engineering-certify.sh"
+  printf '# Engineering Manager certification fixture doctrine\n' >"$CERT_CANON/scripts/local-dev/ENGINEERING-MANAGER.md"
+  git -C "$CERT_CANON" add scripts/local-dev
+  git -C "$CERT_CANON" commit -q -m "add certification fixture references"
+  git -C "$CERT_CANON" push -q origin staging
+  certify_setup_fixture_repo "$CERT_FIXTURE_REPO"
+  certify_setup_fixture_repo "$CERT_FIXTURE_REPO_FAIL"
+
+  cat >"$CERT_CONFIG_FILE" <<CFG
+ALLOY_REPO="$CERT_CANON"
+ALLOY_WORKTREE_ROOT="$CERT_ROOT/worktrees"
+ALLOY_RUNTIME_ROOT="$CERT_RUNTIME"
+ALLOY_BASE_REMOTE="origin"
+ALLOY_BASE_BRANCH="staging"
+ALLOY_FIRST_AGENT_PORT="3911"
+ALLOY_MAX_AGENTS="6"
+ALLOY_SLOT_1_QA_IDENTITY="cert@test.local"
+ALLOY_ENV_SOURCE="$CERT_CANON/web/.env.local"
+ALLOY_SERVER_ENV_SOURCE="$CERT_CANON/web/.env.local"
+CFG
+
+  CERT_FIRST_AGENT_PORT=3911
+  export ALLOY_CONFIG_FILE="$CERT_CONFIG_FILE"
+  export ALLOY_RUNTIME_ROOT="$CERT_RUNTIME"
+  export ALLOY_ENGINEERING_CERTIFY=1
+  export ALLOY_TEST_FIXTURE=1
+  export ALLOY_INITIATIVE_ROOT="$CERT_INITIATIVE_ROOT"
+  export ALLOY_FIRST_AGENT_PORT="$CERT_FIRST_AGENT_PORT"
+  alloy_load_config
+  alloy_resolve_runtime_paths "$CERT_RUNTIME"
+  alloy_engineering_require_node
+
+  local snap="$CERT_ROOT/prod-snapshot"
+  certify_record_production_snapshot "$snap"
+
+  set +e
+  certify_failure_gates
+  certify_happy_path
+
+  certify_assert "production initiatives and metadata untouched" certify_verify_production_untouched "$snap"
+  certify_assert "production metadata file list unchanged" \
+    diff -q "$snap/prod-metadata.files" "$snap/after-metadata.files" >/dev/null 2>&1
+  certify_assert "fixture metadata stays under cert runtime" \
+    bash -c 'compgen -G "$1/metadata/cert-*.env" >/dev/null' _ "$CERT_RUNTIME"
+
+  certify_print_summary
+
+  if [[ "$CERT_FAIL" -gt 0 ]]; then
+    printf '\nCertification FAILED — state preserved at:\n  %s\n' "$CERT_ROOT" >&2
+    exit 1
+  fi
+
+  if [[ "$CERT_KEEP" -eq 1 ]]; then
+    printf '\nCertification passed — artifacts retained at:\n  %s\n' "$CERT_ROOT"
+  else
+    rm -rf "$CERT_ROOT"
+  fi
+  exit 0
+}
+
+main "$@"

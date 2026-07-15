@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Show Alloy agent worktree/dev-server status and tracked ports.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-dev-status
+EOF
+}
+
+alloy_state_for_worktree() {
+  local name="$1"
+  # Clears and reloads metadata for this name in a subshell-friendly way via globals set by caller path.
+  local path="$ALLOY_WORKTREE_PATH"
+  local port="$PORT"
+  local pid_path pid listener owner_cmd
+
+  if [[ ! -d "$path" ]]; then
+    printf 'missing-worktree'
+    return
+  fi
+
+  pid_path="$(alloy_pid_path "$name")"
+  if [[ -f "$pid_path" ]]; then
+    pid="$(alloy_read_pid_file "$pid_path" || true)"
+    if [[ -n "${pid:-}" ]] && alloy_pid_alive "$pid"; then
+      if alloy_pid_belongs_to_worktree "$pid" "$path"; then
+        printf 'running'
+        return
+      fi
+      printf 'stale'
+      return
+    fi
+  fi
+
+  if listener="$(alloy_port_listener_pid "$port" 2>/dev/null)"; then
+    if alloy_pid_belongs_to_worktree "$listener" "$path"; then
+      printf 'running'
+      return
+    fi
+    printf 'foreign-port-owner'
+    return
+  fi
+
+  if [[ -f "$pid_path" ]]; then
+    pid="$(alloy_read_pid_file "$pid_path" || true)"
+    if [[ -n "${pid:-}" ]] && ! alloy_pid_alive "$pid"; then
+      printf 'stale'
+      return
+    fi
+  fi
+
+  printf 'stopped'
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+
+  printf '%-28s %-8s %-40s %-6s %-18s %-8s %s\n' \
+    "NAME" "AGENT" "BRANCH" "PORT" "STATE" "PID" "PATH"
+  printf '%s\n' "------------------------------------------------------------------------------------------------------------------------------------"
+
+  local name state pid_path pid
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    # shellcheck disable=SC1090
+    source "$(alloy_metadata_path "$name")"
+    state="$(alloy_state_for_worktree "$name")"
+    pid_path="$(alloy_pid_path "$name")"
+    pid="-"
+    if [[ -f "$pid_path" ]]; then
+      pid="$(alloy_read_pid_file "$pid_path" || echo "-")"
+    elif listener="$(alloy_port_listener_pid "${PORT}" 2>/dev/null)"; then
+      pid="$listener"
+    fi
+    printf '%-28s %-8s %-40s %-6s %-18s %-8s %s\n' \
+      "$ALLOY_WORKTREE_NAME" \
+      "$ALLOY_AGENT" \
+      "$ALLOY_WORKTREE_BRANCH" \
+      "$PORT" \
+      "$state" \
+      "$pid" \
+      "$ALLOY_WORKTREE_PATH"
+  done < <(alloy_list_metadata_names | sort)
+
+  echo
+  alloy_info "Tracked listeners:"
+  local ports=("$ALLOY_CANONICAL_PORT")
+  local i p listener cmd
+  for ((i = 1; i <= ALLOY_MAX_AGENTS; i++)); do
+    ports+=("$((ALLOY_FIRST_AGENT_PORT + i - 1))")
+  done
+  for p in "${ports[@]}"; do
+    if listener="$(alloy_port_listener_pid "$p" 2>/dev/null)"; then
+      cmd="$(alloy_process_command "$listener")"
+      printf '  port %-5s PID %-8s %s\n' "$p" "$listener" "$cmd"
+    else
+      printf '  port %-5s (free)\n' "$p"
+    fi
+  done
+}
+
+main "$@"

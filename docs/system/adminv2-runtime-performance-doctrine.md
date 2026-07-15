@@ -10,7 +10,7 @@ supersedes: []
 **Path:** `docs/system/adminv2-runtime-performance-doctrine.md`  
 **Status:** **Locked baseline** (June 2026). Implementation detail for reveal/queue/drawer gates.  
 **Platform summary:** **`platform-performance-doctrine.md`** (Passes 1–3, sidecar deferral).  
-**Supplements:** `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/system/drawer-doctrine.md`, `docs/execution/operating-doctrine.md`  
+**Supplements:** `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`, `docs/system/drawer-doctrine.md`, `docs/archive/2026-06-execution/operating-doctrine.md`  
 **Historical context:** `docs/sprints/archive/05_2026/adminv2_reveal_doctrine.md`, `docs/sprints/archive/05_2026/completed/adminv2_performance_closeout.md`  
 **Sprint closeout:** `docs/sprints/archive/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`  
 **Next phase (backend only):** `docs/sprints/archive/06_2026/adminv2_backend_query_payload_optimization_phase.md`

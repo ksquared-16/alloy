@@ -25,6 +25,7 @@ import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
 import type { CompactRowSlots } from "./queueRowSurfaceConfig";
+import type { WorkUnitSelectedSubject } from "./workUnitPillSwitching";
 import type { FocusedSubjectContext } from "./resolveQueueRowSubjectFocus";
 import type {
     ProcessCardIcon,
@@ -181,6 +182,25 @@ export type WorkspaceSurfaceModel = {
 };
 
 /** WU.SURFACE — resolved model for the Work Unit surface. */
+/**
+ * Canonical Work Unit readiness (Trust Closure, atomic reveal). The surface reveals as ONE
+ * coherent composition — header, work-view pills, counts, and the primary queue rows together —
+ * never region-by-region. `coldCompositionReady` is the gate the render mode uses; it includes the
+ * primary queue settling so cold entry holds one skeleton until rows are present, while a seeded
+ * return is ready on first render. `retainedCompositionReady` marks that this mount opened from a
+ * cached composition (no loading boundary should ever show for it).
+ */
+export type WorkUnitReadiness = {
+    /** Identity resolved — the stable shell frame can render. */
+    shellReady: boolean;
+    /** This mount opened from a cached config + rows composition (return navigation). */
+    retainedCompositionReady: boolean;
+    /** Config + header + primary queue all established — the atomic above-fold reveal gate. */
+    coldCompositionReady: boolean;
+    /** Primary composition ready AND the action rail settled — fully interactive. */
+    interactionReady: boolean;
+};
+
 export type WorkUnitSurfaceModel = {
     /** Configurable header (title, subtitle, KPIs) from published Work Unit Header surface. */
     header: WorkspaceHeaderPresentationModel;
@@ -206,6 +226,14 @@ export type WorkUnitSurfaceModel = {
      */
     selectedRecordId: string | null;
     /**
+     * How the surface resolved its DEFAULT operational subject for the current rows/route/retained
+     * selection (url → retained → strategy → first_row → empty), computed synchronously as part of
+     * the committed model. Invariant: when `queue.rows` is non-empty, `selectedSubject.selectedRecordId`
+     * is non-null — a populated Work View never commits with no subject. `selectedRecordId` above is
+     * the LIVE drawer selection (operator interaction), falling back to this resolution.
+     */
+    selectedSubject: WorkUnitSelectedSubject;
+    /**
      * Configured Right Rail actions resolved for this work unit (`surface=work_unit,right_rail`),
      * flattened to the client action shape. Empty until the lane resolves (or when none are
      * configured) — RR.SURFACE stays a zero-footprint anchor while empty, then reveals. Rendered +
@@ -219,7 +247,13 @@ export type WorkUnitSurfaceModel = {
      */
     departmentId: string | null;
     workUnitId: string | null;
+    /**
+     * Legacy single-boolean readiness — equals `readiness.coldCompositionReady`. Retained so the
+     * render mode and existing consumers keep one gate; prefer `readiness` for the full contract.
+     */
     ready: boolean;
+    /** Canonical atomic-reveal readiness (Trust Closure). */
+    readiness: WorkUnitReadiness;
 };
 
 /** Work Unit surface intents — the only mutations presentation components may express. */

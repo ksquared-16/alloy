@@ -73,3 +73,84 @@ export function shouldAutoOpenFirstRowForView(args: {
     if (args.routeRecordId && args.forceAutoOpenViewId !== viewId) return false;
     return true;
 }
+
+/**
+ * Resolve WHICH record the auto-open should select, given the settled rows and the operator's
+ * retained selection. Precedence (a URL record id is handled upstream by
+ * `shouldAutoOpenFirstRowForView`, which suppresses auto-open when a deep-link record is present):
+ *
+ *   1. retained selected record — only when it is still present in the current rows;
+ *   2. the first current row;
+ *   3. null — only when there are no rows (genuinely empty).
+ *
+ * A stale retained record no longer in the view is ignored (falls through to the first row), so a
+ * mutation that removes the selected row lands on the next valid row rather than a blank panel.
+ */
+export function resolveAutoOpenRecordId(
+    rowRecordIds: readonly string[],
+    retainedRecordId: string | null,
+): string | null {
+    if (rowRecordIds.length === 0) return null;
+    const retained = retainedRecordId?.trim() || null;
+    if (retained && rowRecordIds.includes(retained)) return retained;
+    return rowRecordIds[0] ?? null;
+}
+
+/** How the Work Unit surface arrived at its selected subject — ordered by canonical precedence. */
+export type WorkUnitSelectedSubjectSource = "url" | "retained" | "strategy" | "first_row" | "empty";
+
+/**
+ * The subject a populated Work View resolves to, resolved SYNCHRONOUSLY so the surface never commits
+ * a coherent reveal with rows present but nothing selected. `selectedRecordId` is non-null whenever
+ * `rowRecordIds` is non-empty (compatibility fallback = first row), so `rows.length > 0 && selectedRecordId === null` is an impossible committed state.
+ */
+export type WorkUnitSelectedSubject = {
+    selectedRecordId: string | null;
+    source: WorkUnitSelectedSubjectSource;
+};
+
+/**
+ * Canonical Work Unit selected-subject resolution — the ONE precedence the runtime, the readiness
+ * gate, and the auto-open effect share. Doctrine: Work Unit entry resolves a default operational
+ * subject and opens the Focus Panel; queue rows are the selection surface, never an unresolved
+ * landing state. Precedence:
+ *
+ *   1. explicit record id in the route (deep link) — unless the operator just force-switched pills
+ *      in-page, in which case the stale URL no longer pins the subject;
+ *   2. retained valid record for this org + Work Unit + Work View (return-navigation restore) — only
+ *      when it is still present in the current rows;
+ *   3. configured Default Operational Subject Strategy — NOT YET IMPLEMENTED; when it ships it slots
+ *      here (source `"strategy"`), ahead of the first-row fallback;
+ *   4. first visible row — the current compatibility fallback for the default operational subject;
+ *   5. null — only after an authoritative empty result (`queueSettled` with zero rows). Before the
+ *      rows settle the selection is still *pending*, so callers gate the reveal on `queueSettled` and
+ *      a pending null never renders as an empty panel.
+ */
+export function resolveWorkUnitSelectedSubject(args: {
+    routeRecordId: string | null;
+    rowRecordIds: readonly string[];
+    retainedRecordId: string | null;
+    /** Operator just switched pills in-page — a deep-link URL no longer pins selection. */
+    forceAutoOpen: boolean;
+    /** Rows have settled at least once — distinguishes authoritative empty from pending. */
+    queueSettled: boolean;
+}): WorkUnitSelectedSubject {
+    const routeRecordId = args.routeRecordId?.trim() || null;
+    if (routeRecordId && !args.forceAutoOpen) {
+        return { selectedRecordId: routeRecordId, source: "url" };
+    }
+
+    const retained = args.retainedRecordId?.trim() || null;
+    if (retained && args.rowRecordIds.includes(retained)) {
+        return { selectedRecordId: retained, source: "retained" };
+    }
+
+    // 3. Default Operational Subject Strategy — reserved; not yet implemented (first_row is the
+    //    documented compatibility fallback until it ships).
+
+    if (args.rowRecordIds.length > 0) {
+        return { selectedRecordId: args.rowRecordIds[0]!, source: "first_row" };
+    }
+
+    return { selectedRecordId: null, source: "empty" };
+}

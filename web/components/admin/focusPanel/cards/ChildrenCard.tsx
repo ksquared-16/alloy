@@ -1165,6 +1165,7 @@ function FocusedChild({
                                 ocm_id: null,
                             },
                             values: {
+                                location_id: "",
                                 program_category_id: "",
                                 program_room_cohort_key: "",
                                 schedule_type: "",

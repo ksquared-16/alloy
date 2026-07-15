@@ -36,14 +36,8 @@ import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import {
-    queueRowSurfaceId,
-} from "@/lib/adminV2/settings/surfaces/queueRowProcessCatalog";
 import { QUEUE_ROW_SURFACE_PUBLISHED_EVENT } from "@/lib/adminV2/settings/surfaces/queueRowSurfaceService";
 import { isLegacyArtifactProcessName } from "@/lib/admin/buildOperatorLifecycleLanding";
-import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
-import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
-import { findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
 import {
     resolveWorkViewCanonicalLocation,
     type WorkViewCanonicalLocation,
@@ -64,7 +58,7 @@ import { bustOperatorRuntimeReadCaches } from "@/lib/admin/operatorRuntimeReadCa
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import { resolveQueueRowWarmTarget } from "@/lib/presentation/runtime/queueRowWarmTarget";
-import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { warmOperatorWorkUnitNavEntry } from "@/lib/admin/warmOperatorWorkUnitNavEntry";
 import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { fetchWorkUnitRightRailResolvedActions } from "@/lib/workspace/fetchWorkUnitRightRailResolvedActions";
@@ -72,6 +66,41 @@ import { filterRightRailActionsForCurrentWork } from "@/lib/adminV2/runtime/focu
 import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
+import { alloyPerfGet } from "@/lib/perf/alloyPerfGlobal";
+import {
+    beginWorkspaceNav,
+    markWorkspaceNavSignal,
+    resolveWorkspaceNavMode,
+    type WorkspaceNavMode,
+} from "@/lib/perf/workspaceNavGraph";
+import {
+    putWorkUnitSurfaceConfigCache,
+    putWorkUnitSurfaceQueueCache,
+    putWorkUnitSurfaceSummariesCache,
+    putWorkUnitSurfaceRightRailCache,
+    invalidateWorkUnitSurfaceCachesForWorkUnit,
+    invalidateWorkUnitSurfaceQueueCachesForWorkUnit,
+    type WorkUnitViewModelCacheContext,
+} from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
+import {
+    computeWorkUnitSurfaceInitialSeed,
+    queueDefinitionMatchesFetchHost,
+    resolveWorkUnitReadiness,
+    validatedBaseQueueKeyForUnit,
+    workUnitQueueFetchIdentity,
+    workUnitSurfaceQueueLane,
+    type WorkUnitSurfaceInitialSeed,
+} from "./workUnitSurfaceSeed";
+import {
+    fetchWorkUnitSurfaceConfigBundle,
+    queueRowSurfaceIdForDepartment,
+} from "./workUnitSurfaceConfigFetch";
+import {
+    peekRetainedSelection,
+    peekRetainedWorkView,
+    putRetainedSelection,
+    putRetainedWorkView,
+} from "./workUnitOperatorContext";
 import { useOperationalAnswers } from "./useOperationalAnswers";
 import { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";
 import {
@@ -81,7 +110,9 @@ import {
 } from "./workUnitHeaderSurfaceConfig";
 import {
     resolveSelectWorkViewAction,
+    resolveWorkUnitSelectedSubject,
     shouldAutoOpenFirstRowForView,
+    type WorkUnitSelectedSubject,
 } from "./workUnitPillSwitching";
 import {
     queueRowsRouteForView,
@@ -97,6 +128,7 @@ import {
     type QueueRowModel,
     type WorkUnitSurfaceIntents,
     type WorkUnitSurfaceModel,
+    type WorkUnitReadiness,
 } from "./types";
 import { mapQueueRowSurfaceToCompactConfig } from "./queueRowSurfaceConfig";
 import {
@@ -108,31 +140,26 @@ import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3
 /** Drawer open provenance for Focus Panel opens from the presentation runtime queue. */
 const PRESENTATION_RUNTIME_QUEUE_ROW_OPEN_SOURCE = "presentation_runtime_queue_row";
 
-/**
- * Resolve published Queue Row surface id from department lifecycle process.
- * Falls back to legacy pipeline id when catalog id cannot be derived.
- */
-function queueRowSurfaceIdForDepartment(departmentId: string | null, deptMetadata: unknown): string {
-    const lifecycle = lifecycleBuilderFromDepartmentMetadata(deptMetadata);
-    const process = lifecycle ? activeLifecycleProcess(lifecycle) : null;
-    if (process && departmentId) {
-        return queueRowSurfaceId(`${departmentId}:${process.id}`);
-    }
-    return "pipeline-queue-row";
+// ── Trust Closure navigation-mode classification ─────────────────────────────────────────────
+// Classified from real cache + prefetch evidence, not the slug alone (a remount is not "warm"
+// merely because the slug was seen):
+//   - a cached composition is present AND this slug was navigated before → `return`;
+//   - a cached composition is present but this slug was NOT navigated before → `prefetched`
+//     (a prewarm wrote it ahead of the first visit);
+//   - no cache, first navigation since a full page load → `cold`;
+//   - no cache, a soft navigation within the already-hydrated app → `warm`.
+// Module-scoped so it survives the surface unmount/remount that IS the defect.
+const seenWorkUnitNavSlugs = new Set<string>();
+let firstWorkspaceNavSincePageLoad = true;
+
+function classifyWorkspaceNavMode(slug: string, hasCachedComposition: boolean): WorkspaceNavMode {
+    return resolveWorkspaceNavMode({
+        seenBefore: seenWorkUnitNavSlugs.has(slug),
+        firstSinceLoad: firstWorkspaceNavSincePageLoad,
+        hasCachedComposition,
+    });
 }
 
-/**
- * Validate a Work View's base lane against THIS work unit's queue definition. A department's
- * Work Views can bind lanes that exist on sibling work units; when the lane is absent here,
- * fall back to this unit's all-records lane — the server still applies the view's predicates
- * via `work_view_id`.
- */
-function validatedBaseQueueKeyForUnit(base: string | null, queueDefinition: unknown): string | null {
-    const bundle = queueDefinition != null ? tryLoadWorkUnitQueueDefinitionBundle(queueDefinition) : null;
-    if (!bundle) return base;
-    if (base && bundle.def.queues.some((q) => q.key === base)) return base;
-    return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def)) ?? base;
-}
 
 export type WorkUnitSurfaceRuntime = {
     model: WorkUnitSurfaceModel;
@@ -147,78 +174,106 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
 
     // Fetches gate on org readiness: the queue route resolves visibility under the org/auth
     // gate, and a request racing org-context bootstrap 404s transiently.
-    const { orgId } = useWorkspaceOrg();
+    const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const departmentId = orgId ? slugRoute?.departmentId ?? null : null;
     const workUnitId = orgId ? slugRoute?.workUnitId ?? null : null;
+
+    // Session-cache scope — the same org/dept/wu/user/scope key the view-model cache uses. Org id
+    // is part of the key, so a cache read can never cross tenants.
+    const cacheContext = useMemo<WorkUnitViewModelCacheContext>(
+        () => ({
+            orgId,
+            departmentId,
+            workUnitId,
+            userId: principalUserId,
+            scopeFingerprint: accessScopeFingerprint,
+        }),
+        [orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint],
+    );
+
+    // Read-through seed, computed exactly once per surface mount (lazy initializer). On a return
+    // navigation (the surface remounts) this holds the prior config + rows for instant first paint;
+    // on cold entry it is the empty seed. Stable for the mount's life — never re-set.
+    const [seed] = useState<WorkUnitSurfaceInitialSeed>(() =>
+        computeWorkUnitSurfaceInitialSeed({ cacheContext, slugRoute, selectedSiteId }),
+    );
+    // Current cache scope for the once-subscribed mutation listener (which cannot close over it).
+    const cacheContextRef = useRef(cacheContext);
+    cacheContextRef.current = cacheContext;
 
     // ── Work Views: department metadata (`work_views_v1`) + host queue_definition ──────
     // Dept work units are fetched alongside so every visible view's CANONICAL location
     // (host unit + base lane — `resolveWorkViewCanonicalLocation`) resolves client-side;
     // pill counts and pill navigation both read it.
-    const [deptMetadata, setDeptMetadata] = useState<unknown | null>(null);
-    const [queueDefinition, setQueueDefinition] = useState<unknown | null>(null);
+    const [deptMetadata, setDeptMetadata] = useState<unknown | null>(() => seed.config?.deptMetadata ?? null);
+    const [queueDefinition, setQueueDefinition] = useState<unknown | null>(
+        () => seed.config?.queueDefinition ?? null,
+    );
     const [deptWorkUnits, setDeptWorkUnits] = useState<
         WorkViewCanonicalLocationWorkUnitRow[] | null
-    >(null);
-    const [queueRowLayoutConfig, setQueueRowLayoutConfig] = useState<QueueRecordLayoutConfigV3 | null>(null);
-    const [queueRowSurfaceIdState, setQueueRowSurfaceIdState] = useState<string>("pipeline-queue-row");
-    const [configSettled, setConfigSettled] = useState(false);
+    >(() => seed.config?.deptWorkUnits ?? null);
+    const [queueRowLayoutConfig, setQueueRowLayoutConfig] = useState<QueueRecordLayoutConfigV3 | null>(
+        () => seed.config?.queueRowLayoutConfig ?? null,
+    );
+    const [queueRowSurfaceIdState, setQueueRowSurfaceIdState] = useState<string>(
+        () => seed.config?.queueRowSurfaceId ?? "pipeline-queue-row",
+    );
+    // Seeded config → the surface is already established: `configSettled` starts true so the queue
+    // rows effect fires immediately (no re-establish gate) and the seeded rows show without a skeleton.
+    const [configSettled, setConfigSettled] = useState(() => seed.config != null);
+    // Which work unit the current `queueDefinition` belongs to. On a same-department cross-host switch
+    // (Surface Hold, no remount) `workUnitId` advances a render BEFORE the new unit's def loads, while
+    // `configSettled` lags true — so the base queue key would be validated against the WRONG host's def
+    // and fetched from the new host (deployed: lifecycle_lead 404 on a unit without it, and
+    // lifecycle_qualification from a stale def). Gating the rows fetch on def↔unit match closes that
+    // window: the (work_unit, queue_key) pair is always assembled from ONE host's definition.
+    const [configWorkUnitId, setConfigWorkUnitId] = useState<string | null>(
+        () => (seed.config != null ? workUnitId : null),
+    );
+    // The mount seed applies only to the first config-effect run (its context). Later runs (a slug
+    // change without remount) ignore it and re-establish normally.
+    const configSeedConsumedRef = useRef(false);
 
     useEffect(() => {
         if (!departmentId || !workUnitId) return;
+        const useSeed = !configSeedConsumedRef.current && seed.config != null;
+        configSeedConsumedRef.current = true;
+        // Fresh cached config → skip the whole config→layout waterfall for this navigation.
+        if (useSeed && seed.configFresh) {
+            setConfigSettled(true);
+            setConfigWorkUnitId(workUnitId);
+            return;
+        }
         let cancelled = false;
-        setConfigSettled(false);
-        const surfaceId = queueRowSurfaceIdForDepartment(departmentId, null);
-        setQueueRowSurfaceIdState(surfaceId);
-        const init = workspaceDataFetchInit();
-        void Promise.all([
-            dedupeAdminFetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`, init)
-                .then((res) => (res.ok ? res.json() : null))
-                .catch(() => null),
-            dedupeAdminFetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`, init)
-                .then((res) => (res.ok ? res.json() : null))
-                .catch(() => null),
-            dedupeAdminFetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init)
-                .then((res) => (res.ok ? res.json() : null))
-                .catch(() => null),
-        ])
-            .then(([dept, wu, deptUnits]) => {
+        // Seeded-stale keeps the established surface visible during the silent revalidate (SWR); only
+        // a genuine cold establish (or a cross-host switch within a live mount) drops the gate so the
+        // new unit shows its establish state. The queue reveal gate is re-armed separately (below).
+        if (!useSeed) {
+            setConfigSettled(false);
+            const surfaceId = queueRowSurfaceIdForDepartment(departmentId, null);
+            setQueueRowSurfaceIdState(surfaceId);
+        }
+        const init = workspaceDataFetchInit() ?? undefined;
+        // One shared config-bundle fetch — the SAME function the navigation prewarm uses, so a
+        // prefetch writes exactly the entry this effect would (no divergent shape, no second contract).
+        void fetchWorkUnitSurfaceConfigBundle({ departmentId, workUnitId, fetchInit: init })
+            .then((bundle) => {
                 if (cancelled) return;
-                const deptMeta = (dept as { metadata?: unknown } | null)?.metadata ?? null;
-                setDeptMetadata(deptMeta);
-                const resolvedSurfaceId = queueRowSurfaceIdForDepartment(departmentId, deptMeta);
-                setQueueRowSurfaceIdState(resolvedSurfaceId);
-                const lifecycle = lifecycleBuilderFromDepartmentMetadata(deptMeta);
-                const process = lifecycle ? activeLifecycleProcess(lifecycle) : null;
-                const processKey = process?.key ?? "enrollment";
-                const qs = processKey ? `?processKey=${encodeURIComponent(processKey)}` : "";
-                return dedupeAdminFetch(
-                    `/api/admin/queue-row-layout/${encodeURIComponent(resolvedSurfaceId)}${qs}`,
-                    init,
-                )
-                    .then((res) => (res.ok ? res.json() : null))
-                    .catch(() => null)
-                    .then((queueRowLayoutRes) => ({ wu, deptUnits, queueRowLayoutRes }));
+                // A failure shell (transient 404/network) must not overwrite good seeded config nor
+                // poison the cache; leave the prior/seeded config in place and let SWR retry.
+                if (!bundle.ok && seed.config != null) return;
+                setDeptMetadata(bundle.deptMetadata);
+                setQueueRowSurfaceIdState(bundle.queueRowSurfaceId);
+                setQueueDefinition(bundle.queueDefinition);
+                // The def now provably belongs to THIS work unit (the one this effect fetched for).
+                setConfigWorkUnitId(workUnitId);
+                setDeptWorkUnits(bundle.deptWorkUnits);
+                setQueueRowLayoutConfig(bundle.queueRowLayoutConfig);
+                // Write-back only a real config, so a later fresh-skip never trusts an empty bundle.
+                if (bundle.ok) putWorkUnitSurfaceConfigCache(bundle, cacheContext);
             })
-            .then((payload) => {
-                if (cancelled || !payload) return;
-                const { wu, deptUnits, queueRowLayoutRes } = payload;
-                setQueueDefinition((wu as { queue_definition?: unknown } | null)?.queue_definition ?? null);
-                const items = (deptUnits as { items?: unknown } | null)?.items;
-                setDeptWorkUnits(
-                    Array.isArray(items) ? (items as WorkViewCanonicalLocationWorkUnitRow[]) : null,
-                );
-                const envelopeLayout =
-                    (queueRowLayoutRes as { envelope?: { layout?: unknown } } | null)?.envelope?.layout ??
-                    (queueRowLayoutRes as { config?: unknown } | null)?.config ??
-                    null;
-                setQueueRowLayoutConfig(
-                    envelopeLayout
-                        && typeof envelopeLayout === "object"
-                        && Array.isArray((envelopeLayout as { columns?: unknown }).columns)
-                        ? (envelopeLayout as QueueRecordLayoutConfigV3)
-                        : null,
-                );
+            .catch(() => {
+                /* graceful: leave prior/seeded config in place */
             })
             .finally(() => {
                 if (!cancelled) setConfigSettled(true);
@@ -226,21 +281,32 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, workUnitId]);
+    }, [departmentId, workUnitId, cacheContext, seed]);
 
     // Active Work View: route seeds the landing view; same-host pill clicks override via
     // `localWorkViewId` (Excel-tab swap — no navigation). Cross-host clicks use optimistic
     // highlight until `router.push` commits the destination slug.
     const routeSlug = slugRoute?.routeSlug ?? null;
-    const [localWorkViewId, setLocalWorkViewId] = useState<string | null>(null);
+    // Retained selection: on a return to this unit (no explicit Work View in the URL) restore the
+    // operator's last in-page Work View. An explicit route view (deep link / cross-host landing)
+    // always wins over the retained one.
+    const [localWorkViewId, setLocalWorkViewId] = useState<string | null>(() =>
+        slugRoute?.initialWorkViewId ? null : peekRetainedWorkView(orgId, workUnitId),
+    );
     const [optimisticSelection, setOptimisticSelection] = useState<{
         routeSlug: string | null;
         workViewId: string;
     } | null>(null);
 
+    // Reset the in-page selection only when the unit/route ACTUALLY changes (a cross-host switch),
+    // not on the initial mount — otherwise the retained-view seed above would be wiped immediately.
+    const workViewResetKeyRef = useRef(`${workUnitId ?? ""}|${routeSlug ?? ""}`);
     useEffect(() => {
-        setLocalWorkViewId(null);
-    }, [workUnitId, routeSlug]);
+        const nextKey = `${workUnitId ?? ""}|${routeSlug ?? ""}`;
+        if (workViewResetKeyRef.current === nextKey) return;
+        workViewResetKeyRef.current = nextKey;
+        setLocalWorkViewId(slugRoute?.initialWorkViewId ? null : peekRetainedWorkView(orgId, workUnitId));
+    }, [workUnitId, routeSlug, slugRoute?.initialWorkViewId, orgId]);
 
     const selectedWorkViewId =
         optimisticSelection && optimisticSelection.routeSlug === routeSlug
@@ -267,7 +333,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // predicate path) — the same evaluation that renders the rows. Lane summaries evaluate
     // lanes (`compat_queue_key`), a DIFFERENT path that disagrees with view predicates; they
     // are kept only to size the rows fetch so the loaded page covers the lane.
-    const [summaries, setSummaries] = useState<QueueSummary[] | null>(null);
+    const [summaries, setSummaries] = useState<QueueSummary[] | null>(() => seed.summaries);
     const summariesRequestSeq = useRef(0);
 
     // ── Live refresh: re-run the queue + summary + totals fetches when a mutation dispatches
@@ -296,17 +362,27 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             .then(async (res) => {
                 const json = (await res.json().catch(() => ({}))) as { queues?: QueueSummary[]; error?: string };
                 if (!res.ok) throw new Error(json.error ?? "Failed to load queues");
-                if (seq === summariesRequestSeq.current) setSummaries(json.queues ?? []);
+                if (seq === summariesRequestSeq.current) {
+                    const nextSummaries = json.queues ?? [];
+                    setSummaries(nextSummaries);
+                    putWorkUnitSurfaceSummariesCache(nextSummaries, cacheContext, selectedSiteId);
+                }
             })
             .catch(() => {
                 if (seq === summariesRequestSeq.current) setSummaries(null);
             });
-    }, [workUnitId, selectedSiteId, queueRefreshNonce]);
+    }, [workUnitId, selectedSiteId, queueRefreshNonce, cacheContext]);
 
     // ── Queue rows: server applies the active Work View's filters (work_view_id) ────────
-    const [queueResult, setQueueResult] = useState<QueueItemsResult | null>(null);
+    // Seeded from the session cache on mount so a return navigation renders the prior rows instantly;
+    // the effect below still revalidates (SWR) and writes fresh rows back.
+    const [queueResult, setQueueResult] = useState<QueueItemsResult | null>(() => seed.queueResult);
     const [queueLoading, setQueueLoading] = useState(false);
     const [queueError, setQueueError] = useState<string | null>(null);
+    // "The first queue request for this surface has resolved (rows or error)." Seeded true on a
+    // return so the atomic-reveal gate is satisfied immediately; a background revalidate never
+    // clears it (it keys on settled-once, not `queueLoading`), so SWR cannot re-blank the surface.
+    const [queueSettledOnce, setQueueSettledOnce] = useState(() => seed.queueResult != null);
     const queueRequestSeq = useRef(0);
 
     const fetchQueueKey = useMemo(
@@ -322,11 +398,50 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             ? summaryForLane.count
             : undefined;
     const fetchLimit = resolveWorkUnitQueueRowsFetchLimit(settledLaneCount);
+    // Decouple the active-row fetch from the SUMMARY request: the rows fetch reads the latest
+    // fetch-size at fire time from this ref, but `fetchLimit` is NOT a rows-effect dependency — so a
+    // summary arriving after the rows fetch never triggers a duplicate rows request. If summaries are
+    // already present they size the first fetch; if not, the reveal fetch uses the safe default.
+    const fetchLimitRef = useRef(fetchLimit);
+    fetchLimitRef.current = fetchLimit;
+
+    // Fresh seeded rows (a prefetch or a very recent return) → skip the initial revalidate so a
+    // prefetched navigation launches NO duplicate rows request. One-shot: any later lane/view/site
+    // change or mutation nonce still refetches.
+    const skipFreshQueueFetchRef = useRef(seed.queueFresh === true);
+    // One active-queue request per distinct fetch scope. On cold entry the effect re-fires as
+    // `cacheContext` (orgId / scopeFingerprint) and `runtimeCtx.workViewId` settle asynchronously —
+    // the deployed trace showed the SAME lane loading 3×, each a server-cache miss. This guard
+    // collapses those cosmetic re-fires to one fetch while still refetching on a genuine scope change
+    // (org / access scope / view / site / queue / mutation nonce), preserving tenant isolation.
+    const lastQueueFetchIdentityRef = useRef<string | null>(null);
 
     useEffect(() => {
         // Wait for config settle: the lane validation above needs the queue definition, and a
         // rows fetch racing org/config bootstrap 404s transiently.
         if (!workUnitId || !fetchQueueKey || !configSettled) return;
+        // Def↔unit consistency: never fetch a key validated against a DIFFERENT host's queue definition
+        // (the cross-host Surface-Hold window) — the single source of the deployed lifecycle_lead-404 /
+        // lifecycle_qualification-on-wrong-host defect. See queueDefinitionMatchesFetchHost.
+        if (!queueDefinitionMatchesFetchHost(configWorkUnitId, workUnitId)) return;
+        const fetchIdentity = workUnitQueueFetchIdentity({
+            orgId: cacheContext.orgId,
+            scopeFingerprint: cacheContext.scopeFingerprint,
+            workUnitId,
+            fetchQueueKey,
+            workViewId: runtimeCtx.workViewId,
+            selectedSiteId,
+            refreshNonce: queueRefreshNonce,
+        });
+        if (skipFreshQueueFetchRef.current) {
+            // Seeded fresh (prefetch / very recent return): don't refetch, but record the identity so
+            // the settling re-fires for this same scope also short-circuit.
+            skipFreshQueueFetchRef.current = false;
+            lastQueueFetchIdentityRef.current = fetchIdentity;
+            return;
+        }
+        if (lastQueueFetchIdentityRef.current === fetchIdentity) return;
+        lastQueueFetchIdentityRef.current = fetchIdentity;
         const seq = ++queueRequestSeq.current;
         setQueueLoading(true);
         setQueueError(null);
@@ -334,15 +449,28 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             workUnitId,
             baseQueueKey: fetchQueueKey,
             workViewId: runtimeCtx.workViewId,
-            limit: fetchLimit,
+            limit: fetchLimitRef.current,
             selectedSiteId,
+            // Canonical compact projection — same queue_reveal the operational bootstrap uses for
+            // primary-lane rows (queue is preview-only; the Focus Panel is the authoritative record).
+            rowMode: "reveal",
+            callerSurface: "work_unit_runtime",
         });
         void dedupeAdminFetch(route, workspaceDataFetchInit())
             .then(async (res) => {
                 const json = (await res.json().catch(() => ({}))) as { error?: string };
                 if (!res.ok) throw new Error(json.error ?? "Failed to load queue items");
                 // Stale-response guard: only the latest request may apply.
-                if (seq === queueRequestSeq.current) setQueueResult(json as unknown as QueueItemsResult);
+                if (seq === queueRequestSeq.current) {
+                    const nextQueue = json as unknown as QueueItemsResult;
+                    setQueueResult(nextQueue);
+                    // Write-back: persist rows for this lane so return navigation is instant.
+                    putWorkUnitSurfaceQueueCache(
+                        { queueResult: nextQueue },
+                        cacheContext,
+                        workUnitSurfaceQueueLane(fetchQueueKey, runtimeCtx.workViewId, selectedSiteId),
+                    );
+                }
             })
             .catch((e) => {
                 if (seq === queueRequestSeq.current) {
@@ -351,17 +479,38 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 }
             })
             .finally(() => {
-                if (seq === queueRequestSeq.current) setQueueLoading(false);
+                if (seq === queueRequestSeq.current) {
+                    setQueueLoading(false);
+                    setQueueSettledOnce(true);
+                }
             });
+        // fetchLimit intentionally excluded — read from fetchLimitRef so a late summary never refetches.
     }, [
         workUnitId,
         fetchQueueKey,
         runtimeCtx.workViewId,
         selectedSiteId,
-        fetchLimit,
         configSettled,
+        configWorkUnitId,
         queueRefreshNonce,
+        cacheContext,
     ]);
+
+    // Cross-host switch within a live mount: re-arm the queue reveal gate so the destination unit
+    // reveals only once its OWN rows are present. A fresh mount / return navigation is seeded (the
+    // gate starts satisfied), never re-armed — the ref starts equal to the mount's work unit.
+    const queueGateWorkUnitRef = useRef(workUnitId);
+    useEffect(() => {
+        if (queueGateWorkUnitRef.current === workUnitId) return;
+        queueGateWorkUnitRef.current = workUnitId;
+        setQueueSettledOnce(false);
+    }, [workUnitId]);
+
+    // No resolvable queue lane (config settled but the unit exposes no queue key): nothing to wait
+    // for — satisfy the gate so the surface reveals its (empty) composition instead of hanging.
+    useEffect(() => {
+        if (configSettled && !fetchQueueKey) setQueueSettledOnce(true);
+    }, [configSettled, fetchQueueKey]);
 
     const rows = useMemo(() => {
         const base = queueResult ? queueRowModelsFromQueueItemsResult(queueResult) : [];
@@ -400,10 +549,30 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             }
             const refetchRows = shouldRefetchWorkUnitQueueRowsForEvent({ detail, visibleOpportunityIds });
             const refreshSummaries = shouldRefreshQueueSummariesForEvent({ detail, visibleOpportunityIds });
-            if (refetchRows || refreshSummaries) setQueueRefreshNonce((n) => n + 1);
+            if (refetchRows || refreshSummaries) {
+                // Narrowest correct invalidation: drop only the DATA projections (rows / summaries /
+                // counts) for THIS work unit so a return cannot resurrect pre-mutation rows, while the
+                // session-stable config and configured right-rail actions are retained (a data
+                // mutation never changes them). The active lane also refetches (nonce) and writes the
+                // fresh rows back, so the surface stays current in place — no route reconstruction.
+                invalidateWorkUnitSurfaceQueueCachesForWorkUnit({ context: cacheContextRef.current });
+                setQueueRefreshNonce((n) => n + 1);
+            }
         };
         window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
         return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+    }, []);
+
+    // Configuration publish (queue-row surface republished) — the config projection changed, so drop
+    // the FULL surface cache for this work unit (config + rows + right-rail) so a return re-resolves
+    // it. Operational record data is invalidated with it (its projection depends on the config).
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onConfigPublished = () => {
+            invalidateWorkUnitSurfaceCachesForWorkUnit({ context: cacheContextRef.current });
+        };
+        window.addEventListener(QUEUE_ROW_SURFACE_PUBLISHED_EVENT, onConfigPublished);
+        return () => window.removeEventListener(QUEUE_ROW_SURFACE_PUBLISHED_EVENT, onConfigPublished);
     }, []);
 
     // THE count model: the `total` of the same rows response that renders the queue.
@@ -457,6 +626,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         selectedSiteId,
         enabled: configSettled,
         refreshToken: queueRefreshNonce,
+        cacheContext,
     });
     const totalCount = useMemo(() => {
         const activeViewId = runtimeCtx.workViewId?.trim() || null;
@@ -534,7 +704,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         const next = buildWorkUnitHeaderPresentationForRuntime(headerConfig, {
             fallbackTitle: processLabel,
             fallbackSubtitle: workViewLabel,
-            resolved: headerMetricsResolved,
+            // This memo only runs once metrics have settled; coalesce a null resolve (e.g. a
+            // failed warm prefetch) to an empty map so the KPIs settle to genuine no-data ("—")
+            // rather than holding the pending loading slot forever.
+            resolved: headerMetricsResolved ?? {},
         });
         lastCompleteHeader.current = next;
         return next;
@@ -569,15 +742,20 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             });
             if (action.kind === "noop") return;
 
-            // Clear stale focus panel immediately — URL record segment strips via drawer sync.
-            closeDrawer();
-
+            // Do NOT clear the focus panel here. Tearing the drawer down to null drops the
+            // held-prior payload (InlineOpportunityFocusPanel returns null with no subject), so
+            // the record area flashes blank until the new lane's first row composes. Instead we
+            // keep the prior record on screen and let the first-row auto-open SWAP the subject
+            // once the new lane settles (holdPriorPayload spans the swap → no blank). The
+            // auto-open effect clears the drawer only if the new lane resolves empty.
             forceAutoOpenViewRef.current = action.workViewId;
             autoOpenedForViewRef.current = null;
 
             if (action.kind === "in-page") {
                 setLocalWorkViewId(action.workViewId);
                 setOptimisticSelection(null);
+                // Retain the operator's choice so a return to this unit restores this Work View.
+                putRetainedWorkView(orgId, workUnitId, action.workViewId);
                 return;
             }
 
@@ -593,7 +771,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             routeSlug,
             runtimeCtx.workViewId,
             workUnitId,
-            closeDrawer,
+            orgId,
         ],
     );
 
@@ -612,7 +790,9 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 selectedSiteId,
             });
             if (href) {
-                warmOperatorWorkUnitEntryFromHref(href, selectedSiteId, "work_view_pill_intent");
+                // One canonical prewarm for every affordance: identity + bootstrap + the PRV2 surface
+                // session (keyed by the live workspace scope) so navigation consumes the prefetch.
+                warmOperatorWorkUnitNavEntry(href, selectedSiteId, "work_view_pill_intent");
             }
         },
         [savedViews, canonicalLocationByViewId, selectedSiteId, runtimeCtx.workViewId],
@@ -705,11 +885,41 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         autoOpenedForViewRef.current = viewId;
         if (forceAutoOpen) forceAutoOpenViewRef.current = null;
 
-        if (!shouldOpen) return;
+        if (!shouldOpen) {
+            // Operator switched to a lane that settled with no openable rows: the prior record
+            // (held across the switch) belongs to the previous view and must not linger. Clear
+            // it now that we know the new lane is genuinely empty. A non-force pass (initial
+            // mount / deep-link) never force-clears an operator's open record.
+            const recordOpen = drawer.type === "opportunities" && drawer.id != null;
+            if (rows.length === 0 && (forceAutoOpen || recordOpen)) {
+                if (recordOpen) closeDrawer();
+                // Genuinely empty view — drop the retained record so a later return does not
+                // resurrect a record that is no longer in this view (clear only after empty).
+                putRetainedSelection(orgId, workUnitId, {
+                    workViewId: viewId,
+                    queueKey: fetchQueueKey,
+                    selectedRecordId: null,
+                });
+            }
+            return;
+        }
 
-        const first = rows[0];
-        if (!first) return;
-        const warm = resolveQueueRowWarmTarget(first, {
+        // ONE selection resolver drives both the committed model and this open effect, so they can
+        // never disagree. An explicit URL record already suppressed auto-open above; here the resolver
+        // restores the RETAINED record when still in the rows, else the first row.
+        const retained = peekRetainedSelection(orgId, workUnitId);
+        const retainedRecordId =
+            retained && retained.workViewId === viewId ? retained.selectedRecordId : null;
+        const targetId = resolveWorkUnitSelectedSubject({
+            routeRecordId: slugRoute?.routeRecordId ?? null,
+            rowRecordIds: rows.map((r) => r.entityId),
+            retainedRecordId,
+            forceAutoOpen,
+            queueSettled: true,
+        }).selectedRecordId;
+        const target = rows.find((r) => r.entityId === targetId) ?? rows[0];
+        if (!target) return;
+        const warm = resolveQueueRowWarmTarget(target, {
             departmentId,
             workUnitId,
             workViewId: viewId,
@@ -717,7 +927,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         if (warm) {
             prefetchOpportunityDrawerOnRowIntent(warm.id, warm.context, warm.seed);
         }
-        openRecord(first);
+        openRecord(target);
     }, [
         queueLoading,
         queueResult,
@@ -726,42 +936,106 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         openRecord,
         departmentId,
         workUnitId,
+        orgId,
+        fetchQueueKey,
         runtimeCtx.workViewId,
+        drawer.type,
+        drawer.id,
+        closeDrawer,
     ]);
 
-    // ── Selected record: the drawer store is THE selection state (no parallel store) ────
-    const selectedRecordId =
+    // ── Selected record: resolved SYNCHRONOUSLY as part of the committed model ──────────────
+    // The drawer store holds the LIVE selection (what the operator has open); the pure resolver
+    // computes the DEFAULT operational subject a populated view must land on (url → retained →
+    // strategy → first row → empty). `selectedRecordId` prefers the live drawer, else the resolved
+    // subject — so it is never null while rows exist (the `rows>0 && selection===null` state is
+    // unreachable in the committed model). The auto-open effect below still performs the side-effect
+    // of opening the drawer; the reveal gate (`selectionCommitted`) waits for it so no flash occurs.
+    const drawerSelectedId =
         drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
+    const selectedSubject = useMemo<WorkUnitSelectedSubject>(() => {
+        const viewId = runtimeCtx.workViewId?.trim() || null;
+        const retained = viewId ? peekRetainedSelection(orgId, workUnitId) : null;
+        const retainedRecordId =
+            retained && retained.workViewId === viewId ? retained.selectedRecordId : null;
+        return resolveWorkUnitSelectedSubject({
+            routeRecordId: slugRoute?.routeRecordId ?? null,
+            rowRecordIds: rows.map((r) => r.entityId),
+            retainedRecordId,
+            forceAutoOpen: forceAutoOpenViewRef.current === viewId,
+            queueSettled: queueSettledOnce,
+        });
+    }, [runtimeCtx.workViewId, orgId, workUnitId, slugRoute?.routeRecordId, rows, queueSettledOnce]);
+    const selectedRecordId = drawerSelectedId ?? selectedSubject.selectedRecordId;
+    // Reveal gate: the view is either authoritatively empty (nothing to select), a record is open, OR
+    // the auto-open pass has already run for this view. The last clause matters AFTER first reveal: an
+    // operator who closes the Focus Panel (drawer.id → null) must NOT re-blank the whole surface — the
+    // gate only holds the INITIAL reveal until the default subject opens, never re-hides a revealed one.
+    const selectionViewId = runtimeCtx.workViewId?.trim() || null;
+    const selectionCommitted =
+        rows.length === 0
+            ? queueSettledOnce
+            : drawerSelectedId != null || autoOpenedForViewRef.current === selectionViewId;
+
+    // Retain the operator's live record selection (session-scoped, per work unit) so a return to
+    // this Work Unit restores it. Only a real (non-null) selection is retained here — clearing on a
+    // genuinely-empty view happens in the auto-open effect above; a transient null during the
+    // return-mount window must NOT clobber the retained record before auto-open can read it.
+    useEffect(() => {
+        // Retain only a LIVE (drawer-open) selection — not the resolved first-row fallback — so a
+        // return restores what the operator actually had open, and a transient pre-open window never
+        // writes a placeholder into retained storage.
+        if (!workUnitId || !drawerSelectedId) return;
+        putRetainedSelection(orgId, workUnitId, {
+            workViewId: runtimeCtx.workViewId ?? null,
+            queueKey: fetchQueueKey,
+            selectedRecordId: drawerSelectedId,
+        });
+    }, [orgId, workUnitId, fetchQueueKey, runtimeCtx.workViewId, drawerSelectedId]);
 
     // ── Right Rail actions: the configured action lane for this work unit ────────────────
     // The runtime is the single owner of surface data fetching. Load the resolved actions
     // directly from the bundle route (handles the bootstrap defer caveat — see the PR-V2
     // right-rail handoff §5), expose them on the model; RR.SURFACE renders + the existing
     // action runtime executes. Deduped + TTL, so no double-fetch. Never invents actions.
-    const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>([]);
+    const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>(
+        () => seed.rightRailActions ?? [],
+    );
+    // Settled if seeded from cache (a return renders the action rail immediately, then revalidates).
+    const [rightRailSettled, setRightRailSettled] = useState(() => seed.rightRailActions != null);
     const { displayVm } = useOpportunityDrawerVmPayload();
     const { canMutate: authCanMutate } = useAdminAuth();
     useEffect(() => {
         if (!departmentId || !workUnitId) {
             setRightRailActions([]);
+            setRightRailSettled(false);
             return;
         }
         let cancelled = false;
+        // Seeded-stale keeps the rail settled during the silent revalidate; only a cold establish
+        // drops it so the empty rail anchor shows until the actions resolve.
+        if (seed.rightRailActions == null) setRightRailSettled(false);
         void fetchWorkUnitRightRailResolvedActions({
             departmentId,
             workUnitId,
             fetchInit: workspaceDataFetchInit() ?? {},
         })
             .then((list) => {
-                if (!cancelled) setRightRailActions(list);
+                if (!cancelled) {
+                    setRightRailActions(list);
+                    putWorkUnitSurfaceRightRailCache(list, cacheContext);
+                }
             })
             .catch(() => {
-                if (!cancelled) setRightRailActions([]);
+                if (!cancelled && seed.rightRailActions == null) setRightRailActions([]);
+            })
+            .finally(() => {
+                if (!cancelled) setRightRailSettled(true);
             });
         return () => {
             cancelled = true;
         };
-    }, [departmentId, workUnitId]);
+    }, [departmentId, workUnitId, cacheContext, seed]);
 
     const filteredRightRailActions = useMemo(
         () =>
@@ -770,6 +1044,38 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 canMutate: authCanMutate,
             }),
         [rightRailActions, displayVm?.workspace.stage_work_runtime, authCanMutate],
+    );
+
+    // ── Atomic-reveal readiness (Trust Closure) ─────────────────────────────────────────────
+    // The primary composition includes the queue rows: `coldCompositionReady` requires the queue to
+    // have settled once, so cold entry holds ONE skeleton until header + pills + counts + rows are
+    // ready together (no region-by-region reveal), while a seeded return is ready on first render
+    // (queue seeded → `queueSettledOnce` true). A background SWR revalidate keeps `queueSettledOnce`
+    // true and `queueResult` non-null, so it never returns the surface to a loading boundary.
+    const readiness = useMemo<WorkUnitReadiness>(
+        () =>
+            resolveWorkUnitReadiness({
+                hasIdentity: slugRoute != null,
+                configSettled,
+                headerConfigLoaded,
+                hasHeaderPresentation: Boolean(headerPresentation),
+                queueSettledOnce,
+                rightRailSettled,
+                queueLoading,
+                openedFromCache: seed.config != null && seed.queueResult != null,
+                selectionCommitted,
+            }),
+        [
+            slugRoute,
+            configSettled,
+            headerConfigLoaded,
+            headerPresentation,
+            queueSettledOnce,
+            rightRailSettled,
+            queueLoading,
+            seed,
+            selectionCommitted,
+        ],
     );
 
     // ── Resolved model ───────────────────────────────────────────────────────────────────
@@ -790,23 +1096,20 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             },
             activeWorkViewId: runtimeCtx.workViewId,
             selectedRecordId,
+            selectedSubject,
             rightRailActions: filteredRightRailActions,
             departmentId,
             workUnitId,
-            // Above-fold identity + configured views resolved; queue carries its own state.
-            ready:
-                slugRoute != null &&
-                configSettled &&
-                headerConfigLoaded &&
-                Boolean(headerPresentation),
+            // Atomic reveal: the surface is ready only when its primary composition (incl. queue
+            // rows) is established. `ready` mirrors `readiness.coldCompositionReady` for the render mode.
+            ready: readiness.coldCompositionReady,
+            readiness,
         }),
         [
-            slugRoute,
             headerPresentation,
             headerConfig,
             processLabel,
             workViewLabel,
-            headerConfigLoaded,
             workViews,
             rows,
             totalCount,
@@ -815,12 +1118,45 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             queueError,
             runtimeCtx.workViewId,
             selectedRecordId,
+            selectedSubject,
             filteredRightRailActions,
             departmentId,
             workUnitId,
-            configSettled,
+            readiness,
         ],
     );
+
+    // ── Trust Closure instrumentation: open a nav record + stamp the §3 composition markers ─────
+    // Purely observational (dev/staging-gated inside the recorder). `shell_visible` = identity
+    // resolved (frame can render); `coherent_content` = shell + primary queue rows composed as one
+    // (the atomic-reveal point); `interaction_ready` = rows + action rail settled. First-write-wins.
+    useEffect(() => {
+        if (!workUnitId || !routeSlug) return;
+        const navStart = alloyPerfGet("work_unit_navigation_start");
+        const freshStart =
+            typeof navStart === "number" &&
+            typeof performance !== "undefined" &&
+            performance.now() - navStart < 8000
+                ? navStart
+                : undefined;
+        const hasCachedComposition = seed.config != null && seed.queueResult != null;
+        beginWorkspaceNav(routeSlug, classifyWorkspaceNavMode(routeSlug, hasCachedComposition), freshStart);
+        seenWorkUnitNavSlugs.add(routeSlug);
+        firstWorkspaceNavSincePageLoad = false;
+    }, [workUnitId, routeSlug, seed]);
+
+    useEffect(() => {
+        if (slugRoute != null) markWorkspaceNavSignal("shell_visible");
+    }, [slugRoute]);
+
+    useEffect(() => {
+        // The atomic-reveal point: header + pills + counts + primary rows composed as one.
+        if (readiness.coldCompositionReady) markWorkspaceNavSignal("coherent_content");
+    }, [readiness.coldCompositionReady]);
+
+    useEffect(() => {
+        if (readiness.interactionReady) markWorkspaceNavSignal("interaction_ready");
+    }, [readiness.interactionReady]);
 
     const intents = useMemo<WorkUnitSurfaceIntents>(
         () => ({ selectWorkView, prefetchWorkView, openRecord, prefetchRecord }),

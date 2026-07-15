@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-product-contract <key>
+
+Generates proposed Product Contract from brief and audit artifacts.
+Transitions: auditing → contracting → awaiting_decisions|awaiting_product_approval
+
+See: scripts/local-dev/PRODUCT-CONTRACT.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_product_require_node
+  alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+
+  alloy_initiative_acquire_lock "$key"
+  local state
+  state="$(alloy_product_current_state "$key")"
+  [[ "$state" == "auditing" || "$state" == "contracting" || "$state" == "awaiting_decisions" || "$state" == "blocked" ]] \
+    || alloy_die "cannot contract in state: $state (run alloy-product-audit first)"
+
+  local brief_json audit_dir contract_dir decisions_dir result blocking
+  brief_json="$(alloy_product_dir "$key")/brief.json"
+  audit_dir="$(alloy_product_dir "$key")/audit"
+  contract_dir="$(alloy_product_dir "$key")/contract"
+  decisions_dir="$(alloy_product_dir "$key")/decisions"
+  [[ -f "$audit_dir/references.md" ]] || alloy_die "audit artifacts missing — run alloy-product-audit first"
+
+  result="$(alloy_product_artifacts contract "$brief_json" "$audit_dir" "$contract_dir" "$decisions_dir")"
+  alloy_product_record_decision_log "$key"
+
+  blocking="$(node -e "console.log(JSON.parse(process.argv[1]).blocking_decisions)" "$result")"
+
+  if [[ "$state" == "auditing" ]]; then
+    alloy_product_transition "$key" "contracting"
+    state="contracting"
+  fi
+
+  if [[ "$blocking" -gt 0 ]]; then
+    [[ "$state" == "contracting" || "$state" == "awaiting_decisions" ]] && \
+      alloy_product_transition "$key" "awaiting_decisions" 2>/dev/null || true
+  else
+    alloy_product_transition "$key" "awaiting_product_approval" 2>/dev/null || true
+  fi
+
+  alloy_info "Product contract generated: $key"
+  alloy_info "  blocking decisions: $blocking"
+  alloy_info "  state: $(alloy_product_current_state "$key")"
+  alloy_info ""
+  if [[ "$blocking" -gt 0 ]]; then
+    alloy_info "Next: alloy-product-decisions $key"
+  else
+    alloy_info "Next: alloy-product-approve $key --approver Kelly"
+  fi
+}
+
+main "$@"

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Alloy Engineering V1 — local AI Engineering Manager
+
+Initiative lifecycle:
+  alloy-initiative-create <key> --clipboard|--from <file>
+  alloy-initiative-import <key>                    # stdin
+  alloy-initiative-audit <key>
+  alloy-initiative-plan <key>
+  alloy-initiative-approve <key> --approver <name>
+  alloy-initiative-start <key> [--dry-run]
+  alloy-initiative-status [<key>|--all]
+  alloy-initiative-review <key>
+  alloy-initiative-remediate <key>
+  alloy-initiative-package <key>
+  alloy-initiative-close <key> [--promotion-recorded]
+
+Worker delivery:
+  alloy-worker-package <key> <task-id>
+  alloy-worker-open <key> <task-id> [--with-server] [--dry-run]
+  alloy-worker-status <key> [task-id]
+  alloy-worker-report <key> <task-id>
+
+Phase 1–3 toolkit (unchanged):
+  alloy-agent-create / alloy-agent-open / alloy-validate / alloy-agent-verify ...
+
+Storage: ~/.local/state/alloy-dev/initiatives/<key>/
+
+Documentation:
+  scripts/local-dev/ENGINEERING-MANAGER.md
+  scripts/local-dev/INITIATIVE-CONTRACT.md
+  scripts/local-dev/WORKER-PACKAGE.md
+  scripts/local-dev/REVIEW-PIPELINE.md
+
+All commands support --help.
+Push and merge always require explicit human approval.
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]]; then
+    usage
+    exit 0
+  fi
+  usage
+}
+
+main "$@"

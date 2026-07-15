@@ -86,15 +86,35 @@ describe("WorkspaceHeader presentation", () => {
         expect(el.querySelector("[data-workspace-header-kpi='4']")?.textContent).toContain("Open work");
     });
 
-    it("builder and runtime share the same formatter path (title + empty value)", () => {
+    it("builder and runtime share the same formatter path (title + resolved no-data value)", () => {
+        // A settled-but-empty resolve is genuine no-data → the "—" glyph (not the loading slot).
+        const model = buildWorkspaceHeaderPresentation(
+            normalizeWorkspaceHeaderSurfaceConfig({ title: "Published Title" }),
+            { fallbackTitle: "Default Org", resolved: {} },
+        );
+        const el = render(<WorkspaceHeader model={model} />);
+        expect(el.querySelector("[data-workspace-header-title]")?.textContent).toBe("Published Title");
+        const values = el.querySelectorAll("[data-workspace-header-kpi-value]");
+        expect(values.length).toBeGreaterThan(0);
+        for (const value of values) {
+            expect(value.getAttribute("data-kpi-pending")).toBeNull();
+            expect(value.textContent).toBe("—");
+        }
+    });
+
+    it("holds a stable loading slot (not a '—' that flips) until metrics resolve", () => {
+        // No resolved map = metrics not settled yet → each KPI shows the pending loading slot.
         const model = buildWorkspaceHeaderPresentation(
             normalizeWorkspaceHeaderSurfaceConfig({ title: "Published Title" }),
             { fallbackTitle: "Default Org" },
         );
         const el = render(<WorkspaceHeader model={model} />);
-        expect(el.querySelector("[data-workspace-header-title]")?.textContent).toBe("Published Title");
-        for (const value of el.querySelectorAll("[data-workspace-header-kpi-value]")) {
-            expect(value.textContent).toBe("—");
+        const values = el.querySelectorAll("[data-workspace-header-kpi-value]");
+        expect(values.length).toBeGreaterThan(0);
+        for (const value of values) {
+            expect(value.getAttribute("data-kpi-pending")).toBe("true");
+            // No fake value: the placeholder carries no "—" (or any numeric) text.
+            expect(value.textContent).toBe("");
         }
     });
 

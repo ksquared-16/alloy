@@ -233,6 +233,7 @@ export function mergeInquiryChildIntoFocusPanelTruth(
         if (ocm.program_room_cohort_key !== undefined) {
             next.program_room_cohort_key = ocm.program_room_cohort_key;
         }
+        if (ocm.location_id !== undefined) next.location_id = ocm.location_id;
         if (ocm.start_date !== undefined) next.start_date = ocm.start_date;
         return next;
     });

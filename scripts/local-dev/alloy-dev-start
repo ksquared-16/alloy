@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# Start the assigned Next dev server for an Alloy agent worktree.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-dev-start <worktree-name>
+
+Starts a toolkit-owned Next dev server:
+  1) loads sanitized web/.env.local.agent (agent-visible)
+  2) injects trusted server vars from ALLOY_SERVER_ENV_SOURCE into the
+     owned process only (never written to the worktree)
+
+Do not run npm run dev directly — that bypasses trusted injection.
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local name="$1"
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_load_metadata "$name"
+
+  local path="$ALLOY_WORKTREE_PATH"
+  local port="$PORT"
+  local url="${NEXT_PUBLIC_APP_URL:-http://localhost:${port}}"
+  local web_dir pid_path log_path existing_pid
+  web_dir="$(alloy_web_dir_for "$path")"
+  pid_path="$(alloy_pid_path "$name")"
+  log_path="$(alloy_log_path "$name")"
+
+  [[ -d "$path" ]] || alloy_die "worktree path missing: $path"
+  [[ -d "$web_dir" ]] || alloy_die "web directory missing: $web_dir"
+
+  if [[ -f "$pid_path" ]]; then
+    existing_pid="$(alloy_read_pid_file "$pid_path" || true)"
+    if [[ -n "${existing_pid:-}" ]] && alloy_pid_alive "$existing_pid"; then
+      if alloy_pid_belongs_to_worktree "$existing_pid" "$path"; then
+        alloy_die "dev server already running for $name (PID $existing_pid). Refusing duplicate start."
+      fi
+      alloy_die "PID file exists for live PID $existing_pid that does not belong to $path. Inspect: $pid_path"
+    fi
+    alloy_remove_dead_pid_file "$name" || true
+  fi
+
+  alloy_refuse_occupied_port "$port" "dev-start for $name"
+
+  alloy_export_node_defaults
+  export PORT="$port"
+  export NEXT_PUBLIC_APP_URL="$url"
+
+  # Two-tier environment: agent-safe file + trusted server injection (process only).
+  # shellcheck source=lib/verify.sh
+  source "${SCRIPT_DIR}/lib/verify.sh"
+
+  # Fail before Next starts when trusted source / required names are absent.
+  alloy_trusted_server_env_preflight
+
+  if [[ -f "$(alloy_agent_web_env_path "$path")" ]]; then
+    if ! alloy_agent_env_lacks_privileged "$path"; then
+      alloy_die "web/.env.local.agent contains privileged variable names — re-run alloy-agent-prepare (never copy service-role into the worktree)"
+    fi
+    alloy_load_agent_env_exports "$path" || true
+  else
+    alloy_warn "web/.env.local.agent missing — starting with trusted server env only (run alloy-agent-prepare for agent-safe public vars)"
+  fi
+
+  # Trusted overlay into this process tree only — never persisted to worktree/metadata.
+  alloy_load_trusted_server_env_exports
+  local trusted_count="${ALLOY_TRUSTED_ENV_LOADED_COUNT:-0}"
+  local trusted_source
+  trusted_source="$(alloy_server_env_source_path)"
+
+  alloy_info "Starting ${ALLOY_DEV_COMMAND} in ${web_dir} on port ${port}..."
+  (
+    cd "$web_dir"
+    export PORT="$port"
+    export NEXT_PUBLIC_APP_URL="$url"
+    export NODE_OPTIONS
+    # Inherited env includes agent-safe + trusted server vars (not on argv).
+    nohup bash -c "$ALLOY_DEV_COMMAND" >>"$log_path" 2>&1 &
+    echo $! >"$pid_path"
+  )
+
+  local pid
+  pid="$(alloy_read_pid_file "$pid_path")"
+  sleep 1
+  if ! alloy_pid_alive "$pid"; then
+    rm -f "$pid_path"
+    alloy_die "dev server failed to stay alive. Inspect log: $log_path"
+  fi
+
+  cat <<EOF
+Dev server started (toolkit-owned)
+  worktree: ${name}
+  url:      ${url}
+  port:     ${port}
+  PID:      ${pid}
+  log:      ${log_path}
+  path:     ${path}
+
+Environment (two-tier):
+  agent-safe:     web/.env.local.agent (public/safe only)
+  trusted source: ${trusted_source}
+  trusted vars:   ${trusted_count} names injected into owned process only
+  not persisted:  privileged values are never written to the worktree
+
+Do not run npm run dev directly — use alloy-dev-start / devup.
+EOF
+}
+
+main "$@"

@@ -181,7 +181,7 @@ This program **does not** duplicate the following; consult the Engineering Reali
 | Engineering checklists (readiness/complete/cert/migration/rollout) | [Realization §19 — Engineering Checklists](./operational-expectations-engineering-realization.md) |
 | Implementation risk register | [Realization §20 — Implementation Risk Register](./operational-expectations-engineering-realization.md) |
 | Milestones · certification matrix · migration · rollout | [Realization §4 · §5 · §6 · §8](./operational-expectations-engineering-realization.md) |
-| Frozen architecture · ontology · laws · §A resolutions | [System design](../operational-expectations-system-design.md) |
+| Frozen architecture · ontology · laws · §A resolutions | [System design](../core/operational-expectations-system-design.md) |
 
 ---
 
@@ -199,6 +199,6 @@ This program **does not** duplicate the following; consult the Engineering Reali
 
 - [Engineering realization plan](./operational-expectations-engineering-realization.md) — **the single
   authoritative implementation contract**; this program is its subordinate execution index.
-- [System design](../operational-expectations-system-design.md) — frozen architecture, packages, gates.
+- [System design](../core/operational-expectations-system-design.md) — frozen architecture, packages, gates.
 - [Architecture closeout](./operational-expectations-architecture-closeout.md) — the freeze.
 - [Documentation governance](../governance/documentation-governance.md) — freeze policy + status vocabulary.

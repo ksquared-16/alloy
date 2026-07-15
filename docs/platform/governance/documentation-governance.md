@@ -161,9 +161,23 @@ Sprints, audits, and archive **excluded** from default source pack unless explic
 
 ---
 
+## Where decisions belong
+
+| Destination | Use when |
+|-------------|----------|
+| **Canonical doctrine** (`docs/platform/`, `docs/system/`) | Defining how Alloy works today — the encyclopedia |
+| **RFC** (`docs/platform/rfcs/`) | Proposing a material change that needs ratification before it becomes sole truth |
+| **Platform Decisions** (`docs/platform/foundation/platform-decisions.md`) | Recording a consequential, durable, **cross-platform** decision and its rationale so future engineers find *why* quickly — without restating doctrine |
+| **Release history** | Summarizing a **shipped** capability milestone after merge |
+| **Sprint / audit / archive** | Execution history, investigations, and preserved context — **never** primary current truth |
+
+Rule: open debates stay in sprints/audits until resolved; resolved durable decisions update doctrine **and**, when cross-cutting, receive a concise Platform Decisions entry linked to the owners.
+
+---
+
 ## Doctrine freeze policy
 
-**Freeze before documenting.** Open debates belong in sprints/audits until resolved, then merge into platform docs as decisions.
+**Freeze before documenting.** Open debates belong in sprints/audits until resolved, then merge into platform docs as decisions (and record cross-platform decisions in [`../foundation/platform-decisions.md`](../foundation/platform-decisions.md)).
 
 Current frozen (July 2026):
 
@@ -173,6 +187,7 @@ Current frozen (July 2026):
 - BOS human-in-the-loop
 - Platform architecture freeze (`platform/milestones/freeze-july-2026.md`)
 - Operational Expectations architecture (`platform/milestones/operational-expectations-architecture-closeout.md`); realization program: `platform/milestones/operational-expectations-engineering-realization.md`
+- **Documentation Platform v1.0** — handbook, governance, docs-lint, curation, certification; decision register: `platform/foundation/platform-decisions.md`
 
 ---
 
@@ -182,12 +197,15 @@ Current frozen (July 2026):
 - **After major ship:** release-history milestone
 - **After migration apply:** schema regeneration
 - **After doc structure wave:** docs-lint baseline refresh
+- **After durable cross-platform decision:** Platform Decisions entry + owning doctrine in the same change when behavior changes
 
 ---
 
 ## Related
 
 - `design-and-operational-doctrine.md`
-- `../../execution/operating-doctrine.md` (transitional expanded rules)
-- `../../audits/documentation-architecture-audit-2026-07.md` (planning artifact)
-- `../../sprints/active/documentation-rebaseline-v2/migration-manifest.md` (execution manifest)
+- [`../foundation/platform-decisions.md`](../foundation/platform-decisions.md)
+- [`../foundation/alloy-platform-handbook.md`](../foundation/alloy-platform-handbook.md)
+- `docs/archive/2026-06-execution/operating-doctrine.md` (historical)
+- `docs/audits/archive/2026-07-documentation-rebaseline/` (planning artifacts)
+- `docs/sprints/completed/documentation-rebaseline-v2/` (initiative closeout history)

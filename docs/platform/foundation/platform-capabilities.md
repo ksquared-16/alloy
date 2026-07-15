@@ -29,13 +29,14 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | Current Work Runtime | **Complete** | Config-driven stage work in Focus Panel | PR #95 |
 | TypeScript canonical typecheck | **Complete** | Split build/full graphs; 8 GB heap; CI both jobs | `typescript-performance.md` |
 | Workspace orchestration | **Complete** | Repo dev entry coordination | PR #143 |
+| Documentation Platform v1.0 | **Complete** | Handbook, governance, docs-lint/CI, curation, certification, Platform Decisions register | Production infrastructure; incremental maintenance thereafter |
 | Platform simplification (legacy drawer) | **Complete** | Legacy drawer deleted; canonical surfaces | PR #144–#148 |
 
 ---
 
 ## Operational truth (two-ledger ontology)
 
-The frozen [Operational Expectations architecture](../operational-expectations-system-design.md) establishes **two authored ledgers** — the platform's authoritative operational truth. Both are append-only, actor-attributed, and **neither is derived from the other**; that non-derivability is precisely why each is a *capability* rather than a projection. Everything downstream (Judgment, Gap, Projection, Scheduling, Forecasting, Current Work, Billing, Communications) is **derived** and is therefore intentionally **not** listed here as a capability. Terminology is locked in the [glossary two-ledger map](../governance/glossary.md); Law 2 is in the [truth-flow doctrine](../core/operational-truth-flow-doctrine.md).
+The frozen [Operational Expectations architecture](../core/operational-expectations-system-design.md) establishes **two authored ledgers** — the platform's authoritative operational truth. Both are append-only, actor-attributed, and **neither is derived from the other**; that non-derivability is precisely why each is a *capability* rather than a projection. Everything downstream (Judgment, Gap, Projection, Scheduling, Forecasting, Current Work, Billing, Communications) is **derived** and is therefore intentionally **not** listed here as a capability. Terminology is locked in the [glossary two-ledger map](../governance/glossary.md); Law 2 is in the [truth-flow doctrine](../core/operational-truth-flow-doctrine.md).
 
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|
@@ -135,7 +136,8 @@ The frozen [Operational Expectations architecture](../operational-expectations-s
 
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|
-| Settings four-plane V1 | **Complete** | Fields, grouping, layouts, actions | May 2026 |
+| Settings four-plane V1 | **Complete** | Fields, grouping, layouts, actions (control plane) | May 2026 |
+| Configuration Workspace Platform | **In Progress** | Object-centric configuration experience every domain inherits; canonical doctrine `platform/operator/configuration-workspace-platform-doctrine.md` | Reference impl = Locations (Phase B); prototype landed |
 | Field policy enforcement | **Complete** | Opportunity/job subset | Forms parity open |
 | Record Experience Builder | **Planned** | Deferred from parity sprint | |
 | Placement priority | **Complete** | Opt-in ordered cohort ranking layer | Childcare waitlist is one use; off by default |

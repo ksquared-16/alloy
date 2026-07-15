@@ -15,6 +15,15 @@ supersedes: []
 
 ## 2026 H1 — Platform maturation
 
+### July 2026 — Documentation Platform v1.0
+
+**Shipped to `staging`.** Canonical documentation architecture, Platform Handbook, governed frontmatter, docs-lint/CI, history separation (sprints/audits/archive), curation, repository certification, and the **Platform Decisions** register. Documentation is treated as production infrastructure; no further broad documentation reorganization is planned. Active doctrine remains clean; historical sprint/archive link debt stays intentionally baselined.
+
+- Handbook: `platform/foundation/alloy-platform-handbook.md`
+- Decisions: `platform/foundation/platform-decisions.md`
+- Governance: `platform/governance/documentation-governance.md`
+- Certification: `platform/milestones/documentation-rebaseline-v2-certification.md`
+
 ### July 2026 — Operational Expansion Wave 1 (fact & correction-aware consumption contracts)
 
 **Shipped to `staging`** — PR #181, merge `9333379a9`. The first delivery step of the frozen operational-expansion architecture ([`../rfcs/operational-expansion-phase1.md`](../rfcs/operational-expansion-phase1.md)): the runtime **contracts** for operational facts and correction-aware consumption. No operator surface, no Posting, no automatic fact→consumption wiring.

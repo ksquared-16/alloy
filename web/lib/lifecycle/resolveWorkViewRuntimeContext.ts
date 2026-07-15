@@ -4,8 +4,10 @@
 
 import {
     activeLifecycleProcess,
+    activeStagesForProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { primaryQueueKeyForLifecycleStage } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import type { WorkViewConfigV1Stored, WorkViewFilterMatchV1 } from "@/lib/lifecycle/workViewsConfigV1";
 import { normalizeWorkViewsDisplayOrder, resolveWorkViewMatchV1 } from "@/lib/lifecycle/workViewsConfigV1";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
@@ -23,13 +25,21 @@ export function resolveWorkViewBaseQueueKey(
     explicitQueueKey: string | null | undefined,
     queueDefinition: unknown,
 ): string | null {
-    const compat = workView?.compat_queue_key?.trim();
-    if (compat) return compat;
-    const explicit = explicitQueueKey?.trim();
-    if (explicit) return explicit;
     const bundle = queueDefinition != null ? tryLoadWorkUnitQueueDefinitionBundle(queueDefinition) : null;
+    const existsOnUnit = (key: string): boolean =>
+        !bundle || bundle.def.queues.some((q) => q.key === key);
+    // A bound compat lane is only usable when it actually exists on THIS unit's definition. A stale
+    // `compat_queue_key` — e.g. a deleted lifecycle stage like `lifecycle_qualification`, or an
+    // aggregate key like `pipeline_total` that lives on a sibling unit — must NOT be returned: the
+    // server throws "Unknown queue key" (404). When the def is loaded and the key is absent, degrade
+    // to the unit's all-records lane; the server still applies the view's predicates via `work_view_id`.
+    const compat = workView?.compat_queue_key?.trim();
+    if (compat && existsOnUnit(compat)) return compat;
+    const explicit = explicitQueueKey?.trim();
+    if (explicit && existsOnUnit(explicit)) return explicit;
     if (bundle) return findAllRecordsQueueKey(bundle.def, getQueueUiConfig(bundle.def));
-    return null;
+    // No definition to validate against — best-effort passthrough (runtime gates on config readiness).
+    return compat || explicit || null;
 }
 
 export type WorkViewRuntimeContext = {
@@ -44,11 +54,38 @@ export type WorkViewRuntimeContext = {
     sort: WorkViewConfigV1Stored["sort_v1"];
 };
 
+/**
+ * A Work View bound to a `lifecycle_<stage>` lane whose backing stage is no longer active is an
+ * ORPHAN. The physical lane can still exist in the queue definition (stage deleted, lane not pruned),
+ * so every "lane present in def" check passes and the ghost pill renders, prefetches (the residual
+ * `…/lifecycle_qualification?caller_surface=work_unit_prewarm` warm GET), and counts against a stage
+ * the operator removed. Only `lifecycle_*` keys absent from the live active-stage set are orphans —
+ * predicate-only views (no `compat_queue_key`), all-records, and sibling aggregates are never touched.
+ */
+export function isOrphanedLifecycleWorkView(
+    view: { compat_queue_key?: string | null },
+    activeLifecycleQueueKeys: ReadonlySet<string>,
+): boolean {
+    const compat = view.compat_queue_key?.trim();
+    if (!compat || !compat.startsWith("lifecycle_")) return false;
+    return !activeLifecycleQueueKeys.has(compat);
+}
+
+/**
+ * The single upstream owner of saved Work Views. Dropping an orphaned lifecycle view HERE removes the
+ * ghost pill AND every downstream emission path in one place: the Work Unit pill strip, grouped-totals
+ * targets, warm-prefetch href resolution, and Sidebar/tile nav all read through this resolver.
+ */
 export function savedWorkViewsFromDepartmentMetadata(
     departmentMetadata: unknown,
 ): WorkViewConfigV1Stored[] {
     const process = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(departmentMetadata));
-    return normalizeWorkViewsDisplayOrder(process?.work_views_v1 ?? []);
+    const ordered = normalizeWorkViewsDisplayOrder(process?.work_views_v1 ?? []);
+    if (!process) return ordered;
+    const activeLifecycleQueueKeys = new Set(
+        activeStagesForProcess(process).map((s) => primaryQueueKeyForLifecycleStage(s.key)),
+    );
+    return ordered.filter((view) => !isOrphanedLifecycleWorkView(view, activeLifecycleQueueKeys));
 }
 
 /** Load department metadata for a work unit (queue API filter path). */
