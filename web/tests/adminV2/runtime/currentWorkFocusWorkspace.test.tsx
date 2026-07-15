@@ -192,6 +192,51 @@ describe("Current Work Focus workspace composition", () => {
         expect(html).not.toContain("data-work-summary");
     });
 
+    it("promotes Record Outcome for outcome-led work without a fake Primary Action", () => {
+        const outcomeLedSurface = {
+            ...minimalSurface,
+            title: "Conduct Tour",
+            primaryAction: null,
+            execution: {
+                executionMode: "outcome_led",
+                prominentCta: "record_outcome",
+                hasExecutablePrimaryAction: false,
+                primaryActionIsExecutable: false,
+            },
+        } as CurrentWorkSurfaceVM;
+        const html = renderToStaticMarkup(
+            <CurrentWorkWorkspace
+                surface={outcomeLedSurface}
+                completionPhase="working"
+                pendingOutcome={null}
+                pendingOutcomeKey={null}
+                primaryWorkItem={null}
+                busy={false}
+                error={null}
+                handoffNotice={null}
+                activityItems={[]}
+                activityPreviewOpen={false}
+                onToggleActivityPreview={() => undefined}
+                onCloseActivityPreview={() => undefined}
+                onViewFullActivity={() => undefined}
+                onChecklistItem={() => undefined}
+                onSelectOutcome={() => undefined}
+                onCancelOutcome={() => undefined}
+                onConfirmOutcome={() => undefined}
+                onCancelPicker={() => undefined}
+                onAction={() => undefined}
+                onBack={() => undefined}
+                onContinueAfterComplete={() => undefined}
+                completionSummary={null}
+                stageLabel="Tour"
+            />,
+        );
+        expect(html).toContain('data-execution-mode="outcome_led"');
+        expect(html).toContain('data-prominent-cta="record_outcome"');
+        expect(html).toContain('data-outcome-prominence="primary"');
+        expect(html).not.toContain("data-work-primary-action");
+    });
+
     it("ModeGrid hosts current_work workspace replace", () => {
         const source = readFileSync(
             path.join(process.cwd(), "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx"),

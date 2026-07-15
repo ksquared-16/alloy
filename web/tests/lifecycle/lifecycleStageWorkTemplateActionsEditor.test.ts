@@ -39,8 +39,9 @@ describe("LifecycleStageWorkTemplateActionsEditor", () => {
         expect(editor).not.toContain("work-template-alternate-paths");
         expect(editor).toContain("work-template-transitions-note");
 
-        const operatingPlan = read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx");
-        expect(operatingPlan).toContain("Outcome Definitions");
+        const definitions = read("components/adminV2/settings/lifecycle/LifecycleStageOutcomeDefinitionsEditor.tsx");
+        expect(definitions).toContain("Outcome Definitions");
+        expect(definitions).toContain("Define stage outcomes once");
     });
 });
 

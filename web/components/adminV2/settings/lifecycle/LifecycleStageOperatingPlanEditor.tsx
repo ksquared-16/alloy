@@ -6,7 +6,6 @@ import {
     BUSINESS_PROCESS_SECTION_PURPOSE,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import {
-    newOutcomeDraft,
     newWorkTemplateDraft,
     stageOperatingPlanDraftDirty,
     stageOperatingPlanDraftFromSaved,
@@ -14,7 +13,6 @@ import {
     type StageOperatingPlanEditorDraft,
 } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
 import {
-    outcomesForWorkTemplate,
     resolveEffectivePrimaryWorkTemplate,
     setPrimaryWorkTemplate,
 } from "@/lib/lifecycle/stageOperatingPlanConvergence";
@@ -23,8 +21,9 @@ import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1"
 import { STAGE_JOURNEY_SEGMENT_LABELS } from "@/lib/lifecycle/stageOperatingPlanUiLabels";
 import LifecycleStageAttentionRulesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionRulesEditor";
 import LifecycleStageWorkCompletionPolicyEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkCompletionPolicyEditor";
-import LifecycleStageOutcomeAutomationEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeAutomationEditor";
 import LifecycleStageWorkTemplateActionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor";
+import LifecycleStageOutgoingTransitionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutgoingTransitionsEditor";
+import LifecycleStageOutcomeDefinitionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeDefinitionsEditor";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
 import { resolveStageOutcomeTransitionOptions } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
@@ -111,6 +110,9 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 lifecycle_key: stageKey,
                 stage_key: stageKey,
                 journey_segment: draft.journey_segment,
+                ...(draft.outgoing_transitions !== undefined
+                    ? { outgoing_transitions: draft.outgoing_transitions }
+                    : {}),
                 work_templates: draft.work_templates,
                 outcomes: draft.outcomes,
                 outcome_rules: draft.outcome_rules,
@@ -147,8 +149,9 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
             transitionOptions,
             configuredStatuses,
             entityType,
+            processStageKeys: (processStages ?? []).map((stage) => stage.key),
         }),
-        [validPrimaryActionRefs, transitionOptions, configuredStatuses, entityType],
+        [validPrimaryActionRefs, transitionOptions, configuredStatuses, entityType, processStages],
     );
 
     const operatingContractIssues: StageOperatingContractIssue[] = useMemo(
@@ -227,6 +230,22 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 </select>
             </label>
 
+            <LifecycleStageOutgoingTransitionsEditor
+                stageKey={stageKey}
+                stageLabel={stageLabel}
+                transitions={draft.outgoing_transitions ?? []}
+                processStages={processStages ?? []}
+                configuredStatuses={configuredStatuses}
+                entityType={entityType}
+                onChange={(outgoing_transitions) => setDraft((prev) => ({ ...prev, outgoing_transitions }))}
+            />
+
+            <LifecycleStageOutcomeDefinitionsEditor
+                draft={draft}
+                transitionOptions={transitionOptions}
+                onChange={setDraft}
+            />
+
             <div
                 className="rounded-lg border border-alloy-forge/10 bg-white"
                 data-testid="stage-operating-plan-work-section"
@@ -287,7 +306,6 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 <div className="min-w-0 flex-1 space-y-3" data-testid="stage-operating-plan-work-workspace">
                 {draft.work_templates.map((work, index) => {
                         if (work.template_key !== selectedWorkKey) return null;
-                        const workOutcomes = outcomesForWorkTemplate(draft.outcomes, work.template_key);
                         const isPrimary =
                             work.primary === true ||
                             (primaryWork?.template_key === work.template_key && !draft.work_templates.some((w) => w.primary));
@@ -401,15 +419,6 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                             setDraft((prev) => ({
                                                 ...prev,
                                                 work_templates: prev.work_templates.filter((_, i) => i !== index),
-                                                outcomes: prev.outcomes.filter(
-                                                    (o) => o.work_template_key !== work.template_key,
-                                                ),
-                                                outcome_rules: prev.outcome_rules.filter((r) => {
-                                                    const outcome = prev.outcomes.find(
-                                                        (o) => o.outcome_key === r.when_outcome_key,
-                                                    );
-                                                    return outcome?.work_template_key !== work.template_key;
-                                                }),
                                             }))
                                         }
                                     >
@@ -450,132 +459,6 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                         })
                                     }
                                 />
-
-                                <div className="mt-3 border-t border-alloy-forge/10 pt-2">
-                                    <details className="group" data-testid={`stage-operating-plan-outcomes-${work.template_key}`}>
-                                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-1 [&::-webkit-details-marker]:hidden">
-                                            <span className="text-[10px] font-semibold text-alloy-midnight/70">
-                                                Outcome Definitions ({workOutcomes.length})
-                                            </span>
-                                            <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
-                                        </summary>
-                                        <div className="pt-2">
-                                            <p className="mb-2 text-[10px] text-alloy-midnight/45">
-                                                Define what each stage outcome means and what happens after recording it.
-                                            </p>
-                                    <div className="mb-1 flex items-center justify-end gap-2">
-                                        <button
-                                            type="button"
-                                            className="text-[10px] font-medium text-alloy-pine"
-                                            onClick={() =>
-                                                setDraft((prev) => ({
-                                                    ...prev,
-                                                    outcomes: [
-                                                        ...prev.outcomes,
-                                                        newOutcomeDraft(prev.outcomes.length, {
-                                                            work_template_key: work.template_key,
-                                                        }),
-                                                    ],
-                                                }))
-                                            }
-                                        >
-                                            + Add outcome
-                                        </button>
-                                    </div>
-                                    <ul className="space-y-1.5">
-                                        {workOutcomes.map((outcome) => {
-                                            const outcomeIndex = draft.outcomes.findIndex(
-                                                (o) => o.outcome_key === outcome.outcome_key,
-                                            );
-                                            return (
-                                                <li
-                                                    key={outcome.outcome_key}
-                                                    className="rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5"
-                                                    data-testid={`stage-operating-plan-outcome-${outcome.outcome_key}`}
-                                                >
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <input
-                                                            className="min-w-0 flex-1 rounded border border-alloy-forge/15 px-2 py-1 text-xs"
-                                                            value={outcome.label}
-                                                            onChange={(e) =>
-                                                                setDraft((prev) => {
-                                                                    const outcomes = [...prev.outcomes];
-                                                                    outcomes[outcomeIndex] = {
-                                                                        ...outcome,
-                                                                        label: e.target.value,
-                                                                    };
-                                                                    return { ...prev, outcomes };
-                                                                })
-                                                            }
-                                                        />
-                                                        <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={Boolean(outcome.completes_work ?? outcome.successful)}
-                                                                onChange={(e) =>
-                                                                    setDraft((prev) => {
-                                                                        const outcomes = [...prev.outcomes];
-                                                                        const next = { ...outcome };
-                                                                        if (e.target.checked) {
-                                                                            next.successful = true;
-                                                                            next.completes_work = true;
-                                                                        } else {
-                                                                            delete next.successful;
-                                                                            delete next.completes_work;
-                                                                        }
-                                                                        outcomes[outcomeIndex] = next;
-                                                                        return { ...prev, outcomes };
-                                                                    })
-                                                                }
-                                                            />
-                                                            Completes this work
-                                                        </label>
-                                                        <button
-                                                            type="button"
-                                                            className="text-[10px] text-red-700/80"
-                                                            onClick={() =>
-                                                                setDraft((prev) => ({
-                                                                    ...prev,
-                                                                    outcomes: prev.outcomes.filter(
-                                                                        (o) => o.outcome_key !== outcome.outcome_key,
-                                                                    ),
-                                                                    outcome_rules: prev.outcome_rules.filter(
-                                                                        (r) => r.when_outcome_key !== outcome.outcome_key,
-                                                                    ),
-                                                                }))
-                                                            }
-                                                        >
-                                                            Remove
-                                                        </button>
-                                                    </div>
-                                                    <LifecycleStageOutcomeAutomationEditor
-                                                        outcomeKey={outcome.outcome_key}
-                                                        outcomeLabel={outcome.label}
-                                                        rules={draft.outcome_rules}
-                                                        workTemplates={draft.work_templates}
-                                                        stageKey={stageKey}
-                                                        stageLabel={stageLabel}
-                                                        processStages={processStages ?? []}
-                                                        stageOperatingPlan={stageOperatingPlanForResolver}
-                                                        processTracks={processTracks ?? null}
-                                                        defaultRepeatTemplateKey={work.template_key}
-                                                        completesWork={Boolean(outcome.completes_work ?? outcome.successful)}
-                                                        configuredStatuses={configuredStatuses}
-                                                        entityType={entityType}
-                                                        onRulesChange={(outcome_rules) =>
-                                                            setDraft((prev) => ({ ...prev, outcome_rules }))
-                                                        }
-                                                    />
-                                                </li>
-                                            );
-                                        })}
-                                        {!workOutcomes.length ?
-                                            <li className="text-[10px] text-alloy-midnight/45">No outcomes yet.</li>
-                                        :   null}
-                                    </ul>
-                                        </div>
-                                    </details>
-                                </div>
                             </div>
                         );
                     })}
