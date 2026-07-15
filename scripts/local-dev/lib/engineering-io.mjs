@@ -214,6 +214,7 @@ function validateReviewReport(report) {
     "initiative_key",
     "task_ids",
     "review_type",
+    "review_mode",
     "status",
     "findings",
     "severity",
@@ -225,6 +226,9 @@ function validateReviewReport(report) {
     if (!(k in report)) die(`review missing field: ${k}`);
   }
   if (!REVIEW_STATUSES.has(report.status)) die(`invalid review status: ${report.status}`);
+  if (!["advisory", "gate", "final"].includes(report.review_mode)) {
+    die(`invalid review_mode: ${report.review_mode}`);
+  }
   if (!Array.isArray(report.task_ids)) die("task_ids must be a list");
   if (!Array.isArray(report.findings)) die("findings must be a list");
   if (!Array.isArray(report.required_remediation)) die("required_remediation must be a list");

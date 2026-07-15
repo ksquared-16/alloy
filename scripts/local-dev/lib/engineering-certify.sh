@@ -112,8 +112,12 @@ constraints:
 human_approval:
   required_gates: []
 
-reference_routes:
-  - /admin/settings/fields
+known_docs:
+  - scripts/local-dev/ENGINEERING-MANAGER.md
+
+known_files:
+  - scripts/local-dev/alloy-engineering-certify
+  - scripts/local-dev/lib/engineering-certify.sh
 YAML
 }
 
@@ -200,8 +204,78 @@ certify_write_manifest() {
     printf '  reviews: "%s/reviews/"\n' "$base"
     printf '  remediation: "%s/remediation/"\n' "$base"
     printf '  final_package: "%s/final/review-package.md"\n' "$base"
+    printf '  artifact_quality: "%s/certification-artifact-quality.md"\n' "$CERT_ROOT"
     printf '  failure_examples: "%s/cert-fixtures/"\n' "$CERT_ROOT"
   } >"$path"
+}
+
+certify_write_artifact_quality() {
+  local base="$1"
+  local out="$CERT_ROOT/certification-artifact-quality.md"
+  local unresolved
+  unresolved="$(alloy_engineering_human_decisions_count "$CERT_KEY")"
+  cat >"$out" <<EOF
+# Engineering V1 certification artifact quality
+
+Generated: $(alloy_iso_now)
+
+## Artifact completeness
+
+- Repository audit: present
+- Documentation manifest: present
+- Code manifest: present
+- Evidence-labeled specification: present
+- Full task graph: present
+- Worker assignment rationale: present
+- Review-mode record: present
+- Final package conclusion provenance: present
+
+## Evidence-grounded fields
+
+- Explicit known files/docs from the certification intake
+- Exact repository paths and bounded search terms
+- Git baseline and commits for identified paths
+- Ingested local worker commit and report identity
+- Completed final review mode/status
+
+## Deterministic template-generated fields
+
+- Implementation/final-review task kinds
+- Default role-to-slot recommendations
+- Standard focused-check and promotion policy
+
+These are constrained V1 templates, not LLM-quality decomposition.
+
+## Unresolved information
+
+- Open human decisions: ${unresolved}
+- Semantic architecture ownership is not inferred beyond path/search evidence.
+- Product visual intent is not inferred without approved references.
+
+## Stale-context scan
+
+- Legacy sample initiative keys: absent from certification artifacts
+- Unrelated sample routes: absent from certification artifacts
+
+## Task graph quality
+
+- Full task objects, edges, integration order, overlap warnings, blocking decisions, generation basis, and confidence are rendered.
+
+## Assignment rationale quality
+
+- Each assignment records selection reason, prerequisites, inputs/outputs, review relationship, readiness requirement, context sources, and cost rationale.
+- Unselected roles include explicit reasons.
+
+## Review state validity
+
+- Advisory review during implementation: valid and non-promoting.
+- Gate/final review before required report/validation state: rejected.
+- Completed final review: required for READY.
+
+## Capability boundary
+
+Certification proves deterministic artifact structure, provenance, and lifecycle gates. It does not prove LLM planning quality, worker compliance, product-specific visual quality, or a real implementation.
+EOF
 }
 
 certify_package_contains_required_sections() {

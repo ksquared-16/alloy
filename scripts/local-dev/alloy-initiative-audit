@@ -44,6 +44,37 @@ main() {
   intake_json="$base/initiative.json"
   staging_sha="$(alloy_staging_sha)"
 
+  node "${SCRIPT_DIR}/lib/engineering-artifacts.mjs" audit \
+    "$ALLOY_REPO" \
+    "$intake_json" \
+    "$base/audit" \
+    "$staging_sha" \
+    "$ALLOY_METADATA_DIR"
+
+  node -e "
+    const fs = require('fs');
+    const p = '${base}/state.json';
+    const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+    d.staging_baseline_sha = '${staging_sha}';
+    d.audit_completed_at = '$(alloy_iso_now)';
+    d.updated_at = d.audit_completed_at;
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  "
+
+  if [[ "$(alloy_initiative_current_state "$key")" == "auditing" ]]; then
+    alloy_initiative_transition "$key" "planning"
+  fi
+
+  alloy_info "Audit complete for $key"
+  alloy_info "  repository:    $base/audit/repository.md"
+  alloy_info "  documentation: $base/audit/documentation-manifest.yaml"
+  alloy_info "  code:          $base/audit/code-manifest.yaml"
+  alloy_info "  risks:         $base/audit/risks.yaml"
+  alloy_info "  state:         $(alloy_initiative_current_state "$key")"
+  alloy_info ""
+  alloy_info "Next: alloy-initiative-plan $key"
+  return 0
+
   repo_md="$base/audit/repository.md"
   {
     printf '# Repository audit — %s\n\n' "$key"

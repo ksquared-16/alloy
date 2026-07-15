@@ -40,7 +40,8 @@ cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
 setup_fixture_repo() {
-  mkdir -p "$CANON/docs/platform/governance" "$CANON/web/tests" "$CANON/scripts/local-dev"
+  mkdir -p "$CANON/docs/platform/governance" "$CANON/web/tests" \
+    "$CANON/web/components/admin/settings" "$CANON/scripts/local-dev"
   git -C "$CANON" init -q
   git -C "$CANON" config user.email "test@example.com"
   git -C "$CANON" config user.name "Test"
@@ -49,6 +50,7 @@ setup_fixture_repo() {
   echo "export {}" >"$CANON/web/package.json"
   mkdir -p "$CANON/web/tests"
   echo "test('x',()=>{})" >"$CANON/web/tests/sample.test.ts"
+  echo "export {}" >"$CANON/web/components/admin/settings/index.ts"
   cp -R "$ROOT"/* "$CANON/scripts/local-dev/"
   git -C "$CANON" add -A
   git -C "$CANON" commit -q -m "init"
@@ -135,6 +137,8 @@ constraints:
   - x
 human_approval:
   required_gates: []
+known_files:
+  - scripts/local-dev/alloy-engineering-help
 YAML
 }
 
@@ -150,6 +154,7 @@ echo "== Syntax checks =="
 for f in \
   "$ROOT"/lib/engineering.sh \
   "$ROOT"/lib/engineering-io.mjs \
+  "$ROOT"/lib/engineering-artifacts.mjs \
   "$ROOT"/alloy-engineering-help \
   "$ROOT"/alloy-initiative-create \
   "$ROOT"/alloy-initiative-import \
@@ -217,7 +222,7 @@ assert_fail "illegal transition without approval path" \
 echo "== Audit =="
 [[ -f "${INITIATIVES}/settings-fields-v2/audit/documentation-manifest.yaml" ]] \
   && pass "documentation manifest written" || fail "documentation manifest missing"
-grep -q "constitutional_platform" "${INITIATIVES}/settings-fields-v2/audit/documentation-manifest.yaml" \
+grep -q "canonical_documentation" "${INITIATIVES}/settings-fields-v2/audit/documentation-manifest.yaml" \
   && pass "canonical docs prioritized" || fail "canonical docs missing"
 
 echo "== Worker create =="
@@ -291,6 +296,7 @@ fs.writeFileSync(p, JSON.stringify({
   initiative_key: 'shell-test',
   task_ids: ['task-001'],
   review_type: 'architecture',
+  review_mode: 'gate',
   status: 'fail',
   findings: ['Doctrine gap'],
   severity: 'major',
@@ -343,6 +349,8 @@ assert_ok "phase2 tests" bash "$ROOT/tests/run-phase2-tests.sh"
 assert_ok "phase3 tests" bash "$ROOT/tests/run-phase3-tests.sh"
 
 echo "== Engineering certification =="
+assert_ok "artifact quality focused tests" bash "$ROOT/tests/test-engineering-artifact-quality.sh"
+assert_ok "review mode focused tests" bash "$ROOT/tests/test-engineering-review-modes.sh"
 assert_ok "engineering certify harness" bash "$ROOT/tests/test-engineering-certify.sh"
 
 echo

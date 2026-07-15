@@ -74,7 +74,8 @@ alloy-initiative-approve settings-fields-v2 --approver Kelly
 alloy-initiative-start settings-fields-v2
 alloy-worker-open settings-fields-v2 task-001 --with-server   # paste package once
 alloy-worker-report settings-fields-v2 task-001
-alloy-initiative-review settings-fields-v2 --type ui
+alloy-initiative-review settings-fields-v2 --mode advisory --type ui
+alloy-initiative-review settings-fields-v2 --mode final --type integration
 alloy-initiative-remediate settings-fields-v2
 alloy-initiative-package settings-fields-v2
 alloy-initiative-status --all

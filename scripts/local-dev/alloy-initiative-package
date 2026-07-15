@@ -29,7 +29,7 @@ classify_promotion() {
     [[ "$st" == "complete" ]] || blockers=$((blockers + 1))
   done
 
-  # Check review
+  # Check completed final review. Advisory reviews never contribute to READY.
   local review_status="missing"
   if [[ -f "$base/reviews/task-002-review.json" ]]; then
     review_status="$(node -e "console.log(require('${base}/reviews/task-002-review.json').status)")"
@@ -37,6 +37,17 @@ classify_promotion() {
   else
     blockers=$((blockers + 1))
   fi
+  local final_review_ready
+  final_review_ready="$(node -e "
+    const d = require('${base}/state.json');
+    const reviews = Object.values(d.reviews || {});
+    process.stdout.write(reviews.some(r =>
+      r.mode === 'final' &&
+      (r.status === 'pass' || r.status === 'pass_with_findings') &&
+      r.contributes_to_ready === true
+    ) ? 'yes' : 'no');
+  ")"
+  [[ "$final_review_ready" == "yes" ]] || blockers=$((blockers + 1))
 
   local open_decisions
   open_decisions="$(alloy_engineering_human_decisions_count "$key")"
@@ -111,6 +122,16 @@ main() {
     printf 'Rounds: %s\n' "$(node -e "console.log(require('${base}/state.json').remediation_round||0)")"
     printf '\n## Cost summary\n\n'
     node -e "console.log(JSON.stringify(require('${base}/state.json').cost_summary,null,2))"
+    printf '\n## Conclusion provenance\n\n'
+    printf '### Evidence-backed\n\n'
+    printf -- '- Staging baseline and repository paths: audit manifests.\n'
+    printf -- '- Commit and changed files: ingested worker reports verified against fixture/local Git.\n'
+    printf -- '- Review status: completed structured final review artifact.\n'
+    printf -- '- Evidence paths: existence checks during report ingestion.\n'
+    printf '\n### Deterministic template-generated\n\n'
+    printf -- '- Task decomposition and worker-role recommendations are constrained V1 templates.\n'
+    printf -- '- Suggested promotion commands are examples only and were not executed.\n'
+    printf -- '- Candidate code/doc matches are bounded text-search results, not semantic conclusions.\n'
     printf '\n## Promotion recommendation\n\n'
     printf '**%s**\n\n' "$rec_class"
     printf '## Push / PR commands (NOT executed)\n\n'

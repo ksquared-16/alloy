@@ -414,6 +414,16 @@ npm run local-dev:certify
 
 See `ENGINEERING-MANAGER.md` § Certification.
 
+Deterministic planning is intentionally bounded: explicit intake references are confirmed inputs; discovered repository matches are labeled candidates with search terms, provenance, and confidence. V1 coordinates and preserves a high-quality ChatGPT-authored Initiative Brief—it is not an autonomous product strategist or semantic architecture reasoner.
+
+Review modes are explicit:
+
+```bash
+alloy-initiative-review <key> --mode advisory --type architecture
+alloy-initiative-review <key> --mode gate --type test
+alloy-initiative-review <key> --mode final --type integration
+```
+
 ### Initiative workflow
 
 ```bash

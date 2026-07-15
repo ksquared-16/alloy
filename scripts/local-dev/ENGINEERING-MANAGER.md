@@ -94,6 +94,41 @@ Illegal transitions are rejected. Push/merge is never inferred.
 
 Run `alloy-engineering-help` for the full list. All commands support `--help`.
 
+## V1 capability boundary
+
+V1 is:
+
+- a durable initiative workflow engine;
+- a bounded repository/context collector;
+- a specification contract generator that labels intake facts, audit findings, proposals, unknowns, and policy;
+- a constrained deterministic planner with provenance and confidence fields;
+- a worker-package, report, review, and remediation coordinator.
+
+V1 is not yet:
+
+- an autonomous product strategist;
+- a semantic architecture reasoner;
+- an LLM-quality task decomposer;
+- capable of deriving exact visual intent without approved references;
+- capable of eliminating the initial ChatGPT synthesis step.
+
+ChatGPT currently supplies the high-quality Initiative Brief and may also supply a structured proposed plan. Engineering V1 grounds explicit references against the repository, validates required contracts, identifies missing evidence, coordinates workers, and preserves decisions and results. Discovered text matches are labeled **candidates**, not confirmed semantic truth.
+
+## Review modes
+
+- `advisory` may run during `implementing`; it cannot contribute to READY.
+- `gate` requires implementation reports and validation/review state; failures block readiness.
+- `final` requires reported and validated work and is required before merge-ready.
+
+Examples:
+
+```bash
+alloy-initiative-review <key> --mode advisory --type architecture
+alloy-initiative-review <key> --mode gate --type test
+alloy-initiative-review <key> --mode final --type integration
+alloy-initiative-review <key> --ingest task-002
+```
+
 ## Certification
 
 **Run `alloy-engineering-certify` before the first real product initiative.**
@@ -112,10 +147,10 @@ The certification harness:
 - does not access credentials, auth storage, or browser state;
 - does not push, merge, create PRs, or trigger Vercel;
 - exercises **production command scripts** via fixture config injection;
-- runs happy-path lifecycle + failure-path gates (~48 assertions);
+- runs happy-path lifecycle, failure-path gates, and artifact-quality assertions;
 - preserves state on failure; cleans up on success unless `--keep`.
 
-`--keep` prints paths to: initiative brief, audit, specification, approval record, task graph, worker packages, report examples, reviews, remediation, final package, and `certification-manifest.yaml`.
+`--keep` prints paths to: initiative brief, audit, specification, approval record, task graph, worker packages, report examples, reviews, remediation, final package, `certification-manifest.yaml`, and `certification-artifact-quality.md`.
 
 ### What certification does not prove
 
@@ -132,11 +167,12 @@ The certification harness:
 
 ## V1 limitations
 
-- No ChatGPT API integration; brief import is explicit YAML/file/clipboard
-- Worker delivery is clipboard + app open (one manual paste per worker)
-- No daemon, database, or web dashboard
-- Task graphs are manager-generated templates (not LLM-planned in V1)
-- Promotion still requires human `--promotion-recorded` on close
+- No ChatGPT API integration; brief import is explicit YAML/file/clipboard.
+- Worker delivery is clipboard + app open (one manual paste per worker).
+- No daemon, database, or web dashboard.
+- Task objects are deterministically generated and evidence-labeled, not semantically decomposed by an LLM.
+- Candidate repository matches require human confirmation before they become initiative truth.
+- Promotion still requires human `--promotion-recorded` on close.
 
 ## Deferred (Phase 4B/4C)
 

@@ -45,11 +45,15 @@ alloy_engineering_certify_fixture_bind() {
     const lines = yaml.split('\\n');
     let cur = null; const out = [];
     for (const line of lines) {
-      const m = line.match(/^  - task_id: (.+)\$/);
-      if (m) { if (cur) out.push(cur); cur = { task_id: m[1].trim() }; continue; }
+      const m = line.match(/^  - task_id: (.+)$/);
+      if (m) {
+        if (cur) out.push(cur);
+        cur = { task_id: m[1].trim().replace(/^['\"]|['\"]$/g, '') };
+        continue;
+      }
       if (!cur) continue;
-      const s = line.match(/^    slot: (\\d+)/); if (s) cur.slot = +s[1];
-      const a = line.match(/^    agent: (\\S+)/); if (a) cur.agent = a[1];
+      const s = line.match(/^    (?:selected_slot|slot): (\\d+)/); if (s) cur.slot = +s[1];
+      const a = line.match(/^    agent: (\\S+)/); if (a) cur.agent = a[1].replace(/^['\"]|['\"]$/g, '');
       const r = line.match(/^    role: \"(.+)\"/); if (r) cur.role = r[1];
     }
     if (cur) out.push(cur);

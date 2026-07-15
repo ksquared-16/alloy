@@ -41,6 +41,54 @@ main() {
   intake_json="$base/initiative.json"
   plan_dir="$base/plan"
 
+  local planning_result
+  planning_result="$(
+    node "${SCRIPT_DIR}/lib/engineering-artifacts.mjs" plan \
+      "$intake_json" \
+      "$base/audit/evidence.json" \
+      "$plan_dir" \
+      "$base/tasks" \
+      "$base/state.json"
+  )"
+
+  node -e "
+    const fs = require('fs');
+    const p = '${base}/state.json';
+    const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+    const result = JSON.parse(process.argv[1]);
+    d.human_decisions = d.human_decisions || [];
+    for (const question of result.blocking_decisions || []) {
+      if (d.human_decisions.some((item) => item.question === question && item.status !== 'resolved')) continue;
+      d.human_decisions.push({
+        id: 'decision-' + String(d.human_decisions.length + 1).padStart(3, '0'),
+        question,
+        why_it_matters: 'Deterministic V1 lacks enough confirmed evidence to assign implementation safely.',
+        options: ['Supply explicit intake references', 'Confirm audit candidates', 'Defer assignment'],
+        recommendation: 'Supply or confirm evidence before approval.',
+        affected_tasks: ['task-001'],
+        parallel_work_ok: false,
+        status: 'open',
+        created_at: '$(alloy_iso_now)'
+      });
+    }
+    d.updated_at = '$(alloy_iso_now)';
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  " "$planning_result"
+
+  if [[ "$state" == "planning" ]]; then
+    alloy_initiative_transition "$key" "awaiting_plan_approval"
+  fi
+
+  alloy_info "Plan generated for $key"
+  alloy_info "  specification: $plan_dir/specification.md"
+  alloy_info "  task graph:    $plan_dir/task-graph.yaml"
+  alloy_info "  worker plan:   $plan_dir/worker-plan.yaml"
+  alloy_info "  decisions:     $(alloy_engineering_human_decisions_count "$key") unresolved"
+  alloy_info "  state:         $(alloy_initiative_current_state "$key")"
+  alloy_info ""
+  alloy_info "Review plan artifacts, resolve decisions if any, then approve."
+  return 0
+
   # Read intake fields via node
   local objective title has_ui
   objective="$(node -e "console.log(require('${intake_json}').initiative.objective)")"

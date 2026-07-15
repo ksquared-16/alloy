@@ -40,6 +40,12 @@ bash "$ROOT/alloy-engineering-certify" --keep >"$KEEP_OUT" 2>&1
 grep -q "Retained certification directory" "$KEEP_OUT" && pass "--keep retains artifacts" || fail "--keep retains artifacts"
 CERT_DIR="$(grep -A1 "Retained certification" "$KEEP_OUT" | tail -1 | xargs)"
 [[ -f "${CERT_DIR}/certification-manifest.yaml" ]] && pass "--keep manifest present" || fail "--keep manifest present"
+[[ -f "${CERT_DIR}/certification-artifact-quality.md" ]] && pass "--keep artifact quality summary present" || fail "--keep artifact quality summary present"
+if grep -R -qE "settings-fields-v2|/admin/settings/fields" "$CERT_DIR"; then
+  fail "certification artifacts have no stale sample contamination"
+else
+  pass "certification artifacts have no stale sample contamination"
+fi
 rm -rf "$CERT_DIR"
 
 assert_fail "injected failure nonzero exit" \

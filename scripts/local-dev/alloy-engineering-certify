@@ -144,6 +144,10 @@ META
   : >"$CERT_APP_LAUNCH_LOG"
   certify_cmd_env "$SCRIPT_DIR/alloy-initiative-start" cert-nostart --dry-run >/dev/null
   alloy_engineering_certify_fixture_bind cert-nostart "$CERT_FIXTURE_REPO_FAIL"
+  certify_assert_fail "gate review before required report rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" cert-nostart --mode gate
+  certify_assert_fail "final review before validation rejected" \
+    certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" cert-nostart --mode final
   certify_cmd_env "$SCRIPT_DIR/alloy-worker-open" cert-nostart task-001 --dry-run >/dev/null
   certify_assert "app-open dry-run does not launch app" test ! -s "$CERT_APP_LAUNCH_LOG"
   : >"$CERT_CLIPBOARD_FILE"
@@ -207,7 +211,7 @@ META
     const fs=require('fs');
     fs.writeFileSync('${CERT_INITIATIVE_ROOT}/cert-nostart/reviews/task-002-review.json', JSON.stringify({
       review_id:'r-fail', initiative_key:'cert-nostart', task_ids:['task-001'],
-      review_type:'architecture', status:'fail', findings:['gap'],
+      review_type:'architecture', review_mode:'gate', status:'fail', findings:['gap'],
       severity:'major', evidence:[], required_remediation:['Fix gap'], unresolved_decisions:[]
     }));
   "
@@ -262,6 +266,37 @@ certify_happy_path() {
   certify_assert "state awaiting_plan_approval" \
     test "$(alloy_initiative_current_state "$CERT_KEY")" = "awaiting_plan_approval"
 
+  local cert_base
+  cert_base="$(alloy_initiative_dir "$CERT_KEY")"
+  certify_assert "certification artifacts exclude settings-fields-v2" \
+    bash -c '! grep -R -q "settings-fields-v2" "$1"' _ "$cert_base"
+  certify_assert "certification artifacts exclude stale settings route" \
+    bash -c '! grep -R -q "/admin/settings/fields" "$1"' _ "$cert_base"
+  certify_assert "sample documentation does not leak without explicit import" \
+    bash -c '! grep -R -q "Settings Fields V2" "$1"' _ "$cert_base"
+  certify_assert "documentation manifest records relevance reasons" \
+    grep -q "relevance_reason:" "$cert_base/audit/documentation-manifest.yaml"
+  certify_assert "documentation manifest records provenance and confidence" \
+    bash -c 'grep -q "source:" "$1" && grep -q "confidence:" "$1"' _ \
+      "$cert_base/audit/documentation-manifest.yaml"
+  certify_assert "code manifest records bounded search terms" \
+    grep -q "terms:" "$cert_base/audit/code-manifest.yaml"
+  certify_assert "code manifest records confidence" \
+    grep -q "confidence:" "$cert_base/audit/code-manifest.yaml"
+  certify_assert "task graph contains full task objects" \
+    bash -c 'for f in task_id title objective role task_kind dependencies status allowed_scope prohibited_scope constitutional_references initiative_decisions likely_code_areas acceptance focused_checks ui_verification required_outputs integration_risks generation_basis confidence; do grep -q "$f:" "$1" || exit 1; done' _ \
+      "$cert_base/plan/task-graph.yaml"
+  certify_assert "worker plan records assignment rationale" \
+    bash -c 'for f in reason_selected prerequisites expected_inputs expected_outputs review_relationship ui_auth_readiness_required estimated_context_sources cost_rationale reason_not_selected; do grep -q "$f:" "$1" || exit 1; done' _ \
+      "$cert_base/plan/worker-plan.yaml"
+  certify_assert "specification separates evidence classes" \
+    bash -c 'for h in "A. Intake facts" "B. Audit findings" "C. Proposed decisions" "D. Unknowns" "E. Standard operating policy"; do grep -q "$h" "$1" || exit 1; done' _ \
+      "$cert_base/plan/specification.md"
+  certify_assert "specification has no duplicated list markers" \
+    bash -c '! grep -qE "^- +-" "$1"' _ "$cert_base/plan/specification.md"
+  certify_assert "specification has no contradictory unresolved copy" \
+    bash -c '! grep -q "none — pending audit review" "$1"' _ "$cert_base/plan/specification.md"
+
   certify_cmd_env "$SCRIPT_DIR/alloy-initiative-approve" "$CERT_KEY" --approver "Certify Operator" >/dev/null
   local approved_hash approved_at
   approved_hash="$(node -e "console.log(require('$(alloy_initiative_dir "$CERT_KEY")/state.json').approved_spec_hash||'')")"
@@ -271,7 +306,12 @@ certify_happy_path() {
 
   certify_cmd_env "$SCRIPT_DIR/alloy-initiative-start" "$CERT_KEY" --dry-run >/dev/null
   alloy_engineering_certify_fixture_bind "$CERT_KEY" "$CERT_FIXTURE_REPO"
-  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" "$CERT_KEY" --type architecture >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" "$CERT_KEY" --mode advisory --type architecture >/dev/null
+  certify_assert "advisory review is valid during implementation" \
+    grep -q "Mode: advisory" "$cert_base/reviews/task-002-review-package.md"
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-package" "$CERT_KEY" >/dev/null
+  certify_assert "advisory review cannot produce READY" \
+    test "$(node -e "console.log(require('${cert_base}/state.json').promotion.classification)")" != "READY"
 
   local impl_pkg review_pkg
   impl_pkg="$(alloy_initiative_dir "$CERT_KEY")/worker-packages/task-001-package.md"
@@ -300,12 +340,13 @@ certify_happy_path() {
     },null,2));
   "
   certify_cmd_env "$SCRIPT_DIR/alloy-worker-report" "$CERT_KEY" task-001 >/dev/null
+  certify_cmd_env "$SCRIPT_DIR/alloy-initiative-review" "$CERT_KEY" --mode final --type integration >/dev/null
 
   node -e "
     const fs=require('fs');
     fs.writeFileSync('$(alloy_initiative_dir "$CERT_KEY")/reviews/task-002-review.json', JSON.stringify({
       review_id:'r-pass', initiative_key:'${CERT_KEY}', task_ids:['task-001'],
-      review_type:'architecture', status:'pass', findings:[],
+      review_type:'architecture', review_mode:'final', status:'pass', findings:[],
       severity:'info', evidence:[], required_remediation:[], unresolved_decisions:[]
     }));
   "
@@ -324,6 +365,8 @@ certify_happy_path() {
   certify_assert "Vercel preview not triggered" test "$vercel" = "false"
   certify_assert "final package has promotion disclaimer" \
     grep -q "Push and merge still require" "$(alloy_initiative_dir "$CERT_KEY")/final/review-package.md"
+  certify_assert "final package labels conclusion provenance" \
+    grep -q "Conclusion provenance" "$(alloy_initiative_dir "$CERT_KEY")/final/review-package.md"
 
   local reports_before
   reports_before="$(find "$(alloy_initiative_dir "$CERT_KEY")/reports" -type f | wc -l | tr -d ' ')"
@@ -332,6 +375,13 @@ certify_happy_path() {
     test "$(find "$(alloy_initiative_dir "$CERT_KEY")/reports" -type f | wc -l | tr -d ' ')" -eq "$reports_before"
   certify_assert "close state is closed" test "$(alloy_initiative_current_state "$CERT_KEY")" = "closed"
 
+  certify_write_artifact_quality "$cert_base"
+  certify_assert "artifact quality inspection summary generated" \
+    test -f "$CERT_ROOT/certification-artifact-quality.md"
+  certify_assert "all retained certification artifacts exclude legacy sample key" \
+    bash -c '! grep -R -q "settings-fields-v2" "$1"' _ "$CERT_ROOT"
+  certify_assert "all retained certification artifacts exclude unrelated sample route" \
+    bash -c '! grep -R -q "/admin/settings/fields" "$1"' _ "$CERT_ROOT"
   certify_write_manifest "$CERT_ROOT/certification-manifest.yaml"
   return 0
 }
@@ -370,6 +420,13 @@ main() {
   CERT_ORIGIN="$CERT_ROOT/origin.git"
   git init --bare -q "$CERT_ORIGIN"
   certify_setup_canonical_repo "$CERT_CANON" "$CERT_ORIGIN"
+  mkdir -p "$CERT_CANON/scripts/local-dev/lib"
+  printf '# certification command fixture entry point\n' >"$CERT_CANON/scripts/local-dev/alloy-engineering-certify"
+  printf '# certification helper fixture entry point\n' >"$CERT_CANON/scripts/local-dev/lib/engineering-certify.sh"
+  printf '# Engineering Manager certification fixture doctrine\n' >"$CERT_CANON/scripts/local-dev/ENGINEERING-MANAGER.md"
+  git -C "$CERT_CANON" add scripts/local-dev
+  git -C "$CERT_CANON" commit -q -m "add certification fixture references"
+  git -C "$CERT_CANON" push -q origin staging
   certify_setup_fixture_repo "$CERT_FIXTURE_REPO"
   certify_setup_fixture_repo "$CERT_FIXTURE_REPO_FAIL"
 
