@@ -353,6 +353,9 @@ assert_ok "artifact quality focused tests" bash "$ROOT/tests/test-engineering-ar
 assert_ok "review mode focused tests" bash "$ROOT/tests/test-engineering-review-modes.sh"
 assert_ok "engineering certify harness" bash "$ROOT/tests/test-engineering-certify.sh"
 
+echo "== Product Runtime V1 =="
+assert_ok "product runtime focused tests" bash "$ROOT/tests/test-product-runtime.sh"
+
 echo
 echo "Phase 4 results: PASS=$PASS FAIL=$FAIL"
 [[ "$FAIL" -eq 0 ]]
