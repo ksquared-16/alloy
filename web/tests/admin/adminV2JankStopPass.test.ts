@@ -52,7 +52,7 @@ describe("workUnitBootstrap ownership", () => {
             selectedSiteId: null,
             focusQueue: "enrolled",
         });
-        expect(url).toContain("defer_bundle=false");
+        expect(url).toContain("defer_bundle=true"); // bootstrap defers primary lane; runtime owns the fetch
         expect(url).toContain("focus_queue=enrolled");
     });
 

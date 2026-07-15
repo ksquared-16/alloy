@@ -26,9 +26,11 @@ describe("work-unit above-fold reveal gate (page)", () => {
         expect(page).toContain("markWorkUnitRevealGatePhases");
     });
 
-    it("canonical bootstrap includes primary rows and right rail (defer_bundle=false)", () => {
+    it("canonical bootstrap DEFERS the primary lane (PRV2 runtime owns the single row fetch)", () => {
+        // Deployed duplicate-elimination: the bootstrap no longer pre-computes the primary lane the
+        // runtime re-fetches (its only consumer, the legacy dept page, was removed).
         const session = read("lib/adminV2/workUnitBootstrapClientSession.ts");
-        expect(session).toContain('defer_bundle: "false"');
+        expect(session).toContain('defer_bundle: "true"');
     });
 
     it("dept oper console prefetches WU bootstrap on intent", () => {

@@ -45,7 +45,14 @@ export function buildCanonicalWorkUnitOperationalBootstrapUrl(params: WorkUnitBo
         limit: "3",
         omit_total_count: "true",
         primary_row_limit: String(WORK_UNIT_QUEUE_ROWS_FETCH_MIN),
-        defer_bundle: "false",
+        // Defer the primary-lane rows (+ kpi placements + right-rail + lifecycle siblings) to the client.
+        // Deployed staging proved the non-deferred bootstrap computed the primary lane (primary_lane_rows_ms
+        // ~1073) that the Work Unit runtime then re-fetched via /api/admin/queues (its rows/rail/kpi are all
+        // fetched by the runtime itself) — a pure duplicate row computation. The bootstrap payload's rows
+        // are not consumed for render (the runtime seeds only from its own view-scoped queue cache), so
+        // computing them server-side is wasted work. Deferring removes the duplicate: cold entry = ONE row
+        // computation (the runtime's), warm return = zero (the runtime's write-back seed).
+        defer_bundle: "true",
     });
     const focus = params.focusQueue?.trim();
     const bucket = params.attentionBucket?.trim();
