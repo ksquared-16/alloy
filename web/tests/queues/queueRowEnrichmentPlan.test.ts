@@ -149,6 +149,62 @@ describe("buildQueueRowEnrichmentPlan", () => {
         expect(plan.skippedEnrichment).not.toContain("queue_row_context_case_grain");
     });
 
+    it("condensed queue_reveal rail does NOT blanket-enable waste fetches via layoutRuntime", () => {
+        // Deployed defect: layoutRuntime forced persons/locations/activity/openTasks ON for queue_reveal,
+        // running the queries even though the compact row strips their output. The condensed rail keeps
+        // ONLY contact + children relations; locations, activity-timeline, and the open-tasks list
+        // (Current Work comes from the stage-work attach) are skipped.
+        const plan = buildQueueRowEnrichmentPlan({
+            ui: basicUi(), // no configured contact/household/tour/program fields
+            enrichmentMode: "queue_reveal",
+            layoutRuntimeQueueBody: true,
+            executableQueueKey: "lifecycle_lead",
+            skipOptionalEnrichmentFetches: true,
+        });
+
+        // Waste fetches skipped:
+        expect(plan.batchFetch.locations).toBe(false);
+        expect(plan.batchFetch.activityTimelineEvents).toBe(false);
+        expect(plan.batchFetch.openTasks).toBe(false);
+        expect(plan.skippedEnrichment).toContain("locations");
+        expect(plan.skippedEnrichment).toContain("activity_timeline_events");
+        expect(plan.skippedEnrichment).toContain("open_tasks");
+        const queries = enrichmentQueriesRunFromPlan(plan);
+        expect(queries).not.toContain("locations");
+        expect(queries).not.toContain("activity_timeline_events");
+        expect(queries).not.toContain("open_tasks");
+
+        // Compact-context essentials KEPT: contact line (persons/contacts) + children (customer_members),
+        // and the case-grain context still attaches on the layout-runtime path.
+        expect(plan.relationFetch.persons).toBe(true);
+        expect(plan.relationFetch.contacts).toBe(true);
+        expect(plan.relationFetch.customerMembers).toBe(true);
+        expect(plan.attachCaseGrainRowContext).toBe(true);
+    });
+
+    it("needs_attention condensed reveal still fetches open_tasks (task counts shown)", () => {
+        const plan = buildQueueRowEnrichmentPlan({
+            ui: basicUi(),
+            enrichmentMode: "queue_reveal",
+            layoutRuntimeQueueBody: true,
+            executableQueueKey: "needs_attention",
+            skipOptionalEnrichmentFetches: true,
+        });
+        expect(plan.batchFetch.openTasks).toBe(true);
+    });
+
+    it("queue_LIST + layoutRuntime is unchanged (still fetches activity/openTasks)", () => {
+        const plan = buildQueueRowEnrichmentPlan({
+            ui: basicUi(),
+            enrichmentMode: "queue_list",
+            layoutRuntimeQueueBody: true,
+            executableQueueKey: "lead",
+        });
+        expect(plan.batchFetch.activityTimelineEvents).toBe(true);
+        expect(plan.batchFetch.openTasks).toBe(true);
+        expect(plan.batchFetch.locations).toBe(true);
+    });
+
     it("queue_reveal skips case-grain row context on legacy non-layout paths", () => {
         const plan = buildQueueRowEnrichmentPlan({
             ui: basicUi(),
