@@ -206,8 +206,11 @@ export async function composeOpportunityDrawerViewModel(
     );
     phases.visible_entity_ms = Date.now() - tVisible0;
 
-    await attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record);
-
+    // `departmentId` derives from the work-unit row + the step-1 visible record (NOT the household
+    // attach), so the household-persons attach and the dept-metadata / status-definitions fetches are
+    // independent — run them in ONE parallel batch instead of three serial awaits on the first-paint
+    // critical path. The household attach mutates `record` in place and completes before the batch
+    // resolves, so all downstream code sees the fully-attached record.
     const wuData = wuRes.data as {
         id?: string;
         department_id?: string | null;
@@ -221,7 +224,12 @@ export async function composeOpportunityDrawerViewModel(
     const queueDefinition = queueDefinitionFromWorkUnit(wuData);
 
     const tPrep0 = Date.now();
-    const [deptMetadata, statusDefsPack] = await Promise.all([
+    const tHousehold0 = Date.now();
+    const [, deptMetadata, statusDefsPack] = await Promise.all([
+        attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record).then((r) => {
+            phases.household_persons_ms = Date.now() - tHousehold0;
+            return r;
+        }),
         departmentId ?
             fetchDepartmentMetadataForActivity(supabase, orgId, departmentId)
         :   Promise.resolve(null),
