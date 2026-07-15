@@ -129,7 +129,10 @@ export async function POST(request: NextRequest) {
             if (!(await workUnitAccessible(group.workUnitId))) return unknownAll();
             const savedViews = savedWorkViewsFromDepartmentMetadata(await deptMetadata(group.workUnitId));
             const requestedViews = savedViews.filter((v) => group.viewIds.has(v.id));
-            // ONE base-lane fetch (exact all-records count + up to the cap of rows) for the whole group.
+            // ONE base-lane fetch (exact all-records count + up to the cap of rows) for the whole
+            // group. COUNT-ONLY: the base-query operational fields carry the Work-View predicates —
+            // a total must never materialize presentation rows (persons/customers/household/
+            // activity/tasks/comms). Deployed defect fixed: this was `queue_list` (full enrichment).
             const { result } = await getWorkUnitQueueItems({
                 orgId: gate.orgId,
                 workUnitId: group.workUnitId,
@@ -142,7 +145,7 @@ export async function POST(request: NextRequest) {
                 recordScopeConstraints,
                 viewerDisplayTimeZone,
                 attentionBucketKey: null,
-                rowEnrichment: "queue_list",
+                rowEnrichment: "count_only",
             });
             const items = Array.isArray(result.items) ? result.items : [];
             const totals = aggregateWorkViewTotals({

@@ -20,6 +20,7 @@ import {
     fetchDepartmentMetadataForWorkUnit,
     resolveActiveWorkViewRuntimeContext,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import { projectQueuePreviewRowContexts } from "@/lib/queues/queuePreviewRowContextProjection";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
 import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
 import { buildWorkUnitQueueScopeCacheKey } from "@/lib/workspace/workUnitQueueScopeCacheKey";
@@ -194,6 +195,10 @@ export async function GET(
                 headers: {
                     "content-type": "application/json; charset=utf-8",
                     "x-alloy-queue-rows-cache": "hit",
+                    "x-alloy-queue-requested-mode": requestedMode,
+                    "x-alloy-queue-resolved-mode": rowEnrichment,
+                    "x-alloy-queue-caller-surface": callerSurface,
+                    "x-alloy-build-sha": process.env.VERCEL_GIT_COMMIT_SHA ?? "unknown",
                     "Server-Timing": buildQueueRowsServerTimingHeader({
                         cacheHit: true,
                         metrics: {
@@ -251,6 +256,18 @@ export async function GET(
             });
         }
 
+        // Wire-only compact projection for the canonical visible-row (queue_reveal) surface: the
+        // deployed CondensedQueueRow reads only a narrow slice of `_queue_row_context`, so we strip the
+        // Focus-Panel-only / predicate-only / detail fields from the serialized context here — AFTER
+        // work-view filtering has consumed the base-query facts it needs. Counts, filtering, and
+        // `computeWorkViewOperationalSignals` run on base rows before this point and are untouched.
+        if (rowEnrichment === "queue_reveal" && Array.isArray(responseResult.items)) {
+            responseResult = {
+                ...responseResult,
+                items: projectQueuePreviewRowContexts(responseResult.items),
+            };
+        }
+
         writeWorkUnitQueueItemsServerCache(cacheKey, { result: responseResult, rowsPerf });
 
         const tSer0 = Date.now();
@@ -286,11 +303,29 @@ export async function GET(
             omit_total_count: omitTotalCount,
         });
 
+        // Same-invocation proof of the mode this exact request resolved to, plus the running build
+        // SHA — so a browser/network trace proves whether the canonical caller sent reveal and which
+        // build served it, without inferring from source or a deployment record.
+        console.info("[queue-mode-proof]", {
+            rawRowMode: rowMode || null,
+            requested_mode: requestedMode,
+            resolved_mode: rowEnrichment,
+            caller_surface: callerSurface,
+            work_unit_id: workUnitId,
+            queue_key: queueKey,
+            payload_kb: Math.round(payload_kb * 10) / 10,
+            gitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+        });
+
         return new NextResponse(bodyJson, {
             status: 200,
             headers: {
                 "content-type": "application/json; charset=utf-8",
                 "x-alloy-queue-rows-cache": "miss",
+                "x-alloy-queue-requested-mode": requestedMode,
+                "x-alloy-queue-resolved-mode": rowEnrichment,
+                "x-alloy-queue-caller-surface": callerSurface,
+                "x-alloy-build-sha": process.env.VERCEL_GIT_COMMIT_SHA ?? "unknown",
                 "Server-Timing": buildQueueRowsServerTimingHeader({
                     cacheHit: false,
                     metrics: {

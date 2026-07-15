@@ -25,6 +25,7 @@ import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
 import type { CompactRowSlots } from "./queueRowSurfaceConfig";
+import type { WorkUnitSelectedSubject } from "./workUnitPillSwitching";
 import type { FocusedSubjectContext } from "./resolveQueueRowSubjectFocus";
 import type {
     ProcessCardIcon,
@@ -224,6 +225,14 @@ export type WorkUnitSurfaceModel = {
      * use it to render the persistent selected rail.
      */
     selectedRecordId: string | null;
+    /**
+     * How the surface resolved its DEFAULT operational subject for the current rows/route/retained
+     * selection (url → retained → strategy → first_row → empty), computed synchronously as part of
+     * the committed model. Invariant: when `queue.rows` is non-empty, `selectedSubject.selectedRecordId`
+     * is non-null — a populated Work View never commits with no subject. `selectedRecordId` above is
+     * the LIVE drawer selection (operator interaction), falling back to this resolution.
+     */
+    selectedSubject: WorkUnitSelectedSubject;
     /**
      * Configured Right Rail actions resolved for this work unit (`surface=work_unit,right_rail`),
      * flattened to the client action shape. Empty until the lane resolves (or when none are

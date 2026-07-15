@@ -108,9 +108,10 @@ import {
     type WorkUnitHeaderPresentationModel,
 } from "./workUnitHeaderSurfaceConfig";
 import {
-    resolveAutoOpenRecordId,
     resolveSelectWorkViewAction,
+    resolveWorkUnitSelectedSubject,
     shouldAutoOpenFirstRowForView,
+    type WorkUnitSelectedSubject,
 } from "./workUnitPillSwitching";
 import {
     queueRowsRouteForView,
@@ -885,16 +886,19 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             return;
         }
 
-        // Precedence: an explicit URL record already suppressed auto-open above; otherwise restore
-        // the operator's RETAINED record when it is still in this view's rows (return-navigation),
-        // else the first row. A stale retained record not in the rows falls through to the first row.
+        // ONE selection resolver drives both the committed model and this open effect, so they can
+        // never disagree. An explicit URL record already suppressed auto-open above; here the resolver
+        // restores the RETAINED record when still in the rows, else the first row.
         const retained = peekRetainedSelection(orgId, workUnitId);
         const retainedRecordId =
             retained && retained.workViewId === viewId ? retained.selectedRecordId : null;
-        const targetId = resolveAutoOpenRecordId(
-            rows.map((r) => r.entityId),
+        const targetId = resolveWorkUnitSelectedSubject({
+            routeRecordId: slugRoute?.routeRecordId ?? null,
+            rowRecordIds: rows.map((r) => r.entityId),
             retainedRecordId,
-        );
+            forceAutoOpen,
+            queueSettled: true,
+        }).selectedRecordId;
         const target = rows.find((r) => r.entityId === targetId) ?? rows[0];
         if (!target) return;
         const warm = resolveQueueRowWarmTarget(target, {
@@ -922,22 +926,54 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         closeDrawer,
     ]);
 
-    // ── Selected record: the drawer store is THE selection state (no parallel store) ────
-    const selectedRecordId =
+    // ── Selected record: resolved SYNCHRONOUSLY as part of the committed model ──────────────
+    // The drawer store holds the LIVE selection (what the operator has open); the pure resolver
+    // computes the DEFAULT operational subject a populated view must land on (url → retained →
+    // strategy → first row → empty). `selectedRecordId` prefers the live drawer, else the resolved
+    // subject — so it is never null while rows exist (the `rows>0 && selection===null` state is
+    // unreachable in the committed model). The auto-open effect below still performs the side-effect
+    // of opening the drawer; the reveal gate (`selectionCommitted`) waits for it so no flash occurs.
+    const drawerSelectedId =
         drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
+    const selectedSubject = useMemo<WorkUnitSelectedSubject>(() => {
+        const viewId = runtimeCtx.workViewId?.trim() || null;
+        const retained = viewId ? peekRetainedSelection(orgId, workUnitId) : null;
+        const retainedRecordId =
+            retained && retained.workViewId === viewId ? retained.selectedRecordId : null;
+        return resolveWorkUnitSelectedSubject({
+            routeRecordId: slugRoute?.routeRecordId ?? null,
+            rowRecordIds: rows.map((r) => r.entityId),
+            retainedRecordId,
+            forceAutoOpen: forceAutoOpenViewRef.current === viewId,
+            queueSettled: queueSettledOnce,
+        });
+    }, [runtimeCtx.workViewId, orgId, workUnitId, slugRoute?.routeRecordId, rows, queueSettledOnce]);
+    const selectedRecordId = drawerSelectedId ?? selectedSubject.selectedRecordId;
+    // Reveal gate: the view is either authoritatively empty (nothing to select), a record is open, OR
+    // the auto-open pass has already run for this view. The last clause matters AFTER first reveal: an
+    // operator who closes the Focus Panel (drawer.id → null) must NOT re-blank the whole surface — the
+    // gate only holds the INITIAL reveal until the default subject opens, never re-hides a revealed one.
+    const selectionViewId = runtimeCtx.workViewId?.trim() || null;
+    const selectionCommitted =
+        rows.length === 0
+            ? queueSettledOnce
+            : drawerSelectedId != null || autoOpenedForViewRef.current === selectionViewId;
 
     // Retain the operator's live record selection (session-scoped, per work unit) so a return to
     // this Work Unit restores it. Only a real (non-null) selection is retained here — clearing on a
     // genuinely-empty view happens in the auto-open effect above; a transient null during the
     // return-mount window must NOT clobber the retained record before auto-open can read it.
     useEffect(() => {
-        if (!workUnitId || !selectedRecordId) return;
+        // Retain only a LIVE (drawer-open) selection — not the resolved first-row fallback — so a
+        // return restores what the operator actually had open, and a transient pre-open window never
+        // writes a placeholder into retained storage.
+        if (!workUnitId || !drawerSelectedId) return;
         putRetainedSelection(orgId, workUnitId, {
             workViewId: runtimeCtx.workViewId ?? null,
             queueKey: fetchQueueKey,
-            selectedRecordId,
+            selectedRecordId: drawerSelectedId,
         });
-    }, [orgId, workUnitId, fetchQueueKey, runtimeCtx.workViewId, selectedRecordId]);
+    }, [orgId, workUnitId, fetchQueueKey, runtimeCtx.workViewId, drawerSelectedId]);
 
     // ── Right Rail actions: the configured action lane for this work unit ────────────────
     // The runtime is the single owner of surface data fetching. Load the resolved actions
@@ -1009,6 +1045,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 rightRailSettled,
                 queueLoading,
                 openedFromCache: seed.config != null && seed.queueResult != null,
+                selectionCommitted,
             }),
         [
             slugRoute,
@@ -1019,6 +1056,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             rightRailSettled,
             queueLoading,
             seed,
+            selectionCommitted,
         ],
     );
 
@@ -1040,6 +1078,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             },
             activeWorkViewId: runtimeCtx.workViewId,
             selectedRecordId,
+            selectedSubject,
             rightRailActions: filteredRightRailActions,
             departmentId,
             workUnitId,
@@ -1061,6 +1100,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
             queueError,
             runtimeCtx.workViewId,
             selectedRecordId,
+            selectedSubject,
             filteredRightRailActions,
             departmentId,
             workUnitId,

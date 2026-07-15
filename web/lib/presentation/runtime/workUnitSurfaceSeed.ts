@@ -162,6 +162,12 @@ export function resolveWorkUnitReadiness(input: {
     queueLoading: boolean;
     /** This mount opened from a cached config + rows composition (return navigation). */
     openedFromCache: boolean;
+    /**
+     * Selected subject committed to the Focus Panel: `true` when the view is authoritatively empty
+     * (nothing to select) OR a record is open. The atomic reveal waits for this so a populated Work
+     * View never flashes "Select a record to begin" before its default subject opens.
+     */
+    selectionCommitted: boolean;
 }): WorkUnitReadiness {
     const shellReady = input.hasIdentity;
     const coldCompositionReady =
@@ -169,10 +175,13 @@ export function resolveWorkUnitReadiness(input: {
         input.configSettled &&
         input.headerConfigLoaded &&
         input.hasHeaderPresentation &&
-        input.queueSettledOnce;
+        input.queueSettledOnce &&
+        input.selectionCommitted;
     return {
         shellReady,
-        retainedCompositionReady: input.openedFromCache,
+        // A cached return reveals instantly — but not before its retained subject is committed, so the
+        // Focus Panel restores the record rather than flashing the empty prompt on return navigation.
+        retainedCompositionReady: input.openedFromCache && input.selectionCommitted,
         coldCompositionReady,
         interactionReady: coldCompositionReady && input.rightRailSettled && !input.queueLoading,
     };
