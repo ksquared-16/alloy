@@ -466,15 +466,13 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
  * Match is by customer_member_id (= process_instances.subject_id). A child with no process instance
  * (legacy pre-cutover) keeps its OCM-sourced status as a documented fallback.
  */
-export async function overlayProcessInstanceParticipation(
-  supabase: AdminSupabase,
-  orgId: string,
-  opportunityId: string,
+/** Pure application of process-instance participation onto children (fetch already resolved). */
+export function applyProcessInstanceParticipation(
   children: InquiryHydrateChild[],
+  instances: Awaited<ReturnType<typeof listEnrollmentInstancesForLead>>,
   ocmStatusLabelByKey: Map<string, string>,
-): Promise<InquiryHydrateChild[]> {
+): InquiryHydrateChild[] {
   if (!children.length) return children;
-  const instances = await listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId });
   if (!instances.length) {
     // No process instances yet (legacy lead) → OCM remains the participation source (bridge fallback).
     return children.map((c) => ({ ...c, _participation_source: "ocm" as const }));
@@ -501,23 +499,30 @@ export async function overlayProcessInstanceParticipation(
   });
 }
 
+export async function overlayProcessInstanceParticipation(
+  supabase: AdminSupabase,
+  orgId: string,
+  opportunityId: string,
+  children: InquiryHydrateChild[],
+  ocmStatusLabelByKey: Map<string, string>,
+): Promise<InquiryHydrateChild[]> {
+  if (!children.length) return children;
+  const instances = await listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId });
+  return applyProcessInstanceParticipation(children, instances, ocmStatusLabelByKey);
+}
+
 /**
  * Overlay DURABLE operational facts (program / room / schedule / start date) onto the child blocks from
  * the operational enrollment read model (child_enrollment_agreements + child_placements +
  * schedule_assignments) once enrollment has been materialized. Durable facts win; OCM fills only the gaps
  * and remains the fallback for children with no operational agreement yet. Matched by customer_member_id.
  */
-export async function overlayDurableOperationalFacts(
-  supabase: AdminSupabase,
-  orgId: string,
+/** Pure application of durable operational facts onto children (fetch already resolved). */
+export function applyDurableOperationalFacts(
   children: InquiryHydrateChild[],
-): Promise<InquiryHydrateChild[]> {
+  facts: Awaited<ReturnType<typeof resolveDurableFactsForChildren>>,
+): InquiryHydrateChild[] {
   if (!children.length) return children;
-  const facts = await resolveDurableFactsForChildren(
-    supabase as never,
-    orgId,
-    children.map((c) => ({ customerMemberId: c.customer_member_id, siteLocationId: c.location_id ?? null })),
-  );
   if (!facts.size) return children.map((c) => ({ ...c, _operational_facts_source: "ocm" as const }));
   return children.map((c) => {
     const f = c.customer_member_id ? facts.get(c.customer_member_id) : undefined;
@@ -534,6 +539,20 @@ export async function overlayDurableOperationalFacts(
       _operational_facts_source: "durable" as const,
     };
   });
+}
+
+export async function overlayDurableOperationalFacts(
+  supabase: AdminSupabase,
+  orgId: string,
+  children: InquiryHydrateChild[],
+): Promise<InquiryHydrateChild[]> {
+  if (!children.length) return children;
+  const facts = await resolveDurableFactsForChildren(
+    supabase as never,
+    orgId,
+    children.map((c) => ({ customerMemberId: c.customer_member_id, siteLocationId: c.location_id ?? null })),
+  );
+  return applyDurableOperationalFacts(children, facts);
 }
 
 /**
@@ -713,6 +732,9 @@ export async function attachOpportunityInquiryChildrenShell(
   const oppMeta = (host.metadata as Record<string, unknown> | null) ?? null;
   const oppDefaultProgramType = trimOrNull(host.program_type);
   const oppDefaultScheduleType = trimOrNull(host.schedule_type);
+  // Sub-phase instrumentation for `children_orientation_ms` — surfaced on the record so the compose
+  // can bubble it into the response `phases_ms` and the dominant first-useful cost is measurable.
+  const cph: Record<string, number> = {};
 
   const ocmJoinP = supabase
     .from("opportunity_customer_members")
@@ -735,6 +757,7 @@ export async function attachOpportunityInquiryChildrenShell(
         .limit(25)
     : Promise.resolve({ data: [] as CmBootstrapRow[], error: null });
 
+  const tBatch0 = Date.now();
   const [joinRes, cmsRes, ocmMemberDefsTaggedPack] = await Promise.all([
     ocmJoinP,
     customerMembersP,
@@ -744,6 +767,7 @@ export async function attachOpportunityInquiryChildrenShell(
       nextRevalidateSeconds: 900,
     }),
   ]);
+  cph.ocm_members_batch_ms = Date.now() - tBatch0;
 
   const jrows = (joinRes.data ?? []) as OcmJoinRow[];
   const bootstrapList = ((cmsRes.data ?? []) ?? []) as CmBootstrapRow[];
@@ -775,11 +799,13 @@ export async function attachOpportunityInquiryChildrenShell(
 
   const optionLabelMap = EMPTY_OPTION_LABEL_MAP as Map<string, string>;
   const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberDefsTaggedPack.rows);
+  const tLoc0 = Date.now();
   const locationLabelById = await batchLocationLabelsForOrg(
     supabase,
     orgId,
     jrows.map((r) => trimOrNull(r.location_id)).filter((id): id is string => Boolean(id)),
   );
+  cph.location_labels_ms = Date.now() - tLoc0;
 
   let inquiryBlocks = mapOcmJoinRowsToInquiryChildrenBlock(
     jrows,
@@ -799,25 +825,40 @@ export async function attachOpportunityInquiryChildrenShell(
     oppDefaultScheduleType,
     optionLabelMap,
   );
-  let inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, opportunityId);
-  inquiryChildrenOut = await enrichInquiryChildrenWithPlacementOptionLabels(
-    supabase,
+  const inquiryChildrenBase = applyInquiryChildrenMetadataFallbacks(inquiryChildrenMerged, oppMeta, opportunityId);
+
+  // ── Overlay chain — first-useful child orientation ──────────────────────────────────────────
+  // Precedence of APPLICATION is fixed: placement labels → process-instance participation → durable
+  // operational facts → process-instance draft (durable > draft > OCM). But the FETCHES of the first
+  // three are mutually independent — each reads only the base children (customer_member_id/location_id)
+  // and opportunityId, never a prior overlay's OUTPUT. So the three round-trips are issued CONCURRENTLY
+  // and only their pure application stays serial; identical result, one round-trip instead of three.
+  // Only the draft overlay depends on the durable overlay's output (it targets the non-durable remainder),
+  // so it fetches+applies last.
+  const tOverlay0 = Date.now();
+  const placementLabeledP = enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryChildrenBase);
+  const processInstancesP = listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId });
+  const durableFactsP = resolveDurableFactsForChildren(
+    supabase as never,
     orgId,
-    inquiryChildrenOut,
+    inquiryChildrenBase.map((c) => ({
+      customerMemberId: c.customer_member_id,
+      siteLocationId: c.location_id ?? null,
+    })),
   );
-  // Source of truth for participation state + process stage is process_instances (not OCM).
-  inquiryChildrenOut = await overlayProcessInstanceParticipation(
-    supabase,
-    orgId,
-    opportunityId,
-    inquiryChildrenOut,
-    ocmStatusLabelByKey,
-  );
-  // Source of truth for operational facts (program/room/schedule/start) is the durable model once
-  // materialized (agreement/placement/schedule); OCM is the fallback.
-  inquiryChildrenOut = await overlayDurableOperationalFacts(supabase, orgId, inquiryChildrenOut);
-  // Pre-materialization: participation facts come from process_instances.metadata (no OCM).
+  const [placementLabeled, processInstances, durableFacts] = await Promise.all([
+    placementLabeledP,
+    processInstancesP,
+    durableFactsP,
+  ]);
+  cph.overlay_parallel_fetch_ms = Date.now() - tOverlay0;
+  // Apply in precedence order (pure, synchronous).
+  let inquiryChildrenOut = applyProcessInstanceParticipation(placementLabeled, processInstances, ocmStatusLabelByKey);
+  inquiryChildrenOut = applyDurableOperationalFacts(inquiryChildrenOut, durableFacts);
+  // Draft depends on the durable result (targets the non-durable remainder) → fetch+apply last.
+  const tDraft0 = Date.now();
   inquiryChildrenOut = await overlayProcessDraftParticipation(supabase, orgId, opportunityId, inquiryChildrenOut);
+  cph.process_draft_ms = Date.now() - tDraft0;
 
   host._inquiry_children = inquiryChildrenOut;
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
@@ -825,12 +866,15 @@ export async function attachOpportunityInquiryChildrenShell(
   {
     const memberRows = memberRowsFromInquiryChildren(inquiryChildrenOut);
     if (memberRows.length > 0) {
+      const tLinks0 = Date.now();
       await attachChildScopedContactLinksToRecord(supabase, orgId, memberRows, host);
+      cph.child_scoped_contacts_ms = Date.now() - tLinks0;
     } else {
       host._child_scoped_contact_links = [];
       host._child_scoped_contact_links_query_failed = false;
     }
   }
+  host._children_shell_phase_ms = cph;
 }
 
 type OppPersonShellRow = {

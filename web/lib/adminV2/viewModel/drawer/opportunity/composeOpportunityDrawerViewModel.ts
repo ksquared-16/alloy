@@ -197,6 +197,7 @@ export async function composeOpportunityDrawerViewModel(
         });
     }
 
+    phases.base_subject_ms = phases.opportunity_select_ms + phases.record_layout_ms;
     const tVisible0 = Date.now();
     const record = await buildOpportunityDrawerVisiblePayload(
         supabase,
@@ -205,6 +206,15 @@ export async function composeOpportunityDrawerViewModel(
         { hintDepartmentId: ctxDept }
     );
     phases.visible_entity_ms = Date.now() - tVisible0;
+    // Bubble the visible-payload sub-phases so the dominant first-useful cost is measurable in the
+    // response `phases_ms` (drawer_primary_* = the parallel FK batch, children_* = child orientation).
+    const visiblePrimaryPhase = (record as { _drawer_primary_phase_ms?: Record<string, number> })._drawer_primary_phase_ms;
+    if (visiblePrimaryPhase) for (const [k, v] of Object.entries(visiblePrimaryPhase)) phases[`visible_${k}`] = v;
+    const childrenShellPhase = (record as { _children_shell_phase_ms?: Record<string, number> })._children_shell_phase_ms;
+    if (childrenShellPhase) {
+        for (const [k, v] of Object.entries(childrenShellPhase)) phases[`children_${k}`] = v;
+        phases.children_orientation_ms = Object.values(childrenShellPhase).reduce((a, b) => a + b, 0);
+    }
 
     // `departmentId` derives from the work-unit row + the step-1 visible record (NOT the household
     // attach), so the household-persons attach and the dept-metadata / status-definitions fetches are
@@ -297,6 +307,8 @@ export async function composeOpportunityDrawerViewModel(
     Object.assign(record, resolved.record_patches);
     Object.assign(phases, resolved.phases_ms);
     phases.first_paint_resolve_ms = Date.now() - tDeps0;
+    // Everything after first-paint deps resolve is render-model assembly + serialization (no I/O).
+    const tSerialize0 = Date.now();
 
     const reminders = remindersFromFirstPaintData(resolved.data) ?? EMPTY_REMINDERS;
     const resolvedActions = headerActionsFromFirstPaintData(resolved.data);
@@ -508,5 +520,8 @@ export async function composeOpportunityDrawerViewModel(
         },
     };
 
+    // `phases` is referenced by viewModel.timing.phases_ms — these post-literal writes still surface.
+    phases.serialization_ms = Date.now() - tSerialize0;
+    phases.total_ms = Date.now() - composeStart;
     return finishCompose({ ok: true, viewModel });
 }
