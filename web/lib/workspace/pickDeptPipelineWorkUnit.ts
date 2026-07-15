@@ -23,6 +23,7 @@ export function pickDeptPipelineWorkUnit(
         queue_definition?: unknown;
         department_id?: string | null;
         metadata?: unknown;
+        is_active?: boolean | null;
     }>,
     departmentId: string
 ): DeptPipelineWorkUnitPick | null {
@@ -35,6 +36,11 @@ export function pickDeptPipelineWorkUnit(
     });
 
     for (const w of ordered) {
+        // An inactive/archived unit must never be the pipeline host: the queue route refuses to
+        // serve rows for inactive units (is_active=true filter), so picking one produces a 404 in the
+        // request graph (e.g. the deprecated "Qualification" enrollment_pipeline unit still carrying a
+        // `pipeline_total` lane). Skip explicitly-inactive rows; rows with no is_active are unchanged.
+        if (w.is_active === false) continue;
         const key = String(w.key ?? "").trim().toLowerCase();
         if (key === "needs_attention") continue;
         const wuDept = String(w.department_id ?? "").trim();
