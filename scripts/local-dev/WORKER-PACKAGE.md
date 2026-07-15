@@ -15,6 +15,7 @@ Copies are also stored under `initiatives/<key>/worker-packages/`.
 |---------|---------|
 | Identity | initiative, task, role, slot |
 | Objective | task goal |
+| **Product truth** | immutable operator outcomes, scope, visual basis from approved Product Contract (when handoff exists) |
 | Constitutional truth | platform invariants |
 | Initiative-approved decisions | frozen product/visual choices |
 | Worker discretion | allowed technical choices |

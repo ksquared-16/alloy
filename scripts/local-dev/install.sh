@@ -48,6 +48,19 @@ COMMANDS=(
   alloy-initiative-package
   alloy-initiative-close
   alloy-engineering-certify
+  alloy-product-help
+  alloy-product-create
+  alloy-product-import
+  alloy-product-status
+  alloy-product-audit
+  alloy-product-contract
+  alloy-product-decisions
+  alloy-product-decide
+  alloy-product-approve
+  alloy-product-package
+  alloy-product-handoff
+  alloy-product-close
+  alloy-product-certify
 )
 
 alloy_looks_like_toolkit_install() {

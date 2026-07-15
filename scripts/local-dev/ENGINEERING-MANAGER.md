@@ -1,6 +1,8 @@
-# Alloy Engineering Manager V1
+# Alloy Engineering Runtime V1
 
-Phase 4 local AI Engineering Manager — coordinates initiatives across managed Cursor/Claude workers without replacing Phase 1–3 toolkit primitives.
+Phase 4 local **Engineering Runtime** — a durable engineering workflow runtime, repository/context collector, deterministic implementation planner, worker coordinator, and review/evidence runtime. Coordinates initiatives across managed Cursor/Claude workers without replacing Phase 1–3 toolkit primitives.
+
+**Not** an autonomous Engineering Manager or LLM strategist. Product direction comes from **Product Runtime** (`PRODUCT-RUNTIME.md`) via approved handoff.
 
 ## Purpose
 

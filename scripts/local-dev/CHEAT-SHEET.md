@@ -63,7 +63,25 @@ alloy-validate wt1-my-initiative build
 alloy-validate wt1-my-initiative playwright
 alloy-validate wt1-my-initiative imports
 
-# Phase 4 Engineering Manager (initiative lifecycle)
+# Phase 4 Product Runtime → Engineering Runtime
+alloy-product-certify                          # run before first real product initiative
+alloy-product-certify --keep
+alloy-product-help
+# ChatGPT → YAML brief → clipboard:
+alloy-product-create my-feature --clipboard
+alloy-product-audit my-feature
+alloy-product-contract my-feature
+alloy-product-decisions my-feature
+alloy-product-decide my-feature decision-001 --choice "..." --decided-by Kelly --reason "..."
+alloy-product-approve my-feature --approver Kelly
+alloy-product-package my-feature
+alloy-product-handoff my-feature               # creates Engineering intake
+alloy-initiative-audit my-feature
+alloy-initiative-plan my-feature
+alloy-initiative-approve my-feature --approver Kelly
+alloy-initiative-start my-feature
+
+# Phase 4 Engineering Runtime (engineering-only path)
 alloy-engineering-certify                    # run before first real initiative
 alloy-engineering-certify --keep             # inspect certification artifacts
 alloy-engineering-help

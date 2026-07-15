@@ -5,7 +5,8 @@ Self-contained Bash toolkit for running up to six concurrent Cursor or Claude im
 **Phase 1** = worktrees, ports, owned dev servers, validation lock, health/audit/clean.  
 **Phase 2** = managed agent lifecycle on top of Phase 1 (create/open/status/close/instructions + AI health). No dashboards, daemons, or sprint automation.  
 **Phase 3** = per-slot auth, browser verification, evidence, two-tier env.  
-**Phase 4** = local Engineering Manager (initiative intake, audit, plan, worker packages, reports, review/remediation, merge-readiness packages). No auto-push/merge.
+**Phase 4** = local Engineering Runtime (initiative intake, audit, plan, worker packages, reports, review/remediation, merge-readiness packages). No auto-push/merge.  
+**Product Runtime V1** = local Product Contract workflow (brief → audit → contract → approval → handoff). See `PRODUCT-RUNTIME.md`.
 
 This is **developer experience tooling only**. It is not sprint orchestration, a workstation-management platform, or application feature work.
 
