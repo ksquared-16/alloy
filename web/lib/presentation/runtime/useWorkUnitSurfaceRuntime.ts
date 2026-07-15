@@ -84,6 +84,7 @@ import {
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import {
     computeWorkUnitSurfaceInitialSeed,
+    queueDefinitionMatchesFetchHost,
     resolveWorkUnitReadiness,
     validatedBaseQueueKeyForUnit,
     workUnitQueueFetchIdentity,
@@ -220,6 +221,15 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
     // Seeded config → the surface is already established: `configSettled` starts true so the queue
     // rows effect fires immediately (no re-establish gate) and the seeded rows show without a skeleton.
     const [configSettled, setConfigSettled] = useState(() => seed.config != null);
+    // Which work unit the current `queueDefinition` belongs to. On a same-department cross-host switch
+    // (Surface Hold, no remount) `workUnitId` advances a render BEFORE the new unit's def loads, while
+    // `configSettled` lags true — so the base queue key would be validated against the WRONG host's def
+    // and fetched from the new host (deployed: lifecycle_lead 404 on a unit without it, and
+    // lifecycle_qualification from a stale def). Gating the rows fetch on def↔unit match closes that
+    // window: the (work_unit, queue_key) pair is always assembled from ONE host's definition.
+    const [configWorkUnitId, setConfigWorkUnitId] = useState<string | null>(
+        () => (seed.config != null ? workUnitId : null),
+    );
     // The mount seed applies only to the first config-effect run (its context). Later runs (a slug
     // change without remount) ignore it and re-establish normally.
     const configSeedConsumedRef = useRef(false);
@@ -231,6 +241,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         // Fresh cached config → skip the whole config→layout waterfall for this navigation.
         if (useSeed && seed.configFresh) {
             setConfigSettled(true);
+            setConfigWorkUnitId(workUnitId);
             return;
         }
         let cancelled = false;
@@ -254,6 +265,8 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
                 setDeptMetadata(bundle.deptMetadata);
                 setQueueRowSurfaceIdState(bundle.queueRowSurfaceId);
                 setQueueDefinition(bundle.queueDefinition);
+                // The def now provably belongs to THIS work unit (the one this effect fetched for).
+                setConfigWorkUnitId(workUnitId);
                 setDeptWorkUnits(bundle.deptWorkUnits);
                 setQueueRowLayoutConfig(bundle.queueRowLayoutConfig);
                 // Write-back only a real config, so a later fresh-skip never trusts an empty bundle.
@@ -407,6 +420,10 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         // Wait for config settle: the lane validation above needs the queue definition, and a
         // rows fetch racing org/config bootstrap 404s transiently.
         if (!workUnitId || !fetchQueueKey || !configSettled) return;
+        // Def↔unit consistency: never fetch a key validated against a DIFFERENT host's queue definition
+        // (the cross-host Surface-Hold window) — the single source of the deployed lifecycle_lead-404 /
+        // lifecycle_qualification-on-wrong-host defect. See queueDefinitionMatchesFetchHost.
+        if (!queueDefinitionMatchesFetchHost(configWorkUnitId, workUnitId)) return;
         const fetchIdentity = workUnitQueueFetchIdentity({
             orgId: cacheContext.orgId,
             scopeFingerprint: cacheContext.scopeFingerprint,
@@ -474,6 +491,7 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         runtimeCtx.workViewId,
         selectedSiteId,
         configSettled,
+        configWorkUnitId,
         queueRefreshNonce,
         cacheContext,
     ]);

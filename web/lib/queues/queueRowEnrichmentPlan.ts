@@ -106,10 +106,24 @@ export function buildQueueRowEnrichmentPlan(input: BuildQueueRowEnrichmentPlanIn
     const layoutRuntime = input.layoutRuntimeQueueBody === true;
     const skippedEnrichment: string[] = [];
 
+    // Condensed reveal rail: the deployed CondensedQueueRow renders only from the compact
+    // `_queue_row_context`, which reads the primary-contact line (persons/contacts), the household
+    // children summary (customer_members + metadata inquiry-children), status/stage, and
+    // attention/work summaries built from in-memory operational fields — NOT from locations,
+    // activity-timeline, program-category lookups, or the open-tasks list (that feeds the stripped
+    // `_inquiry_summary_tasks`; Current Work is sourced from the stage-work runtime attach instead).
+    // So `layoutRuntime` must NOT blanket-enable those heavy fetches on `queue_reveal` — they are
+    // pure waste on the wire (all measured stripped or unread). Predicates/counts read only base
+    // columns, so nothing server-side breaks. Non-reveal layout-runtime paths are unchanged.
+    const isCondensedReveal = input.enrichmentMode === "queue_reveal" && layoutRuntime;
+    const layoutRuntimeForFetch = layoutRuntime && !isCondensedReveal;
+    const executableKey = String(input.executableQueueKey ?? "").trim().toLowerCase();
+
     const wantsContact = wantsContactFields(fields);
     const wantsHousehold = wantsHouseholdFields(fields);
 
     const relationFetch: QueueRowRelationFetchPlan = {
+        // Contact line + household children ARE shown on the condensed rail → keep these on reveal.
         persons: isCrm || wantsContact || layoutRuntime,
         contacts: isCrm || wantsContact || layoutRuntime,
         customers: isCrm || wantsContact || wantsHousehold || layoutRuntime,
@@ -122,16 +136,23 @@ export function buildQueueRowEnrichmentPlan(input: BuildQueueRowEnrichmentPlanIn
     if (!relationFetch.customerMembers) skippedEnrichment.push("customer_members");
 
     const batchFetch: QueueRowBatchFetchPlan = {
-        locations: wantsLocationLabel(fields, layoutRuntime),
+        // Location label is unread by the compact row (placement comes from inquiry-child raw).
+        locations: wantsLocationLabel(fields, layoutRuntimeForFetch),
         // Configured visible fields stay on reveal — skipOptional only drops unconfigured extras.
         tourBookings: wantsField(fields, "tour_date"),
         ocmDesiredStart:
             wantsField(fields, "start_date") ||
             wantsField(fields, "program") ||
             wantsHousehold ||
-            (layoutRuntime && relationFetch.customerMembers),
-        openTasks: wantsTasksBatch(input, fields),
-        activityTimelineEvents: layoutRuntime || input.enrichmentMode === "full",
+            (layoutRuntimeForFetch && relationFetch.customerMembers),
+        // Open-tasks list feeds the stripped `_inquiry_summary_tasks`; Current Work is sourced from the
+        // stage-work runtime attach. Keep it only for needs_attention (which shows task counts) + full.
+        openTasks:
+            input.enrichmentMode === "full" ||
+            executableKey === "needs_attention" ||
+            (layoutRuntimeForFetch && wantsTasksBatch(input, fields)),
+        // Activity timeline feeds the stripped `_activity_timeline_events` — never on the condensed rail.
+        activityTimelineEvents: layoutRuntimeForFetch || input.enrichmentMode === "full",
     };
 
     if (!batchFetch.locations) skippedEnrichment.push("locations");

@@ -146,6 +146,22 @@ export function computeWorkUnitSurfaceInitialSeed(args: {
 }
 
 /**
+ * Def↔unit consistency gate for the queue-rows fetch. The fetch queue key is derived from the loaded
+ * `queueDefinition`; during a same-department cross-host transition (Surface Hold) `workUnitId` advances
+ * a render before the new unit's definition loads, so a key validated against the PRIOR host's def would
+ * be fetched from the NEW host (deployed: lifecycle_lead 404 / stale lifecycle_qualification). Only fetch
+ * when the definition provably belongs to the current work unit. `configWorkUnitId` is set wherever the
+ * definition is established; null (cold, not-yet-loaded) blocks until it resolves.
+ */
+export function queueDefinitionMatchesFetchHost(
+    configWorkUnitId: string | null,
+    workUnitId: string | null,
+): boolean {
+    if (!workUnitId) return false;
+    return configWorkUnitId === workUnitId;
+}
+
+/**
  * Pure atomic-reveal readiness decision (Trust Closure). The primary composition INCLUDES the
  * queue: `coldCompositionReady` requires `queueSettledOnce`, so cold entry holds one boundary until
  * the rows are present, while a seeded return (queue seeded → `queueSettledOnce` true) is ready at

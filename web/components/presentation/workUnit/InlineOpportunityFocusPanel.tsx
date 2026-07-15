@@ -52,6 +52,9 @@ import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/Opportunit
 import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActionModalsPortal";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
+import { focusPanelScrollScope } from "@/lib/presentation/runtime/workUnitOperatorContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useOpportunityDrawerActionPreflight } from "@/lib/admin/actions/useOpportunityDrawerActionPreflight";
 import { useOpportunityDrawerRegistryActionFeedback } from "@/lib/admin/actions/useOpportunityDrawerRegistryActionFeedback";
@@ -92,6 +95,19 @@ export function InlineOpportunityFocusPanel() {
             subjectId: drawer.type === "opportunities" ? drawer.id : null,
             bodyScrollRef,
         });
+    // Retained Focus Panel scroll — per (org, record). Merge with the existing bodyScrollRef so both
+    // the mode-change scroll-to-top and the retained-scroll capture/restore see the same element.
+    const { orgId: focusPanelOrgId } = useWorkspaceOrg();
+    const retainedFocusScrollRef = useRetainedScroll(
+        focusPanelScrollScope(focusPanelOrgId, drawer.type === "opportunities" ? drawer.id : null),
+    );
+    const setBodyScrollEl = useCallback(
+        (el: HTMLDivElement | null) => {
+            bodyScrollRef.current = el;
+            retainedFocusScrollRef(el);
+        },
+        [retainedFocusScrollRef],
+    );
     const setFocusPanelMode = useCallback(
         (next: typeof focusPanelMode) => {
             if (next === "activity") {
@@ -366,7 +382,7 @@ export function InlineOpportunityFocusPanel() {
                         />}
                 </div>
                 <div
-                    ref={bodyScrollRef}
+                    ref={setBodyScrollEl}
                     data-adminv2-record-modal-scroll
                     className={
                         isActivityMode

@@ -33,6 +33,9 @@ import { CondensedQueueRow } from "./CondensedQueueRow";
 import { QueueFilterControls } from "./QueueFilterControls";
 import { useFocusPanelOpen } from "./FocusPanelSurface";
 import { queueRowsForListDuringHold } from "@/lib/presentation/runtime/queueRowsRetention";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
+import { queueScrollScope } from "@/lib/presentation/runtime/workUnitOperatorContext";
 
 const QUEUE_SKELETON_ROW_COUNT = 3;
 
@@ -112,6 +115,9 @@ export function QueueRegion({
     const { openRecord, prefetchRecord } = useFocusPanelOpen();
     const renderState = queueRegionRenderState(queue);
     const workView = title?.trim() || null;
+    // Retained queue scroll — per (org, work unit, work view) so Work View A→B→A restores each place.
+    const { orgId } = useWorkspaceOrg();
+    const queueScrollRef = useRetainedScroll(queueScrollScope(orgId, workUnitId, workViewId));
 
     const lastMarkedQueueStateRef = useRef<string | null>(null);
     useEffect(() => {
@@ -204,7 +210,7 @@ export function QueueRegion({
                 </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-2.5" data-queue-panel-body>
+            <div ref={queueScrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-2.5" data-queue-panel-body>
                 {renderState === "error" ? (
                     <p
                         role="alert"

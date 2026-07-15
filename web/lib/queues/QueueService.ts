@@ -1406,7 +1406,14 @@ async function enrichOpportunityRows(params: {
         }
     }
     const ocmPlacementByOpportunityId = indexOcmPlacementByOpportunityAndMember(ocmPlacementRows);
-    const locationProgramCategories = await loadLocationProgramCategoriesForOrg(supabase, orgId);
+    // Program-category labels only feed program strings on `_crm_compact_children` / `_requested_program`
+    // (stripped from the condensed reveal wire) or placement/location display. The condensed rail skips
+    // locations + ocmDesiredStart, so this org-wide lookup is pure waste there — gate it. (Previously an
+    // unconditional serial await inside enrichment, part of the ~222ms gap.)
+    const needsProgramCategoryLabels = batch.locations || batch.ocmDesiredStart || enrichment === "full";
+    const locationProgramCategories = needsProgramCategoryLabels
+        ? await loadLocationProgramCategoriesForOrg(supabase, orgId)
+        : [];
     const placementOptionLabelLookup =
         ocmPlacementRows.length > 0
             ? await buildChildcarePlacementOptionLabelLookup(supabase, orgId, ocmPlacementRows)

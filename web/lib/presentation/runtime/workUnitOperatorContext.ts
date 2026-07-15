@@ -66,8 +66,46 @@ export function clearRetainedWorkView(orgId: string | null, workUnitId: string |
     selectedWorkViewByUnit.delete(key(orgId, workUnitId));
 }
 
+// ── Retained scroll continuity (Workspace / Queue / Focus Panel) ─────────────────────────────────
+// Operator scroll position is in-surface continuity, same class as the retained selection: it is not
+// in the URL, so an unmount would lose it. Kept per session, scoped so that returning to the SAME
+// surface restores the operator's place, while a DIFFERENT surface (other view / other record / other
+// site) starts at the top. Scroll restore is a hint only — the browser clamps it to current content
+// height, so a shorter list after a mutation/permission change simply lands at the bottom, never an
+// invalid offset. Cleared wholesale on org change / logout via clearRetainedOperatorContext.
+const scrollByScope = new Map<string, number>();
+
+/** Queue scroll is per (org, work unit, work view) so Work View A→B→A restores each view's place. */
+export function queueScrollScope(
+    orgId: string | null,
+    workUnitId: string | null,
+    workViewId: string | null,
+): string {
+    return `queue:${orgId ?? "_"}:${workUnitId ?? "_"}:${workViewId ?? "_"}`;
+}
+
+/** Focus Panel scroll is per (org, record) — it belongs to the specific record on screen (ids unique). */
+export function focusPanelScrollScope(orgId: string | null, recordId: string | null): string {
+    return `focus:${orgId ?? "_"}:${recordId ?? "_"}`;
+}
+
+/** Workspace scroll is per (org, site scope) — the process-overview surface. */
+export function workspaceScrollScope(orgId: string | null, siteScopeId: string | null): string {
+    return `workspace:${orgId ?? "_"}:${siteScopeId ?? "_"}`;
+}
+
+export function putRetainedScroll(scope: string, top: number): void {
+    if (!Number.isFinite(top) || top < 0) return;
+    scrollByScope.set(scope, Math.round(top));
+}
+
+export function peekRetainedScroll(scope: string): number | null {
+    return scrollByScope.get(scope) ?? null;
+}
+
 /** Clear all retained operator context — used on org change / logout alongside the session cache. */
 export function clearRetainedOperatorContext(): void {
     selectedWorkViewByUnit.clear();
     selectionByUnit.clear();
+    scrollByScope.clear();
 }
