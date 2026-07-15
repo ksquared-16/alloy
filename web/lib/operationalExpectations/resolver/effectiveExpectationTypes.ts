@@ -141,4 +141,5 @@ export type EffectiveExpectationResolution =
  */
 export const RATIFIED_TRANSITIONS: ReadonlySet<ExpectationTransitionType> = new Set<ExpectationTransitionType>([
     "revision",
+    "correction",
 ]);
