@@ -6688,6 +6688,12 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   max-width: 100%;
 }
 
+.identity-record-details {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
 .identity-record-summary__title {
   display: flex;
   align-items: center;

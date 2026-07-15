@@ -90,6 +90,9 @@ export type HouseholdEvidenceContact = {
     /** Person-scoped address components when present on observed truth. */
     addressLine1?: string | null;
     addressLine2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postalCode?: string | null;
 };
 
 /**
@@ -477,8 +480,11 @@ export function buildHouseholdCardEvidence(
         if (!components) return contact;
         const addressLine1 = components.address_line1 ?? null;
         const addressLine2 = components.address_line2 ?? null;
-        if (!addressLine1 && !addressLine2) return contact;
-        return { ...contact, addressLine1, addressLine2 };
+        const city = components.city ?? null;
+        const state = components.state ?? null;
+        const postalCode = components.postal_code ?? null;
+        if (!addressLine1 && !addressLine2 && !city && !state && !postalCode) return contact;
+        return { ...contact, addressLine1, addressLine2, city, state, postalCode };
     };
     if (primaryContact) primaryContact = attachPersonAddress(primaryContact);
     for (const contactList of [

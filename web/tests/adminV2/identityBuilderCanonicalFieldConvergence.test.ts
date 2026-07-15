@@ -7,6 +7,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 
 import { availableFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { identityPickerFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
 import {
     availableFieldsForNestedGroup,
     CHILDREN_SURFACE_ID,
@@ -17,6 +18,7 @@ import {
     nestedSurfaceLibraryCategories,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceBuilderLibrary";
 import { assembleFocusPanelNestedProviders } from "@/lib/fields/consumerCanonicalProviderAssembly";
+import { canonicalPickerIdentityForRefKey } from "@/lib/fields/canonicalProviderDedup";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
@@ -30,10 +32,14 @@ describe("Identity Builder canonical field convergence", () => {
         const expectedKeys = new Set(
             assembleFocusPanelNestedProviders()
                 .filter((provider) => namespaces.includes(provider.entityNamespace as (typeof namespaces)[number]))
-                .map((provider) => provider.refKey),
+                .map((provider) => canonicalPickerIdentityForRefKey(provider.refKey)),
         );
-        const pickerKeys = new Set(availableFieldsForNamespaces(namespaces).map((field) => field.key));
-        expect(pickerKeys).toEqual(expectedKeys);
+        const pickerKeys = new Set(identityPickerFieldsForNamespaces({ namespaces }).map((field) => field.key));
+        for (const key of pickerKeys) {
+            expect(expectedKeys.has(key)).toBe(true);
+        }
+        expect(pickerKeys.has("child.room")).toBe(false);
+        expect(pickerKeys.has("child.schedule")).toBe(false);
     });
 
     it("includes platform child first/last name fields from canonical registry", () => {
@@ -82,6 +88,15 @@ describe("Identity Builder canonical field convergence", () => {
         const fields = availableFieldsForNamespaces(["child"], custom);
         const field = fields.find((entry) => entry.key === "child.program_preference");
         expect(field?.label).toBe("Preferred Program Track");
+    });
+
+    it("children identity picker has no duplicate field refs", () => {
+        const cfg = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        const available = availableFieldsForNestedGroup(CHILDREN_SURFACE_ID, "identity", cfg);
+        const keys = available.map((field) => field.key);
+        expect(new Set(keys).size).toBe(keys.length);
+        expect(keys).not.toContain("child.room");
+        expect(keys).not.toContain("child.dob_age");
     });
 
     it("groups Identity library items by canonical field category", () => {

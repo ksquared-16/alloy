@@ -42,6 +42,10 @@ import {
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { dispatchOpenRelationshipActionModal } from "@/lib/admin/relationship/relationshipActionClient";
 import {
+    PERSON_ADDRESS_VALUE_KEYS,
+    type PersonAddressValueKey,
+} from "@/lib/layout/personDrawerAddressLayoutRefs";
+import {
     mergePersonChildRelationshipIntoFocusPanelTruth,
     patchPersonChildRelationshipFromFocusPanel,
     applyEmergencyRoleRemovalToTruth,
@@ -57,6 +61,9 @@ export type PersonContactValues = {
     phone: string;
     address_line1?: string;
     address_line2?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
 };
 
 /** Only the changed fields, normalized (empty → null) for the PATCH body. */
@@ -125,12 +132,52 @@ type SavedPerson = {
     phone?: string | null;
     address_line1?: string | null;
     address_line2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
 };
 
 function trimOrNull(value: unknown): string | null {
     if (value == null) return null;
     const text = String(value).trim();
     return text.length > 0 ? text : null;
+}
+
+const PRIMARY_ADDRESS_TRUTH_KEYS: Record<PersonAddressValueKey, [primary: string, bare: string]> = {
+    address_line1: ["person.primary_address_line1", "person.address_line1"],
+    address_line2: ["person.primary_address_line2", "person.address_line2"],
+    city: ["person.primary_address_city", "person.city"],
+    state: ["person.primary_address_state", "person.state"],
+    postal_code: ["person.primary_address_postal_code", "person.postal_code"],
+};
+
+function addressComponentsFromSaved(saved: SavedPerson): Partial<Record<PersonAddressValueKey, string | null>> {
+    const out: Partial<Record<PersonAddressValueKey, string | null>> = {};
+    for (const key of PERSON_ADDRESS_VALUE_KEYS) {
+        if (saved[key] !== undefined) out[key] = trimOrNull(saved[key]);
+    }
+    return out;
+}
+
+function mergePersonAddressSnapshot(
+    merged: Record<string, unknown>,
+    personId: string,
+    components: Partial<Record<PersonAddressValueKey, string | null>>,
+): void {
+    if (Object.keys(components).length === 0) return;
+    const snapshotsRaw = merged._person_address_by_id;
+    const snapshots =
+        snapshotsRaw && typeof snapshotsRaw === "object" && !Array.isArray(snapshotsRaw)
+            ? { ...(snapshotsRaw as Record<string, Record<string, unknown>>) }
+            : {};
+    const row = { ...(snapshots[personId] ?? {}) };
+    for (const key of PERSON_ADDRESS_VALUE_KEYS) {
+        if (components[key] === undefined) continue;
+        row[key] = components[key];
+        row[`person.${key}`] = components[key];
+    }
+    snapshots[personId] = row;
+    merged._person_address_by_id = snapshots;
 }
 
 function fullNameFrom(person: SavedPerson): string | null {
@@ -160,6 +207,12 @@ function updateContactArray(value: unknown, personId: string, saved: SavedPerson
             next.address_line2 = trimOrNull(saved.address_line2);
             next.addressLine2 = trimOrNull(saved.address_line2);
         }
+        if (saved.city !== undefined) next.city = trimOrNull(saved.city);
+        if (saved.state !== undefined) next.state = trimOrNull(saved.state);
+        if (saved.postal_code !== undefined) {
+            next.postal_code = trimOrNull(saved.postal_code);
+            next.postalCode = trimOrNull(saved.postal_code);
+        }
         return next;
     });
 }
@@ -184,21 +237,21 @@ export function mergePersonContactIntoFocusPanelTruth(
     merged._opportunity_persons = updateContactArray(merged._opportunity_persons, personId, saved);
     merged._customer_persons = updateContactArray(merged._customer_persons, personId, saved);
 
+    const addressComponents = addressComponentsFromSaved(saved);
+    mergePersonAddressSnapshot(merged, personId, addressComponents);
+
     if (personId === resolveLeadSummaryPrimaryPersonId(truth)) {
         applyPersonPatchToOpportunityHydration(merged, saved);
         const fullName = fullNameFrom(saved);
         if (fullName) merged["person.primary_contact_name"] = fullName;
         if (saved.email !== undefined) merged["person.primary_email"] = trimOrNull(saved.email);
         if (saved.phone !== undefined) merged["person.primary_phone"] = trimOrNull(saved.phone);
-        if (saved.address_line1 !== undefined) {
-            const line1 = trimOrNull(saved.address_line1);
-            merged["person.primary_address_line1"] = line1;
-            merged["person.address_line1"] = line1;
-        }
-        if (saved.address_line2 !== undefined) {
-            const line2 = trimOrNull(saved.address_line2);
-            merged["person.primary_address_line2"] = line2;
-            merged["person.address_line2"] = line2;
+        for (const key of PERSON_ADDRESS_VALUE_KEYS) {
+            if (saved[key] === undefined) continue;
+            const value = trimOrNull(saved[key]);
+            const [primaryKey, bareKey] = PRIMARY_ADDRESS_TRUTH_KEYS[key];
+            merged[primaryKey] = value;
+            merged[bareKey] = value;
         }
         const identity = merged._identity as { primary_person?: { id?: unknown; label?: unknown } } | null | undefined;
         if (fullName && identity && typeof identity === "object" && identity.primary_person) {
@@ -296,7 +349,19 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
             const res = await patchLinkedPersonFromOpportunityDrawer({ personId: id, body: patch, fetchFn });
             if (!res.ok) return { ok: false, status: res.status, error: res.error };
 
-            const merged = mergePersonContactIntoFocusPanelTruth(truth, id, res.json as SavedPerson);
+            const savedPerson: SavedPerson = { ...(res.json as SavedPerson) };
+            for (const [key, value] of Object.entries(patch)) {
+                if (
+                    key === "address_line1"
+                    || key === "address_line2"
+                    || key === "city"
+                    || key === "state"
+                    || key === "postal_code"
+                ) {
+                    (savedPerson as Record<string, unknown>)[key] = value;
+                }
+            }
+            const merged = mergePersonContactIntoFocusPanelTruth(truth, id, savedPerson);
             dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
             dispatchDrawerLayoutRuntimeBodyRecordPatch({
                 entityType: "opportunities",
