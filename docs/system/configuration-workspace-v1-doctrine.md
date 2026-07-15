@@ -1,13 +1,16 @@
 ---
 owner: runtime
-status: frozen
-last_reviewed: 2026-07-12
+status: superseded
+last_reviewed: 2026-07-14
 supersedes: []
+superseded_by: [docs/platform/operator/configuration-workspace-platform-doctrine.md]
 ---
 
 # Configuration Workspace V1 Doctrine
 
-**Status:** Frozen — Configuration Runtime V1 (June 2026).
+> **Superseded by** [`configuration-workspace-platform-doctrine.md`](../platform/operator/configuration-workspace-platform-doctrine.md). The V1 ownership-domain IA is absorbed into the Configuration Workspace Platform; its hard ownership rules are carried forward there and in `configuration-ownership-doctrine.md`. Retained for history.
+
+**Status:** Superseded — July 2026 (was: Frozen — Configuration Runtime V1, June 2026).
 
 ## Configuration Mode visual rule
 

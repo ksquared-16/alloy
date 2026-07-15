@@ -102,6 +102,9 @@ Then: **`platform/foundation/system-overview.md`**
 24. `platform/operator/operational-mode-default-state-doctrine.md` — **Operational Mode as Default State** (approved/frozen)
 25. `platform/operator/workspace-v3-command-center-doctrine.md` — **Workspace V3 — Operational Command Center** (Rev 2 — four zones, progressive depth, enterability)
 26. `platform/operator/workspace-v3-operational-surface-doctrine.md` — **Workspace V3 — Operational Surface launcher** (storytelling, Work View deep links)
+26a. `platform/operator/configuration-workspace-platform-doctrine.md` — **Configuration Workspace Platform Doctrine** (canonical owner of every configuration workspace: operators operate configuration objects; object model, workspace anatomy, two-status model, business-language & inheritance doctrine; **reference impl = Locations**; supersedes the `system/` configuration-workspace docs)
+26b. `platform/operator/configuration-workspace-visual-language.md` — **Configuration Workspace Visual Language** (why configuration feels calm/object-shaped/consequence-first; extends `alloy-visual-language.md`)
+26c. `platform/operator/configuration-workspace-component-library.md` — **Configuration Workspace Component Library** (platform primitives: Object Header, Operational Summary, Attention Panel, Setup Progress, Inline Property, Focused Editor, Consequence Sentence, Inherited Value, Configuration Dialog, …)
 27. `platform/operator/queue-system.md`
 28. `platform/operator/drawer-system.md`
 29. `platform/operator/drawer-sunset-roadmap.md` — **Drawer Sunset & Focus Panel Convergence** (sunset status matrix, freeze rule, editing-gap blocker, Household-then-Children targets — convergence lock)
