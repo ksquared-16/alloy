@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-product-audit <key>
+
+Grounds explicit product references against repository doctrine and surfaces.
+Transitions: draft → auditing → contracting (via alloy-product-contract)
+
+See: scripts/local-dev/PRODUCT-RUNTIME.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_product_require_node
+  alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+
+  alloy_initiative_acquire_lock "$key"
+  local state
+  state="$(alloy_product_current_state "$key")"
+  [[ "$state" == "draft" || "$state" == "auditing" || "$state" == "blocked" ]] \
+    || alloy_die "cannot audit in state: $state"
+
+  local repo staging_sha brief_json audit_dir result
+  repo="${ALLOY_REPO}"
+  [[ -n "$repo" ]] || alloy_die "ALLOY_REPO is not set"
+  staging_sha="$(alloy_staging_sha)"
+  brief_json="$(alloy_product_dir "$key")/brief.json"
+  audit_dir="$(alloy_product_dir "$key")/audit"
+
+  result="$(alloy_product_artifacts audit "$repo" "$brief_json" "$audit_dir" "$staging_sha")"
+
+  if [[ "$state" == "draft" ]]; then
+    alloy_product_transition "$key" "auditing"
+  fi
+
+  alloy_info "Product audit complete: $key"
+  alloy_info "  doctrine entries: $(node -e "console.log(JSON.parse(process.argv[1]).doctrine_count)" "$result")"
+  alloy_info "  surface entries:  $(node -e "console.log(JSON.parse(process.argv[1]).surface_count)" "$result")"
+  alloy_info "  visual entries:   $(node -e "console.log(JSON.parse(process.argv[1]).visual_count)" "$result")"
+  alloy_info "  risks:            $(node -e "console.log(JSON.parse(process.argv[1]).risk_count)" "$result")"
+  alloy_info ""
+  alloy_info "Next: alloy-product-contract $key"
+}
+
+main "$@"
