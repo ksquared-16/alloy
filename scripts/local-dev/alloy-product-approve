@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-product-approve <key> --approver <name>
+  alloy-product-approve <key> --approver <name> --reason "contract change reason"
+
+Requires no blocking decisions, valid visual basis for user-visible work,
+and complete acceptance/scope sections. Freezes approved contract revision.
+
+Transitions: awaiting_product_approval → approved
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  shift
+  local approver="" reason=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --approver) [[ $# -ge 2 ]] || alloy_die "--approver requires value"; approver="$2"; shift 2 ;;
+      --approver=*) approver="${1#--approver=}"; shift ;;
+      --reason) [[ $# -ge 2 ]] || alloy_die "--reason requires value"; reason="$2"; shift 2 ;;
+      --reason=*) reason="${1#--reason=}"; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+  [[ -n "$approver" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_product_require_node
+  alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+
+  alloy_initiative_acquire_lock "$key"
+  local state
+  state="$(alloy_product_current_state "$key")"
+  [[ "$state" == "awaiting_product_approval" || "$state" == "approved" ]] \
+    || alloy_die "cannot approve in state: $state"
+
+  local blocking
+  blocking="$(alloy_product_blocking_decisions_count "$key")"
+  [[ "$blocking" == "0" ]] || alloy_die "cannot approve: $blocking blocking decision(s) remain"
+
+  if [[ "$(alloy_product_user_visible_work "$key")" == "yes" ]]; then
+    alloy_product_validate_visual_basis "$key" || \
+      alloy_die "user-visible work requires a valid visual basis in visual-contract.yaml"
+  fi
+
+  local contract_dir acceptance scope
+  contract_dir="$(alloy_product_dir "$key")/contract"
+  [[ -f "$contract_dir/acceptance.yaml" ]] || alloy_die "acceptance.yaml missing"
+  [[ -f "$contract_dir/scope.yaml" ]] || alloy_die "scope.yaml missing"
+  acceptance="$(grep -c '^  -' "$contract_dir/acceptance.yaml" 2>/dev/null || echo 0)"
+  [[ "$acceptance" -gt 0 ]] || alloy_die "acceptance criteria required"
+
+  local contract_hash prev_hash now revision
+  contract_hash="$(alloy_product_contract_hash "$key")"
+  prev_hash="$(node -e "const d=require('$(alloy_product_state_path "$key")'); process.stdout.write(d.approved_contract_hash||'');")"
+  now="$(alloy_iso_now)"
+  revision="$(node -e "const d=require('$(alloy_product_state_path "$key")'); console.log(d.revision||1);")"
+
+  if [[ -n "$prev_hash" && "$prev_hash" != "$contract_hash" && -z "$reason" ]]; then
+    alloy_die "contract changed since last approval — provide --reason"
+  fi
+
+  if [[ -n "$prev_hash" && "$prev_hash" != "$contract_hash" ]]; then
+    revision=$((revision + 1))
+  fi
+
+  node -e "
+    const fs = require('fs');
+    const p = '$(alloy_product_state_path "$key")';
+    const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+    d.approved_contract_hash = '${contract_hash}';
+    d.approver = $(node -e "console.log(JSON.stringify('${approver}'))");
+    d.approved_at = '${now}';
+    d.revision = ${revision};
+    d.updated_at = '${now}';
+    if ('${reason}') {
+      d.approval_changes = d.approval_changes || [];
+      d.approval_changes.push({
+        at: '${now}',
+        reason: $(node -e "console.log(JSON.stringify('${reason}'))"),
+        prev_hash: '${prev_hash}',
+        new_hash: '${contract_hash}',
+        revision: ${revision}
+      });
+    }
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  "
+
+  cat >"$contract_dir/approval.json" <<EOF
+{
+  "approved_at": "$now",
+  "approver": "$approver",
+  "contract_hash": "$contract_hash",
+  "revision": $revision,
+  "change_reason": $(node -e "console.log(JSON.stringify('${reason}'))"),
+  "frozen_files": [
+    "product-contract.md",
+    "product-contract.yaml",
+    "ux-contract.yaml",
+    "visual-contract.yaml",
+    "acceptance.yaml",
+    "scope.yaml",
+    "test-data-contract.yaml"
+  ]
+}
+EOF
+
+  if [[ "$state" == "awaiting_product_approval" ]]; then
+    alloy_product_transition "$key" "approved"
+  fi
+
+  alloy_info "Product Contract approved: $key"
+  alloy_info "  approver:       $approver"
+  alloy_info "  revision:       $revision"
+  alloy_info "  contract hash:  ${contract_hash:0:16}..."
+  alloy_info ""
+  alloy_info "Next: alloy-product-package $key"
+}
+
+main "$@"
