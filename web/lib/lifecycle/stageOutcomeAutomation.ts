@@ -54,12 +54,16 @@ export type OutcomeFollowUpWorkDraft = {
     due_policy: StageFollowUpWorkDuePolicyV1;
 };
 
+export type OutcomeAttentionDraft = {
+    reason: string;
+    due_policy: StageFollowUpWorkDuePolicyV1;
+};
+
 export type ComposableOutcomeBehaviorDraft = {
     movement: "stay_in_stage" | "move_through_transition";
     transition_ref?: string;
     follow_up_work: OutcomeFollowUpWorkDraft[];
-    attention_enabled: boolean;
-    attention_reason?: string;
+    attention_items: OutcomeAttentionDraft[];
 };
 
 const ENROLLMENT_STAGE_DEFAULT_STATUS: Record<string, string> = {
@@ -293,7 +297,6 @@ export function readComposableOutcomeBehaviorDraft(
 ): ComposableOutcomeBehaviorDraft {
     const targets = rulesForOutcome(rules, outcomeKey).flatMap((rule) => rule.targets);
     const move = targets.find((target) => target.kind === "move_to_stage");
-    const attention = targets.find((target) => target.kind === "create_needs_attention");
     return {
         movement: move ? "move_through_transition" : "stay_in_stage",
         ...(move?.transition_ref ? { transition_ref: move.transition_ref } : {}),
@@ -303,8 +306,12 @@ export function readComposableOutcomeBehaviorDraft(
                 template_key: target.template_key ?? "",
                 due_policy: effectiveFollowUpDuePolicy(target.follow_up_due_policy, target.due_days),
             })),
-        attention_enabled: Boolean(attention),
-        ...(attention?.attention_reason ? { attention_reason: attention.attention_reason } : {}),
+        attention_items: targets
+            .filter((target) => target.kind === "create_needs_attention")
+            .map((target) => ({
+                reason: target.attention_reason ?? "Needs attention",
+                due_policy: effectiveFollowUpDuePolicy(target.follow_up_due_policy, target.due_days),
+            })),
     };
 }
 
@@ -330,11 +337,12 @@ export function upsertComposableOutcomeBehavior(
             follow_up_due_policy: followUp.due_policy,
         });
     }
-    if (draft.attention_enabled) {
+    for (const attention of draft.attention_items) {
         targets.push({
             kind: "create_needs_attention",
-            attention_reason: trimKey(draft.attention_reason) ?? "Needs attention",
+            attention_reason: trimKey(attention.reason) ?? "Needs attention",
             wait_bucket: "waiting_on_staff",
+            follow_up_due_policy: attention.due_policy,
         });
     }
     return [
