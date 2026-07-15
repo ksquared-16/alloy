@@ -15,6 +15,32 @@ export function tourConductTourProofPlan(): StageOperatingPlanV1 {
         stage_key: "tour",
         journey_segment: "family",
         purpose: "Conduct the tour and record what happened.",
+        outgoing_transitions: [
+            {
+                transition_ref: "tour_to_decision",
+                source_stage_key: "tour",
+                target_stage_key: "decision",
+                label: "Continue to Decision",
+                available: true,
+                status_key: "open",
+            },
+            {
+                transition_ref: "tour_to_closed_lost",
+                source_stage_key: "tour",
+                target_stage_key: "closed_lost",
+                label: "Close as Lost",
+                available: true,
+                status_key: "closed",
+                closes_record: true,
+            },
+            {
+                transition_ref: "tour_to_waitlist",
+                source_stage_key: "tour",
+                target_stage_key: "waitlist",
+                label: "Move to Waitlist",
+                available: true,
+            },
+        ],
         work_templates: [
             {
                 template_key: "conduct_tour",
@@ -92,23 +118,21 @@ export function tourConductTourProofPlan(): StageOperatingPlanV1 {
             },
         ],
         outcomes: [
-            { outcome_key: "tour_scheduled", label: "Tour Scheduled", work_template_key: "conduct_tour" },
+            { outcome_key: "tour_scheduled", label: "Tour Scheduled" },
             {
                 outcome_key: "tour_completed",
                 label: "Tour Completed",
-                work_template_key: "conduct_tour",
                 successful: true,
                 completes_work: true,
             },
-            { outcome_key: "no_show", label: "No Show", work_template_key: "conduct_tour", completes_work: true },
-            { outcome_key: "needs_follow_up", label: "Needs Follow-up", work_template_key: "conduct_tour" },
+            { outcome_key: "no_show", label: "No Show", completes_work: true },
+            { outcome_key: "needs_follow_up", label: "Needs Follow-up" },
             {
                 outcome_key: "family_declined",
                 label: "Family Declined",
-                work_template_key: "conduct_tour",
                 completes_work: true,
             },
-            { outcome_key: "no_availability", label: "No Availability", work_template_key: "conduct_tour" },
+            { outcome_key: "no_availability", label: "No Availability" },
         ],
         outcome_rules: [
             {
@@ -145,13 +169,10 @@ export function tourConductTourProofPlan(): StageOperatingPlanV1 {
                 rule_key: "tour_completed_to_decision",
                 when_outcome_key: "tour_completed",
                 targets: [
-                    { kind: "update_family_case_status", status_key: "open" },
                     {
                         kind: "move_to_stage",
-                        stage_key: "decision",
                         transition_ref: "tour_to_decision",
                     },
-                    { kind: "mark_stage_work_complete" },
                 ],
             },
             {
@@ -171,7 +192,6 @@ export function tourConductTourProofPlan(): StageOperatingPlanV1 {
                             missing_anchor_behavior: "use_outcome_recorded_at",
                         },
                     },
-                    { kind: "mark_stage_work_complete" },
                 ],
             },
             {
@@ -197,8 +217,7 @@ export function tourConductTourProofPlan(): StageOperatingPlanV1 {
                 rule_key: "family_declined_close",
                 when_outcome_key: "family_declined",
                 targets: [
-                    { kind: "update_family_case_status", status_key: "closed" },
-                    { kind: "mark_stage_work_complete" },
+                    { kind: "move_to_stage", transition_ref: "tour_to_closed_lost" },
                 ],
             },
             {
@@ -219,7 +238,6 @@ export function tourConductTourProofPlan(): StageOperatingPlanV1 {
                     },
                     {
                         kind: "move_to_stage",
-                        stage_key: "waitlist",
                         transition_ref: "tour_to_waitlist",
                     },
                 ],
@@ -237,6 +255,25 @@ export function leadContactFamilyProofPlan(): StageOperatingPlanV1 {
         stage_key: "lead",
         journey_segment: "family",
         purpose: "Reach the family and determine next steps.",
+        outgoing_transitions: [
+            {
+                transition_ref: "lead_to_tour",
+                source_stage_key: "lead",
+                target_stage_key: "tour",
+                label: "Continue to Tour",
+                available: true,
+                status_key: "open",
+            },
+            {
+                transition_ref: "lead_to_closed_lost",
+                source_stage_key: "lead",
+                target_stage_key: "closed_lost",
+                label: "Close as Lost",
+                available: true,
+                status_key: "closed",
+                closes_record: true,
+            },
+        ],
         work_templates: [
             {
                 template_key: "contact_family",
@@ -262,19 +299,21 @@ export function leadContactFamilyProofPlan(): StageOperatingPlanV1 {
             },
         ],
         outcomes: [
-            { outcome_key: "reached", label: "Reached", work_template_key: "contact_family", successful: true },
-            { outcome_key: "left_message", label: "Left Message", work_template_key: "contact_family" },
-            { outcome_key: "awaiting_response", label: "Awaiting Response", work_template_key: "contact_family" },
-            { outcome_key: "not_interested", label: "Not Interested", work_template_key: "contact_family", completes_work: true },
+            { outcome_key: "reached", label: "Reached", successful: true },
+            { outcome_key: "left_message", label: "Left Message" },
+            { outcome_key: "awaiting_response", label: "Awaiting Response" },
+            { outcome_key: "not_interested", label: "Not Interested", completes_work: true },
         ],
         outcome_rules: [
             {
+                rule_key: "reached_to_tour",
+                when_outcome_key: "reached",
+                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
+            },
+            {
                 rule_key: "not_interested_close",
                 when_outcome_key: "not_interested",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "closed" },
-                    { kind: "mark_stage_work_complete" },
-                ],
+                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_closed_lost" }],
             },
         ],
         attention_rules: [],
@@ -289,6 +328,11 @@ export function decisionSupportEnrollmentProofPlan(): StageOperatingPlanV1 {
         stage_key: "decision",
         journey_segment: "family",
         purpose: "Support the family enrollment decision.",
+        outgoing_transitions: [
+            { transition_ref: "decision_to_enrolling", source_stage_key: "decision", target_stage_key: "enrolling", label: "Continue to Enrolling", available: true },
+            { transition_ref: "decision_to_waitlist", source_stage_key: "decision", target_stage_key: "waitlist", label: "Move to Waitlist", available: true },
+            { transition_ref: "decision_to_closed_lost", source_stage_key: "decision", target_stage_key: "closed_lost", label: "Close as Lost", available: true, status_key: "closed", closes_record: true },
+        ],
         work_templates: [
             {
                 template_key: "support_enrollment_decision",
@@ -316,22 +360,19 @@ export function decisionSupportEnrollmentProofPlan(): StageOperatingPlanV1 {
             {
                 outcome_key: "ready_to_enroll",
                 label: "Ready to Enroll",
-                work_template_key: "support_enrollment_decision",
                 successful: true,
                 completes_work: true,
             },
-            { outcome_key: "needs_time", label: "Needs Time", work_template_key: "support_enrollment_decision" },
+            { outcome_key: "needs_time", label: "Needs Time" },
             {
                 outcome_key: "wants_waitlist",
                 label: "Wants Waitlist",
-                work_template_key: "support_enrollment_decision",
                 successful: true,
                 completes_work: true,
             },
             {
                 outcome_key: "declined",
                 label: "Declined",
-                work_template_key: "support_enrollment_decision",
                 completes_work: true,
             },
         ],
@@ -342,10 +383,8 @@ export function decisionSupportEnrollmentProofPlan(): StageOperatingPlanV1 {
                 targets: [
                     {
                         kind: "move_to_stage",
-                        stage_key: "enrolling",
                         transition_ref: "decision_to_enrolling",
                     },
-                    { kind: "mark_stage_work_complete" },
                 ],
             },
             {
@@ -359,19 +398,14 @@ export function decisionSupportEnrollmentProofPlan(): StageOperatingPlanV1 {
                 targets: [
                     {
                         kind: "move_to_stage",
-                        stage_key: "waitlist",
                         transition_ref: "decision_to_waitlist",
                     },
-                    { kind: "mark_stage_work_complete" },
                 ],
             },
             {
                 rule_key: "declined_close",
                 when_outcome_key: "declined",
-                targets: [
-                    { kind: "update_family_case_status", status_key: "closed" },
-                    { kind: "mark_stage_work_complete" },
-                ],
+                targets: [{ kind: "move_to_stage", transition_ref: "decision_to_closed_lost" }],
             },
         ],
         attention_rules: [],
@@ -386,6 +420,7 @@ export function billingCollectPaymentProofPlan(): StageOperatingPlanV1 {
         stage_key: "collect_payment",
         journey_segment: "family",
         purpose: "Collect payment for the billing period.",
+        outgoing_transitions: [],
         work_templates: [
             {
                 template_key: "collect_payment",
@@ -413,18 +448,17 @@ export function billingCollectPaymentProofPlan(): StageOperatingPlanV1 {
             {
                 outcome_key: "paid",
                 label: "Paid",
-                work_template_key: "collect_payment",
                 successful: true,
                 completes_work: true,
             },
-            { outcome_key: "promise_to_pay", label: "Promise to Pay", work_template_key: "collect_payment" },
-            { outcome_key: "unable_to_collect", label: "Unable to Collect", work_template_key: "collect_payment" },
+            { outcome_key: "promise_to_pay", label: "Promise to Pay" },
+            { outcome_key: "unable_to_collect", label: "Unable to Collect" },
         ],
         outcome_rules: [
             {
                 rule_key: "paid_complete",
                 when_outcome_key: "paid",
-                targets: [{ kind: "mark_stage_work_complete" }],
+                targets: [{ kind: "no_movement" }],
             },
             {
                 rule_key: "promise_follow_up",

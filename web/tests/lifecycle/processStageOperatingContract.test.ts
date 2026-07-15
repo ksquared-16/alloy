@@ -40,7 +40,9 @@ import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1"
 import {
     buildOutcomeRuleFromAutomation,
     outcomeAutomationSummaryForOutcome,
+    readComposableOutcomeBehaviorDraft,
     readOutcomeAutomationDraft,
+    upsertComposableOutcomeBehavior,
     upsertOutcomeAutomationRule,
 } from "@/lib/lifecycle/stageOutcomeAutomation";
 import {
@@ -48,6 +50,7 @@ import {
     stageOperatingContractHasBlockingErrors,
 } from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
 import { availableOutcomesConfigSource } from "@/lib/lifecycle/workTemplateConfigSource";
+import { resolveOutgoingProcessTransitions } from "@/lib/lifecycle/resolveOutgoingProcessTransitions";
 import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
@@ -197,6 +200,17 @@ describe("Process Stage operating contract — outcome editor (6–10)", () => {
         expect(summary.toLowerCase()).toMatch(/decision|move|complete/);
     });
 
+    it("work completion is owned by the Outcome Definition", () => {
+        const plan = tourConductTourProofPlan();
+        const rule = plan.outcome_rules.find((row) => row.when_outcome_key === "tour_completed");
+        expect(plan.outcomes.find((outcome) => outcome.outcome_key === "tour_completed")?.completes_work).toBe(true);
+        expect(rule?.targets.some((target) => target.kind === "mark_stage_work_complete")).toBe(false);
+
+        rule!.targets.push({ kind: "mark_stage_work_complete" });
+        const issues = validateStageOperatingPlanOperatingContract({ plan });
+        expect(issues.some((issue) => issue.code === "legacy_work_completion_invalid")).toBe(true);
+    });
+
     it("10. Editor copy uses Outcomes not Results", () => {
         const editor = read(
             "components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor.tsx",
@@ -205,6 +219,16 @@ describe("Process Stage operating contract — outcome editor (6–10)", () => {
         expect(editor).not.toContain("Available Results");
         expect(editor).toContain("No direct action");
         expect(editor).toContain("Select an action");
+    });
+
+    it("blocking authoring validation is caught by the stage save flow", () => {
+        const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
+        const tryIndex = board.indexOf("try {", board.indexOf("setStageSaveState(\"saving\")"));
+        const draftIndex = board.indexOf("handle.getStageOperatingPlanDraft()", tryIndex);
+        const catchIndex = board.indexOf("catch", draftIndex);
+        expect(tryIndex).toBeGreaterThan(-1);
+        expect(draftIndex).toBeGreaterThan(tryIndex);
+        expect(catchIndex).toBeGreaterThan(draftIndex);
     });
 });
 
@@ -228,18 +252,18 @@ describe("Process Stage operating contract — transitions (11–15)", () => {
         expect(missing.some((i) => i.code === "outcome_transition_missing")).toBe(true);
     });
 
-    it("12. Destination stage alone is insufficient without transition identity when options exist", () => {
+    it("12. Destination stage alone is rejected when first-class transitions exist", () => {
         const plan = tourConductTourProofPlan();
         const stripped = structuredClone(plan);
         const rule = stripped.outcome_rules.find((r) => r.when_outcome_key === "tour_completed")!;
         const move = rule.targets.find((t) => t.kind === "move_to_stage")!;
         delete move.transition_ref;
         move.stage_key = "decision";
-        const draft = readOutcomeAutomationDraft("tour_completed", stripped.outcome_rules, {
-            transitionOptions: [...TOUR_TRANSITIONS],
+        const issues = validateStageOperatingPlanOperatingContract({
+            plan: stripped,
+            transitionOptions: TOUR_TRANSITIONS,
         });
-        // Legacy stage_key resolves uniquely when only one match exists.
-        expect(draft.transition_ref).toBe("tour_to_decision");
+        expect(issues.some((issue) => issue.code === "outcome_transition_invalid")).toBe(true);
     });
 
     it("15. Transition identity persists through automation upsert", () => {
@@ -256,17 +280,68 @@ describe("Process Stage operating contract — transitions (11–15)", () => {
         );
         expect(built?.targets.some((t) => t.transition_ref === "tour_to_decision")).toBe(true);
     });
+
+    it("prefers explicit stage-owned transitions and suppresses legacy fallback", () => {
+        const plan = tourConductTourProofPlan();
+        plan.outcome_rules.push({
+            rule_key: "legacy_extra",
+            when_outcome_key: "tour_completed",
+            targets: [{ kind: "move_to_stage", stage_key: "legacy_destination" }],
+        });
+        const resolved = resolveOutgoingProcessTransitions({
+            currentStageKey: "tour",
+            stageOperatingPlan: plan,
+            processStages: [
+                { key: "tour", label: "Tour" },
+                { key: "decision", label: "Decision" },
+                { key: "closed_lost", label: "Closed Lost" },
+                { key: "waitlist", label: "Waitlist" },
+            ],
+        });
+        expect(resolved.map((row) => row.transition_ref)).toEqual([
+            "tour_to_decision",
+            "tour_to_closed_lost",
+            "tour_to_waitlist",
+        ]);
+        expect(resolved.every((row) => row.source === "process_transition")).toBe(true);
+    });
+
+    it("blocks invalid transition definitions and unavailable references without throwing", () => {
+        const plan = tourConductTourProofPlan();
+        plan.outgoing_transitions![0]!.available = false;
+        plan.outgoing_transitions = [
+            ...plan.outgoing_transitions!,
+            {
+                ...plan.outgoing_transitions![0]!,
+                target_stage_key: "tour",
+                available: false,
+                status_key: "not_canonical",
+            },
+        ];
+        const issues = validateStageOperatingPlanOperatingContract({
+            plan,
+            processStageKeys: ["tour", "decision", "closed_lost", "waitlist"],
+            configuredStatuses: [...FAMILY_CLOSED_STATUSES],
+            entityType: "opportunities",
+        });
+        expect(issues.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+            "transition_identity_duplicate",
+            "transition_destination_self",
+            "outcome_transition_unavailable",
+            "transition_status_noncanonical",
+        ]));
+    });
 });
 
 describe("Process Stage operating contract — statuses (16–21)", () => {
-    it("16. Close Record editor has no raw text field", () => {
+    it("16. Transition editor derives close semantics from configured status", () => {
         const editor = read(
-            "components/adminV2/settings/lifecycle/LifecycleStageOutcomeAutomationEditor.tsx",
+            "components/adminV2/settings/lifecycle/LifecycleStageOutgoingTransitionsEditor.tsx",
         );
         expect(editor).toContain("resolveOutcomeStatusOptions");
-        expect(editor).toContain("stage-outcome-automation-status");
-        expect(editor).not.toMatch(/placeholder=["']closed["']/);
-        expect(editor).not.toMatch(/value=\{draft\.status_key \?\? ["']closed["']\}/);
+        expect(editor).toContain("isConfiguredClosedStatus");
+        expect(editor).toContain("Closes record");
+        expect(editor).not.toContain("Close Record");
     });
 
     it("17–18. Only configured closed statuses appear, scoped by entity", () => {
@@ -354,6 +429,31 @@ describe("Process Stage operating contract — follow-up work (22–25)", () => 
         for (const t of plan.work_templates) {
             expect(t.label.toLowerCase()).not.toMatch(/^work item \d+$/);
         }
+    });
+
+    it("supports zero or multiple follow-up Work Templates on one outcome", () => {
+        const plan = tourConductTourProofPlan();
+        const rules = upsertComposableOutcomeBehavior(plan.outcome_rules, "needs_follow_up", {
+            movement: "stay_in_stage",
+            follow_up_work: [
+                {
+                    template_key: "follow_up_after_tour",
+                    due_policy: { anchor: "outcome_recorded_at", offset_value: 1, offset_unit: "days", direction: "after" },
+                },
+                {
+                    template_key: "availability_follow_up",
+                    due_policy: { anchor: "stage_entered_at", offset_value: 2, offset_unit: "days", direction: "after" },
+                },
+            ],
+            attention_enabled: true,
+            attention_reason: "Follow-up needed",
+        });
+        const draft = readComposableOutcomeBehaviorDraft("needs_follow_up", rules);
+        expect(draft.follow_up_work.map((row) => row.template_key)).toEqual([
+            "follow_up_after_tour",
+            "availability_follow_up",
+        ]);
+        expect(draft.attention_enabled).toBe(true);
     });
 });
 
@@ -465,7 +565,9 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
                     attempt_count: 0,
                     last_outcome: null,
                     completed_at: null,
-                    outcomes: plan.outcomes.filter((o) => o.work_template_key === "conduct_tour"),
+                    outcomes: plan.outcomes.filter((o) =>
+                        plan.work_templates[0]!.outcome_refs?.some((ref) => ref.outcome_ref === o.outcome_key),
+                    ),
                     completion_policy_summary: null,
                     completion_policy_min_attempts: null,
                     completion_policy_max_attempts: null,
@@ -502,7 +604,9 @@ describe("Process Stage operating contract — runtime (31–35)", () => {
                         attempt_count: 0,
                         last_outcome: null,
                         completed_at: null,
-                        outcomes: plan.outcomes.filter((o) => o.work_template_key === "conduct_tour"),
+                        outcomes: plan.outcomes.filter((o) =>
+                            plan.work_templates[0]!.outcome_refs?.some((ref) => ref.outcome_ref === o.outcome_key),
+                        ),
                         completion_policy_summary: null,
                         completion_policy_min_attempts: null,
                         completion_policy_max_attempts: null,

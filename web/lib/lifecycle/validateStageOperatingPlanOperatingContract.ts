@@ -24,7 +24,17 @@ export type StageOperatingContractIssueCode =
     | "outcome_close_status_invalid"
     | "outcome_follow_up_template_missing"
     | "outcome_follow_up_template_invalid"
-    | "outcome_ref_unknown";
+    | "outcome_ref_unknown"
+    | "transition_identity_duplicate"
+    | "transition_identity_invalid"
+    | "transition_source_invalid"
+    | "transition_destination_invalid"
+    | "transition_destination_self"
+    | "transition_status_noncanonical"
+    | "transition_close_status_invalid"
+    | "outcome_transition_unavailable"
+    | "legacy_status_close_invalid"
+    | "legacy_work_completion_invalid";
 
 export type StageOperatingContractIssue = {
     code: StageOperatingContractIssueCode;
@@ -43,6 +53,7 @@ export type ValidateStageOperatingPlanOperatingContractInput = {
     transitionOptions?: ReadonlyArray<StageOutcomeTransitionOption>;
     configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
     entityType?: string;
+    processStageKeys?: ReadonlySet<string> | readonly string[];
 };
 
 function asSet(value: ReadonlySet<string> | readonly string[] | undefined): Set<string> {
@@ -197,6 +208,56 @@ export function validateStageOperatingPlanOperatingContract(
     const entityType = entityTypeForPlan(plan, input.entityType);
 
     const outcomeKeys = new Set(plan.outcomes.map((o) => o.outcome_key));
+    const transitionRefs = new Set<string>();
+    const processStageKeys = asSet(input.processStageKeys);
+    if (!processStageKeys.size) {
+        processStageKeys.add(plan.stage_key);
+        for (const option of transitionOptions) processStageKeys.add(option.target_stage_key);
+    }
+    for (const transition of plan.outgoing_transitions ?? []) {
+        const controlId = `stage-transition-${transition.transition_ref || "new"}`;
+        const ref = transition.transition_ref.trim();
+        if (!/^[a-z0-9][a-z0-9:_-]*$/i.test(ref)) {
+            issues.push({ code: "transition_identity_invalid", severity: "error", message: "Transition identity must be a stable non-empty key.", controlId });
+        } else if (transitionRefs.has(ref)) {
+            issues.push({ code: "transition_identity_duplicate", severity: "error", message: `Transition identity "${ref}" is duplicated.`, controlId });
+        }
+        transitionRefs.add(ref);
+        if (transition.source_stage_key !== plan.stage_key) {
+            issues.push({ code: "transition_source_invalid", severity: "error", message: "Transition source must be the stage that owns it.", controlId });
+        }
+        if (transition.target_stage_key === plan.stage_key) {
+            issues.push({ code: "transition_destination_self", severity: "error", message: "An outgoing transition cannot target its own stage.", controlId });
+        } else if (!transition.target_stage_key.trim() || !processStageKeys.has(transition.target_stage_key)) {
+            issues.push({ code: "transition_destination_invalid", severity: "error", message: "Select a configured destination stage.", controlId });
+        }
+        if (transition.status_key) {
+            const statusResolution = resolveOutcomeStatusOptions({
+                configuredStatuses,
+                purpose: "status_effect",
+                entityType,
+                selectedStatusKey: transition.status_key,
+            });
+            if (!statusResolution.selectedValid) {
+                issues.push({ code: "transition_status_noncanonical", severity: "error", message: `Status "${transition.status_key}" is not a configured canonical status.`, controlId });
+            } else {
+                const closed = resolveOutcomeStatusOptions({
+                    configuredStatuses,
+                    purpose: "close_record",
+                    entityType,
+                    selectedStatusKey: transition.status_key,
+                }).selectedValid;
+                if (transition.closes_record === true && !closed) {
+                    issues.push({ code: "transition_close_status_invalid", severity: "error", message: "Close semantics require a configured closed status.", controlId });
+                }
+                if (closed && transition.closes_record !== true) {
+                    issues.push({ code: "transition_close_status_invalid", severity: "error", message: "A configured closed status must carry derived close semantics.", controlId });
+                }
+            }
+        } else if (transition.closes_record === true) {
+            issues.push({ code: "transition_close_status_invalid", severity: "error", message: "Close semantics require a configured closed status.", controlId });
+        }
+    }
 
     for (const work of plan.work_templates) {
         try {
@@ -206,7 +267,7 @@ export function validateStageOperatingPlanOperatingContract(
                 if (outcomeRef && !outcomeKeys.has(outcomeRef)) {
                     issues.push({
                         code: "outcome_ref_unknown",
-                        severity: "warning",
+                        severity: "error",
                         message: `Available Outcome "${outcomeRef}" is not defined on this stage.`,
                         controlId: `work-template-outcome-ref-${work.template_key}`,
                         template_key: work.template_key,
@@ -244,6 +305,73 @@ export function validateStageOperatingPlanOperatingContract(
             );
         } catch {
             // Partial editing must never throw.
+        }
+    }
+
+    for (const rule of plan.outcome_rules) {
+        const outcomeKey = rule.when_outcome_key?.trim();
+        for (const target of rule.targets) {
+            if (target.kind === "move_to_stage" && plan.outgoing_transitions !== undefined) {
+                const ref = target.transition_ref?.trim() ?? "";
+                const transition = plan.outgoing_transitions.find((row) => row.transition_ref === ref);
+                if (!ref || !transition) {
+                    issues.push({
+                        code: "outcome_transition_invalid",
+                        severity: "error",
+                        message: "Outcome movement must reference a configured transition identity.",
+                        controlId: `stage-outcome-automation-${outcomeKey ?? "unknown"}-transition`,
+                        ...(outcomeKey ? { outcome_key: outcomeKey } : {}),
+                    });
+                } else if (!transition.available) {
+                    issues.push({
+                        code: "outcome_transition_unavailable",
+                        severity: "error",
+                        message: `Transition "${ref}" is unavailable.`,
+                        controlId: `stage-outcome-automation-${outcomeKey ?? "unknown"}-transition`,
+                        ...(outcomeKey ? { outcome_key: outcomeKey } : {}),
+                    });
+                }
+                if (target.stage_key || target.status_key) {
+                    issues.push({
+                        code: "outcome_transition_invalid",
+                        severity: "error",
+                        message: "New outcome movement stores transition identity only; destination and status belong to the transition.",
+                        controlId: `stage-outcome-automation-${outcomeKey ?? "unknown"}-transition`,
+                    });
+                }
+            }
+            if (
+                plan.outgoing_transitions !== undefined
+                && (target.kind === "update_family_case_status" || target.kind === "update_child_enrollment_status")
+            ) {
+                issues.push({
+                    code: "legacy_status_close_invalid",
+                    severity: "error",
+                    message: "Newly edited outcomes must move through a transition for status and close behavior.",
+                    controlId: `stage-outcome-automation-${outcomeKey ?? "unknown"}-transition`,
+                });
+            }
+            if (plan.outgoing_transitions !== undefined && target.kind === "mark_stage_work_complete") {
+                issues.push({
+                    code: "legacy_work_completion_invalid",
+                    severity: "error",
+                    message: "Work completion belongs to the Outcome Definition, not after-recording automation.",
+                    controlId: `stage-outcome-definition-${outcomeKey ?? "unknown"}`,
+                });
+            }
+            if (target.kind === "create_next_work") {
+                const templateKey = target.template_key?.trim() ?? "";
+                if (!templateKey || !plan.work_templates.some((work) => work.template_key === templateKey)) {
+                    issues.push({
+                        code: templateKey ? "outcome_follow_up_template_invalid" : "outcome_follow_up_template_missing",
+                        severity: "error",
+                        message: templateKey
+                            ? `Follow-up Work Template "${templateKey}" is not on this stage.`
+                            : "Select a Work Template for follow-up work.",
+                        controlId: `stage-outcome-automation-${outcomeKey ?? "unknown"}-work-template`,
+                    });
+                }
+            }
         }
     }
 

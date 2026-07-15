@@ -101,6 +101,21 @@ export type StageCompletionOutcomeV1 = {
     completes_work?: boolean;
 };
 
+/**
+ * A stage-owned directed process edge. `closes_record` is derived by the
+ * authoring surface from the selected canonical status; it is never a
+ * separately-authored behavior.
+ */
+export type StageOutgoingTransitionV1 = {
+    transition_ref: string;
+    source_stage_key: string;
+    target_stage_key: string;
+    label: string;
+    available: boolean;
+    status_key?: string;
+    closes_record?: true;
+};
+
 export type StageOutcomeRuleTargetKind =
     | "update_family_case_status"
     | "update_child_enrollment_status"
@@ -187,6 +202,8 @@ export type StageOperatingPlanV1 = {
     stage_key: string;
     purpose?: string;
     journey_segment: StageJourneySegment;
+    /** Absent on legacy plans. When present, this is the authoritative edge set. */
+    outgoing_transitions?: StageOutgoingTransitionV1[];
     work_templates: StageWorkTemplateV1[];
     outcomes: StageCompletionOutcomeV1[];
     outcome_rules: StageOutcomeRuleV1[];
@@ -355,6 +372,26 @@ function parseOutcome(raw: unknown): StageCompletionOutcomeV1 | null {
     };
 }
 
+function parseOutgoingTransition(raw: unknown): StageOutgoingTransitionV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const transition_ref = trimNonEmpty(o.transition_ref);
+    const source_stage_key = trimNonEmpty(o.source_stage_key);
+    const target_stage_key = trimNonEmpty(o.target_stage_key);
+    const label = trimNonEmpty(o.label);
+    if (!transition_ref || !source_stage_key || !target_stage_key || !label) return null;
+    const status_key = trimNonEmpty(o.status_key);
+    return {
+        transition_ref,
+        source_stage_key,
+        target_stage_key,
+        label,
+        available: o.available !== false,
+        ...(status_key ? { status_key } : {}),
+        ...(o.closes_record === true ? { closes_record: true as const } : {}),
+    };
+}
+
 function parseTarget(raw: unknown): StageOutcomeRuleTargetV1 | null {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
     const o = raw as Record<string, unknown>;
@@ -489,6 +526,14 @@ export function parseStageOperatingPlanV1(raw: unknown): StageOperatingPlanV1 | 
         }
     }
 
+    const outgoing_transitions: StageOutgoingTransitionV1[] = [];
+    if (Array.isArray(o.outgoing_transitions)) {
+        for (const item of o.outgoing_transitions) {
+            const parsed = parseOutgoingTransition(item);
+            if (parsed) outgoing_transitions.push(parsed);
+        }
+    }
+
     const outcome_rules: StageOutcomeRuleV1[] = [];
     if (Array.isArray(o.outcome_rules)) {
         for (const item of o.outcome_rules) {
@@ -510,6 +555,7 @@ export function parseStageOperatingPlanV1(raw: unknown): StageOperatingPlanV1 | 
         lifecycle_key,
         stage_key,
         journey_segment: journeyRaw as StageJourneySegment,
+        ...(Array.isArray(o.outgoing_transitions) ? { outgoing_transitions } : {}),
         work_templates,
         outcomes,
         outcome_rules,

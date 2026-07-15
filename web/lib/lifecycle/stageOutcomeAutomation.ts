@@ -49,6 +49,19 @@ export type OutcomeAutomationDraft = {
     when_attempt_count_gte?: number;
 };
 
+export type OutcomeFollowUpWorkDraft = {
+    template_key: string;
+    due_policy: StageFollowUpWorkDuePolicyV1;
+};
+
+export type ComposableOutcomeBehaviorDraft = {
+    movement: "stay_in_stage" | "move_through_transition";
+    transition_ref?: string;
+    follow_up_work: OutcomeFollowUpWorkDraft[];
+    attention_enabled: boolean;
+    attention_reason?: string;
+};
+
 const ENROLLMENT_STAGE_DEFAULT_STATUS: Record<string, string> = {
     lead: "new_lead",
     new_lead: "new_lead",
@@ -74,7 +87,10 @@ function trimKey(value: unknown): string | null {
 }
 
 function rulesForOutcome(rules: StageOutcomeRuleV1[], outcomeKey: string): StageOutcomeRuleV1[] {
-    return rules.filter((r) => (r.when_outcome_key ?? "").trim() === outcomeKey.trim());
+    return rules.filter(
+        (r): r is StageOutcomeRuleV1 =>
+            Boolean(r) && (r.when_outcome_key ?? "").trim() === outcomeKey.trim(),
+    );
 }
 
 function detectAutomationKind(targets: StageOutcomeRuleTargetV1[]): OutcomeAutomationKind {
@@ -212,7 +228,7 @@ export function buildOutcomeRuleFromAutomation(
 
     const rule_key = `${outcomeKey}_automation_${index + 1}`;
     const targets: StageOutcomeRuleTargetV1[] = [];
-    const transitionOptions = options?.transitionOptions ?? [];
+    void options;
 
     switch (draft.kind) {
         case "stay_in_stage":
@@ -221,18 +237,8 @@ export function buildOutcomeRuleFromAutomation(
             break;
         case "move_to_stage": {
             const transitionRef = trimKey(draft.transition_ref);
-            const stageKey =
-                stageKeyFromTransitionRef(transitionRef, transitionOptions)
-                ?? trimKey(draft.stage_key);
-            if (!stageKey && !transitionRef) return null;
-            const statusKey = trimKey(draft.status_key) ?? defaultStatusKeyForStage(stageKey ?? "");
-            targets.push({ kind: "update_family_case_status", status_key: statusKey });
-            targets.push({
-                kind: "move_to_stage",
-                stage_key: stageKey,
-                ...(transitionRef ? { transition_ref: transitionRef } : {}),
-            });
-            targets.push({ kind: "mark_stage_work_complete" });
+            if (!transitionRef) return null;
+            targets.push({ kind: "move_to_stage", transition_ref: transitionRef });
             break;
         }
         case "close_record": {
@@ -279,6 +285,66 @@ export function buildOutcomeRuleFromAutomation(
     if (draft.when_attempt_count_lt != null) rule.when_attempt_count_lt = draft.when_attempt_count_lt;
     if (draft.when_attempt_count_gte != null) rule.when_attempt_count_gte = draft.when_attempt_count_gte;
     return rule;
+}
+
+export function readComposableOutcomeBehaviorDraft(
+    outcomeKey: string,
+    rules: StageOutcomeRuleV1[],
+): ComposableOutcomeBehaviorDraft {
+    const targets = rulesForOutcome(rules, outcomeKey).flatMap((rule) => rule.targets);
+    const move = targets.find((target) => target.kind === "move_to_stage");
+    const attention = targets.find((target) => target.kind === "create_needs_attention");
+    return {
+        movement: move ? "move_through_transition" : "stay_in_stage",
+        ...(move?.transition_ref ? { transition_ref: move.transition_ref } : {}),
+        follow_up_work: targets
+            .filter((target) => target.kind === "create_next_work")
+            .map((target) => ({
+                template_key: target.template_key ?? "",
+                due_policy: effectiveFollowUpDuePolicy(target.follow_up_due_policy, target.due_days),
+            })),
+        attention_enabled: Boolean(attention),
+        ...(attention?.attention_reason ? { attention_reason: attention.attention_reason } : {}),
+    };
+}
+
+export function upsertComposableOutcomeBehavior(
+    rules: StageOutcomeRuleV1[],
+    outcomeKey: string,
+    draft: ComposableOutcomeBehaviorDraft,
+): StageOutcomeRuleV1[] {
+    const without = rules.filter((rule) => rule.when_outcome_key !== outcomeKey);
+    const targets: StageOutcomeRuleTargetV1[] = [];
+    if (draft.movement === "move_through_transition") {
+        const transitionRef = trimKey(draft.transition_ref);
+        if (transitionRef) targets.push({ kind: "move_to_stage", transition_ref: transitionRef });
+    } else {
+        targets.push({ kind: "no_movement" });
+    }
+    for (const followUp of draft.follow_up_work) {
+        const templateKey = trimKey(followUp.template_key);
+        if (!templateKey) continue;
+        targets.push({
+            kind: "create_next_work",
+            template_key: templateKey,
+            follow_up_due_policy: followUp.due_policy,
+        });
+    }
+    if (draft.attention_enabled) {
+        targets.push({
+            kind: "create_needs_attention",
+            attention_reason: trimKey(draft.attention_reason) ?? "Needs attention",
+            wait_bucket: "waiting_on_staff",
+        });
+    }
+    return [
+        ...without,
+        {
+            rule_key: `${outcomeKey}_behavior`,
+            when_outcome_key: outcomeKey,
+            targets,
+        },
+    ];
 }
 
 export function upsertOutcomeAutomationRule(

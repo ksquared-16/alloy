@@ -1,9 +1,9 @@
 /**
  * Outgoing process transitions — derived from configured edges only.
  *
- * Sources (in order):
- * 1. Current stage `stage_operating_plan_v1.outcome_rules` move_to_stage targets
- * 2. Process `tracks_v1.split_rules` where from_stage_key matches current stage
+ * Sources:
+ * 1. First-class `stage_operating_plan_v1.outgoing_transitions` when present
+ * 2. Legacy outcome-rule / split-rule fallback only when that field is absent
  *
  * Never generates transitions from a stage inventory or domain assumptions.
  */
@@ -18,6 +18,9 @@ export type OutgoingProcessTransition = {
     target_stage_key: string;
     target_stage_label: string;
     source: "process_transition" | "legacy_fallback";
+    available: boolean;
+    status_key?: string;
+    closes_record?: true;
     /** Outcome key when transition originates from an outcome rule. */
     outcome_key?: string;
     /** Split-rule outcome key when transition originates from tracks_v1. */
@@ -105,7 +108,8 @@ function transitionsFromOperatingPlan(args: {
                 label,
                 target_stage_key: targetStageKey,
                 target_stage_label: targetStageLabel,
-                source: "process_transition",
+                source: "legacy_fallback",
+                available: true,
                 ...(outcomeKey ? { outcome_key: outcomeKey } : {}),
             });
         }
@@ -158,7 +162,8 @@ function transitionsFromSplitRules(args: {
                 label,
                 target_stage_key: targetStageKey,
                 target_stage_label: targetStageLabel,
-                source: "process_transition",
+                source: "legacy_fallback",
+                available: true,
                 ...(splitOutcomeKey ? { split_outcome_key: splitOutcomeKey } : {}),
             });
         }
@@ -177,6 +182,21 @@ export function resolveOutgoingProcessTransitions(input: {
     if (!currentStageKey) return [];
 
     const processStages = input.processStages ?? [];
+    const explicit = input.stageOperatingPlan?.outgoing_transitions;
+    if (explicit !== undefined) {
+        return explicit
+            .filter((row) => row.source_stage_key.trim() === currentStageKey)
+            .map((row) => ({
+                transition_ref: row.transition_ref,
+                label: row.label,
+                target_stage_key: row.target_stage_key,
+                target_stage_label: stageLabelForKey(row.target_stage_key, processStages),
+                source: "process_transition" as const,
+                available: row.available,
+                ...(row.status_key ? { status_key: row.status_key } : {}),
+                ...(row.closes_record ? { closes_record: true as const } : {}),
+            }));
+    }
     const tracks =
         input.processTracks != null && typeof input.processTracks === "object"
             ? parseProcessTracksV1(input.processTracks) ?? (input.processTracks as ProcessTracksV1)
