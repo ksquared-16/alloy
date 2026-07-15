@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
     computeWorkUnitSurfaceInitialSeed,
+    queueDefinitionMatchesFetchHost,
     resolveWorkUnitReadiness,
     validatedBaseQueueKeyForUnit,
     workUnitSurfaceQueueLane,
@@ -137,6 +138,27 @@ describe("synchronous return-navigation seeding", () => {
         });
         expect(seed.config).toBeNull();
         expect(seed.queueResult).toBeNull();
+    });
+});
+
+describe("queue-definition ↔ work-unit host consistency (cross-host transition)", () => {
+    it("blocks the rows fetch until the loaded definition belongs to the current work unit", () => {
+        // Cold: no definition loaded yet → block.
+        expect(queueDefinitionMatchesFetchHost(null, "wu-A")).toBe(false);
+        // Settled on unit A → fetch A.
+        expect(queueDefinitionMatchesFetchHost("wu-A", "wu-A")).toBe(true);
+
+        // Cross-host transition A→B: workUnitId advances to B a render BEFORE B's def loads, while the
+        // definition state still belongs to A. The fetch MUST be blocked (else a key validated against
+        // A's def is fetched from B → 404 / stale key). This is the deployed lifecycle_lead-404 window.
+        expect(queueDefinitionMatchesFetchHost("wu-A", "wu-B")).toBe(false);
+        // Once B's definition loads and configWorkUnitId catches up → fetch B.
+        expect(queueDefinitionMatchesFetchHost("wu-B", "wu-B")).toBe(true);
+    });
+
+    it("never fetches without a target work unit", () => {
+        expect(queueDefinitionMatchesFetchHost("wu-A", null)).toBe(false);
+        expect(queueDefinitionMatchesFetchHost(null, null)).toBe(false);
     });
 });
 

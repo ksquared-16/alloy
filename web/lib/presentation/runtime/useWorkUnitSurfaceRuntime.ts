@@ -84,6 +84,7 @@ import {
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import {
     computeWorkUnitSurfaceInitialSeed,
+    queueDefinitionMatchesFetchHost,
     resolveWorkUnitReadiness,
     validatedBaseQueueKeyForUnit,
     workUnitQueueFetchIdentity,
@@ -420,10 +421,9 @@ export function useWorkUnitSurfaceRuntime(): WorkUnitSurfaceRuntime {
         // rows fetch racing org/config bootstrap 404s transiently.
         if (!workUnitId || !fetchQueueKey || !configSettled) return;
         // Def↔unit consistency: never fetch a key validated against a DIFFERENT host's queue definition
-        // (the cross-host Surface-Hold window). `fetchQueueKey` is derived from `queueDefinition`; only
-        // fetch once that def provably belongs to the current `workUnitId`. This is the single source of
-        // the deployed lifecycle_lead-404 / lifecycle_qualification-on-wrong-host defect.
-        if (configWorkUnitId !== workUnitId) return;
+        // (the cross-host Surface-Hold window) — the single source of the deployed lifecycle_lead-404 /
+        // lifecycle_qualification-on-wrong-host defect. See queueDefinitionMatchesFetchHost.
+        if (!queueDefinitionMatchesFetchHost(configWorkUnitId, workUnitId)) return;
         const fetchIdentity = workUnitQueueFetchIdentity({
             orgId: cacheContext.orgId,
             scopeFingerprint: cacheContext.scopeFingerprint,
