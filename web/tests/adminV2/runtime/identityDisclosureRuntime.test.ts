@@ -108,13 +108,26 @@ describe("household runtime disclosure", () => {
 
     it("address in details is absent from summary and context", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line", { tier: "expanded" });
-        const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line", { tier: "expanded" });
+        const record = {
+            ...householdRecord(),
+            "person.address_line1": "142 Oak Street",
+            "opportunity.primary_person_id": "p-sarah",
+        };
+        const evidence = buildHouseholdCardEvidence(ctx(record), { nestedConfig: config });
         const card = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
         const primary = card.sections.find((section) => section.key === "primary_contact")?.items[0]!;
+        const other = card.sections.find((section) => section.key === "other_parent_guardian")?.items[0]!;
         const contextView = identityRowsForDisclosureDepth(primary, "context");
-        expect(contextView.visibleRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef)).not.toContain("person.address_line");
-        expect(primary.detailRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef)).toContain("person.address_line");
+        const detailRefs = primary.detailRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
+        expect(contextView.visibleRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef)).not.toContain("person.address_line1");
+        expect(detailRefs).toContain("person.address_line1");
+        expect(detailRefs).not.toContain("person.address_line");
+        expect(primary.canShowDetails).toBe(true);
+        expect(primary.detailRows.flatMap((row) => row.cells).find((cell) => cell.fieldRef === "person.address_line1")?.value).toBe(
+            "142 Oak Street",
+        );
+        expect(other?.detailRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef)).toContain("person.address_line1");
     });
 
     it("card source wires selection into IdentityDisclosureSurface", () => {

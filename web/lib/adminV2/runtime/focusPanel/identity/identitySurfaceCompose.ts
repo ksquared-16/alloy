@@ -52,6 +52,16 @@ function composedPersonFullName(subject: IdentityComposeSubject): string | null 
     return null;
 }
 
+function personAddressLine1(subject: IdentityComposeSubject): string | null {
+    if (subject.kind !== "person") return null;
+    return subject.value.addressLine1?.trim() || null;
+}
+
+function personAddressLine2(subject: IdentityComposeSubject): string | null {
+    if (subject.kind !== "person") return null;
+    return subject.value.addressLine2?.trim() || null;
+}
+
 function personNameParts(subject: IdentityComposeSubject): { first: string | null; last: string | null } {
     if (subject.kind !== "person") return { first: null, last: null };
     const contact = subject.value;
@@ -164,7 +174,9 @@ const PERSON_RESOLVERS: Record<string, Resolver> = {
     },
     "person.role_label": (subject) => (subject.kind === "person" ? subject.value.roleLabel : null),
     "person.date_of_birth": () => null,
-    "person.address_line": () => null,
+    "person.address_line": (subject) => personAddressLine1(subject),
+    "person.address_line1": (subject) => personAddressLine1(subject),
+    "person.address_line2": (subject) => personAddressLine2(subject),
 };
 
 const EMPLOYEE_RESOLVERS: Record<string, Resolver> = {

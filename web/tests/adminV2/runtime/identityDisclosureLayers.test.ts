@@ -108,7 +108,7 @@ describe("configuration / compatibility", () => {
 
     it("expanded fields map to Details", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line", { tier: "expanded" });
         expect(identityConfigurationFieldKeys(config, "primary_contact", "details")).toContain("person.address_line");
     });
 
@@ -202,7 +202,7 @@ describe("context projection", () => {
 describe("household", () => {
     it("parent summaries appear and context reuses them with incremental facts", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line", { tier: "expanded" });
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
         const card = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
         const primary = card.sections.find((s) => s.key === "primary_contact")?.items[0]!;
@@ -211,18 +211,18 @@ describe("household", () => {
         expect(summaryRefs).toContain("person.phone");
         expect(contextRefs).toContain("person.phone");
         expect(contextRefs.filter((r) => r === "person.phone")).toHaveLength(1);
-        expect(contextRefs).not.toContain("person.address_line");
+        expect(contextRefs).not.toContain("person.address_line1");
     });
 
     it("detail fields hidden until details depth", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "primary_contact", "person.address_line", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line", { tier: "expanded" });
         const evidence = buildHouseholdCardEvidence(ctx(householdRecord()), { nestedConfig: config });
         const card = buildHouseholdIdentityCardVM({ config, groups: evidence.groups, canMutate: false });
         const primary = card.sections.find((s) => s.key === "primary_contact")?.items[0]!;
         const contextView = identityRowsForDisclosureDepth(primary, "context");
         expect(contextView.detailRows).toEqual([]);
-        expect(contextView.visibleRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).not.toContain("person.address_line");
+        expect(contextView.visibleRows.flatMap((r) => r.cells).map((c) => c.fieldRef)).not.toContain("person.address_line1");
     });
 });
 
