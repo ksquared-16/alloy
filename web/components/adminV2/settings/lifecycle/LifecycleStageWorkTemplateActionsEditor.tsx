@@ -12,8 +12,11 @@ import {
     removeWorkTemplateHelpfulAction,
     reorderWorkTemplateHelpfulActions,
     reorderWorkTemplateOutcomeRefs,
+    setWorkTemplateNoDirectAction,
     setWorkTemplateOutcomeRefs,
     setWorkTemplatePrimaryActionRef,
+    setWorkTemplateSelectDirectAction,
+    workTemplateExecutionMode,
     workTemplateHelpfulActionRefs,
     workTemplateOutcomeRefs,
     workTemplatePrimaryActionRef,
@@ -23,10 +26,11 @@ import {
     type WorkTemplateActionOption,
 } from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
 import {
-    availableResultsConfigSource,
+    availableOutcomesConfigSource,
     helpfulActionsConfigSource,
     primaryActionConfigSource,
     workTemplateConfigSourceLabel,
+    workTemplateExecutionModeSourceLabel,
 } from "@/lib/lifecycle/workTemplateConfigSource";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
@@ -193,9 +197,11 @@ export default function LifecycleStageWorkTemplateActionsEditor({
         processDefinition,
     });
 
+    const executionMode = workTemplateExecutionMode(work);
     const primaryRef = workTemplatePrimaryActionRef(work) ?? "";
     const helpfulRefs = workTemplateHelpfulActionRefs(work);
     const outcomeRefsList = workTemplateOutcomeRefs(work);
+    const radioName = `work-template-primary-mode-${work.template_key}`;
 
     const primaryOptions = toPickerOptions(options.primaryActionOptions.filter((row) => row.supported));
     const helpfulAddOptions = toPickerOptions(
@@ -205,23 +211,66 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     );
     const outcomeAddOptions: AlloyConfigPickerOption[] = options.outcomeOptions
         .filter((row) => !outcomeRefsList.includes(row.ref))
-        .map((row) => ({ value: row.ref, label: row.label, group: "Recommended" }));
+        .map((row) => ({ value: row.ref, label: row.label, group: "Stage outcomes" }));
 
     return (
         <div className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3" data-testid={`work-template-actions-${work.template_key}`}>
             <section data-testid={`work-template-primary-action-${work.template_key}`}>
                 <div className="mb-1 space-y-0.5">
                     <h4 className="text-[11px] font-semibold text-alloy-midnight">Primary Action</h4>
-                    <p className="text-[10px] text-alloy-midnight/50">The main action used to perform this work.</p>
+                    <p className="text-[10px] text-alloy-midnight/50">
+                        Optional. Use a direct action when operators launch one tool; leave empty for outcome-led work.
+                    </p>
                     <ConfigSourceBadge source={primaryActionConfigSource(work)} />
+                    <p className="text-[10px] text-alloy-midnight/45" data-testid={`work-template-execution-mode-${work.template_key}`}>
+                        {workTemplateExecutionModeSourceLabel(work)}
+                    </p>
                 </div>
-                <AlloyConfigPicker
-                    label="Primary Action"
-                    value={primaryRef}
-                    options={primaryOptions}
-                    onChange={(value) => onChange(setWorkTemplatePrimaryActionRef(work, value || null))}
-                    testId={`work-template-primary-picker-${work.template_key}`}
-                />
+
+                <fieldset className="space-y-2" data-testid={`work-template-primary-mode-${work.template_key}`}>
+                    <legend className="sr-only">Primary Action mode</legend>
+                    <label className="flex cursor-pointer items-start gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5">
+                        <input
+                            type="radio"
+                            name={radioName}
+                            className="mt-0.5"
+                            checked={executionMode === "outcome_led"}
+                            onChange={() => onChange(setWorkTemplateNoDirectAction(work))}
+                            data-testid={`work-template-primary-none-${work.template_key}`}
+                        />
+                        <span>
+                            <span className="block text-[11px] font-medium text-alloy-midnight">No direct action</span>
+                            <span className="block text-[10px] text-alloy-midnight/50">
+                                Record Outcome will be the main operator action.
+                            </span>
+                        </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5">
+                        <input
+                            type="radio"
+                            name={radioName}
+                            className="mt-0.5"
+                            checked={executionMode === "direct_action"}
+                            onChange={() => onChange(setWorkTemplateSelectDirectAction(work, primaryRef || null))}
+                            data-testid={`work-template-primary-select-${work.template_key}`}
+                        />
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-[11px] font-medium text-alloy-midnight">Select an action</span>
+                            <span className="mb-1.5 block text-[10px] text-alloy-midnight/50">
+                                Operators launch this action first, then may record an outcome.
+                            </span>
+                            {executionMode === "direct_action" ?
+                                <AlloyConfigPicker
+                                    label="Primary Action"
+                                    value={primaryRef}
+                                    options={primaryOptions}
+                                    onChange={(value) => onChange(setWorkTemplatePrimaryActionRef(work, value || null))}
+                                    testId={`work-template-primary-picker-${work.template_key}`}
+                                />
+                            :   null}
+                        </span>
+                    </label>
+                </fieldset>
             </section>
 
             <section data-testid={`work-template-helpful-actions-${work.template_key}`}>
@@ -299,12 +348,12 @@ export default function LifecycleStageWorkTemplateActionsEditor({
 
             <section data-testid={`work-template-outcome-refs-${work.template_key}`}>
                 <div className="mb-1 space-y-0.5">
-                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Available Results</h4>
+                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Available Outcomes</h4>
                     <p className="text-[10px] text-alloy-midnight/50">
-                        Choose which stage-defined results operators can record for this work.
+                        Choose which stage outcomes operators can record for this work.
                     </p>
                     <ConfigSourceBadge
-                        source={availableResultsConfigSource(work)}
+                        source={availableOutcomesConfigSource(work)}
                         fallbackHint="Configure this section to take explicit control."
                     />
                 </div>
@@ -318,7 +367,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     </button>
                     <div className="w-44">
                         <AlloyConfigPicker
-                            label="Add available result"
+                            label="Add available outcome"
                             value=""
                             options={outcomeAddOptions}
                             onChange={(ref) => {
@@ -334,11 +383,11 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     </div>
                 </div>
                 <OrderedActionRows
-                    title="Available Results"
+                    title="Available Outcomes"
                     refs={outcomeRefsList}
                     resolveLabel={(ref) => options.outcomeOptions.find((row) => row.ref === ref)?.label ?? ref.replace(/_/g, " ")}
                     resolveInvalid={(ref) =>
-                        options.outcomeOptions.some((row) => row.ref === ref) ? null : "Unknown result"
+                        options.outcomeOptions.some((row) => row.ref === ref) ? null : "Unknown outcome"
                     }
                     onRemove={(ref) =>
                         onChange(setWorkTemplateOutcomeRefs(work, outcomeRefsList.filter((row) => row !== ref)))

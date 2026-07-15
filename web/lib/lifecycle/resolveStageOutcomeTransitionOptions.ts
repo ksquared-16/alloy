@@ -13,6 +13,9 @@ export type StageOutcomeTransitionOption = {
     label: string;
     target_stage_key: string;
     target_stage_label: string;
+    available?: boolean;
+    status_key?: string;
+    closes_record?: true;
 };
 
 export function resolveStageOutcomeTransitionOptions(input: {
@@ -39,6 +42,9 @@ export function resolveStageOutcomeTransitionOptions(input: {
         label: row.label,
         target_stage_key: row.target_stage_key,
         target_stage_label: row.target_stage_label,
+        available: row.available,
+        ...(row.status_key ? { status_key: row.status_key } : {}),
+        ...(row.closes_record ? { closes_record: true as const } : {}),
     }));
 }
 

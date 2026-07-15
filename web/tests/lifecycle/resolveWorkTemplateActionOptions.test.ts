@@ -24,10 +24,29 @@ describe("resolveWorkTemplateActionOptions", () => {
         expect(options.helpfulActionOptions.some((row) => row.ref === "update_enrollment_status")).toBe(false);
     });
 
-    it("derives alternate path transition options from process stages", () => {
+    it("derives alternate path options from stage-owned transitions, not stage inventory", () => {
         const options = resolveWorkTemplateActionOptions({
             actionRegistry: [],
             stageActionCatalog: null,
+            stageOperatingPlan: {
+                version: 1,
+                lifecycle_key: "test",
+                stage_key: "lead",
+                journey_segment: "family",
+                outgoing_transitions: [
+                    {
+                        transition_ref: "lead_to_waitlist",
+                        source_stage_key: "lead",
+                        target_stage_key: "waitlist",
+                        label: "Move to Waitlist",
+                        available: true,
+                    },
+                ],
+                work_templates: [],
+                outcomes: [],
+                outcome_rules: [],
+                attention_rules: [],
+            },
             processTransitions: [
                 { key: "lead", label: "Lead" },
                 { key: "waitlist", label: "Waitlist" },
@@ -36,7 +55,7 @@ describe("resolveWorkTemplateActionOptions", () => {
             stageOutcomes: [],
         });
 
-        expect(options.transitionOptions.map((row) => row.ref)).toEqual(["move_to_stage:waitlist"]);
+        expect(options.transitionOptions.map((row) => row.ref)).toEqual(["lead_to_waitlist"]);
         expect(options.transitionOptions[0]?.label).toBe("Move to Waitlist");
     });
 

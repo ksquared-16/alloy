@@ -65,6 +65,12 @@ Configuration controls:
 
 Legacy rows without timing preserve prior behavior: they appear in stage progress/readiness, while transition blocking remains limited to the pre-existing completion/status guard behavior until explicit `stage_exit` metadata is configured.
 
+### Operational authoring
+
+Each stage Operating Plan owns its `outgoing_transitions` and Outcome Definitions. A transition has a stable `transition_ref`, source and destination stage, operator label, availability, and an optional resulting status chosen from the configured status catalog. A configured closed status derives close semantics; operators do not author a separate Close Record behavior.
+
+Outcome behavior is composed from independent controls: Stay in stage or Move through transition, zero or more follow-up Work Template entries, and optional attention. Follow-up schedules use canonical anchors for immediate/after outcome, before/after a scheduled event, and after stage entry. Work Templates only select Available Outcomes from the stage-owned definitions; legacy outcome `work_template_key` remains compatible.
+
 ---
 
 ---

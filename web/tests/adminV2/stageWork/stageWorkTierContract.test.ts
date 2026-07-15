@@ -14,16 +14,35 @@ function stageRuntime(overrides?: Partial<StageWorkRuntimeProjection>): StageWor
     return {
         stage_key: "qualification",
         stage_label: "Qualification",
+        purpose: "Follow up on qualification work.",
+        journey_segment: "family",
         template_keys: ["work.follow_up"],
         primary: {
             work_id: "wi-1",
             template_key: "work.follow_up",
             label: "Follow up",
+            role: "primary",
             state: "open",
+            requires_outcome_picker: false,
+            due_at: null,
+            due_urgency: "none",
+            attempt_count: 0,
+            last_outcome: null,
+            completed_at: null,
+            outcomes: [],
+            completion_policy_summary: null,
+            completion_policy_min_attempts: null,
+            completion_policy_max_attempts: null,
+            outcome_automation_preview: [],
         },
         additional: [],
-        ...(overrides as object),
-    } as StageWorkRuntimeProjection;
+        execution: {
+            department_id: "dept-1",
+            requires_outcome_picker: false,
+            subject: { journey_segment: "family", opportunity_id: "opp-A" },
+        },
+        ...overrides,
+    };
 }
 
 /** Minimal VM carrying only the regions the merge touches — the rest is identity-preserved. */

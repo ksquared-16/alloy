@@ -77,7 +77,8 @@ function buildTransitionOptions(input: {
         label: row.label,
         description: `Transition · ${fromLabel} → ${row.target_stage_label}`,
         targetStageKey: row.target_stage_key,
-        supported: true,
+        supported: row.available,
+        ...(!row.available ? { disabledReason: "Transition is unavailable" } : {}),
     }));
 }
 

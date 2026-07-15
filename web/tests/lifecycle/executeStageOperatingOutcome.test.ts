@@ -42,10 +42,6 @@ describe("executeStageOperatingOutcome", () => {
             })),
         };
 
-        const { updateOpportunityCustomerMemberLifecycleStatus } = await import(
-            "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus"
-        );
-
         const result = await executeStageOperatingOutcome({
             supabase: supabase as never,
             orgId: "org-1",
@@ -56,12 +52,12 @@ describe("executeStageOperatingOutcome", () => {
             subject: {
                 journey_segment: "child",
                 opportunity_id: "opp-1",
+                customer_member_id: "child-1",
                 opportunity_customer_member_id: "ocm-1",
             },
         });
 
         expect(result.errors).toEqual([]);
-        expect(updateOpportunityCustomerMemberLifecycleStatus).toHaveBeenCalled();
         expect(result.status_updated).toBe(true);
     });
 
@@ -217,5 +213,60 @@ describe("executeStageOperatingOutcome", () => {
         expect(updateSpy).toHaveBeenCalledWith(
             expect.objectContaining({ stage_key: "tour" }),
         );
+    });
+
+    it("resolves transition_ref through the stage-owned transition object", async () => {
+        const { updateOpportunityStatusWithEvent } = await import(
+            "@/lib/opportunities/updateOpportunityStatusWithEvent"
+        );
+        const updateSpy = vi.fn().mockReturnThis();
+        const eqSpy = vi.fn().mockReturnThis();
+        const supabase = {
+            from: vi.fn(() => ({
+                update: (...args: unknown[]) => {
+                    updateSpy(...args);
+                    return { eq: (...args: unknown[]) => { eqSpy(...args); return { eq: eqSpy }; } };
+                },
+            })),
+        };
+        const plan = {
+            version: 1 as const,
+            lifecycle_key: "enrollment",
+            stage_key: "tour",
+            journey_segment: "family" as const,
+            outgoing_transitions: [{
+                transition_ref: "tour_to_closed_lost",
+                source_stage_key: "tour",
+                target_stage_key: "closed_lost",
+                label: "Close as Lost",
+                available: true,
+                status_key: "closed",
+                closes_record: true as const,
+            }],
+            work_templates: [],
+            outcomes: [{ outcome_key: "declined", label: "Declined" }],
+            attention_rules: [],
+            outcome_rules: [{
+                rule_key: "declined",
+                when_outcome_key: "declined",
+                targets: [{ kind: "move_to_stage" as const, transition_ref: "tour_to_closed_lost" }],
+            }],
+        };
+
+        const result = await executeStageOperatingOutcome({
+            supabase: supabase as never,
+            orgId: "org-1",
+            userId: "user-1",
+            departmentId: "dept-1",
+            plan,
+            outcomeKey: "declined",
+            subject: { journey_segment: "family", opportunity_id: "opp-1" },
+        });
+
+        expect(result.errors).toEqual([]);
+        expect(updateOpportunityStatusWithEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ newStatusKey: "closed" }),
+        );
+        expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ stage_key: "closed_lost" }));
     });
 });

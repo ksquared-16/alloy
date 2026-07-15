@@ -340,6 +340,12 @@ export default function LifecycleStageWorkspace({
                                     label: lane.label,
                                 })) ?? []
                             }
+                            configuredStatuses={(bootstrap?.queue_membership_status_options ?? []).map((row) => ({
+                                status_key: row.status_key,
+                                status_label: row.status_label,
+                                entity_type: statusEntityTypeForSubject(statusSubjectType),
+                                is_active: true,
+                            }))}
                         />
                     :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
                 </ConfigurationRuntimeUniversalCard>

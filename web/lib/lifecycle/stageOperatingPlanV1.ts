@@ -56,6 +56,8 @@ export function isWorkTemplateTransitionRef(
     return typeof (ref as StageWorkTemplateTransitionRefV1).transition_ref === "string";
 }
 
+export type StageWorkTemplateExecutionModeV1 = "direct_action" | "outcome_led";
+
 export type StageWorkTemplateV1 = {
     template_key: string;
     label: string;
@@ -68,7 +70,14 @@ export type StageWorkTemplateV1 = {
     /** Optional link to platform work definition catalog key. */
     work_definition_key?: string | null;
     completion_policy?: StageWorkCompletionPolicyV1;
-    /** Operator primary execution affordance for this work template. */
+    /**
+     * Explicit work execution mode. Prefer setting with primary_action:
+     * - direct_action: Primary Action is the leading CTA
+     * - outcome_led: no Primary Action; Record Outcome leads
+     * When omitted, runtime derives from primary_action presence.
+     */
+    execution_mode?: StageWorkTemplateExecutionModeV1;
+    /** Operator primary execution affordance for this work template. Absence is valid for outcome-led work. */
     primary_action?: StageWorkTemplateActionRefV1;
     /** Ordered helpful actions shown on Current Work summary. Empty array = explicitly none. */
     helpful_actions?: StageWorkTemplateActionRefV1[];
@@ -90,6 +99,21 @@ export type StageCompletionOutcomeV1 = {
     successful?: boolean;
     /** Explicit completion semantic — persisted alias of `successful` when set. */
     completes_work?: boolean;
+};
+
+/**
+ * A stage-owned directed process edge. `closes_record` is derived by the
+ * authoring surface from the selected canonical status; it is never a
+ * separately-authored behavior.
+ */
+export type StageOutgoingTransitionV1 = {
+    transition_ref: string;
+    source_stage_key: string;
+    target_stage_key: string;
+    label: string;
+    available: boolean;
+    status_key?: string;
+    closes_record?: true;
 };
 
 export type StageOutcomeRuleTargetKind =
@@ -178,6 +202,8 @@ export type StageOperatingPlanV1 = {
     stage_key: string;
     purpose?: string;
     journey_segment: StageJourneySegment;
+    /** Absent on legacy plans. When present, this is the authoritative edge set. */
+    outgoing_transitions?: StageOutgoingTransitionV1[];
     work_templates: StageWorkTemplateV1[];
     outcomes: StageCompletionOutcomeV1[];
     outcome_rules: StageOutcomeRuleV1[];
@@ -186,6 +212,7 @@ export type StageOperatingPlanV1 = {
 
 const JOURNEY_SEGMENTS = new Set<StageJourneySegment>(["family", "child"]);
 const OWNER_STRATEGIES = new Set<StageWorkOwnerStrategy>(["record_owner", "creator", "unassigned"]);
+const EXECUTION_MODES = new Set<StageWorkTemplateExecutionModeV1>(["direct_action", "outcome_led"]);
 const TARGET_KINDS = new Set<StageOutcomeRuleTargetKind>([
     "update_family_case_status",
     "update_child_enrollment_status",
@@ -292,6 +319,11 @@ function parseWorkTemplate(raw: unknown): StageWorkTemplateV1 | null {
     );
     if (completion_policy) tpl.completion_policy = completion_policy;
 
+    const executionModeRaw = trimNonEmpty(o.execution_mode);
+    if (executionModeRaw && EXECUTION_MODES.has(executionModeRaw as StageWorkTemplateExecutionModeV1)) {
+        tpl.execution_mode = executionModeRaw as StageWorkTemplateExecutionModeV1;
+    }
+
     const primary_action = parseActionRef(o.primary_action);
     if (primary_action) tpl.primary_action = primary_action;
 
@@ -337,6 +369,26 @@ function parseOutcome(raw: unknown): StageCompletionOutcomeV1 | null {
         label,
         ...(trimNonEmpty(o.work_template_key) ? { work_template_key: trimNonEmpty(o.work_template_key) } : {}),
         ...(completesWork ? { successful: true, completes_work: true } : {}),
+    };
+}
+
+function parseOutgoingTransition(raw: unknown): StageOutgoingTransitionV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const transition_ref = trimNonEmpty(o.transition_ref);
+    const source_stage_key = trimNonEmpty(o.source_stage_key);
+    const target_stage_key = trimNonEmpty(o.target_stage_key);
+    const label = trimNonEmpty(o.label);
+    if (!transition_ref || !source_stage_key || !target_stage_key || !label) return null;
+    const status_key = trimNonEmpty(o.status_key);
+    return {
+        transition_ref,
+        source_stage_key,
+        target_stage_key,
+        label,
+        available: o.available !== false,
+        ...(status_key ? { status_key } : {}),
+        ...(o.closes_record === true ? { closes_record: true as const } : {}),
     };
 }
 
@@ -474,6 +526,14 @@ export function parseStageOperatingPlanV1(raw: unknown): StageOperatingPlanV1 | 
         }
     }
 
+    const outgoing_transitions: StageOutgoingTransitionV1[] = [];
+    if (Array.isArray(o.outgoing_transitions)) {
+        for (const item of o.outgoing_transitions) {
+            const parsed = parseOutgoingTransition(item);
+            if (parsed) outgoing_transitions.push(parsed);
+        }
+    }
+
     const outcome_rules: StageOutcomeRuleV1[] = [];
     if (Array.isArray(o.outcome_rules)) {
         for (const item of o.outcome_rules) {
@@ -495,6 +555,7 @@ export function parseStageOperatingPlanV1(raw: unknown): StageOperatingPlanV1 | 
         lifecycle_key,
         stage_key,
         journey_segment: journeyRaw as StageJourneySegment,
+        ...(Array.isArray(o.outgoing_transitions) ? { outgoing_transitions } : {}),
         work_templates,
         outcomes,
         outcome_rules,

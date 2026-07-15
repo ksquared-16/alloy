@@ -34,6 +34,8 @@ export type CurrentWorkTemplateConfigOverlay = {
     title?: string;
     description?: string;
     checklist?: CurrentWorkTemplateChecklistConfig[];
+    /** Explicit execution mode from Work Template — drives Current Work prominence. */
+    execution_mode?: "direct_action" | "outcome_led";
     primary_action?: CurrentWorkTemplateActionRefConfig;
     /** Explicit helpful actions — undefined allows legacy fallback; [] means explicitly none. */
     helpful_actions?: CurrentWorkTemplateActionRefConfig[];

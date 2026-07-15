@@ -9,6 +9,7 @@ import {
     applyStageOutcomeRuleTarget,
     type StageOutcomeExecutionSubject,
 } from "@/lib/lifecycle/stageOutcomeRuleTargetExecutor";
+import { resolveStageTransitionExecutionTargets } from "@/lib/lifecycle/resolveStageTransitionExecutionTargets";
 
 export type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/stageOutcomeRuleTargetExecutor";
 
@@ -52,19 +53,26 @@ export async function executeStageOperatingOutcome(params: {
     for (const rule of rules) {
         for (const target of rule.targets) {
             if (skipKinds?.includes(target.kind)) continue;
-            const result = await applyStageOutcomeRuleTarget(params.supabase, {
-                orgId: params.orgId,
-                userId: params.userId,
-                departmentId: params.departmentId,
-                stageKey: params.plan.stage_key,
-                plan: params.plan,
-                subject: params.subject,
-                target,
-            });
             applied_targets.push(target);
-            if (result.error) errors.push(result.error);
-            if (result.needs_attention) needs_attention_set = true;
-            if (result.status_updated) status_updated = true;
+            const resolved = resolveStageTransitionExecutionTargets(params.plan, target);
+            if (resolved.error) {
+                errors.push(resolved.error);
+                continue;
+            }
+            for (const executableTarget of resolved.targets) {
+                const result = await applyStageOutcomeRuleTarget(params.supabase, {
+                    orgId: params.orgId,
+                    userId: params.userId,
+                    departmentId: params.departmentId,
+                    stageKey: params.plan.stage_key,
+                    plan: params.plan,
+                    subject: params.subject,
+                    target: executableTarget,
+                });
+                if (result.error) errors.push(result.error);
+                if (result.needs_attention) needs_attention_set = true;
+                if (result.status_updated) status_updated = true;
+            }
         }
     }
 

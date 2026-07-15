@@ -23,6 +23,7 @@ import {
     type CurrentWorkActionRefLookup,
     type CurrentWorkTemplateConfigOverlay,
 } from "./currentWorkTemplateConfig";
+import { buildCurrentWorkExecutionVM } from "./buildCurrentWorkExecutionVM";
 import type {
     CurrentWorkChecklistItemVM,
     CurrentWorkLastActivity,
@@ -38,6 +39,7 @@ import { resolveCurrentWorkTemplateFromPublishedPlan } from "./resolveCurrentWor
 import { resolveCurrentWorkTemplateAction } from "./resolveCurrentWorkTemplateAction";
 import { resolveStageWorkOutcomeCompletionState } from "./resolveStageWorkOutcomeCompletionState";
 import { isGenericUmbrellaLifecycleAction } from "./currentWorkActionSurfacePolicy";
+import { resolveWorkTemplateExecutionMode } from "@/lib/lifecycle/resolveWorkTemplateExecutionMode";
 
 export type BuildCurrentWorkSurfaceVMInput = {
     context: OperationalContext;
@@ -356,20 +358,15 @@ function buildWorkPrimaryAction(args: {
             actionRef: resolved.actionRef,
         };
     }
-    if (!args.actionableWorkItem && !args.title) return null;
-    const workDescription =
-        args.actionableWorkItem?.description?.trim()
-        ?? args.description
-        ?? null;
-    return {
-        key: args.workKey,
-        label: args.title,
-        description: workDescription,
-        category: "primary",
-        placement: "current_work_primary",
-        handlerKey: "expand_work",
-        actionRef: args.workKey,
-    };
+    // Outcome-led / no Primary Action: never fabricate a Primary Action from the work title.
+    const mode = resolveWorkTemplateExecutionMode({
+        primary_action: args.templateConfig?.primary_action,
+        execution_mode: args.templateConfig?.execution_mode,
+    });
+    if (mode === "outcome_led" || !args.templateConfig?.primary_action?.action_ref) {
+        return null;
+    }
+    return null;
 }
 
 function buildRecordOutcomeAction(args: {
@@ -682,6 +679,13 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         primaryActionLabel,
     });
 
+    const execution = buildCurrentWorkExecutionVM({
+        templateConfig,
+        primaryAction,
+        recordOutcomeAction,
+        showOutcomeCompletion,
+    });
+
     const helpfulRefs = resolvedHelpfulActionRefs(templateConfig);
     const helpfulExplicit = templateConfig?.helpful_actions_explicit === true;
     const supportingFromConfig =
@@ -736,6 +740,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         checklist,
         primaryAction,
         recordOutcomeAction,
+        execution,
         supportingActions,
         alternatePaths,
         administrativeActions: classified.administrative,

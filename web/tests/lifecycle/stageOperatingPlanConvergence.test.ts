@@ -163,7 +163,8 @@ describe("business process editor convergence wiring", () => {
         );
         expect(editor).toContain("Work items");
         expect(editor).toContain("Primary");
-        expect(editor).toContain("Outcomes for");
+        expect(editor).toContain("LifecycleStageOutcomeDefinitionsEditor");
+        expect(editor).toContain("LifecycleStageOutgoingTransitionsEditor");
         expect(editor).toContain("LifecycleStageAttentionRulesEditor");
     });
 

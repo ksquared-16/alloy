@@ -121,8 +121,8 @@ describe("Focus Panel Current Work — pending is distinct from empty, geometry 
         });
 
         // Current Work region transitioned pending → empty (distinct states, no false-empty flash pre-resolve).
-        expect(pendingVm.workspace.stage_work.status).toBe("pending");
-        expect(resolved.workspace.stage_work.status).toBe("empty");
+        expect(pendingVm.workspace.stage_work?.status).toBe("pending");
+        expect(resolved.workspace.stage_work?.status).toBe("empty");
 
         // Card order + geometry do NOT depend on deferred data: every above-fold region except the
         // record payload is reference-identical, and the frozen layout/shell is untouched.
@@ -142,7 +142,7 @@ describe("Focus Panel Current Work — pending is distinct from empty, geometry 
             workspace: { ...vm.workspace, stage_work_runtime: { keep: true } as never },
         };
         const errored = markStageWorkErrorOnVm(withRuntime);
-        expect(errored.workspace.stage_work.status).toBe("error");
-        expect((errored.workspace.stage_work as { retained?: unknown }).retained).toEqual({ keep: true });
+        expect(errored.workspace.stage_work?.status).toBe("error");
+        expect((errored.workspace.stage_work as { retained?: unknown } | undefined)?.retained).toEqual({ keep: true });
     });
 });

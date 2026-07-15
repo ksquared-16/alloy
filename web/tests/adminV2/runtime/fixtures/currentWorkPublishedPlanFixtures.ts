@@ -28,6 +28,8 @@ export function applyEnrollmentLeadWorkTemplateActions(plan: StageOperatingPlanV
             if (template.template_key !== "contact_family") return template;
             return {
                 ...template,
+                execution_mode: "direct_action",
+                primary_action: { action_ref: "quick_message", override_label: "Contact Family" },
                 helpful_actions: [
                     { action_ref: "schedule_tour" },
                     { action_ref: "quick_message" },
@@ -164,6 +166,7 @@ function billingOperatingPlan(): StageOperatingPlanV1 {
                 due_policy: { kind: "offset_days", days: 3 },
                 owner_strategy: "record_owner",
                 work_definition_key: "collect_payment",
+                execution_mode: "direct_action",
                 primary_action: { action_ref: "record_payment" },
                 helpful_actions: [
                     { action_ref: "send_reminder" },
@@ -172,12 +175,29 @@ function billingOperatingPlan(): StageOperatingPlanV1 {
                     { action_ref: "adjust_invoice" },
                 ],
                 outcome_refs: [
-                    { outcome_ref: "payment_received" },
-                    { outcome_ref: "payment_plan" },
+                    { outcome_ref: "paid" },
+                    { outcome_ref: "promise_to_pay" },
+                    { outcome_ref: "unable_to_collect" },
                 ],
             },
         ],
         outcomes: [
+            {
+                outcome_key: "paid",
+                label: "Paid",
+                work_template_key: "collect_payment",
+                successful: true,
+            },
+            {
+                outcome_key: "promise_to_pay",
+                label: "Promise to Pay",
+                work_template_key: "collect_payment",
+            },
+            {
+                outcome_key: "unable_to_collect",
+                label: "Unable to Collect",
+                work_template_key: "collect_payment",
+            },
             {
                 outcome_key: "payment_received",
                 label: "Payment received",

@@ -5,6 +5,7 @@ import type {
     StageWorkRuntimeProjection,
 } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
+import type { CurrentWorkExecutionVM } from "./buildCurrentWorkExecutionVM";
 
 /** Operator-facing status for Current Work summary chip. */
 export type CurrentWorkSurfaceStatus = "not_started" | "in_progress" | "blocked" | "completed";
@@ -125,6 +126,8 @@ export type CurrentWorkSurfaceVM = {
     primaryAction?: CurrentWorkActionVM | null;
     /** Outcome recording CTA — expanded view only (mockup: under work primary). */
     recordOutcomeAction?: CurrentWorkActionVM | null;
+    /** Unambiguous execution prominence — never invent Primary Action from work title. */
+    execution?: CurrentWorkExecutionVM | null;
     supportingActions: CurrentWorkActionVM[];
     alternatePaths: CurrentWorkActionVM[];
     administrativeActions: CurrentWorkActionVM[];
@@ -142,3 +145,5 @@ export type CurrentWorkSurfaceVM = {
     runtime: StageWorkRuntimeProjection | null;
     isEmpty: boolean;
 };
+
+export type { CurrentWorkExecutionVM } from "./buildCurrentWorkExecutionVM";

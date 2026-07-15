@@ -195,15 +195,11 @@ describe("outcome automation — work template and transitions", () => {
 
     it("legacy stage_key-only draft resolves transition when unambiguous", () => {
         const rules = [
-            buildOutcomeRuleFromAutomation(
-                "legacy_outcome",
-                {
-                    kind: "move_to_stage",
-                    stage_key: "escalated_review",
-                },
-                0,
-                { transitionOptions },
-            )!,
+            {
+                rule_key: "legacy_outcome_move",
+                when_outcome_key: "legacy_outcome",
+                targets: [{ kind: "move_to_stage" as const, stage_key: "escalated_review" }],
+            },
         ];
         const draft = readOutcomeAutomationDraft("legacy_outcome", rules, { transitionOptions });
         expect(draft.transition_ref).toBe("outcome_transition:unable_to_collect:escalated_review");
