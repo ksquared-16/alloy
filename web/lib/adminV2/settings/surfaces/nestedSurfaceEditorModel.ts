@@ -311,6 +311,25 @@ export function selectedFieldKeys(config: NestedSurfaceConfig, groupKey: string)
 }
 
 /**
+ * Effective picker namespaces for a nested surface group.
+ * Keep UI category menus and `availableFieldsForNestedGroup` on the same list.
+ */
+export function namespacesForNestedGroupPicker(
+    surfaceId: string,
+    groupKey: string,
+): readonly AvailableFieldEntityNamespace[] {
+    const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
+    if (!def) return [];
+    if (surfaceId === CHILDREN_SURFACE_ID && groupKey === "emergency_contacts") {
+        return ["person", "person_child_relationship"];
+    }
+    if (surfaceId === CHILDREN_SURFACE_ID && isEvidenceSection(surfaceId, groupKey)) {
+        return ["child", "inquiry_child"];
+    }
+    return def.acceptedNamespaces;
+}
+
+/**
  * Fields available to ADD to a group: real platform + tenant custom fields whose
  * namespace the group accepts, minus already-selected. Never fabricated.
  */
@@ -328,12 +347,7 @@ export function availableFieldsForNestedGroup(
     const selected = new Set(
         group ? fieldKeysForConfigurationPurpose(group, purpose) : selectedFieldKeys(config, groupKey),
     );
-    const namespaces =
-        surfaceId === CHILDREN_SURFACE_ID && groupKey === "emergency_contacts"
-            ? (["person", "person_child_relationship"] as const)
-            : surfaceId === CHILDREN_SURFACE_ID && isEvidenceSection(surfaceId, groupKey)
-                ? (["child", "inquiry_child"] as const)
-                : def.acceptedNamespaces;
+    const namespaces = namespacesForNestedGroupPicker(surfaceId, groupKey);
     return identityPickerFieldsForNamespaces({
         namespaces,
         tenantFieldDefinitions,

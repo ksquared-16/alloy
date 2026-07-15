@@ -4,11 +4,11 @@ import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, GripVertical, Plus, X } from "lucide-react";
 
 import {
+    namespacesForNestedGroupPicker,
     addFieldToNestedGroup,
     availableFieldsForNestedGroup,
     fieldPresentationLabel,
     fieldVisibilityForNestedGroup,
-    groupDefsFor,
     moveFieldInNestedGroup,
     removeFieldFromNestedGroup,
     selectedFieldKeys,
@@ -30,8 +30,8 @@ function catalogLabelFor(
     fieldKey: string,
     tenantDefs: ReturnType<typeof useTenantFieldDefinitions>["tenantFieldDefinitions"],
 ): string {
-    const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
-    const all = def ? availableFieldsForNamespaces(def.acceptedNamespaces, tenantDefs) : [];
+    const namespaces = namespacesForNestedGroupPicker(surfaceId, groupKey);
+    const all = namespaces.length > 0 ? availableFieldsForNamespaces(namespaces, tenantDefs) : [];
     return all.find((f) => f.key === fieldKey)?.label
         ?? fieldKey.replace(/^[a-z_]+\./, "").replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }

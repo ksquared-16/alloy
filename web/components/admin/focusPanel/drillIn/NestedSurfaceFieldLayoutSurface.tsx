@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState, type DragEvent } from "react";
 import clsx from "clsx";
 import { GripVertical, X, type LucideIcon } from "lucide-react";
 
-import {
+import { namespacesForNestedGroupPicker, 
     applyNestedSurfaceFieldDrop,
     fieldLayoutWidthForNestedGroup,
     fieldPresentationLabel,
@@ -65,8 +65,8 @@ function catalogLabelFor(
     fieldKey: string,
     tenantDefs: ReturnType<typeof useTenantFieldDefinitions>["tenantFieldDefinitions"],
 ): string {
-    const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
-    const all = def ? availableFieldsForNamespaces(def.acceptedNamespaces, tenantDefs) : [];
+    const namespaces = namespacesForNestedGroupPicker(surfaceId, groupKey);
+    const all = namespaces.length > 0 ? availableFieldsForNamespaces(namespaces, tenantDefs) : [];
     const fromCatalog = all.find((f) => f.key === fieldKey)?.label?.trim();
     if (fromCatalog && fromCatalog !== fieldKey && !/^[a-z_]+\./i.test(fromCatalog)) return fromCatalog;
     if (fromCatalog && fromCatalog !== fieldKey) return humanizeFieldKey(fieldKey);

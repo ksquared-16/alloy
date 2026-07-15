@@ -7,14 +7,13 @@ import ComposerFloatingPopover from "@/components/admin/focusPanel/drillIn/Compo
 import {
     addFieldToNestedGroup,
     availableFieldsForNestedGroup,
-    groupDefsFor,
     identityConfigurationFieldKeys,
+    namespacesForNestedGroupPicker,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 import { configurationPurposeFromTierArg } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { identityPickerCategoriesForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
-import type { AvailableFieldEntityNamespace } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { householdAuthoringGroupKey } from "@/lib/adminV2/runtime/focusPanel/household/householdRoleConfig";
 import { HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -54,9 +53,8 @@ export default function NestedSurfaceAddField({ surfaceId, groupKey, tier, class
     }, [config, groupKey, tier]);
 
     const categories = useMemo(() => {
-        const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
-        if (!def) return [];
-        const namespaces = def.acceptedNamespaces as readonly AvailableFieldEntityNamespace[];
+        const namespaces = namespacesForNestedGroupPicker(surfaceId, groupKey);
+        if (namespaces.length === 0) return [];
         const all = identityPickerCategoriesForNamespaces({
             namespaces,
             tenantFieldDefinitions,
