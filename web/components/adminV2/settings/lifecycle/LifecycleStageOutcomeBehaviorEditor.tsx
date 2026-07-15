@@ -3,6 +3,15 @@
 import type { StageOutcomeRuleV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
 import {
+    FOLLOW_UP_DUE_ANCHOR_OPTIONS,
+    FOLLOW_UP_OFFSET_UNIT_OPTIONS,
+    formatScheduleTimingSummary,
+    policyFromScheduleTimingUi,
+    scheduleTimingUiFromPolicy,
+    type ScheduleTimingUi,
+    type StageFollowUpWorkDuePolicyV1,
+} from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
+import {
     defaultFollowUpDuePolicy,
     outcomeAutomationSummaryForOutcome,
     readComposableOutcomeBehaviorDraft,
@@ -19,33 +28,86 @@ type Props = {
     onRulesChange: (rules: StageOutcomeRuleV1[]) => void;
 };
 
-type ScheduleMode =
-    | "immediate"
-    | "after_outcome"
-    | "before_scheduled_event"
-    | "after_scheduled_event"
-    | "after_stage_entry";
+function ScheduleTimingControls({
+    policy,
+    onChange,
+    testIdPrefix,
+}: {
+    policy: StageFollowUpWorkDuePolicyV1;
+    onChange: (policy: StageFollowUpWorkDuePolicyV1) => void;
+    testIdPrefix: string;
+}) {
+    const timing = scheduleTimingUiFromPolicy(policy);
+    const applyTiming = (next: ScheduleTimingUi) => onChange(policyFromScheduleTimingUi(next));
 
-function scheduleMode(policy: ReturnType<typeof defaultFollowUpDuePolicy>): ScheduleMode {
-    if (policy.anchor === "scheduled_event_start") {
-        return policy.direction === "before" ? "before_scheduled_event" : "after_scheduled_event";
-    }
-    if (policy.anchor === "stage_entered_at") return "after_stage_entry";
-    return (policy.offset_value ?? 0) === 0 ? "immediate" : "after_outcome";
-}
-
-function policyForMode(mode: ScheduleMode, offset: number) {
-    if (mode === "immediate") return { ...defaultFollowUpDuePolicy(), offset_value: 0 };
-    if (mode === "before_scheduled_event") {
-        return { ...defaultFollowUpDuePolicy("scheduled_event_start"), direction: "before" as const, offset_value: offset || 1 };
-    }
-    if (mode === "after_scheduled_event") {
-        return { ...defaultFollowUpDuePolicy("scheduled_event_start"), direction: "after" as const, offset_value: offset || 1 };
-    }
-    if (mode === "after_stage_entry") {
-        return { ...defaultFollowUpDuePolicy("stage_entered_at"), direction: "after" as const, offset_value: offset || 1 };
-    }
-    return { ...defaultFollowUpDuePolicy(), offset_value: offset || 1 };
+    return (
+        <div className="flex flex-wrap items-center gap-1" data-testid={testIdPrefix}>
+            <select
+                value={timing.mode}
+                aria-label="Schedule timing"
+                onChange={(event) =>
+                    applyTiming({
+                        ...timing,
+                        mode: event.target.value as ScheduleTimingUi["mode"],
+                        offset_value: event.target.value === "immediate" ? 0 : Math.max(1, timing.offset_value || 1),
+                    })
+                }
+                className="rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
+            >
+                <option value="immediate">Immediately</option>
+                <option value="before">Before</option>
+                <option value="after">After</option>
+            </select>
+            {timing.mode !== "immediate" ?
+                <>
+                    <input
+                        type="number"
+                        min={1}
+                        aria-label="Schedule offset value"
+                        className="w-12 rounded border border-alloy-forge/15 px-1 py-0.5 text-[10px]"
+                        value={timing.offset_value || 1}
+                        onChange={(event) =>
+                            applyTiming({
+                                ...timing,
+                                offset_value: Math.max(1, Number(event.target.value) || 1),
+                            })
+                        }
+                    />
+                    <select
+                        value={timing.offset_unit}
+                        aria-label="Schedule offset unit"
+                        onChange={(event) =>
+                            applyTiming({
+                                ...timing,
+                                offset_unit: event.target.value as ScheduleTimingUi["offset_unit"],
+                            })
+                        }
+                        className="rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
+                    >
+                        {FOLLOW_UP_OFFSET_UNIT_OPTIONS.map((unit) => (
+                            <option key={unit.value} value={unit.value}>{unit.label}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={timing.anchor}
+                        aria-label="Schedule anchor"
+                        onChange={(event) =>
+                            applyTiming({
+                                ...timing,
+                                anchor: event.target.value as ScheduleTimingUi["anchor"],
+                            })
+                        }
+                        className="rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
+                    >
+                        {FOLLOW_UP_DUE_ANCHOR_OPTIONS.map((anchor) => (
+                            <option key={anchor.value} value={anchor.value}>{anchor.label}</option>
+                        ))}
+                    </select>
+                </>
+            :   null}
+            <span className="text-[9px] text-alloy-midnight/45">{formatScheduleTimingSummary(policy)}</span>
+        </div>
+    );
 }
 
 export default function LifecycleStageOutcomeBehaviorEditor({
@@ -114,11 +176,12 @@ export default function LifecycleStageOutcomeBehaviorEditor({
             </fieldset>
 
             <section className="space-y-1">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
                     <h5 className="text-[10px] font-semibold text-alloy-midnight/70">Create follow-up work</h5>
                     <button
                         type="button"
                         className="text-[10px] font-medium text-alloy-pine"
+                        data-testid={`stage-outcome-follow-up-add-${outcomeKey}`}
                         onClick={() =>
                             apply({
                                 ...draft,
@@ -132,11 +195,9 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                         + Add
                     </button>
                 </div>
-                {draft.follow_up_work.map((followUp, index) => {
-                    const mode = scheduleMode(followUp.due_policy);
-                    const offset = followUp.due_policy.offset_value ?? 0;
-                    return (
-                        <div key={index} className="flex flex-wrap items-center gap-1 rounded bg-alloy-midnight/[0.025] p-1.5">
+                {draft.follow_up_work.map((followUp, index) => (
+                    <div key={index} className="space-y-1 rounded bg-alloy-midnight/[0.025] p-1.5">
+                        <div className="flex flex-wrap items-center gap-1">
                             <select
                                 value={followUp.template_key}
                                 onChange={(event) => {
@@ -147,65 +208,94 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                                 className="rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
                             >
                                 <option value="">Select Work Template…</option>
-                                {workTemplates.map((work) => <option key={work.template_key} value={work.template_key}>{work.label}</option>)}
+                                {workTemplates.map((work) => (
+                                    <option key={work.template_key} value={work.template_key}>{work.label}</option>
+                                ))}
                             </select>
-                            <select
-                                value={mode}
-                                onChange={(event) => {
-                                    const next = [...draft.follow_up_work];
-                                    next[index] = { ...followUp, due_policy: policyForMode(event.target.value as ScheduleMode, offset) };
-                                    apply({ ...draft, follow_up_work: next });
-                                }}
-                                className="rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
-                            >
-                                <option value="immediate">Immediately</option>
-                                <option value="after_outcome">After outcome</option>
-                                <option value="before_scheduled_event">Before scheduled event</option>
-                                <option value="after_scheduled_event">After scheduled event</option>
-                                <option value="after_stage_entry">After stage entry</option>
-                            </select>
-                            {mode !== "immediate" ?
-                                <input
-                                    type="number"
-                                    min={1}
-                                    aria-label="Schedule offset days"
-                                    className="w-12 rounded border border-alloy-forge/15 px-1 py-0.5 text-[10px]"
-                                    value={offset || 1}
-                                    onChange={(event) => {
-                                        const next = [...draft.follow_up_work];
-                                        next[index] = { ...followUp, due_policy: policyForMode(mode, Math.max(1, Number(event.target.value) || 1)) };
-                                        apply({ ...draft, follow_up_work: next });
-                                    }}
-                                />
-                            :   null}
                             <button
                                 type="button"
                                 className="text-[10px] text-red-700"
-                                onClick={() => apply({ ...draft, follow_up_work: draft.follow_up_work.filter((_, row) => row !== index) })}
+                                onClick={() =>
+                                    apply({
+                                        ...draft,
+                                        follow_up_work: draft.follow_up_work.filter((_, row) => row !== index),
+                                    })
+                                }
                             >
                                 Remove
                             </button>
                         </div>
-                    );
-                })}
+                        <ScheduleTimingControls
+                            policy={followUp.due_policy}
+                            testIdPrefix={`stage-outcome-follow-up-timing-${outcomeKey}-${index}`}
+                            onChange={(due_policy) => {
+                                const next = [...draft.follow_up_work];
+                                next[index] = { ...followUp, due_policy };
+                                apply({ ...draft, follow_up_work: next });
+                            }}
+                        />
+                    </div>
+                ))}
             </section>
 
-            <label className="flex items-center gap-1 text-[10px]">
-                <input
-                    type="checkbox"
-                    checked={draft.attention_enabled}
-                    onChange={(event) => apply({ ...draft, attention_enabled: event.target.checked })}
-                />
-                Create attention
-                {draft.attention_enabled ?
-                    <input
-                        className="min-w-0 flex-1 rounded border border-alloy-forge/15 px-2 py-0.5 text-[10px]"
-                        value={draft.attention_reason ?? ""}
-                        placeholder="Attention label"
-                        onChange={(event) => apply({ ...draft, attention_reason: event.target.value })}
-                    />
-                :   null}
-            </label>
+            <section className="space-y-1">
+                <div className="flex items-center gap-2">
+                    <h5 className="text-[10px] font-semibold text-alloy-midnight/70">Create attention</h5>
+                    <button
+                        type="button"
+                        className="text-[10px] font-medium text-alloy-pine"
+                        data-testid={`stage-outcome-attention-add-${outcomeKey}`}
+                        onClick={() =>
+                            apply({
+                                ...draft,
+                                attention_items: [
+                                    ...draft.attention_items,
+                                    { reason: "Needs attention", due_policy: defaultFollowUpDuePolicy() },
+                                ],
+                            })
+                        }
+                    >
+                        + Add
+                    </button>
+                </div>
+                {draft.attention_items.map((attention, index) => (
+                    <div key={index} className="space-y-1 rounded bg-alloy-midnight/[0.025] p-1.5">
+                        <div className="flex flex-wrap items-center gap-1">
+                            <input
+                                className="min-w-0 flex-1 rounded border border-alloy-forge/15 px-2 py-0.5 text-[10px]"
+                                value={attention.reason}
+                                placeholder="Attention label"
+                                onChange={(event) => {
+                                    const next = [...draft.attention_items];
+                                    next[index] = { ...attention, reason: event.target.value };
+                                    apply({ ...draft, attention_items: next });
+                                }}
+                            />
+                            <button
+                                type="button"
+                                className="text-[10px] text-red-700"
+                                onClick={() =>
+                                    apply({
+                                        ...draft,
+                                        attention_items: draft.attention_items.filter((_, row) => row !== index),
+                                    })
+                                }
+                            >
+                                Remove
+                            </button>
+                        </div>
+                        <ScheduleTimingControls
+                            policy={attention.due_policy}
+                            testIdPrefix={`stage-outcome-attention-timing-${outcomeKey}-${index}`}
+                            onChange={(due_policy) => {
+                                const next = [...draft.attention_items];
+                                next[index] = { ...attention, due_policy };
+                                apply({ ...draft, attention_items: next });
+                            }}
+                        />
+                    </div>
+                ))}
+            </section>
 
             <p className="text-[10px] text-alloy-midnight/50">
                 <span className="font-medium">Summary · </span>{summary}

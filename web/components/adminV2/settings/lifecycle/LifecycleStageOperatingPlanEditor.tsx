@@ -23,7 +23,6 @@ import LifecycleStageAttentionRulesEditor from "@/components/adminV2/settings/li
 import LifecycleStageWorkCompletionPolicyEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkCompletionPolicyEditor";
 import LifecycleStageWorkTemplateActionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor";
 import LifecycleStageOutgoingTransitionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutgoingTransitionsEditor";
-import LifecycleStageOutcomeDefinitionsEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeDefinitionsEditor";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
 import { resolveStageOutcomeTransitionOptions } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
@@ -240,12 +239,6 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 onChange={(outgoing_transitions) => setDraft((prev) => ({ ...prev, outgoing_transitions }))}
             />
 
-            <LifecycleStageOutcomeDefinitionsEditor
-                draft={draft}
-                transitionOptions={transitionOptions}
-                onChange={setDraft}
-            />
-
             <div
                 className="rounded-lg border border-alloy-forge/10 bg-white"
                 data-testid="stage-operating-plan-work-section"
@@ -451,6 +444,9 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                     stageOperatingPlan={stageOperatingPlanForResolver}
                                     processTracks={processTracks ?? null}
                                     stageDefinition={{ journey_segment: draft.journey_segment }}
+                                    stageDraft={draft}
+                                    transitionOptions={transitionOptions}
+                                    onStageDraftChange={setDraft}
                                     onChange={(nextWork) =>
                                         setDraft((prev) => {
                                             const work_templates = [...prev.work_templates];
