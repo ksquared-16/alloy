@@ -90,7 +90,7 @@ export function resolveIdentityAvatar(
     if (role === "primary_contact") {
         tone = 3; // Alloy blue bucket (CSS also keys off role)
     } else if (role === "other_parent_guardian") {
-        tone = 1; // Bend Pine / green bucket
+        tone = 3; // Alloy blue bucket (CSS also keys off role)
     } else if (role === "child") {
         tone = avatarToneForRecordId(opts?.recordId ?? cleanName);
     } else {

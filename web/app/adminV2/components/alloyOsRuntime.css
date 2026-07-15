@@ -3356,7 +3356,7 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"] {
   isolation: isolate;
   background: #ffffff;
-  z-index: 40;
+  z-index: 56; /* > .alloy-os-fp-depth-scrim z-index: 55 */
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -4644,8 +4644,8 @@ html[data-alloy-os-runtime-split="true"]
   --alloy-os-avatar-fg: var(--color-alloy-blue, #00458C);
 }
 .alloy-os-card-avatar[data-avatar-role="other_parent_guardian"] {
-  --alloy-os-avatar-bg: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, #fff);
-  --alloy-os-avatar-fg: var(--alloy-os-bend-pine, #00a283);
+  --alloy-os-avatar-bg: color-mix(in srgb, var(--color-alloy-blue, #00458C) 16%, #fff);
+  --alloy-os-avatar-fg: var(--color-alloy-blue, #00458C);
 }
 .alloy-os-card-avatar[data-avatar-role="contact"] {
   --alloy-os-avatar-bg: #f1f5f9;

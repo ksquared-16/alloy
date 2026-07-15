@@ -31,4 +31,15 @@ describe("identity collection centered focus", () => {
             /\[data-fp-elevated="true"\][\s\S]*?width:\s*min\(var\(--alloy-os-focus-panel-max-width/,
         );
     });
+
+    it("elevated cell stacks above depth scrim (opaque household focus)", () => {
+        const css = readFileSync(join(ROOT, "app/adminV2/components/alloyOsRuntime.css"), "utf8");
+        const scrimMatch = css.match(/\.alloy-os-fp-depth-scrim\s*\{[\s\S]*?z-index:\s*(\d+)/);
+        const cellMatch = css.match(
+            /\.alloy-os-focus-panel-grid\[data-fp-depth="active"\]\s+\.alloy-os-focus-panel-grid__cell\[data-fp-elevated="true"\]\s*\{\s*isolation:\s*isolate;[\s\S]*?z-index:\s*(\d+)/,
+        );
+        expect(scrimMatch?.[1]).toBe("55");
+        expect(cellMatch?.[1]).toBe("56");
+        expect(Number(cellMatch![1])).toBeGreaterThan(Number(scrimMatch![1]));
+    });
 });

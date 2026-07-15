@@ -114,6 +114,12 @@ Finish [PR #194](https://github.com/ksquared-16/alloy/pull/194) after rebasing o
 - published surfaces match /work-unit
 - no stale configuration after publish/reload
 
+
+## QA fixes (2026-07-15)
+
+- **Other parent avatar:** `other_parent_guardian` avatar accent now matches Primary Contact (Alloy blue); Guardian badge stays neutral; Primary pill remains Bend Pine.
+- **View Household focus:** Elevated grid cell `z-index` raised above the depth scrim so the household drill-in is not grayed/blocked.
+
 ## Known risks
 
 - No authenticated browser QA in the session that produced this handoff.
