@@ -16,6 +16,14 @@ G-Standing authoring half: GREEN
 P1 overall: IN PROGRESS / UNCERTIFIED
 ```
 
+> **Architecture ratification (2026-07-14).** Governance review confirmed every Wave C construct is a
+> **faithful representation of the frozen Authority facet** — no new architectural concept. The catalog +
+> assignments realize the frozen Authority (held-by) relation; the resolver, exact-match, scope, and
+> effective-standing derivation are implementation detail; self-ratification (§5) and ratification (§12)
+> are canonical; permission/authority separation + management capabilities are security implementation.
+> Registered: [Platform Decisions](../foundation/platform-decisions.md) + Engineering Realization X0
+> clarification. **Verdict: faithful realization.**
+
 > **Update (2026-07-14, C3 continuation).** The held-authority blocker recorded below (§7) has been
 > **resolved** by implementing the governed Authority model (catalog + effective-dated held-authority
 > assignments + one resolver). The earlier `BLOCKED / NOT GREEN` verdict was correct at that checkpoint;

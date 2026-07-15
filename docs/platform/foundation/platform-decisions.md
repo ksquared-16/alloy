@@ -34,6 +34,33 @@ Detailed behavior always lives in the **canonical owner** documents linked below
 
 ---
 
+## 2026-07 — Operational Expectations Authority represented by a governed catalog + assignments
+
+**Decision:**
+The already-frozen **Authority** tuple facet of an Operational Expectation is represented by (1) a governed
+org-scoped **authority catalog**, (2) append-only **effective-dated held-authority assignments** (holder
+= human/policy/process/external, never AI; scoped), and (3) one **canonical held-authority resolver**.
+**RBAC permission authorizes commands; a held-authority assignment authorizes semantic Standing** — both
+may be required, neither implies the other. This is the implementation *representation* of a frozen facet,
+**not** a new platform concept.
+
+**Why:**
+The frozen doctrine requires authority-holding gating (§12: "an author may assert only expectations whose
+Authority they hold") and self-ratification within authority (§5), but the substrate had only a free-text
+`authority_key` claim. A governed representation was required to certify G-Standing without inventing new
+architecture.
+
+**Consequences:**
+Future work must resolve held authority through the single resolver; must not equate RBAC permission,
+admin role, or service-role with held authority; must keep AI non-holding; and must not add an authority
+hierarchy unless the frozen contract defines dominance (current rule: exact authority-key match). Legacy
+free-text authority claims remain readable but can never bind.
+
+**Canonical owners:** [`platform/core/operational-expectations-system-design.md`](../core/operational-expectations-system-design.md) (§5·§12), [`platform/milestones/operational-expectations-engineering-realization.md`](../milestones/operational-expectations-engineering-realization.md) (X0), [`platform/milestones/operational-expectations-p1-wave-c-standing-ratification.md`](../milestones/operational-expectations-p1-wave-c-standing-ratification.md).
+**Status:** Active
+
+---
+
 ## 2026-07 — Documentation Platform v1.0 frozen
 
 **Decision:**  
