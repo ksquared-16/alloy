@@ -135,8 +135,10 @@ export type EffectiveExpectationResolution =
 
 /**
  * The transitions whose EFFECTIVITY this resolver realizes. Program-owner
- * ratified for this Wave D scope. `cancellation` and `replacement` are
- * deliberately ABSENT — their effectivity is UNRATIFIED and MUST fail closed.
- * (Enabled progressively across D1→D3; see resolveEffectiveExpectation.ts.)
+ * ratified for this Wave D scope: `revision` (D2) and `correction` (D3).
+ * `cancellation` and `replacement` are deliberately ABSENT — their effectivity
+ * is UNRATIFIED and MUST fail closed (see resolveEffectiveExpectation.ts).
  */
-export const RATIFIED_TRANSITIONS: ReadonlySet<ExpectationTransitionType> = new Set<ExpectationTransitionType>();
+export const RATIFIED_TRANSITIONS: ReadonlySet<ExpectationTransitionType> = new Set<ExpectationTransitionType>([
+    "revision",
+]);
