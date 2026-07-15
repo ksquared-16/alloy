@@ -4,6 +4,7 @@ import {
     QUEUE_PREVIEW_CONTEXT_DROPPED_PATHS,
     QUEUE_PREVIEW_CONTEXT_EMPTIED_PATHS,
     QUEUE_PREVIEW_CONTEXT_READ_MANIFEST,
+    QUEUE_REVEAL_DEAD_FLAT_FIELDS,
     projectQueuePreviewRowContext,
     projectQueuePreviewRowContexts,
 } from "@/lib/queues/queuePreviewRowContextProjection";
@@ -251,6 +252,33 @@ describe("compact queue-preview projection — predicate & row independence", ()
         expect(out[1]).toBeNull();
         expect(out[2]).toBe(42);
         expect(out[3]).toMatchObject({ id: "b" });
+    });
+
+    it("drops the dead heavy flat enrichment fields but keeps predicate/identity fields", () => {
+        const row = {
+            id: "opp-1",
+            status_key: "new_lead", // predicate fact — MUST survive
+            stage_key: "lead",
+            name: "Nguyen Family",
+            _queue_row_context: fullContext(),
+            _stage_work_runtime: { big: "x".repeat(1800) },
+            _household_children: [{ display_name: "Sam" }],
+            _activity_timeline_events: [{ at: "2026-07-01" }],
+            _crm_compact_children: "Sam · 3y",
+            _attention_priority_breakdown: { score: 5 },
+            _inquiry_summary_tasks: { state: "loaded" },
+        };
+        const [out] = projectQueuePreviewRowContexts([row]);
+        // Predicate + identity + narrowed context survive.
+        expect(out.status_key).toBe("new_lead");
+        expect(out.stage_key).toBe("lead");
+        expect(out.id).toBe("opp-1");
+        expect(out.name).toBe("Nguyen Family");
+        expect(out._queue_row_context).toBeDefined();
+        // Every dead flat field is gone.
+        for (const dead of QUEUE_REVEAL_DEAD_FLAT_FIELDS) {
+            expect(out, `dead flat field still present: ${dead}`).not.toHaveProperty(dead);
+        }
     });
 
     it("projection is a pure O(n) transform — no query classes added for 1/10/50/100 rows", () => {

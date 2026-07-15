@@ -257,23 +257,45 @@ export function projectQueuePreviewRowContext(context: QueueRowContext): QueueRo
     return projected;
 }
 
-/** True when a value carries a `_queue_row_context` object we can project. */
-function hasQueueRowContext(row: unknown): row is Record<string, unknown> & { _queue_row_context: QueueRowContext } {
-    if (row == null || typeof row !== "object" || Array.isArray(row)) return false;
-    const ctx = (row as Record<string, unknown>)._queue_row_context;
-    return ctx != null && typeof ctx === "object" && !Array.isArray(ctx);
-}
+/**
+ * Heavy flat enrichment fields the DEPLOYED queue_reveal visible-row surface never consumes.
+ *
+ * The mounted Work Unit surface renders each row with `CondensedQueueRow`, whose `QueueRowModel`
+ * reads ONLY `id` + `_queue_row_context`; the record-open seed reads `_queue_row_context` too. Traced:
+ * the ONLY readers of these flat fields are the dev/builder-only layout-runtime record path
+ * (`buildOpportunityQueueRowRecordFromPreview` via `queueRowLayoutRuntimeEnrichment`) and the enrichment
+ * producer — neither is mounted on the deployed surface. Browser-measured, they are ~57% of a
+ * representative row's bytes (`_stage_work_runtime` alone ~1.85 KB), so dropping them from the
+ * `queue_reveal` wire is the material payload win the context narrowing alone could not deliver.
+ * Predicate/count facts (`status_key`, `_queue_row_context` operational fields) are NOT here and
+ * survive; work-view filtering + operational signals run on base rows before this projection.
+ */
+export const QUEUE_REVEAL_DEAD_FLAT_FIELDS = [
+    "_stage_work_runtime",
+    "_household_children",
+    "_activity_timeline_events",
+    "_crm_compact_children",
+    "_attention_priority_breakdown",
+    "_inquiry_summary_tasks",
+] as const;
 
 /**
- * Project every row's `_queue_row_context` in a queue items array to the compact preview shape.
- * Rows without a context (or non-object rows) pass through unchanged. Pure — returns new rows.
+ * Project every row in a queue_reveal items array to the compact wire shape: narrow
+ * `_queue_row_context` to the fields the compact row reads AND drop the dead heavy flat enrichment
+ * fields. Rows without a context still get the flat-field strip. Non-object rows pass through. Pure.
  */
 export function projectQueuePreviewRowContexts<T>(rows: readonly T[]): T[] {
     return rows.map((row) => {
-        if (!hasQueueRowContext(row)) return row;
-        return {
-            ...(row as Record<string, unknown>),
-            _queue_row_context: projectQueuePreviewRowContext(row._queue_row_context),
-        } as T;
+        if (row == null || typeof row !== "object" || Array.isArray(row)) return row;
+        const src = row as Record<string, unknown>;
+        const out: Record<string, unknown> = { ...src };
+        const ctx = src._queue_row_context;
+        if (ctx != null && typeof ctx === "object" && !Array.isArray(ctx)) {
+            out._queue_row_context = projectQueuePreviewRowContext(ctx as QueueRowContext);
+        }
+        for (const dead of QUEUE_REVEAL_DEAD_FLAT_FIELDS) {
+            if (dead in out) delete out[dead];
+        }
+        return out as T;
     });
 }
