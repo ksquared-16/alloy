@@ -204,6 +204,68 @@ describe("child save refresh", () => {
     });
 });
 
+describe("address save refresh", () => {
+    it("address_line1 and city/state/postal survive save refresh when _person_address_by_id is present", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line1", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.city", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.state", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.postal_code", { tier: "expanded" });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.address_line1", "editable", {
+            tier: "expanded",
+        });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.city", "editable", {
+            tier: "expanded",
+        });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.state", "editable", {
+            tier: "expanded",
+        });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.postal_code", "editable", {
+            tier: "expanded",
+        });
+
+        const truth = {
+            ...HOUSEHOLD_TRUTH,
+            _person_address_by_id: {
+                "p-sarah": {
+                    address_line1: "Old Street",
+                    city: "Old City",
+                },
+            },
+            "person.primary_address_line1": "Old Street",
+            "person.primary_address_city": "Old City",
+        };
+        const ctx = householdCtx(truth);
+        const before = buildHouseholdIdentityCardVM({
+            config,
+            groups: buildHouseholdCardEvidence(ctx, { nestedConfig: config }).groups,
+            canMutate: true,
+        });
+        const beforeCells = before.sections.find((s) => s.key === "primary_contact")?.items[0]?.detailRows.flatMap((r) => r.cells) ?? [];
+        expect(beforeCells.find((c) => c.fieldRef === "person.address_line1")?.value).toBe("Old Street");
+
+        const merged = mergePersonContactIntoFocusPanelTruth(truth, "p-sarah", {
+            address_line1: "742 Evergreen Terrace",
+            city: "Springfield",
+            state: "OR",
+            postal_code: "97403",
+        });
+        const after = buildHouseholdIdentityCardVM({
+            config,
+            groups: buildHouseholdCardEvidence(householdCtx(merged), { nestedConfig: config }).groups,
+            canMutate: true,
+        });
+        const afterCells = after.sections.find((s) => s.key === "primary_contact")?.items[0]?.detailRows.flatMap((r) => r.cells) ?? [];
+        expect(afterCells.find((c) => c.fieldRef === "person.address_line1")?.value).toBe("742 Evergreen Terrace");
+        expect(afterCells.find((c) => c.fieldRef === "person.city")?.value).toBe("Springfield");
+        expect(afterCells.find((c) => c.fieldRef === "person.state")?.value).toBe("OR");
+        expect(afterCells.find((c) => c.fieldRef === "person.postal_code")?.value).toBe("97403");
+        const snapshot = (merged._person_address_by_id as Record<string, Record<string, unknown>>)["p-sarah"];
+        expect(snapshot?.address_line1).toBe("742 Evergreen Terrace");
+        expect(snapshot?.city).toBe("Springfield");
+    });
+});
+
 describe("expanded field save refresh", () => {
     it("expanded tier VM reflects saved contact value after merge", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);

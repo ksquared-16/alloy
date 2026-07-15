@@ -64,6 +64,24 @@ function personAddressLine2(subject: IdentityComposeSubject): string | null {
     return null;
 }
 
+function personCity(subject: IdentityComposeSubject): string | null {
+    if (subject.kind === "person") return subject.value.city?.trim() || null;
+    if (subject.kind === "contact_edit") return subject.value.city?.trim() || null;
+    return null;
+}
+
+function personState(subject: IdentityComposeSubject): string | null {
+    if (subject.kind === "person") return subject.value.state?.trim() || null;
+    if (subject.kind === "contact_edit") return subject.value.state?.trim() || null;
+    return null;
+}
+
+function personPostalCode(subject: IdentityComposeSubject): string | null {
+    if (subject.kind === "person") return subject.value.postalCode?.trim() || null;
+    if (subject.kind === "contact_edit") return subject.value.postal_code?.trim() || null;
+    return null;
+}
+
 function personNameParts(subject: IdentityComposeSubject): { first: string | null; last: string | null } {
     if (subject.kind !== "person") return { first: null, last: null };
     const contact = subject.value;
@@ -152,6 +170,11 @@ const CONTACT_EDIT_RESOLVERS: Record<string, Resolver> = {
     "contact.address_line2": (subject) => personAddressLine2(subject),
     "contact.address_line": (subject) => personAddressLine1(subject),
     "contact.address": (subject) => personAddressLine1(subject),
+    "contact.city": (subject) => personCity(subject),
+    "contact.state": (subject) => personState(subject),
+    "contact.postal_code": (subject) => personPostalCode(subject),
+    "contact.postal": (subject) => personPostalCode(subject),
+    "contact.zip": (subject) => personPostalCode(subject),
     "contact.full_name": (subject) => composedPersonFullName(subject),
 };
 
@@ -183,6 +206,11 @@ const PERSON_RESOLVERS: Record<string, Resolver> = {
     "person.address_line": (subject) => personAddressLine1(subject),
     "person.address_line1": (subject) => personAddressLine1(subject),
     "person.address_line2": (subject) => personAddressLine2(subject),
+    "person.city": (subject) => personCity(subject),
+    "person.state": (subject) => personState(subject),
+    "person.postal_code": (subject) => personPostalCode(subject),
+    "person.postal": (subject) => personPostalCode(subject),
+    "person.zip": (subject) => personPostalCode(subject),
 };
 
 const EMPLOYEE_RESOLVERS: Record<string, Resolver> = {

@@ -154,6 +154,17 @@ export const CONTACT_EDIT_FIELD_MAP: Record<string, keyof import("@/lib/adminV2/
     "person.address_line2": "address_line2",
     "person.address_line": "address_line1",
     "person.address": "address_line1",
+    "person.city": "city",
+    "person.state": "state",
+    "person.postal_code": "postal_code",
+    "person.postal": "postal_code",
+    "person.zip": "postal_code",
+    "person.zip_code": "postal_code",
+    "contact.city": "city",
+    "contact.state": "state",
+    "contact.postal_code": "postal_code",
+    "contact.postal": "postal_code",
+    "contact.zip": "postal_code",
 };
 
 export function personContactSaveKeyForIdentityFieldRef(

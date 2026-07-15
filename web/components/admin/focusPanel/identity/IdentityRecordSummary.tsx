@@ -205,6 +205,16 @@ export default function IdentityRecordSummary({
                         onEditField={batchEditing ? undefined : onEditField}
                         batchEdit={batchEditSession}
                     />
+                    {showInlineDetails && detailRows.length > 0 ? (
+                        <IdentityRecordDetails
+                            rows={detailRows}
+                            personId={record.id}
+                            onSaveField={onSaveField}
+                            onEditField={batchEditing ? undefined : onEditField}
+                            batchEdit={batchEditSession}
+                            defaultOpen
+                        />
+                    ) : null}
                     {onActivate && !batchEditing ? (
                         <button
                             type="button"
@@ -229,16 +239,6 @@ export default function IdentityRecordSummary({
                     </button>
                 ) : null}
             </div>
-            {showInlineDetails && detailRows.length > 0 ? (
-                <IdentityRecordDetails
-                    rows={detailRows}
-                    personId={record.id}
-                    onSaveField={onSaveField}
-                    onEditField={batchEditing ? undefined : onEditField}
-                    batchEdit={batchEditSession}
-                    defaultOpen
-                />
-            ) : null}
             {batchEditing ? (
                 <div className="identity-record-summary__batch-actions" data-identity-batch-actions="true">
                     <button

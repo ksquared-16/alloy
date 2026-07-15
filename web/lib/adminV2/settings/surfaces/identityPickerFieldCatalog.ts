@@ -8,6 +8,7 @@ import { platformCategoryLabel } from "@/lib/adminV2/configuration/configuration
 import type { AvailableField, AvailableFieldEntityNamespace } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
 import { filterCanonicalDataProviders } from "@/lib/fields/canonicalDataProviderRegistry";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import { canonicalPickerIdentityForRefKey } from "@/lib/fields/canonicalProviderDedup";
 
 /** Derived display fields — not selectable as independent editable identity fields. */
 const NON_SELECTABLE_DERIVED_REFS = new Set<string>([
@@ -67,7 +68,8 @@ function hubEntityForNamespace(namespace: AvailableFieldEntityNamespace): string
 }
 
 function normalizeSelectableRef(refKey: string): string {
-    return CANONICAL_REF_ALIASES[refKey] ?? refKey;
+    const aliased = CANONICAL_REF_ALIASES[refKey] ?? refKey;
+    return canonicalPickerIdentityForRefKey(aliased);
 }
 
 /** Build category-grouped picker options for identity surfaces. */
@@ -87,16 +89,13 @@ export function identityPickerCategoriesForNamespaces(args: {
 
     const byCategory = new Map<string, IdentityPickerFieldOption[]>();
     const seenLabelsByCategory = new Map<string, Set<string>>();
-    const seenCanonical = new Set<string>();
+    const byCanonicalIdentity = new Map<string, IdentityPickerFieldOption>();
 
     for (const provider of providers) {
         const canonicalRef = normalizeSelectableRef(provider.refKey);
         const categoryKey = provider.categoryKey?.trim() || "general";
         const hubEntity = hubEntityForNamespace(provider.entityNamespace as AvailableFieldEntityNamespace);
         const categoryLabel = platformCategoryLabel(categoryKey, hubEntity);
-        const dedupeKey = `${provider.entityNamespace}:${canonicalRef}`;
-        if (seenCanonical.has(dedupeKey)) continue;
-        seenCanonical.add(dedupeKey);
 
         const readOnlyDerived =
             NON_SELECTABLE_DERIVED_REFS.has(provider.refKey)
@@ -116,14 +115,28 @@ export function identityPickerCategoriesForNamespaces(args: {
             readOnlyDerived: readOnlyDerived || undefined,
         };
 
+        const existing = byCanonicalIdentity.get(canonicalRef);
+        if (!existing) {
+            byCanonicalIdentity.set(canonicalRef, option);
+            continue;
+        }
+        const existingIsCanonical = existing.key === canonicalRef;
+        const incomingIsCanonical = provider.refKey === canonicalRef;
+        if (!existingIsCanonical && incomingIsCanonical) {
+            byCanonicalIdentity.set(canonicalRef, option);
+        }
+    }
+
+    for (const option of byCanonicalIdentity.values()) {
+        if (!option.selectable) continue;
         const labelKey = option.label.trim().toLowerCase();
-        const seenLabels = seenLabelsByCategory.get(categoryKey) ?? new Set<string>();
+        const seenLabels = seenLabelsByCategory.get(option.categoryKey) ?? new Set<string>();
         if (seenLabels.has(labelKey)) continue;
         seenLabels.add(labelKey);
-        seenLabelsByCategory.set(categoryKey, seenLabels);
-        const bucket = byCategory.get(categoryKey) ?? [];
+        seenLabelsByCategory.set(option.categoryKey, seenLabels);
+        const bucket = byCategory.get(option.categoryKey) ?? [];
         bucket.push(option);
-        byCategory.set(categoryKey, bucket);
+        byCategory.set(option.categoryKey, bucket);
     }
 
     return [...byCategory.entries()]

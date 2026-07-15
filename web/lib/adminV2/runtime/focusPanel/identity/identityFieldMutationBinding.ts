@@ -10,7 +10,7 @@
 
 import { reconcileLegacyChildEnrollmentAlias } from "@/lib/fields/canonicalFieldProjection";
 
-export type ContactMutationValueKey = "first_name" | "last_name" | "email" | "phone" | "address_line1" | "address_line2";
+export type ContactMutationValueKey = "first_name" | "last_name" | "email" | "phone" | "address_line1" | "address_line2" | "city" | "state" | "postal_code";
 
 export type ChildFocusMutationValueKey =
     | "location_id"
@@ -37,6 +37,16 @@ const CONTACT_MUTATION_BY_REF: Readonly<Record<string, ContactMutationValueKey>>
     "person.address_line2": "address_line2",
     "person.address_line": "address_line1",
     "person.address": "address_line1",
+    "person.city": "city",
+    "person.state": "state",
+    "person.postal_code": "postal_code",
+    "person.postal": "postal_code",
+    "person.zip": "postal_code",
+    "contact.city": "city",
+    "contact.state": "state",
+    "contact.postal_code": "postal_code",
+    "contact.postal": "postal_code",
+    "contact.zip": "postal_code",
 };
 
 const CHILD_FOCUS_MUTATION_BY_REF: Readonly<Record<string, ChildFocusMutationValueKey>> = {
