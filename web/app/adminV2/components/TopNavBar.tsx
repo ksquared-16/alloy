@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
-import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { usePathname } from "next/navigation";
 import {
     ADMIN_FORMS_HREF,
@@ -206,14 +205,11 @@ export default function TopNavBar() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!isOperationalWorkV1Enabled()) return;
-    const cancelDefer = runWhenAdminV2PrimarySurfaceReady(
-      () => prefetchWorkspaceOperationalTasks("open"),
-      "operational_tasks_topnav_prefetch"
-    );
-    return cancelDefer;
-  }, []);
+  // The open operational-tasks LIST is a detail resource forbidden as /workspace boot work, and it
+  // is already warmed on real intent — the Tasks nav badge hover/focus, the sidebar Work Items click,
+  // and the `adminv2:open-tasks-panel` handler above. The speculative mount-time prefetch was an
+  // extra boot request with no interaction behind it, so it is removed. The nav badge COUNT
+  // (useOperationalTasksNavCounts → summary) still loads — that is an allowed badge count.
 
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
 
