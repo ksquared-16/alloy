@@ -30,9 +30,11 @@ All commits are on `fix/process-stage-operating-contract`. After pulling this br
 | `8fbce8026` | Fix Current Work VM test types for execution-mode contract |
 | `e7c2ea2bc` | **Stage-owned outgoing transitions** + composable outcome automation + runtime transition identity |
 | `4ebf71b54` | **Recomposed editors**: Outgoing Transitions, Outcome Definitions, Outcome Behavior |
-| *(pending)* | Save-flow fix, doctrine docs, this handoff document |
+| `876302814` | Save-flow fix, doctrine docs, engineer handoff (`HANDOFF.md`) |
 
 > **Start here after checkout:** `e7c2ea2bc` + `4ebf71b54` for the V2 authoring model; `c7c25819a` for certification fixtures/tests.
+
+> **Audit note:** Two branch audits ran mid-sprint. [Audit authoring model coverage](f0e6e6d0-ca29-43ad-ad56-18c4ab1afebd) inspected `8fbce8026` — **before** `e7c2ea2bc`/`4ebf71b54`, which added stage-owned transitions, composable behavior editors, and deleted `LifecycleStageOutcomeAutomationEditor.tsx`. Treat that audit's transition-graph and composable-automation gaps as **addressed in later commits** unless re-verified. [Audit test and QA coverage](102fed84-b44c-4d77-bcf8-a4c732346ae9) reflects post-V2 state; gaps below still apply.
 
 ---
 
@@ -143,6 +145,28 @@ npm run typecheck:tests
 ```
 
 **Note:** Machine had high swap pressure during this sprint. Run `npm run workspace:doctor` before heavy validation.
+
+---
+
+## Test & QA gaps (from branch audit)
+
+Still open after `876302814`:
+
+| Gap | Notes |
+|-----|-------|
+| Sprint `evidence/` empty | Manual screenshots required; no Playwright harness checked in |
+| Validator codes untested | `primary_action_invalid`, `outcome_close_status_missing`, `outcome_follow_up_template_invalid`, `outcome_ref_unknown` |
+| Persist-on-save throw | No test for `stageOperatingPlanDraftToPersisted(..., { operatingContract })` blocking save |
+| Contract issues banner | No test for `data-testid="stage-operating-plan-contract-issues"` |
+| Current Work outcome-led render | `currentWorkFocusWorkspace.test.tsx` has outcome-led test in `4ebf71b54`; proof plans not wired into Current Work integration fixtures |
+| Runtime transition execution | Tests assert rule shape; not full `executeStageOperatingOutcome` / reconciliation path for all Tour outcomes |
+| Proof plans vs live defaults | `defaultEnrollmentStageOperatingPlans.ts` unchanged |
+
+Re-verify after checkout (110 tests passed at handoff):
+
+```bash
+cd web && npm run test -- tests/lifecycle/processStageOperatingContract.test.ts
+```
 
 ---
 
