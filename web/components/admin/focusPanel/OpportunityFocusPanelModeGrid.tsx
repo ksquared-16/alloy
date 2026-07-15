@@ -285,8 +285,16 @@ export default function OpportunityFocusPanelModeGrid({
     // Edit seam (Household V1): a separate injected save capability (NOT a write on
     // the read-only Operational Context). Persists via the existing person PATCH path
     // and broadcasts the existing record-patch events → VM merge → context recompose.
+    const recordRef = useRef(record);
+    recordRef.current = record;
     const mutation = useMemo(
-        () => buildOpportunityFocusPanelMutation({ canMutate, opportunityId: drawerId, truth: record }),
+        () =>
+            buildOpportunityFocusPanelMutation({
+                canMutate,
+                opportunityId: drawerId,
+                truth: record,
+                getTruth: () => recordRef.current,
+            }),
         [canMutate, drawerId, record],
     );
 

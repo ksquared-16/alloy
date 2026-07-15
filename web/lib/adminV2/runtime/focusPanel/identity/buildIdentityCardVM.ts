@@ -88,6 +88,19 @@ function resolveEvidenceCollectionsForGroup(
     return [];
 }
 
+
+function placementsForIdentityGroupPurpose(
+    config: NestedSurfaceConfig,
+    groupKey: string,
+    purpose: "summary" | "context_facts" | "details",
+): ReturnType<typeof generateDefaultPlacementsForGroup> {
+    const group = config.groups.find((g) => g.key === groupKey);
+    if (!group) return [];
+    return (group.fieldPlacements ?? generateDefaultPlacementsForGroup(group)).filter((placement) =>
+        storageTierMatchesPurpose(placement.tier, purpose),
+    );
+}
+
 function buildRecordRows(args: {
     config: NestedSurfaceConfig;
     groupKey: string;
@@ -101,9 +114,17 @@ function buildRecordRows(args: {
 }): ReturnType<typeof resolveIdentityFieldRows> {
     const group = args.config.groups.find((g) => g.key === args.groupKey);
     if (!group) return [];
-    const placements = (group.fieldPlacements ?? generateDefaultPlacementsForGroup(group)).filter(
-        (placement) => storageTierMatchesPurpose(placement.tier, args.purpose),
-    );
+    let placements = placementsForIdentityGroupPurpose(args.config, args.groupKey, args.purpose);
+    if (args.editGroupKey && args.editGroupKey !== args.groupKey) {
+        const editPlacements = placementsForIdentityGroupPurpose(args.config, args.editGroupKey, args.purpose);
+        const seen = new Set(placements.map((placement) => `${placement.tier}:${placement.fieldRef}`));
+        for (const placement of editPlacements) {
+            const key = `${placement.tier}:${placement.fieldRef}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            placements.push(placement);
+        }
+    }
     const inputs: IdentityFieldRowInput[] = [];
     for (const placement of placements) {
         const policy = resolveIdentityFieldPolicy({

@@ -14,6 +14,7 @@ import {
     mergeInquiryChildIntoFocusPanelTruth,
     mergePersonContactIntoFocusPanelTruth,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { mergeOpportunityDrawerDisplayRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import {
     isChildFocusFieldSaveSupported,
     type ChildFocusFieldKey,
@@ -293,6 +294,55 @@ describe("expanded field save refresh", () => {
         expect(expandedEmail?.editable).toBe(true);
     });
 });
+
+
+    it("post-save detail cells keep address when merge uses stale truth but patch overlay has values", () => {
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        config = addFieldToNestedGroup(config, "contact_edit", "person.address_line1", { tier: "expanded" });
+        config = addFieldToNestedGroup(config, "contact_edit", "person.city", { tier: "expanded" });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.address_line1", "editable", {
+            tier: "expanded",
+        });
+        config = setFieldVisibilityInNestedGroup(config, "contact_edit", "person.city", "editable", {
+            tier: "expanded",
+        });
+
+        const staleTruth = {
+            ...HOUSEHOLD_TRUTH,
+            "person.primary_address_line1": "742 Evergreen Terrace",
+            "person.primary_address_city": "Springfield",
+        };
+        const currentTruth = {
+            ...staleTruth,
+            _person_address_by_id: {
+                "p-sarah": {
+                    address_line1: "742 Evergreen Terrace",
+                    city: "Springfield",
+                },
+            },
+            extra_runtime_field: "must-survive-patch",
+        };
+
+        const mergedFromStale = mergePersonContactIntoFocusPanelTruth(staleTruth, "p-sarah", {
+            address_line1: "742 Evergreen Terrace",
+            city: "Portland",
+            state: "OR",
+            postal_code: "97201",
+        });
+
+        const authoritative = mergeOpportunityDrawerDisplayRecordPatch(currentTruth, mergedFromStale);
+        expect(authoritative.extra_runtime_field).toBe("must-survive-patch");
+
+        const vm = buildHouseholdIdentityCardVM({
+            config,
+            groups: buildHouseholdCardEvidence(householdCtx(authoritative), { nestedConfig: config }).groups,
+            canMutate: true,
+        });
+        const cells =
+            vm.sections.find((s) => s.key === "primary_contact")?.items[0]?.detailRows.flatMap((r) => r.cells) ?? [];
+        expect(cells.find((c) => c.fieldRef === "person.address_line1")?.value).toBe("742 Evergreen Terrace");
+        expect(cells.find((c) => c.fieldRef === "person.city")?.value).toBe("Portland");
+    });
 
 describe("save failure semantics", () => {
     it("failed save does not mutate authoritative truth used for VM recompose", () => {

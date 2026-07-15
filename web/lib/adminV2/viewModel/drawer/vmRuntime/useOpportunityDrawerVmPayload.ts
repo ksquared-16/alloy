@@ -41,6 +41,7 @@ import { tracePlatformDrawerVm } from "@/lib/perf/platformSurfacePerfTrace";
 import {
     ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH,
     isTourSurfaceActionKey,
+    mergeOpportunityDrawerDisplayRecordPatch,
     parseOpportunityDrawerRecordPatchDetail,
 } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { OPPORTUNITY_QUEUE_UPDATED_EVENT, parseOpportunityQueueUpdatedDetail } from "@/lib/admin/opportunityQueueRefreshEvent";
@@ -310,7 +311,7 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
         const onRecordPatch = (ev: Event) => {
             const detail = parseOpportunityDrawerRecordPatchDetail(ev);
             if (!detail || detail.opportunity_id !== oid) return;
-            patchDisplayRecord(() => detail.record);
+            patchDisplayRecord((prev) => mergeOpportunityDrawerDisplayRecordPatch(prev, detail.record));
         };
 
         const onQueueUpdated = (ev: Event) => {

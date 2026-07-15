@@ -16,6 +16,7 @@ import {
     resolveLeadSummaryPrimaryPersonId,
 } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 import type { PersonContactPatch, PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { buildPersonAddressIndexFromVm } from "@/lib/layout/runtime/resolvePersonAddressFieldValues";
 
 const CONTACT_FIELDS = ["first_name", "last_name", "email", "phone"] as const;
 
@@ -25,6 +26,37 @@ function trimStr(value: unknown): string {
 }
 
 /** Split a combined display name into first (first token) + last (remainder). */
+
+const ADDRESS_VALUE_KEYS = ["address_line1", "address_line2", "city", "state", "postal_code"] as const;
+
+function seedPersonContactAddressValues(
+    truth: Record<string, unknown>,
+    personId: string,
+    base: PersonContactValues,
+): PersonContactValues {
+    const components = buildPersonAddressIndexFromVm(truth).get(personId) ?? {};
+    const out: PersonContactValues = { ...base };
+    for (const key of ADDRESS_VALUE_KEYS) {
+        const value = trimStr(components[key]);
+        if (value) out[key] = value;
+    }
+    if (resolveLeadSummaryPrimaryPersonId(truth) === personId) {
+        const pick = (...keys: string[]) => {
+            for (const k of keys) {
+                const v = trimStr(truth[k]);
+                if (v) return v;
+            }
+            return "";
+        };
+        if (!out.address_line1) out.address_line1 = pick("person.primary_address_line1", "person.address_line1");
+        if (!out.address_line2) out.address_line2 = pick("person.primary_address_line2", "person.address_line2");
+        if (!out.city) out.city = pick("person.primary_address_city", "person.city");
+        if (!out.state) out.state = pick("person.primary_address_state", "person.state");
+        if (!out.postal_code) out.postal_code = pick("person.primary_address_postal_code", "person.postal_code");
+    }
+    return out;
+}
+
 function splitName(name: string): { first_name: string; last_name: string } {
     const parts = name.trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return { first_name: "", last_name: "" };
@@ -95,12 +127,12 @@ export function seedHouseholdContactValuesForPerson(
     return {
         personId: id,
         name: name || "Contact",
-        values: {
+        values: seedPersonContactAddressValues(truth, id, {
             first_name: (isPrimary && trimStr(truth.first_name)) || split.first_name,
             last_name: (isPrimary && trimStr(truth.last_name)) || split.last_name,
             email: trimStr(row?.email) || (isPrimary ? trimStr(truth["person.primary_email"]) : ""),
             phone: trimStr(row?.phone) || (isPrimary ? trimStr(truth["person.primary_phone"]) : ""),
-        },
+        }),
     };
 }
 
@@ -128,12 +160,12 @@ export function seedHouseholdContactValuesFromEvidence(
     return {
         personId: id,
         name: (fromTruth?.name || contact.name || "Contact").trim(),
-        values: {
+        values: seedPersonContactAddressValues(truth, id, {
             first_name: fromTruth?.values.first_name || split.first_name,
             last_name: fromTruth?.values.last_name || split.last_name,
             email,
             phone,
-        },
+        }),
     };
 }
 

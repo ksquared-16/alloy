@@ -39,6 +39,43 @@ export function parseOpportunityDrawerRecordPatchDetail(ev: Event): OpportunityD
     return { opportunity_id: opportunityId, record };
 }
 
+
+/**
+ * Merge an incoming opportunity drawer record patch into the current display record.
+ * Preserves nested snapshots when the patch was built from a stale truth snapshot.
+ */
+export function mergeOpportunityDrawerDisplayRecordPatch(
+    prev: Record<string, unknown>,
+    incoming: Record<string, unknown>,
+): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...prev, ...incoming };
+
+    if (incoming._opportunity_persons !== undefined) {
+        merged._opportunity_persons = incoming._opportunity_persons;
+    }
+    if (incoming._customer_persons !== undefined) {
+        merged._customer_persons = incoming._customer_persons;
+    }
+    if (incoming._inquiry_children !== undefined) {
+        merged._inquiry_children = incoming._inquiry_children;
+    }
+
+    const prevAddr = prev._person_address_by_id;
+    const incAddr = incoming._person_address_by_id;
+    if (incAddr && typeof incAddr === "object" && !Array.isArray(incAddr)) {
+        const out: Record<string, Record<string, unknown>> =
+            prevAddr && typeof prevAddr === "object" && !Array.isArray(prevAddr)
+                ? { ...(prevAddr as Record<string, Record<string, unknown>>) }
+                : {};
+        for (const [personId, row] of Object.entries(incAddr as Record<string, Record<string, unknown>>)) {
+            out[personId] = { ...(out[personId] ?? {}), ...row };
+        }
+        merged._person_address_by_id = out;
+    }
+
+    return merged;
+}
+
 /** In-place VM / legacy drawer record merge — avoids full drawer reload. */
 export function dispatchOpportunityDrawerRecordPatch(
     opportunityId: string,
