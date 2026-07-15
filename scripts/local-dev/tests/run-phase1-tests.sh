@@ -121,7 +121,7 @@ ALLOY_BIN_DIR="$BIN"
 ALLOY_BASE_REMOTE="origin"
 ALLOY_BASE_BRANCH="staging"
 ALLOY_CANONICAL_PORT="3000"
-ALLOY_FIRST_AGENT_PORT="3011"
+ALLOY_FIRST_AGENT_PORT="3911"
 ALLOY_MAX_AGENTS="6"
 ALLOY_PM="npm"
 ALLOY_WEB_DIR="web"
@@ -154,7 +154,7 @@ assert_ok "create slot 1" \
 [[ -f "$WTROOT/wt1-fixture-one/.env.local.agent" ]] && pass "agent env created" || fail "agent env missing"
 [[ -f "$RUNTIME/metadata/wt1-fixture-one.env" ]] && pass "metadata created" || fail "metadata missing"
 
-node -e 'require("http").createServer().listen(3012)' >/dev/null 2>&1 &
+node -e 'require("http").createServer().listen(3912)' >/dev/null 2>&1 &
 OCC_PID=$!
 sleep 0.4
 assert_fail "occupied port rejected on create" \

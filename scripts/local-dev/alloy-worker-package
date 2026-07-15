@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-worker-package <initiative-key> <task-id>
+
+Writes worker package files into the assigned worktree:
+  .alloy-worker-package.md
+  .alloy-worker-task.yaml
+
+See: scripts/local-dev/WORKER-PACKAGE.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+
+  local key="$1" task_id="$2"
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  local task_yaml base
+  task_yaml="$(alloy_engineering_task_path "$key" "$task_id")"
+  [[ -f "$task_yaml" ]] || alloy_die "task not found: $task_id"
+
+  local slot path branch port agent role staging_sha worktree_name
+  slot="$(node -e "
+    const d = require('$(alloy_initiative_dir "$key")/state.json');
+    const w = d.workers['${task_id}'];
+    if (!w) process.exit(1);
+    console.log(w.slot);
+  " 2>/dev/null)" || alloy_die "task $task_id not assigned — run alloy-initiative-start"
+
+  worktree_name="$(node -e "console.log(require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'].worktree_name)")"
+  alloy_load_metadata "$worktree_name"
+  path="$ALLOY_WORKTREE_PATH"
+  local assigned_path resolved_path resolved_assigned
+  assigned_path="$(node -e "console.log(require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'].path)")"
+  resolved_path="$(alloy_realpath "$path")"
+  resolved_assigned="$(alloy_realpath "$assigned_path")"
+  [[ "$resolved_path" == "$resolved_assigned" ]] || alloy_die "worker package path mismatch (refusing write outside assignment)"
+  branch="$ALLOY_WORKTREE_BRANCH"
+  port="$PORT"
+  agent="$ALLOY_AGENT"
+  role="$(node -e "console.log(require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'].role)")"
+  staging_sha="$(node -e "console.log(require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'].base_sha)")"
+
+  base="$(alloy_initiative_dir "$key")"
+  local pkg_md task_out evidence_path
+  pkg_md="$(alloy_engineering_worker_package_md_path "$path")"
+  task_out="$(alloy_engineering_worker_task_yaml_path "$path")"
+  evidence_path="${ALLOY_RUNTIME_ROOT}/evidence/${key}/${task_id}"
+
+  mkdir -p "$evidence_path"
+  alloy_engineering_gitignore_worker_files "$path"
+
+  cp "$task_yaml" "$task_out"
+
+  {
+    printf '# Alloy Worker Package\n\n'
+    printf '## Identity\n\n'
+    printf '| Field | Value |\n|-------|-------|\n'
+    printf '| Initiative | `%s` |\n' "$key"
+    printf '| Task | `%s` |\n' "$task_id"
+    printf '| Role | %s |\n' "$role"
+    printf '| Slot | %s |\n' "$slot"
+    printf '\n## Objective\n\n'
+    grep -A1 '^objective:' "$task_yaml" | tail -1 | sed 's/^/ /'
+    printf '\n## Product truth (immutable for revision)\n\n'
+    if [[ -f "$base/product-handoff.json" ]]; then
+      node -e "
+        const h = require('${base}/product-handoff.json');
+        console.log('- Product revision:', h.product_revision);
+        console.log('- Contract hash:', (h.approved_contract_hash||'').slice(0,16)+'...');
+        console.log('- Operator outcomes:', (h.operator_outcomes||[]).join('; '));
+        console.log('- In scope:', (h.in_scope||[]).slice(0,3).join('; '));
+        console.log('- Visual refs:', (h.ux_visual_contract_refs||[]).join(', '));
+        console.log('- **Do not reinterpret product intent or expand scope.**');
+      "
+    else
+      printf -- '- No Product handoff on record — see Engineering plan contracts.\n'
+    fi
+    printf '\n## Constitutional truth\n\n'
+    alloy_engineering_constitutional_truth
+    printf '\n## Initiative-approved decisions\n\n'
+    sed -n '/^initiative_decisions:/,/^likely_code_areas:/p' "$task_yaml" | grep '^\s*-' | sed 's/^\s*/- /' || printf -- '- See plan/product-contract.yaml\n'
+    printf '\n## Worker discretion\n\n'
+    printf -- '- Internal hook decomposition within conventions\n'
+    printf -- '- Test helper organization\n'
+    printf -- '- Local component naming within established patterns\n'
+    printf '\n## Allowed scope\n\n'
+    sed -n '/^allowed_scope:/,/^prohibited_scope:/p' "$task_yaml" | grep '^\s*-' || true
+    printf '\n## Prohibited scope\n\n'
+    sed -n '/^prohibited_scope:/,/^constitutional_references:/p' "$task_yaml" | grep '^\s*-' || true
+    printf '\n## Relevant documentation\n\n'
+    printf 'Focused manifest: `%s/audit/documentation-manifest.yaml`\n' "$base"
+    sed -n '/^constitutional_references:/,/^initiative_decisions:/p' "$task_yaml" | grep '^\s*-' || true
+    printf '\n## Code locations\n\n'
+    sed -n '/^likely_code_areas:/,/^acceptance:/p' "$task_yaml" | grep '^\s*-' || true
+    printf '\n## Environment\n\n'
+    printf -- '- Staging baseline SHA: `%s`\n' "$staging_sha"
+    printf -- '- Branch: `%s`\n' "$branch"
+    printf -- '- Worktree: `%s`\n' "$path"
+    printf -- '- Port: `%s` / http://localhost:%s\n' "$port" "$port"
+    printf -- '- QA identity alias: ALLOY_SLOT_%s_QA_IDENTITY (name only)\n' "$slot"
+    printf -- '- Prepare: `alloy-agent-prepare %s`\n' "$slot"
+    printf '\n## Acceptance criteria\n\n'
+    sed -n '/^acceptance:/,/^focused_checks:/p' "$task_yaml" | grep '^\s*-' || true
+    printf '\n## Focused checks\n\n'
+    sed -n '/^focused_checks:/,/^ui_verification:/p' "$task_yaml" | grep '^\s*-' || true
+    printf '\n## UI verification\n\n'
+    sed -n '/^ui_verification:/,/^required_outputs:/p' "$task_yaml" || true
+    printf '\n## Evidence path\n\n'
+    printf '`%s`\n' "$evidence_path"
+    printf '\n## Reporting schema\n\n'
+    printf 'Write: `%s/reports/%s-result.json`\n' "$base" "$task_id"
+    printf 'Required status: implemented|blocked|needs_decision|failed\n'
+    printf '\n## Push / merge prohibition\n\n'
+    printf '**Do NOT push. Do NOT merge. Do NOT create PRs.** Local commits only.\n'
+  } >"$pkg_md"
+
+  cp "$pkg_md" "$base/worker-packages/${task_id}-package.md"
+
+  alloy_info "Worker package written"
+  alloy_info "  worktree: $path"
+  alloy_info "  package:  $pkg_md"
+  alloy_info "  task:     $task_out"
+}
+
+main "$@"

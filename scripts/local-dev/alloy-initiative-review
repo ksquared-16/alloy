@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-initiative-review <initiative-key> [--mode advisory|gate|final] [--type TYPE]
+  alloy-initiative-review <initiative-key> --ingest <review-task-id>
+
+Generates reviewer packages for assigned review tasks.
+Implementation worker must not be the sole reviewer for material UI/architecture work.
+
+Modes:
+  advisory  May run during implementation; never contributes to READY.
+  gate      Requires worker reports; may block readiness.
+  final     Requires reported/validated work; required before merge-ready.
+
+See: scripts/local-dev/REVIEW-PIPELINE.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  shift
+  local review_type="integration" review_mode="" ingest_task=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --type) [[ $# -ge 2 ]] || alloy_die "--type requires value"; review_type="$2"; shift 2 ;;
+      --type=*) review_type="${1#--type=}"; shift ;;
+      --mode) [[ $# -ge 2 ]] || alloy_die "--mode requires value"; review_mode="$2"; shift 2 ;;
+      --mode=*) review_mode="${1#--mode=}"; shift ;;
+      --ingest) [[ $# -ge 2 ]] || alloy_die "--ingest requires task id"; ingest_task="$2"; shift 2 ;;
+      --ingest=*) ingest_task="${1#--ingest=}"; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  if [[ -n "$ingest_task" ]]; then
+    local base review_json review_status ingested_mode current_state
+    base="$(alloy_initiative_dir "$key")"
+    review_json="$base/reviews/${ingest_task}-review.json"
+    [[ -f "$review_json" ]] || alloy_die "review report missing: $review_json"
+    alloy_engineering_io validate-review "$review_json"
+    review_status="$(node -e "console.log(require('${review_json}').status)")"
+    ingested_mode="$(node -e "console.log(require('${review_json}').review_mode||'')" )"
+    case "$ingested_mode" in advisory|gate|final) ;; *)
+      alloy_die "review report missing valid review_mode: advisory|gate|final"
+    esac
+    current_state="$(alloy_initiative_current_state "$key")"
+    if [[ "$ingested_mode" == "gate" || "$ingested_mode" == "final" ]]; then
+      [[ -f "$base/reports/task-001-result.json" ]] \
+        || alloy_die "${ingested_mode} review requires task-001 report ingestion"
+      [[ "$current_state" == "validating" || "$current_state" == "reviewing" || "$current_state" == "remediation_required" || "$current_state" == "merge_ready" ]] \
+        || alloy_die "${ingested_mode} review is invalid in state: $current_state"
+      if [[ "$review_status" == "pass" || "$review_status" == "pass_with_findings" ]]; then
+        alloy_engineering_update_task_status "$key" "$ingest_task" "complete"
+      else
+        alloy_engineering_update_task_status "$key" "$ingest_task" "reviewing"
+      fi
+    fi
+    node -e "
+      const fs = require('fs');
+      const p = '${base}/state.json';
+      const d = JSON.parse(fs.readFileSync(p,'utf8'));
+      d.reviews = d.reviews || {};
+      d.reviews['${ingest_task}'] = {
+        ingested_at: '$(alloy_iso_now)',
+        status: '${review_status}',
+        mode: '${ingested_mode}',
+        contributes_to_ready: ['gate', 'final'].includes('${ingested_mode}')
+      };
+      d.updated_at = '$(alloy_iso_now)';
+      fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+    "
+    alloy_info "Review ingested: ${ingest_task} → ${review_status} (${ingested_mode})"
+    exit 0
+  fi
+
+  local state
+  state="$(alloy_initiative_current_state "$key")"
+  if [[ -z "$review_mode" ]]; then
+    case "$state" in
+      implementing) review_mode="advisory" ;;
+      validating|reviewing|remediation_required) review_mode="gate" ;;
+      *) alloy_die "cannot safely infer review mode in state: $state; pass --mode" ;;
+    esac
+  fi
+  case "$review_mode" in advisory|gate|final) ;; *)
+    alloy_die "invalid review mode: $review_mode (advisory|gate|final)"
+  esac
+  case "$review_mode" in
+    advisory)
+      [[ "$state" == "implementing" || "$state" == "validating" || "$state" == "reviewing" || "$state" == "remediation_required" ]] \
+        || alloy_die "advisory review is invalid in state: $state"
+      ;;
+    gate)
+      [[ -f "$(alloy_initiative_dir "$key")/reports/task-001-result.json" ]] \
+        || alloy_die "gate review requires task-001 report ingestion"
+      [[ "$state" == "validating" || "$state" == "reviewing" || "$state" == "remediation_required" ]] \
+        || alloy_die "gate review is invalid in state: $state"
+      ;;
+    final)
+      [[ -f "$(alloy_initiative_dir "$key")/reports/task-001-result.json" ]] \
+        || alloy_die "final review requires task-001 report ingestion"
+      [[ "$state" == "reviewing" || "$state" == "remediation_required" || "$state" == "merge_ready" ]] \
+        || alloy_die "final review requires completed validation/reviewing state (current: $state)"
+      ;;
+  esac
+
+  local base reviews_dir
+  base="$(alloy_initiative_dir "$key")"
+  reviews_dir="$base/reviews"
+
+  # Find review task (task-002 or any non-implementation task)
+  local review_task="task-002"
+  local review_id="review-$(date -u +%Y%m%d%H%M%S)"
+  local pkg_path="$reviews_dir/${review_task}-review-package.md"
+
+  {
+    printf '# Review package — %s\n\n' "$key"
+    printf 'Review ID: `%s`\n' "$review_id"
+    printf 'Type: %s\n' "$review_type"
+    printf 'Mode: %s\n' "$review_mode"
+    printf 'Generated: %s\n\n' "$(alloy_iso_now)"
+    printf '## Scope\n\n'
+    printf 'Review task-001 implementation against approved specification.\n'
+    printf 'Specification hash: `%s`\n\n' "$(node -e "console.log(require('${base}/state.json').approved_spec_hash||'unapproved')")"
+    printf '## Implementation report\n\n'
+    if [[ -f "$base/reports/task-001-result.json" ]]; then
+      node -e "const r=require('${base}/reports/task-001-result.json'); console.log('- summary:', r.summary); console.log('- commit:', r.commit); console.log('- files:', (r.files_changed||[]).join(', '));"
+    else
+      printf '(task-001 report not yet ingested)\n'
+    fi
+    printf '\n## Review checklist\n\n'
+    case "$review_type" in
+      architecture|doctrine)
+        printf -- '- Doctrine alignment with constitutional constraints\n'
+        printf -- '- No parallel systems introduced\n'
+        printf -- '- Ownership boundaries respected\n'
+        ;;
+      ui)
+        printf -- '- Visual contract basis honored\n'
+        printf -- '- Configuration Runtime pattern preserved for settings surfaces\n'
+        printf -- '- Measurable acceptance criteria met\n'
+        ;;
+      *)
+        printf -- '- Focused checks recorded\n'
+        printf -- '- Integration risk assessed\n'
+        ;;
+    esac
+    printf '\n## Report schema\n\n'
+    printf 'Write: `%s/reviews/%s-review.json`\n' "$base" "$review_task"
+    printf '```json\n'
+    cat <<'JSON'
+{
+  "review_id": "...",
+  "initiative_key": "...",
+  "task_ids": ["task-001"],
+  "review_type": "...",
+  "review_mode": "advisory|gate|final",
+  "status": "pass|pass_with_findings|fail|blocked",
+  "findings": [],
+  "severity": "info|minor|major|blocker",
+  "evidence": [],
+  "required_remediation": [],
+  "unresolved_decisions": []
+}
+JSON
+    printf '```\n'
+  } >"$pkg_path"
+
+  # Template review JSON if report exists from reviewer
+  local template_review="$reviews_dir/${review_task}-review.json"
+  if [[ ! -f "$template_review" ]]; then
+    node -e "
+      const fs = require('fs');
+      fs.writeFileSync('${template_review}', JSON.stringify({
+        review_id: '${review_id}',
+        initiative_key: '${key}',
+        task_ids: ['task-001'],
+        review_type: '${review_type}',
+        review_mode: '${review_mode}',
+        status: 'blocked',
+        findings: ['Awaiting reviewer report'],
+        severity: 'info',
+        evidence: [],
+        required_remediation: [],
+        unresolved_decisions: []
+      }, null, 2) + '\n');
+    "
+  fi
+
+  if [[ "$review_mode" != "advisory" ]]; then
+    alloy_engineering_update_task_status "$key" "$review_task" "reviewing"
+  fi
+
+  alloy_info "Review package: $pkg_path"
+  alloy_info "Review mode: $review_mode"
+  alloy_info "Submit review to: $template_review"
+  alloy_info "Ingest with: alloy-initiative-review $key --ingest $review_task (manual edit template first)"
+}
+
+main "$@"

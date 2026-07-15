@@ -1,0 +1,102 @@
+# Settings → Locations — Product Brief SAMPLE (documentation only)
+
+# PLACEHOLDER: Do not execute as a real initiative.
+# Kelly/ChatGPT must confirm every [CONFIRM: ...] field before import.
+
+product:
+  key: locations-settings
+  title: "Settings → Locations [CONFIRM: final title]"
+  summary: |
+    [CONFIRM] Operators manage physical/service locations from Settings with
+  configuration-grade density, preserving list context while editing details.
+
+problem:
+  current_state: |
+    [CONFIRM] Describe current Locations settings experience and gaps.
+  pain_points:
+    - "[CONFIRM] Operators lose list context when editing a location"
+    - "[CONFIRM] Navigation between list and detail is inconsistent with other Settings areas"
+
+users:
+  primary:
+    - "[CONFIRM] Org admin / operations manager"
+  secondary:
+    - "[CONFIRM] Site manager (read-only or scoped edit)"
+
+jobs_to_be_done:
+  - "[CONFIRM] Find a location quickly in a multi-site org"
+  - "[CONFIRM] Create or update location details without losing queue/list context"
+  - "[CONFIRM] Understand which fields are required for scheduling/compliance"
+
+operator_outcomes:
+  - "[CONFIRM] Edit location details without losing sight of the location list"
+  - "[CONFIRM] Complete create/edit flows with clear save/cancel semantics"
+
+business_outcomes:
+  - "[CONFIRM] Reduce misconfigured locations that block scheduling/compliance"
+
+product_direction:
+  - "[CONFIRM] Treat Locations as a configuration surface, not a CRM record drawer"
+  - "[CONFIRM] Inherit AdminV2 Settings patterns for hierarchy and density"
+
+scope:
+  in_scope:
+    - "[CONFIRM] Settings → Locations list and detail/edit experience"
+    - "[CONFIRM] Panel/modal behavior for create and edit"
+  out_of_scope:
+    - "[CONFIRM] Net-new location data model or migrations"
+    - "[CONFIRM] Cross-module scheduling UI changes"
+    - "[CONFIRM] Push/merge/release automation"
+
+acceptance:
+  - "[CONFIRM] Operator can browse locations and open details without full-page context loss"
+  - "[CONFIRM] Create/edit confirms before destructive cancel"
+  - "[CONFIRM] Scroll/overflow rules match approved visual contract"
+
+human_approval:
+  required_gates:
+    - product_contract_approval
+    - promotion_approval
+
+visual_basis:
+  type: pattern_reference
+  # alternatives: exact_reference | bounded_exploration
+
+reference_routes:
+  - "[CONFIRM: /admin/settings/... route]"
+
+reference_components:
+  - "[CONFIRM: existing Settings list/panel component path]"
+
+reference_docs:
+  - docs/platform/modules/configuration-platform.md
+  - docs/platform/governance/design-and-operational-doctrine.md
+
+interaction_expectations:
+  - "[CONFIRM] List remains visible or recoverable while detail panel is open"
+  - "[CONFIRM] Create opens bounded overlay; save returns to list with row highlighted"
+
+density_expectations:
+  - "[CONFIRM] Compact configuration density matching other Settings pages"
+
+scroll_constraints:
+  - "[CONFIRM] Page scroll vs panel scroll ownership documented per region]"
+
+editing_expectations:
+  - "[CONFIRM] Inline vs modal edit rules per field group]"
+
+test_data_requirements:
+  - "[CONFIRM] Multi-site org with ≥3 locations, one inactive, one missing optional fields]"
+
+known_risks:
+  - "[CONFIRM] Legacy settings routes may conflict with AdminV2 surfaces]"
+
+open_questions:
+  - "[CONFIRM] Persistent details panel vs modal edit for create flow]"
+
+architecture_constraints:
+  - Config-driven behavior; no hardcoded childcare-only branches in shared modules
+  - Tenant scoping by org_id
+
+release_constraints:
+  - Local commits only until Kelly promotion approval

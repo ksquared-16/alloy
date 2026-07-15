@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/engineering.sh
+source "${SCRIPT_DIR}/lib/engineering.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cat initiative.yaml | alloy-initiative-import <key>
+
+Imports an Initiative Brief from standard input into a new initiative.
+Equivalent to alloy-initiative-create <key> --from - (stdin).
+
+See: scripts/local-dev/INITIATIVE-CONTRACT.md
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_engineering_require_node
+  alloy_initiative_key_valid "$key" || alloy_die "invalid initiative key: $key"
+
+  local tmp
+  tmp="$(mktemp)"
+  cat >"$tmp"
+  [[ -s "$tmp" ]] || alloy_die "no intake data on stdin"
+
+  env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+    "${SCRIPT_DIR}/alloy-initiative-create" "$key" --from "$tmp"
+  rm -f "$tmp"
+}
+
+main "$@"

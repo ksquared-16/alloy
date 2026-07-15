@@ -62,6 +62,45 @@ alloy-validate wt1-my-initiative test
 alloy-validate wt1-my-initiative build
 alloy-validate wt1-my-initiative playwright
 alloy-validate wt1-my-initiative imports
+
+# Phase 4 Product Runtime → Engineering Runtime
+alloy-product-certify                          # run before first real product initiative
+alloy-product-certify --keep
+alloy-runtime-paths                            # resolved runtime path names (no secrets)
+alloy-cert-leak-report                         # report leaked cert metadata only
+# alloy-cert-leak-clean --confirm              # interactive cleanup of leaked cert metadata
+alloy-product-help
+# ChatGPT → YAML brief → clipboard:
+alloy-product-create my-feature --clipboard
+alloy-product-audit my-feature
+alloy-product-contract my-feature
+alloy-product-decisions my-feature
+alloy-product-decide my-feature decision-001 --choice "..." --decided-by Kelly --reason "..."
+alloy-product-approve my-feature --approver Kelly
+alloy-product-package my-feature
+alloy-product-handoff my-feature               # creates Engineering intake
+alloy-initiative-audit my-feature
+alloy-initiative-plan my-feature
+alloy-initiative-approve my-feature --approver Kelly
+alloy-initiative-start my-feature
+
+# Phase 4 Engineering Runtime (engineering-only path)
+alloy-engineering-certify                    # run before first real initiative
+alloy-engineering-certify --keep             # inspect certification artifacts
+alloy-engineering-help
+alloy-initiative-create settings-fields-v2 --from ./brief.yaml
+alloy-initiative-audit settings-fields-v2
+alloy-initiative-plan settings-fields-v2
+alloy-initiative-approve settings-fields-v2 --approver Kelly
+alloy-initiative-start settings-fields-v2
+alloy-worker-open settings-fields-v2 task-001 --with-server   # paste package once
+alloy-worker-report settings-fields-v2 task-001
+alloy-initiative-review settings-fields-v2 --mode advisory --type ui
+alloy-initiative-review settings-fields-v2 --mode final --type integration
+alloy-initiative-remediate settings-fields-v2
+alloy-initiative-package settings-fields-v2
+alloy-initiative-status --all
+alloy-initiative-close settings-fields-v2 --promotion-recorded
 ```
 
 Ports: canonical `3000` · slots `3011`–`3016`  

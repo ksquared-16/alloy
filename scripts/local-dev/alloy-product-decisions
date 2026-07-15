@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-product-decisions <key>
+
+Shows the Human Decision Queue for a product initiative.
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_product_require_node
+  alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+
+  local decisions_dir
+  decisions_dir="$(alloy_product_dir "$key")/decisions"
+  if [[ ! -d "$decisions_dir" ]]; then
+    alloy_info "No decisions recorded."
+    exit 0
+  fi
+
+  printf '%-14s %-10s %-8s %s\n' "ID" "STATUS" "BLOCKING" "QUESTION"
+  for f in "$decisions_dir"/decision-*.yaml; do
+    [[ -f "$f" ]] || continue
+    local id status blocking question
+    id="$(basename "$f" .yaml)"
+    status="$(grep '^status:' "$f" | head -1 | sed 's/status: //;s/"//g')"
+    blocking="$(grep '^blocking:' "$f" | head -1 | sed 's/blocking: //')"
+    question="$(grep '^question:' "$f" | head -1 | sed 's/question: //;s/^"//;s/"$//')"
+    printf '%-14s %-10s %-8s %s\n' "$id" "$status" "$blocking" "${question:0:80}"
+  done
+}
+
+main "$@"

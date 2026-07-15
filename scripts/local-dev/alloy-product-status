@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-product-status <key>
+
+Shows Product Runtime state, revision, approval, and decision summary.
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  alloy_load_config
+  alloy_product_require_node
+  alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+
+  local state_path
+  state_path="$(alloy_product_state_path "$key")"
+  node -e "
+    const d = require('${state_path}');
+    console.log('Product initiative:', d.key);
+    console.log('Title:           ', d.title);
+    console.log('State:           ', d.state);
+    console.log('Revision:        ', d.revision || 1);
+    console.log('Staging baseline:', (d.staging_baseline_sha || '').slice(0, 12));
+    console.log('Approved hash:   ', d.approved_contract_hash ? d.approved_contract_hash.slice(0, 16) + '...' : '(none)');
+    console.log('Approver:        ', d.approver || '(none)');
+    console.log('Handoff:         ', d.handoff_at || '(none)');
+  "
+  alloy_info "Blocking decisions: $(alloy_product_blocking_decisions_count "$key")"
+  alloy_info "Open decisions:     $(alloy_product_open_decisions_count "$key")"
+}
+
+main "$@"

@@ -31,9 +31,60 @@ alloy_iso_now() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
+# Production default runtime root (path name only — never secrets).
+alloy_default_runtime_root() {
+  printf '%s/.local/state/alloy-dev' "$HOME"
+}
+
+# Derive every runtime subdirectory from the single authoritative root.
+alloy_resolve_runtime_paths() {
+  local root="${1:-${ALLOY_RUNTIME_ROOT:-}}"
+  [[ -n "$root" ]] || root="$(alloy_default_runtime_root)"
+  ALLOY_RUNTIME_ROOT="$root"
+  ALLOY_METADATA_DIR="${ALLOY_RUNTIME_ROOT}/metadata"
+  ALLOY_PIDS_DIR="${ALLOY_RUNTIME_ROOT}/pids"
+  ALLOY_LOGS_DIR="${ALLOY_RUNTIME_ROOT}/logs"
+  ALLOY_LOCKS_DIR="${ALLOY_RUNTIME_ROOT}/locks"
+  ALLOY_VALIDATE_LOCK_DIR="${ALLOY_LOCKS_DIR}/validate.lock"
+  ALLOY_AUTH_DIR="${ALLOY_RUNTIME_ROOT}/auth"
+  ALLOY_BROWSER_PIDS_DIR="${ALLOY_RUNTIME_ROOT}/browser-pids"
+  ALLOY_BROWSER_PROFILES_DIR="${ALLOY_RUNTIME_ROOT}/browser-profiles"
+  ALLOY_EVIDENCE_DIR="${ALLOY_RUNTIME_ROOT}/evidence"
+  ALLOY_INITIATIVES_DIR="${ALLOY_RUNTIME_ROOT}/initiatives"
+  # Export so nested env/subprocess invocations cannot fall back to production.
+  export ALLOY_RUNTIME_ROOT ALLOY_METADATA_DIR ALLOY_PIDS_DIR ALLOY_LOGS_DIR \
+    ALLOY_LOCKS_DIR ALLOY_VALIDATE_LOCK_DIR ALLOY_AUTH_DIR \
+    ALLOY_BROWSER_PIDS_DIR ALLOY_BROWSER_PROFILES_DIR ALLOY_EVIDENCE_DIR \
+    ALLOY_INITIATIVES_DIR
+}
+
+# Diagnostic: resolved runtime path names only (never prints secrets or file contents).
+alloy_runtime_paths_report() {
+  alloy_resolve_runtime_paths "${ALLOY_RUNTIME_ROOT:-}"
+  cat <<EOF
+ALLOY_CONFIG_FILE=${ALLOY_CONFIG_FILE:-}
+ALLOY_RUNTIME_ROOT=${ALLOY_RUNTIME_ROOT}
+ALLOY_METADATA_DIR=${ALLOY_METADATA_DIR}
+ALLOY_PIDS_DIR=${ALLOY_PIDS_DIR}
+ALLOY_LOGS_DIR=${ALLOY_LOGS_DIR}
+ALLOY_LOCKS_DIR=${ALLOY_LOCKS_DIR}
+ALLOY_AUTH_DIR=${ALLOY_AUTH_DIR}
+ALLOY_BROWSER_PIDS_DIR=${ALLOY_BROWSER_PIDS_DIR}
+ALLOY_BROWSER_PROFILES_DIR=${ALLOY_BROWSER_PROFILES_DIR}
+ALLOY_EVIDENCE_DIR=${ALLOY_EVIDENCE_DIR}
+ALLOY_INITIATIVES_DIR=${ALLOY_INITIATIVES_DIR}
+ALLOY_INITIATIVE_ROOT=${ALLOY_INITIATIVE_ROOT:-}
+ALLOY_FIRST_AGENT_PORT=${ALLOY_FIRST_AGENT_PORT:-}
+EOF
+}
+
 alloy_load_config() {
   local example="${ALLOY_LOCAL_DEV_ROOT}/alloy-config.example"
   local user_config="${ALLOY_CONFIG_FILE:-$HOME/.config/alloy-dev/config}"
+  # Preserve an explicitly exported runtime root (certification / tests) across
+  # example sourcing, which otherwise hard-assigns the production default.
+  local explicit_runtime="${ALLOY_RUNTIME_ROOT:-}"
+  local explicit_first_port="${ALLOY_FIRST_AGENT_PORT:-}"
 
   # shellcheck disable=SC1090
   source "$example"
@@ -44,12 +95,16 @@ alloy_load_config() {
   fi
 
   ALLOY_CONFIG_FILE="$user_config"
-  ALLOY_RUNTIME_ROOT="${ALLOY_RUNTIME_ROOT:-$HOME/.local/state/alloy-dev}"
-  ALLOY_METADATA_DIR="${ALLOY_RUNTIME_ROOT}/metadata"
-  ALLOY_PIDS_DIR="${ALLOY_RUNTIME_ROOT}/pids"
-  ALLOY_LOGS_DIR="${ALLOY_RUNTIME_ROOT}/logs"
-  ALLOY_LOCKS_DIR="${ALLOY_RUNTIME_ROOT}/locks"
-  ALLOY_VALIDATE_LOCK_DIR="${ALLOY_LOCKS_DIR}/validate.lock"
+  # Precedence: explicit export (cert/test) > config file > example > default.
+  if [[ -n "$explicit_runtime" ]]; then
+    ALLOY_RUNTIME_ROOT="$explicit_runtime"
+  fi
+  ALLOY_RUNTIME_ROOT="${ALLOY_RUNTIME_ROOT:-$(alloy_default_runtime_root)}"
+  if [[ -n "$explicit_first_port" ]]; then
+    ALLOY_FIRST_AGENT_PORT="$explicit_first_port"
+  fi
+  alloy_resolve_runtime_paths "$ALLOY_RUNTIME_ROOT"
+  export ALLOY_CONFIG_FILE
   ALLOY_MAX_AGENTS="${ALLOY_MAX_AGENTS:-6}"
   ALLOY_CANONICAL_PORT="${ALLOY_CANONICAL_PORT:-3000}"
   ALLOY_FIRST_AGENT_PORT="${ALLOY_FIRST_AGENT_PORT:-3011}"
@@ -60,14 +115,48 @@ alloy_load_config() {
   NODE_OPTIONS_DEFAULT="${NODE_OPTIONS_DEFAULT:---max-old-space-size=4096}"
   ALLOY_CLEAN_ARTIFACT_AGE_HOURS="${ALLOY_CLEAN_ARTIFACT_AGE_HOURS:-24}"
   ALLOY_VALIDATE_POLL_SECONDS="${ALLOY_VALIDATE_POLL_SECONDS:-5}"
+  export ALLOY_FIRST_AGENT_PORT ALLOY_MAX_AGENTS
 }
 
 alloy_ensure_runtime_dirs() {
+  alloy_resolve_runtime_paths "${ALLOY_RUNTIME_ROOT:-}"
   mkdir -p \
     "$ALLOY_METADATA_DIR" \
     "$ALLOY_PIDS_DIR" \
     "$ALLOY_LOGS_DIR" \
     "$ALLOY_LOCKS_DIR"
+}
+
+# True when the resolved runtime root is a certification/test fixture tree.
+alloy_runtime_is_fixture() {
+  local root="${ALLOY_RUNTIME_ROOT:-}"
+  [[ "${ALLOY_ENGINEERING_CERTIFY:-0}" == "1" ]] && return 0
+  [[ "${ALLOY_PRODUCT_CERTIFY:-0}" == "1" ]] && return 0
+  [[ "${ALLOY_TEST_FIXTURE:-0}" == "1" ]] && return 0
+  case "$root" in
+    /tmp/alloy-*-cert.*|/tmp/alloy-*-cert.*/|/tmp/alloy-*-cert.*/*) return 0 ;;
+    /tmp/alloy-*-fixture.*|/tmp/alloy-*-fixture.*/|/tmp/alloy-*-fixture.*/*) return 0 ;;
+    /tmp/alloy-p*-fixture.*|/tmp/alloy-p*-fixture.*/|/tmp/alloy-p*-fixture.*/*) return 0 ;;
+    /private/tmp/alloy-*-cert.*|/private/tmp/alloy-*-cert.*/*) return 0 ;;
+    /private/tmp/alloy-*-fixture.*|/private/tmp/alloy-*-fixture.*/*) return 0 ;;
+    /private/tmp/alloy-p*-fixture.*|/private/tmp/alloy-p*-fixture.*/*) return 0 ;;
+  esac
+  return 1
+}
+
+# During certification/tests, prefer fixture ports (e.g. 3911+) so real operator
+# slots 3011–3016 may remain occupied. Port refusal still uses global lsof on the
+# configured fixture port — it must not require real managed ports to be free.
+alloy_refuse_occupied_port() {
+  local port="$1"
+  local context="${2:-}"
+  local pid
+  if pid="$(alloy_port_listener_pid "$port" 2>/dev/null)"; then
+    if [[ -n "$context" ]]; then
+      alloy_die "port $port is already in use by PID $pid ($context). Refusing to choose a different port."
+    fi
+    alloy_die "port $port is already in use by PID $pid. Refusing to choose a different port."
+  fi
 }
 
 alloy_confirm() {
@@ -148,7 +237,9 @@ alloy_validate_log_path() {
 alloy_write_kv_file() {
   local path="$1"
   shift
-  local tmp
+  local tmp dir
+  dir="$(dirname "$path")"
+  mkdir -p "$dir"
   tmp="$(mktemp "${path}.XXXXXX")"
   {
     for pair in "$@"; do
@@ -253,18 +344,6 @@ alloy_port_listener_pid() {
 alloy_port_in_use() {
   local port="$1"
   alloy_port_listener_pid "$port" >/dev/null 2>&1
-}
-
-alloy_refuse_occupied_port() {
-  local port="$1"
-  local context="${2:-}"
-  local pid
-  if pid="$(alloy_port_listener_pid "$port" 2>/dev/null)"; then
-    if [[ -n "$context" ]]; then
-      alloy_die "port $port is already in use by PID $pid ($context). Refusing to choose a different port."
-    fi
-    alloy_die "port $port is already in use by PID $pid. Refusing to choose a different port."
-  fi
 }
 
 alloy_pid_alive() {
