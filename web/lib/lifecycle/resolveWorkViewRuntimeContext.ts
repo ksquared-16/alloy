@@ -63,7 +63,7 @@ export type WorkViewRuntimeContext = {
  * predicate-only views (no `compat_queue_key`), all-records, and sibling aggregates are never touched.
  */
 export function isOrphanedLifecycleWorkView(
-    view: Pick<WorkViewConfigV1Stored, "compat_queue_key">,
+    view: { compat_queue_key?: string | null },
     activeLifecycleQueueKeys: ReadonlySet<string>,
 ): boolean {
     const compat = view.compat_queue_key?.trim();
