@@ -835,6 +835,24 @@ export async function attachOpportunityInquiryChildrenShell(
   // and only their pure application stays serial; identical result, one round-trip instead of three.
   // Only the draft overlay depends on the durable overlay's output (it targets the non-durable remainder),
   // so it fetches+applies last.
+  // Child-scoped contact links key off customer_member_id + person_id only — both STABLE across the
+  // overlay chain (overlays never add/remove children or rewrite those ids). So this round-trip is
+  // issued CONCURRENTLY with the overlay fetch instead of after it, removing one serial hop from the
+  // dominant children chain. It writes a disjoint host key (`_child_scoped_contact_links`).
+  const tLinks0 = Date.now();
+  const baseMemberRows = memberRowsFromInquiryChildren(inquiryChildrenBase);
+  const contactsP: Promise<unknown> =
+    baseMemberRows.length > 0
+      ? attachChildScopedContactLinksToRecord(supabase, orgId, baseMemberRows, host).then((r) => {
+          cph.child_scoped_contacts_ms = Date.now() - tLinks0;
+          return r;
+        })
+      : Promise.resolve().then(() => {
+          host._child_scoped_contact_links = [];
+          host._child_scoped_contact_links_query_failed = false;
+          cph.child_scoped_contacts_ms = 0;
+        });
+
   const tOverlay0 = Date.now();
   const placementLabeledP = enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryChildrenBase);
   const processInstancesP = listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId });
@@ -863,17 +881,7 @@ export async function attachOpportunityInquiryChildrenShell(
   host._inquiry_children = inquiryChildrenOut;
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
   attachOpportunityChildLifecycleSummary(host);
-  {
-    const memberRows = memberRowsFromInquiryChildren(inquiryChildrenOut);
-    if (memberRows.length > 0) {
-      const tLinks0 = Date.now();
-      await attachChildScopedContactLinksToRecord(supabase, orgId, memberRows, host);
-      cph.child_scoped_contacts_ms = Date.now() - tLinks0;
-    } else {
-      host._child_scoped_contact_links = [];
-      host._child_scoped_contact_links_query_failed = false;
-    }
-  }
+  await contactsP; // ensure the concurrent contact-links fetch has committed before returning
   host._children_shell_phase_ms = cph;
 }
 
