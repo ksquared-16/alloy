@@ -4,16 +4,15 @@ import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, GripVertical, Plus, X } from "lucide-react";
 
 import {
-    availableFieldsForNestedGroup,
-    type NestedSurfaceConfig,
-} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import {
     addFieldToNestedGroup,
+    availableFieldsForNestedGroup,
+    fieldVisibilityForNestedGroup,
     moveFieldInNestedGroup,
+    namespacesForNestedGroupPicker,
     removeFieldFromNestedGroup,
     selectedFieldKeys,
     setFieldVisibilityInNestedGroup,
-    fieldVisibilityForNestedGroup,
+    type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import {
@@ -21,7 +20,6 @@ import {
     type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { availableFieldsForNamespaces, type AvailableField } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
-import { groupDefsFor } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 
 type Props = {
     surfaceId: string;
@@ -40,8 +38,8 @@ function labelForKey(
     fieldKey: string,
     tenantDefs: readonly TenantFieldDefinitionRow[] | undefined,
 ): string {
-    const def = groupDefsFor(surfaceId).find((g) => g.key === groupKey);
-    const all = def ? availableFieldsForNamespaces(def.acceptedNamespaces, tenantDefs) : [];
+    const namespaces = namespacesForNestedGroupPicker(surfaceId, groupKey);
+    const all = namespaces.length > 0 ? availableFieldsForNamespaces(namespaces, tenantDefs) : [];
     return all.find((f) => f.key === fieldKey)?.label
         ?? fieldKey.replace(/^[a-z_]+\./, "").replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
