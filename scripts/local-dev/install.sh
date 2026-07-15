@@ -47,6 +47,7 @@ COMMANDS=(
   alloy-initiative-remediate
   alloy-initiative-package
   alloy-initiative-close
+  alloy-engineering-certify
 )
 
 alloy_looks_like_toolkit_install() {

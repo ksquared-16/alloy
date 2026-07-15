@@ -94,6 +94,36 @@ Illegal transitions are rejected. Push/merge is never inferred.
 
 Run `alloy-engineering-help` for the full list. All commands support `--help`.
 
+## Certification
+
+**Run `alloy-engineering-certify` before the first real product initiative.**
+
+```bash
+alloy-engineering-certify           # disposable; auto-cleanup on success
+alloy-engineering-certify --keep    # retain /tmp/alloy-engineering-cert.* for inspection
+alloy-engineering-certify --verbose
+```
+
+The certification harness:
+
+- uses a **temporary** `ALLOY_RUNTIME_ROOT` and `ALLOY_INITIATIVE_ROOT` (never touches `~/.local/state/alloy-dev/initiatives/`);
+- never modifies production managed-agent metadata;
+- does not open Cursor/Claude (launch is intercepted when `ALLOY_ENGINEERING_CERTIFY=1`);
+- does not access credentials, auth storage, or browser state;
+- does not push, merge, create PRs, or trigger Vercel;
+- exercises **production command scripts** via fixture config injection;
+- runs happy-path lifecycle + failure-path gates (~48 assertions);
+- preserves state on failure; cleans up on success unless `--keep`.
+
+`--keep` prints paths to: initiative brief, audit, specification, approval record, task graph, worker packages, report examples, reviews, remediation, final package, and `certification-manifest.yaml`.
+
+### What certification does not prove
+
+- LLM / planning quality
+- Cursor or Claude worker compliance
+- Product-specific visual quality
+- Real implementation worker behavior
+
 ## Related docs
 
 - `INITIATIVE-CONTRACT.md` — intake schema

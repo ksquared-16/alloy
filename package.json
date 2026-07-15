@@ -20,6 +20,7 @@
     "local-dev:test:phase2": "bash scripts/local-dev/tests/run-phase2-tests.sh",
     "local-dev:test:phase3": "bash scripts/local-dev/tests/run-phase3-tests.sh",
     "local-dev:test:phase4": "bash scripts/local-dev/tests/run-phase4-tests.sh",
+    "local-dev:certify": "bash scripts/local-dev/alloy-engineering-certify",
     "local-dev:test:ai-health": "bash scripts/local-dev/tests/test-ai-health.sh",
     "docs:lint": "node scripts/docs-lint.mjs",
     "docs:lint:ci": "node scripts/docs-lint.mjs --ci --base origin/staging",

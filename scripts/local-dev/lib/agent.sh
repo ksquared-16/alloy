@@ -382,6 +382,11 @@ alloy_open_tool_for_agent() {
   local agent="$1"
   local path="$2"
 
+  if [[ -n "${ALLOY_CERTIFY_APP_LAUNCH_LOG:-}" ]]; then
+    printf 'OPEN %s %s\n' "$agent" "$path" >>"$ALLOY_CERTIFY_APP_LAUNCH_LOG"
+    return 0
+  fi
+
   if [[ "${ALLOY_AGENT_OPEN_DRY_RUN:-0}" == "1" ]]; then
     alloy_info "[dry-run] would open ${agent} on ${path}"
     return 0
@@ -470,6 +475,10 @@ alloy_count_playwright_test_runners() {
 
 alloy_copy_to_clipboard() {
   local text="$1"
+  if [[ -n "${ALLOY_CERTIFY_CLIPBOARD_FILE:-}" ]]; then
+    printf '%s' "$text" >"$ALLOY_CERTIFY_CLIPBOARD_FILE"
+    return 0
+  fi
   if alloy_have_cmd pbcopy; then
     printf '%s' "$text" | pbcopy
     return 0

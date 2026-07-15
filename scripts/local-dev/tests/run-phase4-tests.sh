@@ -139,7 +139,9 @@ YAML
 }
 
 env_cmd() {
-  env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" ALLOY_AGENT_OPEN_DRY_RUN=1 "$@"
+  env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" \
+    ALLOY_INITIATIVE_ROOT="$INITIATIVES" \
+    ALLOY_AGENT_OPEN_DRY_RUN=1 "$@"
 }
 export CONFIG_DIR ROOT RUNTIME INITIATIVES
 export -f env_cmd 2>/dev/null || true
@@ -163,7 +165,9 @@ for f in \
   "$ROOT"/alloy-worker-package \
   "$ROOT"/alloy-worker-open \
   "$ROOT"/alloy-worker-status \
-  "$ROOT"/alloy-worker-report
+  "$ROOT"/alloy-worker-report \
+  "$ROOT"/alloy-engineering-certify \
+  "$ROOT"/lib/engineering-certify.sh
 do
   if [[ "$f" == *.mjs ]]; then node --check "$f"; else bash -n "$f"; fi
   pass "syntax $(basename "$f")"
@@ -184,7 +188,7 @@ assert_fail "duplicate initiative rejected" \
   env_cmd "$ROOT/alloy-initiative-create" settings-fields-v2 --from "$INTAKE_FILE"
 
 assert_ok "stdin import new key" \
-  bash -c 'sed "s/settings-fields-v2/settings-fields-v2b/" "'"$INTAKE_FILE"'" | env ALLOY_CONFIG_FILE="'"$CONFIG_DIR"'/config" "'"$ROOT"'/alloy-initiative-import" settings-fields-v2b'
+  bash -c 'sed "s/settings-fields-v2/settings-fields-v2b/" "'"$INTAKE_FILE"'" | env ALLOY_CONFIG_FILE="'"$CONFIG_DIR"'/config" ALLOY_INITIATIVE_ROOT="'"$INITIATIVES"'" "'"$ROOT"'/alloy-initiative-import" settings-fields-v2b'
 
 malformed_intake >"$TMP/bad.yaml"
 assert_fail "malformed intake rejected" \
@@ -337,6 +341,9 @@ echo "== Phase 1-3 regression =="
 assert_ok "phase1 tests" bash "$ROOT/tests/run-phase1-tests.sh"
 assert_ok "phase2 tests" bash "$ROOT/tests/run-phase2-tests.sh"
 assert_ok "phase3 tests" bash "$ROOT/tests/run-phase3-tests.sh"
+
+echo "== Engineering certification =="
+assert_ok "engineering certify harness" bash "$ROOT/tests/test-engineering-certify.sh"
 
 echo
 echo "Phase 4 results: PASS=$PASS FAIL=$FAIL"

@@ -76,13 +76,14 @@ main() {
     alloy_set_agent_status "$worktree_name" "active"
   fi
 
-  if [[ "$dry_run" -eq 0 ]] && (alloy_have_cmd pbcopy || alloy_have_cmd xclip); then
-    alloy_engineering_copy_to_clipboard "$(cat "$pkg_md")"
-    clipboard="yes"
-  elif [[ "$dry_run" -eq 1 ]]; then
-    clipboard="dry-run"
+  if [[ "$dry_run" -eq 0 ]]; then
+    if alloy_have_cmd pbcopy || alloy_have_cmd xclip || [[ -n "${ALLOY_CERTIFY_CLIPBOARD_FILE:-}" ]]; then
+      alloy_engineering_copy_to_clipboard "$(cat "$pkg_md")" && clipboard="yes"
+    else
+      clipboard="unavailable"
+    fi
   else
-    clipboard="unavailable"
+    clipboard="dry-run"
   fi
 
   cat <<EOF

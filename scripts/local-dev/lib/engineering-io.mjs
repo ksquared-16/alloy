@@ -158,7 +158,7 @@ function validateTransition(from, to) {
   if (!allowed.includes(to)) die(`illegal transition: ${from} -> ${to}`);
 }
 
-function validateWorkerReport(report) {
+function validateWorkerReport(report, { initiativeKey, taskId } = {}) {
   if (!isPlainObject(report)) die("report must be an object");
   const req = [
     "initiative_key",
@@ -195,6 +195,15 @@ function validateWorkerReport(report) {
   if (!Array.isArray(ui.evidence)) die("ui_verification.evidence must be a list");
   if (!Array.isArray(ui.console_errors)) die("ui_verification.console_errors must be a list");
   if (!Array.isArray(ui.failed_requests)) die("ui_verification.failed_requests must be a list");
+  if (initiativeKey && report.initiative_key !== initiativeKey) {
+    die(`report initiative_key mismatch: ${report.initiative_key} != ${initiativeKey}`);
+  }
+  if (taskId && report.task_id !== taskId) {
+    die(`report task_id mismatch: ${report.task_id} != ${taskId}`);
+  }
+  if (ui.required && ui.status === "passed" && ui.evidence.length === 0) {
+    die("ui_verification required with status passed requires evidence paths");
+  }
   return report;
 }
 
@@ -258,6 +267,21 @@ function validateVisualContract(vc) {
   return vc;
 }
 
+function validateVisualContractExclusivity(vc) {
+  validateVisualContract(vc);
+  const flags = [
+    vc.basis === "exact_reference",
+    vc.basis === "pattern_reference",
+    vc.basis === "bounded_exploration",
+    vc.basis === "not_applicable",
+  ].filter(Boolean);
+  if (flags.length !== 1) die("visual contract must have exactly one basis");
+  if (vc.conflicting_bases && Array.isArray(vc.conflicting_bases) && vc.conflicting_bases.length > 1) {
+    die("visual contract has conflicting bases");
+  }
+  return vc;
+}
+
 function main() {
   if (!CMD) die("usage: engineering-io.mjs <command> [args...]");
 
@@ -278,7 +302,12 @@ function main() {
     }
     case "validate-report": {
       const path = process.argv[3];
-      validateWorkerReport(readJson(path));
+      const initiativeKey = process.argv[4] || "";
+      const taskId = process.argv[5] || "";
+      const opts = {};
+      if (initiativeKey) opts.initiativeKey = initiativeKey;
+      if (taskId) opts.taskId = taskId;
+      validateWorkerReport(readJson(path), opts);
       process.stdout.write("ok\n");
       break;
     }
@@ -301,6 +330,20 @@ function main() {
       const m = text.match(/^basis:\s*(\S+)/m);
       if (!m) die("visual contract missing basis field");
       validateVisualContract({ basis: m[1] });
+      process.stdout.write("ok\n");
+      break;
+    }
+    case "validate-visual-exclusivity": {
+      const path = process.argv[3];
+      if (!path) die("validate-visual-exclusivity requires path");
+  if (path.endsWith(".json")) {
+        validateVisualContractExclusivity(readJson(path));
+      } else {
+        const text = readFileSync(path, "utf8");
+        const m = text.match(/^basis:\s*(\S+)/m);
+        if (!m) die("visual contract missing basis field");
+        validateVisualContractExclusivity({ basis: m[1] });
+      }
       process.stdout.write("ok\n");
       break;
     }

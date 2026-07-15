@@ -10,6 +10,7 @@ Generate a reviewer package:
 
 ```bash
 alloy-initiative-review <initiative> --type ui
+alloy-initiative-review <initiative> --ingest task-002
 ```
 
 Default review task: `task-002` (architecture/doctrine slot). Implementation worker must not be the sole reviewer for material UI or architectural work.

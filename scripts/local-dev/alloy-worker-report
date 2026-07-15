@@ -41,7 +41,7 @@ main() {
   [[ -n "$report_path" ]] || report_path="$default_report"
   [[ -f "$report_path" ]] || alloy_die "report not found: $report_path (conversational completion not accepted)"
 
-  alloy_engineering_io validate-report "$report_path"
+  alloy_engineering_io validate-report "$report_path" "$key" "$task_id"
 
   worktree_name="$(node -e "
     const w = require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'];

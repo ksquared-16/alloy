@@ -44,6 +44,11 @@ main() {
   worktree_name="$(node -e "console.log(require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'].worktree_name)")"
   alloy_load_metadata "$worktree_name"
   path="$ALLOY_WORKTREE_PATH"
+  local assigned_path resolved_path resolved_assigned
+  assigned_path="$(node -e "console.log(require('$(alloy_initiative_dir "$key")/state.json').workers['${task_id}'].path)")"
+  resolved_path="$(alloy_realpath "$path")"
+  resolved_assigned="$(alloy_realpath "$assigned_path")"
+  [[ "$resolved_path" == "$resolved_assigned" ]] || alloy_die "worker package path mismatch (refusing write outside assignment)"
   branch="$ALLOY_WORKTREE_BRANCH"
   port="$PORT"
   agent="$ALLOY_AGENT"

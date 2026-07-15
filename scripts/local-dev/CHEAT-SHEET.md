@@ -64,6 +64,8 @@ alloy-validate wt1-my-initiative playwright
 alloy-validate wt1-my-initiative imports
 
 # Phase 4 Engineering Manager (initiative lifecycle)
+alloy-engineering-certify                    # run before first real initiative
+alloy-engineering-certify --keep             # inspect certification artifacts
 alloy-engineering-help
 alloy-initiative-create settings-fields-v2 --from ./brief.yaml
 alloy-initiative-audit settings-fields-v2

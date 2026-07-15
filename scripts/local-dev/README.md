@@ -402,6 +402,19 @@ Storage: `~/.local/state/alloy-dev/initiatives/<key>/`
 | `alloy-initiative-package` | Final merge-readiness package |
 | `alloy-initiative-status` | Operator view (`--all`) |
 | `alloy-initiative-close` | Safe close (`--promotion-recorded`) |
+| `alloy-engineering-certify` | Real-Mac certification harness (run before first real initiative) |
+
+### Certification (required before first real initiative)
+
+```bash
+alloy-engineering-certify
+alloy-engineering-certify --keep
+npm run local-dev:certify
+```
+
+See `ENGINEERING-MANAGER.md` § Certification.
+
+### Initiative workflow
 
 ```bash
 alloy-initiative-create settings-fields-v2 --from ./brief.yaml

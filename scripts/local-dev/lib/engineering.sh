@@ -15,7 +15,87 @@ alloy_engineering_io() {
 }
 
 alloy_initiatives_root() {
+  if [[ -n "${ALLOY_INITIATIVE_ROOT:-}" ]]; then
+    printf '%s' "$ALLOY_INITIATIVE_ROOT"
+    return
+  fi
   printf '%s/initiatives' "${ALLOY_RUNTIME_ROOT:-$HOME/.local/state/alloy-dev}"
+}
+
+alloy_engineering_certify_enabled() {
+  [[ "${ALLOY_ENGINEERING_CERTIFY:-0}" == "1" ]]
+}
+
+# Certification-only: bind fixture git repo + metadata as managed workers (no alloy-agent-create).
+alloy_engineering_certify_fixture_bind() {
+  local key="$1"
+  local fixture_repo="$2"
+  alloy_engineering_certify_enabled || alloy_die "certify fixture bind requires ALLOY_ENGINEERING_CERTIFY=1"
+  [[ -d "$fixture_repo/.git" || -f "$fixture_repo/.git" ]] || alloy_die "fixture repo missing: $fixture_repo"
+
+  local base worker_plan staging_sha assignments count i
+  base="$(alloy_initiative_dir "$key")"
+  worker_plan="$base/plan/worker-plan.yaml"
+  [[ -f "$worker_plan" ]] || alloy_die "worker plan missing"
+  staging_sha="$(alloy_staging_sha)"
+
+  assignments="$(node -e "
+    const fs = require('fs');
+    const yaml = fs.readFileSync('${worker_plan}','utf8');
+    const lines = yaml.split('\\n');
+    let cur = null; const out = [];
+    for (const line of lines) {
+      const m = line.match(/^  - task_id: (.+)\$/);
+      if (m) { if (cur) out.push(cur); cur = { task_id: m[1].trim() }; continue; }
+      if (!cur) continue;
+      const s = line.match(/^    slot: (\\d+)/); if (s) cur.slot = +s[1];
+      const a = line.match(/^    agent: (\\S+)/); if (a) cur.agent = a[1];
+      const r = line.match(/^    role: \"(.+)\"/); if (r) cur.role = r[1];
+    }
+    if (cur) out.push(cur);
+    console.log(JSON.stringify(out));
+  ")"
+
+  count="$(node -e "console.log(JSON.parse(process.argv[1]).length)" "$assignments")"
+  i=0
+  while [[ $i -lt $count ]]; do
+    local task_id slot agent role name branch port
+    task_id="$(node -e "console.log(JSON.parse(process.argv[1])[process.argv[2]].task_id)" "$assignments" "$i")"
+    slot="$(node -e "console.log(JSON.parse(process.argv[1])[process.argv[2]].slot)" "$assignments" "$i")"
+    agent="$(node -e "const a=JSON.parse(process.argv[1])[process.argv[2]]; console.log(a.agent||'cursor')" "$assignments" "$i")"
+    role="$(node -e "const a=JSON.parse(process.argv[1])[process.argv[2]]; console.log(a.role||'Product implementation')" "$assignments" "$i")"
+    name="cert-${key}-slot${slot}"
+    branch="$(alloy_branch_name "$agent" "$slot" "${key}-cert")"
+    port="$(alloy_slot_to_port "$slot")"
+
+    alloy_write_kv_file "$(alloy_metadata_path "$name")" \
+      "ALLOY_WORKTREE_NAME=\"$name\"" \
+      "ALLOY_WORKTREE_SLOT=\"$slot\"" \
+      "ALLOY_WORKTREE_PATH=\"$fixture_repo\"" \
+      "ALLOY_WORKTREE_BRANCH=\"$branch\"" \
+      "ALLOY_AGENT=\"$agent\"" \
+      "PORT=\"$port\"" \
+      "NEXT_PUBLIC_APP_URL=\"http://localhost:${port}\"" \
+      "ALLOY_CREATED_AT=\"$(alloy_iso_now)\"" \
+      "ALLOY_AGENT_ROLE=\"$role\"" \
+      "ALLOY_AGENT_STATUS=\"active\"" \
+      "ALLOY_AGENT_INSTRUCTIONS=\"\""
+
+    alloy_engineering_set_worker_assignment "$key" "$task_id" "$slot" \
+      "$name" "$branch" "$fixture_repo" "$port" "$agent" "$role" "$staging_sha"
+
+    env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" ALLOY_ENGINEERING_CERTIFY=1 \
+      "${ALLOY_LOCAL_DEV_ROOT}/alloy-worker-package" "$key" "$task_id"
+
+    alloy_engineering_update_task_status "$key" "$task_id" "assigned"
+    i=$((i + 1))
+  done
+
+  local state
+  state="$(alloy_initiative_current_state "$key")"
+  if [[ "$state" == "assigning" || "$state" == "approved" ]]; then
+    alloy_initiative_transition "$key" "implementing" 2>/dev/null || true
+  fi
 }
 
 alloy_initiative_dir() {
@@ -549,7 +629,11 @@ alloy_engineering_gitignore_worker_files() {
   local git_dir common_dir exclude_file
   git_dir="$(alloy_git "$worktree_path" rev-parse --git-dir 2>/dev/null || return 0)"
   common_dir="$(alloy_git "$worktree_path" rev-parse --git-common-dir 2>/dev/null || echo "$git_dir")"
-  mkdir -p "${git_dir}/info" "${common_dir}/info"
+  if [[ "$git_dir" != /* ]]; then git_dir="${worktree_path}/${git_dir}"; fi
+  if [[ "$common_dir" != /* ]]; then common_dir="${worktree_path}/${common_dir}"; fi
+  [[ -d "$git_dir" ]] || return 0
+  [[ -d "$common_dir" ]] || common_dir="$git_dir"
+  mkdir -p "${git_dir}/info" "${common_dir}/info" 2>/dev/null || return 0
   for exclude_file in "${git_dir}/info/exclude" "${common_dir}/info/exclude"; do
     for pat in .alloy-worker-package.md .alloy-worker-task.yaml; do
       if ! grep -Fq "$pat" "$exclude_file" 2>/dev/null; then

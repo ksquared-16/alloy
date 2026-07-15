@@ -10,6 +10,7 @@ usage() {
   cat <<'EOF'
 Usage:
   alloy-initiative-review <initiative-key> [--type architecture|doctrine|ui|performance|test|documentation|integration]
+  alloy-initiative-review <initiative-key> --ingest <review-task-id>
 
 Generates reviewer packages for assigned review tasks.
 Implementation worker must not be the sole reviewer for material UI/architecture work.
@@ -24,11 +25,13 @@ main() {
 
   local key="$1"
   shift
-  local review_type="architecture"
+  local review_type="architecture" ingest_task=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --type) [[ $# -ge 2 ]] || alloy_die "--type requires value"; review_type="$2"; shift 2 ;;
       --type=*) review_type="${1#--type=}"; shift ;;
+      --ingest) [[ $# -ge 2 ]] || alloy_die "--ingest requires task id"; ingest_task="$2"; shift 2 ;;
+      --ingest=*) ingest_task="${1#--ingest=}"; shift ;;
       -h|--help) usage; exit 0 ;;
       *) alloy_die "unknown option: $1" ;;
     esac
@@ -37,6 +40,34 @@ main() {
   alloy_load_config
   alloy_engineering_require_node
   alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
+
+  if [[ -n "$ingest_task" ]]; then
+    local base review_json review_status
+    base="$(alloy_initiative_dir "$key")"
+    review_json="$base/reviews/${ingest_task}-review.json"
+    [[ -f "$review_json" ]] || alloy_die "review report missing: $review_json"
+    alloy_engineering_io validate-review "$review_json"
+    review_status="$(node -e "console.log(require('${review_json}').status)")"
+    case "$review_status" in
+      pass|pass_with_findings)
+        alloy_engineering_update_task_status "$key" "$ingest_task" "complete"
+        ;;
+      fail|blocked)
+        alloy_engineering_update_task_status "$key" "$ingest_task" "reviewing"
+        ;;
+    esac
+    node -e "
+      const fs = require('fs');
+      const p = '${base}/state.json';
+      const d = JSON.parse(fs.readFileSync(p,'utf8'));
+      d.reviews = d.reviews || {};
+      d.reviews['${ingest_task}'] = { ingested_at: '$(alloy_iso_now)', status: '${review_status}' };
+      d.updated_at = '$(alloy_iso_now)';
+      fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+    "
+    alloy_info "Review ingested: ${ingest_task} → ${review_status}"
+    exit 0
+  fi
 
   local state
   state="$(alloy_initiative_current_state "$key")"
