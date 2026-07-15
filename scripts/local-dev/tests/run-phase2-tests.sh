@@ -115,7 +115,7 @@ ALLOY_BIN_DIR="$TMP/bin"
 ALLOY_BASE_REMOTE="origin"
 ALLOY_BASE_BRANCH="staging"
 ALLOY_CANONICAL_PORT="3000"
-ALLOY_FIRST_AGENT_PORT="3011"
+ALLOY_FIRST_AGENT_PORT="3911"
 ALLOY_MAX_AGENTS="6"
 ALLOY_PM="npm"
 ALLOY_WEB_DIR="web"
@@ -146,7 +146,7 @@ assert_ok "agent-create auto slot 1" \
 grep -q 'ALLOY_AGENT_ROLE=' "$RUNTIME/metadata/wt1-auto-one.env" && pass "agent role metadata" || fail "agent role metadata"
 grep -q 'Product implementation' "$RUNTIME/metadata/wt1-auto-one.env" && pass "slot 1 permanent role" || fail "slot 1 permanent role"
 grep -q 'ALLOY_AGENT_STATUS="active"' "$RUNTIME/metadata/wt1-auto-one.env" && pass "agent status active" || fail "agent status active"
-grep -q 'PORT="3011"' "$RUNTIME/metadata/wt1-auto-one.env" && pass "auto port 3011" || fail "auto port 3011"
+grep -q 'PORT="3911"' "$RUNTIME/metadata/wt1-auto-one.env" && pass "auto port 3911" || fail "auto port 3911"
 grep -q 'ALLOY_AGENT="cursor"' "$RUNTIME/metadata/wt1-auto-one.env" && pass "slot 1 default cursor" || fail "slot 1 default cursor"
 
 # Explicit slot 3 Performance personality.
@@ -154,7 +154,7 @@ assert_ok "agent-create --slot 3" \
   env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-agent-create" queue-perf --slot 3
 
 grep -q 'ALLOY_WORKTREE_SLOT="3"' "$RUNTIME/metadata/wt3-queue-perf.env" && pass "slot 3 assigned" || fail "slot 3 assigned"
-grep -q 'PORT="3013"' "$RUNTIME/metadata/wt3-queue-perf.env" && pass "port 3013" || fail "port 3013"
+grep -q 'PORT="3913"' "$RUNTIME/metadata/wt3-queue-perf.env" && pass "port 3913" || fail "port 3913"
 grep -q 'Performance' "$RUNTIME/metadata/wt3-queue-perf.env" && pass "performance role" || fail "performance role"
 grep -q 'slot 3' "$WTROOT/wt3-queue-perf/.alloy-agent-instructions.md" && pass "instructions mention slot 3" || fail "instructions mention slot"
 
@@ -173,7 +173,7 @@ echo "$STATUS_OUT" | grep -q "Permanent slot map" && pass "status shows slot map
 echo "$STATUS_OUT" | grep -q "assigned (wt3-queue-perf)" && pass "status marks slot 3 assigned" || fail "status marks slot 3"
 
 INSTR="$(env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-agent-instructions" 3)"
-echo "$INSTR" | grep -q "3013" && pass "instructions include port" || fail "instructions include port"
+echo "$INSTR" | grep -q "3913" && pass "instructions include port" || fail "instructions include port"
 echo "$INSTR" | grep -q "wt3-queue-perf" && pass "instructions include worktree" || fail "instructions include worktree"
 
 if command -v pbcopy >/dev/null 2>&1; then

@@ -45,6 +45,19 @@ Product Runtime is **not**:
 | `alloy-product-handoff` | Bridge to Engineering Runtime |
 | `alloy-product-certify` | Isolated certification harness |
 
+## Certification isolation
+
+`alloy-product-certify` and `alloy-engineering-certify` share one contract:
+
+- every runtime path derives from the fixture `ALLOY_RUNTIME_ROOT` (exported into nested commands);
+- fixture agent ports start at **3911** (real 3011–3016 may remain active);
+- fixture metadata never appears in production `alloy-agent-status`;
+- retained `--keep` trees are inspected only via their fixture config + runtime root;
+- diagnose paths with `alloy-runtime-paths` (names only, never secrets);
+- clean older leaks with `alloy-cert-leak-report` / `alloy-cert-leak-clean --confirm`.
+
+See `ENGINEERING-MANAGER.md` § Certification.
+
 ## Storage
 
 `~/.local/state/alloy-dev/initiatives/<key>/product/`

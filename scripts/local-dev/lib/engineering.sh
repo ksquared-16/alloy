@@ -19,11 +19,36 @@ alloy_initiatives_root() {
     printf '%s' "$ALLOY_INITIATIVE_ROOT"
     return
   fi
-  printf '%s/initiatives' "${ALLOY_RUNTIME_ROOT:-$HOME/.local/state/alloy-dev}"
+  if [[ -n "${ALLOY_INITIATIVES_DIR:-}" ]]; then
+    printf '%s' "$ALLOY_INITIATIVES_DIR"
+    return
+  fi
+  printf '%s/initiatives' "${ALLOY_RUNTIME_ROOT:-$(alloy_default_runtime_root)}"
 }
 
 alloy_engineering_certify_enabled() {
   [[ "${ALLOY_ENGINEERING_CERTIFY:-0}" == "1" ]]
+}
+
+# Shared env for certification nested production commands.
+alloy_engineering_certify_env() {
+  # shellcheck disable=SC2030
+  env \
+    ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+    ALLOY_RUNTIME_ROOT="${ALLOY_RUNTIME_ROOT}" \
+    ALLOY_METADATA_DIR="${ALLOY_METADATA_DIR}" \
+    ALLOY_PIDS_DIR="${ALLOY_PIDS_DIR}" \
+    ALLOY_LOGS_DIR="${ALLOY_LOGS_DIR}" \
+    ALLOY_LOCKS_DIR="${ALLOY_LOCKS_DIR}" \
+    ALLOY_INITIATIVE_ROOT="${ALLOY_INITIATIVE_ROOT:-}" \
+    ALLOY_ENGINEERING_CERTIFY="${ALLOY_ENGINEERING_CERTIFY:-0}" \
+    ALLOY_PRODUCT_CERTIFY="${ALLOY_PRODUCT_CERTIFY:-0}" \
+    ALLOY_TEST_FIXTURE="${ALLOY_TEST_FIXTURE:-0}" \
+    ALLOY_FIRST_AGENT_PORT="${ALLOY_FIRST_AGENT_PORT}" \
+    ALLOY_AGENT_OPEN_DRY_RUN="${ALLOY_AGENT_OPEN_DRY_RUN:-0}" \
+    ALLOY_CERTIFY_CLIPBOARD_FILE="${ALLOY_CERTIFY_CLIPBOARD_FILE:-}" \
+    ALLOY_CERTIFY_APP_LAUNCH_LOG="${ALLOY_CERTIFY_APP_LAUNCH_LOG:-}" \
+    "$@"
 }
 
 # Certification-only: bind fixture git repo + metadata as managed workers (no alloy-agent-create).
@@ -31,7 +56,19 @@ alloy_engineering_certify_fixture_bind() {
   local key="$1"
   local fixture_repo="$2"
   alloy_engineering_certify_enabled || alloy_die "certify fixture bind requires ALLOY_ENGINEERING_CERTIFY=1"
+
+  alloy_resolve_runtime_paths "${ALLOY_RUNTIME_ROOT:-}"
+  local prod_root meta_path
+  prod_root="$(alloy_default_runtime_root)"
+  if [[ "$ALLOY_RUNTIME_ROOT" == "$prod_root" ]] || [[ "$ALLOY_METADATA_DIR" == "${prod_root}/metadata" ]]; then
+    alloy_die "certify fixture bind refused: ALLOY_RUNTIME_ROOT resolves to production ($ALLOY_RUNTIME_ROOT)"
+  fi
+  if ! alloy_runtime_is_fixture; then
+    alloy_die "certify fixture bind refused: runtime root is not a fixture tree ($ALLOY_RUNTIME_ROOT)"
+  fi
+
   [[ -d "$fixture_repo/.git" || -f "$fixture_repo/.git" ]] || alloy_die "fixture repo missing: $fixture_repo"
+  alloy_ensure_runtime_dirs
 
   local base worker_plan staging_sha assignments count i
   base="$(alloy_initiative_dir "$key")"
@@ -72,7 +109,20 @@ alloy_engineering_certify_fixture_bind() {
     branch="$(alloy_branch_name "$agent" "$slot" "${key}-cert")"
     port="$(alloy_slot_to_port "$slot")"
 
-    alloy_write_kv_file "$(alloy_metadata_path "$name")" \
+    meta_path="$(alloy_metadata_path "$name")"
+    case "$meta_path" in
+      "${prod_root}/metadata"/*)
+        alloy_die "certify fixture bind refused: metadata path is production ($meta_path)"
+        ;;
+    esac
+    case "$meta_path" in
+      "${ALLOY_METADATA_DIR}"/*) ;;
+      *)
+        alloy_die "certify fixture bind refused: metadata path outside fixture metadata dir ($meta_path)"
+        ;;
+    esac
+
+    alloy_write_kv_file "$meta_path" \
       "ALLOY_WORKTREE_NAME=\"$name\"" \
       "ALLOY_WORKTREE_SLOT=\"$slot\"" \
       "ALLOY_WORKTREE_PATH=\"$fixture_repo\"" \
@@ -83,12 +133,13 @@ alloy_engineering_certify_fixture_bind() {
       "ALLOY_CREATED_AT=\"$(alloy_iso_now)\"" \
       "ALLOY_AGENT_ROLE=\"$role\"" \
       "ALLOY_AGENT_STATUS=\"active\"" \
-      "ALLOY_AGENT_INSTRUCTIONS=\"\""
+      "ALLOY_AGENT_INSTRUCTIONS=\"\"" \
+      "ALLOY_CERT_FIXTURE=\"1\""
 
     alloy_engineering_set_worker_assignment "$key" "$task_id" "$slot" \
       "$name" "$branch" "$fixture_repo" "$port" "$agent" "$role" "$staging_sha"
 
-    env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" ALLOY_ENGINEERING_CERTIFY=1 \
+    alloy_engineering_certify_env \
       "${ALLOY_LOCAL_DEV_ROOT}/alloy-worker-package" "$key" "$task_id"
 
     alloy_engineering_update_task_status "$key" "$task_id" "assigned"

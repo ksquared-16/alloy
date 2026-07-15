@@ -47,9 +47,16 @@ certify_cmd_env() {
   # shellcheck disable=SC2030
   env \
     ALLOY_CONFIG_FILE="${CERT_CONFIG_FILE}" \
+    ALLOY_RUNTIME_ROOT="${CERT_RUNTIME}" \
+    ALLOY_METADATA_DIR="${CERT_RUNTIME}/metadata" \
+    ALLOY_PIDS_DIR="${CERT_RUNTIME}/pids" \
+    ALLOY_LOGS_DIR="${CERT_RUNTIME}/logs" \
+    ALLOY_LOCKS_DIR="${CERT_RUNTIME}/locks" \
     ALLOY_ENGINEERING_CERTIFY=1 \
+    ALLOY_TEST_FIXTURE=1 \
     ALLOY_AGENT_OPEN_DRY_RUN=1 \
     ALLOY_INITIATIVE_ROOT="${CERT_INITIATIVE_ROOT}" \
+    ALLOY_FIRST_AGENT_PORT="${CERT_FIRST_AGENT_PORT:-3911}" \
     ALLOY_CERTIFY_CLIPBOARD_FILE="${CERT_CLIPBOARD_FILE}" \
     ALLOY_CERTIFY_APP_LAUNCH_LOG="${CERT_APP_LAUNCH_LOG}" \
   "$@"
@@ -180,7 +187,8 @@ certify_verify_production_untouched() {
   else
     : >"$after_meta"
   fi
-  diff -q "$snap/prod-initiatives.files" "$after" >/dev/null 2>&1
+  diff -q "$snap/prod-initiatives.files" "$after" >/dev/null 2>&1 \
+    && diff -q "$snap/prod-metadata.files" "$after_meta" >/dev/null 2>&1
 }
 
 certify_write_manifest() {

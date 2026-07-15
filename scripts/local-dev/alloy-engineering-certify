@@ -123,8 +123,8 @@ ALLOY_WORKTREE_SLOT="1"
 ALLOY_WORKTREE_PATH="$CERT_FIXTURE_REPO_FAIL"
 ALLOY_WORKTREE_BRANCH="agent/cursor/1-occupied"
 ALLOY_AGENT="cursor"
-PORT="3011"
-NEXT_PUBLIC_APP_URL="http://localhost:3011"
+PORT="3911"
+NEXT_PUBLIC_APP_URL="http://localhost:3911"
 META
   certify_intake_for_key cert-slot6 >"$tmp"
   certify_cmd_env "$SCRIPT_DIR/alloy-initiative-create" cert-slot6 --from "$tmp" >/dev/null
@@ -436,18 +436,23 @@ ALLOY_WORKTREE_ROOT="$CERT_ROOT/worktrees"
 ALLOY_RUNTIME_ROOT="$CERT_RUNTIME"
 ALLOY_BASE_REMOTE="origin"
 ALLOY_BASE_BRANCH="staging"
-ALLOY_FIRST_AGENT_PORT="3011"
+ALLOY_FIRST_AGENT_PORT="3911"
 ALLOY_MAX_AGENTS="6"
 ALLOY_SLOT_1_QA_IDENTITY="cert@test.local"
 ALLOY_ENV_SOURCE="$CERT_CANON/web/.env.local"
 ALLOY_SERVER_ENV_SOURCE="$CERT_CANON/web/.env.local"
 CFG
 
+  CERT_FIRST_AGENT_PORT=3911
   export ALLOY_CONFIG_FILE="$CERT_CONFIG_FILE"
-  alloy_load_config
-  alloy_engineering_require_node
+  export ALLOY_RUNTIME_ROOT="$CERT_RUNTIME"
   export ALLOY_ENGINEERING_CERTIFY=1
+  export ALLOY_TEST_FIXTURE=1
   export ALLOY_INITIATIVE_ROOT="$CERT_INITIATIVE_ROOT"
+  export ALLOY_FIRST_AGENT_PORT="$CERT_FIRST_AGENT_PORT"
+  alloy_load_config
+  alloy_resolve_runtime_paths "$CERT_RUNTIME"
+  alloy_engineering_require_node
 
   local snap="$CERT_ROOT/prod-snapshot"
   certify_record_production_snapshot "$snap"
@@ -456,8 +461,11 @@ CFG
   certify_failure_gates
   certify_happy_path
 
-  certify_assert "production initiatives untouched" certify_verify_production_untouched "$snap"
-  certify_assert "production metadata untouched" diff -q "$snap/prod-metadata.files" "$snap/after-metadata.files" >/dev/null 2>&1
+  certify_assert "production initiatives and metadata untouched" certify_verify_production_untouched "$snap"
+  certify_assert "production metadata file list unchanged" \
+    diff -q "$snap/prod-metadata.files" "$snap/after-metadata.files" >/dev/null 2>&1
+  certify_assert "fixture metadata stays under cert runtime" \
+    bash -c 'compgen -G "$1/metadata/cert-*.env" >/dev/null' _ "$CERT_RUNTIME"
 
   certify_print_summary
 

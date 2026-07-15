@@ -66,6 +66,9 @@ alloy-validate wt1-my-initiative imports
 # Phase 4 Product Runtime → Engineering Runtime
 alloy-product-certify                          # run before first real product initiative
 alloy-product-certify --keep
+alloy-runtime-paths                            # resolved runtime path names (no secrets)
+alloy-cert-leak-report                         # report leaked cert metadata only
+# alloy-cert-leak-clean --confirm              # interactive cleanup of leaked cert metadata
 alloy-product-help
 # ChatGPT → YAML brief → clipboard:
 alloy-product-create my-feature --clipboard

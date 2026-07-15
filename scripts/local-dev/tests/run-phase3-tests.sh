@@ -121,7 +121,7 @@ ALLOY_BIN_DIR="$TMP/bin"
 ALLOY_BASE_REMOTE="origin"
 ALLOY_BASE_BRANCH="staging"
 ALLOY_CANONICAL_PORT="3000"
-ALLOY_FIRST_AGENT_PORT="3011"
+ALLOY_FIRST_AGENT_PORT="3911"
 ALLOY_MAX_AGENTS="6"
 ALLOY_PM="npm"
 ALLOY_WEB_DIR="web"
@@ -310,7 +310,7 @@ grep -q ALLOY_FOO_TOKEN "$ENV_FILE" && fail "ALLOY token copied" || pass "ALLOY 
 echo "$READY_OUT" | grep -q 'toolkit-owned' && pass "ready reports toolkit-owned" || fail "ready ownership label"
 
 env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" "$ROOT/alloy-dev-stop" wt1-p3-one >/dev/null 2>&1 || true
-node -e "require('http').createServer((q,s)=>s.end('foreign')).listen(3011)" >/tmp/foreign-p3.log 2>&1 &
+node -e "require('http').createServer((q,s)=>s.end('foreign')).listen(3911)" >/tmp/foreign-p3.log 2>&1 &
 FOREIGN_PID=$!
 sleep 0.3
 READY_FOREIGN="$(env ALLOY_CONFIG_FILE="$CONFIG_DIR/config" ALLOY_SKIP_URL_CHECK=1 "$ROOT/alloy-agent-ready" 1 2>&1 || true)"

@@ -175,20 +175,37 @@ ALLOY_WORKTREE_ROOT="${PRODUCT_CERT_ROOT}/worktrees"
 ALLOY_RUNTIME_ROOT="${PRODUCT_CERT_ROOT}/runtime"
 ALLOY_BASE_REMOTE="origin"
 ALLOY_BASE_BRANCH="staging"
-ALLOY_FIRST_AGENT_PORT="3011"
+ALLOY_FIRST_AGENT_PORT="3911"
 ALLOY_MAX_AGENTS="6"
 CFG
-  mkdir -p "${PRODUCT_CERT_ROOT}/runtime/metadata" "${PRODUCT_CERT_ROOT}/runtime/locks"
+  mkdir -p "${PRODUCT_CERT_ROOT}/runtime/metadata" "${PRODUCT_CERT_ROOT}/runtime/locks" \
+    "${PRODUCT_CERT_ROOT}/runtime/pids" "${PRODUCT_CERT_ROOT}/runtime/logs"
 
+  PRODUCT_CERT_FIRST_PORT=3911
+  CERT_RUNTIME="${PRODUCT_CERT_ROOT}/runtime"
+  CERT_CONFIG_FILE="$PRODUCT_CERT_CONFIG"
+  CERT_INITIATIVE_ROOT="$PRODUCT_CERT_INITIATIVES"
+  CERT_FIRST_AGENT_PORT=3911
+  CERT_PROD_RUNTIME="${HOME}/.local/state/alloy-dev"
   export ALLOY_CONFIG_FILE="$PRODUCT_CERT_CONFIG"
   export ALLOY_INITIATIVE_ROOT="$PRODUCT_CERT_INITIATIVES"
   export ALLOY_RUNTIME_ROOT="${PRODUCT_CERT_ROOT}/runtime"
   export ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
   export ALLOY_ENGINEERING_CERTIFY=1
+  export ALLOY_PRODUCT_CERTIFY=1
+  export ALLOY_TEST_FIXTURE=1
+  export ALLOY_FIRST_AGENT_PORT=3911
   alloy_load_config
+  alloy_resolve_runtime_paths "${PRODUCT_CERT_ROOT}/runtime"
+
+  local prod_snap="${PRODUCT_CERT_ROOT}/prod-snapshot"
+  certify_record_production_snapshot "$prod_snap"
 
   product_certify_failure_gates
   product_certify_happy_path
+
+  product_certify_assert "production metadata untouched" \
+    certify_verify_production_untouched "$prod_snap"
 
   local artifact="${PRODUCT_CERT_ROOT}/product-certification-artifact-quality.md"
   cat >"$artifact" <<EOF

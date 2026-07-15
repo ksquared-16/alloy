@@ -135,6 +135,10 @@ main() {
       fi
       alloy_info "Creating worker: slot $slot / $task_id"
       env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+        ALLOY_RUNTIME_ROOT="${ALLOY_RUNTIME_ROOT}" \
+        ALLOY_ENGINEERING_CERTIFY="${ALLOY_ENGINEERING_CERTIFY:-0}" \
+        ALLOY_TEST_FIXTURE="${ALLOY_TEST_FIXTURE:-0}" \
+        ALLOY_FIRST_AGENT_PORT="${ALLOY_FIRST_AGENT_PORT}" \
         "${SCRIPT_DIR}/alloy-agent-create" "$initiative_suffix" "$agent" --slot "$slot"
       worktree_name="$(alloy_worktree_name "$slot" "$initiative_suffix")"
       alloy_load_metadata "$worktree_name"
@@ -145,6 +149,11 @@ main() {
       alloy_engineering_set_worker_assignment "$key" "$task_id" "$slot" \
         "$worktree_name" "$ALLOY_WORKTREE_BRANCH" "$ALLOY_WORKTREE_PATH" "$PORT" "$ALLOY_AGENT" "$role" "$staging_sha"
       env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
+        ALLOY_RUNTIME_ROOT="${ALLOY_RUNTIME_ROOT}" \
+        ALLOY_INITIATIVE_ROOT="${ALLOY_INITIATIVE_ROOT:-}" \
+        ALLOY_ENGINEERING_CERTIFY="${ALLOY_ENGINEERING_CERTIFY:-0}" \
+        ALLOY_TEST_FIXTURE="${ALLOY_TEST_FIXTURE:-0}" \
+        ALLOY_FIRST_AGENT_PORT="${ALLOY_FIRST_AGENT_PORT}" \
         "${SCRIPT_DIR}/alloy-worker-package" "$key" "$task_id"
       alloy_engineering_update_task_status "$key" "$task_id" "assigned"
     fi

@@ -60,7 +60,23 @@ COMMANDS=(
   alloy-product-package
   alloy-product-handoff
   alloy-product-close
+  alloy-engineering-certify
+  alloy-product-help
+  alloy-product-create
+  alloy-product-import
+  alloy-product-status
+  alloy-product-audit
+  alloy-product-contract
+  alloy-product-decisions
+  alloy-product-decide
+  alloy-product-approve
+  alloy-product-package
+  alloy-product-handoff
+  alloy-product-close
   alloy-product-certify
+  alloy-runtime-paths
+  alloy-cert-leak-report
+  alloy-cert-leak-clean
 )
 
 alloy_looks_like_toolkit_install() {

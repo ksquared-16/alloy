@@ -143,16 +143,37 @@ alloy-engineering-certify --verbose
 
 The certification harness:
 
-- uses a **temporary** `ALLOY_RUNTIME_ROOT` and `ALLOY_INITIATIVE_ROOT` (never touches `~/.local/state/alloy-dev/initiatives/`);
-- never modifies production managed-agent metadata;
+- uses a **temporary** `ALLOY_RUNTIME_ROOT` and `ALLOY_INITIATIVE_ROOT` (never touches `~/.local/state/alloy-dev/initiatives/` or production metadata);
+- **exports** the fixture runtime root into every nested production command (`alloy-initiative-*`, `alloy-worker-*`);
+- uses fixture-only agent ports starting at **3911** so real slots 3011–3016 may stay occupied;
+- never registers fixture agents into the production managed-agent registry;
 - does not open Cursor/Claude (launch is intercepted when `ALLOY_ENGINEERING_CERTIFY=1`);
 - does not access credentials, auth storage, or browser state;
 - does not push, merge, create PRs, or trigger Vercel;
 - exercises **production command scripts** via fixture config injection;
-- runs happy-path lifecycle, failure-path gates, and artifact-quality assertions;
+- asserts production metadata/initiatives are byte-for-byte unchanged;
 - preserves state on failure; cleans up on success unless `--keep`.
 
-`--keep` prints paths to: initiative brief, audit, specification, approval record, task graph, worker packages, report examples, reviews, remediation, final package, `certification-manifest.yaml`, and `certification-artifact-quality.md`.
+`--keep` retains `/tmp/alloy-*-cert.*` for inspection. Those trees are **not** registered globally. Inspect them only by pointing commands at the retained fixture config:
+
+```bash
+ALLOY_CONFIG_FILE=/tmp/alloy-engineering-cert.XXXXXX/config/config \
+  alloy-runtime-paths
+ALLOY_CONFIG_FILE=/tmp/alloy-engineering-cert.XXXXXX/config/config \
+  ALLOY_RUNTIME_ROOT=/tmp/alloy-engineering-cert.XXXXXX/runtime \
+  alloy-agent-status
+```
+
+### Older defective runs (cert metadata leak)
+
+If `alloy-agent-status` shows `cert-*-slot*` entries pointing at `/tmp/alloy-*-cert.*/fixture-repo`, report and optionally clean:
+
+```bash
+alloy-cert-leak-report                 # report-only
+alloy-cert-leak-clean --confirm        # interactive; deletes only leaked cert metadata/PID/log sidecars
+```
+
+Never deletes real worktrees under `/Users/Kelly/Code/alloy-worktrees/` or retained `/tmp` certification trees.
 
 ### What certification does not prove
 
