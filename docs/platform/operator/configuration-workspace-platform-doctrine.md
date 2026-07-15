@@ -273,6 +273,8 @@ Locations demonstrates the whole platform: an object list (locations), an object
 
 When a new domain asks "how should this configuration feel?", the answer is: **like Locations.**
 
+**Commercial Configuration validates the platform** as the second consumer: it is already the reference implementation of the *control plane* (`../modules/configuration-platform.md`), and applying this experience doctrine to it proves the platform generalizes beyond Locations. Locations is the reference for the *experience*; Commercial is the proof it *inherits*. Two domains, one platform — and no third domain invents a new configuration experience.
+
 ---
 
 ## Future platform applicability
@@ -324,7 +326,7 @@ Future engineers **must not** build:
 - `../../system/operational-configuration-platform-phase-b-blueprint.md` — the reference-implementation engineering blueprint.
 - `configuration-workspace-visual-language.md` — why configuration workspaces *feel* different, and the visual system.
 - `configuration-workspace-component-library.md` — the reusable platform primitives.
-- `../foundation/configuration-is-object-centric.md` — the platform decision this doctrine realizes.
+- `../foundation/platform-decisions.md` — the registered platform decision ("Configuration is object-centric") this doctrine realizes.
 - `alloy-visual-language.md`, `canonical-interaction-model.md`, `operational-surface-design-system.md` — the operator platform this doctrine specializes.
 - `../modules/configuration-platform.md`, `../../system/configuration-ownership-doctrine.md`, `../../system/configuration-mode-doctrine.md` — the control plane, ownership matrix, and shell this doctrine consumes.
 

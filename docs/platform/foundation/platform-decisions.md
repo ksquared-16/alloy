@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-13
+last_reviewed: 2026-07-14
 supersedes: []
 ---
 
@@ -149,6 +149,29 @@ No privileged client-side service-role shortcuts “for AI.” Recommendations s
 - [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)  
 - [`../../system/bos-identity-doctrine.md`](../../system/bos-identity-doctrine.md)  
 - [`../../product/bos-foundation.md`](../../product/bos-foundation.md)
+
+**Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — Configuration is object-centric
+
+**Decision:**  
+Operators configure **operational objects** — Location, Program, Room, Commercial Offering, Business Process, Communication Template, Automation, Role, Surface, Field — **not records, tables, or CRUD forms**. Configuration is an operational experience. Every configuration domain inherits **one** platform (the Configuration Workspace Platform); no domain invents its own configuration experience. **Locations is the reference implementation.**
+
+**Why:**  
+Building Locations surfaced that the operator is *running a place*, not editing its row. Designed as CRUD, configuration becomes a form to decode; designed as an operational experience — object, health, attention, the parts you own — it becomes obvious. CRUD-first, database-first, and drawer-over-table configuration are prohibited because they expose implementation (providers, precedence, versioning) the operator must never meet, and because per-domain reinvention forks the platform.
+
+**Consequences:**  
+New configuration domains adopt the platform's object model, workspace anatomy, two-status model (Attention + Setup Progress), business-language and quiet-inheritance rules, and inline/focused editing. No large CRUD forms, edit drawers over tables, provider/precedence terminology, configuration-precedence UI, implementation-driven navigation, generic forms, or object-less settings pages. Commercial Configuration validates the platform as a second consumer; future domains reference Locations.
+
+**Canonical owners:**  
+- [`../operator/configuration-workspace-platform-doctrine.md`](../operator/configuration-workspace-platform-doctrine.md)  
+- [`../operator/configuration-workspace-visual-language.md`](../operator/configuration-workspace-visual-language.md)  
+- [`../operator/configuration-workspace-component-library.md`](../operator/configuration-workspace-component-library.md)  
+- [`../modules/configuration-platform.md`](../modules/configuration-platform.md) *(control-plane substrate — orthogonal layer)*
 
 **Status:** Active  
 

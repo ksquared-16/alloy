@@ -60,7 +60,6 @@ Then: **`platform/foundation/system-overview.md`**
 0a. `platform/foundation/platform-decisions.md` — **Platform Decisions** (durable cross-platform decisions + rationale)
 1. `platform/foundation/system-overview.md`
 2. `platform/foundation/platform-capabilities.md`
-2a. `platform/foundation/configuration-is-object-centric.md` — **Platform Decision: Configuration is Object-Centric** (operators operate configuration objects, not records/tables/CRUD; Locations = reference implementation)
 3. `platform/foundation/product-roadmap.md`
 4. `platform/foundation/architecture.md`
 4a. `platform/foundation/os-runtime-map.md` — **OS Runtime Map** (the nine runtime layers — Kernel · Intent · Navigation · Experience · Surface · Card · Record · Entity · Operational/BOS — the three flows, the **client/server seam**, the **Effects/Integration** service, and the Architecture Evolution & Known Gaps appendix)
