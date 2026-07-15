@@ -11,15 +11,31 @@ export type IdentityFieldSaveArgs = {
     value: string;
 };
 
+export type IdentityFieldBatchEditSession = {
+    drafts: Record<string, string>;
+    onDraftChange: (fieldRef: string, value: string) => void;
+    onCancel: () => void;
+    busy?: boolean;
+};
+
 type Props = {
     rows: IdentityFieldRowVM[];
     className?: string;
     personId?: string;
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onEditField?: (fieldRef: string) => void;
+    /** When set, every editable field opens with one shared Cancel/Save owned by the parent. */
+    batchEdit?: IdentityFieldBatchEditSession | null;
 };
 
-export default function IdentityFieldGrid({ rows, className, personId, onSaveField, onEditField }: Props) {
+export default function IdentityFieldGrid({
+    rows,
+    className,
+    personId,
+    onSaveField,
+    onEditField,
+    batchEdit = null,
+}: Props) {
     const [editingFieldRef, setEditingFieldRef] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
 
@@ -38,7 +54,8 @@ export default function IdentityFieldGrid({ rows, className, personId, onSaveFie
                 >
                     {row.cells.map((cell) => {
                         const canInline =
-                            Boolean(cell.editable && personId && onSaveField);
+                            Boolean(cell.editable && personId && (onSaveField || batchEdit));
+                        const inBatch = Boolean(batchEdit && cell.editable && personId);
                         return (
                             <IdentityFieldValue
                                 key={cell.fieldRef}
@@ -55,30 +72,41 @@ export default function IdentityFieldGrid({ rows, className, personId, onSaveFie
                                         : undefined
                                 }
                                 inlineEdit={
-                                    canInline
+                                    inBatch && batchEdit
                                         ? {
-                                              isEditing: editingFieldRef === cell.fieldRef,
-                                              busy: saving,
-                                              onStartEdit: () => setEditingFieldRef(cell.fieldRef),
-                                              onCancel: () => setEditingFieldRef(null),
-                                              onCommit: async (value) => {
-                                                  if (!personId || !onSaveField) return;
-                                                  setSaving(true);
-                                                  try {
-                                                      const result = await onSaveField({
-                                                          personId,
-                                                          fieldRef: cell.fieldRef,
-                                                          value,
-                                                      });
-                                                      if (!result || result.ok !== false) {
-                                                          setEditingFieldRef(null);
-                                                      }
-                                                  } finally {
-                                                      setSaving(false);
-                                                  }
-                                              },
+                                              isEditing: true,
+                                              busy: batchEdit.busy,
+                                              sharedSession: true,
+                                              draftValue: batchEdit.drafts[cell.fieldRef] ?? cell.value ?? "",
+                                              onDraftChange: (value) => batchEdit.onDraftChange(cell.fieldRef, value),
+                                              onStartEdit: () => undefined,
+                                              onCancel: batchEdit.onCancel,
+                                              onCommit: async () => undefined,
                                           }
-                                        : undefined
+                                        : canInline
+                                          ? {
+                                                isEditing: editingFieldRef === cell.fieldRef,
+                                                busy: saving,
+                                                onStartEdit: () => setEditingFieldRef(cell.fieldRef),
+                                                onCancel: () => setEditingFieldRef(null),
+                                                onCommit: async (value) => {
+                                                    if (!personId || !onSaveField) return;
+                                                    setSaving(true);
+                                                    try {
+                                                        const result = await onSaveField({
+                                                            personId,
+                                                            fieldRef: cell.fieldRef,
+                                                            value,
+                                                        });
+                                                        if (!result || result.ok !== false) {
+                                                            setEditingFieldRef(null);
+                                                        }
+                                                    } finally {
+                                                        setSaving(false);
+                                                    }
+                                                },
+                                            }
+                                          : undefined
                                 }
                             />
                         );

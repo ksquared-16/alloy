@@ -631,7 +631,9 @@ export function buildHouseholdCardEvidence(
 
     const lastUpdatedLabel = (() => {
         const updated = trimOrNull(record.updated_at);
-        return updated ? `Updated ${updated.slice(0, 10)}` : null;
+        if (!updated) return null;
+        const formatted = formatFocusPanelDate(updated);
+        return formatted ? `Updated ${formatted}` : null;
     })();
 
     return {

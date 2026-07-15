@@ -6787,13 +6787,33 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .identity-record-summary__open-details {
-  align-self: flex-start;
+  align-self: end;
+  justify-self: end;
   margin-top: 4px;
+  margin-left: auto;
   padding: 0;
   color: var(--alloy-os-text-secondary, #6b7280);
   font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
+  text-align: right;
+}
+
+.identity-record-summary__batch-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 4px;
+}
+
+.identity-record-summary__edit--save {
+  color: var(--alloy-os-accent, #24634f);
+  font-weight: 650;
+}
+
+.identity-record-summary__edit--cancel {
+  color: var(--alloy-os-text-secondary, #6b7280);
 }
 
 .identity-record-summary__open-details:hover,

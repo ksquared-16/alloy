@@ -22,6 +22,13 @@ type InlineEditProps = {
     onCommit: (value: string) => void | Promise<void>;
     onCancel: () => void;
     busy?: boolean;
+    /**
+     * Parent owns Save/Cancel (person-level batch edit).
+     * Input stays controlled via `draftValue` / `onDraftChange`.
+     */
+    sharedSession?: boolean;
+    draftValue?: string;
+    onDraftChange?: (value: string) => void;
 };
 
 type Props = {
@@ -54,19 +61,24 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
     const inputId = useId();
     const inputRef = useRef<HTMLInputElement>(null);
 
+    const shared = Boolean(inlineEdit?.sharedSession);
+    const controlledDraft = shared ? (inlineEdit?.draftValue ?? cell.value ?? "") : draft;
+
     useEffect(() => {
+        if (shared) return;
         if (!inlineEdit?.isEditing) {
             setDraft(cell.value ?? "");
         }
-    }, [cell.value, inlineEdit?.isEditing]);
+    }, [cell.value, inlineEdit?.isEditing, shared]);
 
     useEffect(() => {
+        if (shared) return;
         if (inlineEdit?.isEditing) {
             setDraft(cell.value ?? "");
             inputRef.current?.focus();
             inputRef.current?.select();
         }
-    }, [inlineEdit?.isEditing, cell.value]);
+    }, [inlineEdit?.isEditing, cell.value, shared]);
 
     if (!cell.value && cell.hideWhenEmpty && !inlineEdit?.isEditing) return null;
     const Icon = resolveIcon(cell.icon);
@@ -103,13 +115,20 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                     ref={inputRef}
                     id={inputId}
                     className="identity-field-value__input"
-                    value={draft}
+                    value={controlledDraft}
                     disabled={inlineEdit.busy}
-                    onChange={(event) => setDraft(event.target.value)}
+                    onChange={(event) => {
+                        const next = event.target.value;
+                        if (shared) {
+                            inlineEdit.onDraftChange?.(next);
+                        } else {
+                            setDraft(next);
+                        }
+                    }}
                     onKeyDown={(event) => {
                         if (event.key === "Enter") {
                             event.preventDefault();
-                            void commit();
+                            if (!shared) void commit();
                         }
                         if (event.key === "Escape") {
                             event.preventDefault();
@@ -164,7 +183,7 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                     ) : null}
                 </span>
             )}
-            {inlineEdit?.isEditing ? (
+            {inlineEdit?.isEditing && !shared ? (
                 <span className="identity-field-value__inline-actions">
                     <button
                         type="button"

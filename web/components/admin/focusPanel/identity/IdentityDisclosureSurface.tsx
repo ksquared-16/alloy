@@ -4,6 +4,7 @@ import clsx from "clsx";
 import type { IdentityDisclosureDepth, IdentityRecordVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
 import IdentityRecordSummary from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
 import type { IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
+import type { IdentityFieldBatchSaveArgs } from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
 import IdentityEvidenceCollections from "@/components/admin/focusPanel/identity/IdentityEvidenceCollections";
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
     className?: string;
     onEditContact?: (recordId: string) => void;
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
+    onSaveFields?: (args: IdentityFieldBatchSaveArgs) => Promise<{ ok: boolean } | void>;
     onEditField?: (fieldRef: string) => void;
     onSelectEvidenceCollection?: (key: string) => void;
     onEnterEvidence?: () => void;
@@ -24,6 +26,7 @@ export default function IdentityDisclosureSurface({
     className,
     onEditContact,
     onSaveField,
+    onSaveFields,
     onEditField,
     onSelectEvidenceCollection,
     onEnterEvidence,
@@ -39,6 +42,7 @@ export default function IdentityDisclosureSurface({
                 depth={depth}
                 onEditContact={onEditContact}
                 onSaveField={onSaveField}
+                onSaveFields={onSaveFields}
                 onEditField={onEditField}
             />
             {depth === "details" ?

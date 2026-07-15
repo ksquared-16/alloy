@@ -259,3 +259,15 @@ describe("HouseholdCard component — Operational Context boundary purity", () =
         expect(withoutIdentityVmProps).not.toMatch(/record\s*:/);
     });
 });
+
+describe("Household card lastUpdatedLabel presentation", () => {
+    it("formats updated_at with Focus Panel display doctrine (not ISO YYYY-MM-DD)", () => {
+        const src = readFileSync(
+            path.join(process.cwd(), "lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence.ts"),
+            "utf8",
+        );
+        expect(src).toContain("formatFocusPanelDate");
+        expect(src).toContain("`Updated ${formatted}`");
+        expect(src).not.toContain("updated.slice(0, 10)");
+    });
+});

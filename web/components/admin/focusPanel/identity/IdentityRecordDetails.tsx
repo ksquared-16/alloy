@@ -3,7 +3,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import clsx from "clsx";
 import type { IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
-import IdentityFieldGrid, { type IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
+import IdentityFieldGrid, {
+    type IdentityFieldBatchEditSession,
+    type IdentityFieldSaveArgs,
+} from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
 
 type Props = {
     rows: IdentityFieldRowVM[];
@@ -11,12 +14,13 @@ type Props = {
     personId?: string;
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onEditField?: (fieldRef: string) => void;
+    batchEdit?: IdentityFieldBatchEditSession | null;
     /** When true, details render open (Details / Evidence depth). */
     defaultOpen?: boolean;
 };
 
 /** Details layer — inspect one identity after selection. */
-export default function IdentityRecordDetails({ rows, className, personId, onSaveField, onEditField, defaultOpen = false }: Props) {
+export default function IdentityRecordDetails({ rows, className, personId, onSaveField, onEditField, batchEdit = null, defaultOpen = false }: Props) {
     const [open, setOpen] = useState(defaultOpen);
     const panelId = useId();
     const rootRef = useRef<HTMLDivElement>(null);
@@ -60,7 +64,7 @@ export default function IdentityRecordDetails({ rows, className, personId, onSav
                 className={clsx("identity-record-details", className)}
                 data-identity-details-root="true"
             >
-                <IdentityFieldGrid rows={rows} personId={personId} onSaveField={onSaveField} onEditField={onEditField} />
+                <IdentityFieldGrid rows={rows} personId={personId} onSaveField={onSaveField} onEditField={onEditField} batchEdit={batchEdit} />
             </div>
         );
     }
@@ -80,7 +84,7 @@ export default function IdentityRecordDetails({ rows, className, personId, onSav
             </button>
             {open ? (
                 <div id={panelId} className="identity-expanded-details__panel" role="region" aria-label="Identity details">
-                    <IdentityFieldGrid rows={rows} personId={personId} onSaveField={onSaveField} onEditField={onEditField} />
+                    <IdentityFieldGrid rows={rows} personId={personId} onSaveField={onSaveField} onEditField={onEditField} batchEdit={batchEdit} />
                 </div>
             ) : null}
         </div>
