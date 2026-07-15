@@ -26,7 +26,6 @@
  */
 
 import { resolveEffectiveStanding } from "@/lib/operationalExpectations/standing/resolveEffectiveStanding";
-import type { ExpectationTransitionType } from "@/lib/operationalExpectations/expectationLedgerContract";
 import {
     RATIFIED_TRANSITIONS,
     type AsOfCoordinate,
@@ -231,9 +230,4 @@ export function resolveEffectiveExpectations(
         );
     }
     return out;
-}
-
-/** The transition types the resolver realizes effectivity for (test/introspection). */
-export function ratifiedTransitions(): readonly ExpectationTransitionType[] {
-    return [...RATIFIED_TRANSITIONS];
 }
