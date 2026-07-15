@@ -28,7 +28,17 @@ import {
     normalizeIdentityStorageTier,
     storageTierMatchesPurpose,
 } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
-import { sanitizeContextFactKeys } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
+function dedupeIdentityFieldRefList(fieldRefs: readonly string[]): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const ref of fieldRefs) {
+        if (seen.has(ref)) continue;
+        seen.add(ref);
+        out.push(ref);
+    }
+    return out;
+}
+
 import type {
     IdentitySectionConfig,
     IdentitySurfaceConfig,
@@ -147,13 +157,15 @@ export const generateDefaultPlacementsForGroup = generateDefaultIdentityFieldPla
  * Migrate legacy config into configuration buckets + normalized placements.
  *
  * - selectedFieldKeys → Summary Fields
- * - contextFieldKeys → Context Facts (summary duplicates stripped)
+ * - contextFieldKeys → Context Facts (may overlap Summary keys independently)
  * - expandedFieldKeys → Detail Fields
  */
 export function migrateIdentityDisclosureGroup(group: NestedSurfaceGroupConfig): NestedSurfaceGroupConfig {
     const reconciled = reconcileFieldModesToPolicies(group);
     const layers = identityLayerFieldKeysFromGroup(reconciled);
-    const contextFactKeys = sanitizeContextFactKeys(layers.summary, reconciled.contextFieldKeys ?? layers.contextFacts);
+    const contextFactKeys = dedupeIdentityFieldRefList([
+        ...(reconciled.contextFieldKeys ?? layers.contextFacts),
+    ]);
     const placementSeed = {
         ...reconciled,
         selectedFieldKeys: layers.summary,
@@ -419,6 +431,12 @@ export function reconcileIdentityNestedConfigsFromMetadata(
     return out;
 }
 
+const IDENTITY_EDIT_SURFACE_GROUP_KEYS = new Set(["contact_edit", "child_edit"]);
+
+function isIdentityPresentationGroup(groupKey: string): boolean {
+    return !IDENTITY_EDIT_SURFACE_GROUP_KEYS.has(groupKey);
+}
+
 /** Resolve effective field policy with edit-surface inheritance (`child_edit` / `contact_edit`). */
 export function resolveIdentityFieldPolicy(args: {
     config: NestedSurfaceConfig;
@@ -446,6 +464,22 @@ export function resolveIdentityFieldPolicy(args: {
         if (stored) return normalizeFieldVisibility(stored);
     }
 
+    if (tier && isIdentityPresentationGroup(groupKey)) {
+        if (editGroupKey && !skipPlacementPolicy) {
+            const editGroup = config.groups.find((g) => g.key === editGroupKey);
+            const editTierPlacement = (editGroup?.fieldPlacements ?? []).find(
+                (row) =>
+                    row.fieldRef === fieldRef
+                    && storageTierMatchesPurpose(normalizeIdentityStorageTier(row.tier), tier),
+            );
+            if (editTierPlacement?.policy) return normalizeFieldVisibility(editTierPlacement.policy);
+        }
+        const legacyMode = group?.fieldModes?.[fieldRef];
+        const fromMode = fieldModeToPolicy(legacyMode);
+        if (fromMode) return fromMode;
+        return "read-only";
+    }
+
     if (editGroupKey) {
         const editGroup = config.groups.find((g) => g.key === editGroupKey);
         const editLayers = editGroup ? identityLayerFieldKeysFromGroup(editGroup) : null;
@@ -465,11 +499,13 @@ export function resolveIdentityFieldPolicy(args: {
             }
             const editPolicy = editGroup?.fieldPolicies?.[fieldRef];
             if (editPolicy) return normalizeFieldVisibility(editPolicy);
-            if (config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID && editGroupKey === "contact_edit") {
-                return "editable";
-            }
-            if (config.surfaceId === CHILDREN_SURFACE_CANONICAL_ID && editGroupKey === "child_edit") {
-                return "editable";
+            if (groupKey === editGroupKey) {
+                if (config.surfaceId === HOUSEHOLD_SURFACE_CANONICAL_ID && editGroupKey === "contact_edit") {
+                    return "editable";
+                }
+                if (config.surfaceId === CHILDREN_SURFACE_CANONICAL_ID && editGroupKey === "child_edit") {
+                    return "editable";
+                }
             }
         }
     }

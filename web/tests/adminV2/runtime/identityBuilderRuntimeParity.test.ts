@@ -22,7 +22,7 @@ import {
     buildHouseholdIdentityCardVM,
 } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityCardVM";
 import { identityRowsForDisclosureDepth } from "@/lib/adminV2/runtime/focusPanel/identity/buildIdentityDisclosureVM";
-import { composeSummaryAndContextFacts } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
+import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import { buildHouseholdCardEvidence } from "@/lib/adminV2/runtime/focusPanel/household/buildHouseholdCardEvidence";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ensureRuntimeSurfacesRegistered } from "@/lib/platform/surfaceComposition/registerRuntimeSurfaces";
@@ -90,7 +90,7 @@ function builderContextPreviewRows(
             width: "full" as const,
         }],
     }));
-    return composeSummaryAndContextFacts(summaryRows, factRows);
+    return composeContextCollectionRows(factRows);
 }
 
 beforeEach(() => {
@@ -114,7 +114,7 @@ describe("identity builder/runtime parity fixture", () => {
         expect(runtimeSummaryKeys).toEqual(builderSummaryKeys);
     });
 
-    it("Builder Context preview equals runtime summaryRows + contextFactRows", () => {
+    it("Builder Context preview equals runtime contextFactRows", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         config = addFieldToNestedGroup(config, "contact_edit", "person.phone");
         config = addFieldToNestedGroup(config, "contact_edit", "person.role_label", { tier: "context" });

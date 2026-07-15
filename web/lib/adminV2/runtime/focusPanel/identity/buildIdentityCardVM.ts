@@ -31,9 +31,10 @@ import {
 import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
-import { CONTACT_EDIT_FIELD_MAP } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
+import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
-import { composeSummaryAndContextFacts } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
+import { resolveIdentityPlacementLabelMode } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import {
     enabledEvidenceSections,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -41,6 +42,11 @@ import type { IdentityCardVM, IdentityRecordVM, IdentityFieldRowVM, IdentityEvid
 import { inferAvatarRoleFromSectionKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelIdentityAvatar";
 import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+
+
+function householdContactFieldSaveSupported(fieldRef: string): boolean {
+    return personContactSaveKeyForIdentityFieldRef(fieldRef) !== null;
+}
 
 function initialsFor(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -115,10 +121,16 @@ function buildRecordRows(args: {
         const value = isMaskedChannel
             ? "Contact details restricted"
             : resolveIdentityFieldValue(args.subject, placement.fieldRef);
-        const saveSupported = args.isFieldSaveSupported?.(placement.fieldRef) ?? Boolean(args.editGroupKey);
+        const saveSupported =
+            args.isFieldSaveSupported?.(placement.fieldRef)
+            ?? (args.groupKey === args.editGroupKey && Boolean(args.editGroupKey));
         const editable = args.canMutate && fieldIsSaveable(policy) && saveSupported;
+        const placementForRuntime = {
+            ...placement,
+            labelMode: resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
+        };
         inputs.push({
-            placement,
+            placement: placementForRuntime,
             label: fieldPresentationLabel(
                 args.config,
                 args.groupKey,
@@ -152,7 +164,7 @@ function finalizeIdentityRecordVM(args: {
     detailRows: IdentityFieldRowVM[];
     evidenceCollections?: IdentityRecordVM["evidenceCollections"];
 }): IdentityRecordVM {
-    const contextRows = composeSummaryAndContextFacts(args.summaryRows, args.contextFactRows);
+    const contextRows = composeContextCollectionRows(args.contextFactRows);
     return {
         id: args.id,
         title: args.title,
@@ -164,8 +176,8 @@ function finalizeIdentityRecordVM(args: {
         detailRows: args.detailRows,
         detailsRows: args.detailRows,
         expandedRows: args.detailRows,
-        canShowDetails: args.detailRows.length > 0,
-        canExpand: args.detailRows.length > 0,
+        canShowDetails: args.detailRows.length > 0 || args.contextFactRows.length > 0,
+        canExpand: args.detailRows.length > 0 || args.contextFactRows.length > 0,
         evidenceCollections: args.evidenceCollections,
     };
 }
@@ -186,6 +198,7 @@ function buildContactRecordVM(args: {
         purpose: "summary",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
+        isFieldSaveSupported: householdContactFieldSaveSupported,
         maskedChannels: args.maskedChannels,
     });
     const contextFactRows = buildRecordRows({
@@ -195,6 +208,7 @@ function buildContactRecordVM(args: {
         purpose: "context_facts",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
+        isFieldSaveSupported: householdContactFieldSaveSupported,
         maskedChannels: args.maskedChannels,
     });
     const detailRows = buildRecordRows({
@@ -204,6 +218,7 @@ function buildContactRecordVM(args: {
         purpose: "details",
         canMutate: args.canMutate,
         editGroupKey: "contact_edit",
+        isFieldSaveSupported: householdContactFieldSaveSupported,
         maskedChannels: args.maskedChannels,
     });
     return finalizeIdentityRecordVM({

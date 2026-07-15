@@ -144,4 +144,21 @@ export const CONTACT_EDIT_FIELD_MAP: Record<string, keyof import("@/lib/adminV2/
     // Builder may place person.* refs on the Parent/Guardian edit map — bind to the same values.
     "person.email": "email",
     "person.phone": "phone",
+    "person.first_name": "first_name",
+    "person.last_name": "last_name",
+    "contact.address_line1": "address_line1",
+    "contact.address_line2": "address_line2",
+    "contact.address_line": "address_line1",
+    "contact.address": "address_line1",
+    "person.address_line1": "address_line1",
+    "person.address_line2": "address_line2",
+    "person.address_line": "address_line1",
+    "person.address": "address_line1",
 };
+
+export function personContactSaveKeyForIdentityFieldRef(
+    fieldRef: string,
+): keyof import("@/lib/adminV2/runtime/focusPanel/focusPanelMutation").PersonContactValues | null {
+    const key = CONTACT_EDIT_FIELD_MAP[fieldRef];
+    return key ?? null;
+}

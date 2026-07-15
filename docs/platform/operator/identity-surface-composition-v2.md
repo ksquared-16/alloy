@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-15
 supersedes: [./identity-surface-composition.md]
 ---
 
@@ -15,7 +15,7 @@ supersedes: [./identity-surface-composition.md]
 
 ## North star
 
-> Runtime disclosure has four layers, but configuration has three field purposes plus evidence collections. **Context is derived from Summary plus Context Facts.**
+> Runtime disclosure has four layers, but configuration has three field purposes plus evidence collections. **Summary does not feed Context; Details inherits Context Facts plus Detail Fields.**
 
 Every identity follows the same grammar: Household, Parent, Guardian, Child, Employee, Additional Contact, Emergency Contact, Vendor, and future identity types.
 
@@ -36,8 +36,8 @@ These are information layers, not UI widgets.
 | Layer | Question | Purpose |
 | --- | --- | --- |
 | **Summary** | Who is this? | Recognition — avatar, name, phone, badge |
-| **Context** | What else belongs here? | Operational understanding — **Summary + incremental facts** |
-| **Details** | Tell me more about **this** person? | Inspection after selecting one identity |
+| **Context** | What else belongs here? | Collection view — **Context Facts only** (shortened Details projection) |
+| **Details** | Tell me more about **this** person? | **Context Facts + Detail Fields** after selecting one identity |
 | **Evidence** | Show me supporting proof? | Collection-oriented proof (documents, forms, …) |
 
 Runtime flow:
@@ -58,10 +58,11 @@ Administrators configure **three field purposes** plus evidence collections:
 Summary Fields → Context Facts → Detail Fields → Evidence Collections
 ```
 
-**Context is a projection, not a duplicate field layer.**
+**Context Facts are the Collection projection; Summary is independent.**
 
 ```
-Context (runtime) = Summary Fields + Context Facts
+Context (runtime) = Context Facts only
+Details (runtime) = Context Facts + Detail Fields
 ```
 
 ### Summary Fields
@@ -70,9 +71,9 @@ Recognition only. Lightweight. No inspection-level information.
 
 ### Context Facts
 
-**Incremental operational facts only** — teacher, program, room, rate, etc.
+Operational facts for the collection view — teacher, program, room, rate, etc.
 
-Summary fields **automatically appear in Context** at runtime. Administrators must **not** configure Name, Phone, Email (or other summary fields) again under Context Facts.
+The **same field may appear in Summary and Context Facts** with different policy, label, or layout. Summary does **not** automatically merge into Context at runtime.
 
 ### Detail Fields
 
@@ -111,7 +112,7 @@ type IdentitySectionConfig = {
 Shared VM invariant:
 
 ```ts
-contextRows = composeSummaryAndContextFacts(summaryRows, contextFactRows);
+contextRows = contextFactRows; // Summary does not merge into Context
 ```
 
 - Stable order: summary first, then incremental facts  
@@ -149,7 +150,7 @@ Address · Employer · Language · Notes
 
 ```
 Name · DOB/Age · Schedule · Teacher · Program · Room · Rate
-         ↑ summary (inherited)              ↑ context facts only
+         ↑ summary only                     ↑ context facts only
 ```
 
 ---
@@ -177,7 +178,7 @@ Must show:
 
 1. **Inherited from Summary** (read-only) — cannot remove from Context here; remove from Summary to remove from Context  
 2. **Context Facts** (editable) — add only incremental facts  
-3. **Context Preview** — Summary + Context Facts merged (representative labels, never raw field keys)
+3. **Context Preview** — Context Facts only (representative labels, never raw field keys)
 
 ---
 
@@ -497,7 +498,7 @@ Never gender. Badges convey Primary / Parent / Enrolling / status.
 ### Collection vs person Details
 
 Collection shows every configured relationship section with effective collection
-presentation (Summary + Context Facts). Detail Fields appear only after an identity
+presentation (Context Facts on Collection; Context Facts + Detail Fields on Details). Detail Fields appear only after an identity
 is selected.
 
 
@@ -519,3 +520,47 @@ and Other Parent runtime sections when `roleOverride` is unset:
 - Builder published preview and work-unit runtime project through the same Household
   VM builder (`buildHouseholdIdentityCardVM` + role merge)
 - Collection is the Context projection (no mandatory separate Context screen label)
+
+
+## Disclosure-tier field policy (Focus Panel)
+
+Field **policy belongs to the placement at that disclosure tier** on the presentation group
+(`primary_contact`, `other_parent_guardian`, …). Mutation capability on `contact_edit` /
+`child_edit` does not make Summary or Context cells editable when that tier is read-only.
+
+Runtime resolves policy in order: tier placement policy → group `fieldPolicies` → read-only
+for presentation groups. `editGroupKey` still binds save support (`CONTACT_EDIT_FIELD_MAP`)
+but must not leak default `editable` from the edit surface.
+
+## Inline editing by disclosure tier (Household + Children)
+
+Editable policy is **per tier**, not global to the card:
+
+- **Collection (`context`)** — Context Facts only. Inline Edit works when those
+  tiers are editable under published policy. Detail Fields do not appear until an identity
+  is selected.
+- **Details (after drill)** — Detail-tier fields render with the same inline grammar. Save
+  commits through canonical mutation bindings (`savePersonContact` for household contacts;
+  `saveInquiryChild` for child roster fields).
+
+Collection rows expose a persistent **Details →** control (not hover-only) beside the name
+when identities are selectable. Field-level **Edit** stays quiet but discoverable at rest
+(~55% opacity, full opacity on hover/focus) so touch and keyboard paths work without
+hover-only discovery.
+
+Summary scan stays read-only by default when all visible Summary cells are read-only.
+Person-level Edit remains for complex `contact_edit` / `ChildFocusEdit` when inline save
+is unsupported.
+
+## Atomic vs derived name fields
+
+`person.first_name` and `person.last_name` are distinct atomic fields. `person.primary_contact_name`
+/ Full Name is derived display-only and must not collapse first/last in role merge dedupe.
+
+## Focus Panel QA corrections (label, context, full name, Primary badge)
+
+- **Label visibility:** Builder `fieldModes[fieldKey].showLabel === false` is authoritative for runtime when `placement.labelMode` is unset. The write path mirrors `showLabel` into every matching `fieldPlacements[].labelMode` (`hidden` / `visible`). Published configs without `labelMode` still honor `showLabel` via the runtime bridge in `buildRecordRows` and placement seeding / role merge (`buildAuthoritativePlacements`).
+- **Same field in Summary and Context Facts:** Each tier keeps its own placement, policy, and label. Runtime Context (`contextRows`) shows Context Facts only; Summary does not merge in.
+- **Full Name:** `person.full_name` / `contact.full_name` are **computed** from first + last (or evidence `name` fallback for persons). They are display-only — not mutation-supported and not aliased to atomic first/last keys. `person.primary_contact_name` remains the evidence display name.
+- **Primary relationship badge:** Relationship pill text `Primary` (case-insensitive) uses Bend Pine (`alloy-os-card-pill--positive`). Other roles (e.g. Guardian) stay on the neutral pill wash.
+

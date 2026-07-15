@@ -28,7 +28,7 @@ describe("household role-based configuration", () => {
     it("applies Parent / Guardian config to Primary and Other Parent runtime sections", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         config = setFieldVisibilityInNestedGroup(config, "contact_edit", "contact.phone", "editable", {
-            tier: "context_facts",
+            tier: "context_fact",
         });
         const merged = withHouseholdRoleMergedGroups(config);
 

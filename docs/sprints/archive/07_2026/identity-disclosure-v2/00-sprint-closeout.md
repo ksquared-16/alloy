@@ -1,14 +1,14 @@
 ---
 owner: operator
-status: ready-for-staging-qa
-last_reviewed: 2026-07-12
+status: manual-authenticated-qa-pending
+last_reviewed: 2026-07-15
 ---
 
 # Identity Disclosure V2 — Sprint Closeout
 
-**Status:** READY FOR STAGING QA  
-**Branch:** `hotfix/restore-identity-canvas-composer`  
-**PR:** #180
+**Status:** MANUAL AUTHENTICATED QA PENDING  
+**Branch:** `fix/focus-panel-field-policy-inline-edit`  
+**PR:** [#194](https://github.com/ksquared-16/alloy/pull/194)
 
 ## Summary
 
@@ -141,3 +141,48 @@ record resolution on one Alloy surface; legacy four-step wizard superseded for t
 
 Collection drill-ins elevate centered. Parent/Guardian published tiers are authoritative;
 address/DOB aliases normalize to canonical refs with no union of seeded defaults.
+
+## PR #194 final authenticated QA gate (Jul 15, 2026)
+
+- **Automated certification:** complete (typecheck, typecheck:tests, production build, focused tests 81/81).
+- **Manual authenticated QA:** pending.
+- **Merge approval:** not approved for merge.
+
+### Pending manual QA matrix
+
+**Summary:**
+
+- First Name label hidden
+- Last Name label hidden
+- Email/Phone labels visible
+- Summary fields read-only
+- Full Name populated
+- Primary badge Bend Pine
+- Guardian badge neutral
+- row layout and pairing correct
+
+**Context:**
+
+- configured fields display normally, not disabled
+- Edit appears only on hover/focus
+- First Name edits inline
+- Last Name edits inline
+- Email edits inline
+- Phone edits inline
+- Kelly mutation targets Kelly
+- Kristi mutation targets Kristi
+- save updates Context
+- save refreshes Summary
+- Full Name recomputes after First/Last changes
+
+**Regression:**
+
+- Household collection drill-in
+- Household Details
+- Household Evidence
+- Children collection handoff
+- Children Details
+- Children Evidence
+- published surfaces match /work-unit
+- no stale configuration after publish/reload
+

@@ -62,6 +62,9 @@ import {
     seedHouseholdContactValuesForPerson,
     seedHouseholdContactValuesFromEvidence,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
+import { personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
+import type { IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
+import type { PersonContactPatch } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type {
     FocusPanelCoordination,
@@ -242,6 +245,44 @@ export default function HouseholdCard({
             setEditingPersonId(null);
         }
     }, [editingPersonId, editingSeed]);
+
+
+    const onSaveIdentityField = canEdit && mutation
+        ? async (args: IdentityFieldSaveArgs) => {
+              if (!isEditableHouseholdPersonId(args.personId)) return { ok: false as const };
+              const key = personContactSaveKeyForIdentityFieldRef(args.fieldRef);
+              if (!key) return { ok: false as const };
+              const result = await mutation.savePersonContact(args.personId, {
+                  [key]: args.value.trim() || null,
+              });
+              if (result.ok) {
+                  setJustSaved(true);
+                  if (savedChipTimer.current) clearTimeout(savedChipTimer.current);
+                  savedChipTimer.current = setTimeout(() => setJustSaved(false), 2600);
+              }
+              return result;
+          }
+        : undefined;
+
+    const onSaveIdentityFields = canEdit && mutation
+        ? async (args: { personId: string; fields: Array<{ fieldRef: string; value: string }> }) => {
+              if (!isEditableHouseholdPersonId(args.personId)) return { ok: false as const };
+              const patch: PersonContactPatch = {};
+              for (const field of args.fields) {
+                  const key = personContactSaveKeyForIdentityFieldRef(field.fieldRef);
+                  if (!key) continue;
+                  patch[key] = field.value.trim() || null;
+              }
+              if (Object.keys(patch).length === 0) return { ok: false as const };
+              const result = await mutation.savePersonContact(args.personId, patch);
+              if (result.ok) {
+                  setJustSaved(true);
+                  if (savedChipTimer.current) clearTimeout(savedChipTimer.current);
+                  savedChipTimer.current = setTimeout(() => setJustSaved(false), 2600);
+              }
+              return result;
+          }
+        : undefined;
 
     const onEditContact = canEdit
         ? (personId: string) => {
@@ -642,6 +683,8 @@ export default function HouseholdCard({
                 record={selectedIdentityRecord}
                 depth={disclosure.depth}
                 onEditContact={onEditContact}
+                onSaveField={onSaveIdentityField}
+                onSaveFields={onSaveIdentityFields}
                 onEnterEvidence={
                     disclosure.depth === "details"
                         ? () => enterEvidence(selectedIdentityRecord.id, disclosure.selectedSectionKey)
@@ -658,6 +701,8 @@ export default function HouseholdCard({
                 focusedSectionKey={disclosure.selectedSectionKey}
                 onOpenChild={openChild}
                 onEditContact={onEditContact}
+                onSaveField={onSaveIdentityField}
+                onSaveFields={onSaveIdentityFields}
                 onSelectIdentity={
                     composingHouseholdSurface ? handleSelectIdentityForCompose : (personId, sectionKey) => selectIdentity(personId, sectionKey)
                 }
@@ -975,6 +1020,8 @@ function ExpandedBody({
     onSelectIdentity,
     onOpenChild,
     onEditContact,
+    onSaveField,
+    onSaveFields,
     onAddEmergencyContact,
     composing,
     composePurpose = null,
@@ -987,6 +1034,8 @@ function ExpandedBody({
     onSelectIdentity: (personId: string, sectionKey: string) => void;
     onOpenChild?: (childId: string) => void;
     onEditContact?: (personId: string) => void;
+    onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
+    onSaveFields?: (args: { personId: string; fields: Array<{ fieldRef: string; value: string }> }) => Promise<{ ok: boolean } | void>;
     onAddEmergencyContact?: () => void;
     composing: boolean;
     composePurpose?: IdentityConfigurationPurpose | null;
@@ -1041,6 +1090,8 @@ function ExpandedBody({
                         onOpenChild={onOpenChild}
                         onSelectIdentity={onSelectIdentity}
                         onEditContact={onEditContact}
+                        onSaveField={onSaveField}
+                        onSaveFields={onSaveFields}
                         onAddEmergencyContact={onAddEmergencyContact}
                         nestedConfig={nestedConfig}
                         composing={composing}
@@ -1092,6 +1143,8 @@ function GroupRows({
     onOpenChild,
     onSelectIdentity,
     onEditContact,
+    onSaveField,
+    onSaveFields,
     onAddEmergencyContact,
     nestedConfig = null,
     composing = false,
@@ -1104,6 +1157,8 @@ function GroupRows({
     onOpenChild?: (childId: string) => void;
     onSelectIdentity?: (personId: string, sectionKey: string) => void;
     onEditContact?: (personId: string) => void;
+    onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
+    onSaveFields?: (args: { personId: string; fields: Array<{ fieldRef: string; value: string }> }) => Promise<{ ok: boolean } | void>;
     onAddEmergencyContact?: () => void;
     nestedConfig?: NestedSurfaceConfig | null;
     composing?: boolean;
@@ -1121,7 +1176,7 @@ function GroupRows({
     const identitySection = buildHouseholdIdentityCardVM({
         config: nestedConfig,
         groups: [group],
-        canMutate: Boolean(onEditContact) && !masked && !composing,
+        canMutate: (Boolean(onEditContact) || Boolean(onSaveField)) && !masked && !composing,
         maskedChannels: masked,
     }).sections.find((section) => section.key === group.key);
     const items = identitySection?.items ?? [];
@@ -1164,6 +1219,8 @@ function GroupRows({
                             : undefined
                     }
                     onEditContact={onEditContact && !composing && !masked ? onEditContact : undefined}
+                    onSaveField={onSaveField && !composing && !masked ? onSaveField : undefined}
+                    onSaveFields={onSaveFields && !composing && !masked ? onSaveFields : undefined}
                 />
             ) : (
                 visible.map((record) => (

@@ -148,12 +148,17 @@ Builder continues to author on the grid track model (76px); runtime Preview on
 
 ## Household person edit and emergency contacts
 
-- Collection/scan surfaces expose **one person-level Edit** affordance (not per-field Edit links).
-- Edit presentation is driven by the Parent/Guardian `contact_edit` semantic map; the selected
-  person supplies values and the mutation target only.
+- **Summary** uses tier placement policy only — read-only Summary cells do not show Edit.
+- **Context / Details** editable cells use inline field edit on the shared identity field row
+  (hover/focus Edit → inline input → `savePersonContact` refresh). No full `contact_edit`
+  surface for a single field click.
+- Person-level Edit (full `contact_edit` form) appears only when visible rows at the current
+  depth include editable cells that need the complex form.
 - Seed uses authoritative family-row truth with evidence channels as fallback; synthetic display
   ids (`primary`, `secondary:…`) are not editable.
 - Save continues through `savePersonContact` → `patchLinkedPersonFromOpportunityDrawer` with truth refresh.
+- **Details view** projects only published Detail Fields (`expandedFieldKeys` / details placements);
+  empty `[]` stays empty — contact_edit defaults are not appended to Details read mode.
 
 ### Add Emergency Contact
 
@@ -172,3 +177,11 @@ names; Household invocation defaults to **All children**.
 `View Household` / `View Children` elevate into the shared centered focus surface
 (same primitive as selected-identity Details). Max width uses
 `--alloy-os-focus-panel-max-width`.
+
+## Focus Panel QA corrections (label, context, full name, Primary badge)
+
+- **Label visibility:** Builder `fieldModes[fieldKey].showLabel === false` is authoritative for runtime when `placement.labelMode` is unset. The write path mirrors `showLabel` into every matching `fieldPlacements[].labelMode` (`hidden` / `visible`). Published configs without `labelMode` still honor `showLabel` via the runtime bridge in `buildRecordRows` and placement seeding / role merge (`buildAuthoritativePlacements`).
+- **Context Facts vs Summary on duplicate refs:** For Context depth projection (`contextRows`), **Context Facts cells win** on overlapping `fieldRef`s (policy, `editable`, `labelMode`, value, icon). Summary-only fields keep summary order; context-only facts append after.
+- **Full Name:** `person.full_name` / `contact.full_name` are **computed** from first + last (or evidence `name` fallback for persons). They are display-only — not mutation-supported and not aliased to atomic first/last keys. `person.primary_contact_name` remains the evidence display name.
+- **Primary relationship badge:** Relationship pill text `Primary` (case-insensitive) uses Bend Pine (`alloy-os-card-pill--positive`). Other roles (e.g. Guardian) stay on the neutral pill wash.
+

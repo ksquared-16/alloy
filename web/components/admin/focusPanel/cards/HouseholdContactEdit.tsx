@@ -43,6 +43,8 @@ const INPUT_TYPE_BY_VALUE_KEY: Record<keyof PersonContactValues, string> = {
     last_name: "text",
     email: "email",
     phone: "tel",
+    address_line1: "text",
+    address_line2: "text",
 };
 
 /**

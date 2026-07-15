@@ -2,6 +2,7 @@
  * Project IdentityCardVM into disclosure-depth views for runtime and builder preview.
  */
 
+import { composeContextFactsIntoDetails } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import type {
     IdentityCardVM,
     IdentityDisclosureDepth,
@@ -59,19 +60,24 @@ export type IdentityRowsForDepth = {
     detailRows: IdentityFieldRowVM[];
 };
 
-/** Rows visible at a given disclosure depth — Context uses composed projection. */
+/** Rows visible at a given disclosure depth — Context uses Context Facts only; Details inherits context + detail-only fields. */
 export function identityRowsForDisclosureDepth(
     record: IdentityRecordVM,
     depth: IdentityDisclosureDepth,
 ): IdentityRowsForDepth {
-    const detailRows = record.detailRows.length > 0 ? record.detailRows : record.detailsRows;
+    const rawDetailRows = record.detailRows.length > 0 ? record.detailRows : record.detailsRows;
     switch (depth) {
         case "summary":
             return { visibleRows: record.summaryRows, detailRows: [] };
         case "context":
             return { visibleRows: record.contextRows, detailRows: [] };
         case "details":
-        case "evidence":
-            return { visibleRows: record.contextRows, detailRows };
+        case "evidence": {
+            const { leadingRows, detailOnlyRows } = composeContextFactsIntoDetails(
+                record.contextFactRows,
+                rawDetailRows,
+            );
+            return { visibleRows: leadingRows, detailRows: detailOnlyRows };
+        }
     }
 }

@@ -55,6 +55,8 @@ export type PersonContactValues = {
     last_name: string;
     email: string;
     phone: string;
+    address_line1?: string;
+    address_line2?: string;
 };
 
 /** Only the changed fields, normalized (empty → null) for the PATCH body. */
@@ -121,6 +123,8 @@ type SavedPerson = {
     full_name?: string | null;
     email?: string | null;
     phone?: string | null;
+    address_line1?: string | null;
+    address_line2?: string | null;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -148,6 +152,14 @@ function updateContactArray(value: unknown, personId: string, saved: SavedPerson
         if (fullName) next.name = fullName;
         if (saved.email !== undefined) next.email = trimOrNull(saved.email);
         if (saved.phone !== undefined) next.phone = trimOrNull(saved.phone);
+        if (saved.address_line1 !== undefined) {
+            next.address_line1 = trimOrNull(saved.address_line1);
+            next.addressLine1 = trimOrNull(saved.address_line1);
+        }
+        if (saved.address_line2 !== undefined) {
+            next.address_line2 = trimOrNull(saved.address_line2);
+            next.addressLine2 = trimOrNull(saved.address_line2);
+        }
         return next;
     });
 }
@@ -178,6 +190,16 @@ export function mergePersonContactIntoFocusPanelTruth(
         if (fullName) merged["person.primary_contact_name"] = fullName;
         if (saved.email !== undefined) merged["person.primary_email"] = trimOrNull(saved.email);
         if (saved.phone !== undefined) merged["person.primary_phone"] = trimOrNull(saved.phone);
+        if (saved.address_line1 !== undefined) {
+            const line1 = trimOrNull(saved.address_line1);
+            merged["person.primary_address_line1"] = line1;
+            merged["person.address_line1"] = line1;
+        }
+        if (saved.address_line2 !== undefined) {
+            const line2 = trimOrNull(saved.address_line2);
+            merged["person.primary_address_line2"] = line2;
+            merged["person.address_line2"] = line2;
+        }
         const identity = merged._identity as { primary_person?: { id?: unknown; label?: unknown } } | null | undefined;
         if (fullName && identity && typeof identity === "object" && identity.primary_person) {
             merged._identity = {

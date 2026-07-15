@@ -62,6 +62,7 @@ import {
     formatFocusPanelDobAgeLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import { buildEmergencyContactsEvidence } from "@/lib/adminV2/runtime/focusPanel/emergencyContacts/buildEmergencyContactsEvidence";
+import { buildPersonAddressIndexFromVm } from "@/lib/layout/runtime/resolvePersonAddressFieldValues";
 
 /** Display-format a phone for the card (e.g. "(541) 654-3217"); raw fallback if unparseable. */
 function formatPhoneForDisplay(raw: unknown): string | null {
@@ -76,6 +77,9 @@ function formatPhoneForDisplay(raw: unknown): string | null {
 export type HouseholdEvidenceContact = {
     personId: string;
     name: string;
+    /** When present on drawer truth; else display falls back to splitting `name`. */
+    firstName?: string | null;
+    lastName?: string | null;
     roleLabel: string | null;
     isPrimary: boolean;
     phone: string | null;
@@ -83,6 +87,9 @@ export type HouseholdEvidenceContact = {
     initials: string;
     /** Identity profile image (evidence model); null → initials fallback. */
     imageUrl?: string | null;
+    /** Person-scoped address components when present on observed truth. */
+    addressLine1?: string | null;
+    addressLine2?: string | null;
 };
 
 /**
@@ -165,10 +172,23 @@ function initialsFor(name: string): string {
     return (parts[0]!.charAt(0) + parts[parts.length - 1]!.charAt(0)).toUpperCase();
 }
 
+
+function splitContactName(name: string): { firstName: string | null; lastName: string | null } {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return { firstName: null, lastName: null };
+    if (parts.length === 1) return { firstName: parts[0]!, lastName: null };
+    return { firstName: parts[0]!, lastName: parts.slice(1).join(" ") || null };
+}
+
 function toEvidenceContact(row: DrawerHouseholdContactRow): HouseholdEvidenceContact {
+    const explicitFirst = trimOrNull((row as { first_name?: string | null }).first_name);
+    const explicitLast = trimOrNull((row as { last_name?: string | null }).last_name);
+    const split = splitContactName(row.display_name);
     return {
         personId: row.person_id,
         name: row.display_name,
+        firstName: explicitFirst ?? split.firstName,
+        lastName: explicitLast ?? split.lastName,
         roleLabel: row.is_primary ? "Primary" : row.role_label,
         isPrimary: row.is_primary,
         phone: formatPhoneForDisplay(row.phone),
@@ -313,7 +333,7 @@ export function buildHouseholdCardEvidence(
         preferOpportunityPointer: true,
     });
     const primaryPersonId = primaryAuthority.target_person_id;
-    const primaryContact = buildPrimaryContact(record, primaryPersonId);
+    let primaryContact = buildPrimaryContact(record, primaryPersonId);
 
     // Read ALL family rows — do NOT use resolveOpportunityDrawerHouseholdContacts
     // which filters out role=parent when a primary is resolved.
@@ -450,6 +470,28 @@ export function buildHouseholdCardEvidence(
     const preferredContactMethod =
         trimOrNull(record["person.preferred_contact_method"]) ??
         trimOrNull(record["person.contact_preference"]);
+
+    const personAddressIndex = buildPersonAddressIndexFromVm(record);
+    const attachPersonAddress = (contact: HouseholdEvidenceContact): HouseholdEvidenceContact => {
+        const components = personAddressIndex.get(contact.personId);
+        if (!components) return contact;
+        const addressLine1 = components.address_line1 ?? null;
+        const addressLine2 = components.address_line2 ?? null;
+        if (!addressLine1 && !addressLine2) return contact;
+        return { ...contact, addressLine1, addressLine2 };
+    };
+    if (primaryContact) primaryContact = attachPersonAddress(primaryContact);
+    for (const contactList of [
+        otherParentGuardianRows,
+        additionalRows,
+        emergencyRows,
+        pickupRows,
+        billingRows,
+    ]) {
+        for (let index = 0; index < contactList.length; index += 1) {
+            contactList[index] = attachPersonAddress(contactList[index]!);
+        }
+    }
 
     const address = buildAddressLine(record);
 
@@ -589,7 +631,9 @@ export function buildHouseholdCardEvidence(
 
     const lastUpdatedLabel = (() => {
         const updated = trimOrNull(record.updated_at);
-        return updated ? `Updated ${updated.slice(0, 10)}` : null;
+        if (!updated) return null;
+        const formatted = formatFocusPanelDate(updated);
+        return formatted ? `Updated ${formatted}` : null;
     })();
 
     return {

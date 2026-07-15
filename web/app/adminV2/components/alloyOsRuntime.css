@@ -2753,6 +2753,10 @@ html[data-alloy-os-runtime="on"]
   color: var(--alloy-os-text-secondary, #4b5563);
   white-space: nowrap;
 }
+.alloy-os-card-pill--neutral {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
 .alloy-os-card-pill--positive {
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 14%, #fff);
   color: var(--alloy-os-bend-pine, #00a283);
@@ -3352,7 +3356,7 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"] {
   isolation: isolate;
   background: #ffffff;
-  z-index: 40;
+  z-index: 56; /* > .alloy-os-fp-depth-scrim z-index: 55 */
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -4635,19 +4639,22 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-card-avatar[data-avatar-tone="5"] { --alloy-os-avatar-bg: #f1f5f9; --alloy-os-avatar-fg: #64748b; }
 
 /* Semantic identity roles — color conveys type/role, never gender or ops status. */
-.alloy-os-card-avatar[data-avatar-role="primary_contact"] {
+.alloy-os-card-avatar[data-avatar-role="primary_contact"],
+.alloy-os-card-avatar[data-avatar-role="primary_contact"][data-avatar-tone] {
   --alloy-os-avatar-bg: color-mix(in srgb, var(--color-alloy-blue, #00458C) 16%, #fff);
   --alloy-os-avatar-fg: var(--color-alloy-blue, #00458C);
 }
-.alloy-os-card-avatar[data-avatar-role="other_parent_guardian"] {
-  --alloy-os-avatar-bg: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, #fff);
-  --alloy-os-avatar-fg: var(--alloy-os-bend-pine, #00a283);
+.alloy-os-card-avatar[data-avatar-role="other_parent_guardian"],
+.alloy-os-card-avatar[data-avatar-role="other_parent_guardian"][data-avatar-tone] {
+  --alloy-os-avatar-bg: color-mix(in srgb, var(--color-alloy-blue, #00458C) 16%, #fff);
+  --alloy-os-avatar-fg: var(--color-alloy-blue, #00458C);
 }
 .alloy-os-card-avatar[data-avatar-role="contact"] {
   --alloy-os-avatar-bg: #f1f5f9;
   --alloy-os-avatar-fg: #64748b;
 }
 /* Children keep deterministic tone buckets; role attribute scopes the family. */
+
 .alloy-os-card-avatar[data-avatar-role="child"] {
   /* tone CSS vars remain authoritative for child palette */
 }
@@ -6705,6 +6712,70 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .identity-record-summary__activate,
 .identity-expanded-details__toggle,
+
+.identity-field-value__value-row {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.identity-field-value--inline-editable .identity-field-value__edit {
+  opacity: 0;
+  pointer-events: auto;
+  position: static;
+  transform: none;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: opacity 120ms ease;
+}
+
+.identity-field-value--inline-editable:hover .identity-field-value__edit,
+.identity-field-value--inline-editable:focus-within .identity-field-value__edit {
+  opacity: 1;
+}
+
+.identity-field-value__value--clickable {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.identity-field-value--inline-editable:hover .identity-field-value__value--clickable,
+.identity-field-value--inline-editable:focus-within .identity-field-value__value--clickable {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.identity-field-value__input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--alloy-os-border, #e5e7eb);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.identity-field-value__inline-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.identity-field-value__edit--cancel {
+  color: var(--alloy-os-text-secondary, #6b7280);
+}
+
 .identity-record-summary__edit,
 .identity-field-value__edit {
   cursor: pointer;
@@ -6713,6 +6784,43 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .identity-record-summary__activate {
   padding: 0;
   text-align: left;
+}
+
+.identity-record-summary__open-details {
+  align-self: end;
+  justify-self: end;
+  margin-top: 4px;
+  margin-left: auto;
+  padding: 0;
+  color: var(--alloy-os-text-secondary, #6b7280);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.identity-record-summary__batch-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 4px;
+}
+
+.identity-record-summary__edit--save {
+  color: var(--alloy-os-accent, #24634f);
+  font-weight: 650;
+}
+
+.identity-record-summary__edit--cancel {
+  color: var(--alloy-os-text-secondary, #6b7280);
+}
+
+.identity-record-summary__open-details:hover,
+.identity-record-summary__open-details:focus-visible {
+  color: var(--alloy-os-accent, #24634f);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .identity-record-summary__activate:hover,
@@ -6825,6 +6933,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   color: var(--alloy-os-text-primary, #17211c);
   font-size: 11.5px;
 }
+
 
 .identity-record-summary__edit,
 .identity-field-value__edit {
@@ -6944,11 +7053,6 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .identity-record-summary:focus-within .identity-record-summary__edit,
 .identity-record-summary__edit:focus-visible {
   opacity: 1;
-}
-@media (hover: none) {
-  .identity-record-summary__edit {
-    opacity: 1;
-  }
 }
 
 .alloy-os-card-edit__opaque {

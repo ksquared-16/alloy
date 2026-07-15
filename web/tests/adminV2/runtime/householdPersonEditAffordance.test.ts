@@ -11,10 +11,24 @@ import {
 const ROOT = join(process.cwd());
 
 describe("Household person-level edit affordance", () => {
-    it("HouseholdCard does not wire per-field onEditField", () => {
+    it("HouseholdCard wires inline onSaveField instead of legacy onEditField", () => {
         const src = readFileSync(join(ROOT, "components/admin/focusPanel/cards/HouseholdCard.tsx"), "utf8");
+        expect(src).toContain("onSaveField=");
         expect(src).not.toContain("onEditField=");
         expect(src).toContain("onEditContact");
+    });
+
+    it("person-level Edit opens shared batch inline session when save is available", () => {
+        const src = readFileSync(
+            join(ROOT, "components/admin/focusPanel/identity/IdentityRecordSummary.tsx"),
+            "utf8",
+        );
+        expect(src).toContain("showPersonLevelEdit");
+        expect(src).toContain("canBatchInline");
+        expect(src).toContain("beginBatchEdit");
+        expect(src).toContain("data-identity-batch-actions");
+        expect(src).toContain("onSaveFields");
+        expect(src).not.toContain("onSaveField && isCollectionDepth");
     });
 
     it("IdentityFieldValue only shows Edit when onEdit is provided (field-scoped)", () => {
@@ -22,7 +36,7 @@ describe("Household person-level edit affordance", () => {
             join(ROOT, "components/admin/focusPanel/identity/IdentityFieldValue.tsx"),
             "utf8",
         );
-        expect(src).toContain("cell.editable && onEdit");
+        expect(src).toContain("identity-field-value--inline-editable");
     });
 
     it("rejects synthetic person ids for edit/save", () => {

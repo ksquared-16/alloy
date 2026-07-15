@@ -19,7 +19,7 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import ChildFocusEdit from "@/components/admin/focusPanel/cards/ChildFocusEdit";
 import IdentityRecordSummary from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
-import IdentityFieldGrid from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
+import IdentityFieldGrid, { type IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
 import IdentityExpandedDetails from "@/components/admin/focusPanel/identity/IdentityExpandedDetails";
 import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity/IdentityDisclosureBackAction";
 import IdentityDisclosureSurface from "@/components/admin/focusPanel/identity/IdentityDisclosureSurface";
@@ -43,7 +43,15 @@ import {
     type ChildFocusFieldKey,
     type ChildFocusView,
 } from "@/lib/adminV2/runtime/focusPanel/children/childIdentityFieldRuntime";
-import { seedChildFocusEditValues } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
+import {
+    childFocusMutationValueKeyForRef,
+    isIdentityFieldSaveSupported,
+} from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
+import type { ChildFocusEditValueKey } from "@/lib/adminV2/runtime/focusPanel/children/childFocusFieldPolicy";
+import {
+    buildChildFocusSavePatch,
+    seedChildFocusEditValues,
+} from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import {
     CHILDREN_FOCUS_GROUP_KEYS,
@@ -173,6 +181,36 @@ export default function ChildrenCard({
     const canEditChild = Boolean(mutation?.canEdit && hasEditableChildFields && !composerPreview);
     const opportunityStartDate =
         context.truth.start_date != null ? String(context.truth.start_date).slice(0, 10) : null;
+
+    const saveChildIdentityField =
+        canEditChild && mutation
+            ? async (args: IdentityFieldSaveArgs) => {
+                  if (!isIdentityFieldSaveSupported(args.fieldRef)) return { ok: false as const };
+                  const valueKey = childFocusMutationValueKeyForRef(args.fieldRef);
+                  if (!valueKey) return { ok: false as const };
+                  const seed = seedChildFocusEditValues(context.truth, args.personId);
+                  if (!seed) return { ok: false as const };
+                  const editableKeys = new Set<ChildFocusEditValueKey>([valueKey]);
+                  const draft = { ...seed.values, [valueKey]: args.value.trim() };
+                  const patch = buildChildFocusSavePatch({
+                      row: seed.row,
+                      draft,
+                      baseline: seed.values,
+                      identityBaseline: seed.identityBaseline,
+                      editableKeys,
+                      opportunityStartDate,
+                  });
+                  const hasChanges =
+                      Object.keys(patch.identityPatch).length > 0 || Object.keys(patch.ocmPatch).length > 0;
+                  if (!hasChanges) return { ok: true as const };
+                  return mutation.saveInquiryChild({
+                      childId: seed.childId,
+                      row: seed.row,
+                      patch,
+                      identityBaseline: seed.identityBaseline,
+                  });
+              }
+            : undefined;
 
     const [editing, setEditing] = useState(false);
     const [relatedViewId, setRelatedViewId] = useState<string | null>(null);
@@ -544,6 +582,7 @@ export default function ChildrenCard({
                 <IdentityDisclosureSurface
                     record={{ ...focusedIdentityRecord, badge: focused.status }}
                     depth={disclosure.depth}
+                    onSaveField={saveChildIdentityField}
                     onEnterEvidence={
                         disclosure.depth === "details" && evidenceSections.length > 0
                             ? () => enterEvidence(focused.id, "roster")
@@ -577,6 +616,7 @@ export default function ChildrenCard({
                         records={contextRosterRecords}
                         selectable
                         onSelectIdentity={selectChildIdentity}
+                        onSaveField={saveChildIdentityField}
                     />
             </ComposableRegionShell>
         );
@@ -597,6 +637,7 @@ export default function ChildrenCard({
                                 child={child}
                                 depth="summary"
                                 childrenSurfaceConfig={childrenSurfaceConfig}
+                                onSaveField={saveChildIdentityField}
                                 onActivate={
                                     composingChildrenSurface ? undefined : selectChildIdentity
                                 }
@@ -687,11 +728,13 @@ function ChildSummaryRow({
     childrenSurfaceConfig,
     depth = "summary",
     onActivate,
+    onSaveField,
 }: {
     child: ChildrenEvidenceChild;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
     depth?: "summary" | "context";
     onActivate?: (childId: string) => void;
+    onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
 }) {
     const record = buildChildIdentityRecordVM({
         config: childrenSurfaceConfig,
@@ -704,6 +747,7 @@ function ChildSummaryRow({
                 record={{ ...record, badge: child.status }}
                 depth={depth}
                 onActivate={onActivate}
+                onSaveField={onSaveField}
             />
             {child.missingLine ? (
                 <span className="alloy-os-children__summary-line alloy-os-card-detail--risk" data-children-missing={child.id}>

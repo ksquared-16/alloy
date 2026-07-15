@@ -1,8 +1,8 @@
 /**
- * Context runtime projection — Summary + Context Facts.
+ * Identity disclosure projections — Summary, Context Facts, and Details tiers.
  *
- * Context is not a duplicate configuration layer. The shared VM composes:
- *   contextRows = summaryRows + incremental contextFactRows (deduped; summary wins).
+ * Summary does not feed Context. Context Facts are the Collection projection.
+ * Details inherits Context Facts plus Detail Fields (detail tier wins duplicate refs in the detail block).
  */
 
 import type { IdentityFieldRowVM } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
@@ -11,39 +11,47 @@ function fieldRefsInRows(rows: IdentityFieldRowVM[]): string[] {
     return rows.flatMap((row) => row.cells.map((cell) => cell.fieldRef));
 }
 
-/** Merge summary rows with incremental context facts; summary placement wins on duplicate refs. */
-export function composeSummaryAndContextFacts(
-    summaryRows: IdentityFieldRowVM[],
-    contextFactRows: IdentityFieldRowVM[],
-): IdentityFieldRowVM[] {
-    const summaryRefs = new Set(fieldRefsInRows(summaryRows));
-    const incrementalFacts = contextFactRows
-        .map((row) => ({
-            ...row,
-            cells: row.cells.filter((cell) => !summaryRefs.has(cell.fieldRef)),
-        }))
-        .filter((row) => row.cells.length > 0);
-
-    if (incrementalFacts.length === 0) {
-        return summaryRows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) }));
-    }
-
-    const merged = summaryRows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell })) }));
-    let nextRow = merged.length > 0 ? Math.max(...merged.map((row) => row.row)) + 1 : 1;
-
-    for (const factRow of incrementalFacts) {
-        merged.push({
-            row: nextRow,
-            cells: factRow.cells.map((cell) => ({ ...cell })),
-        });
-        nextRow += 1;
-    }
-
-    return merged;
+function cloneIdentityFieldRows(rows: IdentityFieldRowVM[]): IdentityFieldRowVM[] {
+    return rows.map((row) => ({
+        ...row,
+        cells: row.cells.map((cell) => ({ ...cell })),
+    }));
 }
 
-/** Strip summary duplicates from persisted context fact keys (compatibility adapter). */
-export function sanitizeContextFactKeys(summaryKeys: readonly string[], contextFactKeys: readonly string[]): string[] {
-    const summary = new Set(summaryKeys);
-    return contextFactKeys.filter((fieldRef) => !summary.has(fieldRef));
+/** Context collection projection — Context Facts only (no Summary merge). */
+export function composeContextCollectionRows(contextFactRows: IdentityFieldRowVM[]): IdentityFieldRowVM[] {
+    return cloneIdentityFieldRows(contextFactRows);
+}
+
+/** Details projection — Context Facts first; detail rows exclude refs already shown in context. */
+export function composeContextFactsIntoDetails(
+    contextFactRows: IdentityFieldRowVM[],
+    detailRows: IdentityFieldRowVM[],
+): { leadingRows: IdentityFieldRowVM[]; detailOnlyRows: IdentityFieldRowVM[] } {
+    const contextRefs = new Set(fieldRefsInRows(contextFactRows));
+    const detailOnlyRows = detailRows
+        .map((row) => ({
+            ...row,
+            cells: row.cells.filter((cell) => !contextRefs.has(cell.fieldRef)),
+        }))
+        .filter((row) => row.cells.length > 0);
+    return {
+        leadingRows: cloneIdentityFieldRows(contextFactRows),
+        detailOnlyRows,
+    };
+}
+
+/**
+ * @deprecated Summary no longer merges into Context. Returns Context Facts only.
+ */
+export function composeSummaryAndContextFacts(
+    _summaryRows: IdentityFieldRowVM[],
+    contextFactRows: IdentityFieldRowVM[],
+): IdentityFieldRowVM[] {
+    return composeContextCollectionRows(contextFactRows);
+}
+
+/** @deprecated Context Facts may overlap Summary keys; returns keys unchanged. */
+export function sanitizeContextFactKeys(_summaryKeys: readonly string[], contextFactKeys: readonly string[]): string[] {
+    return [...contextFactKeys];
 }
