@@ -61,6 +61,13 @@ import {
     parseOpportunityQueueUpdatedDetail,
 } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { bustOperatorRuntimeReadCaches } from "@/lib/admin/operatorRuntimeReadCacheBust";
+import {
+    peekWorkspaceSurface,
+    putWorkspaceSurface,
+    workspaceSurfaceCacheContextReady,
+    type RetainedWorkspaceSurface,
+    type WorkspaceSurfaceCacheContext,
+} from "./workspaceSurfaceSessionCache";
 
 /** Warmest available first paint: session peek, else the server-composed Route VM seed. */
 function seedLifecycleCards(
@@ -73,9 +80,30 @@ function seedLifecycleCards(
 
 export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     const routeVm = useWorkspaceRouteVm();
-    const { orgId, orgName } = useWorkspaceOrg();
+    const { orgId, orgName, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
+
+    // ── RETAINED-TRUTH §4: synchronous retained-surface seed ────────────────────────────
+    // Read the last committed workspace composition once at mount (before any effect) so a return
+    // to /workspace renders the retained tiles/header/counts immediately instead of the skeleton.
+    // Isolation is enforced by the cache key (org + user + scope + site).
+    const cacheContext = useMemo<WorkspaceSurfaceCacheContext>(
+        () => ({ orgId, userId: principalUserId, scopeFingerprint: accessScopeFingerprint, selectedSiteId }),
+        [orgId, principalUserId, accessScopeFingerprint, selectedSiteId],
+    );
+    const retainedSeedRef = useRef<RetainedWorkspaceSurface | null | undefined>(undefined);
+    if (retainedSeedRef.current === undefined) {
+        retainedSeedRef.current = peekWorkspaceSurface(cacheContext)?.surface ?? null;
+    }
+    const retainedSeed = retainedSeedRef.current;
+    const openedFromRetained = retainedSeed != null;
+    // Totals cache context reuses the existing per-view totals store cross-mount (org/user/scope
+    // keyed; the population key already distinguishes the workspace target set).
+    const totalsCacheContext = useMemo(
+        () => ({ orgId, userId: principalUserId, scopeFingerprint: accessScopeFingerprint }),
+        [orgId, principalUserId, accessScopeFingerprint],
+    );
 
     const [cards, setCards] = useState<OperatorLifecycleLandingCard[]>(() =>
         seedLifecycleCards(routeVm.firstPaint.lifecycleCards),
@@ -119,7 +147,9 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     // ── Right Rail actions: the configured Workspace actions for the persistent command rail ─
     // Org-scoped (surface=workspace + shared right_rail); registered into the same shell command
     // rail the Work Unit uses. Deduped + TTL. Never invents actions.
-    const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>([]);
+    const [rightRailActions, setRightRailActions] = useState<ResolvedActionForClient[]>(
+        () => retainedSeed?.rightRailActions ?? [],
+    );
     useEffect(() => {
         if (orgId == null) return;
         let cancelled = false;
@@ -166,6 +196,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         selectedSiteId,
         enabled: orgId != null,
         refreshToken: refreshNonce,
+        cacheContext: totalsCacheContext,
     });
 
     // ── Primary Signal: the ONE configured Operational Calculation per process ──────────
@@ -216,7 +247,9 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     });
 
     const headerFallbackTitle = orgName ?? routeVm.context.orgName;
-    const lastCompleteHeader = useRef<WorkspaceHeaderPresentationModel | null>(null);
+    const lastCompleteHeader = useRef<WorkspaceHeaderPresentationModel | null>(
+        retainedSeed?.headerPresentation ?? null,
+    );
     const headerPresentation = useMemo(() => {
         if (!headerConfigLoaded || !signalsSettled) {
             return lastCompleteHeader.current;
@@ -268,7 +301,9 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         ],
     );
 
-    const lastCompleteProcessSnapshot = useRef<WorkspaceProcessTileSnapshot | null>(null);
+    const lastCompleteProcessSnapshot = useRef<WorkspaceProcessTileSnapshot | null>(
+        retainedSeed?.processSnapshot ?? null,
+    );
     const processSnapshotSelection = useMemo(
         () =>
             selectWorkspaceProcessTileSnapshot({
@@ -295,6 +330,44 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     }
     const visibleProcessSnapshot = processSnapshotSelection.snapshot;
 
+    // ── RETAINED-TRUTH §4: commit the fully-settled composition back to the retained cache ──
+    // Persist ONLY a first-useful composition where every input has settled (never the retained
+    // passthrough shown during a refresh) so a return renders truth, not a half-loaded frame.
+    const fullyCommitted =
+        cardsSettled &&
+        processConfigLoaded &&
+        signalsSettled &&
+        workViewTotalsState.settled &&
+        headerConfigLoaded &&
+        Boolean(headerPresentation) &&
+        Boolean(visibleProcessSnapshot) &&
+        processSnapshotSelection.ready;
+    useEffect(() => {
+        if (!fullyCommitted) return;
+        if (!workspaceSurfaceCacheContextReady(cacheContext)) return;
+        if (!visibleProcessSnapshot || !headerPresentation) return;
+        putWorkspaceSurface(
+            {
+                processSnapshot: visibleProcessSnapshot,
+                headerPresentation,
+                rightRailActions,
+                defaultDepartmentId,
+            },
+            cacheContext,
+        );
+    }, [
+        fullyCommitted,
+        cacheContext,
+        visibleProcessSnapshot,
+        headerPresentation,
+        rightRailActions,
+        defaultDepartmentId,
+    ]);
+
+    // A retained return is composition-ready the instant the seed paints: the retained snapshot +
+    // header are already complete, so we never re-show the skeleton while the background SWR runs.
+    const retainedReady = openedFromRetained && Boolean(visibleProcessSnapshot) && Boolean(headerPresentation);
+
     return useMemo<WorkspaceSurfaceModel>(
         () => ({
             header: headerPresentation ?? buildWorkspaceHeaderPresentation(headerConfig, {
@@ -307,12 +380,14 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
             defaultDepartmentId,
             // Header + process tiles commit only when config + metrics + counts have settled,
             // or from the previous complete snapshot during refresh. Prevents default-header
-            // flash and partial KPI morphs.
+            // flash and partial KPI morphs. A retained return is ready immediately from its seed
+            // (RETAINED-TRUTH §4) so navigating back never re-shows the skeleton.
             ready:
-                processSnapshotSelection.ready &&
-                Boolean(visibleProcessSnapshot) &&
-                headerConfigLoaded &&
-                Boolean(headerPresentation),
+                (processSnapshotSelection.ready &&
+                    Boolean(visibleProcessSnapshot) &&
+                    headerConfigLoaded &&
+                    Boolean(headerPresentation)) ||
+                retainedReady,
         }),
         [
             headerPresentation,
@@ -324,6 +399,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
             rightRailActions,
             defaultDepartmentId,
             processSnapshotSelection.ready,
+            retainedReady,
         ],
     );
 }
