@@ -42,6 +42,22 @@ describe("Identity Builder canonical field convergence", () => {
         expect(pickerKeys.has("child.schedule")).toBe(false);
     });
 
+
+    it("identity picker includes child first and last name from settings catalog", () => {
+        const fields = identityPickerFieldsForNamespaces({ namespaces: ["child"] });
+        const keys = fields.map((field) => field.key);
+        expect(keys).toContain("child.first_name");
+        expect(keys).toContain("child.last_name");
+    });
+
+    it("children child_edit nested picker includes child first and last name", () => {
+        const cfg = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        const available = availableFieldsForNestedGroup(CHILDREN_SURFACE_ID, "child_edit", cfg);
+        const keys = available.map((field) => field.key);
+        expect(keys).toContain("child.first_name");
+        expect(keys).toContain("child.last_name");
+    });
+
     it("includes platform child first/last name fields from canonical registry", () => {
         const fields = availableFieldsForNamespaces(["child"]);
         const keys = fields.map((field) => field.key);

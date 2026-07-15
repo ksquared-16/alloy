@@ -144,6 +144,37 @@ describe("mergeInquiryChildIntoFocusPanelTruth", () => {
     });
 });
 
+
+    it("savePersonContact merges from getTruth when closure truth is stale", async () => {
+        const cap = captureRecordPatch();
+        const staleTruth = { ...BASE_TRUTH };
+        const freshTruth = {
+            ...BASE_TRUTH,
+            extra_field: "preserve-me",
+            _person_address_by_id: {
+                "p-1": { address_line1: "Old Street", city: "Old City" },
+            },
+        };
+        const mutation = buildOpportunityFocusPanelMutation({
+            canMutate: true,
+            opportunityId: "opp-1",
+            truth: staleTruth,
+            getTruth: () => freshTruth,
+            fetchFn: fakeFetch({ ok: true, status: 200, json: async () => ({ id: "p-1" }) }),
+        });
+        const result = await mutation.savePersonContact("p-1", {
+            address_line1: "742 Evergreen Terrace",
+            city: "Springfield",
+        });
+        cap.stop();
+        expect(result).toEqual({ ok: true });
+        const patched = cap.events[0]?.detail?.record as Record<string, unknown>;
+        expect(patched.extra_field).toBe("preserve-me");
+        const snapshot = (patched._person_address_by_id as Record<string, Record<string, unknown>>)["p-1"];
+        expect(snapshot?.address_line1).toBe("742 Evergreen Terrace");
+        expect(snapshot?.city).toBe("Springfield");
+    });
+
 describe("buildOpportunityFocusPanelMutation.saveInquiryChild", () => {
     it("persists OCM patch via child-participation and dispatches merged truth", async () => {
         const cap = captureRecordPatch();

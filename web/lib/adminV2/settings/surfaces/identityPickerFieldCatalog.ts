@@ -6,7 +6,7 @@
 
 import { platformCategoryLabel } from "@/lib/adminV2/configuration/configurationCategoryCatalog";
 import type { AvailableField, AvailableFieldEntityNamespace } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
-import { filterCanonicalDataProviders } from "@/lib/fields/canonicalDataProviderRegistry";
+import { assembleFocusPanelNestedProviders } from "@/lib/fields/consumerCanonicalProviderAssembly";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { canonicalPickerIdentityForRefKey } from "@/lib/fields/canonicalProviderDedup";
 
@@ -81,8 +81,7 @@ export function identityPickerCategoriesForNamespaces(args: {
 }): IdentityPickerCategory[] {
     const accepted = new Set(args.namespaces);
     const exclude = args.excludeKeys ?? new Set<string>();
-    const providers = filterCanonicalDataProviders({
-        consumer: "focus_panel",
+    const providers = assembleFocusPanelNestedProviders({
         isWaitlist: args.isWaitlist ?? false,
         tenantFieldDefinitions: args.tenantFieldDefinitions,
     }).filter((provider) => accepted.has(provider.entityNamespace as AvailableFieldEntityNamespace));

@@ -327,6 +327,8 @@ export type BuildFocusPanelMutationInput = {
     opportunityId: string;
     /** Current observed subject truth (read-only) used to build the merged refresh record. */
     truth: Record<string, unknown>;
+    /** Latest truth at save time — avoids stale-closure merges after async PATCH. */
+    getTruth?: () => Record<string, unknown>;
     /** Test seam. */
     fetchFn?: typeof fetch;
 };
@@ -338,7 +340,7 @@ export type BuildFocusPanelMutationInput = {
  *  - Communications scheduled-send cancel (existing scheduled-sends PATCH)
  */
 export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutationInput): FocusPanelMutation {
-    const { canMutate, opportunityId, truth, fetchFn } = input;
+    const { canMutate, opportunityId, truth, getTruth, fetchFn } = input;
     const f = fetchFn ?? fetch;
     return {
         canEdit: canMutate,
@@ -361,7 +363,7 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                     (savedPerson as Record<string, unknown>)[key] = value;
                 }
             }
-            const merged = mergePersonContactIntoFocusPanelTruth(truth, id, savedPerson);
+            const merged = mergePersonContactIntoFocusPanelTruth(getTruth?.() ?? truth, id, savedPerson);
             dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
             dispatchDrawerLayoutRuntimeBodyRecordPatch({
                 entityType: "opportunities",
