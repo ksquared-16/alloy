@@ -28,6 +28,17 @@ import {
     normalizeIdentityStorageTier,
     storageTierMatchesPurpose,
 } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+function dedupeIdentityFieldRefList(fieldRefs: readonly string[]): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const ref of fieldRefs) {
+        if (seen.has(ref)) continue;
+        seen.add(ref);
+        out.push(ref);
+    }
+    return out;
+}
+
 import { sanitizeContextFactKeys } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import type {
     IdentitySectionConfig,
@@ -147,13 +158,24 @@ export const generateDefaultPlacementsForGroup = generateDefaultIdentityFieldPla
  * Migrate legacy config into configuration buckets + normalized placements.
  *
  * - selectedFieldKeys → Summary Fields
- * - contextFieldKeys → Context Facts (summary duplicates stripped)
+ * - contextFieldKeys → Context Facts (summary duplicates stripped unless explicitly configured per tier)
  * - expandedFieldKeys → Detail Fields
  */
 export function migrateIdentityDisclosureGroup(group: NestedSurfaceGroupConfig): NestedSurfaceGroupConfig {
     const reconciled = reconcileFieldModesToPolicies(group);
     const layers = identityLayerFieldKeysFromGroup(reconciled);
-    const contextFactKeys = sanitizeContextFactKeys(layers.summary, reconciled.contextFieldKeys ?? layers.contextFacts);
+    const sanitizedContextFactKeys = sanitizeContextFactKeys(
+        layers.summary,
+        reconciled.contextFieldKeys ?? layers.contextFacts,
+    );
+    const overlapContextFactKeys = (reconciled.fieldPlacements ?? [])
+        .filter((placement) => normalizeIdentityStorageTier(placement.tier) === "context_fact")
+        .map((placement) => placement.fieldRef)
+        .filter((fieldRef) => layers.summary.includes(fieldRef));
+    const contextFactKeys = dedupeIdentityFieldRefList([
+        ...sanitizedContextFactKeys,
+        ...overlapContextFactKeys,
+    ]);
     const placementSeed = {
         ...reconciled,
         selectedFieldKeys: layers.summary,

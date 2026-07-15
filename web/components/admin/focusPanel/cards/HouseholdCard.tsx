@@ -1148,7 +1148,7 @@ function GroupRows({
     const identitySection = buildHouseholdIdentityCardVM({
         config: nestedConfig,
         groups: [group],
-        canMutate: Boolean(onEditContact) && !masked && !composing,
+        canMutate: (Boolean(onEditContact) || Boolean(onSaveField)) && !masked && !composing,
         maskedChannels: masked,
     }).sections.find((section) => section.key === group.key);
     const items = identitySection?.items ?? [];

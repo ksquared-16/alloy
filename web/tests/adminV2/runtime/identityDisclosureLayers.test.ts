@@ -156,13 +156,37 @@ describe("context projection", () => {
         ]);
     });
 
-    it("duplicate field refs render once with summary winning", () => {
-        const merged = composeSummaryAndContextFacts(
-            [row("person.phone", "Summary Phone")],
-            [row("person.phone", "Fact Phone")],
-        );
+    it("duplicate field refs render once with context facts winning", () => {
+        const summaryRow: IdentityFieldRowVM = {
+            row: 1,
+            cells: [{
+                fieldRef: "person.phone",
+                label: "Summary Phone",
+                value: "111",
+                labelMode: "visible",
+                policy: "read-only",
+                editable: false,
+                hideWhenEmpty: false,
+                width: "full",
+            }],
+        };
+        const factRow: IdentityFieldRowVM = {
+            row: 1,
+            cells: [{
+                fieldRef: "person.phone",
+                label: "Fact Phone",
+                value: "222",
+                labelMode: "visible",
+                policy: "editable",
+                editable: true,
+                hideWhenEmpty: false,
+                width: "full",
+            }],
+        };
+        const merged = composeSummaryAndContextFacts([summaryRow], [factRow]);
         expect(merged).toHaveLength(1);
-        expect(merged[0]!.cells[0]!.label).toBe("Summary Phone");
+        expect(merged[0]!.cells[0]!.label).toBe("Fact Phone");
+        expect(merged[0]!.cells[0]!.editable).toBe(true);
     });
 
     it("empty context facts result in context equal to summary", () => {
