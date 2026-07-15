@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/engineering.sh
 source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
 # shellcheck source=lib/agent.sh
 source "${SCRIPT_DIR}/lib/agent.sh"
 
@@ -48,12 +50,25 @@ main() {
   [[ -n "$(node -e "const d=require('$(alloy_initiative_dir "$key")/state.json'); process.stdout.write(d.approved_spec_hash||'');")" ]] \
     || alloy_die "initiative not approved — run alloy-initiative-approve first"
 
+  if alloy_product_exists "$key"; then
+    local pstate
+    pstate="$(alloy_product_current_state "$key")"
+    [[ "$pstate" == "handed_off" || "$pstate" == "closed" ]] \
+      || alloy_die "Product Runtime not handed off (state: $pstate) — run alloy-product-handoff first"
+  fi
+
+  local base
+  base="$(alloy_initiative_dir "$key")"
+  if [[ -f "$base/product-handoff.json" ]]; then
+    [[ -n "$(node -e "const d=require('${base}/state.json'); process.stdout.write(d.product_contract_hash||d.approved_product_contract_hash||'');")" ]] \
+      || alloy_die "engineering state missing approved Product Contract hash — run alloy-product-handoff"
+  fi
+
   if [[ "$state" == "approved" || "$state" == "remediation_required" ]]; then
     alloy_initiative_transition "$key" "assigning"
   fi
 
-  local base staging_sha worker_plan
-  base="$(alloy_initiative_dir "$key")"
+  local staging_sha worker_plan
   staging_sha="$(alloy_staging_sha)"
   worker_plan="$base/plan/worker-plan.yaml"
 

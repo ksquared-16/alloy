@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/engineering.sh
 source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
 # shellcheck source=lib/agent.sh
 source "${SCRIPT_DIR}/lib/agent.sh"
 
@@ -76,6 +78,20 @@ main() {
     printf '| Slot | %s |\n' "$slot"
     printf '\n## Objective\n\n'
     grep -A1 '^objective:' "$task_yaml" | tail -1 | sed 's/^/ /'
+    printf '\n## Product truth (immutable for revision)\n\n'
+    if [[ -f "$base/product-handoff.json" ]]; then
+      node -e "
+        const h = require('${base}/product-handoff.json');
+        console.log('- Product revision:', h.product_revision);
+        console.log('- Contract hash:', (h.approved_contract_hash||'').slice(0,16)+'...');
+        console.log('- Operator outcomes:', (h.operator_outcomes||[]).join('; '));
+        console.log('- In scope:', (h.in_scope||[]).slice(0,3).join('; '));
+        console.log('- Visual refs:', (h.ux_visual_contract_refs||[]).join(', '));
+        console.log('- **Do not reinterpret product intent or expand scope.**');
+      "
+    else
+      printf -- '- No Product handoff on record — see Engineering plan contracts.\n'
+    fi
     printf '\n## Constitutional truth\n\n'
     alloy_engineering_constitutional_truth
     printf '\n## Initiative-approved decisions\n\n'

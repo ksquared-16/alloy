@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-product-close <key> [--disposition "released|cancelled|superseded"]
+
+Closes a product initiative after engineering/release disposition is recorded.
+Transitions: handed_off → closed
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+  [[ $# -ge 1 ]] || { usage >&2; exit 2; }
+
+  local key="$1"
+  shift
+  local disposition="closed"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --disposition) [[ $# -ge 2 ]] || alloy_die "--disposition requires value"; disposition="$2"; shift 2 ;;
+      --disposition=*) disposition="${1#--disposition=}"; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+
+  alloy_load_config
+  alloy_product_require_node
+  alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+
+  alloy_initiative_acquire_lock "$key"
+  local state
+  state="$(alloy_product_current_state "$key")"
+  [[ "$state" == "handed_off" || "$state" == "closed" ]] \
+    || alloy_die "cannot close in state: $state (expected handed_off)"
+
+  local now
+  now="$(alloy_iso_now)"
+  node -e "
+    const fs = require('fs');
+    const p = '$(alloy_product_state_path "$key")';
+    const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+    d.disposition = $(node -e "console.log(JSON.stringify('${disposition}'))");
+    d.closed_at = '${now}';
+    d.updated_at = '${now}';
+    fs.writeFileSync(p, JSON.stringify(d, null, 2) + '\n');
+  "
+
+  if [[ "$state" == "handed_off" ]]; then
+    alloy_product_transition "$key" "closed"
+  fi
+
+  alloy_info "Product initiative closed: $key"
+  alloy_info "  disposition: $disposition"
+}
+
+main "$@"

@@ -5,14 +5,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/engineering.sh
 source "${SCRIPT_DIR}/lib/engineering.sh"
+# shellcheck source=lib/product.sh
+source "${SCRIPT_DIR}/lib/product.sh"
 
 usage() {
   cat <<'EOF'
 Usage:
   alloy-initiative-create <key> --clipboard
   alloy-initiative-create <key> --from /path/to/initiative.yaml
+  alloy-initiative-create <key> --from-handoff
 
-Creates a new initiative from an Initiative Brief (YAML).
+Creates a new Engineering initiative from an Initiative Brief (YAML)
+or from an approved Product Runtime handoff (product/final/handoff-manifest.json).
+
+Preferred product path: alloy-product-handoff <key> (creates Engineering automatically).
 Validates required fields strictly. Does not overwrite existing initiatives.
 
 See: scripts/local-dev/INITIATIVE-CONTRACT.md
@@ -114,10 +120,22 @@ main() {
     case "$1" in
       --clipboard) mode="clipboard"; shift ;;
       --from) [[ $# -ge 2 ]] || alloy_die "--from requires path"; from_path="$2"; mode="file"; shift 2 ;;
+      --from-handoff) mode="handoff"; shift ;;
       -h|--help) usage; exit 0 ;;
       *) alloy_die "unknown option: $1" ;;
     esac
   done
+
+  if [[ "$mode" == "handoff" ]]; then
+    alloy_product_exists "$key" || alloy_die "product initiative not found: $key"
+    [[ "$(alloy_product_current_state "$key")" == "handed_off" || -f "$(alloy_product_handoff_path "$key")" ]] \
+      || alloy_die "product handoff not ready — approve and run alloy-product-handoff first"
+    if [[ -f "$(alloy_initiative_dir "$key")/state.json" ]]; then
+      alloy_die "engineering initiative already exists: $key"
+    fi
+    env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" "${SCRIPT_DIR}/alloy-product-handoff" "$key"
+    exit 0
+  fi
 
   case "$mode" in
     clipboard)
