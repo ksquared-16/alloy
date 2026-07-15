@@ -14,6 +14,19 @@ export type IdentityFieldTier = IdentityStorageTier;
 
 export type IdentityFieldLabelMode = "visible" | "hidden" | "eyebrow";
 
+/** Resolve runtime label visibility from placement.labelMode or legacy fieldModes.showLabel. */
+export function resolveIdentityPlacementLabelMode(
+    placement: Pick<IdentityFieldPlacement, "labelMode" | "fieldRef">,
+    fieldModes: Record<string, { showLabel?: boolean }> | undefined,
+    fieldRef: string = placement.fieldRef,
+): IdentityFieldLabelMode {
+    if (placement.labelMode === "hidden" || placement.labelMode === "eyebrow" || placement.labelMode === "visible") {
+        return placement.labelMode;
+    }
+    if (fieldModes?.[fieldRef]?.showLabel === false) return "hidden";
+    return "visible";
+}
+
 export type IdentityFieldPlacement = {
     fieldRef: string;
     tier: IdentityStorageTier;
@@ -27,6 +40,7 @@ export type IdentityFieldPlacement = {
 };
 
 export type IdentityPlacementGroupLike = {
+    fieldModes?: Record<string, { showLabel?: boolean }>;
     selectedFieldKeys: string[];
     contextFieldKeys?: string[];
     expandedFieldKeys?: string[];
@@ -43,10 +57,11 @@ function seedPlacement(args: {
     width: NestedSurfaceFieldLayoutWidth;
     policy?: SurfaceFieldVisibility;
     existing?: IdentityFieldPlacement;
+    fieldModes?: Record<string, { showLabel?: boolean }>;
 }): IdentityFieldPlacement {
     const normalizedTier = normalizeIdentityStorageTier(args.tier);
     const keepExistingLayout = args.existing?.width === args.width;
-    return {
+    const seeded: IdentityFieldPlacement = {
         fieldRef: args.fieldRef,
         tier: normalizedTier,
         row: keepExistingLayout ? (args.existing?.row ?? args.row) : args.row,
@@ -56,6 +71,14 @@ function seedPlacement(args: {
         labelMode: args.existing?.labelMode,
         policy: args.existing?.policy ?? args.policy,
         hideWhenEmpty: args.existing?.hideWhenEmpty,
+    };
+    const resolvedLabelMode = resolveIdentityPlacementLabelMode(seeded, args.fieldModes, args.fieldRef);
+    return {
+        ...seeded,
+        labelMode:
+            resolvedLabelMode === "visible"
+                ? args.existing?.labelMode
+                : resolvedLabelMode,
     };
 }
 
@@ -78,9 +101,7 @@ export function generateDefaultIdentityFieldPlacements(
     );
     const summaryKeys = options?.summaryKeys ?? group.selectedFieldKeys;
     const summarySet = new Set(summaryKeys);
-    const contextFactKeys = (options?.contextFactKeys ?? group.contextFieldKeys ?? []).filter(
-        (fieldRef) => !summarySet.has(fieldRef),
-    );
+    const contextFactKeys = options?.contextFactKeys ?? group.contextFieldKeys ?? [];
     const expandedKeys = options?.expandedKeys ?? group.expandedFieldKeys ?? [];
     const placements: IdentityFieldPlacement[] = [];
 
@@ -106,6 +127,7 @@ export function generateDefaultIdentityFieldPlacements(
                     width,
                     policy: prior?.policy ?? group.fieldPolicies?.[fieldRef] ?? options?.defaultPolicy,
                     existing: prior,
+                    fieldModes: group.fieldModes,
                 }),
             );
             if (width === "third" && column < 3) {

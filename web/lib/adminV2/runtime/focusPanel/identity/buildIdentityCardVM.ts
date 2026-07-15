@@ -33,6 +33,7 @@ import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/ident
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
 import { storageTierMatchesPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { resolveIdentityPlacementLabelMode } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 import { composeSummaryAndContextFacts } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
 import {
     enabledEvidenceSections,
@@ -124,8 +125,12 @@ function buildRecordRows(args: {
             args.isFieldSaveSupported?.(placement.fieldRef)
             ?? (args.groupKey === args.editGroupKey && Boolean(args.editGroupKey));
         const editable = args.canMutate && fieldIsSaveable(policy) && saveSupported;
+        const placementForRuntime = {
+            ...placement,
+            labelMode: resolveIdentityPlacementLabelMode(placement, group.fieldModes, placement.fieldRef),
+        };
         inputs.push({
-            placement,
+            placement: placementForRuntime,
             label: fieldPresentationLabel(
                 args.config,
                 args.groupKey,

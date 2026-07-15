@@ -805,17 +805,31 @@ export function setFieldPresentationModeInNestedGroup(
 ): NestedSurfaceConfig {
     return {
         ...config,
-        groups: config.groups.map((g) =>
-            g.key === groupKey
-                ? {
-                      ...g,
-                      fieldModes: {
-                          ...(g.fieldModes ?? {}),
-                          [fieldKey]: { ...(g.fieldModes?.[fieldKey] ?? {}), ...patch },
-                      },
-                  }
-                : g,
-        ),
+        groups: config.groups.map((g) => {
+            if (g.key !== groupKey) return g;
+            const nextFieldModes = {
+                ...(g.fieldModes ?? {}),
+                [fieldKey]: { ...(g.fieldModes?.[fieldKey] ?? {}), ...patch },
+            };
+            let nextPlacements = g.fieldPlacements;
+            if (patch.showLabel !== undefined) {
+                const labelMode = patch.showLabel === false ? ("hidden" as const) : ("visible" as const);
+                const placements =
+                    (g.fieldPlacements?.length ?? 0) > 0
+                        ? g.fieldPlacements!
+                        : generateDefaultIdentityFieldPlacements(g);
+                nextPlacements = placements.map((placement) =>
+                    placement.fieldRef === fieldKey ? { ...placement, labelMode } : placement,
+                );
+            }
+            return {
+                ...g,
+                fieldModes: nextFieldModes,
+                ...(nextPlacements !== undefined && nextPlacements !== g.fieldPlacements
+                    ? { fieldPlacements: nextPlacements }
+                    : {}),
+            };
+        }),
     };
 }
 

@@ -13,7 +13,10 @@ import type { NestedSurfaceConfig, NestedSurfaceGroupConfig } from "@/lib/adminV
 import { generateDefaultIdentityFieldPlacements } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 import { migrateIdentityDisclosureGroup } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
 import { normalizeIdentityStorageTier } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
-import type { IdentityFieldPlacement } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import {
+    resolveIdentityPlacementLabelMode,
+    type IdentityFieldPlacement,
+} from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 
 /** Canonical Parent / Guardian template group (not a runtime section). */
 export const HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP = "contact_edit" as const;
@@ -127,6 +130,7 @@ function buildAuthoritativePlacements(
     contextKeys: string[] | undefined,
     detailKeys: string[] | undefined,
 ): NestedSurfaceGroupConfig["fieldPlacements"] {
+    const mergedFieldModes = mergeFieldMaps(template.fieldModes, runtime.fieldModes);
     const templatePlacements = (template.fieldPlacements ?? generateDefaultIdentityFieldPlacements(template)).map(
         normalizePlacementFieldRef,
     );
@@ -162,7 +166,14 @@ function buildAuthoritativePlacements(
                 column: templatePlacement?.column ?? 1,
                 width: templatePlacement?.width ?? "full",
                 icon: templatePlacement?.icon,
-                labelMode: templatePlacement?.labelMode,
+                labelMode: resolveIdentityPlacementLabelMode(
+                    {
+                        fieldRef,
+                        labelMode: runtimeOverride?.labelMode ?? templatePlacement?.labelMode,
+                    },
+                    mergedFieldModes,
+                    fieldRef,
+                ),
                 hideWhenEmpty: templatePlacement?.hideWhenEmpty,
                 policy: runtimeOverride?.policy ?? templatePlacement?.policy,
             };
@@ -233,6 +244,7 @@ export function resolveHouseholdRoleMergedGroup(
         fieldPolicies: mergeFieldMaps(template.fieldPolicies, runtime.fieldPolicies),
         fieldLabels: mergeFieldMaps(template.fieldLabels, runtime.fieldLabels),
         fieldLayoutWidths: mergeFieldMaps(template.fieldLayoutWidths, runtime.fieldLayoutWidths),
+        fieldModes: mergeFieldMaps(template.fieldModes, runtime.fieldModes),
         evidenceCollections:
             template.evidenceCollections !== undefined
                 ? template.evidenceCollections
@@ -249,18 +261,20 @@ export function resolveHouseholdRoleMergedGroup(
     const migrated = migrateIdentityDisclosureGroup(mergedBase);
     // Re-apply placements after migrate — migrate regenerates from keys; keep our
     // normalized/authoritative placements when present.
+    const fieldPlacements = buildAuthoritativePlacements(
+        template,
+        runtime,
+        summaryKeys,
+        contextKeys,
+        detailKeys,
+    );
     return {
         ...migrated,
         selectedFieldKeys: summaryKeys,
         contextFieldKeys: contextKeys,
         expandedFieldKeys: detailKeys,
-        fieldPlacements: buildAuthoritativePlacements(
-            template,
-            runtime,
-            summaryKeys,
-            contextKeys,
-            detailKeys,
-        ),
+        fieldModes: mergeFieldMaps(template.fieldModes, runtime.fieldModes),
+        fieldPlacements,
     };
 }
 
