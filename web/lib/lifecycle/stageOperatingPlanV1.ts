@@ -9,10 +9,19 @@ import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { normalizeCompletionPolicy } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import {
     parseStageFollowUpWorkDuePolicyV1,
+    type StageFollowUpDueOffsetUnit,
     type StageFollowUpWorkDuePolicyV1,
 } from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
 
 export type { StageFollowUpWorkDuePolicyV1 } from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
+
+const ATTENTION_DURATION_UNITS = new Set<StageFollowUpDueOffsetUnit>([
+    "minutes",
+    "hours",
+    "days",
+    "weeks",
+    "months",
+]);
 
 export const STAGE_OPERATING_PLAN_METADATA_KEY = "stage_operating_plan_v1" as const;
 
@@ -184,13 +193,25 @@ export type StageAttentionRuleKind =
 
 export type StageAttentionSeverity = "low" | "medium" | "high";
 
+/** Elapsed-time threshold for attention rules — shared duration units with follow-up work. */
+export type StageAttentionThresholdDurationV1 = {
+    offset_value: number;
+    offset_unit: StageFollowUpDueOffsetUnit;
+};
+
 export type StageAttentionRuleV1 = {
     rule_key: string;
     kind: StageAttentionRuleKind;
     /** Operator label shown in Business Process editor. */
     label?: string;
     severity?: StageAttentionSeverity;
+    /**
+     * Legacy day threshold. Kept for compatibility; prefer `threshold_duration`.
+     * For `no_contact_attempt`, this remains the minimum attempt count.
+     */
     threshold?: number;
+    /** Canonical elapsed-time threshold (value + unit). */
+    threshold_duration?: StageAttentionThresholdDurationV1;
     /** Optional work item scope for work_overdue rules. */
     template_key?: string | null;
     targets: StageOutcomeRuleTargetV1[];
@@ -492,6 +513,33 @@ function parseAttentionRule(raw: unknown): StageAttentionRuleV1 | null {
     }
     if (typeof o.threshold === "number" && Number.isFinite(o.threshold)) {
         rule.threshold = Math.max(0, Math.floor(o.threshold));
+    }
+    if (o.threshold_duration != null && typeof o.threshold_duration === "object" && !Array.isArray(o.threshold_duration)) {
+        const d = o.threshold_duration as Record<string, unknown>;
+        const offset_value =
+            typeof d.offset_value === "number" && Number.isFinite(d.offset_value) ?
+                Math.max(0, Math.floor(d.offset_value))
+            :   null;
+        const offset_unit = trimNonEmpty(d.offset_unit) as StageFollowUpDueOffsetUnit | null;
+        if (offset_value != null && offset_unit && ATTENTION_DURATION_UNITS.has(offset_unit)) {
+            rule.threshold_duration = { offset_value, offset_unit };
+        }
+    }
+    // Normalize legacy day-only thresholds for elapsed-time rule kinds only.
+    const elapsedTimeKinds = new Set<StageAttentionRuleKind>([
+        "work_overdue",
+        "required_work_overdue",
+        "stage_age_exceeded",
+        "days_without_success",
+        "waiting_on_family",
+        "waiting_on_provider",
+    ]);
+    if (
+        !rule.threshold_duration
+        && typeof rule.threshold === "number"
+        && elapsedTimeKinds.has(rule.kind)
+    ) {
+        rule.threshold_duration = { offset_value: rule.threshold, offset_unit: "days" };
     }
     const template_key = trimNonEmpty(o.template_key);
     if (template_key) rule.template_key = template_key;

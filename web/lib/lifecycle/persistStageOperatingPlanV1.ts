@@ -66,7 +66,8 @@ function applyPlanToBuilderStage(
     return out;
 }
 
-function operatingPlanSeedDecision(
+/** Exported for tests — preserve existing tenant plans; seed only when absent. */
+export function operatingPlanSeedDecision(
     stageKey: string,
     container: unknown,
     processKey: string,

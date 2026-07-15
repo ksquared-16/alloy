@@ -168,6 +168,28 @@ export function effectiveFollowUpDuePolicy(
     return duePolicyFromLegacyDays(legacyDueDays);
 }
 
+/** Convert a positive duration to milliseconds (months ≈ 30 days). */
+export function durationOffsetToMs(
+    offsetValue: number,
+    offsetUnit: StageFollowUpDueOffsetUnit = "days",
+): number {
+    const value = Math.max(0, Math.floor(offsetValue));
+    if (value <= 0) return 0;
+    switch (offsetUnit) {
+        case "minutes":
+            return value * 60 * 1000;
+        case "hours":
+            return value * 60 * 60 * 1000;
+        case "weeks":
+            return value * 7 * 24 * 60 * 60 * 1000;
+        case "months":
+            return value * 30 * 24 * 60 * 60 * 1000;
+        case "days":
+        default:
+            return value * 24 * 60 * 60 * 1000;
+    }
+}
+
 function applyOffset(base: Date, policy: StageFollowUpWorkDuePolicyV1): Date {
     const result = new Date(base);
     const value = policy.offset_value ?? 0;

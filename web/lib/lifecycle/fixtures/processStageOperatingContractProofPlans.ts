@@ -291,23 +291,30 @@ export function leadContactFamilyProofPlan(): StageOperatingPlanV1 {
                     { action_ref: "send_form" },
                 ],
                 outcome_refs: [
-                    { outcome_ref: "reached" },
+                    { outcome_ref: "reached_family" },
                     { outcome_ref: "left_message" },
-                    { outcome_ref: "awaiting_response" },
+                    { outcome_ref: "needs_follow_up" },
+                    { outcome_ref: "interested" },
                     { outcome_ref: "not_interested" },
                 ],
             },
         ],
         outcomes: [
-            { outcome_key: "reached", label: "Reached", successful: true },
+            { outcome_key: "reached_family", label: "Reached Family", successful: true },
             { outcome_key: "left_message", label: "Left Message" },
-            { outcome_key: "awaiting_response", label: "Awaiting Response" },
+            { outcome_key: "needs_follow_up", label: "Needs Follow-up" },
+            { outcome_key: "interested", label: "Interested", successful: true },
             { outcome_key: "not_interested", label: "Not Interested", completes_work: true },
         ],
         outcome_rules: [
             {
-                rule_key: "reached_to_tour",
-                when_outcome_key: "reached",
+                rule_key: "reached_family_to_tour",
+                when_outcome_key: "reached_family",
+                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
+            },
+            {
+                rule_key: "interested_to_tour",
+                when_outcome_key: "interested",
                 targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
             },
             {
@@ -349,7 +356,7 @@ export function decisionSupportEnrollmentProofPlan(): StageOperatingPlanV1 {
                     { action_ref: "send_form" },
                 ],
                 outcome_refs: [
-                    { outcome_ref: "ready_to_enroll" },
+                    { outcome_ref: "family_enrolling" },
                     { outcome_ref: "needs_time" },
                     { outcome_ref: "wants_waitlist" },
                     { outcome_ref: "declined" },
@@ -358,8 +365,8 @@ export function decisionSupportEnrollmentProofPlan(): StageOperatingPlanV1 {
         ],
         outcomes: [
             {
-                outcome_key: "ready_to_enroll",
-                label: "Ready to Enroll",
+                outcome_key: "family_enrolling",
+                label: "Family Enrolling",
                 successful: true,
                 completes_work: true,
             },
@@ -378,8 +385,8 @@ export function decisionSupportEnrollmentProofPlan(): StageOperatingPlanV1 {
         ],
         outcome_rules: [
             {
-                rule_key: "ready_to_enroll_move",
-                when_outcome_key: "ready_to_enroll",
+                rule_key: "family_enrolling_move",
+                when_outcome_key: "family_enrolling",
                 targets: [
                     {
                         kind: "move_to_stage",

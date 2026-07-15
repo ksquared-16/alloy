@@ -89,14 +89,15 @@ describe("parseStageOperatingPlanV1", () => {
 });
 
 describe("defaultStageOperatingPlanForEnrollmentStage", () => {
-    it("seeds lead stage with Review Lead + Contact Family and completion policy", () => {
+    it("seeds lead stage with Direct Action Contact Family and tour/closed transitions", () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("lead");
         expect(plan?.journey_segment).toBe("family");
-        expect(plan?.work_templates.length).toBe(3);
+        expect(plan?.work_templates.length).toBe(1);
         const contactFamily = plan?.work_templates.find((t) => t.template_key === "contact_family");
-        expect(contactFamily?.completion_policy?.min_attempts).toBe(3);
-        expect(outcomeRulesForKey(plan!, "qualified").length).toBeGreaterThan(0);
-        expect(successfulOutcomeKeys(plan!).has("qualified")).toBe(true);
+        expect(contactFamily?.execution_mode).toBe("direct_action");
+        expect(contactFamily?.primary).toBe(true);
+        expect(outcomeRulesForKey(plan!, "reached_family").length).toBeGreaterThan(0);
+        expect(successfulOutcomeKeys(plan!).has("reached_family")).toBe(true);
         expect(outcomeRulesForKey(plan!, "left_message").length).toBeGreaterThan(0);
     });
 

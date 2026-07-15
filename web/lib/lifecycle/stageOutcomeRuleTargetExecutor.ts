@@ -11,6 +11,7 @@ import {
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
+import { spawnDestinationStageEntryWork } from "@/lib/lifecycle/spawnDestinationStageEntryWork";
 import {
     moveEnrollmentInstanceStageByScope,
     setEnrollmentInstanceStateByScope,
@@ -280,14 +281,42 @@ export async function applyStageOutcomeRuleTarget(
                     stageKey: targetStageKey,
                 });
                 if (pi.error) return { error: pi.error };
-                return {};
+            } else {
+                const { error } = await supabase
+                    .from("opportunities")
+                    .update({ stage_key: targetStageKey, updated_at: nowIso })
+                    .eq("id", subject.opportunity_id)
+                    .eq("org_id", orgId);
+                if (error) return { error: error.message };
             }
-            const { error } = await supabase
-                .from("opportunities")
-                .update({ stage_key: targetStageKey, updated_at: nowIso })
-                .eq("id", subject.opportunity_id)
-                .eq("org_id", orgId);
-            if (error) return { error: error.message };
+
+            // Stage membership changes first; then create destination stage-entry work.
+            // Soft-fail: transition already applied. Deduped/skipped entry spawn must not roll back stage membership.
+            try {
+                const { data: deptRow } = await supabase
+                    .from("departments")
+                    .select("metadata")
+                    .eq("id", departmentId)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
+                const departmentMetadata =
+                    deptRow?.metadata != null
+                    && typeof deptRow.metadata === "object"
+                    && !Array.isArray(deptRow.metadata)
+                        ? (deptRow.metadata as Record<string, unknown>)
+                        : {};
+                await spawnDestinationStageEntryWork({
+                    supabase,
+                    orgId,
+                    userId,
+                    opportunityId: subject.opportunity_id,
+                    departmentId,
+                    destinationStageKey: targetStageKey,
+                    departmentMetadata,
+                });
+            } catch {
+                // Test doubles or transient reads must not undo a successful stage move.
+            }
             return {};
         }
 

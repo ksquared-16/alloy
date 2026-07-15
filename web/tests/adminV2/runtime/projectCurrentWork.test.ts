@@ -18,13 +18,13 @@ function stageRuntime(): StageWorkRuntimeProjection {
     return {
         stage_key: "lead",
         stage_label: "Lead",
-        purpose: "Review inbound lead and reach the family.",
+        purpose: plan.purpose ?? "Reach the family and determine next steps.",
         journey_segment: "family",
-        template_keys: ["review_lead", "contact_family", "qualify_fit"],
+        template_keys: ["contact_family"],
         primary: {
-            template_key: "review_lead",
-            label: "Review Lead",
-            description: "Review inbound lead and determine next step.",
+            template_key: "contact_family",
+            label: "Contact Family",
+            description: "Reach the family, understand their needs, and determine the next step.",
             role: "primary",
             state: "open",
             requires_outcome_picker: true,
@@ -34,53 +34,16 @@ function stageRuntime(): StageWorkRuntimeProjection {
             attempt_count: 0,
             last_outcome: null,
             completed_at: null,
-            outcomes: plan.outcomes.filter((o) => o.work_template_key === "review_lead"),
+            outcomes: plan.outcomes,
             completion_policy_summary: null,
             completion_policy_min_attempts: null,
             completion_policy_max_attempts: null,
             outcome_automation_preview: buildStageWorkOutcomeAutomationPreview({
                 plan,
-                templateKey: "review_lead",
+                templateKey: "contact_family",
             }),
         },
-        additional: [
-            {
-                template_key: "contact_family",
-                label: "Contact Family",
-                role: "secondary",
-                state: "planned",
-                requires_outcome_picker: true,
-                work_id: null,
-                due_at: null,
-                due_urgency: "none",
-                attempt_count: 0,
-                last_outcome: null,
-                completed_at: null,
-                outcomes: plan.outcomes.filter((o) => o.work_template_key === "contact_family"),
-                completion_policy_summary: "Up to 3 attempts",
-                completion_policy_min_attempts: 1,
-                completion_policy_max_attempts: 3,
-                outcome_automation_preview: [],
-            },
-            {
-                template_key: "qualify_fit",
-                label: "Confirm fit — location, program, start date",
-                role: "secondary",
-                state: "completed",
-                requires_outcome_picker: true,
-                work_id: "work-qualify",
-                due_at: null,
-                due_urgency: "none",
-                attempt_count: 1,
-                last_outcome: { outcome_key: "qualified", label: "Qualified", at: "2026-01-01" },
-                completed_at: "2026-01-01",
-                outcomes: plan.outcomes.filter((o) => o.work_template_key === "qualify_fit"),
-                completion_policy_summary: null,
-                completion_policy_min_attempts: null,
-                completion_policy_max_attempts: null,
-                outcome_automation_preview: [],
-            },
-        ],
+        additional: [],
         execution: {
             department_id: "dept-1",
             subject: { journey_segment: "family", opportunity_id: "opp-1" },
@@ -142,12 +105,10 @@ describe("projectCurrentWork", () => {
 
     it("projects title, purpose, progress, and checklist from stage runtime", () => {
         const vm = projectCurrentWork(context({ runtime: stageRuntime() }));
-        expect(vm.title).toBe("Review Lead");
-        expect(vm.purpose).toContain("Review inbound lead");
-        expect(vm.progressLabel).toBe("1 of 3 complete");
-        expect(vm.checklist).toHaveLength(3);
+        expect(vm.title).toBe("Contact Family");
+        expect(vm.purpose).toContain("Reach the family");
+        expect(vm.checklist).toHaveLength(1);
         expect(vm.primaryActionLabel).toBe("Record outcome");
-        expect(vm.surface.primaryAction?.label).toBe("Review Lead");
         expect(vm.showOutcomeCompletion).toBe(true);
     });
 
@@ -167,10 +128,11 @@ describe("projectCurrentWork", () => {
         const vm = projectCurrentWork(context({ runtime: stageRuntime() }));
         const keys = vm.completionOutcomes.map((o) => o.outcome_key).sort();
         expect(keys).toEqual([
-            "closed_lost",
-            "duplicate",
-            "needs_more_information",
-            "review_qualified",
+            "interested",
+            "left_message",
+            "needs_follow_up",
+            "not_interested",
+            "reached_family",
         ]);
     });
 
@@ -189,23 +151,22 @@ describe("projectCurrentWork", () => {
             attempt_count: 0,
             last_outcome: null,
             completed_at: null,
-            outcomes: plan.outcomes.filter((o) => o.work_template_key === "contact_family"),
+            outcomes: plan.outcomes,
             completion_policy_summary: null,
             completion_policy_min_attempts: null,
             completion_policy_max_attempts: null,
             outcome_automation_preview: [],
         };
-        runtime.additional = runtime.additional.filter((i) => i.template_key !== "contact_family");
+        runtime.additional = [];
         const vm = projectCurrentWork(context({ runtime }));
         expect(vm.title).toBe("Contact Family");
         expect(vm.completionOutcomes.map((o) => o.outcome_key).sort()).toEqual([
-            "awaiting_response",
-            "contact_closed_lost",
+            "interested",
             "left_message",
-            "reached_qualified",
-            "unable_to_reach",
+            "needs_follow_up",
+            "not_interested",
+            "reached_family",
         ]);
-        expect(vm.checklist.some((i) => i.label === "Review Lead")).toBe(false);
     });
 });
 
@@ -258,7 +219,7 @@ describe("projectCurrentWork supporting actions", () => {
             attempt_count: 0,
             last_outcome: null,
             completed_at: null,
-            outcomes: plan.outcomes.filter((o) => o.work_template_key === "contact_family"),
+            outcomes: plan.outcomes,
             completion_policy_summary: null,
             completion_policy_min_attempts: null,
             completion_policy_max_attempts: null,

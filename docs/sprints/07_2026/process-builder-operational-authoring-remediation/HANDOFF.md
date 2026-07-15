@@ -3,71 +3,35 @@
 **Date:** 2026-07-15  
 **Worktree:** `/Users/Kelly/.cursor/worktrees/Alloy/i6xq`  
 **Branch:** `fix/process-builder-operational-authoring-remediation`  
-**Base:** latest `origin/staging` (includes PR #212 Process Stage operating contract)  
-**Policy:** Local only — **do not push / open PR / merge** until product approval.
+**Policy:** Local only — **do not push / open PR / merge** until product approval after browser certification.
 
 ---
 
-## What changed (product surface)
+## Implemented (this continuation)
 
-1. **Outcome Definitions moved into Work Template authoring**  
-   Operators configure Available Outcomes → Outcome Definitions → Automation while editing a Work Template. Stage-level Outcome Definitions section removed from the operating plan page. Persistence remains stage-level (`outcomes` / `outcome_rules`).
+1. **Canonical enrollment defaults promoted** — Lead (Direct Action Contact Family), Tour (Outcome Led Conduct Tour), Decision (Outcome Led + Family Enrolling → Enrolling), Enrolling (Send Enrollment Packet stage-entry Direct Action). Tenant-authored plans remain preserved via `operatingPlanSeedDecision` (`preserve` when saved plan exists).
 
-2. **Execution Mode labels**  
-   `Direct Action` vs `Outcome Led` (Primary Action absent when Outcome Led).
+2. **Stage-entry work after transitions** — `spawnDestinationStageEntryWork` runs after successful `move_to_stage`. Destination primary (or first required) template is instantiated with existing idempotent `instantiateStageWorkFromTemplate`. Terminal/workless stages skip. No Enrolling hardcoding.
 
-3. **Follow-up timing**  
-   Immediately / Before / After + value + unit (`minutes` | `hours` | `days` | `weeks` | `months`). Add button beside “Create follow-up work”.
+3. **Stage Attention elapsed-time duration** — shared value + unit (`minutes`…`months`) via `threshold_duration`; legacy day thresholds normalize on load; non-time rules (e.g. missing requirements, attempt count) show no duration control.
 
-4. **Attention timing**  
-   Same timing model; multiple attention items with Add beside “Create attention”.
+4. **Shared Outcome Definition ownership** — Remove from Work Template unlinks refs only; Delete definition is a separate protected action that blocks while other Work Templates still reference it.
 
-5. **Outgoing transitions / no Close Record / Available Outcomes terminology**  
-   Retained/confirmed from prior sprint; no free-text closed status field in Outcome UI.
+5. **Empty evidence commit removed** from tip history (soft-reset). Browser certification still required — see evidence index.
 
 ---
 
-## Validation run locally
+## Browser product QA
 
-```bash
-cd web
-npm run test -- \
-  tests/lifecycle/processStageOperatingContract.test.ts \
-  tests/lifecycle/lifecycleStageWorkTemplateActionsEditor.test.ts \
-  tests/lifecycle/stageOutcomeAutomationQa.test.ts \
-  tests/lifecycle/stageOperatingPlanV1.test.ts \
-  tests/lifecycle/executeStageOperatingOutcome.test.ts \
-  tests/lifecycle/stageOperatingPlanConvergence.test.ts \
-  tests/adminV2/runtime/currentWorkFocusWorkspace.test.tsx \
-  tests/adminV2/runtime/currentWorkOperationalSurface.test.ts
-# → 103 passed
-
-npm run typecheck          # pass
-npm run typecheck:tests    # pass
-```
+**Not completed in this session** (operator chose to skip live UI verification).  
+See `evidence/EVIDENCE_INDEX.md` — do not mark product-ready until screenshots exist for the Decision → Enrolling → Send Enrollment Packet Current Work flow.
 
 ---
 
-## Browser evidence
+## Validation (automated)
 
-`evidence/` is empty — manual screenshots still required before product sign-off:
-
-1. Work Template → Outcome Led Conduct Tour + Outcome Definitions inline  
-2. Follow-up timing with hours/weeks  
-3. Attention timing with Add beside label  
-4. Lead Direct Action + Lead → Tour transition  
-5. Billing (industry-neutral)  
-6. Save / reload / Current Work reflects execution mode  
-
----
-
-## Remaining product questions
-
-1. Promote Tour/Lead/Decision proof fixtures into `defaultEnrollmentStageOperatingPlans.ts`?  
-2. Enrolling auto-create “Send Enrollment Packet” on stage entry — not authored in this remediation (needs entry automation / Enrolling proof plan).  
-3. Stage-level Attention Rules section still uses “Days threshold” — only outcome-behavior attention got value+unit. Should stage rules share the same scheduler UI?  
-4. When an outcome is removed from one Work Template but shared with another, definition is retained — OK?  
-5. Canonical doctrine docs were updated in PR #212; this remediation is UI/ownership — any further doctrine writes?
+Focused suites for defaults, stage-entry spawn, attention duration, outcome ownership, Process Stage operating contract, Current Work fixtures: **passing**.  
+Run `npm run typecheck` / `npm run typecheck:tests` before any promotion.
 
 ---
 
@@ -75,9 +39,8 @@ npm run typecheck:tests    # pass
 
 | Area | Path |
 |------|------|
-| Due policy units + timing UI helpers | `web/lib/lifecycle/stageFollowUpWorkDuePolicy.ts` |
-| Attention items in composable behavior | `web/lib/lifecycle/stageOutcomeAutomation.ts` |
-| Outcome behavior editor | `LifecycleStageOutcomeBehaviorEditor.tsx` |
-| Scoped outcome definitions | `LifecycleStageOutcomeDefinitionsEditor.tsx` |
-| Work Template surface | `LifecycleStageWorkTemplateActionsEditor.tsx` |
-| Operating plan shell | `LifecycleStageOperatingPlanEditor.tsx` |
+| Enrollment defaults | `web/lib/lifecycle/defaultEnrollmentStageOperatingPlans.ts` |
+| Stage-entry spawn | `web/lib/lifecycle/spawnDestinationStageEntryWork.ts` |
+| Transition hook | `web/lib/lifecycle/stageOutcomeRuleTargetExecutor.ts` (`move_to_stage`) |
+| Attention duration | `web/lib/lifecycle/stageAttentionThresholdDuration.ts` + catalog + editor |
+| Outcome ownership UI | `LifecycleStageOutcomeDefinitionsEditor.tsx` |

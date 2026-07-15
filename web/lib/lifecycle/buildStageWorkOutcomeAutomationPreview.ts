@@ -9,9 +9,18 @@ function effectLabelForRule(
     const rule = plan.outcome_rules.find((r) => r.when_outcome_key === whenOutcomeKey);
     if (!rule) return null;
 
-    const move = rule.targets.find((t) => t.kind === "move_to_stage" && t.stage_key?.trim());
-    if (move?.stage_key) {
-        return humanizeSnakeCaseToken(move.stage_key.trim());
+    const move = rule.targets.find((t) => t.kind === "move_to_stage");
+    if (move) {
+        const stageKey = move.stage_key?.trim();
+        if (stageKey) return humanizeSnakeCaseToken(stageKey);
+        const transitionRef = move.transition_ref?.trim();
+        if (transitionRef && plan.outgoing_transitions) {
+            const transition = plan.outgoing_transitions.find((row) => row.transition_ref === transitionRef);
+            if (transition?.label?.trim()) return transition.label.trim();
+            if (transition?.target_stage_key?.trim()) {
+                return humanizeSnakeCaseToken(transition.target_stage_key.trim());
+            }
+        }
     }
 
     const close = rule.targets.find(

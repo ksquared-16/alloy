@@ -81,6 +81,9 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
             <div className="space-y-2">
                 {scopedOutcomes.map((outcome) => {
                     const index = draft.outcomes.findIndex((row) => row.outcome_key === outcome.outcome_key);
+                    const referencingTemplates = draft.work_templates.filter((row) =>
+                        workTemplateOutcomeRefs(row).includes(outcome.outcome_key),
+                    );
                     return (
                         <article key={outcome.outcome_key} className="rounded border border-alloy-forge/10 p-2">
                             <div className="flex flex-wrap items-center gap-2">
@@ -113,33 +116,43 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                     />
                                     Complete current work
                                 </label>
-                                <button
-                                    type="button"
-                                    className="text-[10px] text-red-700"
-                                    onClick={() => {
-                                        if (work) {
+                                {work ?
+                                    <button
+                                        type="button"
+                                        className="text-[10px] text-alloy-midnight/70"
+                                        data-testid={`outcome-unlink-${outcome.outcome_key}`}
+                                        onClick={() => {
+                                            // Remove only this Work Template’s reference — retain stage-owned definition.
                                             const work_templates = [...draft.work_templates];
                                             work_templates[workIndex] = setWorkTemplateOutcomeRefs(
                                                 work,
                                                 scopedRefs.filter((ref) => ref !== outcome.outcome_key),
                                             );
-                                            const stillReferenced = work_templates.some((row) =>
-                                                workTemplateOutcomeRefs(row).includes(outcome.outcome_key),
+                                            onChange({ ...draft, work_templates });
+                                        }}
+                                    >
+                                        Remove from work
+                                    </button>
+                                :   null}
+                                <button
+                                    type="button"
+                                    className="text-[10px] text-red-700"
+                                    data-testid={`outcome-delete-definition-${outcome.outcome_key}`}
+                                    title={
+                                        referencingTemplates.length > 0 ?
+                                            `Used by: ${referencingTemplates.map((row) => row.label).join(", ")}`
+                                        :   "Delete stage Outcome Definition"
+                                    }
+                                    onClick={() => {
+                                        const otherRefs = referencingTemplates.filter(
+                                            (row) => !(work && row.template_key === workTemplateKey),
+                                        );
+                                        if (otherRefs.length > 0) {
+                                            window.alert(
+                                                `"${outcome.label}" is still used by: ${otherRefs
+                                                    .map((row) => row.label)
+                                                    .join(", ")}. Remove it from those Work Templates before deleting the definition.`,
                                             );
-                                            onChange({
-                                                ...draft,
-                                                work_templates,
-                                                ...(stillReferenced ?
-                                                    {}
-                                                :   {
-                                                        outcomes: draft.outcomes.filter(
-                                                            (row) => row.outcome_key !== outcome.outcome_key,
-                                                        ),
-                                                        outcome_rules: draft.outcome_rules.filter(
-                                                            (rule) => rule.when_outcome_key !== outcome.outcome_key,
-                                                        ),
-                                                    }),
-                                            });
                                             return;
                                         }
                                         onChange({
@@ -163,9 +176,14 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                         });
                                     }}
                                 >
-                                    Remove
+                                    Delete definition
                                 </button>
                             </div>
+                            {referencingTemplates.length === 0 ?
+                                <p className="mt-1 text-[10px] text-alloy-midnight/45">
+                                    Not used by a Work Template
+                                </p>
+                            :   null}
                             <LifecycleStageOutcomeBehaviorEditor
                                 outcomeKey={outcome.outcome_key}
                                 outcomeLabel={outcome.label}
