@@ -13,7 +13,7 @@ supersedes: []
 
 ## 1. Executive plan
 
-**Seven missions. Four of them run in parallel. One is not product work at all.**
+**Eight missions. Four of them run in parallel. One is not product work at all.**
 
 The initiative is bounded because **no mission requires new architecture and none corrects the Product model.** Every mission moves the product toward what it already says about itself.
 
@@ -67,7 +67,7 @@ The initiative is bounded because **no mission requires new architecture and non
 | **Action availability** | **Process Actions** — the process's capability decision | Work templates | Work templates choose *which available action leads here*, and in what order | Nothing may surface an action Process Actions has disabled | *"I switched Send Form off. It is gone — everywhere. My work templates can no longer offer it."* |
 | **Stage grain** | **Stage** (`ROW TYPE (GRAIN)`) — the frozen chain: *"Stage owns operational work (grain…)"* | Work Views (**inherit** — already correct) | — | **`Journey` must stop authoring.** It becomes **generated output** of grain, or it goes | *"I choose the row type once. Nothing else can disagree with it."* |
 | **Movement** | **Outgoing Transitions** — the stage's authored paths. *The product's own rule:* **"Outcome automation moves records through those transitions — never by destination text alone."** | Outcomes **reference** a path | Outcomes decide *which* path | **Outcomes must stop carrying raw destinations** | *"I define this stage's exits once. Each outcome picks one. **I cannot pick a stage that doesn't exist.**"* |
-| **Automation** | **Undecided — Product Office decision required** (§11) | — | — | One of the two homes | *"There is one place automation lives."* |
+| **Automation** | **Automation Platform** — owns reusable definitions and execution behavior *(ruled 2026-07-16)* | Business Processes **reference · scope · trigger · constrain applicability · present contextual entry points** | — | **No process-owned second definition or competing editor.** Processes → Automation may be a contextual route into the same canonical product | *"There is one place automation lives."* |
 
 **Movement convergence is the highest-value single item in M1:** it makes the dangling-target class **impossible by construction** rather than merely detectable. The administrator cannot author `qualification` because she picks from paths that exist. **That is a whole category of M2 checks retired before they are built.**
 
@@ -321,16 +321,18 @@ M8 ─────────────────────────�
 
 ## 15. Inputs required for Review 09 — Engineering Mission Intake
 
-1. **Seven missions**, each bounded to one Product responsibility, with acceptance and protected strengths.
-2. **The convergence map** (§4) — four concerns, each with an owner and a reference/refinement rule. **Automation's owner is undecided.**
+1. **Eight missions**, each bounded to one Product responsibility, with acceptance and protected strengths.
+2. **The convergence map** (§4) — four concerns, each with an owner and a reference/refinement rule. **All four owners are ruled.**
 3. **The certification contract** (§5) — five levels; what HEALTHY may mean.
 4. **The regression matrix** (§11) — **Laws 7/8 are the most fragile.**
 5. **The scenario matrix** (§10) — nothing complete by inspection.
 6. **Release boundaries and truthful claims** (§12).
 
-### Product Office decisions still required
+### Product Office decisions — **ALL RULED 2026-07-16**
 
-1. **Automation's canonical owner** — process-scoped or platform-scoped? Blocks M1's fourth instance only.
-2. **Ratify M8's classification** — particularly that the Principles artifact is *evidence*, not doctrine.
-3. **Accept the R1 reclassification** — counts move to R5; **R1 has four instances, not five.**
-4. **Confirm M3's scope** — is repairing the reference tenant Configuration's work, or does it need a Product owner to define "representative"?
+*Retained as history. All four were open when this plan was written; none is open now. Review 09 §2 carries them as closed.*
+
+1. ~~Automation's canonical owner~~ → **RULED: the Automation Platform** owns reusable definitions and execution behavior. Business Processes reference, scope, trigger, constrain applicability, and present contextual entry points — they may not independently author a second definition. Processes → Automation may be a contextual route into the same canonical product, never a competing editor.
+2. ~~Ratify M8's classification~~ → **RULED: accepted.** The Product Principles artifact **remains Evidence**. Durable conclusions reconcile into existing canonical owners. **No parallel Product Constitution tree.**
+3. ~~Accept the R1 reclassification~~ → **RULED: accepted.** **R1 has four instances** — action availability · Stage grain/Journey · movement/Outcomes/Transitions · Automation authoring. **Operational counts are not an R1 instance; they belong wholly to R5.**
+4. ~~Confirm M3's scope~~ → **RULED:** Product owns the definition of a representative Enrollment journey and reference dataset. **Configuration** authors and repairs the tenant against that contract. **QA / Certification** proves it.
