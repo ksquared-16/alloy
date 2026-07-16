@@ -8,7 +8,6 @@ import {
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import ConfigurationAdvancedSection from "@/components/adminV2/settings/locations/ConfigurationAdvancedSection";
 
 function metadataString(metadata: unknown, key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
@@ -200,16 +199,6 @@ export default function LocationSiteDetailPanel({
                     </ConfigurationPrimaryButton>
                 :   null}
 
-                <ConfigurationAdvancedSection testId="locations-site-advanced">
-                    <div>
-                        <span className="config-typo-field-label">Location ID</span>
-                        <p className="config-typo-meta mt-1 font-mono text-[11px]">{site.id}</p>
-                    </div>
-                    <div>
-                        <span className="config-typo-field-label">Location type</span>
-                        <p className="config-typo-meta mt-1">{site.location_type ?? "site"}</p>
-                    </div>
-                </ConfigurationAdvancedSection>
             </div>
         </ConfigurationDetailCard>
     );

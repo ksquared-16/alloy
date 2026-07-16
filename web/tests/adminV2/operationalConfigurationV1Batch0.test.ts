@@ -89,10 +89,11 @@ describe("Batch 0 — Financials configuration surfaces", () => {
 });
 
 describe("Batch 0 — Locations operational rule sections", () => {
-    it("Locations page adds an Operational Rules section + panel", () => {
+    it("Locations page no longer exposes Operational Rules as a section-first destination", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(page).toContain("LocationOperationalRulesPanel");
-        expect(page).toContain('section === "operational_rules"');
+        expect(page).not.toContain("LocationOperationalRulesPanel");
+        expect(page).not.toContain('section === "operational_rules"');
+        expect(page).toContain("LOCATION_WORKSPACE_TABS");
     });
 
     it("operational rules panel exposes capacity, ratio, operating windows, schedule rules + resolved preview", () => {
@@ -105,10 +106,10 @@ describe("Batch 0 — Locations operational rule sections", () => {
         expect(panel).toContain("resolveConfigRule");
     });
 
-    it("quarantines the location create drawer to the Locations section (marked for removal)", () => {
+    it("keeps location creation inline and outside a legacy drawer", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(page).toContain('canMutate && section === "locations"');
-        expect(page).toMatch(/marked for removal/i);
+        expect(page).toContain("LocationSiteCreatePanel");
+        expect(page).not.toMatch(/openDrawer|useAdminDrawer/);
     });
 });
 

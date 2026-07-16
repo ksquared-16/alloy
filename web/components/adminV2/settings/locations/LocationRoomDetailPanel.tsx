@@ -10,7 +10,6 @@ import {
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import ConfigurationAdvancedSection from "@/components/adminV2/settings/locations/ConfigurationAdvancedSection";
 
 export default function LocationRoomDetailPanel({
     room,
@@ -95,18 +94,43 @@ export default function LocationRoomDetailPanel({
                     </select>
                 </label>
 
-                <label className="block space-y-1.5">
-                    <span className="config-typo-field-label">Capacity</span>
-                    <input
-                        type="number"
-                        min={0}
-                        value={capacity}
-                        disabled={!canMutate}
-                        onChange={(e) => setCapacity(e.target.value)}
-                        className="config-runtime-input max-w-[8rem]"
-                        data-testid="locations-room-capacity"
-                    />
-                </label>
+                <div className="rounded-xl border border-alloy-forge/10 bg-[#00a283]/[0.035] p-4">
+                    <h3 className="config-typo-workspace-title">Capacity & ratios</h3>
+                    <p className="config-typo-sublabel mt-1">
+                        Set how many children this room holds and the staffing ratio together.
+                    </p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="block space-y-1.5">
+                            <span className="config-typo-field-label">Capacity</span>
+                            <input
+                                type="number"
+                                min={0}
+                                value={capacity}
+                                disabled={!canMutate}
+                                onChange={(e) => setCapacity(e.target.value)}
+                                className="config-runtime-input"
+                                data-testid="locations-room-capacity"
+                            />
+                        </label>
+                        <label className="block space-y-1.5">
+                            <span className="config-typo-field-label">Staffing ratio</span>
+                            <input
+                                type="text"
+                                value={studentTeacherRatio}
+                                disabled={!canMutate}
+                                onChange={(e) => setStudentTeacherRatio(e.target.value)}
+                                placeholder="e.g. 1:5"
+                                className="config-runtime-input"
+                                data-testid="locations-room-ratio"
+                            />
+                        </label>
+                    </div>
+                    <p className="mt-3 rounded-lg border border-[#00a283]/15 bg-white px-3 py-2 text-xs text-alloy-midnight/70">
+                        {capacity.trim() ?
+                            `This room is set to hold ${capacity.trim()} children${studentTeacherRatio.trim() ? ` with a ${studentTeacherRatio.trim()} staffing ratio` : "; add a staffing ratio to finish setup"}.`
+                        :   "Capacity is not set up yet."}
+                    </p>
+                </div>
 
                 <label className="flex items-center gap-2">
                     <input
@@ -162,64 +186,41 @@ export default function LocationRoomDetailPanel({
                     </ConfigurationPrimaryButton>
                 :   null}
 
-                <ConfigurationAdvancedSection testId="locations-room-advanced">
-                    <div>
-                        <span className="config-typo-field-label">Location</span>
-                        <p className="config-typo-sublabel mt-1">{siteLabel}</p>
-                    </div>
-                    <div className="space-y-2">
-                        <span className="config-typo-field-label">Age range</span>
-                        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr]">
-                            <input
-                                type="text"
-                                value={ageFrom}
-                                disabled={!canMutate}
-                                onChange={(e) => setAgeFrom(e.target.value)}
-                                placeholder="From"
-                                className="config-runtime-input"
-                            />
-                            <input
-                                type="text"
-                                value={ageTo}
-                                disabled={!canMutate}
-                                onChange={(e) => setAgeTo(e.target.value)}
-                                placeholder="To"
-                                className="config-runtime-input"
-                            />
-                            <select
-                                value={ageUnit}
-                                disabled={!canMutate}
-                                onChange={(e) => setAgeUnit(e.target.value)}
-                                className="config-runtime-select"
-                            >
-                                <option value="">Unit</option>
-                                {ageUnitSelectOptions.map((o) => (
-                                    <option key={o.value} value={o.value}>
-                                        {o.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                    <label className="block space-y-1.5">
-                        <span className="config-typo-field-label">Student:teacher ratio</span>
+                <div className="space-y-2">
+                    <span className="config-typo-field-label">Age range</span>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr]">
                         <input
                             type="text"
-                            value={studentTeacherRatio}
+                            value={ageFrom}
                             disabled={!canMutate}
-                            onChange={(e) => setStudentTeacherRatio(e.target.value)}
-                            className="config-runtime-input max-w-[8rem]"
+                            onChange={(e) => setAgeFrom(e.target.value)}
+                            placeholder="From"
+                            className="config-runtime-input"
                         />
-                    </label>
-                    <div>
-                        <span className="config-typo-field-label">Room ID</span>
-                        <p className="config-typo-meta mt-1 font-mono text-[11px]">{room.id}</p>
+                        <input
+                            type="text"
+                            value={ageTo}
+                            disabled={!canMutate}
+                            onChange={(e) => setAgeTo(e.target.value)}
+                            placeholder="To"
+                            className="config-runtime-input"
+                        />
+                        <select
+                            value={ageUnit}
+                            disabled={!canMutate}
+                            onChange={(e) => setAgeUnit(e.target.value)}
+                            className="config-runtime-select"
+                        >
+                            <option value="">Unit</option>
+                            {ageUnitSelectOptions.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                    {o.label}
+                                </option>
+                            ))}
+                        </select>
                     </div>
-                    <div>
-                        <span className="config-typo-field-label">Parent location ID</span>
-                        <p className="config-typo-meta mt-1 font-mono text-[11px]">{room.parent_location_id ?? "—"}</p>
-                    </div>
-                </ConfigurationAdvancedSection>
+                </div>
+                <p className="config-typo-meta">Uses {siteLabel} hours unless a different room schedule is set.</p>
             </div>
         </ConfigurationDetailCard>
     );

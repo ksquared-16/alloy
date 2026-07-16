@@ -1,6 +1,4 @@
-/**
- * Configuration Runtime — Locations page uses Context → Queue → Workspace → BOS.
- */
+/** Locations is the object-centric reference configuration workspace. */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -17,14 +15,15 @@ describe("Configuration Runtime — Locations", () => {
         expect(read("app/adminV2/settings/locations/page.tsx")).not.toContain("LocationsHierarchySettingsClient");
     });
 
-    it("LocationsConfigurationPage uses Configuration Mode shell", () => {
+    it("LocationsConfigurationPage uses the shared shell as a location-first workspace", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(page).toContain("ConfigurationContext");
         expect(page).toContain("ConfigurationShell");
         expect(page).toContain('title="Locations"');
-        expect(page).toContain("Configure campuses, programs, classrooms, and scheduling resources.");
-        expect(page).toContain("locations-section-queue");
-        expect(page).toContain("locations-item-queue");
+        expect(page).toContain("locations-object-selector");
+        expect(page).toContain("locations-selected-location");
+        expect(page).toContain("locations-setup-progress");
+        expect(page).not.toContain("locations-section-queue");
         expect(page).not.toContain("SettingsPageHeader");
         expect(page).not.toContain("data-locations-editor-table");
         expect(page).not.toContain("openDrawer");
@@ -32,24 +31,35 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("LocationSiteCreatePanel");
     });
 
-    it("section queue includes Locations, Programs, Rooms, and Schedule Templates", () => {
-        const hook = read("components/adminV2/settings/locations/useLocationsConfigurationSettings.ts");
-        expect(hook).toContain('"locations"');
-        expect(hook).toContain('"programs"');
-        expect(hook).toContain('"rooms"');
-        expect(hook).toContain('"schedule_templates"');
-        expect(hook).toContain("Schedule Templates");
+    it("uses the eight owned-concern tabs and keeps General behind Edit Location", () => {
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        const model = read("lib/locations/locationWorkspaceModel.ts");
+        for (const label of [
+            "Overview",
+            "Programs",
+            "Rooms",
+            "Schedule",
+            "Tours",
+            "Placement",
+            "Communications",
+            "Access",
+        ]) {
+            expect(model).toContain(`label: "${label}"`);
+        }
+        expect(page).toContain("Edit Location");
+        const tabCatalog = model.slice(model.indexOf("LOCATION_WORKSPACE_TABS"), model.indexOf("] as const;"));
+        expect(tabCatalog).not.toContain('key: "general"');
     });
 
-    it("workspace detail panels hide technical metadata under Advanced", () => {
-        expect(read("components/adminV2/settings/locations/LocationSiteDetailPanel.tsx")).toContain(
-            "ConfigurationAdvancedSection",
-        );
-        expect(read("components/adminV2/settings/locations/LocationProgramDetailPanel.tsx")).toContain("Program key");
-        expect(read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx")).toContain("Room ID");
-        expect(read("components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel.tsx")).toContain(
-            "Pattern key",
-        );
+    it("keeps implementation identifiers out of the operator panels", () => {
+        for (const rel of [
+            "components/adminV2/settings/locations/LocationSiteDetailPanel.tsx",
+            "components/adminV2/settings/locations/LocationProgramDetailPanel.tsx",
+            "components/adminV2/settings/locations/LocationRoomDetailPanel.tsx",
+            "components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel.tsx",
+        ]) {
+            expect(read(rel)).not.toMatch(/Location ID|Program key|Program ID|Room ID|Parent location ID|Pattern key|Pattern ID/);
+        }
     });
 
     it("uses shared typography tokens", () => {

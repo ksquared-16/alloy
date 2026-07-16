@@ -28,28 +28,28 @@ test.describe("configuration-runtime-locations", () => {
         await page.goto("/settings/locations", { waitUntil: "networkidle", timeout: 120_000 });
         await expect(page.getByTestId("locations-configuration-page")).toBeVisible({ timeout: 60_000 });
         await page.screenshot({
-            path: path.join(screenshotDir, "01-locations-section.png"),
+            path: path.join(screenshotDir, "01-location-overview.png"),
             fullPage: true,
             animations: "disabled",
         });
 
-        await page.getByTestId("locations-section-programs").click();
+        await page.getByTestId("locations-tab-programs").click();
         await page.waitForTimeout(400);
         await page.screenshot({
-            path: path.join(screenshotDir, "02-programs-section.png"),
+            path: path.join(screenshotDir, "02-programs.png"),
             fullPage: true,
             animations: "disabled",
         });
 
-        await page.getByTestId("locations-section-rooms").click();
+        await page.getByTestId("locations-tab-rooms").click();
         await page.waitForTimeout(400);
         await page.screenshot({
-            path: path.join(screenshotDir, "03-rooms-section.png"),
+            path: path.join(screenshotDir, "03-rooms.png"),
             fullPage: true,
             animations: "disabled",
         });
 
-        const firstItem = page.locator('[data-testid^="locations-item-"]').first();
+        const firstItem = page.locator('[data-testid^="locations-room-"]').first();
         if (await firstItem.isVisible().catch(() => false)) {
             await firstItem.click();
             await page.waitForTimeout(400);
@@ -67,8 +67,12 @@ test.describe("configuration-runtime-locations", () => {
             animations: "disabled",
         });
 
-        await expect(page.getByTestId("locations-section-queue")).toBeVisible();
+        await expect(page.getByTestId("locations-object-selector")).toBeVisible();
+        await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible();
+        await expect(page.getByRole("tab", { name: "Access" })).toBeVisible();
         await expect(page.getByTestId("locations-configuration-context")).toContainText("Locations");
+        await expect(page.getByTestId("locations-configuration-page")).not.toContainText("Today's Tours");
+        await expect(page.getByTestId("locations-configuration-page")).not.toContainText("Helpful Resources");
     });
 
     test("Add Location opens inline create workspace (not legacy drawer)", async ({ page }) => {

@@ -61,10 +61,12 @@ describe("Configuration Runtime V1 final", () => {
         );
     });
 
-    it("Locations uses Configuration Mode with updated subtitle and Sections queue", () => {
+    it("Locations uses Configuration Mode with an object selector and owned-concern tabs", () => {
         const loc = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(loc).toContain("Configure campuses, programs, classrooms, and scheduling resources.");
-        expect(loc).toContain('title="Sections"');
+        expect(loc).toContain("Choose a location, understand what needs attention");
+        expect(loc).toContain("locations-object-selector");
+        expect(loc).toContain("LOCATION_WORKSPACE_TABS");
+        expect(loc).not.toContain("locations-section-queue");
         expect(loc).not.toContain("LocationsHierarchySettingsClient");
         expect(loc).not.toContain("data-locations-editor-table");
     });

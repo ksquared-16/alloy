@@ -7,7 +7,6 @@ import {
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import ConfigurationAdvancedSection from "@/components/adminV2/settings/locations/ConfigurationAdvancedSection";
 
 function readMeta(metadata: LocationProgramCategoryRow["metadata"], key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
@@ -173,24 +172,7 @@ export default function LocationProgramDetailPanel({
                     </ConfigurationPrimaryButton>
                 :   null}
 
-                <ConfigurationAdvancedSection testId="locations-program-advanced">
-                    <div>
-                        <span className="config-typo-field-label">Location</span>
-                        <p className="config-typo-sublabel mt-1">{siteLabel}</p>
-                    </div>
-                    <div>
-                        <span className="config-typo-field-label">Program key</span>
-                        <p className="config-typo-meta mt-1 font-mono text-[11px]">{program.key}</p>
-                    </div>
-                    <div>
-                        <span className="config-typo-field-label">Program ID</span>
-                        <p className="config-typo-meta mt-1 font-mono text-[11px]">{program.id}</p>
-                    </div>
-                    <div>
-                        <span className="config-typo-field-label">Sort order</span>
-                        <p className="config-typo-meta mt-1">{program.sort_order ?? 100}</p>
-                    </div>
-                </ConfigurationAdvancedSection>
+                <p className="config-typo-meta">Offered at {siteLabel}</p>
             </div>
         </ConfigurationDetailCard>
     );
