@@ -26,7 +26,8 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("LocationsCommandRailActions");
         expect(page).toContain("LocationOverviewSurface");
         expect(page).toContain("buildLocationIdentityFacts");
-        expect(page).toContain("xl:grid-cols-[14rem_minmax(0,1fr)]");
+        expect(page).toContain("xl:grid-cols-[12.5rem_minmax(0,1fr)]");
+        expect(page).toContain('data-testid="locations-hero"');
         expect(page).toContain('variant="rail"');
         expect(page).not.toContain("ConfigOperationalActions");
         expect(page).not.toContain("Address not set up yet");

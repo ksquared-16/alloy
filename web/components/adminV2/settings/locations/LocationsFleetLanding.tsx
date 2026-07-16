@@ -45,7 +45,7 @@ export default function LocationsFleetLanding({
         :   "None";
 
     return (
-        <div className="space-y-3" data-testid="locations-fleet-landing">
+        <div className="flex flex-col gap-3" data-testid="locations-fleet-landing">
             <ConfigWorkspaceCard compact testId="locations-fleet-rollups">
                 <div className="grid gap-4 sm:grid-cols-3 sm:divide-x sm:divide-alloy-stone/20">
                     <section className="sm:pr-4" data-testid="locations-fleet-readiness">

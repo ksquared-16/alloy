@@ -154,6 +154,7 @@ export default function LocationProgramDetailPanel({
         : editing ?
             <div className="space-y-3" data-testid={`locations-program-edit-${program.id}`}>
                 <ConfigObjectHeader
+                    size="hero"
                     name={summary?.label ?? program.label}
                     status={{ label: "Editing", tone: "attention" }}
                     facts={[siteLabel ? `Offered at ${siteLabel}` : ""].filter(Boolean)}
@@ -334,6 +335,7 @@ export default function LocationProgramDetailPanel({
             </div>
         :   <div className="space-y-3" data-testid={`locations-program-summary-${program.id}`}>
                 <ConfigObjectHeader
+                    size="hero"
                     name={summary?.label ?? program.label}
                     status={{ label: status.label, tone: status.tone }}
                     facts={[siteLabel ? `Offered at ${siteLabel}` : ""].filter(Boolean)}

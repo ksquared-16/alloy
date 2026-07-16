@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 /**
  * Configuration Object Header — answers "What am I configuring?"
- * Identifying facts are only shown when present; missing identity surfaces via Attention / Readiness.
+ * `hero` is the page anchor; `default` is a selected child object.
  */
 export function ConfigObjectHeader({
     name,
@@ -13,6 +13,7 @@ export function ConfigObjectHeader({
     breadcrumb,
     actions,
     testId = "config-object-header",
+    size = "default",
 }: {
     name: string;
     status?: { label: string; tone: "active" | "inactive" | "attention" };
@@ -21,23 +22,35 @@ export function ConfigObjectHeader({
     breadcrumb?: ReactNode;
     actions?: ReactNode;
     testId?: string;
+    size?: "default" | "hero";
 }) {
     const visibleFacts = facts.map((fact) => fact.trim()).filter(Boolean);
+    const isHero = size === "hero";
 
     return (
-        <header className="mb-2.5 border-b border-alloy-stone/20 pb-2.5" data-testid={testId}>
+        <header
+            className={isHero ? undefined : "mb-1"}
+            data-testid={testId}
+            data-config-header-size={size}
+        >
             {breadcrumb ?
-                <div className="mb-1.5 text-[11px] text-alloy-midnight/45">{breadcrumb}</div>
+                <div className="mb-2">{breadcrumb}</div>
             :   null}
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight sm:text-2xl">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        <h1
+                            className={
+                                isHero ?
+                                    "text-[1.75rem] font-semibold tracking-tight text-alloy-midnight sm:text-[2rem] leading-tight"
+                                :   "text-xl font-semibold tracking-tight text-alloy-midnight sm:text-2xl"
+                            }
+                        >
                             {name}
                         </h1>
                         {status ?
                             <span
-                                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
                                     status.tone === "inactive" ?
                                         "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
                                     : status.tone === "attention" ?
@@ -50,7 +63,15 @@ export function ConfigObjectHeader({
                         :   null}
                     </div>
                     {visibleFacts.length > 0 ?
-                        <p className="config-typo-sublabel mt-1">{visibleFacts.join(" · ")}</p>
+                        <p
+                            className={
+                                isHero ?
+                                    "mt-2 text-sm text-alloy-midnight/55"
+                                :   "config-typo-sublabel mt-1"
+                            }
+                        >
+                            {visibleFacts.join(" · ")}
+                        </p>
                     :   null}
                 </div>
                 {actions ?

@@ -3,8 +3,8 @@
 import type { ReactNode } from "react";
 
 /**
- * Child-object workspace — one white region on the stone canvas.
- * List selects; detail owns the working surface (not a second floating card).
+ * Child-object page composition — narrow supporting queue + primary detail region.
+ * Stone breathes between the two; detail owns the workspace.
  */
 export function ConfigChildObjectMasterDetail({
     listTitle,
@@ -23,15 +23,15 @@ export function ConfigChildObjectMasterDetail({
 }) {
     return (
         <div
-            className="process-config-setup-card grid min-h-[22rem] gap-0 overflow-hidden lg:grid-cols-[14rem_minmax(0,1fr)]"
+            className="grid items-start gap-3 lg:grid-cols-[10.5rem_minmax(0,1fr)]"
             data-testid={testId}
             data-config-surface="workspace"
         >
             <aside
-                className="min-w-0 border-b border-alloy-stone/25 bg-white lg:border-b-0 lg:border-r lg:border-alloy-stone/25"
+                className="process-config-setup-card self-start p-0"
                 data-testid={`${testId}-list`}
             >
-                <div className="flex items-start justify-between gap-2 px-3 py-2.5">
+                <div className="flex items-start justify-between gap-2 px-2.5 py-2">
                     <div>
                         <p className="config-typo-queue-section-label">{listTitle}</p>
                         {listSummary ?
@@ -40,9 +40,12 @@ export function ConfigChildObjectMasterDetail({
                     </div>
                     {listActions}
                 </div>
-                <div className="space-y-1 px-2 pb-2.5">{list}</div>
+                <div className="space-y-0.5 px-1.5 pb-2">{list}</div>
             </aside>
-            <div className="min-w-0 bg-white px-4 py-3.5" data-testid={`${testId}-detail`}>
+            <div
+                className="process-config-setup-card min-w-0 self-start px-5 py-4"
+                data-testid={`${testId}-detail`}
+            >
                 {detail}
             </div>
         </div>

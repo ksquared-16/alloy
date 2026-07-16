@@ -3,7 +3,7 @@
 import type { ConfigScopeMode } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 /**
- * Configuration scope — minimal chrome, operator language.
+ * Quiet ownership metadata — never competes with the object hero.
  */
 export function ConfigScopeContextBar({
     mode,
@@ -20,38 +20,38 @@ export function ConfigScopeContextBar({
     ownershipHint?: string;
     testId?: string;
 }) {
+    const hint =
+        ownershipHint ??
+        (mode === "object" ? "Configured at this location" : "Organization-wide configuration");
+
     return (
-        <div className="mb-2 flex flex-wrap items-center gap-1.5" data-testid={testId}>
-            <p className="mr-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/40">
-                Configuration
-            </p>
+        <div
+            className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-alloy-midnight/45"
+            data-testid={testId}
+        >
             <button
                 type="button"
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    mode === "organization" ?
-                        "bg-alloy-bend-pine/15 text-[#007d68]"
-                    :   "text-alloy-midnight/55 hover:bg-alloy-stone/15"
+                className={`font-medium underline-offset-2 hover:text-alloy-midnight/70 hover:underline ${
+                    mode === "organization" ? "text-[#007d68]" : ""
                 }`}
                 onClick={() => onModeChange("organization")}
                 data-testid={`${testId}-organization`}
             >
                 {organizationLabel}
             </button>
+            <span aria-hidden="true">·</span>
             <button
                 type="button"
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    mode === "object" ?
-                        "bg-alloy-bend-pine/15 text-[#007d68]"
-                    :   "text-alloy-midnight/55 hover:bg-alloy-stone/15"
+                className={`font-medium underline-offset-2 hover:text-alloy-midnight/70 hover:underline ${
+                    mode === "object" ? "text-alloy-midnight/60" : ""
                 }`}
                 onClick={() => onModeChange("object")}
                 data-testid={`${testId}-object`}
             >
                 {objectLabel}
             </button>
-            {ownershipHint ?
-                <p className="ml-auto text-[11px] text-alloy-midnight/45">{ownershipHint}</p>
-            :   null}
+            <span aria-hidden="true">·</span>
+            <span>{hint}</span>
         </div>
     );
 }

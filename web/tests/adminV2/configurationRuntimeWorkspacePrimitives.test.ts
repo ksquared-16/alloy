@@ -41,14 +41,17 @@ describe("Configuration Runtime workspace primitives", () => {
             'surface = "panel"',
         );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigScopeContextBar.tsx")).toContain(
-            "Configuration",
+            "Configured at this location",
         );
         expect(
             read("components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail.tsx"),
         ).toContain('data-config-surface="workspace"');
         expect(
             read("components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail.tsx"),
-        ).toContain("process-config-setup-card");
+        ).toContain("lg:grid-cols-[10.5rem_minmax(0,1fr)]");
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigObjectHeader.tsx")).toContain(
+            'size = "default"',
+        );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel.tsx")).toContain(
             "actionable.length === 0",
         );

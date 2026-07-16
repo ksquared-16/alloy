@@ -604,29 +604,32 @@ export default function LocationsConfigurationPage({
                         }}
                     />
                 : !selectedSite ?
-                    <>
+                    <div className="pb-4" data-testid="locations-fleet-composition">
                         <ConfigScopeContextBar
                             mode="organization"
                             organizationLabel="Organization"
                             objectLabel="Location"
+                            ownershipHint="Organization-wide configuration"
                             onModeChange={(mode) => {
                                 if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
                             }}
                         />
-                        <LocationsFleetLanding
-                            fleet={fleet}
-                            showInactive={showInactive}
-                            onShowInactiveChange={setShowInactive}
-                            search={search}
-                            onSearchChange={setSearch}
-                            onOpenLocation={(locationId) => openLocation(locationId)}
-                            onAddLocation={beginAddLocation}
-                            canMutate={canMutate}
-                        />
-                    </>
-                :   <div className="grid min-h-full gap-0 xl:grid-cols-[14rem_minmax(0,1fr)]">
+                        <div className="mt-3">
+                            <LocationsFleetLanding
+                                fleet={fleet}
+                                showInactive={showInactive}
+                                onShowInactiveChange={setShowInactive}
+                                search={search}
+                                onSearchChange={setSearch}
+                                onOpenLocation={(locationId) => openLocation(locationId)}
+                                onAddLocation={beginAddLocation}
+                                canMutate={canMutate}
+                            />
+                        </div>
+                    </div>
+                :   <div className="grid items-start gap-4 pb-4 xl:grid-cols-[12.5rem_minmax(0,1fr)]">
                         <aside
-                            className="hidden overflow-hidden rounded-xl border border-alloy-stone/25 bg-white xl:block"
+                            className="process-config-setup-card hidden self-start p-0 xl:block"
                             aria-label="Location selector"
                             data-testid="locations-object-selector"
                         >
@@ -695,8 +698,8 @@ export default function LocationsConfigurationPage({
                             </div>
                         </aside>
 
-                        <main className="min-w-0 xl:pl-4" data-testid="locations-selected-location">
-                            <div className="mb-2 xl:hidden">
+                        <main className="min-w-0 space-y-3" data-testid="locations-selected-location">
+                            <div className="xl:hidden">
                                 <button
                                     type="button"
                                     className="mb-2 text-[11px] font-semibold text-[#007d68]"
@@ -726,48 +729,57 @@ export default function LocationsConfigurationPage({
                                 </select>
                             </div>
 
-                            <ConfigScopeContextBar
-                                mode="object"
-                                organizationLabel="Organization"
-                                objectLabel={model?.displayName ?? "Location"}
-                                onModeChange={(mode) => {
-                                    if (mode === "organization") returnToFleet();
-                                }}
-                            />
-
-                            <ConfigObjectHeader
-                                name={model?.displayName ?? "Location"}
-                                status={{
-                                    label: selectedSite.is_active === false ? "Inactive" : "Active",
-                                    tone: selectedSite.is_active === false ? "inactive" : "active",
-                                }}
-                                facts={identityFacts}
-                                testId="locations-object-header"
-                            />
-
-                            <div
-                                className="mb-3 flex overflow-x-auto border-b border-alloy-stone/30"
-                                role="tablist"
-                                aria-label="Location settings"
+                            <section
+                                className="process-config-setup-card px-5 pt-4"
+                                data-testid="locations-hero"
                             >
-                                {LOCATION_WORKSPACE_TABS.map((tab) => (
-                                    <button
-                                        key={tab.key}
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={activeTab === tab.key && !editingSite}
-                                        className={`shrink-0 border-b-2 px-3 py-1.5 text-xs font-semibold ${
-                                            activeTab === tab.key && !editingSite ?
-                                                "border-[#00a283] text-[#007d68]"
-                                            :   "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
-                                        }`}
-                                        onClick={() => navigate(tab.key)}
-                                        data-testid={`locations-tab-${tab.key}`}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
-                            </div>
+                                <ConfigObjectHeader
+                                    size="hero"
+                                    name={model?.displayName ?? "Location"}
+                                    status={{
+                                        label: selectedSite.is_active === false ? "Inactive" : "Active",
+                                        tone: selectedSite.is_active === false ? "inactive" : "active",
+                                    }}
+                                    facts={identityFacts}
+                                    breadcrumb={
+                                        <ConfigScopeContextBar
+                                            mode="object"
+                                            organizationLabel="Organization"
+                                            objectLabel={model?.displayName ?? "Location"}
+                                            ownershipHint="Configured at this location"
+                                            onModeChange={(mode) => {
+                                                if (mode === "organization") returnToFleet();
+                                            }}
+                                        />
+                                    }
+                                    testId="locations-object-header"
+                                />
+
+                                <div
+                                    className="mt-4 flex overflow-x-auto border-t border-alloy-stone/25"
+                                    role="tablist"
+                                    aria-label="Location settings"
+                                >
+                                    {LOCATION_WORKSPACE_TABS.map((tab) => (
+                                        <button
+                                            key={tab.key}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={activeTab === tab.key && !editingSite}
+                                            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs font-semibold ${
+                                                activeTab === tab.key && !editingSite ?
+                                                    "border-[#00a283] text-[#007d68]"
+                                                :   "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
+                                            }`}
+                                            onClick={() => navigate(tab.key)}
+                                            data-testid={`locations-tab-${tab.key}`}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
+
                             {tabBody}
                             {selectedSite && toursKeepAlive && !editingSite ?
                                 <div

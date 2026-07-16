@@ -11,8 +11,8 @@ import {
 import type { LocationWorkspaceModel, LocationWorkspaceTab } from "@/lib/locations/locationWorkspaceModel";
 
 /**
- * One Overview panel on the stone canvas.
- * Internal regions: attention, readiness, configuration summary, how it runs.
+ * Overview page composition — stacked regions on stone, not one white slab.
+ * Rhythm: health → configuration → operations.
  */
 export function LocationOverviewSurface({
     model,
@@ -46,62 +46,60 @@ export function LocationOverviewSurface({
     const hasAttention = attentionItems.some((item) => item.grade !== "good");
 
     return (
-        <ConfigWorkspaceCard testId="locations-overview" compact>
-            <div
-                className={`grid gap-5 ${hasAttention ? "lg:grid-cols-2" : ""}`}
-                data-testid="locations-overview-health"
-            >
-                <ConfigAttentionPanel
-                    items={attentionItems}
-                    compact
-                    embedded
-                    testId="locations-attention"
-                    onResolve={(item) => {
-                        const match = model.attention.find((entry) => entry.key === item.key);
-                        if (match) onResolveAttention(match.tab);
-                    }}
-                />
-                <section data-testid="locations-setup-progress" data-config-surface="region">
-                    <div className="mb-2.5 flex items-start justify-between gap-3">
-                        <div>
-                            <h2 className="config-typo-workspace-title">Operational readiness</h2>
-                            <p className="mt-0.5 text-[11px] text-alloy-midnight/50">
-                                {knownComplete} of {knownTotal}{" "}
-                                {knownTotal === 1 ? "area" : "areas"} complete · {readinessCaption}
-                            </p>
-                        </div>
-                        <div
-                            className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-                            style={{
-                                background: `conic-gradient(${
-                                    model.setupPercent >= 100 ? "#007d68" : "#00a283"
-                                } ${model.setupPercent}%, rgba(89,103,139,0.12) 0)`,
-                            }}
-                            aria-hidden
-                        >
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-semibold text-alloy-midnight">
-                                {model.setupPercent}%
-                            </div>
-                        </div>
-                    </div>
-                    <ConfigOperationalReadiness
-                        percent={model.setupPercent}
-                        areas={readinessAreas}
-                        onSelectArea={(area) => {
-                            const match = model.setupItems.find((item) => item.key === area.key);
-                            if (match) onSelectReadinessArea(match.tab);
-                        }}
+        <div className="flex flex-col gap-3 pb-2" data-testid="locations-overview">
+            <ConfigWorkspaceCard compact testId="locations-overview-health">
+                <div className={`grid gap-5 ${hasAttention ? "lg:grid-cols-2" : ""}`}>
+                    <ConfigAttentionPanel
+                        items={attentionItems}
                         compact
                         embedded
-                        testId="locations-overview-readiness-detail"
+                        testId="locations-attention"
+                        onResolve={(item) => {
+                            const match = model.attention.find((entry) => entry.key === item.key);
+                            if (match) onResolveAttention(match.tab);
+                        }}
                     />
-                </section>
-            </div>
+                    <section data-testid="locations-setup-progress" data-config-surface="region">
+                        <div className="mb-2.5 flex items-start justify-between gap-3">
+                            <div>
+                                <h2 className="config-typo-workspace-title">Operational readiness</h2>
+                                <p className="mt-0.5 text-[11px] text-alloy-midnight/50">
+                                    {knownComplete} of {knownTotal}{" "}
+                                    {knownTotal === 1 ? "area" : "areas"} complete · {readinessCaption}
+                                </p>
+                            </div>
+                            <div
+                                className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+                                style={{
+                                    background: `conic-gradient(${
+                                        model.setupPercent >= 100 ? "#007d68" : "#00a283"
+                                    } ${model.setupPercent}%, rgba(89,103,139,0.12) 0)`,
+                                }}
+                                aria-hidden
+                            >
+                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-semibold text-alloy-midnight">
+                                    {model.setupPercent}%
+                                </div>
+                            </div>
+                        </div>
+                        <ConfigOperationalReadiness
+                            percent={model.setupPercent}
+                            areas={readinessAreas}
+                            onSelectArea={(area) => {
+                                const match = model.setupItems.find((item) => item.key === area.key);
+                                if (match) onSelectReadinessArea(match.tab);
+                            }}
+                            compact
+                            embedded
+                            testId="locations-overview-readiness-detail"
+                        />
+                    </section>
+                </div>
+            </ConfigWorkspaceCard>
 
             <ConfigGlanceMetrics
                 title="Configuration summary"
                 testId="locations-overview-capacity"
-                embedded
                 metrics={[
                     {
                         key: "capacity",
@@ -150,12 +148,7 @@ export function LocationOverviewSurface({
                 ]}
             />
 
-            <section
-                className="border-t border-alloy-stone/25 pt-3.5"
-                data-testid="locations-overview-operations"
-                data-config-surface="region"
-            >
-                <h2 className="config-typo-workspace-title mb-2.5">How this location runs</h2>
+            <ConfigWorkspaceCard title="How this location runs" compact testId="locations-overview-operations">
                 <div className="grid gap-2 sm:grid-cols-3">
                     {[
                         {
@@ -213,7 +206,7 @@ export function LocationOverviewSurface({
                         </button>
                     ))}
                 </div>
-            </section>
-        </ConfigWorkspaceCard>
+            </ConfigWorkspaceCard>
+        </div>
     );
 }

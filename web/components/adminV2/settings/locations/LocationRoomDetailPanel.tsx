@@ -175,6 +175,7 @@ export default function LocationRoomDetailPanel({
         : editing ?
             <div className="space-y-3" data-testid="locations-room-edit">
                 <ConfigObjectHeader
+                    size="hero"
                     name={label.trim() || "Untitled room"}
                     status={{ label: "Editing", tone: "attention" }}
                     facts={[programLabel ?? "", siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
@@ -482,6 +483,7 @@ export default function LocationRoomDetailPanel({
             </div>
         :   <div className="space-y-3" data-testid="locations-room-detail">
                 <ConfigObjectHeader
+                    size="hero"
                     name={label.trim() || "Untitled room"}
                     status={{ label: statusLabel, tone: statusTone }}
                     facts={[programLabel ?? "", siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
