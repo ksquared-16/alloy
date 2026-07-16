@@ -43,6 +43,7 @@ awt 3                                         # cd slot 3 worktree
 devup                                         # start owned localhost server
 
 # Managed Sprint Operations V1 (normal daily lifecycle)
+# Canonical doctrine: docs/platform/governance/managed-sprint-operations.md
 alloy-sprint-start my-sprint --provider cursor --slot auto
 alloy-sprint-start my-sprint --provider claude --slot 3 --with-server
 alloy-worker-status                           # six-slot table

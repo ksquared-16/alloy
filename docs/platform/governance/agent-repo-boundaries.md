@@ -1,17 +1,19 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
 # Agent repo boundaries
 
-**Status:** Canonical governance (June 2026). Permanent repo/workspace separation for AI development agents.
+**Status:** Canonical governance (June 2026; managed-sprint cross-link July 2026). Permanent repo/workspace separation for AI development agents.
 
 **Purpose:** Prevent Cursor, Claude/Cowork, and shared staging from interfering with each other. Every agent session must respect assigned repo ownership and merge flow.
 
 **Cursor rule:** `.cursor/rules/repo-boundry.mdc` (enforced in this workspace)
+
+**Managed sprints:** `docs/platform/governance/managed-sprint-operations.md` — default bootstrap via `alloy-sprint-start`. Claude Code entry: `CLAUDE.md`.
 
 ---
 

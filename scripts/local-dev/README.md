@@ -297,6 +297,8 @@ Phase 2 does **not** duplicate worktree, port, or validation logic — it calls 
 
 ### Managed Sprint Operations V1
 
+**Canonical doctrine:** [`docs/platform/governance/managed-sprint-operations.md`](../../docs/platform/governance/managed-sprint-operations.md)
+
 Normal daily lifecycle for the six permanent slots (extends Phase 1–3 registries; not Director/Company OS):
 
 | Command | Purpose |
@@ -309,6 +311,8 @@ Normal daily lifecycle for the six permanent slots (extends Phase 1–3 registri
 | `alloy-sprint-finish <slot>` | stop processes, archive metadata, free slot; never delete/push/merge/PR |
 
 Resource defaults (override in `~/.config/alloy-dev/config`): `ALLOY_MAX_ACTIVE_PROVIDERS=3`, `ALLOY_MAX_RUNNING_SERVERS=3`, `ALLOY_MAX_CONCURRENT_INSTALLS=1`, `ALLOY_MAX_CONCURRENT_HEAVY_JOBS=1`. High macOS memory pressure refuses/defer heavy work without killing healthy workers.
+
+**Short Kelly prompt:** see §5 of the canonical doctrine (bootstrap + first-response card only).
 
 ### Interpreting `alloy-ai-health` (read-only)
 

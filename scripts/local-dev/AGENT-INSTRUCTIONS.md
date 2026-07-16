@@ -1,6 +1,14 @@
 # Agent instruction templates
 
-Phase 2 generates **concrete** per-worktree instructions automatically:
+**Canonical managed-sprint doctrine:** [`docs/platform/governance/managed-sprint-operations.md`](../../docs/platform/governance/managed-sprint-operations.md)
+
+Preferred bootstrap for new sprints:
+
+```bash
+alloy-sprint-start <name> --provider <cursor|claude> [--slot auto|N] [--with-server|--without-server]
+```
+
+Phase 2 still generates **concrete** per-worktree instructions automatically:
 
 ```bash
 alloy-agent-create <initiative>
@@ -44,21 +52,23 @@ Use only when generated files are unavailable.
 
 ```text
 You are working in an Alloy Git worktree for parallel local development.
+Read docs/platform/governance/managed-sprint-operations.md for the full sprint contract.
 
 Hard constraints:
 - Work ONLY in this assigned worktree directory.
-- Use ONLY the assigned branch and PORT (see alloy-agent-status).
+- Use ONLY the assigned branch and PORT (see alloy-worker-status / alloy-agent-status).
 - Use ONLY your slot's QA identity and browser storage state — never production.
 - At start: confirm pwd, branch, git status --short.
-- Do NOT push, merge, delete branches, or remove worktrees.
-- Commit coherent changes locally when appropriate.
+- Do NOT push, merge, rebase, delete branches, remove worktrees, open PRs, or trigger Vercel until Kelly authorizes promotion.
+- “Commit” never implies “push.” Multiple coherent local commits are expected.
 - Focused checks: single-file Vitest, lint of touched files.
-- Heavy checks: alloy-validate <worktree> <kind> only (serialized).
+- Heavy checks: alloy-validate <worktree> <kind> only (serialized; respect heavy-job limits).
 - Do NOT start a second dev server or duplicate toolkit browser.
 - Do NOT run `npm run dev` directly — use `alloy-dev-start` / `devup` (agent-safe `.env.local.agent` + trusted server injection; privileged values never enter the worktree).
 - Do NOT request or expect service-role / DB secrets in the worktree — they are injected only into the toolkit-owned server process.
 - Run `npm install` inside **this** worktree’s `web/` — browser tooling uses that worktree-local Playwright only (never borrow another tree’s `node_modules`).
 - If `alloy-agent-ready` reports only `web/next-env.d.ts` dirty after dev, run `git restore web/next-env.d.ts` (Next.js regeneration — not a toolkit defect).
+- Overnight: alloy-worker-pause <slot>. Morning: alloy-worker-resume <slot>. Finish: alloy-sprint-finish <slot>.
 
 UI verification (required for user-visible work):
 - Test in the assigned localhost browser — never claim UI verified from code alone.
@@ -73,9 +83,9 @@ Port map: slot N → 3010+N (3011–3016). Login: /login (Supabase email/passwor
 
 ### Claude agent
 
-Same as Cursor. Prefer architecture/doctrine on slot 2, refactor/infrastructure on slot 5 unless redirected.
+Same as Cursor. Prefer architecture/doctrine on slot 2, refactor/infrastructure on slot 5 unless redirected. Claude Code also loads repo-root `CLAUDE.md`, which points at the same managed-sprint doctrine.
 
-Claude Desktop: open the exact worktree folder printed by `alloy-agent-open` if no `claude` CLI exists.
+Claude Desktop: open the exact worktree folder printed by `alloy-agent-open` / `alloy-sprint-start` if no `claude` CLI exists.
 
 ---
 

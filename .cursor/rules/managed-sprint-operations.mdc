@@ -1,0 +1,40 @@
+---
+description: Managed sprint bootstrap via Alloy toolkit; local-only Git until Kelly promotes
+alwaysApply: true
+---
+
+# Managed Sprint Operations (Cursor)
+
+Before beginning an Alloy **implementation sprint** (new feature, remediation, or toolkit work that needs an isolated worktree), read:
+
+`docs/platform/governance/managed-sprint-operations.md`
+
+## Bootstrap
+
+1. Use the **installed** Alloy toolkit (`alloy-sprint-start`), not hand-created branches in the canonical checkout.
+2. Work **only** in the worktree returned by the toolkit.
+3. Permanent ports are **3011–3016**. Do not invent ports.
+4. Start localhost only when required (`--with-server` / `alloy-dev-start`).
+5. Worktree-local `npm install` only — never symlink `node_modules` across worktrees.
+6. Respect provider, server, install, and heavy-job resource limits.
+
+## Git / deploy
+
+- Coherent **local** commits throughout; multiple commits are expected.
+- **“Commit” never means “push.”**
+- Do **not** push, merge, rebase, create/update a PR, trigger Vercel, or modify `staging` until Kelly explicitly authorizes promotion.
+- Do not modify sibling worktrees or the canonical checkout during implementation.
+
+## First response
+
+Print the operator controls compactly on the first reply (sprint, slot, provider, worktree, branch, port, localhost or “server not required”, auth, server status, and the five operator commands). Do not dump implementation theory in that first response.
+
+Exact commands Kelly may use later:
+
+```text
+alloy-worker-status
+alloy-worker-pause <slot>
+alloy-worker-resume <slot>
+alloy-worker-doctor <slot>
+alloy-sprint-finish <slot>
+```

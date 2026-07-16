@@ -326,20 +326,23 @@ Expected:
 
 ## Hard constraints
 
+- Read \`docs/platform/governance/managed-sprint-operations.md\` for the full sprint contract.
 - Work ONLY in \`${path}\`. Do not edit other worktrees or the canonical checkout unless explicitly told.
 - Use ONLY branch \`${branch}\`.
 - Use ONLY port \`${port}\` / \`${url}\`.
 - Do NOT push.
 - Do NOT merge.
+- Do NOT rebase onto staging unless Kelly explicitly authorizes promotion sync.
 - Do NOT delete branches.
 - Do NOT remove worktrees.
 - Do NOT stash/reset/clean user work.
-- Commit coherent changes locally when asked / appropriate.
+- “Commit” never implies “push.” Commit coherent changes locally when asked / appropriate (multiple local commits expected).
 - Prefer focused checks (single-file Vitest, lint of touched files).
 - Heavy checks only via: \`alloy-validate ${name} typecheck|test|build|playwright|imports\`
 - Do NOT background heavy checks.
 - Do NOT start a second dev server. Use \`alloy-dev-start ${name}\` / \`alloy-dev-stop ${name}\` only — **never** \`npm run dev\` directly (two-tier env: agent-safe \`web/.env.local.agent\` + trusted server injection; privileged values never enter the worktree).
 - Ensure \`npm install\` has been run in **this** worktree's \`web/\` — login/verify use that worktree-local Playwright only.
+- Overnight: \`alloy-worker-pause ${slot}\`. Morning: \`alloy-worker-resume ${slot}\`. Finish: \`alloy-sprint-finish ${slot}\`.
 - Before finishing, report any processes left running.
 
 ## Operator shortcuts

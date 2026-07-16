@@ -138,6 +138,8 @@ Then: **`platform/foundation/system-overview.md`**
 | Design & operational doctrine | `platform/governance/design-and-operational-doctrine.md` |
 | Documentation rules | `platform/governance/documentation-governance.md` |
 | Agent repo boundaries | `platform/governance/agent-repo-boundaries.md` |
+| **Managed sprint operations** | `platform/governance/managed-sprint-operations.md` |
+| Workspace orchestration | `platform/governance/workspace-orchestration.md` |
 | API contracts | `platform/governance/api-contracts.md` |
 | **API documentation (full inventory)** | `api/README.md` — per-domain reference + generated route index + audit |
 | Roles & permissions | `platform/governance/roles-and-permissions.md` |
@@ -237,7 +239,7 @@ CSV source: `supabase/reference/*.csv` (8 files)
 
 **June 2026 rebaseline audit (prior art):** `audits/archive/2026-06-doc-rebaseline/`
 
-**Agent development:** [`platform/governance/agent-repo-boundaries.md`](platform/governance/agent-repo-boundaries.md)
+**Agent development:** [`platform/governance/agent-repo-boundaries.md`](platform/governance/agent-repo-boundaries.md) · **Managed sprints:** [`platform/governance/managed-sprint-operations.md`](platform/governance/managed-sprint-operations.md)
 
 **Documentation validation:** `npm run docs:lint` from repository root — see `scripts/README-docs-lint.md`
 

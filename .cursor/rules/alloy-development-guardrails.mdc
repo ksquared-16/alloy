@@ -75,6 +75,10 @@ Rules:
 
 See `docs/platform/governance/workspace-orchestration.md`.
 
+### Managed sprints
+
+New implementation sprints use the installed Alloy toolkit (`alloy-sprint-start`). Canonical doctrine: `docs/platform/governance/managed-sprint-operations.md`. Local commits only until Kelly authorizes promotion — “commit” never implies “push.”
+
 ### TypeScript: `import type` for props and interfaces
 
 When a symbol appears **only as a type** (component props, function parameters, return types), import it with **`import type`** from the defining module — do not rely on value imports from the same line unless the symbol is also used at runtime.

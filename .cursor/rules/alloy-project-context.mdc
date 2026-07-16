@@ -49,7 +49,7 @@ When starting non-trivial Alloy work, load context in this order:
 
 Add **`docs/platform/modules/communications-platform.md`** or **`docs/platform/modules/configuration-platform.md`** when the task touches those areas.
 
-For behavior-changing work, include item 15 in context. For agent/repo workflow, also read **`docs/platform/governance/agent-repo-boundaries.md`**.
+For behavior-changing work, include item 15 in context. For agent/repo workflow, also read **`docs/platform/governance/agent-repo-boundaries.md`**. For **implementation sprints** (new isolated worktree work), read **`docs/platform/governance/managed-sprint-operations.md`** first and bootstrap with `alloy-sprint-start`.
 
 **Supplemental (vertical detail):** `docs/product/crm-system.md` — enrollment pipeline reference implementation, not canonical platform framing.
 
