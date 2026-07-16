@@ -15,7 +15,7 @@ export function ConfigObjectHeader({
     testId = "config-object-header",
 }: {
     name: string;
-    status?: { label: string; tone: "active" | "inactive" };
+    status?: { label: string; tone: "active" | "inactive" | "attention" };
     /** Only include facts that have real values — never "not set" placeholders. */
     facts?: string[];
     breadcrumb?: ReactNode;
@@ -40,6 +40,8 @@ export function ConfigObjectHeader({
                                 className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                                     status.tone === "inactive" ?
                                         "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
+                                    : status.tone === "attention" ?
+                                        "border-alloy-ember/25 bg-alloy-ember/[0.08] text-alloy-ember"
                                     :   "border-[#00a283]/25 bg-[#00a283]/10 text-[#007d68]"
                                 }`}
                             >

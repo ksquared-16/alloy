@@ -20,6 +20,7 @@ import {
     ConfigAttentionPanel,
     ConfigChildObjectMasterDetail,
     ConfigConsequenceLine,
+    ConfigEditorSection,
     ConfigObjectHeader,
     ConfigWorkspaceCard,
     type ConfigAttentionItem,
@@ -56,7 +57,6 @@ export default function LocationRoomDetailPanel({
     rooms,
     selectedRoomId,
     onSelectRoom,
-    onAddRoom,
 }: {
     room: LocationHierarchyRow | null;
     siteLabel: string;
@@ -67,7 +67,6 @@ export default function LocationRoomDetailPanel({
     rooms: LocationHierarchyRow[];
     selectedRoomId: string | null;
     onSelectRoom: (roomId: string) => void;
-    onAddRoom?: () => void;
 }) {
     const [label, setLabel] = useState("");
     const [capacity, setCapacity] = useState("");
@@ -206,46 +205,56 @@ export default function LocationRoomDetailPanel({
 
                 {editing ?
                     <ConfigWorkspaceCard title="Adjust this room" testId="locations-room-editor">
-                        <div className="space-y-3">
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <label className="block space-y-1">
-                                    <span className="config-typo-field-label">Name</span>
-                                    <input
-                                        type="text"
-                                        value={label}
-                                        disabled={!canMutate}
-                                        onChange={(e) => setLabel(e.target.value)}
-                                        className="config-runtime-input"
-                                        data-testid="locations-room-name"
-                                    />
-                                </label>
-                                <label className="block space-y-1">
-                                    <span className="config-typo-field-label">Program</span>
-                                    <select
-                                        value={programKey}
-                                        disabled={!canMutate}
-                                        onChange={(e) => setProgramKey(e.target.value)}
-                                        className="config-runtime-select"
-                                        data-testid="locations-room-program"
-                                    >
-                                        <option value="">—</option>
-                                        {programOptions.map((p) => (
-                                            <option key={p.id} value={p.key}>
-                                                {p.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                            </div>
-
-                            <section className="rounded-lg border border-alloy-forge/10 bg-[#00a283]/[0.025] p-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <h3 className="config-typo-workspace-title">Capacity & staffing</h3>
-                                    <span className="text-xs font-medium text-alloy-midnight/65">
-                                        {capacity.trim() ? `${capacity.trim()} children` : "Capacity not set"}
-                                    </span>
+                        <div className="space-y-2.5">
+                            <ConfigEditorSection title="Identity" testId="locations-room-editor-identity">
+                                <div className="grid gap-2.5 sm:grid-cols-2">
+                                    <label className="block space-y-1">
+                                        <span className="config-typo-field-label">Name</span>
+                                        <input
+                                            type="text"
+                                            value={label}
+                                            disabled={!canMutate}
+                                            onChange={(e) => setLabel(e.target.value)}
+                                            className="config-runtime-input"
+                                            data-testid="locations-room-name"
+                                        />
+                                    </label>
+                                    <label className="block space-y-1">
+                                        <span className="config-typo-field-label">Program</span>
+                                        <select
+                                            value={programKey}
+                                            disabled={!canMutate}
+                                            onChange={(e) => setProgramKey(e.target.value)}
+                                            className="config-runtime-select"
+                                            data-testid="locations-room-program"
+                                        >
+                                            <option value="">—</option>
+                                            {programOptions.map((p) => (
+                                                <option key={p.id} value={p.key}>
+                                                    {p.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
                                 </div>
-                                <div className="mt-2 grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)]">
+                                <label className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={active}
+                                        disabled={!canMutate}
+                                        onChange={(e) => setActive(e.target.checked)}
+                                        className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                                    />
+                                    <span className="config-typo-sublabel">Active room</span>
+                                </label>
+                            </ConfigEditorSection>
+
+                            <ConfigEditorSection
+                                title="Capacity / participation"
+                                description="How many children this room can hold, and staffing thresholds."
+                                testId="locations-room-editor-capacity"
+                            >
+                                <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)]">
                                     <label className="block space-y-1">
                                         <span className="config-typo-field-label">Capacity</span>
                                         <input
@@ -349,23 +358,9 @@ export default function LocationRoomDetailPanel({
                                         </button>
                                     </div>
                                 </div>
-                            </section>
+                            </ConfigEditorSection>
 
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <label className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={active}
-                                        disabled={!canMutate}
-                                        onChange={(e) => setActive(e.target.checked)}
-                                        className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
-                                    />
-                                    <span className="config-typo-sublabel">Active room</span>
-                                </label>
-                            </div>
-
-                            <div className="space-y-1">
-                                <span className="config-typo-field-label">Age range</span>
+                            <ConfigEditorSection title="Age range" testId="locations-room-editor-age">
                                 <div className="grid gap-2 sm:grid-cols-3">
                                     <input
                                         type="text"
@@ -397,7 +392,15 @@ export default function LocationRoomDetailPanel({
                                         ))}
                                     </select>
                                 </div>
-                            </div>
+                            </ConfigEditorSection>
+
+                            <ConfigEditorSection
+                                title="Schedule / operating behavior"
+                                description="Rooms follow this location’s weekly hours."
+                                testId="locations-room-editor-schedule"
+                            >
+                                <p className="text-sm text-alloy-midnight/75">Uses {siteLabel} hours</p>
+                            </ConfigEditorSection>
 
                             {error ?
                                 <p className="text-sm text-red-800" role="alert">
@@ -488,18 +491,7 @@ export default function LocationRoomDetailPanel({
         <ConfigChildObjectMasterDetail
             listTitle="Rooms"
             listSummary="Capacity lives on each room"
-            listActions={
-                canMutate && onAddRoom ?
-                    <button
-                        type="button"
-                        className="text-xs font-semibold text-[#007d68]"
-                        onClick={onAddRoom}
-                        data-testid="locations-room-add"
-                    >
-                        + Add
-                    </button>
-                :   null
-            }
+            listActions={null}
             testId="locations-rooms"
             list={
                 rooms.length > 0 ?

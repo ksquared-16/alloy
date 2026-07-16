@@ -18,6 +18,7 @@ describe("Configuration Runtime workspace primitives", () => {
             "ConfigOperationalReadiness",
             "ConfigOperationalActions",
             "ConfigGlanceMetrics",
+            "ConfigEditorSection",
             "ConfigScopeContextBar",
             "ConfigApplyToDialog",
             "ConfigChildObjectMasterDetail",
@@ -25,6 +26,12 @@ describe("Configuration Runtime workspace primitives", () => {
         ]) {
             expect(index).toContain(name);
         }
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).toContain(
+            "data-config-glance-icon-well",
+        );
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigScopeContextBar.tsx")).toContain(
+            "Settings for",
+        );
     });
 
     it("keeps unknown readiness out of incomplete math", () => {

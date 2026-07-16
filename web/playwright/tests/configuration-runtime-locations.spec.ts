@@ -53,7 +53,7 @@ test.describe("configuration-runtime-locations", () => {
             animations: "disabled",
         });
 
-        const editLocation = page.getByTestId("locations-edit-location");
+        const editLocation = page.getByTestId("locations-rail-edit-details");
         if (await editLocation.isVisible().catch(() => false)) {
             await editLocation.click();
             const timezone = page.getByTestId("locations-site-timezone");
@@ -90,6 +90,7 @@ test.describe("configuration-runtime-locations", () => {
             animations: "disabled",
         });
         await expect(page.locator('[data-testid^="locations-program-summary-"]').first()).toBeVisible();
+        await expect(page.getByTestId("locations-program-ops")).toBeVisible();
 
         await page.getByTestId("locations-tab-rooms").click();
         await page.waitForTimeout(400);
@@ -102,6 +103,7 @@ test.describe("configuration-runtime-locations", () => {
         const firstItem = page.locator('[data-testid^="locations-room-"]').first();
         if (await firstItem.isVisible().catch(() => false)) {
             await firstItem.click();
+            await page.getByTestId("locations-room-toggle-edit").click();
             await expect(page.getByTestId("locations-room-capacity")).toBeVisible();
             await expect(page.getByTestId("locations-room-save")).toBeVisible();
             await page.waitForTimeout(400);
@@ -113,10 +115,9 @@ test.describe("configuration-runtime-locations", () => {
         }
 
         await page.getByTestId("locations-tab-schedule").click();
-        await expect(page.getByTestId("locations-schedule-add")).toBeVisible();
         await expect(page.getByTestId("locations-schedule-patterns")).toBeVisible();
         await expect(page.getByTestId("locations-schedule-closures")).toBeVisible();
-        await expect(page.getByTestId("locations-closure-add")).toBeVisible();
+        await expect(page.getByTestId("locations-rail-add-schedule-pattern")).toBeVisible();
         await page.screenshot({
             path: path.join(screenshotDir, "05-schedule.png"),
             fullPage: true,
@@ -174,7 +175,7 @@ test.describe("configuration-runtime-locations", () => {
             timeout: 60_000,
         });
 
-        const addBtn = page.getByTestId("locations-add-location");
+        const addBtn = page.getByTestId("locations-fleet-add-location");
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
             await expect(page.getByTestId("locations-site-create")).toBeVisible({
@@ -184,6 +185,13 @@ test.describe("configuration-runtime-locations", () => {
                 path: path.join(screenshotDir, "11-inline-location-create.png"),
                 fullPage: true,
                 animations: "disabled",
+            });
+        } else {
+            const railAdd = page.getByTestId("locations-rail-add-location");
+            await expect(railAdd).toBeVisible();
+            await railAdd.click();
+            await expect(page.getByTestId("locations-site-create")).toBeVisible({
+                timeout: 30_000,
             });
         }
     });

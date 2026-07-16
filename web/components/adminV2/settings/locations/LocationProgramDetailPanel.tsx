@@ -12,6 +12,7 @@ import {
     ConfigAttentionPanel,
     ConfigChildObjectMasterDetail,
     ConfigConsequenceLine,
+    ConfigEditorSection,
     ConfigObjectHeader,
     ConfigWorkspaceCard,
     type ConfigAttentionItem,
@@ -39,9 +40,20 @@ function programAttention(summary: LocationProgramOperationalSummary | null, age
     return items;
 }
 
+function programStatusLabel(summary: LocationProgramOperationalSummary | null, attention: ConfigAttentionItem[]): {
+    label: string;
+    tone: "active" | "inactive" | "attention";
+} {
+    if (!summary?.isActive) return { label: "Inactive", tone: "inactive" };
+    if (attention.some((item) => item.grade === "fix")) return { label: "Needs setup", tone: "attention" };
+    if (attention.some((item) => item.grade === "improve")) return { label: "Active · incomplete", tone: "attention" };
+    return { label: "Active · complete", tone: "active" };
+}
+
 export default function LocationProgramDetailPanel({
     program,
     summary,
+    summaries = [],
     siteLabel,
     canMutate,
     onSave,
@@ -49,9 +61,12 @@ export default function LocationProgramDetailPanel({
     selectedProgramId,
     onSelectProgram,
     ageUnitSelectOptions = [],
+    locationHasSchedule = false,
+    scheduleSummary,
 }: {
     program: LocationProgramCategoryRow | null;
     summary: LocationProgramOperationalSummary | null;
+    summaries?: LocationProgramOperationalSummary[];
     siteLabel: string;
     canMutate: boolean;
     onSave: (
@@ -67,6 +82,9 @@ export default function LocationProgramDetailPanel({
     selectedProgramId: string | null;
     onSelectProgram: (programId: string) => void;
     ageUnitSelectOptions?: readonly { value: string; label: string }[];
+    /** Authoritative: location has at least one active schedule pattern. */
+    locationHasSchedule?: boolean;
+    scheduleSummary?: string;
 }) {
     const [label, setLabel] = useState("");
     const [ageFrom, setAgeFrom] = useState("");
@@ -93,6 +111,11 @@ export default function LocationProgramDetailPanel({
     const ageDisplay = summary?.ageRange ?? "Not set";
     const attention = programAttention(summary, ageDisplay);
     const hasIssues = attention.some((item) => item.grade !== "good");
+    const status = programStatusLabel(summary, attention);
+    const scheduleLine =
+        locationHasSchedule ?
+            `Uses ${siteLabel || "location"} hours${scheduleSummary ? ` · ${scheduleSummary}` : ""}`
+        :   "Location hours are not set up yet";
 
     const detail =
         !program ?
@@ -105,8 +128,8 @@ export default function LocationProgramDetailPanel({
                 <ConfigObjectHeader
                     name={summary?.label ?? program.label}
                     status={{
-                        label: active ? "Active" : "Inactive",
-                        tone: active ? "active" : "inactive",
+                        label: status.label,
+                        tone: status.tone,
                     }}
                     facts={[siteLabel ? `Offered at ${siteLabel}` : ""].filter(Boolean)}
                     actions={
@@ -134,58 +157,140 @@ export default function LocationProgramDetailPanel({
                     :   "No rooms are assigned to this program yet."}
                 </ConfigConsequenceLine>
 
-                <div className={`grid gap-3 ${hasIssues ? "lg:grid-cols-2" : ""}`}>
-                    {hasIssues ?
-                        <ConfigAttentionPanel
-                            items={attention}
-                            compact
-                            testId="locations-program-attention"
-                            onResolve={() => setEditing(true)}
-                        />
-                    :   null}
-                    <ConfigWorkspaceCard title="What is configured" compact testId="locations-program-configured">
-                        <dl className="space-y-1.5 text-sm text-alloy-midnight/80">
-                            <div className="flex justify-between gap-3">
-                                <dt className="config-typo-sublabel">Rooms</dt>
-                                <dd className="font-medium">{summary?.roomCount ?? 0}</dd>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                                <dt className="config-typo-sublabel">Capacity</dt>
-                                <dd className="font-medium">
-                                    {summary?.configuredCapacity == null ?
-                                        "Not set up yet"
-                                    :   `${summary.configuredCapacity} children`}
-                                </dd>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                                <dt className="config-typo-sublabel">Age range</dt>
-                                <dd className="font-medium">{ageDisplay}</dd>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                                <dt className="config-typo-sublabel">Ownership</dt>
-                                <dd className="font-medium">Configured at this location</dd>
-                            </div>
-                        </dl>
-                    </ConfigWorkspaceCard>
+                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-program-ops">
+                    {[
+                        {
+                            key: "status",
+                            label: "Status",
+                            value: status.label,
+                            hint: active ? "Offered at this location" : "Not currently offered",
+                            tone: status.tone,
+                        },
+                        {
+                            key: "rooms",
+                            label: "Rooms",
+                            value: String(summary?.roomCount ?? 0),
+                            hint: "Classrooms using this program",
+                            tone: (summary?.roomCount ?? 0) === 0 ? "attention" : "ready",
+                        },
+                        {
+                            key: "capacity",
+                            label: "Capacity",
+                            value:
+                                summary?.configuredCapacity == null ?
+                                    "Not set"
+                                :   String(summary.configuredCapacity),
+                            hint:
+                                summary?.configuredCapacity == null ?
+                                    "From participating rooms"
+                                :   "Children across assigned rooms",
+                            tone: summary?.configuredCapacity == null ? "attention" : "ready",
+                        },
+                        {
+                            key: "age",
+                            label: "Age range",
+                            value: ageDisplay === "Age range not set" ? "Not set" : ageDisplay,
+                            hint: "Who this program serves",
+                            tone:
+                                ageDisplay === "Age range not set" || ageDisplay === "Not set" ?
+                                    "attention"
+                                :   "ready",
+                        },
+                        {
+                            key: "schedule",
+                            label: "Operating hours",
+                            value: locationHasSchedule ? "Location hours" : "Not set",
+                            hint: scheduleLine,
+                            tone: locationHasSchedule ? "ready" : "attention",
+                        },
+                        {
+                            key: "ownership",
+                            label: "Ownership",
+                            value: "Configured here",
+                            hint: "Location setting · not inherited",
+                            tone: "ready",
+                        },
+                    ].map((card) => (
+                        <div
+                            key={card.key}
+                            className="rounded-xl border border-alloy-forge/10 bg-white px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.03)]"
+                            data-testid={`locations-program-metric-${card.key}`}
+                        >
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                {card.label}
+                            </p>
+                            <p
+                                className={`mt-1 text-base font-semibold leading-tight ${
+                                    card.tone === "attention" ? "text-alloy-ember" : "text-alloy-midnight"
+                                }`}
+                            >
+                                {card.value}
+                            </p>
+                            <p className="mt-1 text-[11px] text-alloy-midnight/50">{card.hint}</p>
+                        </div>
+                    ))}
                 </div>
+
+                {hasIssues ?
+                    <ConfigAttentionPanel
+                        items={attention}
+                        compact
+                        testId="locations-program-attention"
+                        onResolve={() => setEditing(true)}
+                    />
+                :   null}
 
                 {editing ?
                     <ConfigWorkspaceCard title="Adjust this program" testId="locations-program-editor">
-                        <div className="space-y-3">
-                            <label className="block space-y-1">
-                                <span className="config-typo-field-label">Name</span>
-                                <input
-                                    type="text"
-                                    value={label}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setLabel(e.target.value)}
-                                    className="config-runtime-input"
-                                    data-testid="locations-program-name"
-                                />
-                            </label>
+                        <div className="space-y-2.5">
+                            <ConfigEditorSection title="Identity" testId="locations-program-editor-identity">
+                                <label className="block space-y-1">
+                                    <span className="config-typo-field-label">Name</span>
+                                    <input
+                                        type="text"
+                                        value={label}
+                                        disabled={!canMutate}
+                                        onChange={(e) => setLabel(e.target.value)}
+                                        className="config-runtime-input"
+                                        data-testid="locations-program-name"
+                                    />
+                                </label>
+                                <label className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={active}
+                                        disabled={!canMutate}
+                                        onChange={(e) => setActive(e.target.checked)}
+                                        className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                                    />
+                                    <span className="config-typo-sublabel">Active program</span>
+                                </label>
+                            </ConfigEditorSection>
 
-                            <div className="space-y-1">
-                                <span className="config-typo-field-label">Age range</span>
+                            <ConfigEditorSection
+                                title="Capacity / participation"
+                                description="Participation is derived from rooms assigned to this program."
+                                testId="locations-program-editor-participation"
+                            >
+                                <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                                    <div>
+                                        <dt className="config-typo-sublabel">Rooms</dt>
+                                        <dd className="font-medium text-alloy-midnight">
+                                            {summary?.roomCount ?? 0}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="config-typo-sublabel">Configured capacity</dt>
+                                        <dd className="font-medium text-alloy-midnight">
+                                            {summary?.configuredCapacity == null ?
+                                                "Not set up yet"
+                                            :   `${summary.configuredCapacity} children`}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </ConfigEditorSection>
+
+                            <ConfigEditorSection title="Age range" testId="locations-program-editor-age">
                                 <div className="grid gap-2 sm:grid-cols-3">
                                     <input
                                         type="text"
@@ -218,30 +323,32 @@ export default function LocationProgramDetailPanel({
                                         ))}
                                     </select>
                                 </div>
-                            </div>
+                            </ConfigEditorSection>
 
-                            <label className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={active}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setActive(e.target.checked)}
-                                    className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
-                                />
-                                <span className="config-typo-sublabel">Active program</span>
-                            </label>
+                            <ConfigEditorSection
+                                title="Schedule / operating behavior"
+                                description="Programs follow this location’s weekly hours."
+                                testId="locations-program-editor-schedule"
+                            >
+                                <p className="text-sm text-alloy-midnight/75">{scheduleLine}</p>
+                            </ConfigEditorSection>
 
-                            <label className="block space-y-1">
-                                <span className="config-typo-field-label">Default room types</span>
-                                <input
-                                    type="text"
-                                    value={defaultRoomTypes}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setDefaultRoomTypes(e.target.value)}
-                                    placeholder="Comma-separated room categories"
-                                    className="config-runtime-input"
-                                />
-                            </label>
+                            <ConfigEditorSection
+                                title="Advanced configuration"
+                                testId="locations-program-editor-advanced"
+                            >
+                                <label className="block space-y-1">
+                                    <span className="config-typo-field-label">Default room types</span>
+                                    <input
+                                        type="text"
+                                        value={defaultRoomTypes}
+                                        disabled={!canMutate}
+                                        onChange={(e) => setDefaultRoomTypes(e.target.value)}
+                                        placeholder="Comma-separated room categories"
+                                        className="config-runtime-input"
+                                    />
+                                </label>
+                            </ConfigEditorSection>
 
                             {error ?
                                 <p className="text-sm text-red-800" role="alert">
@@ -261,7 +368,8 @@ export default function LocationProgramDetailPanel({
                                                 setError(null);
                                                 try {
                                                     const base =
-                                                        program.metadata != null && typeof program.metadata === "object" ?
+                                                        program.metadata != null &&
+                                                        typeof program.metadata === "object" ?
                                                             { ...(program.metadata as Record<string, unknown>) }
                                                         :   {};
                                                     const metadata: Record<string, unknown> = { ...base };
@@ -312,16 +420,28 @@ export default function LocationProgramDetailPanel({
             testId="locations-programs"
             list={
                 programs.length > 0 ?
-                    programs.map((entry) => (
-                        <ConfigurationQueueItem
-                            key={entry.id}
-                            active={entry.id === selectedProgramId}
-                            title={entry.label}
-                            subtitle={entry.is_active === false ? "Inactive" : "Active"}
-                            onClick={() => onSelectProgram(entry.id)}
-                            testId={`locations-program-${entry.id}`}
-                        />
-                    ))
+                    programs.map((entry) => {
+                        const entrySummary = summaries.find((item) => item.id === entry.id);
+                        const subtitle =
+                            entry.is_active === false ? "Inactive"
+                            : entrySummary ?
+                                `${entrySummary.roomCount} rooms · ${
+                                    entrySummary.configuredCapacity == null ?
+                                        "capacity unset"
+                                    :   `${entrySummary.configuredCapacity} capacity`
+                                }`
+                            :   "Active";
+                        return (
+                            <ConfigurationQueueItem
+                                key={entry.id}
+                                active={entry.id === selectedProgramId}
+                                title={entry.label}
+                                subtitle={subtitle}
+                                onClick={() => onSelectProgram(entry.id)}
+                                testId={`locations-program-${entry.id}`}
+                            />
+                        );
+                    })
                 :   <p className="config-typo-sublabel">No programs offered yet.</p>
             }
             detail={detail}

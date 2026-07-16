@@ -3,12 +3,12 @@
 import type { ConfigScopeMode } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 /**
- * Scope context bar — Organization (global) vs the selected configuration object.
- * Reusable across Settings domains; labels are supplied by the domain.
+ * Ownership context — organization defaults vs settings for the selected location.
+ * Operator language only (no raw platform / implementation terminology).
  */
 export function ConfigScopeContextBar({
     mode,
-    organizationLabel = "Organization",
+    organizationLabel = "Organization defaults",
     objectLabel,
     onModeChange,
     ownershipHint,
@@ -23,15 +23,17 @@ export function ConfigScopeContextBar({
 }) {
     return (
         <div
-            className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-alloy-forge/10 bg-white px-2.5 py-2"
+            className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-alloy-forge/10 bg-gradient-to-r from-white to-alloy-bend-pine/[0.04] px-3 py-2.5"
             data-testid={testId}
         >
-            <p className="config-typo-meta mr-1 uppercase tracking-[0.14em]">Scope</p>
+            <p className="mr-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/40">
+                Settings for
+            </p>
             <button
                 type="button"
                 className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                     mode === "organization" ?
-                        "bg-[#00a283]/15 text-[#007d68]"
+                        "bg-alloy-bend-pine/15 text-[#007d68]"
                     :   "text-alloy-midnight/55 hover:bg-alloy-stone/15"
                 }`}
                 onClick={() => onModeChange("organization")}
@@ -43,7 +45,7 @@ export function ConfigScopeContextBar({
                 type="button"
                 className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                     mode === "object" ?
-                        "bg-[#00a283]/15 text-[#007d68]"
+                        "bg-alloy-bend-pine/15 text-[#007d68]"
                     :   "text-alloy-midnight/55 hover:bg-alloy-stone/15"
                 }`}
                 onClick={() => onModeChange("object")}
@@ -52,7 +54,9 @@ export function ConfigScopeContextBar({
                 {objectLabel}
             </button>
             {ownershipHint ?
-                <p className="config-typo-sublabel ml-auto">{ownershipHint}</p>
+                <p className="ml-auto max-w-md text-right text-[11px] leading-snug text-alloy-midnight/50">
+                    {ownershipHint}
+                </p>
             :   null}
         </div>
     );

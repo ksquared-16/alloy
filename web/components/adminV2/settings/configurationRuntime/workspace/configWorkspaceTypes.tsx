@@ -29,11 +29,16 @@ export type ConfigOperationalAction = {
     disabled?: boolean;
 };
 
+export type ConfigGlanceMetricTone = "default" | "attention" | "ready";
+
 export type ConfigGlanceMetric = {
     key: string;
     label: string;
     value: string;
     hint?: string;
+    /** Optional semantic glyph for summary objects (capacity, rooms, …). */
+    icon?: "capacity" | "rooms" | "programs" | "schedule";
+    tone?: ConfigGlanceMetricTone;
     onSelect?: () => void;
 };
 

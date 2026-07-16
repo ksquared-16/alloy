@@ -55,9 +55,10 @@ describe("Configuration Runtime — Locations", () => {
         expect(model).toContain("locationsFleetHref");
     });
 
-    it("uses the seven ready owned-concern tabs and keeps General behind Edit Location", () => {
+    it("uses the seven ready owned-concern tabs and keeps General behind Edit location (Actions)", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         const model = read("lib/locations/locationWorkspaceModel.ts");
+        const rail = read("lib/locations/buildLocationsRailActions.ts");
         for (const label of [
             "Overview",
             "Programs",
@@ -69,7 +70,8 @@ describe("Configuration Runtime — Locations", () => {
         ]) {
             expect(model).toContain(`label: "${label}"`);
         }
-        expect(page).toContain("Edit Location");
+        expect(rail).toContain('label: "Edit location"');
+        expect(page).not.toContain('data-testid="locations-edit-location"');
         const tabCatalog = model.slice(model.indexOf("LOCATION_WORKSPACE_TABS"), model.indexOf("] as const;"));
         expect(tabCatalog).not.toContain('key: "general"');
         expect(tabCatalog).not.toContain("Communications");
@@ -94,15 +96,18 @@ describe("Configuration Runtime — Locations", () => {
         expect(programs).toContain("locations-program-summary-");
         expect(programs).toContain("ConfigChildObjectMasterDetail");
         expect(programs).toContain("locations-program-age-unit");
-        expect(programs).toContain("What is configured");
+        expect(programs).toContain("locations-program-ops");
+        expect(programs).toContain("Configured here");
         expect(programs).toContain("Edit program");
-        expect(rooms).toContain("Capacity & staffing");
+        expect(programs).toContain("ConfigEditorSection");
+        expect(rooms).toContain("Capacity / participation");
         expect(rooms).toContain("Staffing thresholds");
         expect(rooms).toContain("Add staffing threshold");
         expect(rooms).toContain("formatStaffingThreshold");
         expect(rooms).toContain("ConfigChildObjectMasterDetail");
         expect(rooms).toContain("locations-room-consequence");
         expect(rooms).toContain("Adjust room");
+        expect(rooms).toContain("ConfigEditorSection");
         expect(rooms).not.toContain("Configure room");
         expect(rooms).not.toContain("Set how many children this room holds and the staffing ratio together.");
         expect(rooms.indexOf("Age range")).toBeLessThan(rooms.indexOf("locations-room-save"));
@@ -156,16 +161,23 @@ describe("Configuration Runtime — Locations", () => {
 
     it("supports multiple schedule patterns and shell-owned operational actions", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(page).toContain("+ Add Schedule Pattern");
+        const rail = read("lib/locations/buildLocationsRailActions.ts");
         expect(page).toContain("Closures / Holidays");
-        expect(page).toContain("+ Add Closure");
         expect(page).toContain("LocationSchedulePatternCreatePanel");
         expect(page).toContain("LocationsCommandRailActions");
-        expect(page).toContain("configure-capacity");
-        expect(page).toContain("resolve-timezone");
-        expect(page).toContain("apply-to");
+        expect(page).toContain("buildLocationsRailActions");
+        expect(page).not.toContain('data-testid="locations-add-location"');
+        expect(page).not.toContain('data-testid="locations-edit-location"');
+        expect(page).not.toContain("+ Add Schedule Pattern");
+        expect(rail).toContain('id: "configure-capacity"');
+        expect(rail).toContain('id: "resolve-timezone"');
+        expect(rail).toContain('applyAction("apply-to"');
+        expect(rail).toContain('group: "more"');
         expect(read("components/adminV2/settings/locations/LocationsCommandRailActions.tsx")).toContain(
             'actionsPlacementSurface="company"',
+        );
+        expect(read("components/adminV2/settings/locations/LocationsCommandRailActions.tsx")).toContain(
+            "More actions",
         );
         expect(page).not.toContain("Publish Communications");
     });

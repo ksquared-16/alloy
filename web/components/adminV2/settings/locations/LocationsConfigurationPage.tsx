@@ -6,7 +6,6 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
     ConfigurationContext,
     ConfigurationEmptyState,
-    ConfigurationPrimaryButton,
     ConfigurationQueue,
     ConfigurationQueueItem,
     ConfigurationShell,
@@ -28,14 +27,15 @@ import {
     LocationToursPanel,
 } from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
 import { LocationOverviewSurface } from "@/components/adminV2/settings/locations/LocationOverviewSurface";
-import {
-    LocationsCommandRailActions,
-    type LocationsRailAction,
-} from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
+import { LocationsCommandRailActions } from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
 import LocationsFleetLanding from "@/components/adminV2/settings/locations/LocationsFleetLanding";
 import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
-import { buildLocationIdentityFacts } from "@/lib/locations/locationIdentityPresentation";
+import { buildLocationsRailActions } from "@/lib/locations/buildLocationsRailActions";
+import {
+    buildLocationIdentityFacts,
+    formatLocationLocality,
+} from "@/lib/locations/locationIdentityPresentation";
 import {
     buildLocationWorkspaceModel,
     buildLocationProgramOperationalSummaries,
@@ -46,6 +46,22 @@ import {
     type LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
+
+function locationSelectorSignal(location: {
+    criticalCount: number;
+    improveCount: number;
+    setupPercent: number;
+    locality: string | null;
+    isActive: boolean;
+}): string {
+    if (!location.isActive) return "Inactive";
+    if (location.criticalCount > 0) {
+        return `${location.criticalCount} need${location.criticalCount === 1 ? "s" : ""} attention`;
+    }
+    if (location.setupPercent < 100) return `${location.setupPercent}% ready`;
+    if (location.locality) return location.locality;
+    return "Ready";
+}
 
 export default function LocationsConfigurationPage({
     initialLocationId = null,
@@ -312,249 +328,49 @@ export default function LocationsConfigurationPage({
         })();
     };
 
-    const railActions = useMemo((): LocationsRailAction[] => {
-        const actions: LocationsRailAction[] = [];
-
-        if (!selectedSite) {
-            if (canMutate) {
-                actions.push({
-                    id: "add-location",
-                    label: "Add Location",
-                    group: "manage",
-                    onClick: beginAddLocation,
-                });
-            }
-            return actions;
-        }
-
-        if (!model) return actions;
-
-        const applyDisabled = !canMutate || siteRows.length < 2;
-        const applyReason =
-            !canMutate ? "You do not have permission to apply configuration"
-            : siteRows.length < 2 ? "Need at least two locations"
-            : undefined;
-
-        if (activeTab === "overview") {
-            if (!model.timezone) {
-                actions.push({
-                    id: "resolve-timezone",
-                    label: "Set time zone",
-                    group: "fix",
-                    reason: "Required for schedules and tours",
-                    onClick: () => setEditingSite(true),
-                });
-            }
-            if (model.roomsNeedingCapacity > 0 || model.configuredCapacity == null) {
-                actions.push({
-                    id: "configure-capacity",
-                    label: "Configure capacity",
-                    group: "fix",
-                    reason:
-                        model.roomsNeedingCapacity > 0 ?
-                            `${model.roomsNeedingCapacity} rooms need setup`
-                        :   "No capacity configured yet",
-                    onClick: () => navigate("rooms"),
-                });
-            }
-            if (selectedSchedules.length === 0) {
-                actions.push({
-                    id: "set-schedule",
-                    label: "Set weekly schedule",
-                    group: "fix",
-                    reason: "Hours this location operates",
-                    onClick: () => navigate("schedule"),
-                });
-            }
-            if (model.setupItems.find((item) => item.key === "tours")?.complete === false) {
-                actions.push({
-                    id: "fix-tours",
-                    label: "Set up tour availability",
-                    group: "fix",
-                    reason: "Tours are not configured yet",
-                    onClick: () => navigate("tours"),
-                });
-            }
-
-            if (canMutate) {
-                actions.push({
-                    id: "add-room",
-                    label: "Add room",
-                    group: "manage",
-                    onClick: addRoom,
-                });
-            }
-            actions.push({
-                id: "apply-to",
-                label: "Apply to other locations",
-                group: "manage",
-                disabled: applyDisabled,
-                reason: applyReason,
-                onClick: () => setApplyToOpen(true),
-            });
-            actions.push({
-                id: "edit-details",
-                label: "Edit location",
-                group: "manage",
-                onClick: () => setEditingSite(true),
-            });
-            actions.push({
-                id: "duplicate-location",
-                label: "Duplicate location",
-                group: "manage",
-                disabled: true,
-                reason: "Coming soon",
-                onClick: () => undefined,
-            });
-            actions.push(
-                {
-                    id: "manage-rooms",
-                    label: "Manage rooms",
-                    group: "manage",
-                    onClick: () => navigate("rooms"),
-                },
-                {
-                    id: "manage-programs",
-                    label: "Manage programs",
-                    group: "manage",
-                    onClick: () => navigate("programs"),
-                },
-            );
-            return actions;
-        }
-
-        if (activeTab === "programs") {
-            actions.push({
-                id: "add-program",
-                label: "Add program",
-                group: "manage",
-                disabled: !canMutate,
-                reason: canMutate ? undefined : "You do not have permission to add programs",
-                onClick: () => navigate("programs"),
-            });
-            if (effectiveProgramId) {
-                actions.push({
-                    id: "edit-program",
-                    label: "Edit selected program",
-                    group: "manage",
-                    disabled: !canMutate,
-                    onClick: () => navigate("programs", effectiveProgramId),
-                });
-            }
-            actions.push({
-                id: "apply-programs",
-                label: "Apply programs",
-                group: "manage",
-                disabled: applyDisabled,
-                reason: applyReason,
-                onClick: () => setApplyToOpen(true),
-            });
-            return actions;
-        }
-
-        if (activeTab === "rooms") {
-            if (canMutate) {
-                actions.push({
-                    id: "add-room",
-                    label: "Add room",
-                    group: "manage",
-                    onClick: addRoom,
-                });
-            }
-            actions.push({
-                id: "configure-capacity",
-                label: "Configure capacity",
-                group: model.roomsNeedingCapacity > 0 || model.configuredCapacity == null ? "fix" : "manage",
-                reason:
-                    model.roomsNeedingCapacity > 0 ?
-                        `${model.roomsNeedingCapacity} rooms need setup`
-                    :   undefined,
-                onClick: () => navigate("rooms", effectiveRoomId),
-            });
-            if (effectiveRoomId) {
-                actions.push({
-                    id: "adjust-room",
-                    label: "Adjust selected room",
-                    group: "manage",
-                    onClick: () => navigate("rooms", effectiveRoomId),
-                });
-            }
-            return actions;
-        }
-
-        if (activeTab === "schedule") {
-            actions.push({
-                id: "add-schedule-pattern",
-                label: "Add schedule pattern",
-                group: "manage",
-                disabled: !canMutate,
-                onClick: () => {
+    const railActions = useMemo(
+        () =>
+            buildLocationsRailActions({
+                activeTab,
+                canMutate,
+                model,
+                selectedSite: Boolean(selectedSite),
+                siteCount: siteRows.length,
+                scheduleCount: selectedSchedules.length,
+                roomCount: selectedRooms.length,
+                programCount: selectedPrograms.length,
+                hasSelectedProgram: Boolean(effectiveProgramId),
+                hasSelectedRoom: Boolean(effectiveRoomId),
+                roomsNeedingCapacity: model?.roomsNeedingCapacity ?? 0,
+                onAddLocation: beginAddLocation,
+                onEditLocation: () => setEditingSite(true),
+                onAddRoom: addRoom,
+                onNavigate: navigate,
+                onApply: () => setApplyToOpen(true),
+                onCreateSchedule: () => {
                     if (!canMutate) return;
                     setCreatingSchedule(true);
                     navigate("schedule");
                 },
-            });
-            actions.push({
-                id: "add-closure",
-                label: "Add closure",
-                group: "manage",
-                disabled: true,
-                reason: "Date-specific closure authoring is not available yet",
-                onClick: () => undefined,
-            });
-            actions.push({
-                id: "apply-schedule",
-                label: "Apply schedule",
-                group: "manage",
-                disabled: applyDisabled,
-                reason: applyReason,
-                onClick: () => setApplyToOpen(true),
-            });
-            return actions;
-        }
+            }),
+        [
+            activeTab,
+            canMutate,
+            effectiveProgramId,
+            effectiveRoomId,
+            model,
+            selectedPrograms.length,
+            selectedRooms.length,
+            selectedSchedules.length,
+            selectedSite,
+            siteRows.length,
+        ],
+    );
 
-        if (activeTab === "tours") {
-            actions.push({
-                id: "review-availability",
-                label: "Review availability",
-                group: "manage",
-                onClick: () => navigate("tours"),
-            });
-            return actions;
-        }
-
-        if (activeTab === "placement") {
-            actions.push({
-                id: "configure-ranking",
-                label: "Configure ranking",
-                group: "manage",
-                onClick: () => navigate("placement"),
-            });
-            return actions;
-        }
-
-        if (activeTab === "access") {
-            actions.push({
-                id: "manage-access",
-                label: "Manage access",
-                group: "manage",
-                onClick: () => navigate("access"),
-            });
-        }
-
-        return actions;
-    }, [
-        activeTab,
-        canMutate,
-        createRoomUnit,
-        effectiveProgramId,
-        effectiveRoomId,
-        model,
-        selectedRooms.length,
-        selectedSchedules.length,
-        selectedSite,
-        siteRows.length,
-    ]);
+    const fleetById = useMemo(() => {
+        const map = new Map(fleet.locations.map((location) => [location.id, location]));
+        return map;
+    }, [fleet.locations]);
 
     const scheduleSummary =
         selectedSchedules.length > 0 ?
@@ -605,7 +421,10 @@ export default function LocationsConfigurationPage({
                 <LocationProgramDetailPanel
                     program={selectedProgram}
                     summary={programSummaries.find((summary) => summary.id === effectiveProgramId) ?? null}
+                    summaries={programSummaries}
                     siteLabel={model?.displayName ?? ""}
+                    locationHasSchedule={selectedSchedules.length > 0}
+                    scheduleSummary={scheduleSummary}
                     canMutate={canMutate}
                     onSave={patchProgramCategory}
                     programs={selectedPrograms}
@@ -633,7 +452,6 @@ export default function LocationsConfigurationPage({
                         setSelectedRoomId(roomId);
                         navigate("rooms", roomId);
                     }}
-                    onAddRoom={canMutate ? addRoom : undefined}
                 />
             );
         }
@@ -641,23 +459,12 @@ export default function LocationsConfigurationPage({
             return (
                 <div className="space-y-3" data-testid="locations-schedule">
                     <section className="process-config-setup-card p-4" data-testid="locations-schedule-patterns">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                                <h3 className="config-typo-workspace-title">Schedule Patterns</h3>
-                                <p className="config-typo-sublabel mt-1">
-                                    Reusable weekly attendance patterns offered by this location.
-                                </p>
-                            </div>
-                            {canMutate && !creatingSchedule ?
-                                <button
-                                    type="button"
-                                    className="rounded-md border border-[#00a283]/25 px-3 py-2 text-xs font-semibold text-[#007d68] hover:bg-[#00a283]/5"
-                                    onClick={() => setCreatingSchedule(true)}
-                                    data-testid="locations-schedule-add"
-                                >
-                                    + Add Schedule Pattern
-                                </button>
-                            :   null}
+                        <div>
+                            <h3 className="config-typo-workspace-title">Schedule Patterns</h3>
+                            <p className="config-typo-sublabel mt-1">
+                                Reusable weekly attendance patterns offered by this location. Use Actions to add a
+                                pattern.
+                            </p>
                         </div>
                         <div className="mt-4">
                             {creatingSchedule ?
@@ -706,24 +513,11 @@ export default function LocationsConfigurationPage({
                     </section>
 
                     <section className="process-config-setup-card p-4" data-testid="locations-schedule-closures">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                                <h3 className="config-typo-workspace-title">Closures / Holidays</h3>
-                                <p className="config-typo-sublabel mt-1">
-                                    Full-day closures and holiday exceptions belong to this location.
-                                </p>
-                            </div>
-                            {canMutate ?
-                                <button
-                                    type="button"
-                                    className="rounded-md border border-alloy-forge/15 px-3 py-2 text-xs font-semibold text-alloy-midnight/45"
-                                    disabled
-                                    title="Date-specific closure authoring is not available in the current schedule substrate."
-                                    data-testid="locations-closure-add"
-                                >
-                                    + Add Closure
-                                </button>
-                            :   null}
+                        <div>
+                            <h3 className="config-typo-workspace-title">Closures / Holidays</h3>
+                            <p className="config-typo-sublabel mt-1">
+                                Full-day closures and holiday exceptions belong to this location.
+                            </p>
                         </div>
                         <p className="config-typo-sublabel mt-4">
                             No date-specific closure records are available in the current schedule configuration.
@@ -745,21 +539,7 @@ export default function LocationsConfigurationPage({
         <div className="process-config-page min-h-0 flex-1" data-testid="locations-configuration-page">
             <LocationsCommandRailActions actions={railActions} />
 
-            <ConfigurationContext
-                title="Locations"
-                actions={
-                    canMutate && !creatingSite && selectedSite ?
-                        <ConfigurationPrimaryButton
-                            className="config-primary-btn--sm"
-                            data-testid="locations-add-location"
-                            onClick={beginAddLocation}
-                        >
-                            Add Location
-                        </ConfigurationPrimaryButton>
-                    :   null
-                }
-                testId="locations-configuration-context"
-            />
+            <ConfigurationContext title="Locations" testId="locations-configuration-context" />
 
             {error ?
                 <p
@@ -797,12 +577,12 @@ export default function LocationsConfigurationPage({
                     <>
                         <ConfigScopeContextBar
                             mode="organization"
-                            organizationLabel="Organization"
-                            objectLabel="Location"
+                            organizationLabel="Organization defaults"
+                            objectLabel="Select a location"
                             onModeChange={(mode) => {
                                 if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
                             }}
-                            ownershipHint="Organization view — configuration health across locations"
+                            ownershipHint="Organization defaults · Open a location to manage overrides"
                         />
                         <LocationsFleetLanding
                             fleet={fleet}
@@ -851,24 +631,33 @@ export default function LocationsConfigurationPage({
                                     placeholder="Search locations"
                                     className="config-runtime-input"
                                 />
-                                {visibleSites.map((site) => (
-                                    <ConfigurationQueueItem
-                                        key={site.id}
-                                        active={site.id === selectedId}
-                                        title={String(site.label ?? "").trim() || "Untitled location"}
-                                        subtitle={
-                                            site.is_active === false ?
-                                                "Inactive"
-                                            :   [site.city, site.state].filter(Boolean).join(", ") || "Active"
-                                        }
-                                        onClick={() => {
-                                            setSelectedId(site.id);
-                                            setEditingSite(false);
-                                            router.replace(locationWorkspaceHref(site.id, activeTab));
-                                        }}
-                                        testId={`locations-location-${site.id}`}
-                                    />
-                                ))}
+                                {visibleSites.map((site) => {
+                                    const summary = fleetById.get(site.id);
+                                    const locality =
+                                        formatLocationLocality({ city: site.city, state: site.state }) ??
+                                        summary?.locality ??
+                                        null;
+                                    return (
+                                        <ConfigurationQueueItem
+                                            key={site.id}
+                                            active={site.id === selectedId}
+                                            title={String(site.label ?? "").trim() || "Untitled location"}
+                                            subtitle={
+                                                summary ?
+                                                    locationSelectorSignal({ ...summary, locality })
+                                                :   site.is_active === false ?
+                                                    "Inactive"
+                                                :   "Active"
+                                            }
+                                            onClick={() => {
+                                                setSelectedId(site.id);
+                                                setEditingSite(false);
+                                                router.replace(locationWorkspaceHref(site.id, activeTab));
+                                            }}
+                                            testId={`locations-location-${site.id}`}
+                                        />
+                                    );
+                                })}
                             </ConfigurationQueue>
                         </aside>
 
@@ -905,12 +694,12 @@ export default function LocationsConfigurationPage({
 
                             <ConfigScopeContextBar
                                 mode="object"
-                                organizationLabel="Organization"
+                                organizationLabel="Organization defaults"
                                 objectLabel={model?.displayName ?? "Location"}
                                 onModeChange={(mode) => {
                                     if (mode === "organization") returnToFleet();
                                 }}
-                                ownershipHint="Configured at this location"
+                                ownershipHint="Configured at this location · Overrides organization defaults where changed"
                             />
 
                             <ConfigObjectHeader
@@ -920,18 +709,6 @@ export default function LocationsConfigurationPage({
                                     tone: selectedSite.is_active === false ? "inactive" : "active",
                                 }}
                                 facts={identityFacts}
-                                actions={
-                                    canMutate ?
-                                        <button
-                                            type="button"
-                                            className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
-                                            onClick={() => setEditingSite(true)}
-                                            data-testid="locations-edit-location"
-                                        >
-                                            Edit Location
-                                        </button>
-                                    :   null
-                                }
                                 testId="locations-object-header"
                             />
 
