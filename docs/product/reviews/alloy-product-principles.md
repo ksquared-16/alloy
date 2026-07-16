@@ -1,6 +1,6 @@
 ---
 owner: product
-status: draft
+status: proposed
 last_reviewed: 2026-07-16
 supersedes: []
 ---
