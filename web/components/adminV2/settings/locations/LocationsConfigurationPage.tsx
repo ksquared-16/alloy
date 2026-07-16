@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
@@ -11,6 +11,17 @@ import {
     ConfigurationQueueItem,
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import {
+    ConfigApplyToDialog,
+    ConfigAttentionPanel,
+    ConfigGlanceMetrics,
+    ConfigObjectHeader,
+    ConfigOperationalActions,
+    ConfigOperationalReadiness,
+    ConfigScopeContextBar,
+    ConfigWorkspaceCard,
+    type ConfigOperationalAction,
+} from "@/components/adminV2/settings/configurationRuntime/workspace";
 import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
@@ -32,34 +43,9 @@ import {
     LOCATION_WORKSPACE_TABS,
     locationsFleetHref,
     locationWorkspaceHref,
-    readLocationMetadataString,
     type LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-
-function WorkspaceCard({
-    title,
-    description,
-    children,
-    testId,
-}: {
-    title: string;
-    description?: string;
-    children: ReactNode;
-    testId?: string;
-}) {
-    return (
-        <section className="process-config-setup-card p-4" data-testid={testId}>
-            <div className="mb-3">
-                <h2 className="config-typo-workspace-title">{title}</h2>
-                {description ?
-                    <p className="config-typo-sublabel mt-1">{description}</p>
-                :   null}
-            </div>
-            {children}
-        </section>
-    );
-}
 
 export default function LocationsConfigurationPage({
     initialLocationId = null,
@@ -75,7 +61,8 @@ export default function LocationsConfigurationPage({
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
     const [creatingSchedule, setCreatingSchedule] = useState(false);
-    const [showSetupDetails, setShowSetupDetails] = useState(false);
+    const [applyToOpen, setApplyToOpen] = useState(false);
+    const [applyNotice, setApplyNotice] = useState<string | null>(null);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
         Record<string, Partial<Record<"tours" | "placement" | "access", boolean>>>
     >({});
@@ -99,6 +86,7 @@ export default function LocationsConfigurationPage({
         siteLabelById,
         selectedSite,
         createSiteLocation,
+        createRoomUnit,
         patchLocation,
         patchProgramCategory,
         roomCapacitySummaryForSite,
@@ -275,206 +263,181 @@ export default function LocationsConfigurationPage({
         navigate(tab);
     };
 
+    const operationalActions = useMemo((): ConfigOperationalAction[] => {
+        if (!model) return [];
+        const actions: ConfigOperationalAction[] = [];
+        if (!model.timezone) {
+            actions.push({
+                id: "resolve-timezone",
+                label: "Set time zone",
+                reason: "Required for schedules and tours",
+                priority: "fix",
+            });
+        }
+        if (model.roomsNeedingCapacity > 0 || model.configuredCapacity == null) {
+            actions.push({
+                id: "configure-capacity",
+                label: "Configure capacity",
+                reason:
+                    model.roomsNeedingCapacity > 0 ?
+                        `${model.roomsNeedingCapacity} rooms need setup`
+                    :   "No capacity configured yet",
+                priority: "fix",
+            });
+        }
+        if (model.activeProgramCount === 0) {
+            actions.push({
+                id: "offer-programs",
+                label: "Offer programs",
+                reason: "Programs connect rooms and placement",
+                priority: "next",
+            });
+        }
+        if (selectedSchedules.length === 0) {
+            actions.push({
+                id: "set-schedule",
+                label: "Set weekly schedule",
+                reason: "Hours this location operates",
+                priority: "next",
+            });
+        }
+        actions.push(
+            {
+                id: "manage-rooms",
+                label: "Manage rooms",
+                priority: "manage",
+            },
+            {
+                id: "manage-tours",
+                label: "Tour availability",
+                priority: "manage",
+            },
+            {
+                id: "manage-placement",
+                label: "Placement rules",
+                priority: "manage",
+            },
+            {
+                id: "apply-to",
+                label: "Apply to other locations",
+                reason: "Push selected configuration",
+                priority: "manage",
+                disabled: !canMutate || siteRows.length < 2,
+            },
+            {
+                id: "edit-details",
+                label: "Edit location details",
+                priority: "manage",
+            },
+        );
+        return actions;
+    }, [canMutate, model, selectedSchedules.length, siteRows.length]);
+
+    const runOperationalAction = (action: ConfigOperationalAction) => {
+        switch (action.id) {
+            case "resolve-timezone":
+            case "edit-details":
+                setEditingSite(true);
+                return;
+            case "configure-capacity":
+            case "manage-rooms":
+                navigate("rooms");
+                return;
+            case "offer-programs":
+                navigate("programs");
+                return;
+            case "set-schedule":
+                navigate("schedule");
+                return;
+            case "manage-tours":
+                navigate("tours");
+                return;
+            case "manage-placement":
+                navigate("placement");
+                return;
+            case "apply-to":
+                setApplyToOpen(true);
+                return;
+            default:
+                return;
+        }
+    };
+
     const overview =
         selectedSite && model ?
-            <div className="space-y-7" data-testid="locations-overview">
-                <section className="space-y-3" data-testid="locations-overview-health">
-                    <div>
-                        <p className="config-typo-meta uppercase tracking-[0.16em]">Health</p>
-                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">What needs you now</h2>
-                    </div>
-                    <div className="grid gap-4 lg:grid-cols-2">
-                        <WorkspaceCard
-                            title="Attention"
-                            description="Current issues and improvements, ranked by impact."
-                            testId="locations-attention"
-                        >
-                            <ul className="divide-y divide-alloy-forge/10">
-                                {model.attention.map((item) => (
-                                    <li key={item.key} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                                        <span
-                                            className={
-                                                item.grade === "fix" ? "text-amber-700"
-                                                : item.grade === "improve" ?
-                                                    "text-blue-700"
-                                                :   "text-[#007d68]"
-                                            }
-                                            aria-hidden="true"
-                                        >
-                                            {item.grade === "fix" ?
-                                                "⚠"
-                                            : item.grade === "improve" ?
-                                                "ⓘ"
-                                            :   "✓"}
-                                        </span>
-                                        <span className="min-w-0 flex-1 text-sm text-alloy-midnight/80">
-                                            {item.label}
-                                        </span>
-                                        {item.grade !== "good" ?
-                                            <button
-                                                type="button"
-                                                className="shrink-0 text-xs font-medium text-[#007d68]"
-                                                onClick={() => showSetupDestination(item.tab)}
-                                            >
-                                                Resolve
-                                            </button>
-                                        :   null}
-                                    </li>
-                                ))}
-                            </ul>
-                        </WorkspaceCard>
-                        <WorkspaceCard
-                            title="Setup progress"
-                            description="Operational readiness, not a mechanical checklist."
-                            testId="locations-setup-progress"
-                        >
-                            <div className="flex items-end gap-4">
-                                <p className="text-3xl font-medium tracking-tight text-alloy-midnight">
-                                    {model.setupPercent}%
-                                </p>
-                                <div className="pb-0.5 text-xs">
-                                    <p className="font-medium text-amber-700">{model.criticalCount} Critical</p>
-                                    <p className="mt-0.5 text-alloy-midnight/50">
-                                        {model.recommendedCount} Recommended
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-alloy-forge/10">
-                                <div
-                                    className="h-full rounded-full bg-[#00a283]"
-                                    style={{ width: `${model.setupPercent}%` }}
-                                />
-                            </div>
-                            {model.setupComplete ?
-                                <p className="config-typo-sublabel mt-3 text-[#007d68]">Setup complete ✓</p>
-                            :   <button
-                                    type="button"
-                                    className="mt-3 text-xs font-medium text-[#007d68]"
-                                    onClick={() => setShowSetupDetails((current) => !current)}
-                                    aria-expanded={showSetupDetails}
-                                >
-                                    {showSetupDetails ? "Hide setup details" : "Review setup"}
-                                </button>
-                            }
-                            {showSetupDetails ?
-                                <ul className="mt-3 divide-y divide-alloy-forge/10 border-t border-alloy-forge/10">
-                                    {model.setupItems.map((item) => (
-                                        <li key={item.key}>
-                                            <button
-                                                type="button"
-                                                className="flex w-full items-center justify-between py-2 text-xs"
-                                                onClick={() => showSetupDestination(item.tab)}
-                                            >
-                                                <span className="text-alloy-midnight/65">{item.label}</span>
-                                                <span
-                                                    className={
-                                                        item.complete ? "text-[#007d68]" : "text-alloy-midnight/40"
-                                                    }
-                                                >
-                                                    {item.complete ?
-                                                        "Ready"
-                                                    : item.complete == null ?
-                                                        "Review"
-                                                    :   "Finish"}
-                                                </span>
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            :   null}
-                        </WorkspaceCard>
-                    </div>
-                </section>
-
-                <section className="space-y-3" data-testid="locations-overview-capacity">
-                    <div>
-                        <p className="config-typo-meta uppercase tracking-[0.16em]">Capacity</p>
-                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">What this location can serve</h2>
-                    </div>
-                    <WorkspaceCard
-                        title="Capacity summary"
-                        description="Room capacity is the operational source; inventory follows."
-                        testId="locations-at-a-glance"
-                    >
-                        <button
-                            type="button"
-                            className="w-full rounded-xl border border-alloy-forge/10 bg-[#00a283]/[0.035] p-4 text-left"
-                            onClick={() => navigate("rooms")}
-                        >
-                            <span className="config-typo-field-label">Configured capacity</span>
-                            <span className="mt-1 block text-2xl font-medium tracking-tight text-alloy-midnight">
-                                {model.configuredCapacity == null ?
-                                    "Not set up yet"
-                                :   `${model.configuredCapacity} children`}
-                            </span>
-                            <span className="config-typo-sublabel mt-1 block">
-                                {model.roomsNeedingCapacity > 0 ?
-                                    `${model.roomsNeedingCapacity} ${model.roomsNeedingCapacity === 1 ? "room needs" : "rooms need"} capacity setup.`
-                                :   "Review the rooms and staffing thresholds behind this total."}
-                            </span>
-                        </button>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            {[
-                                {
-                                    label: "Programs",
-                                    value: model.activeProgramCount,
-                                    tab: "programs" as const,
-                                },
-                                {
-                                    label: "Rooms",
-                                    value: model.activeRoomCount,
-                                    tab: "rooms" as const,
-                                },
-                            ].map((item) => (
-                                <button
-                                    key={item.label}
-                                    type="button"
-                                    className="rounded-lg border border-alloy-forge/10 p-3 text-left hover:bg-alloy-stone/10"
-                                    onClick={() => navigate(item.tab)}
-                                >
-                                    <span className="text-lg font-medium text-alloy-midnight">{item.value}</span>
-                                    <span className="config-typo-sublabel ml-2">{item.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </WorkspaceCard>
-                </section>
-
-                <section className="space-y-3" data-testid="locations-overview-operations">
-                    <div>
-                        <p className="config-typo-meta uppercase tracking-[0.16em]">Operations</p>
-                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">How this location runs</h2>
-                    </div>
-                    <div className="process-config-setup-card divide-y divide-alloy-forge/10 px-4">
-                        {[
+            <div className="space-y-3" data-testid="locations-overview">
+                <div className="grid gap-3 lg:grid-cols-2" data-testid="locations-overview-health">
+                    <ConfigAttentionPanel
+                        items={model.attention}
+                        compact
+                        testId="locations-attention"
+                        onResolve={(item) => {
+                            const match = model.attention.find((entry) => entry.key === item.key);
+                            if (match) showSetupDestination(match.tab);
+                        }}
+                    />
+                    <ConfigGlanceMetrics
+                        title="What is configured"
+                        testId="locations-overview-capacity"
+                        metrics={[
                             {
+                                key: "capacity",
+                                label: "Capacity",
+                                value:
+                                    model.configuredCapacity == null ?
+                                        "Not set up yet"
+                                    :   `${model.configuredCapacity}`,
+                                hint: model.roomsNeedingCapacity > 0 ? `${model.roomsNeedingCapacity} rooms need setup` : undefined,
+                                onSelect: () => navigate("rooms"),
+                            },
+                            {
+                                key: "rooms",
+                                label: "Rooms",
+                                value: String(model.activeRoomCount),
+                                onSelect: () => navigate("rooms"),
+                            },
+                            {
+                                key: "programs",
+                                label: "Programs",
+                                value: String(model.activeProgramCount),
+                                onSelect: () => navigate("programs"),
+                            },
+                            {
+                                key: "schedule",
                                 label: "Schedule",
                                 value:
                                     selectedSchedules.length > 0 ?
                                         formatWeekdaySelection(selectedSchedules[0]!.weekdays)
                                     :   "Not set up yet",
-                                tab: "schedule" as const,
+                                onSelect: () => navigate("schedule"),
                             },
+                        ]}
+                    />
+                </div>
+
+                <ConfigWorkspaceCard title="How this location runs" compact testId="locations-overview-operations">
+                    <div className="divide-y divide-alloy-forge/10">
+                        {[
                             {
                                 label: "Tours",
-                                value: "Availability and booking rules",
+                                value: "Availability and booking",
                                 tab: "tours" as const,
                             },
                             {
                                 label: "Placement",
-                                value: `${model.activeRoomCount} active rooms`,
+                                value: `${model.activeRoomCount} active rooms participate`,
                                 tab: "placement" as const,
                             },
                             {
                                 label: "Access",
-                                value: "Team and location permissions",
+                                value: "Team permissions for this location",
                                 tab: "access" as const,
                             },
                         ].map((item) => (
                             <button
                                 key={item.label}
                                 type="button"
-                                className="flex w-full items-center justify-between gap-4 py-3 text-left"
+                                className="flex w-full items-center justify-between gap-3 py-2 text-left first:pt-0 last:pb-0"
                                 onClick={() => navigate(item.tab)}
                             >
                                 <span className="text-sm font-medium text-alloy-midnight/80">{item.label}</span>
@@ -482,7 +445,13 @@ export default function LocationsConfigurationPage({
                             </button>
                         ))}
                     </div>
-                </section>
+                </ConfigWorkspaceCard>
+
+                {applyNotice ?
+                    <p className="rounded-md border border-[#00a283]/20 bg-[#00a283]/5 px-3 py-2 text-xs text-[#007d68]">
+                        {applyNotice}
+                    </p>
+                :   null}
             </div>
         :   null;
 
@@ -534,37 +503,38 @@ export default function LocationsConfigurationPage({
         }
         if (activeTab === "rooms") {
             return (
-                <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]" data-testid="locations-rooms">
-                    <ConfigurationQueue title="Rooms" summary="Capacity and ratios live on each room">
-                        {selectedRooms.length > 0 ?
-                            selectedRooms.map((room) => (
-                                <ConfigurationQueueItem
-                                    key={room.id}
-                                    active={room.id === effectiveRoomId}
-                                    title={String(room.label ?? "").trim() || "Untitled room"}
-                                    subtitle={
-                                        readLocationMetadataString(room.metadata, "capacity") ?
-                                            `${readLocationMetadataString(room.metadata, "capacity")} children`
-                                        :   "Needs capacity setup"
+                <LocationRoomDetailPanel
+                    room={selectedRoom}
+                    siteLabel={model?.displayName ?? ""}
+                    programOptions={programOptionsForSite(selectedSite.id)}
+                    ageUnitSelectOptions={ageUnitSelectOptions}
+                    canMutate={canMutate}
+                    onSave={patchLocation}
+                    rooms={selectedRooms}
+                    selectedRoomId={effectiveRoomId}
+                    onSelectRoom={(roomId) => {
+                        setSelectedRoomId(roomId);
+                        navigate("rooms", roomId);
+                    }}
+                    onAddRoom={
+                        canMutate ?
+                            () => {
+                                void (async () => {
+                                    try {
+                                        const newId = await createRoomUnit(
+                                            selectedSite.id,
+                                            `Room ${(selectedRooms.length + 1).toString()}`,
+                                        );
+                                        setSelectedRoomId(newId);
+                                        navigate("rooms", newId);
+                                    } catch (e) {
+                                        setError(e instanceof Error ? e.message : "Failed to add room");
                                     }
-                                    onClick={() => {
-                                        setSelectedRoomId(room.id);
-                                        navigate("rooms", room.id);
-                                    }}
-                                    testId={`locations-room-${room.id}`}
-                                />
-                            ))
-                        :   <p className="config-typo-sublabel">No rooms yet. Add a room to begin capacity setup.</p>}
-                    </ConfigurationQueue>
-                    <LocationRoomDetailPanel
-                        room={selectedRoom}
-                        siteLabel={model?.displayName ?? ""}
-                        programOptions={programOptionsForSite(selectedSite.id)}
-                        ageUnitSelectOptions={ageUnitSelectOptions}
-                        canMutate={canMutate}
-                        onSave={patchLocation}
-                    />
-                </div>
+                                })();
+                            }
+                        :   undefined
+                    }
+                />
             );
         }
         if (activeTab === "schedule") {
@@ -739,21 +709,32 @@ export default function LocationsConfigurationPage({
                         }}
                     />
                 : !selectedSite ?
-                    <LocationsFleetLanding
-                        fleet={fleet}
-                        showInactive={showInactive}
-                        onShowInactiveChange={setShowInactive}
-                        search={search}
-                        onSearchChange={setSearch}
-                        onOpenLocation={(locationId) => openLocation(locationId)}
-                        onAddLocation={() => {
-                            setCreatingSite(true);
-                            setEditingSite(false);
-                            setError(null);
-                        }}
-                        canMutate={canMutate}
-                    />
-                :   <div className="grid min-h-full gap-4 xl:grid-cols-[15rem_minmax(0,1fr)_14rem]">
+                    <>
+                        <ConfigScopeContextBar
+                            mode="organization"
+                            organizationLabel="Organization"
+                            objectLabel="Location"
+                            onModeChange={(mode) => {
+                                if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
+                            }}
+                            ownershipHint="Organization view — configuration health across locations"
+                        />
+                        <LocationsFleetLanding
+                            fleet={fleet}
+                            showInactive={showInactive}
+                            onShowInactiveChange={setShowInactive}
+                            search={search}
+                            onSearchChange={setSearch}
+                            onOpenLocation={(locationId) => openLocation(locationId)}
+                            onAddLocation={() => {
+                                setCreatingSite(true);
+                                setEditingSite(false);
+                                setError(null);
+                            }}
+                            canMutate={canMutate}
+                        />
+                    </>
+                :   <div className="grid min-h-full gap-3 xl:grid-cols-[14rem_minmax(0,1fr)_13rem]">
                         <aside className="hidden xl:block" aria-label="Location selector">
                             <ConfigurationQueue
                                 title="Locations"
@@ -811,7 +792,7 @@ export default function LocationsConfigurationPage({
                         </aside>
 
                         <main className="min-w-0" data-testid="locations-selected-location">
-                            <div className="mb-4 xl:hidden">
+                            <div className="mb-3 xl:hidden">
                                 <button
                                     type="button"
                                     className="mb-2 text-[11px] font-semibold text-[#007d68]"
@@ -841,32 +822,27 @@ export default function LocationsConfigurationPage({
                                 </select>
                             </div>
 
-                            <header className="mb-4 border-b border-alloy-forge/10 pb-3">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <h1 className="text-2xl font-semibold tracking-tight text-alloy-midnight">
-                                                {model?.displayName}
-                                            </h1>
-                                            <span
-                                                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                                                    selectedSite.is_active === false ?
-                                                        "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
-                                                    :   "border-[#00a283]/25 bg-[#00a283]/10 text-[#007d68]"
-                                                }`}
-                                            >
-                                                {selectedSite.is_active === false ? "○ Inactive" : "● Active"}
-                                            </span>
-                                        </div>
-                                        <p className="config-typo-sublabel mt-1">
-                                            {model?.address ?? "Address not set up yet"}
-                                            {" · "}
-                                            {model?.phone ?? "Phone not set up yet"}
-                                            {" · "}
-                                            {model?.timezone ?? "Time zone not set up yet"}
-                                        </p>
-                                    </div>
-                                    {canMutate ?
+                            <ConfigScopeContextBar
+                                mode="object"
+                                organizationLabel="Organization"
+                                objectLabel={model?.displayName ?? "Location"}
+                                onModeChange={(mode) => {
+                                    if (mode === "organization") returnToFleet();
+                                }}
+                                ownershipHint="Configured at this location"
+                            />
+
+                            <ConfigObjectHeader
+                                name={model?.displayName ?? "Location"}
+                                status={{
+                                    label: selectedSite.is_active === false ? "Inactive" : "Active",
+                                    tone: selectedSite.is_active === false ? "inactive" : "active",
+                                }}
+                                facts={[model?.address, model?.phone, model?.timezone].filter(
+                                    (value): value is string => Boolean(value),
+                                )}
+                                actions={
+                                    canMutate ?
                                         <button
                                             type="button"
                                             className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
@@ -875,12 +851,13 @@ export default function LocationsConfigurationPage({
                                         >
                                             Edit Location
                                         </button>
-                                    :   null}
-                                </div>
-                            </header>
+                                    :   null
+                                }
+                                testId="locations-object-header"
+                            />
 
                             <div
-                                className="mb-4 flex overflow-x-auto border-b border-alloy-forge/10"
+                                className="mb-3 flex overflow-x-auto border-b border-alloy-forge/10"
                                 role="tablist"
                                 aria-label="Location settings"
                             >
@@ -905,36 +882,53 @@ export default function LocationsConfigurationPage({
                             {tabBody}
                         </main>
 
-                        <aside className="space-y-4" aria-label="Location actions and setup">
-                            <WorkspaceCard title="Quick actions">
-                                <div className="space-y-1">
-                                    {[
-                                        [
-                                            model?.roomsNeedingCapacity || model?.configuredCapacity == null ?
-                                                "Configure Capacity"
-                                            :   "Review Capacity",
-                                            "rooms",
-                                        ],
-                                        [model?.timezone ? "Edit Location Details" : "Resolve Time Zone", "general"],
-                                        ["Create Tour", "tours"],
-                                    ].map(([label, tab]) => (
-                                        <button
-                                            key={`${tab}-${label}`}
-                                            type="button"
-                                            className="block w-full rounded-md px-2 py-2 text-left text-xs font-medium text-[#007d68] hover:bg-[#00a283]/5"
-                                            onClick={() =>
-                                                showSetupDestination(tab as LocationWorkspaceTab | "general")
-                                            }
-                                        >
-                                            {label} →
-                                        </button>
-                                    ))}
-                                </div>
-                            </WorkspaceCard>
+                        <aside className="space-y-3" aria-label="Location actions and readiness">
+                            <ConfigOperationalActions
+                                actions={operationalActions}
+                                onSelect={runOperationalAction}
+                                testId="locations-operational-actions"
+                            />
+                            {model ?
+                                <ConfigOperationalReadiness
+                                    percent={model.setupPercent}
+                                    areas={model.setupItems.map((item) => ({
+                                        key: item.key,
+                                        label: item.label,
+                                        complete: item.complete,
+                                    }))}
+                                    onSelectArea={(area) => {
+                                        const match = model.setupItems.find((item) => item.key === area.key);
+                                        if (match) showSetupDestination(match.tab);
+                                    }}
+                                    compact
+                                    testId="locations-setup-progress"
+                                />
+                            :   null}
                         </aside>
                     </div>
                 }
             </ConfigurationShell>
+
+            <ConfigApplyToDialog
+                open={applyToOpen}
+                title="Apply configuration to…"
+                description="Choose other locations that should receive configuration from this location."
+                targets={siteRows
+                    .filter((site) => site.id !== selectedSite?.id)
+                    .map((site) => ({
+                        id: site.id,
+                        label: String(site.label ?? "").trim() || "Untitled location",
+                        subtitle: [site.city, site.state].filter(Boolean).join(", ") || undefined,
+                    }))}
+                confirmLabel="Apply"
+                onClose={() => setApplyToOpen(false)}
+                onApply={async (targetIds) => {
+                    // Substrate push is deferred; establish the reusable Apply To interaction now.
+                    setApplyNotice(
+                        `Ready to apply to ${targetIds.length} ${targetIds.length === 1 ? "location" : "locations"}. Configuration push connects next without changing this interaction.`,
+                    );
+                }}
+            />
         </div>
     );
 }

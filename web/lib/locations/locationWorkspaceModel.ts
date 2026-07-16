@@ -395,8 +395,11 @@ export function buildLocationWorkspaceModel(params: {
             complete: params.ownedConcernSetup?.access ?? null,
         },
     ];
-    const completedSetupItems = setupItems.filter((item) => item.complete).length;
-    const setupPercent = Math.round((completedSetupItems / setupItems.length) * 100);
+    // Unknown (null) areas are excluded from the denominator — never treated as incomplete.
+    const knownSetupItems = setupItems.filter((item) => item.complete !== null);
+    const completedSetupItems = knownSetupItems.filter((item) => item.complete === true).length;
+    const setupPercent =
+        knownSetupItems.length === 0 ? 0 : Math.round((completedSetupItems / knownSetupItems.length) * 100);
 
     const attention: LocationWorkspaceAttentionItem[] = [];
     if (!timezone) {
@@ -447,7 +450,7 @@ export function buildLocationWorkspaceModel(params: {
         });
     }
     const criticalCount = attention.filter((item) => item.grade === "fix").length;
-    const incompleteSetupCount = setupItems.filter((item) => item.complete !== true).length;
+    const incompleteSetupCount = setupItems.filter((item) => item.complete === false).length;
     const recommendedCount = incompleteSetupCount + attention.filter((item) => item.grade === "improve").length;
 
     return {

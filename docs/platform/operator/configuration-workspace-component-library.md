@@ -47,10 +47,19 @@ The read-only "is this object healthy?" surface. Presents derived state (capacit
 The live, ranked list answering "is anything wrong or improvable right now?" Items are graded Fix / Improve / Good, each one-tap actionable and self-clearing. Empty state: "Everything looks good." No timestamp, no global health badge. This **is** the health model.
 
 ### Setup Progress
-The onboarding completeness surface: a percentage donut plus a per-owned-area checklist, each linking to finish. Prominent while incomplete; **collapses to a single line at 100%**. Distinct from Attention by responsibility and by placement (rail vs body).
+The onboarding completeness surface: a percentage donut plus a per-owned-area checklist, each linking to finish. Prominent while incomplete; **collapses to a single line at 100%**. Distinct from Attention by responsibility and by placement (rail vs body). **Unknown areas (`complete === null`) are excluded from the denominator** — unknown is never incomplete.
+
+### Operational Action Model
+Ranked actions on the command rail, grouped **Fix now → Do next → Manage**. Domains supply actions from Attention + high-frequency operations; the primitive only groups and presents. Replaces ad-hoc “Quick actions” button lists.
+
+### Scope Context Bar
+Organization (global) vs the selected configuration object. Switches the operator between the org landing and the object workspace without inventing a third “fleet” noun.
+
+### Apply To Dialog
+Multi-select targets + confirm. Domains supply targets and the mutation; the dialog is the shared interaction for pushing configuration across locations (or future domain peers).
 
 ### Configuration Health Banner
-A per-object or per-section rollup of substrate resolution status into a single calm statement ("All good" / "Needs setup"). A compact form of Attention for tight spaces (e.g. a nested object's rail). Never a "last checked" heartbeat.
+A per-object or per-section rollup of substrate resolution status into a single calm statement ("All good" / "Needs setup"). A compact form of Attention for tight spaces (e.g. a nested object's rail). Never a "last checked" heartbeat. **Do not introduce a third status system named Health** — Attention remains the live health model; this banner is Attention in compact form.
 
 ---
 
@@ -99,6 +108,14 @@ An on-demand, plain-language history of what changed and when ("Capacity was 12,
 
 ### Configuration Activity Feed
 The object's recent changes as a short list — actor · plain summary · relative time · deep-link. A read surface, not an audit console.
+
+---
+
+### Child Object Master/Detail
+The reusable nested-object pattern (Rooms inside Locations; future Programs, templates, etc.). List selects; detail answers what is configured / needs attention / next action **before** exposing editors. Editing is intentional (Adjust), not the default posture.
+
+### Consequence Line
+A live, plain-language line restating the substrate's computed result as a business outcome for the focused child object.
 
 ---
 

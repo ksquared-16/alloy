@@ -274,6 +274,32 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         [refreshLocations],
     );
 
+    const createRoomUnit = useCallback(
+        async (siteId: string, label: string): Promise<string> => {
+            const res = await fetch("/api/admin/locations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    location_type: "unit",
+                    parent_location_id: siteId,
+                    label: label.trim() || "New room",
+                    is_active: true,
+                }),
+            });
+            const json = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+            if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+            const newId = String(json.id ?? "").trim();
+            if (!newId) throw new Error("Create failed: missing room id");
+            window.dispatchEvent(
+                new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
+            );
+            await refreshLocations();
+            return newId;
+        },
+        [refreshLocations],
+    );
+
     const patchLocation = useCallback(
         async (id: string, body: Record<string, unknown>) => {
             const res = await fetch(`/api/admin/locations/${encodeURIComponent(id)}`, {
@@ -354,6 +380,7 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         selectedRoom,
         selectedSchedulePattern,
         createSiteLocation,
+        createRoomUnit,
         patchLocation,
         patchProgramCategory,
         refresh,

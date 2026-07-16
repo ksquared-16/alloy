@@ -27,6 +27,11 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("locations-overview-health");
         expect(page).toContain("locations-overview-capacity");
         expect(page).toContain("locations-overview-operations");
+        expect(page).toContain("ConfigObjectHeader");
+        expect(page).toContain("ConfigOperationalActions");
+        expect(page).toContain("ConfigScopeContextBar");
+        expect(page).toContain("ConfigApplyToDialog");
+        expect(page).not.toContain("Address not set up yet");
         expect(page).not.toContain("locations-section-queue");
         expect(page).not.toContain("SettingsPageHeader");
         expect(page).not.toContain("data-locations-editor-table");
@@ -99,6 +104,9 @@ describe("Configuration Runtime — Locations", () => {
         expect(rooms).toContain("Staffing thresholds");
         expect(rooms).toContain("Add staffing threshold");
         expect(rooms).toContain("formatStaffingThreshold");
+        expect(rooms).toContain("ConfigChildObjectMasterDetail");
+        expect(rooms).toContain("locations-room-consequence");
+        expect(rooms).toContain("Adjust room");
         expect(rooms).not.toContain("Configure room");
         expect(rooms).not.toContain("Set how many children this room holds and the staffing ratio together.");
         expect(rooms.indexOf("Age range")).toBeLessThan(rooms.indexOf("locations-room-save"));
@@ -147,15 +155,16 @@ describe("Configuration Runtime — Locations", () => {
         expect(rankingEditor).toContain("Move down");
     });
 
-    it("supports multiple schedule patterns and contextual actions", () => {
+    it("supports multiple schedule patterns and operational actions", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(page).toContain("+ Add Schedule Pattern");
         expect(page).toContain("Closures / Holidays");
         expect(page).toContain("+ Add Closure");
         expect(page).toContain("LocationSchedulePatternCreatePanel");
-        expect(page).toContain("Configure Capacity");
-        expect(page).toContain("Resolve Time Zone");
-        expect(page).toContain("Create Tour");
+        expect(page).toContain("configure-capacity");
+        expect(page).toContain("resolve-timezone");
+        expect(page).toContain("apply-to");
+        expect(page).toContain("locations-operational-actions");
         expect(page).not.toContain("Publish Communications");
     });
 

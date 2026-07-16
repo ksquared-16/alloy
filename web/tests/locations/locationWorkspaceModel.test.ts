@@ -145,6 +145,31 @@ describe("location workspace model", () => {
         expect(model.attention.map((item) => item.key)).toEqual(["timezone", "rooms", "programs", "schedule"]);
     });
 
+    it("excludes unknown readiness areas from the setup denominator", () => {
+        const model = buildLocationWorkspaceModel({
+            site: site(),
+            rooms: [
+                room("a", {
+                    capacity: "12",
+                    category: "toddler",
+                    student_teacher_ratio: "1:5",
+                }),
+            ],
+            programs: [program("toddler")],
+            schedules: [{ id: "schedule-1", is_active: true }],
+            // tours/placement/access omitted → null/unknown
+        });
+
+        expect(model.setupPercent).toBe(100);
+        expect(model.setupComplete).toBe(true);
+        expect(model.setupItems.filter((item) => item.complete === null).map((item) => item.key)).toEqual([
+            "tours",
+            "placement",
+            "access",
+        ]);
+        expect(model.recommendedCount).toBe(0);
+    });
+
     it("keeps selected location, tab, and nested item URL-addressable", () => {
         expect(locationsFleetHref()).toBe("/settings/locations");
         expect(locationWorkspaceHref("site-1", "rooms", "room-2")).toBe(
