@@ -113,6 +113,27 @@ Replace only `[objective]` with the sprint goal. Do not paste operational novels
 - Multiple commits are expected.
 - Do not push, merge, rebase, open/update a PR, or touch `staging` / Vercel.
 
+**Canonical sprint completion lifecycle**
+
+1. Local implementation commits (coherent chunks; multiple expected)
+2. Product review (human)
+3. Explicit promotion approval from Kelly
+4. Push / PR / merge into `staging` (once; no duplicate pushes)
+5. Reinstall toolkit from the canonical checkout on staging:  
+   `bash /Users/Kelly/Alloy/scripts/local-dev/install.sh`
+6. `alloy-sprint-finish <slot>` — free the slot after the branch is on staging
+7. `alloy-agent-close <slot>` — optional; only after the branch is safely accounted for (merged or explicitly retained)
+
+**`alloy-sprint-finish` guarantees**
+
+- Stops registry-owned provider, server, and browser processes only
+- Releases the slot (archives metadata under `~/.local/state/alloy-dev/finished/`)
+- Preserves worktree, branch, commits, continuation record, auth, and logs
+- Never deletes the worktree or branch
+- Never pushes, merges, rebases, or creates a PR
+- Never kills unrelated processes
+- Blocks on dirty trees unless `--acknowledge-uncommitted`
+
 **When Kelly authorizes promotion** (human-operated; worker may prepare but not execute until told):
 
 ```bash
