@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     fetchCommunicationsBindingsCached,
     invalidateCommunicationsBindingsCache,
@@ -31,23 +31,33 @@ function providerLabel(b: BindingRow): string {
     const p = (b.provider ?? "").trim().toLowerCase();
     const ch = (b.channel ?? "").trim().toLowerCase();
     if (ch === "email" && p === "resend") return "Resend";
-    if (ch === "sms" && p) return p === "twilio" ? "Twilio" : b.provider ?? "SMS provider";
+    if (ch === "sms" && p) return p === "twilio" ? "Twilio" : (b.provider ?? "SMS provider");
     return b.provider ?? "—";
 }
 
-export default function CommunicationsSetupClient() {
+export default function CommunicationsSetupClient({
+    locationId = null,
+    embedded = false,
+}: {
+    locationId?: string | null;
+    embedded?: boolean;
+}) {
     const [bindings, setBindings] = useState<BindingRow[]>([]);
     const [channelsAvailable, setChannelsAvailable] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
     const [savingId, setSavingId] = useState<string | null>(null);
-    const [drafts, setDrafts] = useState<Record<string, { display_label: string; status: string; is_primary: boolean }>>({});
+    const [drafts, setDrafts] = useState<
+        Record<string, { display_label: string; status: string; is_primary: boolean }>
+    >({});
 
     const load = useCallback(async (options?: { force?: boolean }) => {
         setLoading(true);
         setErr(null);
         try {
-            const { ok, status, json } = await fetchCommunicationsBindingsCached({ force: options?.force });
+            const { ok, status, json } = await fetchCommunicationsBindingsCached({
+                force: options?.force,
+            });
             if (!ok) throw new Error(json.error ?? `HTTP ${status}`);
             const list = (Array.isArray(json.bindings) ? json.bindings : []) as BindingRow[];
             const ch = json.channels_available;
@@ -101,29 +111,45 @@ export default function CommunicationsSetupClient() {
         }
     };
 
-    const emailOutboundOk = channelsAvailable.includes("email");
-    const smsOutboundOk = channelsAvailable.includes("sms");
+    const visibleBindings = useMemo(
+        () => (locationId ? bindings.filter((binding) => binding.location_id === locationId) : bindings),
+        [bindings, locationId],
+    );
+    const emailOutboundOk =
+        locationId ?
+            visibleBindings.some((binding) => binding.channel === "email" && binding.ready_for_composer)
+        :   channelsAvailable.includes("email");
+    const smsOutboundOk =
+        locationId ?
+            visibleBindings.some((binding) => binding.channel === "sms" && binding.ready_for_composer)
+        :   channelsAvailable.includes("sms");
 
     return (
         <div className="space-y-4">
-            <div
-                className="rounded-xl border border-amber-200/80 bg-amber-50/90 p-3 text-[12px] leading-snug text-amber-950/90 shadow-sm"
-                role="status"
-            >
-                <p className="font-semibold text-amber-950">Communications settings — mid-build but useful</p>
-                <p className="mt-1 text-[11px] text-amber-950/88">
-                    Credential setup is currently <strong>admin-managed</strong> (deployment / vault / DB binding rows). Full self-service
-                    credential entry in this UI is coming. Here you can see read-only provider readiness, edit binding{" "}
-                    <strong>label</strong>, <strong>status</strong>, and <strong>primary</strong> only — never secret values. The record
-                    drawer composer only enables <strong>Resend</strong> (email) and <strong>Twilio SMS</strong> rows that meet the rules in
-                    outbound readiness — other providers may show a secret ref but still not unlock compose.
-                </p>
-            </div>
+            {!embedded ?
+                <div
+                    className="rounded-xl border border-amber-200/80 bg-amber-50/90 p-3 text-[12px] leading-snug text-amber-950/90 shadow-sm"
+                    role="status"
+                >
+                    <p className="font-semibold text-amber-950">Communications settings — mid-build but useful</p>
+                    <p className="mt-1 text-[11px] text-amber-950/88">
+                        Credential setup is currently <strong>admin-managed</strong> (deployment / vault / DB binding
+                        rows). Full self-service credential entry in this UI is coming. Here you can see read-only
+                        provider readiness, edit binding <strong>label</strong>, <strong>status</strong>, and{" "}
+                        <strong>primary</strong> only — never secret values. The record drawer composer only enables{" "}
+                        <strong>Resend</strong> (email) and <strong>Twilio SMS</strong> rows that meet the rules in
+                        outbound readiness — other providers may show a secret ref but still not unlock compose.
+                    </p>
+                </div>
+            :   null}
 
             <section className="rounded-xl border border-alloy-stone/16 bg-white/90 p-3 shadow-sm">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/44">Outbound readiness</h2>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/44">
+                    Outbound readiness
+                </h2>
                 <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/58">
-                    Derived from active bindings with credentials configured (<code className="text-[10px]">secret_ref</code> not empty /{" "}
+                    Derived from active bindings with credentials configured (
+                    <code className="text-[10px]">secret_ref</code> not empty /{" "}
                     <code className="text-[10px]">unconfigured</code>). No secrets are shown on this page.
                 </p>
                 <ul className="mt-2 flex flex-wrap gap-3 text-[12px]">
@@ -143,25 +169,32 @@ export default function CommunicationsSetupClient() {
             </section>
 
             <section className="rounded-xl border border-alloy-stone/16 bg-white/90 p-3 shadow-sm">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/44">Provider bindings</h2>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/44">
+                    Provider bindings
+                </h2>
                 <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/55">
-                    Each row shows <strong>read-only</strong> provider/channel context and whether a credential ref is configured (no secrets).
-                    Use the <strong>Binding status</strong> dropdown and Save to enable/disable a row; changing <code className="text-[10px]">secret_ref</code>{" "}
-                    still happens outside this UI today (runbooks / migrations / ops).
+                    Each row shows <strong>read-only</strong> provider/channel context and whether a credential ref is
+                    configured (no secrets). Use the <strong>Binding status</strong> dropdown and Save to enable/disable
+                    a row; changing <code className="text-[10px]">secret_ref</code> still happens outside this UI today
+                    (runbooks / migrations / ops).
                 </p>
 
-                {loading ? (
+                {loading ?
                     <p className="mt-3 text-[12px] text-alloy-midnight/50" aria-busy="true">
                         Loading…
                     </p>
-                ) : err && bindings.length === 0 ? (
+                : err && visibleBindings.length === 0 ?
                     <p className="mt-2 text-[12px] text-alloy-ember">{err}</p>
-                ) : bindings.length === 0 ? (
-                    <p className="mt-2 text-[12px] text-alloy-midnight/58">No binding rows for this org yet.</p>
-                ) : (
-                    <div className="mt-3 space-y-3">
-                        {err ? <p className="text-[11px] text-alloy-ember">{err}</p> : null}
-                        {bindings.map((b) => {
+                : visibleBindings.length === 0 ?
+                    <p className="mt-2 text-[12px] text-alloy-midnight/58">
+                        No location-specific provider binding is available yet. Organization sender defaults remain
+                        unchanged.
+                    </p>
+                :   <div className="mt-3 space-y-3">
+                        {err ?
+                            <p className="text-[11px] text-alloy-ember">{err}</p>
+                        :   null}
+                        {visibleBindings.map((b) => {
                             const d = drafts[b.id];
                             const secretOk = Boolean(b.ready_for_composer);
                             return (
@@ -173,40 +206,48 @@ export default function CommunicationsSetupClient() {
                                         <span className="font-semibold text-alloy-forge">
                                             {channelLabel(b.channel)} · {providerLabel(b)}
                                         </span>
-                                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${secretOk ? "bg-green-800/10 text-green-900/90" : "bg-alloy-ember/10 text-alloy-ember"}`}>
+                                        <span
+                                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${secretOk ? "bg-green-800/10 text-green-900/90" : "bg-alloy-ember/10 text-alloy-ember"}`}
+                                        >
                                             Composer outbound: {secretOk ? "ready" : "not ready"}
                                         </span>
                                     </div>
                                     <dl className="mt-1.5 grid gap-0.5 text-[10px] text-alloy-midnight/55 sm:grid-cols-2">
                                         <div>
-                                            <dt className="inline font-medium text-alloy-midnight/45">Status (stored)</dt>{" "}
+                                            <dt className="inline font-medium text-alloy-midnight/45">
+                                                Status (stored)
+                                            </dt>{" "}
                                             <dd className="inline">{b.status ?? "—"}</dd>
                                         </div>
                                         <div>
                                             <dt className="inline font-medium text-alloy-midnight/45">Primary</dt>{" "}
                                             <dd className="inline">{b.is_primary ? "Yes" : "No"}</dd>
                                         </div>
-                                        {b.inbound_to_e164 ? (
+                                        {b.inbound_to_e164 ?
                                             <div className="sm:col-span-2">
                                                 <dt className="inline font-medium text-alloy-midnight/45">Inbound</dt>{" "}
                                                 <dd className="inline font-mono text-[10px]">{b.inbound_to_e164}</dd>
                                             </div>
-                                        ) : null}
-                                        {b.from_email_hint ? (
+                                        :   null}
+                                        {b.from_email_hint ?
                                             <div className="sm:col-span-2">
-                                                <dt className="inline font-medium text-alloy-midnight/45">From (config hint)</dt>{" "}
+                                                <dt className="inline font-medium text-alloy-midnight/45">
+                                                    From (config hint)
+                                                </dt>{" "}
                                                 <dd className="inline">{b.from_email_hint}</dd>
                                             </div>
-                                        ) : null}
+                                        :   null}
                                         <div>
                                             <dt className="inline font-medium text-alloy-midnight/45">Scope</dt>{" "}
                                             <dd className="inline">{b.scope ?? "—"}</dd>
                                         </div>
                                     </dl>
-                                    {d ? (
+                                    {d && !locationId ?
                                         <div className="mt-2 space-y-2 border-t border-alloy-stone/12 pt-2">
                                             <label className="block">
-                                                <span className="text-[10px] font-medium text-alloy-midnight/50">Display label</span>
+                                                <span className="text-[10px] font-medium text-alloy-midnight/50">
+                                                    Display label
+                                                </span>
                                                 <input
                                                     type="text"
                                                     value={d.display_label}
@@ -220,7 +261,9 @@ export default function CommunicationsSetupClient() {
                                                 />
                                             </label>
                                             <label className="block">
-                                                <span className="text-[10px] font-medium text-alloy-midnight/50">Binding status</span>
+                                                <span className="text-[10px] font-medium text-alloy-midnight/50">
+                                                    Binding status
+                                                </span>
                                                 <select
                                                     value={d.status}
                                                     onChange={(e) =>
@@ -247,7 +290,9 @@ export default function CommunicationsSetupClient() {
                                                         }))
                                                     }
                                                 />
-                                                <span className="text-[10px] text-alloy-midnight/60">Primary for this channel</span>
+                                                <span className="text-[10px] text-alloy-midnight/60">
+                                                    Primary for this channel
+                                                </span>
                                             </label>
                                             <button
                                                 type="button"
@@ -258,12 +303,12 @@ export default function CommunicationsSetupClient() {
                                                 {savingId === b.id ? "Saving…" : "Save row"}
                                             </button>
                                         </div>
-                                    ) : null}
+                                    :   null}
                                 </div>
                             );
                         })}
                     </div>
-                )}
+                }
             </section>
         </div>
     );

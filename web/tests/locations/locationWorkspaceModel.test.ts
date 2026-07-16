@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import {
+    buildLocationProgramOperationalSummaries,
     buildLocationWorkspaceModel,
+    formatStaffingThreshold,
     locationWorkspaceHref,
+    parseStaffingThresholds,
     parseLocationWorkspaceTab,
+    serializeStaffingThresholds,
 } from "@/lib/locations/locationWorkspaceModel";
 
 function site(overrides: Partial<LocationHierarchyRow> = {}): LocationHierarchyRow {
@@ -52,8 +56,16 @@ describe("location workspace model", () => {
         const model = buildLocationWorkspaceModel({
             site: site(),
             rooms: [
-                room("a", { capacity: "12", category: "toddler", student_teacher_ratio: "1:5" }),
-                room("b", { capacity: "18", category: "preschool", student_teacher_ratio: "1:8" }),
+                room("a", {
+                    capacity: "12",
+                    category: "toddler",
+                    student_teacher_ratio: "1:5",
+                }),
+                room("b", {
+                    capacity: "18",
+                    category: "preschool",
+                    student_teacher_ratio: "1:8",
+                }),
             ],
             programs: [program("toddler"), program("preschool")],
             schedules: [{ id: "schedule-1", is_active: true }],
@@ -69,8 +81,14 @@ describe("location workspace model", () => {
         expect(model.activeRoomCount).toBe(2);
         expect(model.activeProgramCount).toBe(2);
         expect(model.setupComplete).toBe(true);
+        expect(model.criticalCount).toBe(0);
+        expect(model.recommendedCount).toBe(0);
         expect(model.attention).toEqual([
-            expect.objectContaining({ key: "all-good", grade: "good", label: "Everything looks good" }),
+            expect.objectContaining({
+                key: "all-good",
+                grade: "good",
+                label: "Everything looks good",
+            }),
         ]);
     });
 
@@ -78,7 +96,11 @@ describe("location workspace model", () => {
         const model = buildLocationWorkspaceModel({
             site: site(),
             rooms: [
-                room("configured", { capacity: "10", category: "toddler", student_teacher_ratio: "1:5" }),
+                room("configured", {
+                    capacity: "10",
+                    category: "toddler",
+                    student_teacher_ratio: "1:5",
+                }),
                 room("unknown", { category: "preschool" }),
             ],
             programs: [program("toddler")],
@@ -94,6 +116,8 @@ describe("location workspace model", () => {
             ]),
         );
         expect(model.setupComplete).toBe(false);
+        expect(model.criticalCount).toBe(1);
+        expect(model.recommendedCount).toBeGreaterThan(0);
     });
 
     it("represents an unconfigured location with honest nulls rather than zero", () => {
@@ -124,5 +148,48 @@ describe("location workspace model", () => {
         );
         expect(parseLocationWorkspaceTab("communications")).toBe("communications");
         expect(parseLocationWorkspaceTab("unknown")).toBe("overview");
+    });
+
+    it("supports threshold staffing while preserving legacy one-to-five values", () => {
+        const thresholds = parseStaffingThresholds("1:5, 2–11\n3-17");
+        expect(thresholds).toEqual([
+            { requiredStaff: 1, maxChildren: 5 },
+            { requiredStaff: 2, maxChildren: 11 },
+            { requiredStaff: 3, maxChildren: 17 },
+        ]);
+        expect(thresholds.map(formatStaffingThreshold)).toEqual(["1–5", "2–11", "3–17"]);
+        expect(serializeStaffingThresholds(thresholds)).toBe("1:5,2:11,3:17");
+    });
+
+    it("builds program cards from the rooms and capacity each program serves", () => {
+        const programs = [
+            {
+                ...program("toddler"),
+                label: "Toddler",
+                metadata: {
+                    age_range_from: "18",
+                    age_range_to: "36",
+                    age_range_unit: "months",
+                },
+            },
+        ];
+        const summaries = buildLocationProgramOperationalSummaries({
+            programs,
+            rooms: [
+                room("a", { category: "toddler", capacity: "11" }),
+                room("b", { category: "toddler", capacity: "17" }),
+                room("c", { category: "preschool", capacity: "20" }),
+            ],
+        });
+
+        expect(summaries).toEqual([
+            expect.objectContaining({
+                label: "Toddler",
+                roomCount: 2,
+                configuredCapacity: 28,
+                ageRange: "18–36 months",
+                isActive: true,
+            }),
+        ]);
     });
 });

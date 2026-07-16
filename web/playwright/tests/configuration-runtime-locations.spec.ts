@@ -6,7 +6,7 @@ import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 
 loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
-const screenshotDir = path.join(__dirname, "../../../docs/sprints/archive/06_2026/configuration-runtime-locations");
+const screenshotDir = path.join(__dirname, "../../../docs/sprints/completed/locations-product-review-remediation");
 
 async function ensureSidebarExpanded(page: import("@playwright/test").Page) {
     const expand = page.getByRole("button", { name: "Expand sidebar" });
@@ -25,8 +25,13 @@ test.describe("configuration-runtime-locations", () => {
         await page.setViewportSize({ width: 1440, height: 960 });
         await ensureAdminPlaywrightSession(page);
 
-        await page.goto("/settings/locations", { waitUntil: "networkidle", timeout: 120_000 });
-        await expect(page.getByTestId("locations-configuration-page")).toBeVisible({ timeout: 60_000 });
+        await page.goto("/settings/locations", {
+            waitUntil: "networkidle",
+            timeout: 120_000,
+        });
+        await expect(page.getByTestId("locations-configuration-page")).toBeVisible({
+            timeout: 60_000,
+        });
         await page.screenshot({
             path: path.join(screenshotDir, "01-location-overview.png"),
             fullPage: true,
@@ -40,6 +45,7 @@ test.describe("configuration-runtime-locations", () => {
             fullPage: true,
             animations: "disabled",
         });
+        await expect(page.locator('[data-testid^="locations-program-summary-"]').first()).toBeVisible();
 
         await page.getByTestId("locations-tab-rooms").click();
         await page.waitForTimeout(400);
@@ -60,9 +66,32 @@ test.describe("configuration-runtime-locations", () => {
             });
         }
 
+        await page.getByTestId("locations-tab-schedule").click();
+        await expect(page.getByTestId("locations-schedule-add")).toBeVisible();
+        await page.screenshot({
+            path: path.join(screenshotDir, "05-schedule.png"),
+            fullPage: true,
+            animations: "disabled",
+        });
+
+        for (const [tab, filename, surface] of [
+            ["tours", "06-tours.png", "locations-tours-surface"],
+            ["placement", "07-placement.png", "locations-placement-surface"],
+            ["communications", "08-communications.png", "locations-communications-surface"],
+            ["access", "09-access.png", "locations-access-surface"],
+        ] as const) {
+            await page.getByTestId(`locations-tab-${tab}`).click();
+            await expect(page.getByTestId(surface)).toBeVisible();
+            await page.screenshot({
+                path: path.join(screenshotDir, filename),
+                fullPage: true,
+                animations: "disabled",
+            });
+        }
+
         await ensureSidebarExpanded(page);
         await page.screenshot({
-            path: path.join(screenshotDir, "05-full-bos.png"),
+            path: path.join(screenshotDir, "10-full-bos.png"),
             fullPage: true,
             animations: "disabled",
         });
@@ -80,15 +109,22 @@ test.describe("configuration-runtime-locations", () => {
         await page.setViewportSize({ width: 1440, height: 960 });
         await ensureAdminPlaywrightSession(page);
 
-        await page.goto("/settings/locations", { waitUntil: "domcontentloaded", timeout: 120_000 });
-        await expect(page.getByTestId("locations-configuration-page")).toBeVisible({ timeout: 60_000 });
+        await page.goto("/settings/locations", {
+            waitUntil: "domcontentloaded",
+            timeout: 120_000,
+        });
+        await expect(page.getByTestId("locations-configuration-page")).toBeVisible({
+            timeout: 60_000,
+        });
 
         const addBtn = page.getByTestId("locations-add-location");
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
-            await expect(page.getByTestId("locations-site-create")).toBeVisible({ timeout: 30_000 });
+            await expect(page.getByTestId("locations-site-create")).toBeVisible({
+                timeout: 30_000,
+            });
             await page.screenshot({
-                path: path.join(screenshotDir, "06-inline-location-create.png"),
+                path: path.join(screenshotDir, "11-inline-location-create.png"),
                 fullPage: true,
                 animations: "disabled",
             });

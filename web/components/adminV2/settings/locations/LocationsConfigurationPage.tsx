@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
@@ -13,12 +13,20 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
+import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
 import LocationSiteCreatePanel from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
 import LocationSiteDetailPanel from "@/components/adminV2/settings/locations/LocationSiteDetailPanel";
+import {
+    LocationAccessPanel,
+    LocationCommunicationsPanel,
+    LocationPlacementPanel,
+    LocationToursPanel,
+} from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
 import {
     buildLocationWorkspaceModel,
+    buildLocationProgramOperationalSummaries,
     LOCATION_WORKSPACE_TABS,
     locationWorkspaceHref,
     readLocationMetadataString,
@@ -43,33 +51,12 @@ function WorkspaceCard({
         <section className="process-config-setup-card p-4" data-testid={testId}>
             <div className="mb-3">
                 <h2 className="config-typo-workspace-title">{title}</h2>
-                {description ? <p className="config-typo-sublabel mt-1">{description}</p> : null}
+                {description ?
+                    <p className="config-typo-sublabel mt-1">{description}</p>
+                :   null}
             </div>
             {children}
         </section>
-    );
-}
-
-function ConcernLink({
-    title,
-    description,
-    href,
-    action,
-}: {
-    title: string;
-    description: string;
-    href: string;
-    action: string;
-}) {
-    return (
-        <WorkspaceCard title={title} description={description}>
-            <a
-                href={href}
-                className="inline-flex rounded-md border border-alloy-forge/15 px-3 py-2 text-xs font-semibold text-[#007d68] hover:bg-[#00a283]/5"
-            >
-                {action}
-            </a>
-        </WorkspaceCard>
     );
 }
 
@@ -86,15 +73,15 @@ export default function LocationsConfigurationPage({
     const { canMutate } = useAdminAuth();
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
+    const [creatingSchedule, setCreatingSchedule] = useState(false);
+    const [showSetupDetails, setShowSetupDetails] = useState(false);
+    const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
+        Record<string, Partial<Record<"tours" | "placement" | "communications" | "access", boolean>>>
+    >({});
     const [activeTab, setActiveTab] = useState<LocationWorkspaceTab>(initialTab);
     const [search, setSearch] = useState("");
     const [showInactive, setShowInactive] = useState(false);
-    const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
-        initialTab === "programs" ? initialItemId : null,
-    );
-    const [selectedRoomId, setSelectedRoomId] = useState<string | null>(
-        initialTab === "rooms" ? initialItemId : null,
-    );
+    const [selectedRoomId, setSelectedRoomId] = useState<string | null>(initialTab === "rooms" ? initialItemId : null);
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(
         initialTab === "schedule" ? initialItemId : null,
     );
@@ -160,21 +147,86 @@ export default function LocationsConfigurationPage({
         [schedulePatterns, selectedSite],
     );
 
-    const effectiveProgramId =
-        selectedProgramId && selectedPrograms.some((program) => program.id === selectedProgramId) ?
-            selectedProgramId
-        :   selectedPrograms[0]?.id ?? null;
     const effectiveRoomId =
         selectedRoomId && selectedRooms.some((room) => room.id === selectedRoomId) ?
             selectedRoomId
-        :   selectedRooms[0]?.id ?? null;
+        :   (selectedRooms[0]?.id ?? null);
     const effectiveScheduleId =
         selectedScheduleId && selectedSchedules.some((schedule) => schedule.id === selectedScheduleId) ?
             selectedScheduleId
-        :   selectedSchedules[0]?.id ?? null;
-    const selectedProgram = selectedPrograms.find((program) => program.id === effectiveProgramId) ?? null;
+        :   (selectedSchedules[0]?.id ?? null);
     const selectedRoom = selectedRooms.find((room) => room.id === effectiveRoomId) ?? null;
     const selectedSchedule = selectedSchedules.find((schedule) => schedule.id === effectiveScheduleId) ?? null;
+    const programSummaries = useMemo(
+        () =>
+            buildLocationProgramOperationalSummaries({
+                programs: selectedPrograms,
+                rooms: selectedRooms,
+            }),
+        [selectedPrograms, selectedRooms],
+    );
+
+    useEffect(() => {
+        if (!selectedSite) return;
+        let cancelled = false;
+        const locationId = selectedSite.id;
+        void Promise.all([
+            fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
+                credentials: "include",
+            })
+                .then(async (response) => {
+                    if (!response.ok) return null;
+                    const json = (await response.json().catch(() => ({}))) as {
+                        rules?: { location_id?: string | null; is_active?: boolean }[];
+                    };
+                    return (json.rules ?? []).some(
+                        (rule) => rule.location_id === locationId && rule.is_active !== false,
+                    );
+                })
+                .catch(() => null),
+            fetch(`/api/admin/communications/identities?location_id=${encodeURIComponent(locationId)}`, {
+                credentials: "include",
+            })
+                .then(async (response) => {
+                    if (!response.ok) return null;
+                    const json = (await response.json().catch(() => ({}))) as { identities?: unknown[] };
+                    return (json.identities ?? []).length > 0;
+                })
+                .catch(() => null),
+            fetch("/api/admin/settings/users-roles/members", { credentials: "include" })
+                .then(async (response) => {
+                    if (!response.ok) return null;
+                    const json = (await response.json().catch(() => ({}))) as {
+                        members?: {
+                            role_keys?: string[];
+                            site_scope?: string;
+                            site_location_ids?: string[];
+                        }[];
+                    };
+                    return (json.members ?? []).some(
+                        (member) =>
+                            member.role_keys?.includes("admin") &&
+                            (member.site_scope === "all" || member.site_location_ids?.includes(locationId)),
+                    );
+                })
+                .catch(() => null),
+        ]).then(([tours, communications, access]) => {
+            if (cancelled) return;
+            setOwnedConcernSetupByLocation((current) => ({
+                ...current,
+                [locationId]: {
+                    tours: tours ?? undefined,
+                    communications: communications ?? undefined,
+                    access: access ?? undefined,
+                },
+            }));
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedSite]);
+
+    const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
     const model =
         selectedSite ?
             buildLocationWorkspaceModel({
@@ -182,6 +234,10 @@ export default function LocationsConfigurationPage({
                 rooms: selectedRooms,
                 programs: selectedPrograms,
                 schedules: selectedSchedules,
+                ownedConcernSetup: {
+                    ...ownedConcernSetup,
+                    placement: selectedRooms.some((room) => room.is_active !== false),
+                },
             })
         :   null;
 
@@ -189,6 +245,7 @@ export default function LocationsConfigurationPage({
         if (!selectedSite) return;
         setActiveTab(tab);
         setEditingSite(false);
+        setCreatingSchedule(false);
         router.replace(locationWorkspaceHref(selectedSite.id, tab, itemId));
     };
 
@@ -202,112 +259,217 @@ export default function LocationsConfigurationPage({
 
     const overview =
         selectedSite && model ?
-            <div className="space-y-4" data-testid="locations-overview">
-                <WorkspaceCard
-                    title="At a glance"
-                    description="Utilization comes first; inventory stays secondary."
-                    testId="locations-at-a-glance"
-                >
-                    <button
-                        type="button"
-                        className="w-full rounded-xl border border-alloy-forge/10 bg-[#00a283]/[0.035] p-4 text-left"
-                        onClick={() => navigate("rooms")}
-                    >
-                        <span className="config-typo-field-label">Configured capacity</span>
-                        <span className="mt-1 block text-xl font-semibold text-alloy-midnight">
-                            {model.configuredCapacity == null ?
-                                "Not set up yet"
-                            :   `${model.configuredCapacity} children`}
-                        </span>
-                        <span className="config-typo-sublabel mt-1 block">
-                            {model.roomsNeedingCapacity > 0 ?
-                                `${model.roomsNeedingCapacity} ${model.roomsNeedingCapacity === 1 ? "room needs" : "rooms need"} setup before the location total is complete.`
-                            : model.configuredCapacity == null ?
-                                "Add room capacity to make utilization visible."
-                            :   "Enrollment and open seats need current enrollment data; unknown values are not shown as zero."}
-                        </span>
-                    </button>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <button
-                            type="button"
-                            className="rounded-lg border border-alloy-forge/10 p-3 text-left hover:bg-alloy-stone/10"
-                            onClick={() => navigate("programs")}
+            <div className="space-y-7" data-testid="locations-overview">
+                <section className="space-y-3" data-testid="locations-overview-health">
+                    <div>
+                        <p className="config-typo-meta uppercase tracking-[0.16em]">Health</p>
+                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">What needs you now</h2>
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        <WorkspaceCard
+                            title="Attention"
+                            description="Current issues and improvements, ranked by impact."
+                            testId="locations-attention"
                         >
-                            <span className="text-lg font-semibold text-alloy-midnight">{model.activeProgramCount}</span>
-                            <span className="config-typo-sublabel ml-2">active programs</span>
-                        </button>
+                            <ul className="divide-y divide-alloy-forge/10">
+                                {model.attention.map((item) => (
+                                    <li key={item.key} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                                        <span
+                                            className={
+                                                item.grade === "fix" ? "text-amber-700"
+                                                : item.grade === "improve" ?
+                                                    "text-blue-700"
+                                                :   "text-[#007d68]"
+                                            }
+                                            aria-hidden="true"
+                                        >
+                                            {item.grade === "fix" ?
+                                                "⚠"
+                                            : item.grade === "improve" ?
+                                                "ⓘ"
+                                            :   "✓"}
+                                        </span>
+                                        <span className="min-w-0 flex-1 text-sm text-alloy-midnight/80">
+                                            {item.label}
+                                        </span>
+                                        {item.grade !== "good" ?
+                                            <button
+                                                type="button"
+                                                className="shrink-0 text-xs font-medium text-[#007d68]"
+                                                onClick={() => showSetupDestination(item.tab)}
+                                            >
+                                                Resolve
+                                            </button>
+                                        :   null}
+                                    </li>
+                                ))}
+                            </ul>
+                        </WorkspaceCard>
+                        <WorkspaceCard
+                            title="Setup progress"
+                            description="Operational readiness, not a mechanical checklist."
+                            testId="locations-setup-progress"
+                        >
+                            <div className="flex items-end gap-4">
+                                <p className="text-3xl font-medium tracking-tight text-alloy-midnight">
+                                    {model.setupPercent}%
+                                </p>
+                                <div className="pb-0.5 text-xs">
+                                    <p className="font-medium text-amber-700">{model.criticalCount} Critical</p>
+                                    <p className="mt-0.5 text-alloy-midnight/50">
+                                        {model.recommendedCount} Recommended
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-alloy-forge/10">
+                                <div
+                                    className="h-full rounded-full bg-[#00a283]"
+                                    style={{ width: `${model.setupPercent}%` }}
+                                />
+                            </div>
+                            {model.setupComplete ?
+                                <p className="config-typo-sublabel mt-3 text-[#007d68]">Setup complete ✓</p>
+                            :   <button
+                                    type="button"
+                                    className="mt-3 text-xs font-medium text-[#007d68]"
+                                    onClick={() => setShowSetupDetails((current) => !current)}
+                                    aria-expanded={showSetupDetails}
+                                >
+                                    {showSetupDetails ? "Hide setup details" : "Review setup"}
+                                </button>
+                            }
+                            {showSetupDetails ?
+                                <ul className="mt-3 divide-y divide-alloy-forge/10 border-t border-alloy-forge/10">
+                                    {model.setupItems.map((item) => (
+                                        <li key={item.key}>
+                                            <button
+                                                type="button"
+                                                className="flex w-full items-center justify-between py-2 text-xs"
+                                                onClick={() => showSetupDestination(item.tab)}
+                                            >
+                                                <span className="text-alloy-midnight/65">{item.label}</span>
+                                                <span
+                                                    className={
+                                                        item.complete ? "text-[#007d68]" : "text-alloy-midnight/40"
+                                                    }
+                                                >
+                                                    {item.complete ?
+                                                        "Ready"
+                                                    : item.complete == null ?
+                                                        "Review"
+                                                    :   "Finish"}
+                                                </span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            :   null}
+                        </WorkspaceCard>
+                    </div>
+                </section>
+
+                <section className="space-y-3" data-testid="locations-overview-capacity">
+                    <div>
+                        <p className="config-typo-meta uppercase tracking-[0.16em]">Capacity</p>
+                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">What this location can serve</h2>
+                    </div>
+                    <WorkspaceCard
+                        title="Capacity summary"
+                        description="Room capacity is the operational source; inventory follows."
+                        testId="locations-at-a-glance"
+                    >
                         <button
                             type="button"
-                            className="rounded-lg border border-alloy-forge/10 p-3 text-left hover:bg-alloy-stone/10"
+                            className="w-full rounded-xl border border-alloy-forge/10 bg-[#00a283]/[0.035] p-4 text-left"
                             onClick={() => navigate("rooms")}
                         >
-                            <span className="text-lg font-semibold text-alloy-midnight">{model.activeRoomCount}</span>
-                            <span className="config-typo-sublabel ml-2">active rooms</span>
+                            <span className="config-typo-field-label">Configured capacity</span>
+                            <span className="mt-1 block text-2xl font-medium tracking-tight text-alloy-midnight">
+                                {model.configuredCapacity == null ?
+                                    "Not set up yet"
+                                :   `${model.configuredCapacity} children`}
+                            </span>
+                            <span className="config-typo-sublabel mt-1 block">
+                                {model.roomsNeedingCapacity > 0 ?
+                                    `${model.roomsNeedingCapacity} ${model.roomsNeedingCapacity === 1 ? "room needs" : "rooms need"} capacity setup.`
+                                :   "Review the rooms and staffing thresholds behind this total."}
+                            </span>
                         </button>
-                    </div>
-                </WorkspaceCard>
-
-                <WorkspaceCard
-                    title="Attention"
-                    description="What is incomplete or worth improving right now."
-                    testId="locations-attention"
-                >
-                    <ul className="divide-y divide-alloy-forge/10">
-                        {model.attention.map((item) => (
-                            <li key={item.key} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                                <span
-                                    className={
-                                        item.grade === "fix" ? "text-amber-700"
-                                        : item.grade === "improve" ? "text-blue-700"
-                                        : "text-[#007d68]"
-                                    }
-                                    aria-hidden="true"
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            {[
+                                {
+                                    label: "Programs",
+                                    value: model.activeProgramCount,
+                                    tab: "programs" as const,
+                                },
+                                {
+                                    label: "Rooms",
+                                    value: model.activeRoomCount,
+                                    tab: "rooms" as const,
+                                },
+                            ].map((item) => (
+                                <button
+                                    key={item.label}
+                                    type="button"
+                                    className="rounded-lg border border-alloy-forge/10 p-3 text-left hover:bg-alloy-stone/10"
+                                    onClick={() => navigate(item.tab)}
                                 >
-                                    {item.grade === "fix" ? "⚠" : item.grade === "improve" ? "ⓘ" : "✓"}
-                                </span>
-                                <span className="min-w-0 flex-1 text-sm text-alloy-midnight/80">{item.label}</span>
-                                {item.grade !== "good" ?
-                                    <button
-                                        type="button"
-                                        className="shrink-0 text-xs font-semibold text-[#007d68]"
-                                        onClick={() => showSetupDestination(item.tab)}
-                                    >
-                                        View
-                                    </button>
-                                :   null}
-                            </li>
-                        ))}
-                    </ul>
-                </WorkspaceCard>
+                                    <span className="text-lg font-medium text-alloy-midnight">{item.value}</span>
+                                    <span className="config-typo-sublabel ml-2">{item.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </WorkspaceCard>
+                </section>
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                    <WorkspaceCard title="Operating schedule" description="Weekly hours for this location.">
-                        <p className="text-sm font-medium text-alloy-midnight/80">
-                            {selectedSchedules.length > 0 ?
-                                formatWeekdaySelection(selectedSchedules[0]!.weekdays)
-                            :   "Not set up yet"}
-                        </p>
-                        <button
-                            type="button"
-                            className="mt-3 text-xs font-semibold text-[#007d68]"
-                            onClick={() => navigate("schedule")}
-                        >
-                            View schedule
-                        </button>
-                    </WorkspaceCard>
-                    <WorkspaceCard title="Closed days & exceptions" description="Schedule changes belong together.">
-                        <p className="text-sm text-alloy-midnight/70">
-                            Review location schedule patterns before adding one-off changes.
-                        </p>
-                        <button
-                            type="button"
-                            className="mt-3 text-xs font-semibold text-[#007d68]"
-                            onClick={() => navigate("schedule")}
-                        >
-                            Manage schedule
-                        </button>
-                    </WorkspaceCard>
-                </div>
+                <section className="space-y-3" data-testid="locations-overview-operations">
+                    <div>
+                        <p className="config-typo-meta uppercase tracking-[0.16em]">Operations</p>
+                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">How this location runs</h2>
+                    </div>
+                    <div className="process-config-setup-card divide-y divide-alloy-forge/10 px-4">
+                        {[
+                            {
+                                label: "Schedule",
+                                value:
+                                    selectedSchedules.length > 0 ?
+                                        formatWeekdaySelection(selectedSchedules[0]!.weekdays)
+                                    :   "Not set up yet",
+                                tab: "schedule" as const,
+                            },
+                            {
+                                label: "Tours",
+                                value: "Availability and booking rules",
+                                tab: "tours" as const,
+                            },
+                            {
+                                label: "Placement",
+                                value: `${model.activeRoomCount} active rooms`,
+                                tab: "placement" as const,
+                            },
+                            {
+                                label: "Communications",
+                                value: "Sender identity and channels",
+                                tab: "communications" as const,
+                            },
+                            {
+                                label: "Access",
+                                value: "Team and location permissions",
+                                tab: "access" as const,
+                            },
+                        ].map((item) => (
+                            <button
+                                key={item.label}
+                                type="button"
+                                className="flex w-full items-center justify-between gap-4 py-3 text-left"
+                                onClick={() => navigate(item.tab)}
+                            >
+                                <span className="text-sm font-medium text-alloy-midnight/80">{item.label}</span>
+                                <span className="config-typo-sublabel text-right">{item.value} →</span>
+                            </button>
+                        ))}
+                    </div>
+                </section>
             </div>
         :   null;
 
@@ -335,32 +497,32 @@ export default function LocationsConfigurationPage({
         if (activeTab === "overview") return overview;
         if (activeTab === "programs") {
             return (
-                <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]" data-testid="locations-programs">
-                    <ConfigurationQueue title="Programs" summary="Offered at this location">
-                        {selectedPrograms.length > 0 ?
-                            selectedPrograms.map((program) => (
-                                <ConfigurationQueueItem
+                <div className="space-y-4" data-testid="locations-programs">
+                    <div>
+                        <p className="config-typo-meta uppercase tracking-[0.16em]">Capacity</p>
+                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">Programs</h2>
+                        <p className="config-typo-sublabel mt-1">
+                            Operational summaries show what is offered, where it runs, and the capacity behind it.
+                        </p>
+                    </div>
+                    {selectedPrograms.length > 0 ?
+                        <div className="space-y-3">
+                            {selectedPrograms.map((program) => (
+                                <LocationProgramDetailPanel
                                     key={program.id}
-                                    active={program.id === effectiveProgramId}
-                                    title={program.label}
-                                    subtitle={program.is_active === false ? "Inactive" : "Active"}
-                                    onClick={() => {
-                                        setSelectedProgramId(program.id);
-                                        navigate("programs", program.id);
-                                    }}
-                                    testId={`locations-program-${program.id}`}
+                                    program={program}
+                                    summary={programSummaries.find((summary) => summary.id === program.id) ?? null}
+                                    siteLabel={model?.displayName ?? ""}
+                                    canMutate={canMutate}
+                                    onSave={patchProgramCategory}
                                 />
-                            ))
-                        :   <p className="config-typo-sublabel">
-                                This location does not offer any programs yet.
-                            </p>}
-                    </ConfigurationQueue>
-                    <LocationProgramDetailPanel
-                        program={selectedProgram}
-                        siteLabel={model?.displayName ?? ""}
-                        canMutate={canMutate}
-                        onSave={patchProgramCategory}
-                    />
+                            ))}
+                        </div>
+                    :   <ConfigurationEmptyState
+                            title="No programs offered yet"
+                            description="Offer a program to connect rooms, age ranges, and capacity at this location."
+                        />
+                    }
                 </div>
             );
         }
@@ -386,9 +548,7 @@ export default function LocationsConfigurationPage({
                                     testId={`locations-room-${room.id}`}
                                 />
                             ))
-                        :   <p className="config-typo-sublabel">
-                                No rooms yet. Add a room to begin capacity setup.
-                            </p>}
+                        :   <p className="config-typo-sublabel">No rooms yet. Add a room to begin capacity setup.</p>}
                     </ConfigurationQueue>
                     <LocationRoomDetailPanel
                         room={selectedRoom}
@@ -404,85 +564,90 @@ export default function LocationsConfigurationPage({
         if (activeTab === "schedule") {
             return (
                 <div className="space-y-4" data-testid="locations-schedule">
-                    <WorkspaceCard
-                        title="Weekly hours, closed days & exceptions"
-                        description="This location owns its schedule. Rooms only show a difference when they keep their own hours."
-                    >
-                        <p className="text-sm text-alloy-midnight/70">
-                            Manage recurring schedule patterns below. Unknown hours remain “not set up yet” until saved.
-                        </p>
-                    </WorkspaceCard>
-                    <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
-                        <ConfigurationQueue title="Schedule patterns">
-                            {selectedSchedules.length > 0 ?
-                                selectedSchedules.map((schedule) => (
-                                    <ConfigurationQueueItem
-                                        key={schedule.id}
-                                        active={schedule.id === effectiveScheduleId}
-                                        title={schedule.label}
-                                        subtitle={formatWeekdaySelection(schedule.weekdays)}
-                                        onClick={() => {
-                                            setSelectedScheduleId(schedule.id);
-                                            navigate("schedule", schedule.id);
-                                        }}
-                                        testId={`locations-schedule-${schedule.id}`}
-                                    />
-                                ))
-                            :   <p className="config-typo-sublabel">
-                                    Set weekly hours to get started.
-                                </p>}
-                        </ConfigurationQueue>
-                        <LocationScheduleTemplateDetailPanel
-                            pattern={selectedSchedule}
-                            siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
-                            canMutate={canMutate}
-                            onUpdated={(row) => {
-                                setSchedulePatterns((prev) => prev.map((p) => (p.id === row.id ? row : p)));
-                            }}
-                            onError={setError}
-                        />
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <p className="config-typo-meta uppercase tracking-[0.16em]">Operations</p>
+                            <h2 className="mt-1 text-base font-medium text-alloy-midnight">Schedule</h2>
+                            <p className="config-typo-sublabel mt-1">
+                                Weekly patterns, closed days, and exceptions belong to this location.
+                            </p>
+                        </div>
+                        {canMutate && !creatingSchedule ?
+                            <button
+                                type="button"
+                                className="rounded-md border border-[#00a283]/25 px-3 py-2 text-xs font-semibold text-[#007d68] hover:bg-[#00a283]/5"
+                                onClick={() => setCreatingSchedule(true)}
+                                data-testid="locations-schedule-add"
+                            >
+                                + Add Schedule Pattern
+                            </button>
+                        :   null}
                     </div>
+                    {creatingSchedule ?
+                        <LocationSchedulePatternCreatePanel
+                            locationId={selectedSite.id}
+                            onCancel={() => setCreatingSchedule(false)}
+                            onCreated={(created) => {
+                                setSchedulePatterns((current) => [...current, created]);
+                                setSelectedScheduleId(created.id);
+                                setCreatingSchedule(false);
+                                navigate("schedule", created.id);
+                            }}
+                        />
+                    :   <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
+                            <ConfigurationQueue title="Schedule patterns">
+                                {selectedSchedules.length > 0 ?
+                                    selectedSchedules.map((schedule) => (
+                                        <ConfigurationQueueItem
+                                            key={schedule.id}
+                                            active={schedule.id === effectiveScheduleId}
+                                            title={schedule.label}
+                                            subtitle={formatWeekdaySelection(schedule.weekdays)}
+                                            onClick={() => {
+                                                setSelectedScheduleId(schedule.id);
+                                                navigate("schedule", schedule.id);
+                                            }}
+                                            testId={`locations-schedule-${schedule.id}`}
+                                        />
+                                    ))
+                                :   <p className="config-typo-sublabel">Set weekly hours to get started.</p>}
+                            </ConfigurationQueue>
+                            <LocationScheduleTemplateDetailPanel
+                                pattern={selectedSchedule}
+                                siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
+                                canMutate={canMutate}
+                                onUpdated={(row) => {
+                                    setSchedulePatterns((prev) => prev.map((p) => (p.id === row.id ? row : p)));
+                                }}
+                                onError={setError}
+                            />
+                        </div>
+                    }
                 </div>
             );
         }
         if (activeTab === "tours") {
             return (
-                <ConcernLink
-                    title="Tour availability"
-                    description="Set when families can visit, then manage booking rules in the existing tour availability settings."
-                    href="/settings/tours/availability"
-                    action="Open tour availability"
+                <LocationToursPanel
+                    key={selectedSite.id}
+                    locationId={selectedSite.id}
+                    locationLabel={model?.displayName ?? ""}
                 />
             );
         }
         if (activeTab === "placement") {
             return (
-                <ConcernLink
-                    title="Placement"
-                    description="Choose how children are prioritized and which rooms participate."
-                    href="/settings/placement-priority"
-                    action="Open placement priority"
+                <LocationPlacementPanel
+                    key={selectedSite.id}
+                    rooms={selectedRooms}
+                    onReviewRooms={() => navigate("rooms")}
                 />
             );
         }
         if (activeTab === "communications") {
-            return (
-                <ConcernLink
-                    title="Communications"
-                    description="Manage sender identity and the communication defaults families receive."
-                    href="/settings/communications"
-                    action="Open communications settings"
-                />
-            );
+            return <LocationCommunicationsPanel key={selectedSite.id} locationId={selectedSite.id} />;
         }
-        return (
-            <ConcernLink
-                title="Access"
-                description="Manage the team members and roles that can operate this location."
-                href="/settings/users-roles"
-                action="Open users & roles"
-            />
-        );
+        return <LocationAccessPanel key={selectedSite.id} locationId={selectedSite.id} />;
     })();
 
     return (
@@ -509,7 +674,10 @@ export default function LocationsConfigurationPage({
             />
 
             {error ?
-                <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+                <p
+                    className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                    role="alert"
+                >
                     {error}
                 </p>
             :   null}
@@ -576,7 +744,7 @@ export default function LocationsConfigurationPage({
                                         subtitle={
                                             site.is_active === false ?
                                                 "Inactive"
-                                            : [site.city, site.state].filter(Boolean).join(", ") || "Active"
+                                            :   [site.city, site.state].filter(Boolean).join(", ") || "Active"
                                         }
                                         onClick={() => {
                                             setSelectedId(site.id);
@@ -680,62 +848,28 @@ export default function LocationsConfigurationPage({
                             <WorkspaceCard title="Quick actions">
                                 <div className="space-y-1">
                                     {[
-                                        ["Add a room", "rooms"],
-                                        ["Offer a program", "programs"],
-                                        ["Add a closed day", "schedule"],
+                                        [
+                                            model?.roomsNeedingCapacity || model?.configuredCapacity == null ?
+                                                "Configure Capacity"
+                                            :   "Review Capacity",
+                                            "rooms",
+                                        ],
+                                        [model?.timezone ? "Edit Location Details" : "Resolve Time Zone", "general"],
+                                        ["Create Tour", "tours"],
+                                        ["Publish Communications", "communications"],
                                     ].map(([label, tab]) => (
                                         <button
-                                            key={tab}
+                                            key={`${tab}-${label}`}
                                             type="button"
-                                            className="block w-full rounded-md px-2 py-2 text-left text-xs font-semibold text-[#007d68] hover:bg-[#00a283]/5"
-                                            onClick={() => navigate(tab as LocationWorkspaceTab)}
+                                            className="block w-full rounded-md px-2 py-2 text-left text-xs font-medium text-[#007d68] hover:bg-[#00a283]/5"
+                                            onClick={() =>
+                                                showSetupDestination(tab as LocationWorkspaceTab | "general")
+                                            }
                                         >
-                                            + {label}
+                                            {label} →
                                         </button>
                                     ))}
                                 </div>
-                            </WorkspaceCard>
-
-                            <WorkspaceCard title="Setup progress" testId="locations-setup-progress">
-                                {model?.setupComplete ?
-                                    <p className="text-sm font-semibold text-[#007d68]">Setup complete ✓</p>
-                                :   <>
-                                        <div className="flex items-center gap-3">
-                                            <div
-                                                className="grid h-11 w-11 place-items-center rounded-full text-[11px] font-bold text-[#007d68]"
-                                                style={{
-                                                    background: `conic-gradient(#00a283 ${model?.setupPercent ?? 0}%, rgba(89, 103, 139, 0.12) 0)`,
-                                                }}
-                                                aria-label={`${model?.setupPercent ?? 0}% complete`}
-                                            >
-                                                <span className="grid h-8 w-8 place-items-center rounded-full bg-white">
-                                                    {model?.setupPercent ?? 0}%
-                                                </span>
-                                            </div>
-                                            <p className="config-typo-sublabel">Finish the location basics.</p>
-                                        </div>
-                                        <ul className="mt-3 space-y-1">
-                                            {model?.setupItems.map((item) => (
-                                                <li key={item.key}>
-                                                    <button
-                                                        type="button"
-                                                        className="flex w-full items-center justify-between rounded px-1 py-1 text-xs hover:bg-alloy-stone/10"
-                                                        onClick={() => showSetupDestination(item.tab)}
-                                                    >
-                                                        <span className="text-alloy-midnight/65">{item.label}</span>
-                                                        <span
-                                                            className={
-                                                                item.complete ? "text-[#007d68]" : "text-alloy-midnight/35"
-                                                            }
-                                                        >
-                                                            {item.complete == null ? "Review" : item.complete ? "✓" : "○"}
-                                                        </span>
-                                                    </button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </>
-                                }
                             </WorkspaceCard>
                         </aside>
                     </div>

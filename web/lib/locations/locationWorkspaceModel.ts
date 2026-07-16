@@ -42,6 +42,22 @@ export type LocationWorkspaceModel = {
     setupComplete: boolean;
     setupItems: LocationWorkspaceSetupItem[];
     attention: LocationWorkspaceAttentionItem[];
+    criticalCount: number;
+    recommendedCount: number;
+};
+
+export type StaffingThreshold = {
+    requiredStaff: number;
+    maxChildren: number;
+};
+
+export type LocationProgramOperationalSummary = {
+    id: string;
+    label: string;
+    roomCount: number;
+    configuredCapacity: number | null;
+    ageRange: string;
+    isActive: boolean;
 };
 
 export function parseLocationWorkspaceTab(raw: string | string[] | null | undefined): LocationWorkspaceTab {
@@ -71,7 +87,75 @@ export function readLocationMetadataString(metadata: unknown, key: string): stri
     return normalized || null;
 }
 
-export function formatLocationAddress(site: Pick<LocationHierarchyRow, "address1" | "city" | "state" | "postal_code">): string | null {
+export function parseStaffingThresholds(raw: unknown): StaffingThreshold[] {
+    const value = String(raw ?? "").trim();
+    if (!value) return [];
+    const thresholds: StaffingThreshold[] = [];
+    for (const segment of value.split(/[\n,;]+/)) {
+        const match = segment.trim().match(/^(\d+)\s*(?::|[-–—])\s*(\d+)$/);
+        if (!match) continue;
+        const requiredStaff = Number(match[1]);
+        const maxChildren = Number(match[2]);
+        if (requiredStaff > 0 && maxChildren > 0) thresholds.push({ requiredStaff, maxChildren });
+    }
+    return thresholds.sort((a, b) => a.requiredStaff - b.requiredStaff || a.maxChildren - b.maxChildren);
+}
+
+export function serializeStaffingThresholds(thresholds: StaffingThreshold[]): string {
+    return thresholds
+        .filter(
+            (threshold) =>
+                Number.isInteger(threshold.requiredStaff) &&
+                threshold.requiredStaff > 0 &&
+                Number.isInteger(threshold.maxChildren) &&
+                threshold.maxChildren > 0,
+        )
+        .sort((a, b) => a.requiredStaff - b.requiredStaff || a.maxChildren - b.maxChildren)
+        .map((threshold) => `${threshold.requiredStaff}:${threshold.maxChildren}`)
+        .join(",");
+}
+
+export function formatStaffingThreshold(threshold: StaffingThreshold): string {
+    return `${threshold.requiredStaff}–${threshold.maxChildren}`;
+}
+
+function formatProgramAgeRange(program: LocationProgramCategoryRow): string {
+    const from = readLocationMetadataString(program.metadata, "age_range_from");
+    const to = readLocationMetadataString(program.metadata, "age_range_to");
+    const unit = readLocationMetadataString(program.metadata, "age_range_unit");
+    if (!from && !to) return "Age range not set";
+    const range = from && to ? `${from}–${to}` : (from ?? to ?? "");
+    return unit ? `${range} ${unit}` : range;
+}
+
+export function buildLocationProgramOperationalSummaries(params: {
+    programs: LocationProgramCategoryRow[];
+    rooms: LocationHierarchyRow[];
+}): LocationProgramOperationalSummary[] {
+    return params.programs.map((program) => {
+        const programRooms = params.rooms.filter(
+            (room) => room.is_active !== false && readLocationMetadataString(room.metadata, "category") === program.key,
+        );
+        const capacities = programRooms
+            .map((room) => {
+                const rawCapacity = readLocationMetadataString(room.metadata, "capacity");
+                return rawCapacity == null ? null : Number(rawCapacity);
+            })
+            .filter((capacity): capacity is number => capacity != null && Number.isFinite(capacity) && capacity >= 0);
+        return {
+            id: program.id,
+            label: program.label,
+            roomCount: programRooms.length,
+            configuredCapacity: capacities.length > 0 ? capacities.reduce((sum, capacity) => sum + capacity, 0) : null,
+            ageRange: formatProgramAgeRange(program),
+            isActive: program.is_active !== false,
+        };
+    });
+}
+
+export function formatLocationAddress(
+    site: Pick<LocationHierarchyRow, "address1" | "city" | "state" | "postal_code">,
+): string | null {
     const locality = [site.city, site.state, site.postal_code]
         .map((part) => String(part ?? "").trim())
         .filter(Boolean)
@@ -110,10 +194,25 @@ export function buildLocationWorkspaceModel(params: {
         rooms.length > 0 &&
         roomPresentations.every((room) => Boolean(room.capacity && room.student_teacher_ratio && room.category));
     const setupItems: LocationWorkspaceSetupItem[] = [
-        { key: "general", label: "General", tab: "general", complete: generalComplete },
-        { key: "programs", label: "Programs", tab: "programs", complete: programs.length > 0 },
+        {
+            key: "general",
+            label: "General",
+            tab: "general",
+            complete: generalComplete,
+        },
+        {
+            key: "programs",
+            label: "Programs",
+            tab: "programs",
+            complete: programs.length > 0,
+        },
         { key: "rooms", label: "Rooms", tab: "rooms", complete: roomsComplete },
-        { key: "schedule", label: "Schedule", tab: "schedule", complete: schedules.length > 0 },
+        {
+            key: "schedule",
+            label: "Schedule",
+            tab: "schedule",
+            complete: schedules.length > 0,
+        },
         {
             key: "tours",
             label: "Tours",
@@ -190,6 +289,9 @@ export function buildLocationWorkspaceModel(params: {
             tab: "overview",
         });
     }
+    const criticalCount = attention.filter((item) => item.grade === "fix").length;
+    const incompleteSetupCount = setupItems.filter((item) => item.complete !== true).length;
+    const recommendedCount = incompleteSetupCount + attention.filter((item) => item.grade === "improve").length;
 
     return {
         displayName: String(site.label ?? "").trim() || "Untitled location",
@@ -204,5 +306,7 @@ export function buildLocationWorkspaceModel(params: {
         setupComplete: setupPercent === 100,
         setupItems,
         attention,
+        criticalCount,
+        recommendedCount,
     };
 }
