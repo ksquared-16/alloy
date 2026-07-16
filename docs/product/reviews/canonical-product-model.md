@@ -323,3 +323,63 @@ What is broken is **not the model** but **fidelity to it**:
 - **HIGH CONFIDENCE** — the Process Builder's enrollment hardcoding violates **P15**.
 
 The model does not need to be decided. **It needs to be assembled in one place and obeyed.** Every source quoted in §1 is already frozen, ratified, or canonical.
+
+---
+
+## 10. Row Grain vs Operational Subject — independent, and already decided
+
+**Verdict: they are independent concepts, the product already treats them so, and Product should author neither twice.**
+
+### The evidence — all six live Enrollment Work Views (`VERIFIED`)
+
+| Work View | Row type | Authored or derived? | Predicate | Focus Panel subject (G-5) | Operator selects = receives? |
+|---|---|---|---|---|---|
+| New Leads | **Family** | *"Inherited from included stages"* | Stage equals Lead | Case (family) | **Yes — coincide** |
+| Active Pipeline | **Family** | *"Inherited from included stages"* | Updated date is Prev:15:Days | Case (family) | **Yes — coincide** |
+| Registration | **Child** | *"Inherited from included stages"* | Stage equals **Enrolling** | Case (family) | **NO — diverge** |
+| Waitlist | **Child** | *"Inherited from included stages"* | Stage equals Waitlist | Case (family) | **NO — diverge** |
+| Tours | **Family** | *"Inherited from included stages"* | Tour date equals Next:7:Days | Case (family) | **Yes — coincide** |
+| All Leads | **(none shown)** | catch-all — no stage predicate | — | Case (family) | **NO for child rows** |
+
+### 1. Are they independent? **Yes — provably.**
+
+Row grain varies (`Family` | `Child`). The Operational Subject does not: **Rule G-5 — *"The Focus Panel is always case-grain … `context.subject.id` is always an `opportunity_id`."*** If they were one concept, a child-grain row would open a child subject. It cannot. **The product already separates them.**
+
+### 2. Should Product author both? **No — and it already doesn't.**
+
+Every Work View reads **"Inherited from included stages."** Row grain is **authored once, at the Stage**, and **derived** everywhere else. This is the frozen ownership chain being obeyed: ***"Stage owns operational work (grain, expected work, outcomes, requirements)"*** and ***"Work View consumes processes (lens)"***. The Work View does not own grain; it inherits it.
+
+**The Operational Subject is not authored at all** — G-5 fixes it. What *is* authorable is a different thing: *which* subject opens first (the Default Operational Subject strategy). Three concepts, not two:
+
+| Concept | Question | Authored? |
+|---|---|---|
+| **Row Grain** | *"What does one row represent?"* | **Yes — at the Stage, once.** Inherited by Work Views |
+| **Operational Subject** | *"What does the Focus Panel open on?"* | **No** — fixed at case grain by G-5 |
+| **Default Operational Subject** | *"Which one opens first?"* | Yes — Work-Unit-owned strategy (`NOT YET IMPLEMENTED`) |
+
+**So the only genuine double-authoring is the one already flagged:** the `Journey` control (Family journey / Child journey) in Operational Experience duplicates the Stage's `ROW TYPE (GRAIN)`. Two controls, one truth — and **the frozen chain says grain belongs to Stage.** `Journey` is the violation, not the pair.
+
+### 3. Does the operator perceive row and subject as the same thing?
+
+**For Family-grain views: yes, and correctly** — she clicks the Kurzman family and gets the Kurzman family. `VERIFIED` on New Leads.
+
+**For Child-grain views: no — and this is the finding.** In **Registration** and **Waitlist** the row is a **child**; the Focus Panel opens the **family**. She clicks *Lennon Kurzman, Waitlist* and receives *the Kurzman household*. Nothing tells her the subject changed. (`HIGH CONFIDENCE` — both queues hold zero records in this tenant, so the divergence is read from config + G-5, not observed.)
+
+### 4. This explains a Deliverable #1 defect
+
+The child-track execution failure — *"Could not resolve child for enrollment state update"* — is **not an unrelated bug**. It is the row/subject divergence surfacing: the row carried a child, the subject carries a case, and the outcome executor asks the subject for a child identity the subject never had. **The concept question and the runtime defect are the same finding.**
+
+### 5. Two further observations (`VERIFIED`)
+
+- **"Registration" selects `Stage equals Enrolling`.** The tab an operator reads and the stage it selects have different names. This is *permitted* — Work View labels are free text — and it is the precise mechanism behind the "vocabulary drift" finding: not a bug, a naming freedom that produces incoherence.
+- **Inheritance is claimed where nothing was inherited.** *Active Pipeline* and *Tours* have **no stage condition** yet display *"Family · Inherited from included stages."* *All Leads*, also with no stage condition, correctly shows no row type. (`HYPOTHESIS`: a default-to-family fallback presenting itself as a derivation.) A derivation that reports a provenance it does not have is worse than one that reports none.
+
+### 6. Recommendation — grounded in existing principles
+
+**Do not author grain twice; the product already says where it lives.** The frozen chain assigns grain to **Stage**. Work View inheritance is correct and shipped. The `Journey` control is the outlier.
+
+**Do not author the Operational Subject.** G-5 owns it. And G-5 is explicitly a **current-state** rule with a stated expiry — the grain doctrine's own rationale anticipates this exact divergence: *"The upcoming work on child-grain queue rows (Enrollment Offers queue) and candidate-grain queue rows (Waitlist queue) will introduce surfaces where **the primary subject is a child or candidate, not a case**."*
+
+**The principle that governs the gap is P1 — *operators report reality*.** When a director selects *Lennon, Waitlist* and receives *the Kurzman household*, the product has substituted a different reality than the one she chose. That is not a grain problem; it is a **truthfulness** problem, and P10 (*the unit of work must be explicit*) says the unit must be explicit **to her**, not only to the config.
+
+**The product model does not need a new concept.** It needs the divergence it already anticipated to be **declared where the operator can see it**, rather than resolved silently in the subject's favor.
