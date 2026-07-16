@@ -55,7 +55,8 @@ Platform Discovery:      Complete
 Architecture:            Frozen
 Engineering Realization:  Approved
 Platform Realization:    Open
-Current Package:         P0
+Current Package:         P2 / P3 (next authorized; not started)
+Completed:               P0 (G-Reconciliation) · P1 + X0-authoring (M1)
 ```
 
 The corpus is merged to `staging` (PR #188, merge commit `7f8c545e8`). Operating mode is **Platform
@@ -102,20 +103,30 @@ Readiness **state** only — every definition is owned by the referenced Realiza
 
 | Package | Readiness | Blocking gate or dependency | Authoritative contract |
 |---|---|---|---|
-| **P0** | **Ready Now** | none (DAG root; corpus merged) | [Realization §13 · P0](./operational-expectations-engineering-realization.md) |
-| P1 | Needs prerequisite | P0 + **G-Reconciliation** | [Realization §13 · P1](./operational-expectations-engineering-realization.md) |
-| P2 | Blocked by dependency | P1 (tuple grammar) | [Realization §13 · P2](./operational-expectations-engineering-realization.md) |
-| P3 | Blocked by dependency | P1 + P2 + Consumption V1 oracle | [Realization §13 · P3](./operational-expectations-engineering-realization.md) |
+| **P0** | **Complete** (G-Reconciliation green) | — | [Realization §13 · P0](./operational-expectations-engineering-realization.md) |
+| **P1** | **Complete** (M1; G-Modality-Closure, G-Standing(authoring), G-Revision green) | — | [Realization §13 · P1](./operational-expectations-engineering-realization.md) |
+| P2 | **Ready Now** | none (P1 grammar available) | [Realization §13 · P2](./operational-expectations-engineering-realization.md) |
+| P3 | Needs prerequisite | P2 + Consumption V1 oracle (skeleton may run ∥ P2) | [Realization §13 · P3](./operational-expectations-engineering-realization.md) |
 | P4 | Blocked by certification | **G-Parity** green | [Realization §13 · P4](./operational-expectations-engineering-realization.md) |
 | P5 | Blocked by dependency | P3 + P4 | [Realization §13 · P5](./operational-expectations-engineering-realization.md) |
 | P6 | Blocked by dependency | P5 + P4 | [Realization §13 · P6](./operational-expectations-engineering-realization.md) |
 | P7 | Blocked by dependency | P2 + P4 | [Realization §13 · P7](./operational-expectations-engineering-realization.md) |
-| P8 | Blocked by dependency | P1 + P5 + X0 | [Realization §13 · P8](./operational-expectations-engineering-realization.md) |
+| P8 | Blocked by dependency | P5 + X0(ratify) | [Realization §13 · P8](./operational-expectations-engineering-realization.md) |
 
 **X0 (Security · Standing · Ratification)** is **cross-cutting**, delivered inside P1 and P8 — **not** a
 standalone late hardening phase ([Realization §13 · X0](./operational-expectations-engineering-realization.md)).
+Its **authoring half is delivered and certified** in P1 (M1); its **ratification half** lands with P8 (M6).
 
-Only **P0 is Ready Now**; every other package is gated by design (the dependency graph is the schedule).
+**P2 is Ready Now**; every other open package is gated by design (the dependency graph is the schedule).
+
+> **Open decision carried into the P1 public-interface freeze (Checkpoint 2).** `cancellation` and
+> `replacement` **effectivity** is deliberately **unratified**: their storage and intake exist (the five
+> verbs are admitted and typed), but their fold behavior is undefined in the frozen corpus, so the
+> resolver **fails closed** on them. This did **not** block P1 — no P1 completion item, gate, or M1 exit
+> criterion covers it ([P1 certification §6](./operational-expectations-p1-certification.md)). It must be
+> resolved by **P4 at the latest**, whose `Provides` includes a Typed Transition Event of
+> `revision|correction|cancellation|replacement` ([Realization §13 · P4](./operational-expectations-engineering-realization.md)).
+> Resolving it is an architecture escalation to the frozen-corpus owner ([Realization §22](./operational-expectations-engineering-realization.md)) — never an in-thread decision.
 
 ---
 
@@ -123,8 +134,10 @@ Only **P0 is Ready Now**; every other package is gated by design (the dependency
 
 Program-wide barriers; all threads reconcile at each:
 
-1. **G-Reconciliation** (after P0) — before any ledger code.
-2. **P1 public-interface freeze** — before P2/P3 attach to the tuple grammar / standing model.
+1. **G-Reconciliation** (after P0) — before any ledger code. **Cleared.**
+2. **P1 public-interface freeze** — before P2/P3 attach to the tuple grammar / standing model. **Next
+   checkpoint** (P1 is complete; the freeze itself has not been taken — it carries the open
+   cancellation/replacement effectivity decision noted in §5).
 3. **G-Parity** (after P3) — the program-wide barrier: **no downstream thread proceeds until green.**
 4. **P3/P4 interface freeze** — before the parallel lanes branch.
 5. **P6 convergence** — Lanes A + B rejoin before Current Work integration.
@@ -156,12 +169,17 @@ The authoritative build order and branch points are
 ## 8. Next action
 
 ```
-Next authorized implementation package: P0
-P0 implementation has not started.
+Completed: P0 (M0) · P1 + X0-authoring (M1)
+Next authorized implementation package: P2 — Configuration (intensional layer)
+P2 implementation has not started.
+Prerequisite checkpoint: the P1 public-interface freeze (§6.2) precedes P2/P3 attachment.
 ```
 
-P0 begins in a separate implementation thread. Its scope, checklists, and completion definition are
-authoritative in [Realization §13 · §19 · P0](./operational-expectations-engineering-realization.md).
+P2 begins in a separate implementation thread. Its scope, checklists, and completion definition are
+authoritative in [Realization §13 · §19 · P2](./operational-expectations-engineering-realization.md).
+P3's engine skeleton may run in parallel with P2 once the interface freeze is taken
+([Realization §15](./operational-expectations-engineering-realization.md)); the two converge at the
+parity step, and **G-Parity gates everything downstream**.
 This program authorizes no runtime change and starts no package here.
 
 ---
