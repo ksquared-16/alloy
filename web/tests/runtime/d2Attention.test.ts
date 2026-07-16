@@ -63,12 +63,24 @@ describe("D2 — K1 Attention", () => {
     it("3b. K1 cannot fail — a throwing subscriber never breaks acknowledgment", () => {
         const acked: number[] = [];
         const o = new AttentionOwner({ onAcknowledged: (_r, ms) => acked.push(ms) });
+        // Hydration establishes attention and is itself acknowledged (every movement is).
         o.hydrate({ ...IDENT, target: "new_leads", lens: "new_leads", source: "reload" });
+        expect(acked.length).toBe(1);
         o.subscribe(() => {
             throw new Error("downstream exploded");
         });
         expect(() => o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "opp-1", source: "pointer" })).not.toThrow();
-        expect(acked.length).toBe(1);
+        expect(acked.length).toBe(2); // the movement was acknowledged despite the subscriber fault
+    });
+
+    it("3c. cold-load hydration is acknowledged too — instrumentation has no hole at cold entry", () => {
+        const onAccepted = vi.fn();
+        const onAcknowledged = vi.fn();
+        const o = new AttentionOwner({ onAccepted, onAcknowledged });
+        o.hydrate({ ...IDENT, target: "new_leads", lens: "new_leads", source: "direct_url" });
+        expect(onAccepted).toHaveBeenCalledTimes(1);
+        expect(onAcknowledged).toHaveBeenCalledTimes(1);
+        expect(onAcknowledged.mock.calls[0][1]).toBeLessThanOrEqual(50);
     });
 
     it("4. latest same-scope intent wins", () => {
@@ -185,8 +197,9 @@ describe("D2 — K1 Attention", () => {
         o.hydrate({ ...IDENT, target: "new_leads", lens: "new_leads", source: "reload" });
         o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "opp-1", source: "pointer" });
         o.move({ scope: ATTENTION_SCOPE.LENS, lens: "tours", source: "work_view_selection" });
-        expect(onAccepted).toHaveBeenCalledTimes(2);
-        expect(onAcknowledged).toHaveBeenCalledTimes(2);
+        // 3 = hydration + 2 movements. Every attention that becomes current is accepted AND acknowledged.
+        expect(onAccepted).toHaveBeenCalledTimes(3);
+        expect(onAcknowledged).toHaveBeenCalledTimes(3);
         // the lens movement superseded the subject movement
         expect(onSuperseded).toHaveBeenCalledTimes(1);
         expect(onAcknowledged.mock.calls.every(([, ms]) => ms <= 50)).toBe(true);

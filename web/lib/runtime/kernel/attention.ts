@@ -160,6 +160,7 @@ export class AttentionOwner {
               : h.lens
                 ? ATTENTION_SCOPE.LENS
                 : ATTENTION_SCOPE.SURFACE;
+        const t0 = this.clock();
         const ref: AttentionRef = {
             tenant: h.tenant,
             principal: h.principal,
@@ -172,7 +173,14 @@ export class AttentionOwner {
             version: ++this.version,
         };
         this.current = ref;
-        this.emit({ type: "attention.moved", ref, supersedes: null, t0: this.clock() });
+        // Hydration establishes attention, so it is acknowledged like any other movement:
+        // "Receive EVERY attention movement … Acknowledge unconditionally." On a cold load there is
+        // nothing to wait for, so the obligation is discharged immediately — but it is still
+        // discharged, and still measured. Instrumentation must not have a hole here, or a cold entry
+        // would report no acknowledgment at all.
+        this.instrumentation.onAccepted?.(ref, t0);
+        this.instrumentation.onAcknowledged?.(ref, this.clock() - t0);
+        this.emit({ type: "attention.moved", ref, supersedes: null, t0 });
         return ref;
     }
 
