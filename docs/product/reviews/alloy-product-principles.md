@@ -59,9 +59,22 @@ This is a strong, well-formed conviction: a record moves because something *happ
 
 ---
 
-## P4 — CONTESTED: what a stage *is*
+## P4 — Stage is a persisted operational position, written only by outcome
 
-**The product believes two incompatible things**, in two files, in shipped copy.
+> **CORRECTED 2026-07-16.** This entry previously read *"CONTESTED: what a stage is."* **That classification was wrong and is withdrawn.** See [canonical-product-model.md](./canonical-product-model.md) §2. The product **decided** at commit `08f2a99a6` — *"Enrollment Alignment S4: collapse durable status + persist stage."* `operationalProjection.ts` marks the old model `@deprecated`: *"Stage is no longer derived from status (S4 collapse)."*
+>
+> The "rollups" sentence below has **zero live consumers** (`VERIFIED` by grep) — only three text-matching tests and the dead `LifecycleStageWorkspace` component. It is never rendered to a human. It is a **pre-S4 fossil**, not a competing belief.
+>
+> The two statements also address **different layers**: what rolls up is **Work View membership** (L3, derived); what persists is **Stage** (authoritative position). Law 2 permits exactly the materialization the projection performs.
+>
+> **Also withdrawn:** the causal claim that missing write-validation was a *consequence* of believing stages derived. The product believes stages are authored. The missing guarantee is a **gap**, not a conceptual consequence.
+
+**The product already believes this**, and says so where a human can read it:
+
+> *"Records land here when an outcome moves them to this stage. **Membership is the persisted stage — not a status filter**."*
+> — `VERIFIED`, `StageEditorV2.tsx:847`, rendered live
+
+**The fossil, retained here only as a record of what was superseded:**
 
 > *"Records land here when an outcome moves them to this stage. **Membership is the persisted stage — not a status filter**."*
 > — `VERIFIED`, `StageEditorV2.tsx:847`, rendered live
@@ -170,8 +183,13 @@ This is the frame a director already has. It requires no translation.
 | P1 | Operators report reality; the system derives meaning | Held, straining |
 | P2 | An outcome produces a durable state change | Held, expression leaks |
 | P3 | Movement is earned by outcome, never asserted by destination | **Stated, violated** |
-| P4 | What a stage *is* | **CONTESTED** |
-| P5 | Whether a terminal state is a stage or a status | **CONTESTED** |
+| P4 | Stage is a persisted operational position, written only by outcome | **Settled at S4** (was wrongly "contested") |
+| P5 | Whether a terminal state is a stage or a status | `HYPOTHESIS` — config variance, not a contested belief |
+| P12 | Consumers never compute | **Frozen (D3)** |
+| P13 | Projections are derived; never a system of record | **Ratified (Law 2)** |
+| P14 | Current Work threshold — all five must hold; variance ≠ work | **Frozen (D7)** |
+| P15 | No childcare-specific platform abstractions | **Frozen — violated in Process Builder** |
+| P16 | Honest gaps, never invention | Canonical |
 | P6 | Configuration steers behavior; runtime owns execution | **Stated, violated** |
 | P7 | The platform owns what the operator should not have to | Held, over-promised |
 | P8 | Current Work is where work is completed | **Stated, largest gap** |
