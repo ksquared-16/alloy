@@ -72,7 +72,11 @@ Deliverable #2 classified these as a contested principle. **That was wrong**, an
 
 ### Work View
 - **Operational question:** *"Which slice of this work am I looking at?"*
-- **What it IS:** a **saved operational lens** — authored predicates (Work View Conditions V3) an operator switches between. Product copy: *"Operational lenses staff switch between in the work unit — each maps to a synced queue lane."* (`HIGH CONFIDENCE`)
+- **What it IS (canonical, stated four times across docs):** **the operator's primary navigation tier.** *"**Operator navigation is the Work View, not the stage or the lane.** … Queue lanes are **execution/runtime**; stages are **lifecycle/governance**. Neither is the operator's primary navigation tier — **Work Views are**."*
+- **Authored** by an administrator, **persisted** to `departments.metadata.lifecycle_builder_v1.processes[].work_views_v1`
+- **What it must never own:** presentation — *"Work Views do **not** own: columns, row layouts, presentation."*
+  > **CORRECTED.** An earlier revision quoted *"Operational lenses staff switch between in the work unit — **each maps to a synced queue lane**"* as product copy. **That constant has zero call sites — it is never rendered**, and its lane-coupling contradicts current doctrine (*"a view without one still materializes"*). I quoted dead copy as if it were the product's live voice. The shipped framing carries no lane mention: *"Work Views define how operators consume process work. They choose which stages/work to include, how to group and sort them, and which surfaces present the rows."*
+- **VERIFIED-adjacent (`HIGH CONFIDENCE`):** the workspace tabs (New Leads / Active Pipeline / Registration / Waitlist / Tours / All Leads) **are Work Views, not lanes** — three converging proofs: the lane set does not match (`Active Pipeline`, `Registration`, `All Leads` exist as **no lane**; lanes `Follow Up`/`Enrolling`/`Enrolled` are absent from the tabs); the pill strip reads `work_views_v1`; and the code names *"Active Pipeline"* as a Work View by example. **This resolves a Deliverable #2 finding:** the "three vocabularies" are Work-View labels an admin chose, a lane set, and an analytics set — not three names for one thing.
 - **Author:** Administrator · **Consumer:** Operator (as tabs) and the Projection (as predicate input)
 - **Authored**, persisted · **Visible to both**
 - **What should never belong to it:** truth. A Work View **selects**; it must never **compute** counts or membership of its own — that is the Projection's job, and the doctrine says so by construction (`count === rows.length`, one evaluator).
@@ -129,6 +133,39 @@ Deliverable #2 classified these as a contested principle. **That was wrong**, an
 - **What she must never be shown:** projections, grains, lanes, keys, or the derivation that produced her screen.
 
 ---
+
+## 3a. The frozen ownership chain — the model's true spine
+
+> **ADDED.** This existed all along, marked **frozen**, in `docs/platform/core/stage-membership-and-outcomes.md:20-33`. It supersedes anything this document might otherwise imply about ownership. It is quoted verbatim:
+
+```
+Entity        owns durable truth            (children, families, leads — no duplication)
+Process       owns operational meaning      (a child participates in an Enrollment Process)
+Stage         owns operational work         (grain, expected work, outcomes, requirements)
+Work          owns operational detail       (progress; changes constantly)
+Outcome       produces durable state        (the only mutation mechanism)
+Durable State is small                      (open/closed; waitlisted/enrolling/enrolled/…)
+Work View     consumes processes            (lens: stages, filters, grouping, sort, surface refs)
+Surface       owns presentation             (rows, cards, panels, action placement)
+```
+
+> *"If a design decision violates this chain, stop and redesign it."*
+
+**This is the single most authoritative statement of the product model in the repository**, and it is *ownership*, not sequence — which is why it coexists with the runtime chain in §4 rather than competing with it. Three things it settles outright:
+
+- **"Outcome produces durable state (the only mutation mechanism)"** — P2/P3 are not aspirations; they are the frozen chain.
+- **"Surface owns presentation"** — a layer this document omitted. Explicit prohibition: *"Work Views do **not** own: columns, row layouts, presentation — those belong to Surfaces."* A Work View owns *surface assignment* (a reference), never presentation (the content).
+- **"Work View filters refine *within* process stages … they never re-implement stage membership from raw durable state."**
+
+**The anti-pattern table (`:107-116`) also names this review's own findings as already-forbidden:**
+
+| Anti-pattern the product forbids | Bearing on this review |
+|---|---|
+| *"Stage membership derived from status lists"* → **Persisted `stage_key`** | Confirms the P4 correction |
+| *"Status filters as membership criteria"* | Confirms it again |
+| *"Stages with no work (**'Qualification'**)"* → *"Fold the work into the stage that owns it"* | **The live tenant still routes to `qualification`** — a named, documented anti-pattern, still wired |
+| *"Generic `update_status` operator action"* → *"Domain verbs → outcome execution"* | Explains why `update_enrollment_status` is banned from Current Work |
+| *"Stages that own surfaces/layout"* | Surface refs are assigned by Work Views |
 
 ## 4. The canonical chain
 
@@ -235,6 +272,43 @@ Per instruction, no principles invented. This review **refines two**, **withdraw
 **P16 — Honest gaps, never invention.** *"honest gap copy — **never invent lists**"* and *"blocked operator copy — **never silent no-op**"* — canonical. The product already believes that an absent configuration must be *said*, not papered over.
 
 ---
+
+## 8a. ONE genuine contradiction — and it passes the layering test
+
+Every tension this review examined dissolved under the layering test. **This one does not.**
+
+| Doc | Published chain |
+|---|---|
+| `operational-workspace-shell.md:105` | `Business Process → Work View → Queue Lane → Operational Artifact → Focus Panel / Record` |
+| **`navigation-and-workspace-doctrine.md:87`** (frozen, July 2026) | `Organization → Workspace → Operational Surface → Work Unit → **Queue** → Focus Panel → Embedded Workspace → BOS` |
+
+Both are canonical. Both claim to describe **the operator's navigational path** — the same layer, the same question. The nav doctrine **omits Work View entirely** and places **Queue** in the operator's path. The shell doctrine forbids exactly that: *"Lanes are an implementation surface a Work View resolves onto, **not something operators navigate by name**."*
+
+**Why this matters to the product:** the nav doctrine is the document a reader would reach for when asking *"what does an operator navigate?"* — and it teaches the one answer the rest of the product rejects. **`HYPOTHESIS`:** these may be different axes (nav-shell zoom vs. work-generation ownership) and both "true"; they are reconciled nowhere I found. This is the contested item Deliverable #2 was reaching for and misattributed to Stage.
+
+## 8b. Deliverable #1's open mystery — solved
+
+**"Where does '5 Overdue work' come from?"** — carried as a `HYPOTHESIS` since Deliverable #1, because the number reconciled with no queue. It is now **answered, and the answer is the doctrine violation itself.**
+
+**VERIFIED**, `web/lib/metrics/registry.ts`:
+
+> `"ops.work_overdue_count"` · label **"Overdue work"** · *"Count of open **operational_tasks** where due_at is before now(). Point-in-time snapshot."*
+>
+> `"ops.needs_attention_count"` · label **"Needs attention"** · *"**Bounded snapshot**: opportunities evaluated with resolveOpportunityAttention (**cap 2000**). **NOT exhaustive org total**."*
+
+The tiles are **Operational Calculations / analytics metrics** (`presentation-runtime-v2.md:64-65`), not the projection. Three concrete divergences, in the product's own words:
+
+1. **"Overdue work" counts `operational_tasks`** — a *task* grain. The projection's overdue counts *opportunity rows*. Different things, one label.
+2. **"Needs attention" is a cap-2000 bounded snapshot**, self-described as *"NOT exhaustive org total."*
+3. Both are **org-grain**; the projection is work-unit/process-scoped.
+
+**So "Needs attention" ships as two different numbers, from two engines, under one label** — the projection computes its own per-view attention signals, explicitly demoted: *"Secondary, decision-supporting context … **NOT the count**."*
+
+This is precisely what `operationalProjection.ts:14` forbids — *"Analytics metrics … **must not masquerade as operational queue truth**"* — and what `business-process-system.md:192` forbids — *"**Analytics is not operational truth** … they may differ in scope and **must be labeled as such**."*
+
+**`HIGH CONFIDENCE`:** nothing in the KPI render path carries scope or provenance. `WorkspaceHeaderCalculationCardVm` holds `label`, `formattedValue`, `status`, `drillHref` — **no grain, no scope, no provenance field**. The guard the doctrine names is a *no-data* guard, not a *provenance* guard. So the director sees "Needs attention · 4" in the header and a different "Needs attention" per Work View, with **no affordance explaining the difference** — and clicking the header one 404s.
+
+The number was never wrong. It was answering a different question, under a borrowed name, with no way to tell.
 
 ## 9. Certification of the model
 
