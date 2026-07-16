@@ -183,6 +183,15 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             .sort((a, b) => a.sortSite.localeCompare(b.sortSite) || a.title.localeCompare(b.title));
     }, [section, siteRows, programCategories, roomRows, schedulePatterns, siteLabelById]);
 
+    // URL is the source of truth for fleet vs object workspace.
+    useEffect(() => {
+        if (loading) return;
+        if (!initialLocationId) {
+            setSelectedId(null);
+            setError(null);
+        }
+    }, [initialLocationId, loading]);
+
     useEffect(() => {
         if (loading || !initialLocationId) return;
         if (section !== "locations") {
@@ -195,20 +204,18 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             setError(null);
             return;
         }
-        if (!loading) {
+        if (siteRows.length > 0) {
             setError("Location not found or unavailable.");
             setSelectedId(null);
         }
     }, [initialLocationId, loading, siteRows, section]);
 
+    // Fleet landing: never auto-open the first location. Drop stale ids only.
     useEffect(() => {
-        if (!listItems.length) {
-            if (!initialLocationId) setSelectedId(null);
-            return;
-        }
+        if (!selectedId || !listItems.length) return;
         if (initialLocationId && section === "locations") return;
-        if (!selectedId || !listItems.some((item) => item.id === selectedId)) {
-            setSelectedId(listItems[0]!.id);
+        if (!listItems.some((item) => item.id === selectedId)) {
+            setSelectedId(null);
         }
     }, [listItems, selectedId, initialLocationId, section]);
 

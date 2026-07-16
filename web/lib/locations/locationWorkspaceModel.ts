@@ -83,6 +83,11 @@ export function parseLocationWorkspaceTab(raw: string | string[] | null | undefi
     return LOCATION_WORKSPACE_TABS.some((tab) => tab.key === value) ? (value as LocationWorkspaceTab) : "overview";
 }
 
+/** Org-level Locations fleet landing — no location selected. */
+export function locationsFleetHref(): string {
+    return "/settings/locations";
+}
+
 export function locationWorkspaceHref(
     locationId: string,
     tab: LocationWorkspaceTab = "overview",
@@ -96,6 +101,146 @@ export function locationWorkspaceHref(
     if (normalizedItemId) params.set("itemId", normalizedItemId);
     const search = params.toString();
     return `/settings/locations${search ? `?${search}` : ""}`;
+}
+
+export type LocationsFleetLocationSummary = {
+    id: string;
+    displayName: string;
+    isActive: boolean;
+    locality: string | null;
+    criticalCount: number;
+    improveCount: number;
+    setupPercent: number;
+    setupComplete: boolean;
+    activeRoomCount: number;
+    activeProgramCount: number;
+    configuredCapacity: number | null;
+    topAttention: LocationWorkspaceAttentionItem | null;
+};
+
+export type LocationsFleetAttentionHighlight = {
+    locationId: string;
+    locationName: string;
+    item: LocationWorkspaceAttentionItem;
+};
+
+export type LocationsFleetModel = {
+    locationCount: number;
+    activeLocationCount: number;
+    inactiveLocationCount: number;
+    locationsNeedingAttention: number;
+    locationsSetupComplete: number;
+    averageSetupPercent: number;
+    totalCritical: number;
+    totalImprove: number;
+    totalConfiguredCapacity: number | null;
+    totalRooms: number;
+    totalPrograms: number;
+    locations: LocationsFleetLocationSummary[];
+    attentionHighlights: LocationsFleetAttentionHighlight[];
+};
+
+/**
+ * Fleet setup uses only known-complete dimensions (general, programs, rooms, schedule).
+ * Tours / Placement / Access stay unknown until a location workspace loads them — they must
+ * not depress org rollups as incomplete (doctrine: unknown is never zero / fabricated).
+ */
+function fleetSetupFromWorkspace(model: LocationWorkspaceModel): {
+    setupPercent: number;
+    setupComplete: boolean;
+} {
+    const known = model.setupItems.filter((item) =>
+        item.key === "general" || item.key === "programs" || item.key === "rooms" || item.key === "schedule",
+    );
+    const completed = known.filter((item) => item.complete === true).length;
+    const setupPercent = known.length === 0 ? 0 : Math.round((completed / known.length) * 100);
+    return { setupPercent, setupComplete: setupPercent === 100 };
+}
+
+export function buildLocationsFleetModel(params: {
+    sites: LocationHierarchyRow[];
+    rooms: LocationHierarchyRow[];
+    programs: LocationProgramCategoryRow[];
+    schedules: { id: string; site_location_id: string; is_active: boolean }[];
+}): LocationsFleetModel {
+    const locations: LocationsFleetLocationSummary[] = params.sites.map((site) => {
+        const siteSchedules = params.schedules.filter((schedule) => schedule.site_location_id === site.id);
+        const workspace = buildLocationWorkspaceModel({
+            site,
+            rooms: params.rooms,
+            programs: params.programs,
+            schedules: siteSchedules,
+        });
+        const fleetSetup = fleetSetupFromWorkspace(workspace);
+        const topAttention =
+            workspace.attention.find((item) => item.grade === "fix") ??
+            workspace.attention.find((item) => item.grade === "improve") ??
+            null;
+        const locality =
+            [site.city, site.state]
+                .map((part) => String(part ?? "").trim())
+                .filter(Boolean)
+                .join(", ") || null;
+        return {
+            id: site.id,
+            displayName: workspace.displayName,
+            isActive: site.is_active !== false,
+            locality,
+            criticalCount: workspace.criticalCount,
+            improveCount: workspace.attention.filter((item) => item.grade === "improve").length,
+            setupPercent: fleetSetup.setupPercent,
+            setupComplete: fleetSetup.setupComplete,
+            activeRoomCount: workspace.activeRoomCount,
+            activeProgramCount: workspace.activeProgramCount,
+            configuredCapacity: workspace.configuredCapacity,
+            topAttention,
+        };
+    });
+
+    locations.sort((a, b) => {
+        if (a.criticalCount !== b.criticalCount) return b.criticalCount - a.criticalCount;
+        if (a.improveCount !== b.improveCount) return b.improveCount - a.improveCount;
+        if (a.setupPercent !== b.setupPercent) return a.setupPercent - b.setupPercent;
+        return a.displayName.localeCompare(b.displayName);
+    });
+
+    const active = locations.filter((location) => location.isActive);
+    const capacityValues = locations
+        .map((location) => location.configuredCapacity)
+        .filter((capacity): capacity is number => capacity != null && Number.isFinite(capacity));
+    const attentionHighlights: LocationsFleetAttentionHighlight[] = [];
+    for (const location of locations) {
+        if (!location.topAttention || location.topAttention.grade === "good") continue;
+        attentionHighlights.push({
+            locationId: location.id,
+            locationName: location.displayName,
+            item: location.topAttention,
+        });
+        if (attentionHighlights.length >= 8) break;
+    }
+
+    const setupPercents = locations.map((location) => location.setupPercent);
+    const averageSetupPercent =
+        setupPercents.length === 0 ?
+            0
+        :   Math.round(setupPercents.reduce((sum, value) => sum + value, 0) / setupPercents.length);
+
+    return {
+        locationCount: locations.length,
+        activeLocationCount: active.length,
+        inactiveLocationCount: locations.length - active.length,
+        locationsNeedingAttention: locations.filter((location) => location.criticalCount > 0 || location.improveCount > 0)
+            .length,
+        locationsSetupComplete: locations.filter((location) => location.setupComplete).length,
+        averageSetupPercent,
+        totalCritical: locations.reduce((sum, location) => sum + location.criticalCount, 0),
+        totalImprove: locations.reduce((sum, location) => sum + location.improveCount, 0),
+        totalConfiguredCapacity: capacityValues.length > 0 ? capacityValues.reduce((sum, value) => sum + value, 0) : null,
+        totalRooms: locations.reduce((sum, location) => sum + location.activeRoomCount, 0),
+        totalPrograms: locations.reduce((sum, location) => sum + location.activeProgramCount, 0),
+        locations,
+        attentionHighlights,
+    };
 }
 
 export function readLocationMetadataString(metadata: unknown, key: string): string | null {

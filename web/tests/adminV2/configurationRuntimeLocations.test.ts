@@ -20,6 +20,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("ConfigurationContext");
         expect(page).toContain("ConfigurationShell");
         expect(page).toContain('title="Locations"');
+        expect(page).toContain("LocationsFleetLanding");
         expect(page).toContain("locations-object-selector");
         expect(page).toContain("locations-selected-location");
         expect(page).toContain("locations-setup-progress");
@@ -32,6 +33,24 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).not.toContain("openDrawer");
         expect(page).not.toContain("useAdminDrawer");
         expect(page).toContain("LocationSiteCreatePanel");
+    });
+
+    it("opens the fleet landing when no locationId is in the URL", () => {
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        const fleet = read("components/adminV2/settings/locations/LocationsFleetLanding.tsx");
+        const hook = read("components/adminV2/settings/locations/useLocationsConfigurationSettings.ts");
+        const model = read("lib/locations/locationWorkspaceModel.ts");
+        expect(page).toContain("buildLocationsFleetModel");
+        expect(page).toContain("locationsFleetHref");
+        expect(page).toContain("locations-back-to-fleet");
+        expect(page).not.toContain("Choose a location, understand what needs attention");
+        expect(fleet).toContain("locations-fleet-landing");
+        expect(fleet).toContain("locations-fleet-rollups");
+        expect(fleet).toContain("Operational readiness");
+        expect(hook).toContain("Fleet landing: never auto-open");
+        expect(hook).not.toContain("listItems[0]!.id");
+        expect(model).toContain("buildLocationsFleetModel");
+        expect(model).toContain("locationsFleetHref");
     });
 
     it("uses the seven ready owned-concern tabs and keeps General behind Edit Location", () => {

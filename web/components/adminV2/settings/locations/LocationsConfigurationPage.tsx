@@ -23,17 +23,19 @@ import {
     LocationToursPanel,
 } from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
+import LocationsFleetLanding from "@/components/adminV2/settings/locations/LocationsFleetLanding";
+import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
 import {
     buildLocationWorkspaceModel,
     buildLocationProgramOperationalSummaries,
+    buildLocationsFleetModel,
     LOCATION_WORKSPACE_TABS,
+    locationsFleetHref,
     locationWorkspaceHref,
     readLocationMetadataString,
     type LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-
-const LOCATIONS_SUBTITLE = "Choose a location, understand what needs attention, and manage everything it owns.";
 
 function WorkspaceCard({
     title,
@@ -229,6 +231,33 @@ export default function LocationsConfigurationPage({
                 },
             })
         :   null;
+
+    const fleet = useMemo(
+        () =>
+            buildLocationsFleetModel({
+                sites: siteRows,
+                rooms: roomRows,
+                programs: programCategories,
+                schedules: schedulePatterns,
+            }),
+        [programCategories, roomRows, schedulePatterns, siteRows],
+    );
+
+    const openLocation = (locationId: string, tab: LocationWorkspaceTab = "overview") => {
+        setSelectedId(locationId);
+        setEditingSite(false);
+        setCreatingSite(false);
+        setActiveTab(tab);
+        router.replace(locationWorkspaceHref(locationId, tab));
+    };
+
+    const returnToFleet = () => {
+        setSelectedId(null);
+        setEditingSite(false);
+        setCreatingSchedule(false);
+        setActiveTab("overview");
+        router.replace(locationsFleetHref());
+    };
 
     const navigate = (tab: LocationWorkspaceTab, itemId?: string | null) => {
         if (!selectedSite) return;
@@ -659,9 +688,8 @@ export default function LocationsConfigurationPage({
         <div className="process-config-page min-h-0 flex-1" data-testid="locations-configuration-page">
             <ConfigurationContext
                 title="Locations"
-                subtitle={LOCATIONS_SUBTITLE}
                 actions={
-                    canMutate && !creatingSite ?
+                    canMutate && !creatingSite && selectedSite ?
                         <ConfigurationPrimaryButton
                             className="config-primary-btn--sm"
                             data-testid="locations-add-location"
@@ -697,21 +725,33 @@ export default function LocationsConfigurationPage({
                 : creatingSite ?
                     <LocationSiteCreatePanel
                         canMutate={canMutate}
-                        onCancel={() => setCreatingSite(false)}
+                        onCancel={() => {
+                            setCreatingSite(false);
+                            if (!selectedSite) router.replace(locationsFleetHref());
+                        }}
                         onCreate={async (input) => {
                             const newId = await createSiteLocation(input);
                             setCreatingSite(false);
                             setSelectedId(newId);
                             setActiveTab("overview");
-                            router.replace(locationWorkspaceHref(newId));
+                            router.replace(canonicalLocationSettingsHref(newId));
                             return newId;
                         }}
                     />
                 : !selectedSite ?
-                    <ConfigurationEmptyState
-                        testId="locations-site-workspace-empty"
-                        title="No location selected"
-                        description="Choose a location or add one to begin."
+                    <LocationsFleetLanding
+                        fleet={fleet}
+                        showInactive={showInactive}
+                        onShowInactiveChange={setShowInactive}
+                        search={search}
+                        onSearchChange={setSearch}
+                        onOpenLocation={(locationId) => openLocation(locationId)}
+                        onAddLocation={() => {
+                            setCreatingSite(true);
+                            setEditingSite(false);
+                            setError(null);
+                        }}
+                        canMutate={canMutate}
                     />
                 :   <div className="grid min-h-full gap-4 xl:grid-cols-[15rem_minmax(0,1fr)_14rem]">
                         <aside className="hidden xl:block" aria-label="Location selector">
@@ -730,6 +770,14 @@ export default function LocationsConfigurationPage({
                                 }
                                 testId="locations-object-selector"
                             >
+                                <button
+                                    type="button"
+                                    className="mb-1 w-full rounded-md px-2 py-1.5 text-left text-[11px] font-semibold text-[#007d68] hover:bg-[#00a283]/5"
+                                    onClick={returnToFleet}
+                                    data-testid="locations-back-to-fleet"
+                                >
+                                    ← All locations
+                                </button>
                                 <label className="sr-only" htmlFor="locations-search">
                                     Search locations
                                 </label>
@@ -764,6 +812,14 @@ export default function LocationsConfigurationPage({
 
                         <main className="min-w-0" data-testid="locations-selected-location">
                             <div className="mb-4 xl:hidden">
+                                <button
+                                    type="button"
+                                    className="mb-2 text-[11px] font-semibold text-[#007d68]"
+                                    onClick={returnToFleet}
+                                    data-testid="locations-back-to-fleet-mobile"
+                                >
+                                    ← All locations
+                                </button>
                                 <label className="config-typo-field-label" htmlFor="locations-mobile-selector">
                                     Location
                                 </label>

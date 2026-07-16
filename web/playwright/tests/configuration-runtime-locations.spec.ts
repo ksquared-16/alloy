@@ -32,6 +32,21 @@ test.describe("configuration-runtime-locations", () => {
         await expect(page.getByTestId("locations-configuration-page")).toBeVisible({
             timeout: 60_000,
         });
+        await expect(page.getByTestId("locations-fleet-landing")).toBeVisible({
+            timeout: 60_000,
+        });
+        await page.screenshot({
+            path: path.join(screenshotDir, "00-locations-fleet-landing.png"),
+            fullPage: true,
+            animations: "disabled",
+        });
+
+        const firstFleetRow = page.locator('[data-testid^="locations-fleet-row-"]').first();
+        await expect(firstFleetRow).toBeVisible({ timeout: 30_000 });
+        await firstFleetRow.click();
+        await expect(page.getByTestId("locations-selected-location")).toBeVisible({
+            timeout: 60_000,
+        });
         await page.screenshot({
             path: path.join(screenshotDir, "01-location-overview.png"),
             fullPage: true,
