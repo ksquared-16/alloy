@@ -106,12 +106,12 @@ Readiness **state** only — every definition is owned by the referenced Realiza
 | **P0** | **Complete** (G-Reconciliation green) | — | [Realization §13 · P0](./operational-expectations-engineering-realization.md) |
 | **P1** | **Complete** (M1; G-Modality-Closure, G-Standing(authoring), G-Revision green) | — | [Realization §13 · P1](./operational-expectations-engineering-realization.md) |
 | P2 | **Ready Now** | none (P1 grammar available) | [Realization §13 · P2](./operational-expectations-engineering-realization.md) |
-| P3 | Needs prerequisite | P2 + Consumption V1 oracle (skeleton may run ∥ P2) | [Realization §13 · P3](./operational-expectations-engineering-realization.md) |
+| P3 | Needs prerequisite | P1 + P2 + Consumption V1 oracle | [Realization §13 · P3](./operational-expectations-engineering-realization.md) |
 | P4 | Blocked by certification | **G-Parity** green | [Realization §13 · P4](./operational-expectations-engineering-realization.md) |
 | P5 | Blocked by dependency | P3 + P4 | [Realization §13 · P5](./operational-expectations-engineering-realization.md) |
 | P6 | Blocked by dependency | P5 + P4 | [Realization §13 · P6](./operational-expectations-engineering-realization.md) |
 | P7 | Blocked by dependency | P2 + P4 | [Realization §13 · P7](./operational-expectations-engineering-realization.md) |
-| P8 | Blocked by dependency | P5 + X0(ratify) | [Realization §13 · P8](./operational-expectations-engineering-realization.md) |
+| P8 | Blocked by dependency | P1 + P5 + X0 | [Realization §13 · P8](./operational-expectations-engineering-realization.md) |
 
 **X0 (Security · Standing · Ratification)** is **cross-cutting**, delivered inside P1 and P8 — **not** a
 standalone late hardening phase ([Realization §13 · X0](./operational-expectations-engineering-realization.md)).
