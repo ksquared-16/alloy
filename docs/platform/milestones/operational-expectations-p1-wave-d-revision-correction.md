@@ -60,7 +60,19 @@ their fold behavior is undefined in the frozen corpus). The resolver **fails clo
 known horizon of a lineage contains `cancellation` or `replacement`, the whole lineage returns a typed
 `unsupported_transition` result (transition type, offending expectation id, lineage root) — never
 ignored, never aliased to correction/revision, never partially resolved. Enabling their effectivity
-requires a program-owner architecture decision (see the design correction package).
+requires a program-owner architecture decision.
+
+> **Correction to this record (Wave E, 2026-07-16) — historical debt, not a defect.** The sentence above
+> originally deferred this decision to "the design correction package." **No such package was ever
+> created, registered, or scoped**, so the reference pointed nowhere and the decision had no owner. It is
+> recorded here as debt rather than invented after the fact. The decision itself is unchanged and remains
+> **deliberately unratified**: it did not block P1 (no P1 completion item, gate, or M1 exit criterion
+> covers cancellation/replacement effectivity — see
+> [P1 certification §6](./operational-expectations-p1-certification.md)), and it is carried into the
+> **P1 public-interface freeze**, due by **P4** at the latest, whose `Provides` includes a Typed
+> Transition Event of `revision|correction|cancellation|replacement`
+> ([Realization §13 · P4](./operational-expectations-engineering-realization.md)). Resolving it is an
+> architecture escalation to the frozen-corpus owner ([Realization §22](./operational-expectations-engineering-realization.md)).
 
 ## Downstream deferrals (not built here)
 
