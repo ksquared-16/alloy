@@ -33,13 +33,31 @@ function roomAttention(params: {
 }): ConfigAttentionItem[] {
     const items: ConfigAttentionItem[] = [];
     if (!params.capacity.trim()) {
-        items.push({ key: "capacity", grade: "fix", label: "Capacity is not set up yet" });
+        items.push({
+            key: "capacity",
+            grade: "fix",
+            label: "Capacity is not set",
+            consequence: "This room cannot count toward location inventory.",
+            nextLabel: "Set capacity",
+        });
     }
     if (!params.programKey.trim()) {
-        items.push({ key: "program", grade: "fix", label: "Assign this room to a program" });
+        items.push({
+            key: "program",
+            grade: "fix",
+            label: "No program assigned",
+            consequence: "Placement cannot route children into this room.",
+            nextLabel: "Assign program",
+        });
     }
     if (params.thresholds.length === 0) {
-        items.push({ key: "staffing", grade: "fix", label: "Add staffing thresholds" });
+        items.push({
+            key: "staffing",
+            grade: "fix",
+            label: "Staffing thresholds are missing",
+            consequence: "Ratio guidance stays incomplete for this room.",
+            nextLabel: "Add staffing",
+        });
     }
     return items;
 }

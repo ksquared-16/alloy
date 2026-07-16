@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import {
-    formatWeekdaySelection,
     patchSchedulePattern,
     WEEKDAY_OPTIONS,
     type SchedulePatternRow,
 } from "@/lib/childcareOperational/fetchOperationalEnrollment";
+
+const WEEKDAY_CHIP_SELECTED =
+    "rounded-full border border-[#00a283]/35 bg-[#00a283]/12 text-[#007d68]";
+const WEEKDAY_CHIP_IDLE =
+    "rounded-full border border-alloy-forge/15 text-alloy-midnight/55 hover:border-alloy-forge/25";
 import {
     ConfigurationDetailCard,
     ConfigurationEmptyState,
@@ -81,16 +85,15 @@ export default function LocationScheduleTemplateDetailPanel({
 
                 <div className="space-y-2">
                     <span className="config-typo-field-label">Weekdays</span>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-1.5" data-testid="locations-schedule-weekdays">
                         {WEEKDAY_OPTIONS.map((day) => (
                             <button
                                 key={day.value}
                                 type="button"
                                 disabled={!canMutate}
-                                className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${
-                                    weekdays.includes(day.value) ?
-                                        "border-alloy-pine/40 bg-alloy-pine/10 text-alloy-pine"
-                                    :   "border-alloy-forge/15 text-alloy-midnight/55"
+                                aria-pressed={weekdays.includes(day.value)}
+                                className={`px-2.5 py-1 text-xs font-semibold ${
+                                    weekdays.includes(day.value) ? WEEKDAY_CHIP_SELECTED : WEEKDAY_CHIP_IDLE
                                 }`}
                                 onClick={() => toggleWeekday(day.value)}
                             >
@@ -98,7 +101,6 @@ export default function LocationScheduleTemplateDetailPanel({
                             </button>
                         ))}
                     </div>
-                    <p className="config-typo-meta">{formatWeekdaySelection(weekdays)}</p>
                 </div>
 
                 <label className="flex items-center gap-2">

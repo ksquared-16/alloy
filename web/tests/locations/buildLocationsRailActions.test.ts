@@ -23,7 +23,7 @@ function model(overrides: Partial<LocationWorkspaceModel> = {}): LocationWorkspa
             { key: "placement", label: "Placement", tab: "placement", complete: true },
             { key: "access", label: "Access", tab: "access", complete: true },
         ],
-        attention: [{ key: "all-good", grade: "good", label: "Everything looks good", tab: "overview" }],
+        attention: [],
         criticalCount: 0,
         recommendedCount: 0,
         ...overrides,
@@ -41,7 +41,7 @@ describe("buildLocationsRailActions", () => {
         onCreateSchedule: vi.fn(),
     };
 
-    it("curates overview into Fix / Do next / Manage / More without nav dump", () => {
+    it("curates overview into Fix / Do next / Manage / More without dead placeholders", () => {
         const actions = buildLocationsRailActions({
             activeTab: "overview",
             canMutate: true,
@@ -54,6 +54,7 @@ describe("buildLocationsRailActions", () => {
             hasSelectedProgram: false,
             hasSelectedRoom: false,
             roomsNeedingCapacity: 1,
+            firstRoomNeedingCapacityId: "room-1",
             ...handlers,
         });
 
@@ -64,10 +65,13 @@ describe("buildLocationsRailActions", () => {
         expect(actions.some((action) => action.id === "set-schedule" && action.group === "next")).toBe(true);
         expect(actions.some((action) => action.id === "apply-to" && action.group === "manage")).toBe(true);
         expect(actions.some((action) => action.id === "edit-details" && action.group === "manage")).toBe(true);
-        expect(actions.some((action) => action.id === "duplicate-location" && action.group === "more")).toBe(true);
+        expect(actions.some((action) => action.id === "duplicate-location")).toBe(false);
+        expect(actions.some((action) => action.id === "add-closure")).toBe(false);
         expect(actions.some((action) => action.id === "go-rooms" && action.group === "more")).toBe(true);
-        expect(actions.some((action) => action.id === "manage-rooms")).toBe(false);
         expect(actions.filter((action) => action.group !== "more").length).toBeLessThanOrEqual(8);
+
+        actions.find((action) => action.id === "configure-capacity")?.onClick();
+        expect(handlers.onNavigate).toHaveBeenCalledWith("rooms", "room-1");
     });
 
     it("keeps Add location only on the organization landing", () => {
@@ -83,6 +87,7 @@ describe("buildLocationsRailActions", () => {
             hasSelectedProgram: false,
             hasSelectedRoom: false,
             roomsNeedingCapacity: 0,
+            firstRoomNeedingCapacityId: null,
             ...handlers,
         });
         expect(actions).toEqual([
@@ -103,6 +108,7 @@ describe("buildLocationsRailActions", () => {
             hasSelectedProgram: false,
             hasSelectedRoom: true,
             roomsNeedingCapacity: 2,
+            firstRoomNeedingCapacityId: "room-2",
             ...handlers,
         });
         expect(actions.map((action) => action.id)).toEqual([
@@ -126,11 +132,33 @@ describe("buildLocationsRailActions", () => {
             hasSelectedProgram: false,
             hasSelectedRoom: false,
             roomsNeedingCapacity: 0,
+            firstRoomNeedingCapacityId: null,
             ...handlers,
         });
         const addProgram = actions.find((action) => action.id === "add-program");
         expect(addProgram?.group).toBe("fix");
         expect(addProgram?.reason).toBe("No programs offered yet");
         expect(addProgram?.disabled).toBeFalsy();
+    });
+
+    it("disables Apply with an intentional reason when only one location exists", () => {
+        const actions = buildLocationsRailActions({
+            activeTab: "overview",
+            canMutate: true,
+            model: model(),
+            selectedSite: true,
+            siteCount: 1,
+            scheduleCount: 1,
+            roomCount: 1,
+            programCount: 1,
+            hasSelectedProgram: true,
+            hasSelectedRoom: true,
+            roomsNeedingCapacity: 0,
+            firstRoomNeedingCapacityId: null,
+            ...handlers,
+        });
+        const apply = actions.find((action) => action.id === "apply-to");
+        expect(apply?.disabled).toBe(true);
+        expect(apply?.reason).toBe("Need at least two locations");
     });
 });

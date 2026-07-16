@@ -4,8 +4,8 @@ import type { ConfigAttentionItem } from "@/components/adminV2/settings/configur
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 /**
- * Attention region — collapses when healthy.
- * Standalone → white panel on stone. Embedded → nested region inside a panel.
+ * Attention region — operational rows (problem → consequence → next).
+ * Collapses when healthy.
  */
 export function ConfigAttentionPanel({
     items,
@@ -25,29 +25,46 @@ export function ConfigAttentionPanel({
 
     const list = (
         <ul className="divide-y divide-alloy-forge/10">
-            {actionable.map((item) => (
-                <li
-                    key={item.key}
-                    className={`flex items-center gap-2.5 ${compact ? "py-1.5" : "py-2"} first:pt-0 last:pb-0`}
-                >
-                    <span
-                        className={item.grade === "fix" ? "text-amber-700" : "text-blue-700"}
-                        aria-hidden="true"
-                    >
-                        {item.grade === "fix" ? "⚠" : "ⓘ"}
-                    </span>
-                    <span className="min-w-0 flex-1 text-sm text-alloy-midnight/80">{item.label}</span>
-                    {onResolve ?
-                        <button
-                            type="button"
-                            className="shrink-0 text-xs font-semibold text-[#007d68]"
-                            onClick={() => onResolve(item)}
+            {actionable.map((item) => {
+                const nextLabel = item.nextLabel ?? "Continue";
+                const body = (
+                    <div className="flex items-start gap-2.5">
+                        <span
+                            className={`mt-0.5 ${item.grade === "fix" ? "text-amber-700" : "text-blue-700"}`}
+                            aria-hidden="true"
                         >
-                            Resolve
-                        </button>
-                    :   null}
-                </li>
-            ))}
+                            {item.grade === "fix" ? "⚠" : "ⓘ"}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-alloy-midnight">{item.label}</p>
+                            {item.consequence ?
+                                <p className="mt-0.5 text-[12px] leading-snug text-alloy-midnight/55">
+                                    {item.consequence}
+                                </p>
+                            :   null}
+                            {onResolve ?
+                                <p className="mt-1.5 text-xs font-semibold text-[#007d68]">
+                                    {nextLabel} →
+                                </p>
+                            :   null}
+                        </div>
+                    </div>
+                );
+
+                return (
+                    <li key={item.key} className={compact ? "py-2 first:pt-0 last:pb-0" : "py-2.5 first:pt-0 last:pb-0"}>
+                        {onResolve ?
+                            <button
+                                type="button"
+                                className="-mx-1 w-[calc(100%+0.5rem)] rounded-md px-1 py-0.5 text-left hover:bg-alloy-bend-pine/[0.04]"
+                                onClick={() => onResolve(item)}
+                            >
+                                {body}
+                            </button>
+                        :   body}
+                    </li>
+                );
+            })}
         </ul>
     );
 

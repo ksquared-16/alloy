@@ -124,29 +124,39 @@ export default function LocationsFleetLanding({
                 >
                     <ul className="divide-y divide-alloy-forge/10">
                         {fleet.attentionHighlights.map((highlight) => (
-                            <li
-                                key={`${highlight.locationId}-${highlight.item.key}`}
-                                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
-                            >
-                                <span
-                                    className={
-                                        highlight.item.grade === "fix" ? "text-amber-700" : "text-blue-700"
-                                    }
-                                    aria-hidden="true"
-                                >
-                                    {highlight.item.grade === "fix" ? "⚠" : "ⓘ"}
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm text-alloy-midnight/80">{highlight.item.label}</p>
-                                    <p className="config-typo-sublabel mt-0.5">{highlight.locationName}</p>
-                                </div>
+                            <li key={`${highlight.locationId}-${highlight.item.key}`} className="py-2 first:pt-0 last:pb-0">
                                 <button
                                     type="button"
-                                    className="shrink-0 text-xs font-medium text-[#007d68]"
+                                    className="-mx-1 w-[calc(100%+0.5rem)] rounded-md px-1 py-0.5 text-left hover:bg-alloy-bend-pine/[0.04]"
                                     onClick={() => onOpenLocation(highlight.locationId)}
                                     data-testid={`locations-fleet-attention-${highlight.locationId}`}
                                 >
-                                    Open →
+                                    <div className="flex items-start gap-2.5">
+                                        <span
+                                            className={`mt-0.5 ${
+                                                highlight.item.grade === "fix" ? "text-amber-700" : "text-blue-700"
+                                            }`}
+                                            aria-hidden="true"
+                                        >
+                                            {highlight.item.grade === "fix" ? "⚠" : "ⓘ"}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-semibold text-alloy-midnight">
+                                                {highlight.item.label}
+                                            </p>
+                                            {highlight.item.consequence ?
+                                                <p className="mt-0.5 text-[12px] leading-snug text-alloy-midnight/55">
+                                                    {highlight.item.consequence}
+                                                </p>
+                                            :   null}
+                                            <p className="mt-1 text-[11px] text-alloy-midnight/45">
+                                                {highlight.locationName}
+                                            </p>
+                                            <p className="mt-1.5 text-xs font-semibold text-[#007d68]">
+                                                {(highlight.item.nextLabel ?? "Open location") + " →"}
+                                            </p>
+                                        </div>
+                                    </div>
                                 </button>
                             </li>
                         ))}

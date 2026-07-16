@@ -13,6 +13,8 @@ type BuildArgs = {
     hasSelectedProgram: boolean;
     hasSelectedRoom: boolean;
     roomsNeedingCapacity: number;
+    /** First room missing capacity — used by Fix capacity actions. */
+    firstRoomNeedingCapacityId: string | null;
     onAddLocation: () => void;
     onEditLocation: () => void;
     onAddRoom: () => void;
@@ -24,7 +26,7 @@ type BuildArgs = {
 
 /**
  * Curated Location Actions — Fix now / Do next / Manage / More.
- * Navigation-only items stay behind More. Executable gap-closing stays primary.
+ * Every visible action must execute or be intentionally disabled with a reason.
  */
 export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[] {
     if (!args.selectedSite) {
@@ -57,6 +59,10 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
         onClick: args.onApply,
     });
 
+    const openCapacityWork = () => {
+        args.onNavigate("rooms", args.firstRoomNeedingCapacityId);
+    };
+
     if (args.activeTab === "overview") {
         const actions: LocationsRailAction[] = [];
 
@@ -65,20 +71,20 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 id: "resolve-timezone",
                 label: "Set time zone",
                 group: "fix",
-                reason: "Required for schedules and tours",
+                reason: "Required for hours and tours",
                 onClick: args.onEditLocation,
             });
         }
         if (args.roomsNeedingCapacity > 0 || args.model.configuredCapacity == null) {
             actions.push({
                 id: "configure-capacity",
-                label: "Configure capacity",
+                label: "Set room capacity",
                 group: "fix",
                 reason:
                     args.roomsNeedingCapacity > 0 ?
                         `${args.roomsNeedingCapacity} rooms need setup`
-                    :   "No capacity configured yet",
-                onClick: () => args.onNavigate("rooms"),
+                    :   "No capacity set yet",
+                onClick: openCapacityWork,
             });
         }
 
@@ -87,7 +93,7 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 id: "set-schedule",
                 label: "Set operating hours",
                 group: "next",
-                reason: "Weekly hours are not set up yet",
+                reason: "Weekly hours are not set yet",
                 onClick: () => args.onNavigate("schedule"),
             });
         }
@@ -116,7 +122,7 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
             });
         }
 
-        actions.push(applyAction("apply-to", "Apply configuration"));
+        actions.push(applyAction("apply-to", "Apply to other locations"));
         if (args.canMutate) {
             actions.push({
                 id: "edit-details",
@@ -134,15 +140,15 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 onClick: args.onAddRoom,
             });
         }
-        actions.push(
-            {
-                id: "duplicate-location",
-                label: "Duplicate location",
+        if (args.canMutate && args.programCount > 0) {
+            actions.push({
+                id: "add-program-more",
+                label: "Add program",
                 group: "more",
-                disabled: true,
-                reason: "Coming soon",
-                onClick: () => undefined,
-            },
+                onClick: args.onAddProgram,
+            });
+        }
+        actions.push(
             {
                 id: "go-rooms",
                 label: "Open rooms",
@@ -154,6 +160,12 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 label: "Open programs",
                 group: "more",
                 onClick: () => args.onNavigate("programs"),
+            },
+            {
+                id: "go-schedule",
+                label: "Open schedule",
+                group: "more",
+                onClick: () => args.onNavigate("schedule"),
             },
         );
         return actions;
@@ -170,7 +182,7 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 onClick: args.onAddProgram,
             });
         }
-        actions.push(applyAction("apply-programs", "Apply programs"));
+        actions.push(applyAction("apply-programs", "Apply to other locations"));
         return actions;
     }
 
@@ -179,13 +191,13 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
         if (args.roomsNeedingCapacity > 0 || args.model.configuredCapacity == null) {
             actions.push({
                 id: "configure-capacity",
-                label: "Configure room capacity",
+                label: "Set room capacity",
                 group: "fix",
                 reason:
                     args.roomsNeedingCapacity > 0 ?
                         `${args.roomsNeedingCapacity} rooms need setup`
                     :   undefined,
-                onClick: () => args.onNavigate("rooms"),
+                onClick: openCapacityWork,
             });
         }
         if (args.canMutate) {
@@ -196,7 +208,7 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 onClick: args.onAddRoom,
             });
         }
-        actions.push(applyAction("apply-rooms", "Apply room configuration"));
+        actions.push(applyAction("apply-rooms", "Apply to other locations"));
         return actions;
     }
 
@@ -208,6 +220,7 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 label: "Add schedule pattern",
                 group: "fix",
                 disabled: !args.canMutate,
+                reason: !args.canMutate ? "You do not have permission" : undefined,
                 onClick: args.onCreateSchedule,
             });
         } else if (args.canMutate) {
@@ -218,50 +231,49 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 onClick: args.onCreateSchedule,
             });
         }
-        actions.push(applyAction("apply-schedule", "Apply schedule configuration"));
-        actions.push({
-            id: "add-closure",
-            label: "Add closure",
-            group: "more",
-            disabled: true,
-            reason: "Not available yet",
-            onClick: () => undefined,
-        });
+        actions.push(applyAction("apply-schedule", "Apply to other locations"));
         return actions;
     }
 
     if (args.activeTab === "tours") {
         return [
-            {
-                id: "review-availability",
-                label: "Review availability",
-                group: "manage",
-                onClick: () => args.onNavigate("tours"),
-            },
-            applyAction("apply-tours", "Apply tour configuration"),
+            applyAction("apply-tours", "Apply to other locations"),
+            ...(args.canMutate ?
+                [
+                    {
+                        id: "edit-details",
+                        label: "Edit location",
+                        group: "manage" as const,
+                        onClick: args.onEditLocation,
+                    },
+                ]
+            :   []),
         ];
     }
 
     if (args.activeTab === "placement") {
         return [
             {
-                id: "configure-ranking",
-                label: "Configure ranking",
+                id: "review-rooms",
+                label: "Review rooms",
                 group: "manage",
-                onClick: () => args.onNavigate("placement"),
+                reason: "Placement uses active rooms",
+                onClick: () => args.onNavigate("rooms"),
             },
         ];
     }
 
     if (args.activeTab === "access") {
-        return [
-            {
-                id: "manage-access",
-                label: "Manage access",
-                group: "manage",
-                onClick: () => args.onNavigate("access"),
-            },
-        ];
+        return args.canMutate ?
+                [
+                    {
+                        id: "edit-details",
+                        label: "Edit location",
+                        group: "manage",
+                        onClick: args.onEditLocation,
+                    },
+                ]
+            :   [];
     }
 
     return [];

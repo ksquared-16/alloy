@@ -9,7 +9,12 @@ export type ConfigAttentionGrade = "fix" | "improve" | "good";
 export type ConfigAttentionItem = {
     key: string;
     grade: ConfigAttentionGrade;
+    /** What is wrong. */
     label: string;
+    /** What happens because of it. */
+    consequence?: string;
+    /** Where the operator goes next (row CTA). */
+    nextLabel?: string;
 };
 
 export type ConfigReadinessArea = {

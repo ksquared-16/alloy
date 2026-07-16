@@ -3,11 +3,15 @@
 import { useState } from "react";
 import {
     createSchedulePattern,
-    formatWeekdaySelection,
     WEEKDAY_OPTIONS,
     type SchedulePatternRow,
 } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+
+const WEEKDAY_CHIP_SELECTED =
+    "rounded-full border border-[#00a283]/35 bg-[#00a283]/12 text-[#007d68]";
+const WEEKDAY_CHIP_IDLE =
+    "rounded-full border border-alloy-forge/15 text-alloy-midnight/55 hover:border-alloy-forge/25";
 
 function patternKey(label: string): string {
     const stem = label
@@ -60,15 +64,14 @@ export default function LocationSchedulePatternCreatePanel({
             </label>
             <div className="space-y-2">
                 <span className="config-typo-field-label">Weekdays</span>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5" data-testid="locations-schedule-create-weekdays">
                     {WEEKDAY_OPTIONS.map((day) => (
                         <button
                             key={day.value}
                             type="button"
-                            className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
-                                weekdays.includes(day.value) ?
-                                    "border-[#00a283]/30 bg-[#00a283]/10 text-[#007d68]"
-                                :   "border-alloy-forge/15 text-alloy-midnight/55"
+                            aria-pressed={weekdays.includes(day.value)}
+                            className={`px-2.5 py-1 text-xs font-semibold ${
+                                weekdays.includes(day.value) ? WEEKDAY_CHIP_SELECTED : WEEKDAY_CHIP_IDLE
                             }`}
                             onClick={() => toggleWeekday(day.value)}
                         >
@@ -76,7 +79,6 @@ export default function LocationSchedulePatternCreatePanel({
                         </button>
                     ))}
                 </div>
-                <p className="config-typo-meta">{formatWeekdaySelection(weekdays)}</p>
             </div>
             {error ?
                 <p role="alert" className="text-sm text-red-800">

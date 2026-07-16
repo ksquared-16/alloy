@@ -25,10 +25,20 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("locations-selected-location");
         expect(page).toContain("LocationsCommandRailActions");
         expect(page).toContain("LocationOverviewSurface");
+        expect(page).toContain("operatingSnapshot");
         expect(page).toContain("buildLocationIdentityFacts");
         expect(page).toContain("xl:grid-cols-[16rem_minmax(0,1fr)]");
         expect(page).toContain('data-testid="locations-hero"');
+        expect(page).toContain("titleIcon");
         expect(page).not.toContain("← All locations");
+        expect(read("components/adminV2/settings/locations/LocationOverviewSurface.tsx")).toContain(
+            "locations-overview-operating-now",
+        );
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel.tsx")).toContain(
+            "consequence",
+        );
+        expect(read("lib/locations/buildLocationsRailActions.ts")).not.toContain("Coming soon");
+        expect(read("lib/locations/buildLocationsRailActions.ts")).not.toContain("Not available yet");
         expect(page).toContain('variant="rail"');
         expect(page).not.toContain("ConfigOperationalActions");
         expect(page).not.toContain("Address not set up yet");
@@ -104,7 +114,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(programs).toContain("ConfigChildObjectMasterDetail");
         expect(programs).toContain("locations-program-age-unit");
         expect(programs).toContain("locations-program-ops");
-        expect(programs).toContain("Configured here");
+        expect(programs).toContain("Set here");
         expect(programs).toContain("Edit program");
         expect(programs).toContain("ConfigEditorSection");
         expect(programs).toContain("Hours / operating rules");

@@ -32,6 +32,7 @@ import { LocationsCommandRailActions } from "@/components/adminV2/settings/locat
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
 import LocationsFleetLanding from "@/components/adminV2/settings/locations/LocationsFleetLanding";
 import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
+import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
 import { buildLocationsRailActions } from "@/lib/locations/buildLocationsRailActions";
 import {
     buildLocationIdentityFacts,
@@ -344,6 +345,26 @@ export default function LocationsConfigurationPage({
         })();
     };
 
+    const firstRoomNeedingCapacityId = useMemo(() => {
+        const match = selectedRooms.find((room) => !readLocationMetadataPresentation(room.metadata).capacity);
+        return match?.id ?? null;
+    }, [selectedRooms]);
+
+    const operatingSnapshot = useMemo(
+        () => ({
+            scheduleName: selectedSchedules[0]?.label?.trim() || null,
+            hoursLabel:
+                selectedSchedules.length > 0 ? formatWeekdaySelection(selectedSchedules[0]!.weekdays) : null,
+            programNames: selectedPrograms
+                .filter((program) => program.is_active !== false)
+                .map((program) => program.label.trim())
+                .filter(Boolean),
+            activeRoomCount: model?.activeRoomCount ?? 0,
+            configuredCapacity: model?.configuredCapacity ?? null,
+        }),
+        [model?.activeRoomCount, model?.configuredCapacity, selectedPrograms, selectedSchedules],
+    );
+
     const railActions = useMemo(
         () =>
             buildLocationsRailActions({
@@ -358,6 +379,7 @@ export default function LocationsConfigurationPage({
                 hasSelectedProgram: Boolean(effectiveProgramId),
                 hasSelectedRoom: Boolean(effectiveRoomId),
                 roomsNeedingCapacity: model?.roomsNeedingCapacity ?? 0,
+                firstRoomNeedingCapacityId,
                 onAddLocation: beginAddLocation,
                 onEditLocation: () => setEditingSite(true),
                 onAddRoom: addRoom,
@@ -375,6 +397,7 @@ export default function LocationsConfigurationPage({
             canMutate,
             effectiveProgramId,
             effectiveRoomId,
+            firstRoomNeedingCapacityId,
             model,
             selectedPrograms.length,
             selectedRooms.length,
@@ -421,6 +444,7 @@ export default function LocationsConfigurationPage({
                     <LocationOverviewSurface
                         model={model}
                         scheduleSummary={scheduleSummary}
+                        operatingSnapshot={operatingSnapshot}
                         onResolveAttention={showSetupDestination}
                         onSelectReadinessArea={showSetupDestination}
                         onOpenTab={navigate}

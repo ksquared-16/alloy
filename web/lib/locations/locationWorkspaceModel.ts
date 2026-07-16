@@ -43,7 +43,12 @@ export type LocationWorkspaceSetupItem = {
 export type LocationWorkspaceAttentionItem = {
     key: string;
     grade: "fix" | "improve" | "good";
+    /** What is wrong. */
     label: string;
+    /** What happens because of it. */
+    consequence?: string;
+    /** Where the operator goes next. */
+    nextLabel?: string;
     tab: LocationWorkspaceTab | "general";
 };
 
@@ -406,7 +411,9 @@ export function buildLocationWorkspaceModel(params: {
         attention.push({
             key: "timezone",
             grade: "fix",
-            label: "Time zone is not set up yet",
+            label: "Time zone is not set",
+            consequence: "Hours and tours cannot run in local time.",
+            nextLabel: "Set time zone",
             tab: "general",
         });
     }
@@ -414,14 +421,18 @@ export function buildLocationWorkspaceModel(params: {
         attention.push({
             key: "rooms",
             grade: "fix",
-            label: "Add a room to begin tracking capacity",
+            label: "No rooms are operating yet",
+            consequence: "Capacity and placement have nowhere to land.",
+            nextLabel: "Add a room",
             tab: "rooms",
         });
     } else if (roomsNeedingCapacity > 0) {
         attention.push({
             key: "room-capacity",
             grade: "fix",
-            label: `${roomsNeedingCapacity} ${roomsNeedingCapacity === 1 ? "room needs" : "rooms need"} capacity setup`,
+            label: `${roomsNeedingCapacity} ${roomsNeedingCapacity === 1 ? "room needs" : "rooms need"} capacity`,
+            consequence: "Those rooms cannot count toward location inventory.",
+            nextLabel: "Set capacity",
             tab: "rooms",
         });
     }
@@ -429,7 +440,9 @@ export function buildLocationWorkspaceModel(params: {
         attention.push({
             key: "programs",
             grade: "fix",
-            label: "No programs are offered at this location yet",
+            label: "No programs are offered yet",
+            consequence: "Families cannot be placed into an offering here.",
+            nextLabel: "Offer a program",
             tab: "programs",
         });
     }
@@ -437,7 +450,9 @@ export function buildLocationWorkspaceModel(params: {
         attention.push({
             key: "schedule",
             grade: "improve",
-            label: "Weekly schedule is not set up yet",
+            label: "Weekly hours are not set",
+            consequence: "Operating days stay unclear for tours and staffing.",
+            nextLabel: "Set hours",
             tab: "schedule",
         });
     }

@@ -26,13 +26,31 @@ function readMeta(metadata: LocationProgramCategoryRow["metadata"], key: string)
 function programAttention(summary: LocationProgramOperationalSummary | null, ageRange: string): ConfigAttentionItem[] {
     const items: ConfigAttentionItem[] = [];
     if (!ageRange || ageRange === "Age range not set" || ageRange === "Not set") {
-        items.push({ key: "age", grade: "fix", label: "Age range is not set up yet" });
+        items.push({
+            key: "age",
+            grade: "fix",
+            label: "Age range is not set",
+            consequence: "Families cannot tell who this program serves.",
+            nextLabel: "Set age range",
+        });
     }
     if ((summary?.roomCount ?? 0) === 0) {
-        items.push({ key: "rooms", grade: "improve", label: "No rooms are assigned to this program yet" });
+        items.push({
+            key: "rooms",
+            grade: "improve",
+            label: "No rooms are assigned yet",
+            consequence: "This program has no classrooms participating.",
+            nextLabel: "Review rooms",
+        });
     }
     if (summary?.configuredCapacity == null && (summary?.roomCount ?? 0) > 0) {
-        items.push({ key: "capacity", grade: "fix", label: "Participating rooms need capacity setup" });
+        items.push({
+            key: "capacity",
+            grade: "fix",
+            label: "Participating rooms need capacity",
+            consequence: "Program capacity cannot be counted yet.",
+            nextLabel: "Set capacity",
+        });
     }
     return items;
 }
@@ -416,7 +434,7 @@ export default function LocationProgramDetailPanel({
                         {
                             key: "ownership",
                             label: "Ownership",
-                            value: "Configured here",
+                            value: "Set here",
                             hint: "Location setting",
                             tone: "ready",
                         },
