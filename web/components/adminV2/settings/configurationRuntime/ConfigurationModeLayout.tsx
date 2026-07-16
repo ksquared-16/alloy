@@ -163,7 +163,7 @@ export function ConfigurationQueueItem({
     onClick,
     testId,
     wrapTitle = false,
-    /** `rail` = flat nav row (Processing-like). `card` = legacy floating tile. */
+    /** `rail` = Processing-like nav row. `card` = legacy floating tile. */
     variant = "card",
 }: {
     active: boolean;
@@ -177,9 +177,7 @@ export function ConfigurationQueueItem({
 }) {
     const className =
         variant === "rail" ?
-            `process-config-nav-item w-full rounded-none border-0 px-3 py-2 text-left ${
-                active ? "process-config-nav-item--active" : ""
-            }`
+            `process-config-nav-item w-full text-left ${active ? "process-config-nav-item--active" : ""}`
         :   `process-config-work-view-list-card ${active ? "process-config-work-view-list-card--active" : ""}`;
 
     return (

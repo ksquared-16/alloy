@@ -8,7 +8,10 @@ export type {
     ConfigScopeMode,
     ConfigApplyTarget,
 } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
-export { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
+export {
+    CONFIG_OBJECT_CELL,
+    ConfigWorkspaceCard,
+} from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 export { ConfigObjectHeader } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigObjectHeader";
 export { ConfigAttentionPanel } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel";
 export { ConfigOperationalReadiness } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigOperationalReadiness";

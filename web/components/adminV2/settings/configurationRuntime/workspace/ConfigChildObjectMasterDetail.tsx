@@ -3,8 +3,8 @@
 import type { ReactNode } from "react";
 
 /**
- * Child-object master/detail as one continuous workspace — shared surface,
- * left rail + detail separated by a subtle vertical divider (not two cards).
+ * Child-object workspace — one white region on the stone canvas.
+ * List selects; detail owns the working surface (not a second floating card).
  */
 export function ConfigChildObjectMasterDetail({
     listTitle,
@@ -23,12 +23,12 @@ export function ConfigChildObjectMasterDetail({
 }) {
     return (
         <div
-            className="grid min-h-[22rem] gap-0 overflow-hidden rounded-xl border border-alloy-stone/25 bg-white lg:grid-cols-[13.5rem_minmax(0,1fr)]"
+            className="process-config-setup-card grid min-h-[22rem] gap-0 overflow-hidden lg:grid-cols-[14rem_minmax(0,1fr)]"
             data-testid={testId}
             data-config-surface="workspace"
         >
             <aside
-                className="min-w-0 border-b border-alloy-stone/25 lg:border-b-0 lg:border-r lg:border-alloy-stone/25"
+                className="min-w-0 border-b border-alloy-stone/25 bg-white lg:border-b-0 lg:border-r lg:border-alloy-stone/25"
                 data-testid={`${testId}-list`}
             >
                 <div className="flex items-start justify-between gap-2 px-3 py-2.5">
@@ -40,9 +40,9 @@ export function ConfigChildObjectMasterDetail({
                     </div>
                     {listActions}
                 </div>
-                <div className="divide-y divide-alloy-stone/18 border-t border-alloy-stone/20">{list}</div>
+                <div className="space-y-1 px-2 pb-2.5">{list}</div>
             </aside>
-            <div className="min-w-0 px-4 py-3" data-testid={`${testId}-detail`}>
+            <div className="min-w-0 bg-white px-4 py-3.5" data-testid={`${testId}-detail`}>
                 {detail}
             </div>
         </div>
@@ -57,7 +57,10 @@ export function ConfigConsequenceLine({
     testId?: string;
 }) {
     return (
-        <p className="text-sm leading-snug text-alloy-midnight/70" data-testid={testId}>
+        <p
+            className="rounded-md border border-[#00a283]/12 bg-[#00a283]/[0.04] px-2.5 py-1.5 text-sm leading-snug text-alloy-midnight/75"
+            data-testid={testId}
+        >
             {children}
         </p>
     );

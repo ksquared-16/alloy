@@ -23,6 +23,8 @@ describe("Configuration Runtime workspace primitives", () => {
             "ConfigApplyToDialog",
             "ConfigChildObjectMasterDetail",
             "ConfigConsequenceLine",
+            "CONFIG_OBJECT_CELL",
+            "ConfigWorkspaceCard",
         ]) {
             expect(index).toContain(name);
         }
@@ -30,10 +32,13 @@ describe("Configuration Runtime workspace primitives", () => {
             "data-config-glance-icon-well",
         );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).toContain(
-            'data-config-surface="region"',
+            "CONFIG_OBJECT_CELL",
         );
-        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).not.toContain(
-            "ConfigWorkspaceCard",
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).toContain(
+            "embedded",
+        );
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes.tsx")).toContain(
+            'surface = "panel"',
         );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigScopeContextBar.tsx")).toContain(
             "Configuration",
@@ -41,6 +46,9 @@ describe("Configuration Runtime workspace primitives", () => {
         expect(
             read("components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail.tsx"),
         ).toContain('data-config-surface="workspace"');
+        expect(
+            read("components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail.tsx"),
+        ).toContain("process-config-setup-card");
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel.tsx")).toContain(
             "actionable.length === 0",
         );

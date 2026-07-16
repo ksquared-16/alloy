@@ -1,5 +1,6 @@
 "use client";
 
+import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type { LocationsFleetModel } from "@/lib/locations/locationWorkspaceModel";
 
 function formatCapacity(value: number | null): string {
@@ -44,85 +45,84 @@ export default function LocationsFleetLanding({
         :   "None";
 
     return (
-        <div className="space-y-0" data-testid="locations-fleet-landing">
-            <div
-                className="grid gap-0 border-b border-alloy-stone/25 pb-4 sm:grid-cols-3 sm:divide-x sm:divide-alloy-stone/20"
-                data-testid="locations-fleet-rollups"
-            >
-                <section className="px-0 py-1 sm:pr-4" data-testid="locations-fleet-readiness">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                        Operational readiness
-                    </p>
-                    <p className="mt-1 text-xl font-semibold tracking-tight text-alloy-midnight">
-                        {fleet.averageSetupPercent}%
-                    </p>
-                    <p className="config-typo-sublabel mt-1">
-                        {fleet.locationsSetupComplete} of {fleet.locationCount}{" "}
-                        {fleet.locationCount === 1 ? "location" : "locations"} fully configured
-                    </p>
-                    <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-alloy-stone/25">
-                        <div
-                            className="h-full rounded-full bg-[#00a283]"
-                            style={{ width: `${Math.min(100, Math.max(0, fleet.averageSetupPercent))}%` }}
-                        />
-                    </div>
-                </section>
+        <div className="space-y-3" data-testid="locations-fleet-landing">
+            <ConfigWorkspaceCard compact testId="locations-fleet-rollups">
+                <div className="grid gap-4 sm:grid-cols-3 sm:divide-x sm:divide-alloy-stone/20">
+                    <section className="sm:pr-4" data-testid="locations-fleet-readiness">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                            Operational readiness
+                        </p>
+                        <p className="mt-1 text-xl font-semibold tracking-tight text-alloy-midnight">
+                            {fleet.averageSetupPercent}%
+                        </p>
+                        <p className="config-typo-sublabel mt-1">
+                            {fleet.locationsSetupComplete} of {fleet.locationCount}{" "}
+                            {fleet.locationCount === 1 ? "location" : "locations"} fully configured
+                        </p>
+                        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-alloy-stone/25">
+                            <div
+                                className="h-full rounded-full bg-[#00a283]"
+                                style={{ width: `${Math.min(100, Math.max(0, fleet.averageSetupPercent))}%` }}
+                            />
+                        </div>
+                    </section>
 
-                <section className="px-0 py-1 sm:px-4" data-testid="locations-fleet-attention-summary">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                        Needs attention
-                    </p>
-                    <p className="mt-1 text-xl font-semibold tracking-tight text-alloy-midnight">{readinessLabel}</p>
-                    <p className="config-typo-sublabel mt-1">
-                        {fleet.locationsNeedingAttention}{" "}
-                        {fleet.locationsNeedingAttention === 1 ? "location" : "locations"} need follow-up
-                    </p>
-                </section>
+                    <section className="sm:px-4" data-testid="locations-fleet-attention-summary">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                            Needs attention
+                        </p>
+                        <p className="mt-1 text-xl font-semibold tracking-tight text-alloy-midnight">
+                            {readinessLabel}
+                        </p>
+                        <p className="config-typo-sublabel mt-1">
+                            {fleet.locationsNeedingAttention}{" "}
+                            {fleet.locationsNeedingAttention === 1 ? "location" : "locations"} need follow-up
+                        </p>
+                    </section>
 
-                <section className="px-0 py-1 sm:pl-4" data-testid="locations-fleet-inventory">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                        Inventory
-                    </p>
-                    <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-alloy-midnight/80">
-                        <div>
-                            <dt className="config-typo-sublabel">Locations</dt>
-                            <dd className="font-semibold text-alloy-midnight">
-                                {fleet.activeLocationCount}
-                                {fleet.inactiveLocationCount > 0 ?
-                                    <span className="ml-1 font-normal text-alloy-midnight/45">
-                                        (+{fleet.inactiveLocationCount} inactive)
-                                    </span>
-                                :   null}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="config-typo-sublabel">Rooms</dt>
-                            <dd className="font-semibold text-alloy-midnight">{fleet.totalRooms}</dd>
-                        </div>
-                        <div>
-                            <dt className="config-typo-sublabel">Programs</dt>
-                            <dd className="font-semibold text-alloy-midnight">{fleet.totalPrograms}</dd>
-                        </div>
-                        <div>
-                            <dt className="config-typo-sublabel">Capacity</dt>
-                            <dd className="font-semibold text-alloy-midnight">
-                                {formatCapacity(fleet.totalConfiguredCapacity)}
-                            </dd>
-                        </div>
-                    </dl>
-                </section>
-            </div>
+                    <section className="sm:pl-4" data-testid="locations-fleet-inventory">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                            Inventory
+                        </p>
+                        <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-alloy-midnight/80">
+                            <div>
+                                <dt className="config-typo-sublabel">Locations</dt>
+                                <dd className="font-semibold text-alloy-midnight">
+                                    {fleet.activeLocationCount}
+                                    {fleet.inactiveLocationCount > 0 ?
+                                        <span className="ml-1 font-normal text-alloy-midnight/45">
+                                            (+{fleet.inactiveLocationCount} inactive)
+                                        </span>
+                                    :   null}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="config-typo-sublabel">Rooms</dt>
+                                <dd className="font-semibold text-alloy-midnight">{fleet.totalRooms}</dd>
+                            </div>
+                            <div>
+                                <dt className="config-typo-sublabel">Programs</dt>
+                                <dd className="font-semibold text-alloy-midnight">{fleet.totalPrograms}</dd>
+                            </div>
+                            <div>
+                                <dt className="config-typo-sublabel">Capacity</dt>
+                                <dd className="font-semibold text-alloy-midnight">
+                                    {formatCapacity(fleet.totalConfiguredCapacity)}
+                                </dd>
+                            </div>
+                        </dl>
+                    </section>
+                </div>
+            </ConfigWorkspaceCard>
 
             {fleet.attentionHighlights.length > 0 ?
-                <section
-                    className="border-b border-alloy-stone/25 py-3"
-                    data-testid="locations-fleet-attention-list"
+                <ConfigWorkspaceCard
+                    title="Needs attention"
+                    description="Highest-impact items across locations."
+                    compact
+                    testId="locations-fleet-attention-list"
                 >
-                    <div className="mb-1.5">
-                        <h2 className="config-typo-workspace-title">Needs attention</h2>
-                        <p className="config-typo-sublabel mt-0.5">Highest-impact items across locations.</p>
-                    </div>
-                    <ul className="divide-y divide-alloy-stone/20">
+                    <ul className="divide-y divide-alloy-forge/10">
                         {fleet.attentionHighlights.map((highlight) => (
                             <li
                                 key={`${highlight.locationId}-${highlight.item.key}`}
@@ -151,11 +151,11 @@ export default function LocationsFleetLanding({
                             </li>
                         ))}
                     </ul>
-                </section>
+                </ConfigWorkspaceCard>
             :   null}
 
-            <section className="pt-3" data-testid="locations-fleet-list-card">
-                <div className="mb-2 flex flex-wrap items-center gap-3">
+            <ConfigWorkspaceCard compact testId="locations-fleet-list-card">
+                <div className="mb-2.5 flex flex-wrap items-center gap-3">
                     <p className="config-typo-queue-section-label mr-auto">Locations</p>
                     <label className="sr-only" htmlFor="locations-fleet-search">
                         Search locations
@@ -210,12 +210,12 @@ export default function LocationsFleetLanding({
                             </button>
                         :   null}
                     </div>
-                :   <ul className="divide-y divide-alloy-stone/18" data-testid="locations-fleet-list">
+                :   <ul className="space-y-1.5" data-testid="locations-fleet-list">
                         {visible.map((location) => (
                             <li key={location.id}>
                                 <button
                                     type="button"
-                                    className="flex w-full items-start gap-3 py-2.5 text-left hover:bg-alloy-bend-pine/[0.04]"
+                                    className="process-config-nav-item flex w-full items-start gap-3 text-left"
                                     onClick={() => onOpenLocation(location.id)}
                                     data-testid={`locations-fleet-row-${location.id}`}
                                 >
@@ -269,7 +269,7 @@ export default function LocationsFleetLanding({
                         ))}
                     </ul>
                 }
-            </section>
+            </ConfigWorkspaceCard>
         </div>
     );
 }

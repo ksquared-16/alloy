@@ -51,11 +51,19 @@ export type ConfigApplyTarget = {
     disabled?: boolean;
 };
 
-export type ConfigSurface = "card" | "region";
+/**
+ * `panel` — Level 2 white region on the stone canvas (major section).
+ * `region` — Level 2 subsection inside a panel (typography + divider, no second card).
+ */
+export type ConfigSurface = "panel" | "region";
+
+/** Soft Level 3 object cell — scannable without becoming a floating widget. */
+export const CONFIG_OBJECT_CELL =
+    "rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-2.5";
 
 /**
- * Workspace section — prefer `region` (typography + divider) over floating cards.
- * `card` retained for legacy / dialog-adjacent surfaces.
+ * Workspace section.
+ * Prefer `panel` for large white regions on stone; `region` for nested subsections.
  */
 export function ConfigWorkspaceCard({
     title,
@@ -63,7 +71,7 @@ export function ConfigWorkspaceCard({
     children,
     testId,
     compact = false,
-    surface = "card",
+    surface = "panel",
 }: {
     title?: string;
     description?: string;
@@ -93,9 +101,13 @@ export function ConfigWorkspaceCard({
     }
 
     return (
-        <section className={`process-config-setup-card ${compact ? "p-3" : "p-4"}`} data-testid={testId}>
+        <section
+            className={`process-config-setup-card ${compact ? "p-3.5" : "p-4"}`}
+            data-testid={testId}
+            data-config-surface="panel"
+        >
             {title ?
-                <div className={compact ? "mb-2" : "mb-3"}>
+                <div className={compact ? "mb-2.5" : "mb-3"}>
                     <h2 className="config-typo-workspace-title">{title}</h2>
                     {description ?
                         <p className="config-typo-sublabel mt-0.5">{description}</p>

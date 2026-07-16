@@ -9,6 +9,7 @@ import {
     ConfigurationQueueItem,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
+    CONFIG_OBJECT_CELL,
     ConfigAttentionPanel,
     ConfigChildObjectMasterDetail,
     ConfigConsequenceLine,
@@ -362,7 +363,7 @@ export default function LocationProgramDetailPanel({
                 </ConfigConsequenceLine>
 
                 <div
-                    className="grid gap-y-3 border-t border-alloy-stone/20 pt-2.5 sm:grid-cols-2 sm:gap-x-6 lg:grid-cols-3"
+                    className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
                     data-testid="locations-program-ops"
                 >
                     {[
@@ -418,7 +419,11 @@ export default function LocationProgramDetailPanel({
                             tone: "ready",
                         },
                     ].map((card) => (
-                        <div key={card.key} data-testid={`locations-program-metric-${card.key}`}>
+                        <div
+                            key={card.key}
+                            className={CONFIG_OBJECT_CELL}
+                            data-testid={`locations-program-metric-${card.key}`}
+                        >
                             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
                                 {card.label}
                             </p>
@@ -437,6 +442,7 @@ export default function LocationProgramDetailPanel({
                 <ConfigAttentionPanel
                     items={attention}
                     compact
+                    embedded
                     testId="locations-program-attention"
                     onResolve={beginEdit}
                 />

@@ -624,13 +624,13 @@ export default function LocationsConfigurationPage({
                             canMutate={canMutate}
                         />
                     </>
-                :   <div className="grid min-h-full gap-0 xl:grid-cols-[13.5rem_minmax(0,1fr)]">
+                :   <div className="grid min-h-full gap-0 xl:grid-cols-[14rem_minmax(0,1fr)]">
                         <aside
-                            className="hidden border-r border-alloy-stone/25 xl:block"
+                            className="hidden overflow-hidden rounded-xl border border-alloy-stone/25 bg-white xl:block"
                             aria-label="Location selector"
                             data-testid="locations-object-selector"
                         >
-                            <div className="flex items-start justify-between gap-2 px-2 pb-2 pt-0.5">
+                            <div className="flex items-start justify-between gap-2 px-3 pb-2 pt-3">
                                 <div>
                                     <p className="config-typo-queue-section-label">Locations</p>
                                     <p className="config-typo-sublabel mt-0.5">{visibleSites.length} shown</p>
@@ -646,7 +646,7 @@ export default function LocationsConfigurationPage({
                             </div>
                             <button
                                 type="button"
-                                className="mb-1 w-full px-2 py-1 text-left text-[11px] font-semibold text-[#007d68] hover:bg-alloy-bend-pine/[0.05]"
+                                className="mb-1.5 w-full px-3 py-1 text-left text-[11px] font-semibold text-[#007d68] hover:bg-alloy-bend-pine/[0.05]"
                                 onClick={returnToFleet}
                                 data-testid="locations-back-to-fleet"
                             >
@@ -661,9 +661,9 @@ export default function LocationsConfigurationPage({
                                 value={search}
                                 onChange={(event) => setSearch(event.target.value)}
                                 placeholder="Search locations"
-                                className="config-runtime-input mx-2 mb-1 w-[calc(100%-1rem)]"
+                                className="config-runtime-input mx-2.5 mb-2 w-[calc(100%-1.25rem)]"
                             />
-                            <div className="divide-y divide-alloy-stone/18 border-t border-alloy-stone/20">
+                            <div className="space-y-1 px-2 pb-3">
                                 {visibleSites.map((site) => {
                                     const summary = fleetById.get(site.id);
                                     const locality =
@@ -695,7 +695,7 @@ export default function LocationsConfigurationPage({
                             </div>
                         </aside>
 
-                        <main className="min-w-0 xl:pl-5" data-testid="locations-selected-location">
+                        <main className="min-w-0 xl:pl-4" data-testid="locations-selected-location">
                             <div className="mb-2 xl:hidden">
                                 <button
                                     type="button"
@@ -746,7 +746,7 @@ export default function LocationsConfigurationPage({
                             />
 
                             <div
-                                className="mb-2.5 flex overflow-x-auto border-b border-alloy-stone/25"
+                                className="mb-3 flex overflow-x-auto border-b border-alloy-stone/30"
                                 role="tablist"
                                 aria-label="Location settings"
                             >

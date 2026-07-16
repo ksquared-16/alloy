@@ -1,6 +1,9 @@
 "use client";
 
-import type { ConfigGlanceMetric } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
+import {
+    CONFIG_OBJECT_CELL,
+    type ConfigGlanceMetric,
+} from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 const ICON_PATH: Record<NonNullable<ConfigGlanceMetric["icon"]>, string> = {
     capacity: "M4 19h16M6 17V9m4 8V5m4 12v-6m4 6V7",
@@ -24,84 +27,96 @@ function wellClass(tone: ConfigGlanceMetric["tone"]): string {
 }
 
 /**
- * One summary region — icon + typography + subtle column separators.
- * Not four independent bordered cards.
+ * Configuration summary region — one section with soft object cells.
+ * Not four independent cards; not plain text.
  */
 export function ConfigGlanceMetrics({
     title = "Configured",
     metrics,
     testId = "config-glance-metrics",
+    embedded = false,
 }: {
     title?: string;
     metrics: ConfigGlanceMetric[];
     testId?: string;
+    /** When true, render as a nested region (no outer panel). */
+    embedded?: boolean;
 }) {
-    return (
-        <section
-            className="border-t border-alloy-stone/25 pt-3"
-            data-testid={testId}
-            data-config-surface="region"
-        >
-            <h2 className="config-typo-workspace-title mb-2.5">{title}</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x sm:divide-alloy-stone/20">
-                {metrics.map((metric) => {
-                    const body = (
-                        <>
-                            <div className="flex items-start gap-2.5">
-                                {metric.icon ?
-                                    <span
-                                        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${wellClass(metric.tone)}`}
-                                        data-config-glance-icon-well=""
-                                    >
-                                        <MetricIcon icon={metric.icon} />
+    const body = (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {metrics.map((metric) => {
+                const content = (
+                    <>
+                        <div className="flex items-start gap-2.5">
+                            {metric.icon ?
+                                <span
+                                    className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${wellClass(metric.tone)}`}
+                                    data-config-glance-icon-well=""
+                                >
+                                    <MetricIcon icon={metric.icon} />
+                                </span>
+                            :   null}
+                            <div className="min-w-0">
+                                <span className="block text-[11px] font-medium uppercase tracking-[0.06em] text-alloy-midnight/45">
+                                    {metric.label}
+                                </span>
+                                <span
+                                    className={`mt-0.5 block text-lg font-semibold leading-tight ${
+                                        metric.tone === "attention" ?
+                                            "text-alloy-ember"
+                                        :   "text-alloy-midnight"
+                                    }`}
+                                >
+                                    {metric.value}
+                                </span>
+                                {metric.hint ?
+                                    <span className="mt-1 block text-[11px] leading-snug text-alloy-midnight/50">
+                                        {metric.hint}
                                     </span>
                                 :   null}
-                                <div className="min-w-0">
-                                    <span className="block text-[11px] font-medium uppercase tracking-[0.06em] text-alloy-midnight/45">
-                                        {metric.label}
-                                    </span>
-                                    <span
-                                        className={`mt-0.5 block text-lg font-semibold leading-tight ${
-                                            metric.tone === "attention" ?
-                                                "text-alloy-ember"
-                                            :   "text-alloy-midnight"
-                                        }`}
-                                    >
-                                        {metric.value}
-                                    </span>
-                                    {metric.hint ?
-                                        <span className="mt-1 block text-[11px] leading-snug text-alloy-midnight/50">
-                                            {metric.hint}
-                                        </span>
-                                    :   null}
-                                </div>
                             </div>
-                        </>
-                    );
-                    if (metric.onSelect) {
-                        return (
-                            <button
-                                key={metric.key}
-                                type="button"
-                                className="px-3 py-1.5 text-left first:pl-0 last:pr-0 hover:bg-alloy-bend-pine/[0.03] sm:px-4"
-                                onClick={metric.onSelect}
-                                data-testid={`${testId}-${metric.key}`}
-                            >
-                                {body}
-                            </button>
-                        );
-                    }
+                        </div>
+                    </>
+                );
+                if (metric.onSelect) {
                     return (
-                        <div
+                        <button
                             key={metric.key}
-                            className="px-3 py-1.5 first:pl-0 last:pr-0 sm:px-4"
+                            type="button"
+                            className={`${CONFIG_OBJECT_CELL} text-left transition-colors hover:border-alloy-bend-pine/25 hover:bg-alloy-bend-pine/[0.04]`}
+                            onClick={metric.onSelect}
                             data-testid={`${testId}-${metric.key}`}
                         >
-                            {body}
-                        </div>
+                            {content}
+                        </button>
                     );
-                })}
-            </div>
+                }
+                return (
+                    <div key={metric.key} className={CONFIG_OBJECT_CELL} data-testid={`${testId}-${metric.key}`}>
+                        {content}
+                    </div>
+                );
+            })}
+        </div>
+    );
+
+    if (embedded) {
+        return (
+            <section
+                className="border-t border-alloy-stone/25 pt-3.5"
+                data-testid={testId}
+                data-config-surface="region"
+            >
+                <h2 className="config-typo-workspace-title mb-2.5">{title}</h2>
+                {body}
+            </section>
+        );
+    }
+
+    return (
+        <section className="process-config-setup-card p-3.5" data-testid={testId} data-config-surface="panel">
+            <h2 className="config-typo-workspace-title mb-2.5">{title}</h2>
+            {body}
         </section>
     );
 }

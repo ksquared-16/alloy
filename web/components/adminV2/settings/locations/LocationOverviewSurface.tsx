@@ -2,14 +2,17 @@
 
 import type { ConfigAttentionItem, ConfigReadinessArea } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import {
+    CONFIG_OBJECT_CELL,
     ConfigAttentionPanel,
     ConfigGlanceMetrics,
     ConfigOperationalReadiness,
+    ConfigWorkspaceCard,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type { LocationWorkspaceModel, LocationWorkspaceTab } from "@/lib/locations/locationWorkspaceModel";
 
 /**
- * Full-width Overview — continuous regions, not stacked cards.
+ * One Overview panel on the stone canvas.
+ * Internal regions: attention, readiness, configuration summary, how it runs.
  */
 export function LocationOverviewSurface({
     model,
@@ -43,14 +46,15 @@ export function LocationOverviewSurface({
     const hasAttention = attentionItems.some((item) => item.grade !== "good");
 
     return (
-        <div className="space-y-0" data-testid="locations-overview">
+        <ConfigWorkspaceCard testId="locations-overview" compact>
             <div
-                className={`grid gap-6 ${hasAttention ? "lg:grid-cols-2" : ""}`}
+                className={`grid gap-5 ${hasAttention ? "lg:grid-cols-2" : ""}`}
                 data-testid="locations-overview-health"
             >
                 <ConfigAttentionPanel
                     items={attentionItems}
                     compact
+                    embedded
                     testId="locations-attention"
                     onResolve={(item) => {
                         const match = model.attention.find((entry) => entry.key === item.key);
@@ -58,7 +62,7 @@ export function LocationOverviewSurface({
                     }}
                 />
                 <section data-testid="locations-setup-progress" data-config-surface="region">
-                    <div className="mb-2 flex items-start justify-between gap-3">
+                    <div className="mb-2.5 flex items-start justify-between gap-3">
                         <div>
                             <h2 className="config-typo-workspace-title">Operational readiness</h2>
                             <p className="mt-0.5 text-[11px] text-alloy-midnight/50">
@@ -97,6 +101,7 @@ export function LocationOverviewSurface({
             <ConfigGlanceMetrics
                 title="Configuration summary"
                 testId="locations-overview-capacity"
+                embedded
                 metrics={[
                     {
                         key: "capacity",
@@ -146,12 +151,12 @@ export function LocationOverviewSurface({
             />
 
             <section
-                className="border-t border-alloy-stone/25 pt-3"
+                className="border-t border-alloy-stone/25 pt-3.5"
                 data-testid="locations-overview-operations"
                 data-config-surface="region"
             >
-                <h2 className="config-typo-workspace-title mb-2">How this location runs</h2>
-                <div className="grid gap-0 sm:grid-cols-3 sm:divide-x sm:divide-alloy-stone/20">
+                <h2 className="config-typo-workspace-title mb-2.5">How this location runs</h2>
+                <div className="grid gap-2 sm:grid-cols-3">
                     {[
                         {
                             label: "Tours",
@@ -181,7 +186,7 @@ export function LocationOverviewSurface({
                         <button
                             key={item.label}
                             type="button"
-                            className="px-3 py-1.5 text-left first:pl-0 last:pr-0 hover:bg-alloy-bend-pine/[0.03] sm:px-4"
+                            className={`${CONFIG_OBJECT_CELL} text-left transition-colors hover:border-alloy-bend-pine/25 hover:bg-alloy-bend-pine/[0.04]`}
                             onClick={() => onOpenTab(item.tab)}
                         >
                             <div className="flex items-start gap-2.5">
@@ -209,6 +214,6 @@ export function LocationOverviewSurface({
                     ))}
                 </div>
             </section>
-        </div>
+        </ConfigWorkspaceCard>
     );
 }
