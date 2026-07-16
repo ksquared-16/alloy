@@ -2,7 +2,31 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import TourAvailabilitySettingsClient from "@/app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient";
+import { PriorityRuleOrderEditor } from "@/components/adminV2/settings/PriorityRuleOrderEditor";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import {
+    parsePlacementPriorityLayer,
+    PLACEMENT_EVALUATION_CAP_DEFAULT,
+    type PlacementPriorityLayer,
+} from "@/lib/orchestration/placement/placementConfigSchema";
+import {
+    TIER_EMPLOYEE_FAMILY_BUCKET,
+    TIER_GENERAL_WAITLIST_BUCKET,
+} from "@/lib/orchestration/placement/placementBucketLabels";
+import { CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 } from "@/lib/orchestration/placement/presets/childcareEnrollmentPlacementProfile";
+import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
+import {
+    expandOperatorPriorityRuleOrderForProfile,
+    sortPriorityRuleEnabledKeysForSave,
+} from "@/lib/orchestration/placement/placementPriorityRuleOrder";
+import {
+    resolveEffectivePriorityRuleConfig,
+    WAITLIST_RANKING_TIE_BREAKERS_V1,
+} from "@/lib/orchestration/placement/waitlistRankingPolicyFactors";
+import {
+    filterWaitlistRankingEligibleWorkUnits,
+    pickDefaultWaitlistRankingWorkUnitId,
+} from "@/lib/orchestration/placement/waitlistRankingPolicyWorkUnits";
 
 function ConcernSurface({
     title,
@@ -57,113 +81,243 @@ export function LocationToursPanel({ locationId, locationLabel }: { locationId: 
 export function LocationPlacementPanel({
     rooms,
     onReviewRooms,
+    canMutate,
 }: {
     rooms: LocationHierarchyRow[];
     onReviewRooms: () => void;
+    canMutate: boolean;
 }) {
     const activeRooms = rooms.filter((room) => room.is_active !== false);
+    const [workUnits, setWorkUnits] = useState<
+        { id: string; key: string; name: string; metadata?: unknown; queue_definition?: unknown }[]
+    >([]);
+    const [selectedId, setSelectedId] = useState("");
+    const [enabled, setEnabled] = useState(false);
+    const [shadowMode, setShadowMode] = useState(false);
+    const [ruleOrder, setRuleOrder] = useState<string[]>([]);
+    const [enabledKeys, setEnabledKeys] = useState<Set<string>>(new Set());
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [saved, setSaved] = useState(false);
+
+    const loadPolicy = useCallback(async () => {
+        setError(null);
+        try {
+            const response = await fetch("/api/admin/work-units", { cache: "no-store" });
+            const json = (await response.json().catch(() => ({}))) as {
+                items?: { id: string; key: string; name: string; metadata?: unknown; queue_definition?: unknown }[];
+                error?: string;
+            };
+            if (!response.ok) throw new Error(json.error ?? "Waitlist ranking policy could not be loaded.");
+            const eligible = filterWaitlistRankingEligibleWorkUnits(json.items ?? []);
+            setWorkUnits(eligible);
+            setSelectedId((current) => pickDefaultWaitlistRankingWorkUnitId(eligible, current));
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Waitlist ranking policy could not be loaded.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadPolicy();
+    }, [loadPolicy]);
+
+    const selectedWorkUnit = useMemo(
+        () => workUnits.find((workUnit) => workUnit.id === selectedId) ?? null,
+        [selectedId, workUnits],
+    );
+
+    useEffect(() => {
+        if (!selectedWorkUnit) return;
+        const layer = parsePlacementPriorityLayer(selectedWorkUnit.metadata);
+        const profileId = layer?.profile_id ?? CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.profile_id;
+        const effective = resolveEffectivePriorityRuleConfig({
+            profileId,
+            priority_rule_order: layer?.priority_rule_order,
+            priority_rule_enabled_keys: layer?.priority_rule_enabled_keys,
+        });
+        setEnabled(layer?.enabled === true);
+        setShadowMode(layer?.shadow_mode === true);
+        setRuleOrder(effective.ruleOrder);
+        setEnabledKeys(new Set(effective.ruleEnabledKeys));
+    }, [selectedWorkUnit]);
+
+    const profileId =
+        parsePlacementPriorityLayer(selectedWorkUnit?.metadata)?.profile_id ??
+        CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.profile_id;
+    const profile =
+        getPlacementProfileFromRegistry(profileId) ??
+        CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1;
+    const fallbackBucketKey = profile.fallback_bucket_key;
+
+    const savePolicy = async () => {
+        if (!canMutate || !selectedWorkUnit) return;
+        setSaving(true);
+        setSaved(false);
+        setError(null);
+        try {
+            const current = parsePlacementPriorityLayer(selectedWorkUnit.metadata);
+            const fullOrder = expandOperatorPriorityRuleOrderForProfile(profile, ruleOrder);
+            const layer: PlacementPriorityLayer = {
+                ...current,
+                version: 1,
+                enabled,
+                profile_id: profile.profile_id,
+                profile_revision: profile.revision,
+                queue_keys_enabled: current?.queue_keys_enabled ?? ["waitlisted"],
+                shadow_mode: shadowMode,
+                evaluation_cap: current?.evaluation_cap ?? PLACEMENT_EVALUATION_CAP_DEFAULT,
+                display: current?.display ?? { show_bucket_chip: true, show_sort_hint: true },
+                priority_rule_order: fullOrder,
+                priority_rule_enabled_keys: sortPriorityRuleEnabledKeysForSave(enabledKeys, fullOrder),
+            };
+            const response = await fetch(`/api/admin/work-units/${encodeURIComponent(selectedWorkUnit.id)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ metadata: { placement_priority_v1: layer } }),
+            });
+            const json = (await response.json().catch(() => ({}))) as { error?: string };
+            if (!response.ok) throw new Error(json.error ?? "Waitlist ranking policy could not be saved.");
+            await loadPolicy();
+            setSaved(true);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Waitlist ranking policy could not be saved.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <ConcernSurface
             title="Placement"
-            consequence="Review the rooms available for placement and the priority policy used when demand exceeds space."
-            status={`${activeRooms.length} participating ${activeRooms.length === 1 ? "room" : "rooms"}`}
+            consequence="Set the priority order used when more families are waiting than this location can place."
+            status={loading ? "Loading ranking…" : enabled ? "Ranking active" : "Ranking off"}
             testId="locations-placement-surface"
             action={
-                <div className="space-y-3">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="rounded-lg border border-alloy-forge/10 p-3">
-                            <p className="config-typo-meta">Participating rooms</p>
-                            <p className="mt-1 text-lg font-medium text-alloy-midnight">{activeRooms.length}</p>
-                            <p className="config-typo-sublabel mt-1">
-                                Active rooms at this location are available to placement workflows.
+                <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-alloy-forge/10 p-3">
+                        <div>
+                            <p className="config-typo-meta">Placement inventory</p>
+                            <p className="mt-1 text-sm font-medium text-alloy-midnight/80">
+                                {activeRooms.length} participating {activeRooms.length === 1 ? "room" : "rooms"}
                             </p>
                         </div>
-                        <div className="rounded-lg border border-alloy-forge/10 p-3">
-                            <p className="config-typo-meta">Priority</p>
-                            <p className="mt-1 text-sm font-medium text-alloy-midnight/80">Enrollment policy</p>
-                            <p className="config-typo-sublabel mt-1">
-                                Priority is owned by the enrollment process, so this location does not duplicate it.
-                            </p>
-                        </div>
+                        <button
+                            type="button"
+                            className="text-xs font-medium text-[#007d68]"
+                            onClick={onReviewRooms}
+                            data-testid="locations-placement-review-rooms"
+                        >
+                            Review rooms
+                        </button>
                     </div>
-                    <button
-                        type="button"
-                        className="text-xs font-medium text-[#007d68]"
-                        onClick={onReviewRooms}
-                        data-testid="locations-placement-review-rooms"
-                    >
-                        Review participating rooms
-                    </button>
-                </div>
-            }
-        />
-    );
-}
 
-type IdentityRow = {
-    id: string;
-    channel: string;
-    display_name: string | null;
-    verification_state: string | null;
-};
-
-export function LocationCommunicationsPanel({ locationId }: { locationId: string }) {
-    const [identities, setIdentities] = useState<IdentityRow[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        let cancelled = false;
-        void fetch(`/api/admin/communications/identities?location_id=${encodeURIComponent(locationId)}`, {
-            credentials: "include",
-        })
-            .then(async (response) => {
-                const json = (await response.json().catch(() => ({}))) as {
-                    identities?: IdentityRow[];
-                };
-                if (!cancelled && response.ok) setIdentities(json.identities ?? []);
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [locationId]);
-
-    const channelSummary = useMemo(() => {
-        const channels = new Set(identities.map((identity) => identity.channel));
-        if (channels.size === 0) return "Sender identity not set";
-        return [...channels].map((channel) => channel.toUpperCase()).join(" & ");
-    }, [identities]);
-
-    return (
-        <ConcernSurface
-            title="Communications"
-            consequence="Review the sender identity and delivery channels families recognize for this location."
-            status={loading ? "Checking sender identity…" : channelSummary}
-            testId="locations-communications-surface"
-            action={
-                <div className="space-y-3">
-                    {identities.length > 0 ?
-                        <ul className="divide-y divide-alloy-forge/10 rounded-lg border border-alloy-forge/10">
-                            {identities.map((identity) => (
-                                <li key={identity.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                                    <div>
-                                        <p className="text-sm font-medium text-alloy-midnight/80">
-                                            {identity.display_name ?? `${identity.channel.toUpperCase()} sender`}
-                                        </p>
-                                        <p className="config-typo-meta">{identity.channel.toUpperCase()}</p>
-                                    </div>
-                                    <span className="config-typo-meta">
-                                        {identity.verification_state === "verified" ? "Verified" : "Review"}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
+                    {error ?
+                        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert">
+                            {error}
+                        </p>
                     :   null}
-                    <p className="config-typo-sublabel">
-                        Location sender assignment is shown from the canonical communications identity system.
-                    </p>
+
+                    {!loading && !selectedWorkUnit ?
+                        <p className="config-typo-sublabel">No waitlist-enabled process is available for ranking.</p>
+                    : selectedWorkUnit ?
+                        <fieldset disabled={!canMutate || saving} className="space-y-4">
+                            <div>
+                                <p className="config-typo-meta">Waitlist ranking</p>
+                                <p className="mt-1 text-sm font-medium text-alloy-midnight/80">{selectedWorkUnit.name}</p>
+                            </div>
+                            <label className="flex items-center gap-2 text-sm font-medium text-alloy-midnight/80">
+                                <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={(event) => setEnabled(event.target.checked)}
+                                />
+                                Use priority ranking
+                            </label>
+
+                            <div className="space-y-2" data-testid="locations-placement-priority-order">
+                                <div>
+                                    <h3 className="config-typo-workspace-title">Priority order</h3>
+                                    <p className="config-typo-sublabel mt-1">
+                                        The first matching priority wins. Move factors to set their order.
+                                    </p>
+                                </div>
+                                <PriorityRuleOrderEditor
+                                    order={ruleOrder}
+                                    enabledKeys={enabledKeys}
+                                    fallbackBucketKey={fallbackBucketKey}
+                                    labels={{
+                                        [TIER_EMPLOYEE_FAMILY_BUCKET]: "Employee",
+                                        tier_sibling_enrolled: "Sibling — this location",
+                                        tier_sister_center: "Sibling — another location",
+                                        [TIER_GENERAL_WAITLIST_BUCKET]: "Standard waitlist",
+                                    }}
+                                    sources={{}}
+                                    disabled={!canMutate}
+                                    onOrderChange={setRuleOrder}
+                                    onEnabledKeysChange={setEnabledKeys}
+                                />
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-lg border border-alloy-forge/10 p-3">
+                                    <p className="config-typo-meta">Tie-break</p>
+                                    <ol className="mt-2 space-y-1 text-sm text-alloy-midnight/75">
+                                        {WAITLIST_RANKING_TIE_BREAKERS_V1.map((tieBreaker, index) => (
+                                            <li key={tieBreaker.order}>
+                                                {index + 1}. {tieBreaker.label === "Waitlist date" ? "Application / waitlist date" : tieBreaker.label}
+                                            </li>
+                                        ))}
+                                    </ol>
+                                </div>
+                                <div className="rounded-lg border border-alloy-forge/10 p-3">
+                                    <p className="config-typo-meta">Manual priority</p>
+                                    <p className="config-typo-sublabel mt-2">
+                                        Candidate-level manual priority overrides this order and is managed from the waitlist.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <fieldset className="space-y-2">
+                                <legend className="config-typo-field-label">Ordering mode</legend>
+                                <label className="flex items-start gap-2 text-sm text-alloy-midnight/75">
+                                    <input
+                                        className="mt-0.5"
+                                        type="radio"
+                                        name="locations-placement-ordering-mode"
+                                        checked={shadowMode}
+                                        onChange={() => setShadowMode(true)}
+                                    />
+                                    Preview priority without changing waitlist order
+                                </label>
+                                <label className="flex items-start gap-2 text-sm text-alloy-midnight/75">
+                                    <input
+                                        className="mt-0.5"
+                                        type="radio"
+                                        name="locations-placement-ordering-mode"
+                                        checked={!shadowMode}
+                                        onChange={() => setShadowMode(false)}
+                                    />
+                                    Order the waitlist by this priority
+                                </label>
+                            </fieldset>
+
+                            {canMutate ?
+                                <button
+                                    type="button"
+                                    className="rounded-md bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                                    disabled={saving}
+                                    onClick={() => void savePolicy()}
+                                    data-testid="locations-placement-save"
+                                >
+                                    {saving ? "Saving…" : "Save ranking"}
+                                </button>
+                            :   null}
+                            {saved ? <p className="text-xs text-[#007d68]">Ranking saved.</p> : null}
+                        </fieldset>
+                    :   null}
                 </div>
             }
         />

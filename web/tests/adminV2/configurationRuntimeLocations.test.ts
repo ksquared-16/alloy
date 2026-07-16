@@ -34,7 +34,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("LocationSiteCreatePanel");
     });
 
-    it("uses the eight owned-concern tabs and keeps General behind Edit Location", () => {
+    it("uses the seven ready owned-concern tabs and keeps General behind Edit Location", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         const model = read("lib/locations/locationWorkspaceModel.ts");
         for (const label of [
@@ -44,7 +44,6 @@ describe("Configuration Runtime — Locations", () => {
             "Schedule",
             "Tours",
             "Placement",
-            "Communications",
             "Access",
         ]) {
             expect(model).toContain(`label: "${label}"`);
@@ -52,6 +51,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("Edit Location");
         const tabCatalog = model.slice(model.indexOf("LOCATION_WORKSPACE_TABS"), model.indexOf("] as const;"));
         expect(tabCatalog).not.toContain('key: "general"');
+        expect(tabCatalog).not.toContain("Communications");
     });
 
     it("keeps implementation identifiers out of the operator panels", () => {
@@ -72,21 +72,25 @@ describe("Configuration Runtime — Locations", () => {
         const rooms = read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx");
         expect(programs).toContain("locations-program-summary-");
         expect(programs).toContain("Rooms");
+        expect(programs).toContain("Status");
         expect(programs).toContain("Capacity");
         expect(programs).toContain("Age range");
-        expect(programs).toContain("Edit program");
+        expect(programs).toContain("locations-program-edit-");
         expect(rooms).toContain("Threshold staffing");
         expect(rooms).toContain("Add staffing threshold");
         expect(rooms).toContain("formatStaffingThreshold");
+        expect(rooms).not.toContain("Configure room");
+        expect(rooms.indexOf("Age range")).toBeLessThan(rooms.indexOf("locations-room-save"));
     });
 
     it("keeps every location-owned concern in the Locations workspace", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         const panels = read("components/adminV2/settings/locations/LocationOwnedConcernPanels.tsx");
+        const rankingFactors = read("lib/orchestration/placement/waitlistRankingPolicyFactors.ts");
         expect(page).toContain("LocationToursPanel");
         expect(page).toContain("LocationPlacementPanel");
-        expect(page).toContain("LocationCommunicationsPanel");
         expect(page).toContain("LocationAccessPanel");
+        expect(page).not.toContain("LocationCommunicationsPanel");
         expect(page).not.toMatch(/href="\/settings\/(tours|placement-priority|communications|users-roles)/);
         expect(panels).toContain("Location-owned configuration");
         expect(panels).toContain("TourAvailabilitySettingsClient");
@@ -96,16 +100,25 @@ describe("Configuration Runtime — Locations", () => {
         expect(panels).toContain("/api/admin/settings/users-roles/members");
         expect(panels).toContain("/access-scope");
         expect(panels).toContain("department_scope: member.department_scope");
+        expect(panels).toContain("PriorityRuleOrderEditor");
+        expect(panels).toContain("Sibling — this location");
+        expect(panels).toContain("Employee");
+        expect(panels).toContain("Application / waitlist date");
+        expect(rankingFactors).toContain("Desired start date");
+        expect(panels).toContain("Manual priority");
+        expect(panels).toContain("Tie-break");
     });
 
     it("supports multiple schedule patterns and contextual actions", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(page).toContain("+ Add Schedule Pattern");
+        expect(page).toContain("Closures / Holidays");
+        expect(page).toContain("+ Add Closure");
         expect(page).toContain("LocationSchedulePatternCreatePanel");
         expect(page).toContain("Configure Capacity");
         expect(page).toContain("Resolve Time Zone");
         expect(page).toContain("Create Tour");
-        expect(page).toContain("Publish Communications");
+        expect(page).not.toContain("Publish Communications");
     });
 
     it("uses shared typography tokens", () => {
@@ -113,6 +126,9 @@ describe("Configuration Runtime — Locations", () => {
         expect(panel).toContain("config-typo-field-label");
         expect(panel).toContain("config-typo-sublabel");
         expect(panel).toContain("config-runtime-input");
+        expect(panel).toContain('type="search"');
+        expect(panel).toContain("<select");
+        expect(panel).not.toContain('placeholder="e.g. America/Chicago"');
     });
 
     it("playwright locations spec exists", () => {

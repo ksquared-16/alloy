@@ -72,7 +72,6 @@ describe("location workspace model", () => {
             ownedConcernSetup: {
                 tours: true,
                 placement: true,
-                communications: true,
                 access: true,
             },
         });
@@ -146,7 +145,7 @@ describe("location workspace model", () => {
         expect(locationWorkspaceHref("site-1", "rooms", "room-2")).toBe(
             "/settings/locations?locationId=site-1&tab=rooms&itemId=room-2",
         );
-        expect(parseLocationWorkspaceTab("communications")).toBe("communications");
+        expect(parseLocationWorkspaceTab("communications")).toBe("overview");
         expect(parseLocationWorkspaceTab("unknown")).toBe("overview");
     });
 

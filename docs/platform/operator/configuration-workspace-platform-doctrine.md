@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-14
+last_reviewed: 2026-07-15
 supersedes: [docs/system/configuration-workspace-doctrine.md, docs/system/configuration-workspace-v1-doctrine.md]
 ---
 
@@ -72,7 +72,7 @@ An **operational configuration object** has, at minimum:
 
 - **Identity** — a name the operator recognizes, a stable code, a status (active/inactive).
 - **An owner** — the object above it in the ownership hierarchy, or the organization. Ownership determines where the object is configured and what it inherits.
-- **Owned collections and concerns** — the child objects and settings this object owns (a Location owns its Programs, Rooms, Schedule, Tours, Communications, Access).
+- **Owned collections and concerns** — the child objects and settings this object owns (a Location owns its Programs, Rooms, Schedule, Tours, Placement, and Access). Communications remains outside Locations until its ownership model is ready.
 - **A derived operational state** — capacity, availability, enrollment, or the equivalent, computed by the substrate and shown as consequence, never as raw numbers.
 - **A health** — the live answer to "is anything wrong or improvable right now?"
 - **A setup state** — the answer to "have I finished configuring this?"
@@ -269,7 +269,7 @@ The following rules from the superseded and adjacent configuration doctrine rema
 
 **Locations is the reference implementation of the Configuration Workspace Platform** — the way Operational Runtime has its reference surfaces and the Focus Panel has its reference subjects. Every future configuration domain **references Locations**; it does not invent its own experience.
 
-Locations demonstrates the whole platform: an object list (locations), an object workspace (a location) with owned-concern tabs (Programs, Rooms, Schedule, Tours, Placement, Communications, Access), a nested object (Room) with its own workspace and the capacity+ratios focused editor, the two-status model (Attention + Setup Progress), quiet inheritance (a Room "uses location hours"), business-language translation of the capacity/ratio substrate, and honest unknowns (staffing "not set up yet"). The clickable evidence is the prototype at `web/app/adminV2/settings/prototypes/operational-configuration`.
+Locations demonstrates the whole platform: an object list (locations), an object workspace (a location) with owned-concern tabs (Programs, Rooms, Schedule, Tours, Placement, Access), a nested object (Room) with its own workspace and the capacity+ratios focused editor, the two-status model (Attention + Setup Progress), quiet inheritance (a Room "uses location hours"), business-language translation of the capacity/ratio substrate, and honest unknowns (staffing "not set up yet"). Communications is intentionally absent until ownership is ready. The clickable evidence is the prototype at `web/app/adminV2/settings/prototypes/operational-configuration`.
 
 When a new domain asks "how should this configuration feel?", the answer is: **like Locations.**
 

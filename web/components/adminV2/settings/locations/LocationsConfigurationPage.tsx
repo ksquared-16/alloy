@@ -19,7 +19,6 @@ import LocationSiteCreatePanel from "@/components/adminV2/settings/locations/Loc
 import LocationSiteDetailPanel from "@/components/adminV2/settings/locations/LocationSiteDetailPanel";
 import {
     LocationAccessPanel,
-    LocationCommunicationsPanel,
     LocationPlacementPanel,
     LocationToursPanel,
 } from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
@@ -76,7 +75,7 @@ export default function LocationsConfigurationPage({
     const [creatingSchedule, setCreatingSchedule] = useState(false);
     const [showSetupDetails, setShowSetupDetails] = useState(false);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
-        Record<string, Partial<Record<"tours" | "placement" | "communications" | "access", boolean>>>
+        Record<string, Partial<Record<"tours" | "placement" | "access", boolean>>>
     >({});
     const [activeTab, setActiveTab] = useState<LocationWorkspaceTab>(initialTab);
     const [search, setSearch] = useState("");
@@ -184,15 +183,6 @@ export default function LocationsConfigurationPage({
                     );
                 })
                 .catch(() => null),
-            fetch(`/api/admin/communications/identities?location_id=${encodeURIComponent(locationId)}`, {
-                credentials: "include",
-            })
-                .then(async (response) => {
-                    if (!response.ok) return null;
-                    const json = (await response.json().catch(() => ({}))) as { identities?: unknown[] };
-                    return (json.identities ?? []).length > 0;
-                })
-                .catch(() => null),
             fetch("/api/admin/settings/users-roles/members", { credentials: "include" })
                 .then(async (response) => {
                     if (!response.ok) return null;
@@ -210,13 +200,12 @@ export default function LocationsConfigurationPage({
                     );
                 })
                 .catch(() => null),
-        ]).then(([tours, communications, access]) => {
+        ]).then(([tours, access]) => {
             if (cancelled) return;
             setOwnedConcernSetupByLocation((current) => ({
                 ...current,
                 [locationId]: {
                     tours: tours ?? undefined,
-                    communications: communications ?? undefined,
                     access: access ?? undefined,
                 },
             }));
@@ -448,11 +437,6 @@ export default function LocationsConfigurationPage({
                                 tab: "placement" as const,
                             },
                             {
-                                label: "Communications",
-                                value: "Sender identity and channels",
-                                tab: "communications" as const,
-                            },
-                            {
                                 label: "Access",
                                 value: "Team and location permissions",
                                 tab: "access" as const,
@@ -506,7 +490,7 @@ export default function LocationsConfigurationPage({
                         </p>
                     </div>
                     {selectedPrograms.length > 0 ?
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                             {selectedPrograms.map((program) => (
                                 <LocationProgramDetailPanel
                                     key={program.id}
@@ -564,65 +548,103 @@ export default function LocationsConfigurationPage({
         if (activeTab === "schedule") {
             return (
                 <div className="space-y-4" data-testid="locations-schedule">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                            <p className="config-typo-meta uppercase tracking-[0.16em]">Operations</p>
-                            <h2 className="mt-1 text-base font-medium text-alloy-midnight">Schedule</h2>
-                            <p className="config-typo-sublabel mt-1">
-                                Weekly patterns, closed days, and exceptions belong to this location.
-                            </p>
-                        </div>
-                        {canMutate && !creatingSchedule ?
-                            <button
-                                type="button"
-                                className="rounded-md border border-[#00a283]/25 px-3 py-2 text-xs font-semibold text-[#007d68] hover:bg-[#00a283]/5"
-                                onClick={() => setCreatingSchedule(true)}
-                                data-testid="locations-schedule-add"
-                            >
-                                + Add Schedule Pattern
-                            </button>
-                        :   null}
+                    <div>
+                        <p className="config-typo-meta uppercase tracking-[0.16em]">Operations</p>
+                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">Schedule</h2>
+                        <p className="config-typo-sublabel mt-1">
+                            Weekly patterns and location closures are managed as separate operational concerns.
+                        </p>
                     </div>
-                    {creatingSchedule ?
-                        <LocationSchedulePatternCreatePanel
-                            locationId={selectedSite.id}
-                            onCancel={() => setCreatingSchedule(false)}
-                            onCreated={(created) => {
-                                setSchedulePatterns((current) => [...current, created]);
-                                setSelectedScheduleId(created.id);
-                                setCreatingSchedule(false);
-                                navigate("schedule", created.id);
-                            }}
-                        />
-                    :   <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
-                            <ConfigurationQueue title="Schedule patterns">
-                                {selectedSchedules.length > 0 ?
-                                    selectedSchedules.map((schedule) => (
-                                        <ConfigurationQueueItem
-                                            key={schedule.id}
-                                            active={schedule.id === effectiveScheduleId}
-                                            title={schedule.label}
-                                            subtitle={formatWeekdaySelection(schedule.weekdays)}
-                                            onClick={() => {
-                                                setSelectedScheduleId(schedule.id);
-                                                navigate("schedule", schedule.id);
-                                            }}
-                                            testId={`locations-schedule-${schedule.id}`}
-                                        />
-                                    ))
-                                :   <p className="config-typo-sublabel">Set weekly hours to get started.</p>}
-                            </ConfigurationQueue>
-                            <LocationScheduleTemplateDetailPanel
-                                pattern={selectedSchedule}
-                                siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
-                                canMutate={canMutate}
-                                onUpdated={(row) => {
-                                    setSchedulePatterns((prev) => prev.map((p) => (p.id === row.id ? row : p)));
-                                }}
-                                onError={setError}
-                            />
+
+                    <section className="process-config-setup-card p-4" data-testid="locations-schedule-patterns">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h3 className="config-typo-workspace-title">Schedule Patterns</h3>
+                                <p className="config-typo-sublabel mt-1">
+                                    Reusable weekly attendance patterns offered by this location.
+                                </p>
+                            </div>
+                            {canMutate && !creatingSchedule ?
+                                <button
+                                    type="button"
+                                    className="rounded-md border border-[#00a283]/25 px-3 py-2 text-xs font-semibold text-[#007d68] hover:bg-[#00a283]/5"
+                                    onClick={() => setCreatingSchedule(true)}
+                                    data-testid="locations-schedule-add"
+                                >
+                                    + Add Schedule Pattern
+                                </button>
+                            :   null}
                         </div>
-                    }
+                        <div className="mt-4">
+                            {creatingSchedule ?
+                                <LocationSchedulePatternCreatePanel
+                                    locationId={selectedSite.id}
+                                    onCancel={() => setCreatingSchedule(false)}
+                                    onCreated={(created) => {
+                                        setSchedulePatterns((current) => [...current, created]);
+                                        setSelectedScheduleId(created.id);
+                                        setCreatingSchedule(false);
+                                        navigate("schedule", created.id);
+                                    }}
+                                />
+                            :   <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
+                                    <ConfigurationQueue title="Schedule patterns">
+                                        {selectedSchedules.length > 0 ?
+                                            selectedSchedules.map((schedule) => (
+                                                <ConfigurationQueueItem
+                                                    key={schedule.id}
+                                                    active={schedule.id === effectiveScheduleId}
+                                                    title={schedule.label}
+                                                    subtitle={formatWeekdaySelection(schedule.weekdays)}
+                                                    onClick={() => {
+                                                        setSelectedScheduleId(schedule.id);
+                                                        navigate("schedule", schedule.id);
+                                                    }}
+                                                    testId={`locations-schedule-${schedule.id}`}
+                                                />
+                                            ))
+                                        :   <p className="config-typo-sublabel">Set weekly hours to get started.</p>}
+                                    </ConfigurationQueue>
+                                    <LocationScheduleTemplateDetailPanel
+                                        pattern={selectedSchedule}
+                                        siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
+                                        canMutate={canMutate}
+                                        onUpdated={(row) => {
+                                            setSchedulePatterns((prev) =>
+                                                prev.map((p) => (p.id === row.id ? row : p)),
+                                            );
+                                        }}
+                                        onError={setError}
+                                    />
+                                </div>
+                            }
+                        </div>
+                    </section>
+
+                    <section className="process-config-setup-card p-4" data-testid="locations-schedule-closures">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h3 className="config-typo-workspace-title">Closures / Holidays</h3>
+                                <p className="config-typo-sublabel mt-1">
+                                    Full-day closures and holiday exceptions belong to this location.
+                                </p>
+                            </div>
+                            {canMutate ?
+                                <button
+                                    type="button"
+                                    className="rounded-md border border-alloy-forge/15 px-3 py-2 text-xs font-semibold text-alloy-midnight/45"
+                                    disabled
+                                    title="Date-specific closure authoring is not available in the current schedule substrate."
+                                    data-testid="locations-closure-add"
+                                >
+                                    + Add Closure
+                                </button>
+                            :   null}
+                        </div>
+                        <p className="config-typo-sublabel mt-4">
+                            No date-specific closure records are available in the current schedule configuration.
+                        </p>
+                    </section>
                 </div>
             );
         }
@@ -641,11 +663,9 @@ export default function LocationsConfigurationPage({
                     key={selectedSite.id}
                     rooms={selectedRooms}
                     onReviewRooms={() => navigate("rooms")}
+                    canMutate={canMutate}
                 />
             );
-        }
-        if (activeTab === "communications") {
-            return <LocationCommunicationsPanel key={selectedSite.id} locationId={selectedSite.id} />;
         }
         return <LocationAccessPanel key={selectedSite.id} locationId={selectedSite.id} />;
     })();
@@ -856,7 +876,6 @@ export default function LocationsConfigurationPage({
                                         ],
                                         [model?.timezone ? "Edit Location Details" : "Resolve Time Zone", "general"],
                                         ["Create Tour", "tours"],
-                                        ["Publish Communications", "communications"],
                                     ].map(([label, tab]) => (
                                         <button
                                             key={`${tab}-${label}`}

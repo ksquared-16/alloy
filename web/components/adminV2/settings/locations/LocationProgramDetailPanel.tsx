@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import type { LocationProgramOperationalSummary } from "@/lib/locations/locationWorkspaceModel";
 import {
-    ConfigurationDetailCard,
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
@@ -68,63 +67,55 @@ export default function LocationProgramDetailPanel({
     }
 
     return (
-        <ConfigurationDetailCard
-            testId={`locations-program-summary-${program.id}`}
-            title={summary?.label ?? (label.trim() || "Untitled program")}
+        <section
+            className="rounded-xl border border-alloy-forge/10 bg-white/70 p-3"
+            data-testid={`locations-program-summary-${program.id}`}
+            aria-label={`${summary?.label ?? program.label} program summary`}
         >
-            <div className="space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <p className="config-typo-sublabel">Offered at {siteLabel}</p>
-                    <span
-                        className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                            summary?.isActive === false ?
-                                "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
-                            :   "border-[#00a283]/25 bg-[#00a283]/10 text-[#007d68]"
-                        }`}
-                    >
-                        {summary?.isActive === false ? "Inactive" : "Active"}
-                    </span>
+            <div className="grid items-center gap-x-4 gap-y-2 sm:grid-cols-[minmax(8rem,1.35fr)_6rem_5rem_8rem_minmax(8rem,1fr)_auto]">
+                <div className="min-w-0">
+                    <p className="config-typo-meta">Program</p>
+                    <p className="truncate text-sm font-semibold text-alloy-midnight/85">
+                        {summary?.label ?? program.label}
+                    </p>
                 </div>
+                <div>
+                    <p className="config-typo-meta">Status</p>
+                    <p className={summary?.isActive === false ? "text-xs text-alloy-midnight/50" : "text-xs text-[#007d68]"}>
+                        {summary?.isActive === false ? "○ Inactive" : "● Active"}
+                    </p>
+                </div>
+                <div>
+                    <p className="config-typo-meta">Rooms</p>
+                    <p className="text-sm font-medium text-alloy-midnight/80">{summary?.roomCount ?? 0}</p>
+                </div>
+                <div>
+                    <p className="config-typo-meta">Capacity</p>
+                    <p className="text-sm font-medium text-alloy-midnight/80">
+                        {summary?.configuredCapacity == null ? "Not set" : `${summary.configuredCapacity} children`}
+                    </p>
+                </div>
+                <div>
+                    <p className="config-typo-meta">Age range</p>
+                    <p className="text-sm font-medium text-alloy-midnight/80">
+                        {summary?.ageRange ?? "Not set"}
+                    </p>
+                </div>
+                {!editing && canMutate ?
+                    <button
+                        type="button"
+                        className="justify-self-start text-xs font-medium text-[#007d68] sm:justify-self-end"
+                        onClick={() => setEditing(true)}
+                        data-testid={`locations-program-edit-${program.id}`}
+                    >
+                        Edit
+                    </button>
+                :   null}
+            </div>
 
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-alloy-forge/10 py-3 sm:grid-cols-4">
-                    <div>
-                        <dt className="config-typo-meta">Program</dt>
-                        <dd className="mt-1 text-sm font-medium text-alloy-midnight/85">
-                            {summary?.label ?? program.label}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt className="config-typo-meta">Rooms</dt>
-                        <dd className="mt-1 text-sm font-medium text-alloy-midnight/85">{summary?.roomCount ?? 0}</dd>
-                    </div>
-                    <div>
-                        <dt className="config-typo-meta">Capacity</dt>
-                        <dd className="mt-1 text-sm font-medium text-alloy-midnight/85">
-                            {summary?.configuredCapacity == null ?
-                                "Not set up"
-                            :   `${summary.configuredCapacity} children`}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt className="config-typo-meta">Age range</dt>
-                        <dd className="mt-1 text-sm font-medium text-alloy-midnight/85">
-                            {summary?.ageRange ?? "Age range not set"}
-                        </dd>
-                    </div>
-                </dl>
-
-                {!editing ?
-                    canMutate ?
-                        <button
-                            type="button"
-                            className="text-xs font-medium text-[#007d68]"
-                            onClick={() => setEditing(true)}
-                            data-testid={`locations-program-edit-${program.id}`}
-                        >
-                            Edit program
-                        </button>
-                    :   null
-                :   <div className="space-y-4 rounded-xl border border-alloy-forge/10 bg-alloy-stone/[0.04] p-4">
+            {editing ?
+                <div className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3">
+                    <p className="config-typo-meta">Editing {summary?.label ?? program.label} at {siteLabel}</p>
                         <label className="block space-y-1.5">
                             <span className="config-typo-field-label">Name</span>
                             <input
@@ -249,9 +240,8 @@ export default function LocationProgramDetailPanel({
                                 </button>
                             </div>
                         :   null}
-                    </div>
-                }
-            </div>
-        </ConfigurationDetailCard>
+                </div>
+            :   null}
+        </section>
     );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import {
@@ -12,6 +12,42 @@ import {
 function metadataString(metadata: unknown, key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
     return String((metadata as Record<string, unknown>)[key] ?? "").trim();
+}
+
+const COMMON_IANA_TIMEZONES = [
+    "UTC",
+    "America/Anchorage",
+    "America/Chicago",
+    "America/Denver",
+    "America/Detroit",
+    "America/Halifax",
+    "America/Los_Angeles",
+    "America/New_York",
+    "America/Phoenix",
+    "America/Puerto_Rico",
+    "America/Toronto",
+    "America/Vancouver",
+    "Pacific/Honolulu",
+] as const;
+
+function isIanaTimezone(value: string): boolean {
+    if (!value.trim()) return false;
+    try {
+        Intl.DateTimeFormat(undefined, { timeZone: value });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function ianaTimezones(selected: string): string[] {
+    const supportedValuesOf = (
+        Intl as unknown as { supportedValuesOf?: (key: "timeZone") => string[] }
+    ).supportedValuesOf;
+    const supported = supportedValuesOf ? supportedValuesOf("timeZone") : [...COMMON_IANA_TIMEZONES];
+    return [...new Set(["UTC", ...supported, ...(isIanaTimezone(selected) ? [selected] : [])])].sort((a, b) =>
+        a.localeCompare(b),
+    );
 }
 
 export default function LocationSiteDetailPanel({
@@ -32,6 +68,7 @@ export default function LocationSiteDetailPanel({
     const [postalCode, setPostalCode] = useState("");
     const [phone, setPhone] = useState("");
     const [timezone, setTimezone] = useState("");
+    const [timezoneSearch, setTimezoneSearch] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -44,10 +81,19 @@ export default function LocationSiteDetailPanel({
         setState((site.state ?? "").trim());
         setPostalCode(site.postal_code?.trim() ?? "");
         setPhone(metadataString(site.metadata, "site_phone"));
-        setTimezone(metadataString(site.metadata, "timezone"));
+        const storedTimezone = metadataString(site.metadata, "timezone");
+        setTimezone(isIanaTimezone(storedTimezone) ? storedTimezone : "");
+        setTimezoneSearch("");
         setActive(site.is_active !== false);
         setError(null);
     }, [site]);
+
+    const timezoneOptions = useMemo(() => ianaTimezones(timezone), [timezone]);
+    const visibleTimezoneOptions = useMemo(() => {
+        const query = timezoneSearch.trim().toLowerCase();
+        if (!query) return timezoneOptions;
+        return timezoneOptions.filter((option) => option === timezone || option.toLowerCase().includes(query));
+    }, [timezone, timezoneOptions, timezoneSearch]);
 
     if (!site) {
         return (
@@ -127,18 +173,41 @@ export default function LocationSiteDetailPanel({
                     />
                 </label>
 
-                <label className="block space-y-1.5">
-                    <span className="config-typo-field-label">Timezone</span>
+                <div className="space-y-1.5">
+                    <label className="config-typo-field-label" htmlFor="locations-site-timezone-search">
+                        Timezone
+                    </label>
                     <input
-                        type="text"
+                        id="locations-site-timezone-search"
+                        type="search"
+                        value={timezoneSearch}
+                        disabled={!canMutate}
+                        onChange={(e) => setTimezoneSearch(e.target.value)}
+                        placeholder="Search IANA timezones"
+                        className="config-runtime-input"
+                        data-testid="locations-site-timezone-search"
+                    />
+                    <select
                         value={timezone}
                         disabled={!canMutate}
-                        onChange={(e) => setTimezone(e.target.value)}
-                        placeholder="e.g. America/Chicago"
-                        className="config-runtime-input"
+                        onChange={(e) => {
+                            setTimezone(e.target.value);
+                            setTimezoneSearch("");
+                        }}
+                        className="config-runtime-select"
                         data-testid="locations-site-timezone"
-                    />
-                </label>
+                    >
+                        <option value="">Select an IANA timezone</option>
+                        {visibleTimezoneOptions.map((option) => (
+                            <option key={option} value={option}>
+                                {option}
+                            </option>
+                        ))}
+                    </select>
+                    {timezoneSearch.trim() && visibleTimezoneOptions.length === 0 ?
+                        <p className="config-typo-meta">No matching IANA timezone.</p>
+                    :   null}
+                </div>
 
                 <div>
                     <span className="config-typo-field-label">Capacity summary</span>

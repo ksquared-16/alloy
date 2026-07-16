@@ -9,14 +9,13 @@ export const LOCATION_WORKSPACE_TABS = [
     { key: "schedule", label: "Schedule" },
     { key: "tours", label: "Tours" },
     { key: "placement", label: "Placement" },
-    { key: "communications", label: "Communications" },
     { key: "access", label: "Access" },
 ] as const;
 
 export type LocationWorkspaceTab = (typeof LOCATION_WORKSPACE_TABS)[number]["key"];
 
 export type LocationWorkspaceSetupItem = {
-    key: "general" | "programs" | "rooms" | "schedule" | "tours" | "placement" | "communications" | "access";
+    key: "general" | "programs" | "rooms" | "schedule" | "tours" | "placement" | "access";
     label: string;
     tab: LocationWorkspaceTab | "general";
     complete: boolean | null;
@@ -168,7 +167,7 @@ export function buildLocationWorkspaceModel(params: {
     rooms: LocationHierarchyRow[];
     programs: LocationProgramCategoryRow[];
     schedules: { id: string; is_active: boolean }[];
-    ownedConcernSetup?: Partial<Record<"tours" | "placement" | "communications" | "access", boolean>>;
+    ownedConcernSetup?: Partial<Record<"tours" | "placement" | "access", boolean>>;
 }): LocationWorkspaceModel {
     const { site } = params;
     const rooms = params.rooms.filter((room) => room.parent_location_id === site.id && room.is_active !== false);
@@ -224,12 +223,6 @@ export function buildLocationWorkspaceModel(params: {
             label: "Placement",
             tab: "placement",
             complete: params.ownedConcernSetup?.placement ?? null,
-        },
-        {
-            key: "communications",
-            label: "Communications",
-            tab: "communications",
-            complete: params.ownedConcernSetup?.communications ?? null,
         },
         {
             key: "access",

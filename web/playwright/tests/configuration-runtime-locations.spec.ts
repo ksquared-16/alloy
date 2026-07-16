@@ -58,6 +58,8 @@ test.describe("configuration-runtime-locations", () => {
         const firstItem = page.locator('[data-testid^="locations-room-"]').first();
         if (await firstItem.isVisible().catch(() => false)) {
             await firstItem.click();
+            await expect(page.getByTestId("locations-room-capacity")).toBeVisible();
+            await expect(page.getByTestId("locations-room-save")).toBeVisible();
             await page.waitForTimeout(400);
             await page.screenshot({
                 path: path.join(screenshotDir, "04-workspace-detail.png"),
@@ -68,6 +70,9 @@ test.describe("configuration-runtime-locations", () => {
 
         await page.getByTestId("locations-tab-schedule").click();
         await expect(page.getByTestId("locations-schedule-add")).toBeVisible();
+        await expect(page.getByTestId("locations-schedule-patterns")).toBeVisible();
+        await expect(page.getByTestId("locations-schedule-closures")).toBeVisible();
+        await expect(page.getByTestId("locations-closure-add")).toBeVisible();
         await page.screenshot({
             path: path.join(screenshotDir, "05-schedule.png"),
             fullPage: true,
@@ -77,8 +82,7 @@ test.describe("configuration-runtime-locations", () => {
         for (const [tab, filename, surface] of [
             ["tours", "06-tours.png", "locations-tours-surface"],
             ["placement", "07-placement.png", "locations-placement-surface"],
-            ["communications", "08-communications.png", "locations-communications-surface"],
-            ["access", "09-access.png", "locations-access-surface"],
+            ["access", "08-access.png", "locations-access-surface"],
         ] as const) {
             await page.getByTestId(`locations-tab-${tab}`).click();
             await expect(page.getByTestId(surface)).toBeVisible();
@@ -99,6 +103,7 @@ test.describe("configuration-runtime-locations", () => {
         await expect(page.getByTestId("locations-object-selector")).toBeVisible();
         await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible();
         await expect(page.getByRole("tab", { name: "Access" })).toBeVisible();
+        await expect(page.getByRole("tab", { name: "Communications" })).toHaveCount(0);
         await expect(page.getByTestId("locations-configuration-context")).toContainText("Locations");
         await expect(page.getByTestId("locations-configuration-page")).not.toContainText("Today's Tours");
         await expect(page.getByTestId("locations-configuration-page")).not.toContainText("Helpful Resources");

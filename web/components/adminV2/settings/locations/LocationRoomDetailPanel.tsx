@@ -42,7 +42,6 @@ export default function LocationRoomDetailPanel({
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [editing, setEditing] = useState(false);
 
     useEffect(() => {
         if (!room) return;
@@ -64,7 +63,6 @@ export default function LocationRoomDetailPanel({
         );
         setActive(room.is_active !== false);
         setError(null);
-        setEditing(false);
     }, [room]);
 
     if (!room) {
@@ -117,20 +115,9 @@ export default function LocationRoomDetailPanel({
                             {active ? "Active" : "Inactive"}
                         </span>
                     </div>
-                    {!editing && canMutate ?
-                        <button
-                            type="button"
-                            className="mt-3 text-xs font-medium text-[#007d68]"
-                            onClick={() => setEditing(true)}
-                            data-testid="locations-room-edit"
-                        >
-                            Configure room
-                        </button>
-                    :   null}
                 </div>
 
-                {editing ?
-                    <div className="space-y-4 rounded-xl border border-alloy-forge/10 bg-alloy-stone/[0.04] p-4">
+                <div className="space-y-4 rounded-xl border border-alloy-forge/10 bg-alloy-stone/[0.04] p-4">
                         <label className="block space-y-1.5">
                             <span className="config-typo-field-label">Name</span>
                             <input
@@ -295,6 +282,43 @@ export default function LocationRoomDetailPanel({
                             </p>
                         :   null}
 
+                        <div className="space-y-2">
+                            <span className="config-typo-field-label">Age range</span>
+                            <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr]">
+                                <input
+                                    type="text"
+                                    value={ageFrom}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setAgeFrom(e.target.value)}
+                                    placeholder="From"
+                                    className="config-runtime-input"
+                                />
+                                <input
+                                    type="text"
+                                    value={ageTo}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setAgeTo(e.target.value)}
+                                    placeholder="To"
+                                    className="config-runtime-input"
+                                />
+                                <select
+                                    value={ageUnit}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setAgeUnit(e.target.value)}
+                                    className="config-runtime-select"
+                                >
+                                    <option value="">Unit</option>
+                                    {ageUnitSelectOptions.map((o) => (
+                                        <option key={o.value} value={o.value}>
+                                            {o.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <p className="config-typo-meta">
+                            Uses {siteLabel} hours unless a different room schedule is set.
+                        </p>
                         {canMutate ?
                             <ConfigurationPrimaryButton
                                 className="config-primary-btn--sm"
@@ -357,7 +381,6 @@ export default function LocationRoomDetailPanel({
                                                 is_active: active,
                                                 metadata,
                                             });
-                                            setEditing(false);
                                         } catch (e) {
                                             setError(e instanceof Error ? e.message : "Save failed");
                                         } finally {
@@ -369,54 +392,7 @@ export default function LocationRoomDetailPanel({
                                 {saving ? "Saving…" : "Save room"}
                             </ConfigurationPrimaryButton>
                         :   null}
-
-                        <div className="space-y-2">
-                            <span className="config-typo-field-label">Age range</span>
-                            <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr]">
-                                <input
-                                    type="text"
-                                    value={ageFrom}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setAgeFrom(e.target.value)}
-                                    placeholder="From"
-                                    className="config-runtime-input"
-                                />
-                                <input
-                                    type="text"
-                                    value={ageTo}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setAgeTo(e.target.value)}
-                                    placeholder="To"
-                                    className="config-runtime-input"
-                                />
-                                <select
-                                    value={ageUnit}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setAgeUnit(e.target.value)}
-                                    className="config-runtime-select"
-                                >
-                                    <option value="">Unit</option>
-                                    {ageUnitSelectOptions.map((o) => (
-                                        <option key={o.value} value={o.value}>
-                                            {o.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                        <p className="config-typo-meta">
-                            Uses {siteLabel} hours unless a different room schedule is set.
-                        </p>
-                        <button
-                            type="button"
-                            className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-medium text-alloy-midnight/65"
-                            onClick={() => setEditing(false)}
-                            disabled={saving}
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                :   null}
+                </div>
             </div>
         </ConfigurationDetailCard>
     );
