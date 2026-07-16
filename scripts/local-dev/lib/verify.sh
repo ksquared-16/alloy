@@ -501,6 +501,18 @@ alloy_load_trusted_server_env_exports() {
     [[ -n "$key" ]] || continue
     value="$(alloy_read_env_value "$source" "$key" || true)"
     [[ -n "${value:-}" ]] || continue
+    # ALLOY_BLOCK_REMOTE_SUPABASE asserts "this run must not reach a remote Supabase". The
+    # agent-env classifier enforces that for the client URL; the server reads the database, so
+    # enforce it here too or the guard only covers the half that doesn't do the querying.
+    # Fail closed (die, not skip): a silently absent SUPABASE_URL starts an app that looks local
+    # while being broken, which is harder to diagnose than a refusal.
+    case "$key" in
+      *SUPABASE_URL|DATABASE_URL|*DATABASE_URL)
+        if alloy_is_production_supabase_url "$value"; then
+          alloy_die "trusted server env $key targets a remote host (blocked by ALLOY_BLOCK_REMOTE_SUPABASE)"
+        fi
+        ;;
+    esac
     # Assign without echoing value (export name=value form; value stays in shell memory).
     export "${key}=${value}"
     count=$((count + 1))
