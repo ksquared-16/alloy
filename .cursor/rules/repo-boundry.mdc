@@ -16,9 +16,11 @@ Do not read, edit, diff, commit, push, or reference:
 
 Canonical doc: `docs/platform/governance/agent-repo-boundaries.md`
 
+Managed sprints (slot/worktree bootstrap): `docs/platform/governance/managed-sprint-operations.md`
+
 Default branch behavior:
 - Use `staging` for shared documentation/tooling/hotfix work.
-- Use feature branches for larger runtime work.
+- Use feature branches / managed worktrees for larger runtime work.
 - Before work, confirm `pwd`, branch, `git status --short`, and latest `origin/staging`.
 
-Claude-owned work lives outside this repo unless intentionally merged from a reviewed branch.
+Claude-owned specialist lanes live outside this repo unless intentionally merged from a reviewed branch. Claude sessions in **this** repo follow `CLAUDE.md` and the same managed-sprint doctrine.

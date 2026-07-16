@@ -43,6 +43,11 @@ COMMANDS=(
   alloy-worker-open
   alloy-worker-status
   alloy-worker-report
+  alloy-sprint-start
+  alloy-worker-pause
+  alloy-worker-resume
+  alloy-worker-doctor
+  alloy-sprint-finish
   alloy-initiative-review
   alloy-initiative-remediate
   alloy-initiative-package

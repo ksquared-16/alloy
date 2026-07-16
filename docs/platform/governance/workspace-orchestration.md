@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-13
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
@@ -11,7 +11,8 @@ supersedes: []
 
 This document defines how Alloy **Cursor windows, git worktrees, agents, language servers, dev servers, and validation commands** should coexist on a developer machine. It is infrastructure only — no product runtime behavior.
 
-Related: `docs/platform/governance/typescript-performance.md` (typecheck memory and scripts).
+Related: `docs/platform/governance/typescript-performance.md` (typecheck memory and scripts).  
+**Managed sprint lifecycle (start/pause/resume/finish):** `docs/platform/governance/managed-sprint-operations.md` — that document owns slot/port/server bootstrap policy for implementation sprints.
 
 ---
 
@@ -70,20 +71,27 @@ Run from **repository root** or `web/` (aliases exist in both `package.json` fil
 | `npm run worktree:prune-safe` | **Dry-run** merged+clean worktree removal | No (default) |
 | `npm run workspace:cleanup` | **Dry-run** stale process + worktree suggestions | No (default) |
 
-### Local parallel-agent toolkit (Phase 1 + Phase 2)
+### Local parallel-agent toolkit (Phase 1 + Phase 2 + Managed Sprint Ops)
 
-Installed via `npm run local-dev:install` (`scripts/local-dev/`). Operator-friction commands only — not a daemon or sprint platform.
+Installed via `npm run local-dev:install` (`scripts/local-dev/`). Operator-friction commands only — not a daemon or Company OS.
+
+**Canonical sprint lifecycle:** [`managed-sprint-operations.md`](./managed-sprint-operations.md) (`alloy-sprint-start` / `alloy-worker-pause` / `resume` / `status` / `doctor` / `alloy-sprint-finish`).
 
 | Command | Purpose |
 |---------|---------|
+| `alloy-sprint-start` | Preferred: allocate free slot + worktree + deps + open provider |
 | `alloy-agent-create` | Auto slot/port + worktree + instructions |
 | `alloy-agent-open` | Open Cursor/Claude; optional `--with-server` |
 | `alloy-agent-status` | Managed agents, slots, ports, git, servers |
 | `alloy-agent-close` | Stop server + git summary; never removes worktree |
 | `alloy-agent-instructions` | Concrete prompt; `--copy` |
 | `alloy-ai-health` | Read-only AI/memory/cache/CPU diagnostics |
+| `alloy-worker-status` | Six-slot compact table (also Phase 4 initiative view) |
+| `alloy-worker-pause` / `resume` | Overnight stop / morning restore of registry-owned processes |
+| `alloy-worker-doctor` | Drift/stale PID diagnosis (`--recover` to fix safely) |
+| `alloy-sprint-finish` | Free slot; preserve worktree; never push/merge/PR |
 
-Permanent slots (1–6) keep stable roles (Product, Architecture, Performance, UI/UX, Refactor, Experimental). Optional shell helpers: `source ~/bin/alloy-dev/shell-aliases.sh` → `awt <slot>`, `devup`. See `scripts/local-dev/README.md`.
+Permanent slots (1–6) keep stable roles (Product, Architecture, Performance, UI/UX, Refactor, Experimental) and ports **3011–3016**. Optional shell helpers: `source ~/bin/alloy-dev/shell-aliases.sh` → `awt <slot>`, `devup`. See `scripts/local-dev/README.md`.
 
 **Destructive flags (manual review required):**
 
@@ -132,18 +140,13 @@ Repository-local exclusions: `.vscode/settings.json` excludes `node_modules`, `.
 
 | Rule | Guidance |
 |------|----------|
-| **Max concurrent** | **2** (`next dev`) |
-| **Port convention** | Default `3000` for primary; `3001`, `3002`, … for additional worktrees |
-| **Ownership** | Agent that started the server must document port in session; check `workspace:ports` |
-| **Shutdown** | Stop server when agent session ends unless explicitly parked |
-| **Stale detection** | `workspace:ports` + process age; confirm before killing |
+| **Max concurrent (managed slots)** | Prefer toolkit defaults (`ALLOY_MAX_RUNNING_SERVERS`, typically 3) — see `managed-sprint-operations.md` |
+| **Port convention** | Canonical checkout: `3000`. Managed agent slots: **3011–3016** only |
+| **Ownership** | Start with `alloy-dev-start` / `alloy-sprint-start --with-server`; never invent ports |
+| **Shutdown** | `alloy-dev-stop` or `alloy-worker-pause`; confirm with `alloy-worker-status` / `workspace:ports` |
+| **Stale detection** | `alloy-worker-doctor` + `workspace:ports`; never kill unregistered processes |
 
-Start additional servers with an explicit port:
-
-```bash
-cd web && npx next dev -p 3002
-```
-
+Do **not** start ad-hoc Next servers on invented ports for managed agents — that bypasses two-tier env and permanent slot ports (3011–3016). Use `alloy-dev-start` / `alloy-sprint-start --with-server` only.
 ### Validation concurrency
 
 | Command | Concurrent? | Notes |

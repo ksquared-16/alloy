@@ -42,6 +42,19 @@ alloy-agent-browser-stop 3                      # slot-owned browser only
 awt 3                                         # cd slot 3 worktree
 devup                                         # start owned localhost server
 
+# Managed Sprint Operations V1 (normal daily lifecycle)
+# Canonical doctrine: docs/platform/governance/managed-sprint-operations.md
+alloy-sprint-start my-sprint --provider cursor --slot auto
+alloy-sprint-start my-sprint --provider claude --slot 3 --with-server
+alloy-worker-status                           # six-slot table
+alloy-worker-pause 3                          # overnight
+alloy-worker-resume 3                         # morning
+alloy-worker-pause --all
+alloy-worker-resume --all
+alloy-worker-doctor --all                     # read-only
+alloy-worker-doctor 3 --recover               # clear stale PIDs only
+alloy-sprint-finish 3                         # free slot; never delete/push/merge/PR
+
 # Phase 1 primitives (still available)
 alloy-worktree-create 1 my-initiative cursor
 cd /Users/Kelly/Code/alloy-worktrees/wt1-my-initiative/web && npm install

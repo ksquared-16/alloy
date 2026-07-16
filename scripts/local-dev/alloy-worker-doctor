@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Diagnose managed worker health. Read-only unless --recover.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+# shellcheck source=lib/verify.sh
+source "${SCRIPT_DIR}/lib/verify.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-worker-doctor <slot|--all> [--recover]
+
+Detects stale PIDs, dead providers, orphaned ports, unreachable registered
+servers, duplicate worktree ownership, missing dependencies/auth/env,
+generated-file noise, and registry drift.
+
+Does not mutate by default. Pass --recover for safe stale-PID cleanup only.
+
+Examples:
+  alloy-worker-doctor 3
+  alloy-worker-doctor --all
+  alloy-worker-doctor --all --recover
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  local target="" recover=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --recover) recover=1; shift ;;
+      -h|--help) usage; exit 0 ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *)
+        [[ -z "$target" ]] || alloy_die "unexpected argument: $1"
+        target="$1"
+        shift
+        ;;
+    esac
+  done
+  [[ -n "$target" ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_sprint_ops_dirs
+  alloy_ensure_verify_runtime_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+  export ALLOY_SKIP_AUTH_LIVE_CHECK=1
+
+  if [[ "$target" == "--all" ]]; then
+    alloy_worker_doctor_all "$recover"
+    exit 0
+  fi
+
+  alloy_worker_doctor_one "$target" "$recover"
+}
+
+main "$@"

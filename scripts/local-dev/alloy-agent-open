@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/agent.sh
 source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
 
 usage() {
   cat <<'EOF'
@@ -68,6 +70,8 @@ main() {
     if [[ "$server_state" == "running" ]]; then
       alloy_info "dev server already running on port ${port} (no duplicate started)"
     else
+      alloy_sprint_ops_defaults
+      alloy_guard_server_start "$name"
       env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
         "${SCRIPT_DIR}/alloy-dev-start" "$name"
     fi
@@ -75,7 +79,17 @@ main() {
 
   alloy_set_agent_status "$name" "active"
   alloy_load_metadata "$name"
+  alloy_sprint_ops_defaults
+  alloy_guard_provider_start "$name"
   alloy_open_tool_for_agent "$agent" "$path"
+  if [[ "${ALLOY_AGENT_OPEN_DRY_RUN:-0}" != "1" && -z "${ALLOY_CERTIFY_APP_LAUNCH_LOG:-}" ]]; then
+    local launch_pid
+    launch_pid="$(pgrep -n -f "${path}" 2>/dev/null | head -1 || true)"
+    if [[ -n "$launch_pid" ]]; then
+      alloy_register_provider_pid "$name" "$launch_pid" "$path" \
+        "${ALLOY_PROVIDER_SESSION_ID:-}"
+    fi
+  fi
 
   # Best-effort: copy concrete prompt for immediate paste.
   if alloy_have_cmd pbcopy || alloy_have_cmd xclip; then

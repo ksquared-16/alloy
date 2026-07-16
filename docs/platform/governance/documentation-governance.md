@@ -156,6 +156,9 @@ AI/Cursor load order uses:
 - Supabase CSV reference
 - Locked runtime doctrines in `docs/system/` (performance, queue record, BOS identity)
 - Agent repo boundaries: `docs/platform/governance/agent-repo-boundaries.md`
+- Managed sprint operations: `docs/platform/governance/managed-sprint-operations.md`
+- Cursor rule: `.cursor/rules/managed-sprint-operations.mdc`
+- Claude Code entry: `CLAUDE.md`
 
 Sprints, audits, and archive **excluded** from default source pack unless explicitly needed for the task.
 

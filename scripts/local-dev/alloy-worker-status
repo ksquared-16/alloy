@@ -7,22 +7,26 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/engineering.sh"
 # shellcheck source=lib/agent.sh
 source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
 
 usage() {
   cat <<'EOF'
 Usage:
+  alloy-worker-status
+  alloy-worker-status --slots
   alloy-worker-status <initiative-key> [task-id]
 
-Shows worker assignment, worktree git state, package presence, and report status.
+With no args (or --slots): one compact authoritative table for all six slots
+(sprint, provider, worktree, branch, git, ahead/behind, agent lifecycle,
+server, port, auth, health).
+
+With an initiative key: existing Engineering Runtime worker assignment view.
 EOF
 }
 
-main() {
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
-  [[ $# -ge 1 ]] || { usage >&2; exit 2; }
-
+show_initiative_workers() {
   local key="$1" filter_task="${2:-}"
-  alloy_load_config
   alloy_initiative_exists "$key" || alloy_die "initiative not found: $key"
 
   local base
@@ -67,6 +71,28 @@ main() {
       show_task "$tid"
     done
   fi
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+
+  alloy_load_config
+  alloy_ensure_sprint_ops_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+
+  if [[ $# -eq 0 || "${1:-}" == "--slots" ]]; then
+    alloy_worker_status_table
+    exit 0
+  fi
+
+  # Numeric slot → single-row context via full table filter would be overkill;
+  # show the full authoritative table when first arg is a bare slot number.
+  if [[ "$1" =~ ^[1-9][0-9]*$ ]] && [[ $# -eq 1 ]]; then
+    alloy_worker_status_table
+    exit 0
+  fi
+
+  show_initiative_workers "$@"
 }
 
 main "$@"

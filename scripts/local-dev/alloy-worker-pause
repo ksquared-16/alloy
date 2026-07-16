@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Safely pause managed worker(s): stop registry-owned provider/server/browser only.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent.sh
+source "${SCRIPT_DIR}/lib/agent.sh"
+# shellcheck source=lib/sprint-ops.sh
+source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+# shellcheck source=lib/verify.sh
+source "${SCRIPT_DIR}/lib/verify.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-worker-pause <slot|--all>
+
+Safely stops registered provider, server, and browser processes for the slot.
+Preserves worktree, branch, changes, auth, environment, port, logs, and
+resumable provider metadata. Records pre-pause running state.
+
+Never kills unrelated processes (ownership must be proven by the toolkit registry).
+
+Examples:
+  alloy-worker-pause 3
+  alloy-worker-pause --all
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+
+  alloy_load_config
+  alloy_ensure_sprint_ops_dirs
+  alloy_ensure_verify_runtime_dirs
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+
+  if [[ "$1" == "--all" ]]; then
+    local i found
+    for ((i = 1; i <= ALLOY_MAX_AGENTS; i++)); do
+      if found="$(alloy_find_metadata_by_slot "$i" 2>/dev/null)"; then
+        alloy_worker_pause_one "$found"
+      fi
+    done
+    exit 0
+  fi
+
+  alloy_worker_pause_one "$1"
+}
+
+main "$@"

@@ -217,7 +217,13 @@ alloy_augment_metadata_agent_fields() {
     "ALLOY_AGENT_STATUS=\"${status}\"" \
     "ALLOY_AGENT_INSTRUCTIONS=\"${instructions}\"" \
     "ALLOY_AGENT_OPENED_AT=\"${ALLOY_AGENT_OPENED_AT:-}\"" \
-    "ALLOY_AGENT_CLOSED_AT=\"${ALLOY_AGENT_CLOSED_AT:-}\""
+    "ALLOY_AGENT_CLOSED_AT=\"${ALLOY_AGENT_CLOSED_AT:-}\"" \
+    ${ALLOY_SPRINT_NAME:+ALLOY_SPRINT_NAME=\"${ALLOY_SPRINT_NAME}\"} \
+    ${ALLOY_SPRINT_OBJECTIVE:+ALLOY_SPRINT_OBJECTIVE=\"${ALLOY_SPRINT_OBJECTIVE}\"} \
+    ${ALLOY_WORKER_LIFECYCLE:+ALLOY_WORKER_LIFECYCLE=\"${ALLOY_WORKER_LIFECYCLE}\"} \
+    ${ALLOY_PROVIDER_SESSION_ID:+ALLOY_PROVIDER_SESSION_ID=\"${ALLOY_PROVIDER_SESSION_ID}\"} \
+    ${ALLOY_PAUSE_RECORDED_AT:+ALLOY_PAUSE_RECORDED_AT=\"${ALLOY_PAUSE_RECORDED_AT}\"} \
+    ${ALLOY_FINISHED_AT:+ALLOY_FINISHED_AT=\"${ALLOY_FINISHED_AT}\"}
 }
 
 alloy_set_agent_status() {
@@ -255,7 +261,13 @@ alloy_set_agent_status() {
     "ALLOY_AGENT_STATUS=\"${status}\"" \
     "ALLOY_AGENT_INSTRUCTIONS=\"${ALLOY_AGENT_INSTRUCTIONS:-$(alloy_instructions_path "$ALLOY_WORKTREE_PATH")}\"" \
     "ALLOY_AGENT_OPENED_AT=\"${opened}\"" \
-    "ALLOY_AGENT_CLOSED_AT=\"${closed}\""
+    "ALLOY_AGENT_CLOSED_AT=\"${closed}\"" \
+    ${ALLOY_SPRINT_NAME:+ALLOY_SPRINT_NAME=\"${ALLOY_SPRINT_NAME}\"} \
+    ${ALLOY_SPRINT_OBJECTIVE:+ALLOY_SPRINT_OBJECTIVE=\"${ALLOY_SPRINT_OBJECTIVE}\"} \
+    ${ALLOY_WORKER_LIFECYCLE:+ALLOY_WORKER_LIFECYCLE=\"${ALLOY_WORKER_LIFECYCLE}\"} \
+    ${ALLOY_PROVIDER_SESSION_ID:+ALLOY_PROVIDER_SESSION_ID=\"${ALLOY_PROVIDER_SESSION_ID}\"} \
+    ${ALLOY_PAUSE_RECORDED_AT:+ALLOY_PAUSE_RECORDED_AT=\"${ALLOY_PAUSE_RECORDED_AT}\"} \
+    ${ALLOY_FINISHED_AT:+ALLOY_FINISHED_AT=\"${ALLOY_FINISHED_AT}\"}
 }
 
 alloy_generate_agent_instructions() {
@@ -314,20 +326,23 @@ Expected:
 
 ## Hard constraints
 
+- Read \`docs/platform/governance/managed-sprint-operations.md\` for the full sprint contract.
 - Work ONLY in \`${path}\`. Do not edit other worktrees or the canonical checkout unless explicitly told.
 - Use ONLY branch \`${branch}\`.
 - Use ONLY port \`${port}\` / \`${url}\`.
 - Do NOT push.
 - Do NOT merge.
+- Do NOT rebase onto staging unless Kelly explicitly authorizes promotion sync.
 - Do NOT delete branches.
 - Do NOT remove worktrees.
 - Do NOT stash/reset/clean user work.
-- Commit coherent changes locally when asked / appropriate.
+- “Commit” never implies “push.” Commit coherent changes locally when asked / appropriate (multiple local commits expected).
 - Prefer focused checks (single-file Vitest, lint of touched files).
 - Heavy checks only via: \`alloy-validate ${name} typecheck|test|build|playwright|imports\`
 - Do NOT background heavy checks.
 - Do NOT start a second dev server. Use \`alloy-dev-start ${name}\` / \`alloy-dev-stop ${name}\` only — **never** \`npm run dev\` directly (two-tier env: agent-safe \`web/.env.local.agent\` + trusted server injection; privileged values never enter the worktree).
 - Ensure \`npm install\` has been run in **this** worktree's \`web/\` — login/verify use that worktree-local Playwright only.
+- Overnight: \`alloy-worker-pause ${slot}\`. Morning: \`alloy-worker-resume ${slot}\`. Finish: \`alloy-sprint-finish ${slot}\`.
 - Before finishing, report any processes left running.
 
 ## Operator shortcuts

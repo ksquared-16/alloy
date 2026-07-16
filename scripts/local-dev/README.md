@@ -295,6 +295,25 @@ Operating rules:
 
 Phase 2 does **not** duplicate worktree, port, or validation logic — it calls Phase 1 commands.
 
+### Managed Sprint Operations V1
+
+**Canonical doctrine:** [`docs/platform/governance/managed-sprint-operations.md`](../../docs/platform/governance/managed-sprint-operations.md)
+
+Normal daily lifecycle for the six permanent slots (extends Phase 1–3 registries; not Director/Company OS):
+
+| Command | Purpose |
+|---------|---------|
+| `alloy-sprint-start <name> --provider cursor\|claude [--slot auto\|N] [--with-server]` | allocate free slot, create worktree, install deps, prepare env, open provider |
+| `alloy-worker-pause <slot\|--all>` | stop registry-owned provider/server/browser; preserve work + pause state |
+| `alloy-worker-resume <slot\|--all>` | restore prior resources only; resume session or continuation brief |
+| `alloy-worker-status` | compact six-slot table (initiative args keep Phase 4 behavior) |
+| `alloy-worker-doctor <slot\|--all> [--recover]` | diagnose drift/stale PIDs; mutate only with `--recover` |
+| `alloy-sprint-finish <slot>` | stop processes, archive metadata, free slot; never delete/push/merge/PR |
+
+Resource defaults (override in `~/.config/alloy-dev/config`): `ALLOY_MAX_ACTIVE_PROVIDERS=3`, `ALLOY_MAX_RUNNING_SERVERS=3`, `ALLOY_MAX_CONCURRENT_INSTALLS=1`, `ALLOY_MAX_CONCURRENT_HEAVY_JOBS=1`. High macOS memory pressure refuses/defer heavy work without killing healthy workers.
+
+**Short Kelly prompt:** see §5 of the canonical doctrine (bootstrap + first-response card only).
+
 ### Interpreting `alloy-ai-health` (read-only)
 
 `alloy-ai-health` reports sizes and process counts for orientation. It does **not** claim causation and does **not** delete anything.
