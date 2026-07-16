@@ -26,6 +26,10 @@ supersedes: []
 | `web/lib/lifecycle/operationalProjection.ts` | Canonical (code doctrine) | *"the single source of runtime work truth"*; `count === rows.length`; *"Analytics metrics … must not masquerade as operational queue truth"* |
 | `08f2a99a6` — *Enrollment Alignment S4: collapse durable status + persist stage* | Shipped decision | **Stage is persisted, written only by outcome — no longer derived from status** |
 | `docs/platform/operator/current-work-surface.md` | Canonical | **Summary → Focus** grammar; *"never invent lists"*; *"never silent no-op"* |
+| `docs/platform/operator/operational-context-boundary.md` | Canonical | The **Queue → Operational Context → Focus Panel → Cards** spine; *"rows are previews, never operational truth"*; *"cards observe; they never fetch"* |
+| `docs/platform/operator/operational-mode-default-state-doctrine.md` | Canonical | **Default Operational Subject** — a Work Unit–owned strategy; *"the runtime no longer opens the 'first row'"* |
+| `docs/platform/operator/operational-grain-doctrine.md` | Canonical | **Rule G-5** — *"the Focus Panel is always case-grain"* |
+| `supabase/migrations/20260713000000_process_instances.sql` | Shipped | *"a Process Instance is the running operational journey of a SUBJECT through a PROCESS, within a CONTEXT"*; one instance per `(process, subject, context)` |
 
 ---
 
@@ -79,20 +83,46 @@ Deliverable #2 classified these as a contested principle. **That was wrong**, an
 - **Truth it OWNS:** base scope (`total`), per-view `count`, `rows`, and membership — *"every operational surface (workspace process card, Work View nav/sidebar count, Work View header/pill count, Work Unit queue rows, Focus Panel membership) must agree because they all derive from ONE projection."*
 - **Truth it does NOT own:** stage assignment (outcome execution owns it); what work to do (the operating plan owns it); and **analytics** — *"Analytics metrics … are NOT this projection and must not masquerade as operational queue truth."*
 - **Computed**, never persisted as record · **Implementation-only** — the operator should never hear the word
-- **Should it generate queue rows, counts, pill counts, Work View membership, Focus Panel membership?** **The product already answers yes to all five, by name.**
-- **Default subject:** **not in the doctrine and not in the emitted type** (`OperationalProjection = { total, views[], byViewId }` — `VERIFIED`). This is a genuine, honest gap in an otherwise complete statement.
+- **Should it generate queue rows, counts, pill counts, Work View membership, Focus Panel membership?** The product answers **yes** to all five by name — but **Focus Panel membership is aspirational only** (zero production callers, `VERIFIED`). Shipped: counts, pill counts, rows, Work View membership.
+- **Should it generate the default subject?** **No — and correctly not.** `OperationalProjection = { total, views[], byViewId }` emits none (`VERIFIED`).
+  > **CORRECTED.** The first revision called this *"a genuine, honest gap in an otherwise complete statement."* **Wrong.** It is not a gap — **default subject is a separately owned concept** with its own canonical doctrine (`operational-mode-default-state-doctrine.md`) and its own resolver strategies. The projection is silent because selection is **not its job**. The model is more complete than I credited; what is missing is the *implementation* of the configured strategy, not the concept.
 
 ### Queue
-- **Is it a product concept?** **No.** It is the **rendering of projection rows**, plus a legacy compat surface (*"synced queue lane"*, *"Compatibility queue lane"*).
-- **If Queue disappeared tomorrow, would the product still make sense?** **Yes.** The truth is the Projection; the Work View is the operator's concept. What replaces it: the same projection rows, presented under the Work View the operator already switched to. Nothing operational is lost — only a word.
-- **Computed** · **Implementation-only**
-- **Nothing should depend on Queue.** Anything that does has taken a dependency on presentation.
+> **CORRECTED.** An earlier revision of this document claimed *"Queue is not a product concept"* and *"not a layer."* **Wrong.** `operational-context-boundary.md` names Queue as a canonical level with a strictly bounded role.
+
+- **Operational question:** *"Which of these do I want to work?"*
+- **What it IS (canonical):** *"**Preview/selection surface. Rows are previews, never operational truth.**"* It **owns selection intent** and loads *"queue rows only."*
+- **What it must never be:** truth. Restated canonically: *"Queue remains preview/selection only — authoritative detail from entity GET / Focus Panel."*
+- **If Queue disappeared tomorrow?** Its **truth** role is nil — nothing is lost. Its **selection** role is real and canonical, so something must still own selection intent. The honest answer is narrower than my first: *the word* could go; *the role* could not.
+- **Computed** · operator-visible as rows, but the *word* need not be
+
+### Default Operational Subject
+> **ADDED — a layer the first revision omitted entirely.**
+
+- **Operational question:** *"Which one opens first?"*
+- **What it IS:** a **Work Unit–owned resolution strategy**. Canonical: *"The runtime **no longer opens the 'first row.'** It resolves the **Default Operational Subject** using a **Work Unit–owned resolution strategy**"*; and *"**First row** — **Not** the default selection rule unless strategy explicitly resolves to it."*
+- Strategies shipped: `highest_priority | earliest_due | assigned_to_me | highest_sort_order | first_row`
+- **Doctrine is ahead of code** (`HIGH CONFIDENCE`): the configured-strategy slot is marked **`NOT YET IMPLEMENTED`**, and first row is today's effective default. The doctrine's own ban — *"Do not fall back silently to 'first row' without documenting the fallback as explicit platform behavior"* — is satisfied in letter (the fallback is documented) while its intent is not yet met.
+
+### Operational Context
+> **ADDED — the most consequential omission in the first revision.**
+
+- **Operational question:** *"What is true about this subject, right now?"*
+- **What it IS (canonical):** *"The fully-composed situation the operator is working within: **subject** + **business process** + **composed subject truth** + **capabilities/permissions** + **status**. Loaded **once** per subject."*
+- **Owns:** *"The single source of observed truth for all cards."* It is *"**the only routine load level**."*
+- **Computed**, loaded once per subject · **Implementation-only** (the operator never hears the term)
 
 ### Focus Panel
 - **What drives it?** Per frozen D3: *"Consumers (**Work Units, Focus Panels**, Surface Builder) request resolved values and place actions; **they never compute**."*
-- Therefore: driven by the **Projection** (membership) and the **operating plan** (work). **Not** by the Queue. Not by itself.
+- **What it IS (canonical):** *"The cognitive presentation of one Operational Context. Three modes (Summary / Work / Activity) select which cards compose; mode is not a tab and not a route."* It **owns** composition, mode, and the reveal gate — and **does not load**: *"reads the already-loaded context."*
+- **One Focus Panel**, composed differently for different operational subjects.
+- **Grain law G-5 (canonical):** *"**The Focus Panel is always case-grain.** … `context.subject.id` is always an `opportunity_id`. All Focus Panel cards answer questions at case grain, even when they display child-level data as subordinate content."*
 - **Consumer**, never author · **Operator-visible** — it *is* the operator experience
 - **Grammar (canonical):** **Summary** answers *"What is happening?"* · **Focus** answers *"Help me do it."*
+
+### Cards
+- **Canonical:** *"Operational answers. Each observes the Operational Context and answers exactly one question."* They load **never independently**: *"Cards observe; they never fetch."*
+- *"Perspective and mode never load."* · *"Only a new subject loads."*
 
 ### Operator
 - **What she owns:** *reality*. She answers **"WHAT HAPPENED?"** (`VERIFIED`)
@@ -102,7 +132,15 @@ Deliverable #2 classified these as a contested principle. **That was wrong**, an
 
 ## 4. The canonical chain
 
-The product's own doctrine implies a shape slightly different from a linear stack — and the difference matters:
+> **CORRECTED.** The first revision drew Projection → Focus Panel directly and asserted *"Queue is not a layer between Projection and Focus Panel."* **That was wrong on both counts**, and it collapsed three distinct concerns that the doctrine keeps separate.
+
+**The model's real insight: three concerns, three owners.** Conflating them is what produces drift.
+
+| Concern | Question | Owner |
+|---|---|---|
+| **Membership / scale** | *"What is in play?"* | Operational Projection |
+| **Selection** | *"Which one am I working?"* | Queue (intent) → Default Operational Subject (resolution) |
+| **Truth** | *"What is true about it?"* | Operational Context |
 
 ```
 Business Process   (authored)
@@ -111,18 +149,22 @@ Business Process   (authored)
       ↓
   Work View        (authored lens — predicates)
       ↓
-        ─────→ OPERATIONAL PROJECTION  (derived · single source of work truth)
-                    │
-                    ├──→ counts / pill counts
-                    ├──→ queue rows ──→ [Queue = rendering only]
-                    └──→ Focus Panel membership
-                                  ↓
-                            Focus Panel   (consumer — never computes)
-                                  ↓
-                              Operator    (reports reality)
+OPERATIONAL PROJECTION      (derived · counts + rows · "single source of runtime work truth")
+      ↓
+    Queue                   (preview/selection ONLY — "rows are previews, never operational truth")
+      ↓
+Default Operational Subject (strategy resolves WHICH subject opens)
+      ↓
+Operational Context         (composed truth · loaded ONCE · "the only routine load level")
+      ↓
+  Focus Panel               (cognitive presentation · composition/mode/reveal · never loads)
+      ↓
+    Cards                   (observe; answer one question; never fetch)
+      ↓
+  Operator                  (reports reality)
 ```
 
-**Queue is not a layer between Projection and Focus Panel.** Focus Panel membership comes from the **Projection directly** — the doctrine names it explicitly. Any path where the Queue feeds the Focus Panel inverts the model.
+**The projection's Focus-Panel-membership claim is aspirational, not shipped.** `operationalProjection.ts:5` asserts *"Focus Panel membership"* derives from the one projection; its own body hedges to *"the runtime **can** use this"*. **VERIFIED:** `recordMatchesWorkView` and `resolveFocusPanelScope` have **zero production callers**. The projection governs **counts and queue rows**; the Focus Panel's subject arrives via the selection chain. This is a **doctrine-ahead-of-code** gap, not an incoherence — nothing contradicts it; it is simply unrealized.
 
 ---
 
@@ -132,7 +174,17 @@ Business Process   (authored)
 
 And the enrollment model already requires it: the family case and each child's enrollment track are **concurrent operational positions** — a family at `decision` while children sit at `waitlist` and `enrolling`. The split at Decision is the product's expression of exactly this.
 
-**So the model supports multi-grain Work Views, and no redesign is needed to express concurrent tracks.** What it lacks is not capability but **one authority**: the family/child distinction is configured **twice**, under two names — `ROW TYPE (GRAIN)` in Stage Context and `Journey` in Operational Experience (`VERIFIED`) — and they are free to disagree.
+**The rule is more precise than my first pass allowed** (`HIGH CONFIDENCE`), and it is coherent:
+
+- A **stage-scoped** Work View **may not** mix grains — *"A flat Work View cannot mix grains — each row type produces a different queue entry shape."* The operator-facing block is real: *"Mixed row types — resolve before saving."*
+- A **predicate-scoped or catch-all** view **may** span grains — *"Mixed-grain is only enforced when the operator explicitly scopes the view to stages with different row types"*; *"A Work View is a filter predicate, not a container of stages."*
+- The projection **computes dual-grain counts** (`primaryGrainKind` + `supportingGrainKind` simultaneously), so a view carries a grain **pair**, not a scalar.
+
+**Concurrency is the schema's normal case, not an exception.** `process_instances` is unique per `(org, process, subject, context)` — *"One running instance per (process, subject, context)"* — so three children under one opportunity are three rows with independent `stage_key`s, while family position lives separately on `opportunities.stage_key`. Doctrine: *"a Process Instance is the running operational journey of a SUBJECT through a PROCESS, within a CONTEXT."* Divergent siblings are designed behavior — the split rule's field is literally `per_subject_outcomes`, and one option is *"No action — keep with family."*
+
+**So the model already expresses concurrent tracks. No redesign is needed.** What it lacks is not capability but **one authority**: the family/child distinction is configured **twice**, under two names — `ROW TYPE (GRAIN)` in Stage Context and `Journey` in Operational Experience (`VERIFIED`) — and they are free to disagree.
+
+**`UNCERTAIN`:** no operator surface renders a *unified cross-track view* of one family (family at `tour`, child A at `waitlist`, child B at `enrolling`) in a single frame. Tracks are expressed per queue lane and per child block. Whether that absence is a gap or a deliberate choice is unresolved, and Rule **G-5** (*"the Focus Panel is always case-grain"*) may already answer it.
 
 ---
 
@@ -152,11 +204,12 @@ Stated only as product experience, per the canonical grammar already in the prod
 | Should remain **operator-facing** | Should remain **administrator-facing** | Should become **implementation-only** |
 |---|---|---|
 | Business Process (the funnel) | Business Process authoring | Operational Projection |
-| Stage (where a record is) | Stage authoring | Queue / queue lane |
-| Work View (the lens she switches) | Work View predicates | Grain (as a *word*) |
-| Work / Current Work | Operating plan, outcomes, requirements | Predicate evaluator |
-| Outcome ("what happened") | Actions catalog & placement | `stage_key`, `outcome_key`, `transition_ref` |
-| Focus Panel | Configuration Health | Projection materialization |
+| Stage (where a record is) | Stage authoring | **Operational Context** |
+| Work View (the lens she switches) | Work View predicates | **Queue / queue lane** (the *word*; the selection role stays) |
+| Work / Current Work | Operating plan, outcomes, requirements | Grain (as a *word*) |
+| Outcome ("what happened") | Actions catalog & placement | Predicate evaluator |
+| Focus Panel | **Default Operational Subject strategy** | `stage_key`, `outcome_key`, `transition_ref` |
+| Cards (as *answers*, not as "cards") | Configuration Health | Projection materialization · `process_instances` |
 
 ---
 
