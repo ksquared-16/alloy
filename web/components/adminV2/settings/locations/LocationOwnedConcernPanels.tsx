@@ -44,22 +44,18 @@ function ConcernSurface({
     testId: string;
 }) {
     return (
-        <section className="process-config-setup-card p-4" data-testid={testId}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <p className="config-typo-meta uppercase tracking-[0.14em]">Location-owned configuration</p>
-                    <h2 className="config-typo-workspace-title mt-1">{title}</h2>
-                    <p className="config-typo-sublabel mt-1 max-w-2xl">{consequence}</p>
-                </div>
+        <section className="process-config-setup-card p-3" data-testid={testId} aria-label={title}>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-alloy-forge/10 pb-2">
+                <p className="config-typo-sublabel max-w-2xl">{consequence}</p>
                 <span className="rounded-full border border-alloy-forge/12 bg-alloy-stone/10 px-2 py-1 text-[11px] text-alloy-midnight/60">
                     {status}
                 </span>
             </div>
             {action ?
-                <div className="mt-4">{action}</div>
+                <div className="mt-3">{action}</div>
             :   null}
             {children ?
-                <div className="mt-4 border-t border-alloy-forge/10 pt-4">{children}</div>
+                <div className="mt-3">{children}</div>
             :   null}
         </section>
     );
@@ -225,8 +221,26 @@ export function LocationPlacementPanel({
                     : selectedWorkUnit ?
                         <fieldset disabled={!canMutate || saving} className="space-y-4">
                             <div>
-                                <p className="config-typo-meta">Waitlist ranking</p>
-                                <p className="mt-1 text-sm font-medium text-alloy-midnight/80">{selectedWorkUnit.name}</p>
+                                <label className="config-typo-field-label" htmlFor="locations-placement-work-unit">
+                                    Waitlist process
+                                </label>
+                                <select
+                                    id="locations-placement-work-unit"
+                                    className="config-runtime-select mt-1"
+                                    value={selectedId}
+                                    onChange={(event) => setSelectedId(event.target.value)}
+                                    data-testid="locations-placement-work-unit"
+                                >
+                                    {workUnits.map((workUnit) => (
+                                        <option key={workUnit.id} value={workUnit.id}>
+                                            {workUnit.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="config-typo-meta mt-1" data-testid="locations-placement-persistence-scope">
+                                    Saved on this work unit, not this location. The ranking applies at every location
+                                    using {selectedWorkUnit.name}.
+                                </p>
                             </div>
                             <label className="flex items-center gap-2 text-sm font-medium text-alloy-midnight/80">
                                 <input
@@ -255,6 +269,7 @@ export function LocationPlacementPanel({
                                         [TIER_GENERAL_WAITLIST_BUCKET]: "Standard waitlist",
                                     }}
                                     sources={{}}
+                                    selectableCatalog
                                     disabled={!canMutate}
                                     onOrderChange={setRuleOrder}
                                     onEnabledKeysChange={setEnabledKeys}

@@ -12,6 +12,25 @@ export const LOCATION_WORKSPACE_TABS = [
     { key: "access", label: "Access" },
 ] as const;
 
+export const US_LOCATION_TIMEZONE_OPTIONS = [
+    { label: "Eastern Time", value: "America/New_York" },
+    { label: "Central Time", value: "America/Chicago" },
+    { label: "Mountain Time", value: "America/Denver" },
+    { label: "Arizona", value: "America/Phoenix" },
+    { label: "Pacific Time", value: "America/Los_Angeles" },
+    { label: "Alaska Time", value: "America/Anchorage" },
+    { label: "Hawaii Time", value: "Pacific/Honolulu" },
+] as const;
+
+export type UsLocationTimezone = (typeof US_LOCATION_TIMEZONE_OPTIONS)[number]["value"];
+
+export function normalizeUsLocationTimezone(value: unknown): UsLocationTimezone | null {
+    const normalized = String(value ?? "").trim();
+    return US_LOCATION_TIMEZONE_OPTIONS.some((option) => option.value === normalized) ?
+            (normalized as UsLocationTimezone)
+        :   null;
+}
+
 export type LocationWorkspaceTab = (typeof LOCATION_WORKSPACE_TABS)[number]["key"];
 
 export type LocationWorkspaceSetupItem = {

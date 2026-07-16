@@ -38,6 +38,35 @@ test.describe("configuration-runtime-locations", () => {
             animations: "disabled",
         });
 
+        const editLocation = page.getByTestId("locations-edit-location");
+        if (await editLocation.isVisible().catch(() => false)) {
+            await editLocation.click();
+            const timezone = page.getByTestId("locations-site-timezone");
+            await expect(timezone).toBeVisible();
+            await expect(timezone.locator("option")).toHaveCount(8);
+            await expect(timezone.locator("option")).toHaveText([
+                "Select a U.S. time zone",
+                "Eastern Time",
+                "Central Time",
+                "Mountain Time",
+                "Arizona",
+                "Pacific Time",
+                "Alaska Time",
+                "Hawaii Time",
+            ]);
+            expect(await timezone.locator("option").evaluateAll((options) => options.map((option) => option.getAttribute("value")))).toEqual([
+                "",
+                "America/New_York",
+                "America/Chicago",
+                "America/Denver",
+                "America/Phoenix",
+                "America/Los_Angeles",
+                "America/Anchorage",
+                "Pacific/Honolulu",
+            ]);
+            await page.getByRole("button", { name: /^← Back to/ }).click();
+        }
+
         await page.getByTestId("locations-tab-programs").click();
         await page.waitForTimeout(400);
         await page.screenshot({
@@ -86,6 +115,14 @@ test.describe("configuration-runtime-locations", () => {
         ] as const) {
             await page.getByTestId(`locations-tab-${tab}`).click();
             await expect(page.getByTestId(surface)).toBeVisible();
+            if (tab === "placement") {
+                const scope = page.getByTestId("locations-placement-persistence-scope");
+                if (await scope.isVisible().catch(() => false)) {
+                    await expect(scope).toContainText("Saved on this work unit, not this location");
+                    await expect(page.getByTestId("priority-active-factors")).toBeVisible();
+                    await expect(page.getByText("Available factors", { exact: true })).toBeVisible();
+                }
+            }
             await page.screenshot({
                 path: path.join(screenshotDir, filename),
                 fullPage: true,

@@ -481,14 +481,7 @@ export default function LocationsConfigurationPage({
         if (activeTab === "overview") return overview;
         if (activeTab === "programs") {
             return (
-                <div className="space-y-4" data-testid="locations-programs">
-                    <div>
-                        <p className="config-typo-meta uppercase tracking-[0.16em]">Capacity</p>
-                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">Programs</h2>
-                        <p className="config-typo-sublabel mt-1">
-                            Operational summaries show what is offered, where it runs, and the capacity behind it.
-                        </p>
-                    </div>
+                <div className="space-y-2" data-testid="locations-programs">
                     {selectedPrograms.length > 0 ?
                         <div className="space-y-2">
                             {selectedPrograms.map((program) => (
@@ -547,15 +540,7 @@ export default function LocationsConfigurationPage({
         }
         if (activeTab === "schedule") {
             return (
-                <div className="space-y-4" data-testid="locations-schedule">
-                    <div>
-                        <p className="config-typo-meta uppercase tracking-[0.16em]">Operations</p>
-                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">Schedule</h2>
-                        <p className="config-typo-sublabel mt-1">
-                            Weekly patterns and location closures are managed as separate operational concerns.
-                        </p>
-                    </div>
-
+                <div className="space-y-3" data-testid="locations-schedule">
                     <section className="process-config-setup-card p-4" data-testid="locations-schedule-patterns">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>

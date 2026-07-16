@@ -76,23 +76,34 @@ describe("Configuration Runtime — Locations", () => {
         expect(programs).toContain("Capacity");
         expect(programs).toContain("Age range");
         expect(programs).toContain("locations-program-edit-");
-        expect(rooms).toContain("Threshold staffing");
+        expect(rooms).toContain("Capacity & staffing");
+        expect(rooms).toContain("Staffing thresholds");
         expect(rooms).toContain("Add staffing threshold");
         expect(rooms).toContain("formatStaffingThreshold");
         expect(rooms).not.toContain("Configure room");
+        expect(rooms).not.toContain("Set how many children this room holds and the staffing ratio together.");
         expect(rooms.indexOf("Age range")).toBeLessThan(rooms.indexOf("locations-room-save"));
+    });
+
+    it("does not repeat active tab titles as tab-body headers", () => {
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        const panels = read("components/adminV2/settings/locations/LocationOwnedConcernPanels.tsx");
+        expect(page).not.toContain("Operational summaries show what is offered");
+        expect(page).not.toContain("Weekly patterns and location closures are managed as separate operational concerns");
+        expect(panels).not.toContain("Location-owned configuration");
+        expect(panels).not.toContain("<h2");
     });
 
     it("keeps every location-owned concern in the Locations workspace", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         const panels = read("components/adminV2/settings/locations/LocationOwnedConcernPanels.tsx");
         const rankingFactors = read("lib/orchestration/placement/waitlistRankingPolicyFactors.ts");
+        const rankingEditor = read("components/adminV2/settings/PriorityRuleOrderEditor.tsx");
         expect(page).toContain("LocationToursPanel");
         expect(page).toContain("LocationPlacementPanel");
         expect(page).toContain("LocationAccessPanel");
         expect(page).not.toContain("LocationCommunicationsPanel");
         expect(page).not.toMatch(/href="\/settings\/(tours|placement-priority|communications|users-roles)/);
-        expect(panels).toContain("Location-owned configuration");
         expect(panels).toContain("TourAvailabilitySettingsClient");
         expect(panels).not.toContain("PlacementPrioritySettingsClient");
         expect(panels).not.toContain("CommunicationsSetupClient");
@@ -107,6 +118,14 @@ describe("Configuration Runtime — Locations", () => {
         expect(rankingFactors).toContain("Desired start date");
         expect(panels).toContain("Manual priority");
         expect(panels).toContain("Tie-break");
+        expect(panels).toContain("selectableCatalog");
+        expect(panels).toContain("Saved on this work unit, not this location");
+        expect(panels).toContain("applies at every location");
+        expect(rankingEditor).toContain("Available factors");
+        expect(rankingEditor).toContain("onDragStart");
+        expect(rankingEditor).toContain("onDrop");
+        expect(rankingEditor).toContain("Move up");
+        expect(rankingEditor).toContain("Move down");
     });
 
     it("supports multiple schedule patterns and contextual actions", () => {
@@ -123,12 +142,27 @@ describe("Configuration Runtime — Locations", () => {
 
     it("uses shared typography tokens", () => {
         const panel = read("components/adminV2/settings/locations/LocationSiteDetailPanel.tsx");
+        const model = read("lib/locations/locationWorkspaceModel.ts");
         expect(panel).toContain("config-typo-field-label");
         expect(panel).toContain("config-typo-sublabel");
         expect(panel).toContain("config-runtime-input");
-        expect(panel).toContain('type="search"');
         expect(panel).toContain("<select");
-        expect(panel).not.toContain('placeholder="e.g. America/Chicago"');
+        expect(panel).toContain("US_LOCATION_TIMEZONE_OPTIONS");
+        expect(panel).toContain("normalizeUsLocationTimezone(timezone)");
+        expect(panel).not.toContain('type="search"');
+        expect(panel).not.toContain("supportedValuesOf");
+        expect(panel).not.toContain("Select an IANA timezone");
+        for (const [label, value] of [
+            ["Eastern Time", "America/New_York"],
+            ["Central Time", "America/Chicago"],
+            ["Mountain Time", "America/Denver"],
+            ["Arizona", "America/Phoenix"],
+            ["Pacific Time", "America/Los_Angeles"],
+            ["Alaska Time", "America/Anchorage"],
+            ["Hawaii Time", "Pacific/Honolulu"],
+        ]) {
+            expect(model).toContain(`label: "${label}", value: "${value}"`);
+        }
     });
 
     it("playwright locations spec exists", () => {

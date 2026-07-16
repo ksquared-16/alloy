@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import {
+    normalizeUsLocationTimezone,
+    US_LOCATION_TIMEZONE_OPTIONS,
+} from "@/lib/locations/locationWorkspaceModel";
 import {
     ConfigurationDetailCard,
     ConfigurationEmptyState,
@@ -12,42 +16,6 @@ import {
 function metadataString(metadata: unknown, key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
     return String((metadata as Record<string, unknown>)[key] ?? "").trim();
-}
-
-const COMMON_IANA_TIMEZONES = [
-    "UTC",
-    "America/Anchorage",
-    "America/Chicago",
-    "America/Denver",
-    "America/Detroit",
-    "America/Halifax",
-    "America/Los_Angeles",
-    "America/New_York",
-    "America/Phoenix",
-    "America/Puerto_Rico",
-    "America/Toronto",
-    "America/Vancouver",
-    "Pacific/Honolulu",
-] as const;
-
-function isIanaTimezone(value: string): boolean {
-    if (!value.trim()) return false;
-    try {
-        Intl.DateTimeFormat(undefined, { timeZone: value });
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-function ianaTimezones(selected: string): string[] {
-    const supportedValuesOf = (
-        Intl as unknown as { supportedValuesOf?: (key: "timeZone") => string[] }
-    ).supportedValuesOf;
-    const supported = supportedValuesOf ? supportedValuesOf("timeZone") : [...COMMON_IANA_TIMEZONES];
-    return [...new Set(["UTC", ...supported, ...(isIanaTimezone(selected) ? [selected] : [])])].sort((a, b) =>
-        a.localeCompare(b),
-    );
 }
 
 export default function LocationSiteDetailPanel({
@@ -68,7 +36,7 @@ export default function LocationSiteDetailPanel({
     const [postalCode, setPostalCode] = useState("");
     const [phone, setPhone] = useState("");
     const [timezone, setTimezone] = useState("");
-    const [timezoneSearch, setTimezoneSearch] = useState("");
+    const [storedTimezone, setStoredTimezone] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -82,18 +50,11 @@ export default function LocationSiteDetailPanel({
         setPostalCode(site.postal_code?.trim() ?? "");
         setPhone(metadataString(site.metadata, "site_phone"));
         const storedTimezone = metadataString(site.metadata, "timezone");
-        setTimezone(isIanaTimezone(storedTimezone) ? storedTimezone : "");
-        setTimezoneSearch("");
+        setStoredTimezone(storedTimezone);
+        setTimezone(normalizeUsLocationTimezone(storedTimezone) ?? "");
         setActive(site.is_active !== false);
         setError(null);
     }, [site]);
-
-    const timezoneOptions = useMemo(() => ianaTimezones(timezone), [timezone]);
-    const visibleTimezoneOptions = useMemo(() => {
-        const query = timezoneSearch.trim().toLowerCase();
-        if (!query) return timezoneOptions;
-        return timezoneOptions.filter((option) => option === timezone || option.toLowerCase().includes(query));
-    }, [timezone, timezoneOptions, timezoneSearch]);
 
     if (!site) {
         return (
@@ -173,41 +134,33 @@ export default function LocationSiteDetailPanel({
                     />
                 </label>
 
-                <div className="space-y-1.5">
-                    <label className="config-typo-field-label" htmlFor="locations-site-timezone-search">
-                        Timezone
-                    </label>
-                    <input
-                        id="locations-site-timezone-search"
-                        type="search"
-                        value={timezoneSearch}
-                        disabled={!canMutate}
-                        onChange={(e) => setTimezoneSearch(e.target.value)}
-                        placeholder="Search IANA timezones"
-                        className="config-runtime-input"
-                        data-testid="locations-site-timezone-search"
-                    />
+                <label className="block space-y-1.5">
+                    <span className="config-typo-field-label">
+                        Time zone
+                    </span>
                     <select
                         value={timezone}
                         disabled={!canMutate}
-                        onChange={(e) => {
-                            setTimezone(e.target.value);
-                            setTimezoneSearch("");
-                        }}
+                        onChange={(e) => setTimezone(e.target.value)}
                         className="config-runtime-select"
                         data-testid="locations-site-timezone"
                     >
-                        <option value="">Select an IANA timezone</option>
-                        {visibleTimezoneOptions.map((option) => (
-                            <option key={option} value={option}>
-                                {option}
+                        <option value="">Select a U.S. time zone</option>
+                        {US_LOCATION_TIMEZONE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
                             </option>
                         ))}
                     </select>
-                    {timezoneSearch.trim() && visibleTimezoneOptions.length === 0 ?
-                        <p className="config-typo-meta">No matching IANA timezone.</p>
+                    <span className="config-typo-meta">
+                        Hours and closures display in this location&apos;s time zone.
+                    </span>
+                    {storedTimezone && !normalizeUsLocationTimezone(storedTimezone) && !timezone ?
+                        <span className="config-typo-meta text-amber-700">
+                            Choose a supported U.S. time zone to replace the current setting.
+                        </span>
                     :   null}
-                </div>
+                </label>
 
                 <div>
                     <span className="config-typo-field-label">Capacity summary</span>
@@ -246,7 +199,12 @@ export default function LocationSiteDetailPanel({
                                 setError(null);
                                 try {
                                     let metadata = mergeLocationMetadataField(site.metadata, "site_phone", phone.trim() || null);
-                                    metadata = mergeLocationMetadataField(metadata, "timezone", timezone.trim() || null);
+                                    const timezoneToPersist =
+                                        normalizeUsLocationTimezone(timezone) ??
+                                        (storedTimezone && !normalizeUsLocationTimezone(storedTimezone) ?
+                                            storedTimezone
+                                        :   null);
+                                    metadata = mergeLocationMetadataField(metadata, "timezone", timezoneToPersist);
                                     await onSave(site.id, {
                                         label: label.trim() || null,
                                         address1: address1.trim() || null,

@@ -341,3 +341,44 @@ export function reorderPriorityRuleMoveDownEnabled(
     }
     return null;
 }
+
+/**
+ * Reorder active operator factors for drag-and-drop while leaving inactive catalog entries in
+ * their existing slots and keeping the fallback active and last.
+ */
+export function reorderPriorityRuleByDrag(
+    order: readonly string[],
+    enabled: ReadonlySet<string>,
+    fallbackLast: string,
+    draggedKey: string,
+    targetKey: string
+): string[] | null {
+    if (order[order.length - 1] !== fallbackLast) return null;
+    if (
+        !draggedKey ||
+        !targetKey ||
+        draggedKey === targetKey ||
+        draggedKey === fallbackLast ||
+        !enabled.has(draggedKey) ||
+        !enabled.has(targetKey)
+    ) {
+        return null;
+    }
+
+    const activeOrder = order.filter((key) => key !== fallbackLast && enabled.has(key));
+    const draggedIndex = activeOrder.indexOf(draggedKey);
+    if (draggedIndex < 0) return null;
+
+    activeOrder.splice(draggedIndex, 1);
+    const targetIndex = targetKey === fallbackLast ? activeOrder.length : activeOrder.indexOf(targetKey);
+    if (targetIndex < 0) return null;
+    activeOrder.splice(targetIndex, 0, draggedKey);
+
+    let activeIndex = 0;
+    const next = order.map((key) => {
+        if (key === fallbackLast || !enabled.has(key)) return key;
+        return activeOrder[activeIndex++]!;
+    });
+    if (next[next.length - 1] !== fallbackLast || next.every((key, index) => key === order[index])) return null;
+    return next;
+}

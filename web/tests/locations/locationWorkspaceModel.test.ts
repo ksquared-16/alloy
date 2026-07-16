@@ -6,9 +6,11 @@ import {
     buildLocationWorkspaceModel,
     formatStaffingThreshold,
     locationWorkspaceHref,
+    normalizeUsLocationTimezone,
     parseStaffingThresholds,
     parseLocationWorkspaceTab,
     serializeStaffingThresholds,
+    US_LOCATION_TIMEZONE_OPTIONS,
 } from "@/lib/locations/locationWorkspaceModel";
 
 function site(overrides: Partial<LocationHierarchyRow> = {}): LocationHierarchyRow {
@@ -147,6 +149,21 @@ describe("location workspace model", () => {
         );
         expect(parseLocationWorkspaceTab("communications")).toBe("overview");
         expect(parseLocationWorkspaceTab("unknown")).toBe("overview");
+    });
+
+    it("limits location timezone choices to canonical United States IANA values", () => {
+        expect(US_LOCATION_TIMEZONE_OPTIONS).toEqual([
+            { label: "Eastern Time", value: "America/New_York" },
+            { label: "Central Time", value: "America/Chicago" },
+            { label: "Mountain Time", value: "America/Denver" },
+            { label: "Arizona", value: "America/Phoenix" },
+            { label: "Pacific Time", value: "America/Los_Angeles" },
+            { label: "Alaska Time", value: "America/Anchorage" },
+            { label: "Hawaii Time", value: "Pacific/Honolulu" },
+        ]);
+        expect(normalizeUsLocationTimezone(" America/Chicago ")).toBe("America/Chicago");
+        expect(normalizeUsLocationTimezone("America/Toronto")).toBeNull();
+        expect(normalizeUsLocationTimezone("UTC")).toBeNull();
     });
 
     it("supports threshold staffing while preserving legacy one-to-five values", () => {

@@ -1,6 +1,8 @@
 "use client";
 
+import type { DragEvent } from "react";
 import {
+    reorderPriorityRuleByDrag,
     reorderPriorityRuleMoveDownEnabled,
     reorderPriorityRuleMoveUpEnabled,
 } from "@/lib/orchestration/placement/placementPriorityRuleOrder";
@@ -19,6 +21,7 @@ export type PriorityRuleOrderEditorProps = {
     labels?: Record<string, string>;
     descriptions?: Record<string, string>;
     sources?: Record<string, string>;
+    selectableCatalog?: boolean;
     disabled?: boolean;
     onOrderChange: (next: string[]) => void;
     onEnabledKeysChange: (next: Set<string>) => void;
@@ -31,6 +34,7 @@ export function PriorityRuleOrderEditor({
     labels = WAITLIST_RANKING_POLICY_FACTOR_LABELS,
     descriptions = WAITLIST_RANKING_POLICY_FACTOR_DESCRIPTIONS,
     sources = WAITLIST_RANKING_POLICY_FACTOR_SOURCES,
+    selectableCatalog = false,
     disabled = false,
     onOrderChange,
     onEnabledKeysChange,
@@ -38,6 +42,187 @@ export function PriorityRuleOrderEditor({
     const sourceKeyByBucket = Object.fromEntries(
         WAITLIST_RANKING_POLICY_FACTORS.map((f) => [f.bucketKey, f.sourceKey ?? ""])
     );
+
+    const setFactorActive = (bucketKey: string, active: boolean) => {
+        if (bucketKey === fallbackBucketKey) return;
+        const next = new Set(enabledKeys);
+        if (active) next.add(bucketKey);
+        else next.delete(bucketKey);
+        next.add(fallbackBucketKey);
+        onEnabledKeysChange(next);
+    };
+
+    const handleDrop = (event: DragEvent<HTMLElement>, targetKey: string) => {
+        event.preventDefault();
+        if (disabled) return;
+        const draggedKey = event.dataTransfer.getData("application/x-alloy-priority-factor");
+        const next = reorderPriorityRuleByDrag(order, enabledKeys, fallbackBucketKey, draggedKey, targetKey);
+        if (next) onOrderChange(next);
+    };
+
+    if (selectableCatalog) {
+        const activeOrder = order.filter((bucketKey) => enabledKeys.has(bucketKey));
+        const availableFactors = order.filter(
+            (bucketKey) => bucketKey !== fallbackBucketKey && !enabledKeys.has(bucketKey)
+        );
+
+        return (
+            <div className="space-y-4" data-testid="priority-factors-editor">
+                <p className="text-[11px] leading-snug text-alloy-midnight/55">
+                    Add supported factors, then drag active factors into priority order. The first match wins.
+                </p>
+                <section className="space-y-2" aria-labelledby="priority-active-factors-title">
+                    <div className="flex items-center justify-between gap-3">
+                        <h4
+                            id="priority-active-factors-title"
+                            className="config-typo-field-label"
+                        >
+                            Active ranking
+                        </h4>
+                        <span className="config-typo-meta">Drag to reorder</span>
+                    </div>
+                    <ol className="m-0 list-none space-y-2 p-0" data-testid="priority-active-factors">
+                        {activeOrder.map((bucketKey, activeIndex) => {
+                            const orderIndex = order.indexOf(bucketKey);
+                            const label = labels[bucketKey]?.trim() || bucketKey;
+                            const description = descriptions[bucketKey]?.trim();
+                            const isFallback = bucketKey === fallbackBucketKey;
+                            const up = reorderPriorityRuleMoveUpEnabled(
+                                order,
+                                enabledKeys,
+                                fallbackBucketKey,
+                                orderIndex
+                            );
+                            const down = reorderPriorityRuleMoveDownEnabled(
+                                order,
+                                enabledKeys,
+                                fallbackBucketKey,
+                                orderIndex
+                            );
+                            return (
+                                <li
+                                    key={bucketKey}
+                                    className="rounded-lg border border-alloy-forge/10 bg-white/80 px-3 py-2.5 text-sm text-alloy-midnight"
+                                    data-testid={`priority-factor-${bucketKey}`}
+                                    draggable={!disabled && !isFallback}
+                                    onDragStart={(event) => {
+                                        event.dataTransfer.effectAllowed = "move";
+                                        event.dataTransfer.setData(
+                                            "application/x-alloy-priority-factor",
+                                            bucketKey
+                                        );
+                                    }}
+                                    onDragOver={(event) => {
+                                        if (!disabled) event.preventDefault();
+                                    }}
+                                    onDrop={(event) => handleDrop(event, bucketKey)}
+                                >
+                                    <div className="flex flex-wrap items-start gap-2">
+                                        <span
+                                            className="mt-0.5 select-none text-alloy-midnight/35"
+                                            aria-hidden="true"
+                                        >
+                                            {isFallback ? "·" : "⋮⋮"}
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="font-medium">
+                                                <span className="mr-2 text-[11px] font-normal text-alloy-midnight/45">
+                                                    {activeIndex + 1}.
+                                                </span>
+                                                {label}
+                                            </span>
+                                            {isFallback ?
+                                                <span className="ml-2 text-[10px] font-normal text-alloy-midnight/45">
+                                                    (always on · last)
+                                                </span>
+                                            :   null}
+                                            {description ?
+                                                <span className="mt-0.5 block text-[11px] leading-snug text-alloy-midnight/55">
+                                                    {description}
+                                                </span>
+                                            :   null}
+                                        </span>
+                                        <span className="flex shrink-0 flex-wrap gap-1">
+                                            {!isFallback ?
+                                                <button
+                                                    type="button"
+                                                    className="rounded border border-alloy-forge/15 bg-white px-2 py-0.5 text-[11px] font-medium text-alloy-midnight hover:bg-alloy-forge/5 disabled:cursor-not-allowed disabled:opacity-40"
+                                                    disabled={disabled}
+                                                    onClick={() => setFactorActive(bucketKey, false)}
+                                                >
+                                                    Remove
+                                                </button>
+                                            :   null}
+                                            <button
+                                                type="button"
+                                                className="rounded border border-alloy-forge/15 bg-white px-2 py-0.5 text-[11px] font-medium text-alloy-midnight hover:bg-alloy-forge/5 disabled:cursor-not-allowed disabled:opacity-40"
+                                                disabled={disabled || up == null}
+                                                onClick={() => up && onOrderChange(up)}
+                                                aria-label={`Move ${label} up`}
+                                            >
+                                                Move up
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="rounded border border-alloy-forge/15 bg-white px-2 py-0.5 text-[11px] font-medium text-alloy-midnight hover:bg-alloy-forge/5 disabled:cursor-not-allowed disabled:opacity-40"
+                                                disabled={disabled || down == null}
+                                                onClick={() => down && onOrderChange(down)}
+                                                aria-label={`Move ${label} down`}
+                                            >
+                                                Move down
+                                            </button>
+                                        </span>
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ol>
+                </section>
+                <section className="space-y-2" aria-labelledby="priority-available-factors-title">
+                    <h4 id="priority-available-factors-title" className="config-typo-field-label">
+                        Available factors
+                    </h4>
+                    {availableFactors.length > 0 ?
+                        <ul
+                            className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2"
+                            data-testid="priority-available-factors"
+                        >
+                            {availableFactors.map((bucketKey) => {
+                                const label = labels[bucketKey]?.trim() || bucketKey;
+                                const description = descriptions[bucketKey]?.trim();
+                                return (
+                                    <li
+                                        key={bucketKey}
+                                        className="flex items-start justify-between gap-3 rounded-lg border border-dashed border-alloy-forge/15 px-3 py-2"
+                                    >
+                                        <span className="min-w-0">
+                                            <span className="block text-xs font-medium text-alloy-midnight/75">
+                                                {label}
+                                            </span>
+                                            {description ?
+                                                <span className="mt-0.5 block text-[11px] leading-snug text-alloy-midnight/50">
+                                                    {description}
+                                                </span>
+                                            :   null}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="shrink-0 text-xs font-medium text-[#007d68] disabled:opacity-40"
+                                            disabled={disabled}
+                                            onClick={() => setFactorActive(bucketKey, true)}
+                                            aria-label={`Add ${label} to ranking`}
+                                        >
+                                            Add
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    :   <p className="config-typo-meta">All supported factors are active.</p>}
+                </section>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-3" data-testid="priority-factors-editor">
@@ -70,11 +255,7 @@ export function PriorityRuleOrderEditor({
                                         disabled={disabled || isFallback}
                                         onChange={() => {
                                             if (isFallback) return;
-                                            const next = new Set(enabledKeys);
-                                            if (next.has(bucketKey)) next.delete(bucketKey);
-                                            else next.add(bucketKey);
-                                            next.add(fallbackBucketKey);
-                                            onEnabledKeysChange(next);
+                                            setFactorActive(bucketKey, !isActive);
                                         }}
                                     />
                                     <span>
