@@ -25,7 +25,7 @@ export function ConfigObjectHeader({
     const visibleFacts = facts.map((fact) => fact.trim()).filter(Boolean);
 
     return (
-        <header className="mb-3 border-b border-alloy-forge/10 pb-3" data-testid={testId}>
+        <header className="mb-2.5 border-b border-alloy-stone/20 pb-2.5" data-testid={testId}>
             {breadcrumb ?
                 <div className="mb-1.5 text-[11px] text-alloy-midnight/45">{breadcrumb}</div>
             :   null}

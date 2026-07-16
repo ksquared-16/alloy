@@ -501,21 +501,26 @@ export default function LocationsConfigurationPage({
                                 />
                             :   <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
                                     <ConfigurationQueue title="Schedule patterns">
-                                        {selectedSchedules.length > 0 ?
-                                            selectedSchedules.map((schedule) => (
-                                                <ConfigurationQueueItem
-                                                    key={schedule.id}
-                                                    active={schedule.id === effectiveScheduleId}
-                                                    title={schedule.label}
-                                                    subtitle={formatWeekdaySelection(schedule.weekdays)}
-                                                    onClick={() => {
-                                                        setSelectedScheduleId(schedule.id);
-                                                        navigate("schedule", schedule.id);
-                                                    }}
-                                                    testId={`locations-schedule-${schedule.id}`}
-                                                />
-                                            ))
-                                        :   <p className="config-typo-sublabel">Set weekly hours to get started.</p>}
+                                        <div className="divide-y divide-alloy-stone/18 border-t border-alloy-stone/20">
+                                            {selectedSchedules.length > 0 ?
+                                                selectedSchedules.map((schedule) => (
+                                                    <ConfigurationQueueItem
+                                                        key={schedule.id}
+                                                        variant="rail"
+                                                        active={schedule.id === effectiveScheduleId}
+                                                        title={schedule.label}
+                                                        subtitle={formatWeekdaySelection(schedule.weekdays)}
+                                                        onClick={() => {
+                                                            setSelectedScheduleId(schedule.id);
+                                                            navigate("schedule", schedule.id);
+                                                        }}
+                                                        testId={`locations-schedule-${schedule.id}`}
+                                                    />
+                                                ))
+                                            :   <p className="config-typo-sublabel px-2 py-3">
+                                                    Set weekly hours to get started.
+                                                </p>}
+                                        </div>
                                     </ConfigurationQueue>
                                     <LocationScheduleTemplateDetailPanel
                                         pattern={selectedSchedule}
@@ -619,42 +624,46 @@ export default function LocationsConfigurationPage({
                             canMutate={canMutate}
                         />
                     </>
-                :   <div className="grid min-h-full gap-3 xl:grid-cols-[14rem_minmax(0,1fr)]">
-                        <aside className="hidden xl:block" aria-label="Location selector">
-                            <ConfigurationQueue
-                                title="Locations"
-                                summary={`${visibleSites.length} shown`}
-                                actions={
-                                    <label className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/55">
-                                        <input
-                                            type="checkbox"
-                                            checked={showInactive}
-                                            onChange={(event) => setShowInactive(event.target.checked)}
-                                        />
-                                        Inactive
-                                    </label>
-                                }
-                                testId="locations-object-selector"
-                            >
-                                <button
-                                    type="button"
-                                    className="mb-1 w-full rounded-md px-2 py-1.5 text-left text-[11px] font-semibold text-[#007d68] hover:bg-[#00a283]/5"
-                                    onClick={returnToFleet}
-                                    data-testid="locations-back-to-fleet"
-                                >
-                                    ← All locations
-                                </button>
-                                <label className="sr-only" htmlFor="locations-search">
-                                    Search locations
+                :   <div className="grid min-h-full gap-0 xl:grid-cols-[13.5rem_minmax(0,1fr)]">
+                        <aside
+                            className="hidden border-r border-alloy-stone/25 xl:block"
+                            aria-label="Location selector"
+                            data-testid="locations-object-selector"
+                        >
+                            <div className="flex items-start justify-between gap-2 px-2 pb-2 pt-0.5">
+                                <div>
+                                    <p className="config-typo-queue-section-label">Locations</p>
+                                    <p className="config-typo-sublabel mt-0.5">{visibleSites.length} shown</p>
+                                </div>
+                                <label className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/55">
+                                    <input
+                                        type="checkbox"
+                                        checked={showInactive}
+                                        onChange={(event) => setShowInactive(event.target.checked)}
+                                    />
+                                    Inactive
                                 </label>
-                                <input
-                                    id="locations-search"
-                                    type="search"
-                                    value={search}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                    placeholder="Search locations"
-                                    className="config-runtime-input"
-                                />
+                            </div>
+                            <button
+                                type="button"
+                                className="mb-1 w-full px-2 py-1 text-left text-[11px] font-semibold text-[#007d68] hover:bg-alloy-bend-pine/[0.05]"
+                                onClick={returnToFleet}
+                                data-testid="locations-back-to-fleet"
+                            >
+                                ← All locations
+                            </button>
+                            <label className="sr-only" htmlFor="locations-search">
+                                Search locations
+                            </label>
+                            <input
+                                id="locations-search"
+                                type="search"
+                                value={search}
+                                onChange={(event) => setSearch(event.target.value)}
+                                placeholder="Search locations"
+                                className="config-runtime-input mx-2 mb-1 w-[calc(100%-1rem)]"
+                            />
+                            <div className="divide-y divide-alloy-stone/18 border-t border-alloy-stone/20">
                                 {visibleSites.map((site) => {
                                     const summary = fleetById.get(site.id);
                                     const locality =
@@ -664,6 +673,7 @@ export default function LocationsConfigurationPage({
                                     return (
                                         <ConfigurationQueueItem
                                             key={site.id}
+                                            variant="rail"
                                             active={site.id === selectedId}
                                             title={String(site.label ?? "").trim() || "Untitled location"}
                                             subtitle={
@@ -682,11 +692,11 @@ export default function LocationsConfigurationPage({
                                         />
                                     );
                                 })}
-                            </ConfigurationQueue>
+                            </div>
                         </aside>
 
-                        <main className="min-w-0" data-testid="locations-selected-location">
-                            <div className="mb-3 xl:hidden">
+                        <main className="min-w-0 xl:pl-5" data-testid="locations-selected-location">
+                            <div className="mb-2 xl:hidden">
                                 <button
                                     type="button"
                                     className="mb-2 text-[11px] font-semibold text-[#007d68]"
@@ -736,7 +746,7 @@ export default function LocationsConfigurationPage({
                             />
 
                             <div
-                                className="mb-3 flex overflow-x-auto border-b border-alloy-forge/10"
+                                className="mb-2.5 flex overflow-x-auto border-b border-alloy-stone/25"
                                 role="tablist"
                                 aria-label="Location settings"
                             >
@@ -746,7 +756,7 @@ export default function LocationsConfigurationPage({
                                         type="button"
                                         role="tab"
                                         aria-selected={activeTab === tab.key && !editingSite}
-                                        className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold ${
+                                        className={`shrink-0 border-b-2 px-3 py-1.5 text-xs font-semibold ${
                                             activeTab === tab.key && !editingSite ?
                                                 "border-[#00a283] text-[#007d68]"
                                             :   "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"

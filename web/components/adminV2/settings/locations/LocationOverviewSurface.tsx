@@ -5,13 +5,11 @@ import {
     ConfigAttentionPanel,
     ConfigGlanceMetrics,
     ConfigOperationalReadiness,
-    ConfigWorkspaceCard,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type { LocationWorkspaceModel, LocationWorkspaceTab } from "@/lib/locations/locationWorkspaceModel";
 
 /**
- * Full-width Overview — page owns understanding/state.
- * Commands live on the shell Actions rail, not here.
+ * Full-width Overview — continuous regions, not stacked cards.
  */
 export function LocationOverviewSurface({
     model,
@@ -42,13 +40,12 @@ export function LocationOverviewSurface({
     const capacityNeedsAttention =
         model.configuredCapacity == null || model.roomsNeedingCapacity > 0;
     const scheduleNeedsAttention = scheduleSummary === "Not set up yet";
-
     const hasAttention = attentionItems.some((item) => item.grade !== "good");
 
     return (
-        <div className="space-y-4" data-testid="locations-overview">
+        <div className="space-y-0" data-testid="locations-overview">
             <div
-                className={`grid gap-3 ${hasAttention ? "lg:grid-cols-2" : ""}`}
+                className={`grid gap-6 ${hasAttention ? "lg:grid-cols-2" : ""}`}
                 data-testid="locations-overview-health"
             >
                 <ConfigAttentionPanel
@@ -60,11 +57,8 @@ export function LocationOverviewSurface({
                         if (match) onResolveAttention(match.tab);
                     }}
                 />
-                <section
-                    className="rounded-xl border border-alloy-forge/10 bg-white p-3 shadow-[0_1px_0_rgba(15,23,42,0.03)]"
-                    data-testid="locations-setup-progress"
-                >
-                    <div className="mb-3 flex items-start justify-between gap-3">
+                <section data-testid="locations-setup-progress" data-config-surface="region">
+                    <div className="mb-2 flex items-start justify-between gap-3">
                         <div>
                             <h2 className="config-typo-workspace-title">Operational readiness</h2>
                             <p className="mt-0.5 text-[11px] text-alloy-midnight/50">
@@ -73,7 +67,7 @@ export function LocationOverviewSurface({
                             </p>
                         </div>
                         <div
-                            className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
+                            className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
                             style={{
                                 background: `conic-gradient(${
                                     model.setupPercent >= 100 ? "#007d68" : "#00a283"
@@ -81,7 +75,7 @@ export function LocationOverviewSurface({
                             }}
                             aria-hidden
                         >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xs font-semibold text-alloy-midnight">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-semibold text-alloy-midnight">
                                 {model.setupPercent}%
                             </div>
                         </div>
@@ -151,8 +145,13 @@ export function LocationOverviewSurface({
                 ]}
             />
 
-            <ConfigWorkspaceCard title="How this location runs" compact testId="locations-overview-operations">
-                <div className="grid gap-2.5 sm:grid-cols-3">
+            <section
+                className="border-t border-alloy-stone/25 pt-3"
+                data-testid="locations-overview-operations"
+                data-config-surface="region"
+            >
+                <h2 className="config-typo-workspace-title mb-2">How this location runs</h2>
+                <div className="grid gap-0 sm:grid-cols-3 sm:divide-x sm:divide-alloy-stone/20">
                     {[
                         {
                             label: "Tours",
@@ -182,7 +181,7 @@ export function LocationOverviewSurface({
                         <button
                             key={item.label}
                             type="button"
-                            className="rounded-xl border border-alloy-forge/10 bg-white px-3 py-2.5 text-left shadow-[0_1px_0_rgba(15,23,42,0.03)] transition-colors hover:border-alloy-bend-pine/25 hover:bg-alloy-bend-pine/[0.03]"
+                            className="px-3 py-1.5 text-left first:pl-0 last:pr-0 hover:bg-alloy-bend-pine/[0.03] sm:px-4"
                             onClick={() => onOpenTab(item.tab)}
                         >
                             <div className="flex items-start gap-2.5">
@@ -203,13 +202,13 @@ export function LocationOverviewSurface({
                                 <div className="min-w-0">
                                     <p className="text-sm font-semibold text-alloy-midnight">{item.label}</p>
                                     <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{item.value}</p>
-                                    <p className="mt-2 text-xs font-semibold text-[#007d68]">{item.action} →</p>
+                                    <p className="mt-1.5 text-xs font-semibold text-[#007d68]">{item.action} →</p>
                                 </div>
                             </div>
                         </button>
                     ))}
                 </div>
-            </ConfigWorkspaceCard>
+            </section>
         </div>
     );
 }

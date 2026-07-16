@@ -1,40 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
 import type { LocationsFleetModel } from "@/lib/locations/locationWorkspaceModel";
-
-function FleetCard({
-    title,
-    description,
-    icon,
-    children,
-    testId,
-}: {
-    title: string;
-    description?: string;
-    icon?: string;
-    children: ReactNode;
-    testId?: string;
-}) {
-    return (
-        <section className="process-config-setup-card p-3.5" data-testid={testId}>
-            <div className="mb-2.5 flex items-center gap-2">
-                {icon ?
-                    <span className="text-base text-[#007d68]" aria-hidden>
-                        {icon}
-                    </span>
-                :   null}
-                <div>
-                    <h2 className="text-[13px] font-semibold tracking-tight text-alloy-midnight">{title}</h2>
-                    {description ?
-                        <p className="config-typo-sublabel mt-0.5">{description}</p>
-                    :   null}
-                </div>
-            </div>
-            {children}
-        </section>
-    );
-}
 
 function formatCapacity(value: number | null): string {
     if (value == null) return "Not set up yet";
@@ -78,34 +44,46 @@ export default function LocationsFleetLanding({
         :   "None";
 
     return (
-        <div className="space-y-4" data-testid="locations-fleet-landing">
-            <div className="grid gap-4 lg:grid-cols-3" data-testid="locations-fleet-rollups">
-                <FleetCard title="Operational readiness" icon="◎" testId="locations-fleet-readiness">
-                    <p className="text-xl font-semibold tracking-tight text-alloy-midnight">
+        <div className="space-y-0" data-testid="locations-fleet-landing">
+            <div
+                className="grid gap-0 border-b border-alloy-stone/25 pb-4 sm:grid-cols-3 sm:divide-x sm:divide-alloy-stone/20"
+                data-testid="locations-fleet-rollups"
+            >
+                <section className="px-0 py-1 sm:pr-4" data-testid="locations-fleet-readiness">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                        Operational readiness
+                    </p>
+                    <p className="mt-1 text-xl font-semibold tracking-tight text-alloy-midnight">
                         {fleet.averageSetupPercent}%
                     </p>
                     <p className="config-typo-sublabel mt-1">
                         {fleet.locationsSetupComplete} of {fleet.locationCount}{" "}
                         {fleet.locationCount === 1 ? "location" : "locations"} fully configured
                     </p>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-alloy-stone/25">
+                    <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-alloy-stone/25">
                         <div
                             className="h-full rounded-full bg-[#00a283]"
                             style={{ width: `${Math.min(100, Math.max(0, fleet.averageSetupPercent))}%` }}
                         />
                     </div>
-                </FleetCard>
+                </section>
 
-                <FleetCard title="Needs attention" icon="⚠" testId="locations-fleet-attention-summary">
-                    <p className="text-xl font-semibold tracking-tight text-alloy-midnight">{readinessLabel}</p>
+                <section className="px-0 py-1 sm:px-4" data-testid="locations-fleet-attention-summary">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                        Needs attention
+                    </p>
+                    <p className="mt-1 text-xl font-semibold tracking-tight text-alloy-midnight">{readinessLabel}</p>
                     <p className="config-typo-sublabel mt-1">
                         {fleet.locationsNeedingAttention}{" "}
                         {fleet.locationsNeedingAttention === 1 ? "location" : "locations"} need follow-up
                     </p>
-                </FleetCard>
+                </section>
 
-                <FleetCard title="Inventory" icon="▦" testId="locations-fleet-inventory">
-                    <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-alloy-midnight/80">
+                <section className="px-0 py-1 sm:pl-4" data-testid="locations-fleet-inventory">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                        Inventory
+                    </p>
+                    <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-alloy-midnight/80">
                         <div>
                             <dt className="config-typo-sublabel">Locations</dt>
                             <dd className="font-semibold text-alloy-midnight">
@@ -132,20 +110,23 @@ export default function LocationsFleetLanding({
                             </dd>
                         </div>
                     </dl>
-                </FleetCard>
+                </section>
             </div>
 
             {fleet.attentionHighlights.length > 0 ?
-                <FleetCard
-                    title="Needs attention"
-                    description="Highest-impact items across locations."
-                    testId="locations-fleet-attention-list"
+                <section
+                    className="border-b border-alloy-stone/25 py-3"
+                    data-testid="locations-fleet-attention-list"
                 >
-                    <ul className="divide-y divide-alloy-forge/10">
+                    <div className="mb-1.5">
+                        <h2 className="config-typo-workspace-title">Needs attention</h2>
+                        <p className="config-typo-sublabel mt-0.5">Highest-impact items across locations.</p>
+                    </div>
+                    <ul className="divide-y divide-alloy-stone/20">
                         {fleet.attentionHighlights.map((highlight) => (
                             <li
                                 key={`${highlight.locationId}-${highlight.item.key}`}
-                                className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
                             >
                                 <span
                                     className={
@@ -170,11 +151,12 @@ export default function LocationsFleetLanding({
                             </li>
                         ))}
                     </ul>
-                </FleetCard>
+                </section>
             :   null}
 
-            <FleetCard title="Locations" testId="locations-fleet-list-card">
-                <div className="mb-3 flex flex-wrap items-center gap-3">
+            <section className="pt-3" data-testid="locations-fleet-list-card">
+                <div className="mb-2 flex flex-wrap items-center gap-3">
+                    <p className="config-typo-queue-section-label mr-auto">Locations</p>
                     <label className="sr-only" htmlFor="locations-fleet-search">
                         Search locations
                     </label>
@@ -199,7 +181,7 @@ export default function LocationsFleetLanding({
                     {canMutate ?
                         <button
                             type="button"
-                            className="ml-auto rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                            className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
                             onClick={onAddLocation}
                             data-testid="locations-fleet-add-location"
                         >
@@ -209,10 +191,7 @@ export default function LocationsFleetLanding({
                 </div>
 
                 {visible.length === 0 ?
-                    <div
-                        className="rounded-lg border border-dashed border-alloy-forge/15 px-4 py-8 text-center"
-                        data-testid="locations-fleet-empty"
-                    >
+                    <div className="px-1 py-8 text-center" data-testid="locations-fleet-empty">
                         <p className="text-sm font-medium text-alloy-midnight">
                             {fleet.locationCount === 0 ? "Add your first location" : "No locations match"}
                         </p>
@@ -231,12 +210,12 @@ export default function LocationsFleetLanding({
                             </button>
                         :   null}
                     </div>
-                :   <ul className="divide-y divide-alloy-forge/10" data-testid="locations-fleet-list">
+                :   <ul className="divide-y divide-alloy-stone/18" data-testid="locations-fleet-list">
                         {visible.map((location) => (
                             <li key={location.id}>
                                 <button
                                     type="button"
-                                    className="flex w-full items-start gap-3 py-3 text-left hover:bg-alloy-stone/10"
+                                    className="flex w-full items-start gap-3 py-2.5 text-left hover:bg-alloy-bend-pine/[0.04]"
                                     onClick={() => onOpenLocation(location.id)}
                                     data-testid={`locations-fleet-row-${location.id}`}
                                 >
@@ -246,10 +225,10 @@ export default function LocationsFleetLanding({
                                                 {location.displayName}
                                             </span>
                                             <span
-                                                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                                                     location.isActive ?
-                                                        "border-[#00a283]/25 bg-[#00a283]/10 text-[#007d68]"
-                                                    :   "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
+                                                        "bg-alloy-bend-pine/10 text-[#007d68]"
+                                                    :   "bg-alloy-stone/20 text-alloy-midnight/55"
                                                 }`}
                                             >
                                                 {location.isActive ? "Active" : "Inactive"}
@@ -290,7 +269,7 @@ export default function LocationsFleetLanding({
                         ))}
                     </ul>
                 }
-            </FleetCard>
+            </section>
         </div>
     );
 }

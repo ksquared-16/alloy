@@ -34,10 +34,10 @@ export function ConfigurationContext({
                             {eyebrow}
                         </p>
                     :   null}
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2">
                         {titleIcon ?
                             <span
-                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-alloy-bend-pine/[0.10] text-[#007d68]"
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-alloy-bend-pine/[0.10] text-[#007d68]"
                                 data-testid={`${testId}-title-icon`}
                                 aria-hidden
                             >
@@ -163,6 +163,8 @@ export function ConfigurationQueueItem({
     onClick,
     testId,
     wrapTitle = false,
+    /** `rail` = flat nav row (Processing-like). `card` = legacy floating tile. */
+    variant = "card",
 }: {
     active: boolean;
     title: string;
@@ -171,12 +173,20 @@ export function ConfigurationQueueItem({
     onClick: () => void;
     testId?: string;
     wrapTitle?: boolean;
+    variant?: "card" | "rail";
 }) {
+    const className =
+        variant === "rail" ?
+            `process-config-nav-item w-full rounded-none border-0 px-3 py-2 text-left ${
+                active ? "process-config-nav-item--active" : ""
+            }`
+        :   `process-config-work-view-list-card ${active ? "process-config-work-view-list-card--active" : ""}`;
+
     return (
         <button
             type="button"
             onClick={onClick}
-            className={`process-config-work-view-list-card ${active ? "process-config-work-view-list-card--active" : ""}`}
+            className={className}
             data-testid={testId}
             aria-current={active ? "true" : undefined}
         >

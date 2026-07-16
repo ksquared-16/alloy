@@ -1,11 +1,9 @@
 "use client";
 
 import type { ConfigAttentionItem } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
-import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 /**
- * Attention Panel — "What needs attention?"
- * Renders nothing when there are no actionable items (healthy surfaces collapse).
+ * Attention region — no floating card. Collapses entirely when healthy.
  */
 export function ConfigAttentionPanel({
     items,
@@ -22,12 +20,17 @@ export function ConfigAttentionPanel({
     if (actionable.length === 0) return null;
 
     return (
-        <ConfigWorkspaceCard title="Needs attention" compact={compact} testId={testId}>
-            <ul className="divide-y divide-alloy-forge/10">
+        <section
+            className={compact ? "min-w-0" : "border-t border-alloy-stone/25 pt-3"}
+            data-testid={testId}
+            data-config-surface="region"
+        >
+            <h2 className="config-typo-workspace-title mb-1.5">Needs attention</h2>
+            <ul className="divide-y divide-alloy-stone/20">
                 {actionable.map((item) => (
                     <li
                         key={item.key}
-                        className={`flex items-center gap-2.5 ${compact ? "py-2" : "py-2.5"} first:pt-0 last:pb-0`}
+                        className={`flex items-center gap-2.5 ${compact ? "py-1.5" : "py-2"} first:pt-0 last:pb-0`}
                     >
                         <span
                             className={item.grade === "fix" ? "text-amber-700" : "text-blue-700"}
@@ -48,6 +51,6 @@ export function ConfigAttentionPanel({
                     </li>
                 ))}
             </ul>
-        </ConfigWorkspaceCard>
+        </section>
     );
 }

@@ -509,7 +509,10 @@ export default function LocationRoomDetailPanel({
                     :   "Capacity is not set up yet — this room cannot be counted in location inventory."}
                 </ConfigConsequenceLine>
 
-                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-ops">
+                <div
+                    className="grid gap-y-3 border-t border-alloy-stone/20 pt-2.5 sm:grid-cols-2 sm:gap-x-6 lg:grid-cols-3"
+                    data-testid="locations-room-ops"
+                >
                     {[
                         {
                             key: "capacity",
@@ -557,22 +560,18 @@ export default function LocationRoomDetailPanel({
                             tone: statusTone === "attention" ? "attention" : "ready",
                         },
                     ].map((card) => (
-                        <div
-                            key={card.key}
-                            className="rounded-xl border border-alloy-forge/10 bg-white px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.03)]"
-                            data-testid={`locations-room-metric-${card.key}`}
-                        >
+                        <div key={card.key} data-testid={`locations-room-metric-${card.key}`}>
                             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
                                 {card.label}
                             </p>
                             <p
-                                className={`mt-1 text-base font-semibold leading-tight ${
+                                className={`mt-0.5 text-base font-semibold leading-tight ${
                                     card.tone === "attention" ? "text-alloy-ember" : "text-alloy-midnight"
                                 }`}
                             >
                                 {card.value}
                             </p>
-                            <p className="mt-1 text-[11px] text-alloy-midnight/50">{card.hint}</p>
+                            <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{card.hint}</p>
                         </div>
                     ))}
                 </div>
@@ -609,6 +608,7 @@ export default function LocationRoomDetailPanel({
                         return (
                             <ConfigurationQueueItem
                                 key={entry.id}
+                                variant="rail"
                                 active={entry.id === selectedRoomId}
                                 title={String(entry.label ?? "").trim() || "Untitled room"}
                                 subtitle={

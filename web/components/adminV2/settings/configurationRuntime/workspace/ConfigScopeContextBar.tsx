@@ -3,8 +3,7 @@
 import type { ConfigScopeMode } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 /**
- * Configuration scope — Organization vs the selected location.
- * Minimal operator language only.
+ * Configuration scope — minimal chrome, operator language.
  */
 export function ConfigScopeContextBar({
     mode,
@@ -18,15 +17,11 @@ export function ConfigScopeContextBar({
     organizationLabel?: string;
     objectLabel: string;
     onModeChange: (mode: ConfigScopeMode) => void;
-    /** Optional; prefer omitting — keep the bar scannable. */
     ownershipHint?: string;
     testId?: string;
 }) {
     return (
-        <div
-            className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-alloy-forge/10 bg-white px-3 py-2"
-            data-testid={testId}
-        >
+        <div className="mb-2 flex flex-wrap items-center gap-1.5" data-testid={testId}>
             <p className="mr-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/40">
                 Configuration
             </p>

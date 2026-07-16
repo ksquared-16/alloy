@@ -29,9 +29,18 @@ describe("Configuration Runtime workspace primitives", () => {
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).toContain(
             "data-config-glance-icon-well",
         );
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).toContain(
+            'data-config-surface="region"',
+        );
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).not.toContain(
+            "ConfigWorkspaceCard",
+        );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigScopeContextBar.tsx")).toContain(
             "Configuration",
         );
+        expect(
+            read("components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail.tsx"),
+        ).toContain('data-config-surface="workspace"');
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel.tsx")).toContain(
             "actionable.length === 0",
         );

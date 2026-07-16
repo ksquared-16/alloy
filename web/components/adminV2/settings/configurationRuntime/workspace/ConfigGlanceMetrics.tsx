@@ -1,7 +1,6 @@
 "use client";
 
 import type { ConfigGlanceMetric } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
-import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 const ICON_PATH: Record<NonNullable<ConfigGlanceMetric["icon"]>, string> = {
     capacity: "M4 19h16M6 17V9m4 8V5m4 12v-6m4 6V7",
@@ -25,8 +24,8 @@ function wellClass(tone: ConfigGlanceMetric["tone"]): string {
 }
 
 /**
- * Compact operational glance — summary objects with identity, primary value, secondary state.
- * Prefer icon wells + metric hierarchy over equal text boxes.
+ * One summary region — icon + typography + subtle column separators.
+ * Not four independent bordered cards.
  */
 export function ConfigGlanceMetrics({
     title = "Configured",
@@ -38,8 +37,13 @@ export function ConfigGlanceMetrics({
     testId?: string;
 }) {
     return (
-        <ConfigWorkspaceCard title={title} compact testId={testId}>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <section
+            className="border-t border-alloy-stone/25 pt-3"
+            data-testid={testId}
+            data-config-surface="region"
+        >
+            <h2 className="config-typo-workspace-title mb-2.5">{title}</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x sm:divide-alloy-stone/20">
                 {metrics.map((metric) => {
                     const body = (
                         <>
@@ -56,32 +60,30 @@ export function ConfigGlanceMetrics({
                                     <span className="block text-[11px] font-medium uppercase tracking-[0.06em] text-alloy-midnight/45">
                                         {metric.label}
                                     </span>
-                                    <span className="mt-0.5 block text-lg font-semibold leading-tight text-alloy-midnight">
+                                    <span
+                                        className={`mt-0.5 block text-lg font-semibold leading-tight ${
+                                            metric.tone === "attention" ?
+                                                "text-alloy-ember"
+                                            :   "text-alloy-midnight"
+                                        }`}
+                                    >
                                         {metric.value}
                                     </span>
+                                    {metric.hint ?
+                                        <span className="mt-1 block text-[11px] leading-snug text-alloy-midnight/50">
+                                            {metric.hint}
+                                        </span>
+                                    :   null}
                                 </div>
                             </div>
-                            {metric.hint ?
-                                <span
-                                    className={`mt-2 block text-[11px] leading-snug ${
-                                        metric.tone === "attention" ?
-                                            "font-medium text-alloy-ember"
-                                        :   "text-alloy-midnight/50"
-                                    }`}
-                                >
-                                    {metric.hint}
-                                </span>
-                            :   null}
                         </>
                     );
-                    const shellClass =
-                        "rounded-xl border border-alloy-forge/10 bg-white px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.03)]";
                     if (metric.onSelect) {
                         return (
                             <button
                                 key={metric.key}
                                 type="button"
-                                className={`${shellClass} text-left transition-colors hover:border-alloy-bend-pine/25 hover:bg-alloy-bend-pine/[0.03]`}
+                                className="px-3 py-1.5 text-left first:pl-0 last:pr-0 hover:bg-alloy-bend-pine/[0.03] sm:px-4"
                                 onClick={metric.onSelect}
                                 data-testid={`${testId}-${metric.key}`}
                             >
@@ -90,12 +92,16 @@ export function ConfigGlanceMetrics({
                         );
                     }
                     return (
-                        <div key={metric.key} className={shellClass} data-testid={`${testId}-${metric.key}`}>
+                        <div
+                            key={metric.key}
+                            className="px-3 py-1.5 first:pl-0 last:pr-0 sm:px-4"
+                            data-testid={`${testId}-${metric.key}`}
+                        >
                             {body}
                         </div>
                     );
                 })}
             </div>
-        </ConfigWorkspaceCard>
+        </section>
     );
 }

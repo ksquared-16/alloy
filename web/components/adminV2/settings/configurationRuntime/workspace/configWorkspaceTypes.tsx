@@ -51,19 +51,47 @@ export type ConfigApplyTarget = {
     disabled?: boolean;
 };
 
+export type ConfigSurface = "card" | "region";
+
+/**
+ * Workspace section — prefer `region` (typography + divider) over floating cards.
+ * `card` retained for legacy / dialog-adjacent surfaces.
+ */
 export function ConfigWorkspaceCard({
     title,
     description,
     children,
     testId,
     compact = false,
+    surface = "card",
 }: {
     title?: string;
     description?: string;
     children: ReactNode;
     testId?: string;
     compact?: boolean;
+    surface?: ConfigSurface;
 }) {
+    if (surface === "region") {
+        return (
+            <section
+                className={`${compact ? "pt-3" : "pt-4"} border-t border-alloy-stone/25`}
+                data-testid={testId}
+                data-config-surface="region"
+            >
+                {title ?
+                    <div className={compact ? "mb-2" : "mb-2.5"}>
+                        <h2 className="config-typo-workspace-title">{title}</h2>
+                        {description ?
+                            <p className="config-typo-sublabel mt-0.5">{description}</p>
+                        :   null}
+                    </div>
+                :   null}
+                {children}
+            </section>
+        );
+    }
+
     return (
         <section className={`process-config-setup-card ${compact ? "p-3" : "p-4"}`} data-testid={testId}>
             {title ?
