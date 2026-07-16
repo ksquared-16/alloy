@@ -29,28 +29,28 @@ export function ConfigObjectHeader({
 
     return (
         <header
-            className={isHero ? undefined : "mb-1"}
+            className={isHero ? undefined : "mb-3 border-b border-alloy-stone/20 pb-3"}
             data-testid={testId}
             data-config-header-size={size}
         >
             {breadcrumb ?
-                <div className="mb-2">{breadcrumb}</div>
+                <div className="mb-1">{breadcrumb}</div>
             :   null}
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                 <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
                         <h1
                             className={
                                 isHero ?
-                                    "text-[1.75rem] font-semibold tracking-tight text-alloy-midnight sm:text-[2rem] leading-tight"
-                                :   "text-xl font-semibold tracking-tight text-alloy-midnight sm:text-2xl"
+                                    "text-[1.5rem] font-semibold tracking-tight text-alloy-midnight sm:text-[1.75rem] leading-none"
+                                :   "text-2xl font-semibold tracking-tight text-alloy-midnight leading-none"
                             }
                         >
                             {name}
                         </h1>
                         {status ?
                             <span
-                                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${
                                     status.tone === "inactive" ?
                                         "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
                                     : status.tone === "attention" ?
@@ -63,13 +63,7 @@ export function ConfigObjectHeader({
                         :   null}
                     </div>
                     {visibleFacts.length > 0 ?
-                        <p
-                            className={
-                                isHero ?
-                                    "mt-2 text-sm text-alloy-midnight/55"
-                                :   "config-typo-sublabel mt-1"
-                            }
-                        >
+                        <p className="mt-1 text-[12px] leading-snug text-alloy-midnight/50">
                             {visibleFacts.join(" · ")}
                         </p>
                     :   null}

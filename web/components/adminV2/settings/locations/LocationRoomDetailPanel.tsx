@@ -592,7 +592,7 @@ export default function LocationRoomDetailPanel({
     return (
         <ConfigChildObjectMasterDetail
             listTitle="Rooms"
-            listSummary="Capacity lives on each room"
+            listSummary="Capacity per room"
             listActions={
                 canMutate && onAddRoom ?
                     <button
@@ -616,10 +616,7 @@ export default function LocationRoomDetailPanel({
                                 variant="rail"
                                 active={entry.id === selectedRoomId}
                                 title={String(entry.label ?? "").trim() || "Untitled room"}
-                                subtitle={
-                                    md.capacity ? `${md.capacity} children`
-                                    :   "Needs capacity setup"
-                                }
+                                subtitle={md.capacity ? `${md.capacity} capacity` : "No capacity"}
                                 onClick={() => onSelectRoom(entry.id)}
                                 testId={`locations-room-${entry.id}`}
                             />

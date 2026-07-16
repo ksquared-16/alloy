@@ -3,7 +3,7 @@
 import type { ConfigScopeMode } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 /**
- * Quiet ownership metadata — never competes with the object hero.
+ * Quiet scope control — operator language, never competes with the object hero.
  */
 export function ConfigScopeContextBar({
     mode,
@@ -20,9 +20,7 @@ export function ConfigScopeContextBar({
     ownershipHint?: string;
     testId?: string;
 }) {
-    const hint =
-        ownershipHint ??
-        (mode === "object" ? "Configured at this location" : "Organization-wide configuration");
+    const hint = ownershipHint ?? (mode === "object" ? "This location" : "All locations");
 
     return (
         <div
@@ -43,12 +41,12 @@ export function ConfigScopeContextBar({
             <button
                 type="button"
                 className={`font-medium underline-offset-2 hover:text-alloy-midnight/70 hover:underline ${
-                    mode === "object" ? "text-alloy-midnight/60" : ""
+                    mode === "object" ? "text-alloy-midnight/65" : ""
                 }`}
                 onClick={() => onModeChange("object")}
                 data-testid={`${testId}-object`}
             >
-                {objectLabel}
+                {mode === "object" ? objectLabel : "Location"}
             </button>
             <span aria-hidden="true">·</span>
             <span>{hint}</span>

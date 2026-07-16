@@ -2,7 +2,6 @@
 
 import type { ConfigAttentionItem, ConfigReadinessArea } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import {
-    CONFIG_OBJECT_CELL,
     ConfigAttentionPanel,
     ConfigGlanceMetrics,
     ConfigOperationalReadiness,
@@ -11,8 +10,8 @@ import {
 import type { LocationWorkspaceModel, LocationWorkspaceTab } from "@/lib/locations/locationWorkspaceModel";
 
 /**
- * Overview page composition — stacked regions on stone, not one white slab.
- * Rhythm: health → configuration → operations.
+ * Overview composition — attention leads; readiness supports;
+ * summary and operations are lightweight regions.
  */
 export function LocationOverviewSurface({
     model,
@@ -36,10 +35,6 @@ export function LocationOverviewSurface({
     const attentionItems: ConfigAttentionItem[] = model.attention;
     const knownComplete = readinessAreas.filter((area) => area.complete === true).length;
     const knownTotal = readinessAreas.filter((area) => area.complete !== null).length;
-    const readinessCaption =
-        model.setupPercent >= 100 ? "Ready"
-        : model.setupPercent >= 60 ? "Getting close"
-        :   "Needs setup";
     const capacityNeedsAttention =
         model.configuredCapacity == null || model.roomsNeedingCapacity > 0;
     const scheduleNeedsAttention = scheduleSummary === "Not set up yet";
@@ -48,7 +43,9 @@ export function LocationOverviewSurface({
     return (
         <div className="flex flex-col gap-3 pb-2" data-testid="locations-overview">
             <ConfigWorkspaceCard compact testId="locations-overview-health">
-                <div className={`grid gap-5 ${hasAttention ? "lg:grid-cols-2" : ""}`}>
+                <div
+                    className={`grid gap-6 ${hasAttention ? "lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]" : ""}`}
+                >
                     <ConfigAttentionPanel
                         items={attentionItems}
                         compact
@@ -59,17 +56,22 @@ export function LocationOverviewSurface({
                             if (match) onResolveAttention(match.tab);
                         }}
                     />
-                    <section data-testid="locations-setup-progress" data-config-surface="region">
-                        <div className="mb-2.5 flex items-start justify-between gap-3">
+                    <section
+                        className={hasAttention ? "lg:border-l lg:border-alloy-stone/20 lg:pl-6" : undefined}
+                        data-testid="locations-setup-progress"
+                        data-config-surface="region"
+                    >
+                        <div className="mb-2 flex items-center justify-between gap-3">
                             <div>
-                                <h2 className="config-typo-workspace-title">Operational readiness</h2>
-                                <p className="mt-0.5 text-[11px] text-alloy-midnight/50">
-                                    {knownComplete} of {knownTotal}{" "}
-                                    {knownTotal === 1 ? "area" : "areas"} complete · {readinessCaption}
+                                <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+                                    Operational readiness
+                                </h2>
+                                <p className="mt-0.5 text-[11px] text-alloy-midnight/45">
+                                    {knownComplete}/{knownTotal} areas · {model.setupPercent}%
                                 </p>
                             </div>
                             <div
-                                className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+                                className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
                                 style={{
                                     background: `conic-gradient(${
                                         model.setupPercent >= 100 ? "#007d68" : "#00a283"
@@ -77,7 +79,7 @@ export function LocationOverviewSurface({
                                 }}
                                 aria-hidden
                             >
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-semibold text-alloy-midnight">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-alloy-midnight">
                                     {model.setupPercent}%
                                 </div>
                             </div>
@@ -110,12 +112,7 @@ export function LocationOverviewSurface({
                             model.configuredCapacity == null ?
                                 "Not set"
                             :   String(model.configuredCapacity),
-                        hint:
-                            model.roomsNeedingCapacity > 0 ?
-                                `${model.roomsNeedingCapacity} rooms need setup`
-                            : model.configuredCapacity == null ?
-                                "Children this location can serve"
-                            :   "Children across active rooms",
+                        hint: model.roomsNeedingCapacity > 0 ? `${model.roomsNeedingCapacity} need setup` : undefined,
                         onSelect: () => onOpenTab("rooms"),
                     },
                     {
@@ -124,7 +121,6 @@ export function LocationOverviewSurface({
                         icon: "rooms",
                         tone: model.activeRoomCount === 0 ? "attention" : "default",
                         value: String(model.activeRoomCount),
-                        hint: model.activeRoomCount === 0 ? "Add a room to begin" : "Active classrooms",
                         onSelect: () => onOpenTab("rooms"),
                     },
                     {
@@ -133,7 +129,6 @@ export function LocationOverviewSurface({
                         icon: "programs",
                         tone: model.activeProgramCount === 0 ? "attention" : "default",
                         value: String(model.activeProgramCount),
-                        hint: model.activeProgramCount === 0 ? "Nothing offered yet" : "Active offerings",
                         onSelect: () => onOpenTab("programs"),
                     },
                     {
@@ -142,67 +137,39 @@ export function LocationOverviewSurface({
                         icon: "schedule",
                         tone: scheduleNeedsAttention ? "attention" : "ready",
                         value: scheduleNeedsAttention ? "Not set" : scheduleSummary,
-                        hint: scheduleNeedsAttention ? "Weekly operating hours" : "Primary weekly pattern",
                         onSelect: () => onOpenTab("schedule"),
                     },
                 ]}
             />
 
             <ConfigWorkspaceCard title="How this location runs" compact testId="locations-overview-operations">
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid gap-y-3 sm:grid-cols-3 sm:divide-x sm:divide-alloy-stone/20">
                     {[
                         {
                             label: "Tours",
-                            value: "Availability and booking",
-                            action: "Open tours",
+                            value: "Availability & booking",
                             tab: "tours" as const,
-                            well: "bg-alloy-bend-pine/[0.08] text-[#007d68]",
-                            glyph: "M12 6v6l4 2M12 22a10 10 0 100-20 10 10 0 000 20z",
                         },
                         {
                             label: "Placement",
-                            value: `${model.activeRoomCount} rooms participate`,
-                            action: "Open placement",
+                            value: `${model.activeRoomCount} rooms`,
                             tab: "placement" as const,
-                            well: "bg-alloy-bend-pine/[0.08] text-[#007d68]",
-                            glyph: "M4 6h16M4 12h10M4 18h7",
                         },
                         {
                             label: "Access",
                             value: "Team permissions",
-                            action: "Open access",
                             tab: "access" as const,
-                            well: "bg-alloy-midnight/[0.05] text-alloy-midnight/70",
-                            glyph: "M12 12a4 4 0 100-8 4 4 0 000 8zM4 20a8 8 0 0116 0",
                         },
                     ].map((item) => (
                         <button
                             key={item.label}
                             type="button"
-                            className={`${CONFIG_OBJECT_CELL} text-left transition-colors hover:border-alloy-bend-pine/25 hover:bg-alloy-bend-pine/[0.04]`}
+                            className="px-0 text-left hover:bg-alloy-bend-pine/[0.03] sm:px-4 first:sm:pl-0 last:sm:pr-0"
                             onClick={() => onOpenTab(item.tab)}
                         >
-                            <div className="flex items-start gap-2.5">
-                                <span
-                                    className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.well}`}
-                                >
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.75"
-                                        className="h-4 w-4"
-                                        aria-hidden
-                                    >
-                                        <path strokeLinecap="round" strokeLinejoin="round" d={item.glyph} />
-                                    </svg>
-                                </span>
-                                <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-alloy-midnight">{item.label}</p>
-                                    <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{item.value}</p>
-                                    <p className="mt-1.5 text-xs font-semibold text-[#007d68]">{item.action} →</p>
-                                </div>
-                            </div>
+                            <p className="text-sm font-semibold text-alloy-midnight">{item.label}</p>
+                            <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{item.value}</p>
+                            <p className="mt-1.5 text-xs font-semibold text-[#007d68]">Open →</p>
                         </button>
                     ))}
                 </div>

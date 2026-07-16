@@ -453,7 +453,7 @@ export default function LocationProgramDetailPanel({
     return (
         <ConfigChildObjectMasterDetail
             listTitle="Programs"
-            listSummary="What this location offers"
+            listSummary="Offerings"
             testId="locations-programs"
             listActions={
                 canMutate && onAddProgram ?
@@ -473,13 +473,10 @@ export default function LocationProgramDetailPanel({
                         const entrySummary = summaries.find((item) => item.id === entry.id);
                         const subtitle =
                             entry.is_active === false ? "Inactive"
-                            : entrySummary ?
-                                `${entrySummary.roomCount} rooms · ${
-                                    entrySummary.configuredCapacity == null ?
-                                        "capacity unset"
-                                    :   `${entrySummary.configuredCapacity} capacity`
-                                }`
-                            :   "Active";
+                            : (entrySummary?.roomCount ?? 0) === 0 ? "No rooms"
+                            : entrySummary?.configuredCapacity == null ?
+                                `${entrySummary.roomCount} rooms`
+                            :   `${entrySummary.roomCount} rooms · ${entrySummary.configuredCapacity}`;
                         return (
                             <ConfigurationQueueItem
                                 key={entry.id}

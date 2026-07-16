@@ -26,8 +26,9 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("LocationsCommandRailActions");
         expect(page).toContain("LocationOverviewSurface");
         expect(page).toContain("buildLocationIdentityFacts");
-        expect(page).toContain("xl:grid-cols-[12.5rem_minmax(0,1fr)]");
+        expect(page).toContain("xl:grid-cols-[16rem_minmax(0,1fr)]");
         expect(page).toContain('data-testid="locations-hero"');
+        expect(page).not.toContain("← All locations");
         expect(page).toContain('variant="rail"');
         expect(page).not.toContain("ConfigOperationalActions");
         expect(page).not.toContain("Address not set up yet");
@@ -46,7 +47,9 @@ describe("Configuration Runtime — Locations", () => {
         const model = read("lib/locations/locationWorkspaceModel.ts");
         expect(page).toContain("buildLocationsFleetModel");
         expect(page).toContain("locationsFleetHref");
-        expect(page).toContain("locations-back-to-fleet");
+        expect(page).toContain("ConfigScopeContextBar");
+        expect(page).toContain("returnToFleet");
+        expect(page).not.toContain("← All locations");
         expect(page).not.toContain("Choose a location, understand what needs attention");
         expect(fleet).toContain("locations-fleet-landing");
         expect(fleet).toContain("locations-fleet-rollups");

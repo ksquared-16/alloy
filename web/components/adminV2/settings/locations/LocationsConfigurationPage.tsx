@@ -56,9 +56,7 @@ function locationSelectorSignal(location: {
     isActive: boolean;
 }): string {
     if (!location.isActive) return "Inactive";
-    if (location.criticalCount > 0) {
-        return `${location.criticalCount} need${location.criticalCount === 1 ? "s" : ""} attention`;
-    }
+    if (location.criticalCount > 0) return `${location.criticalCount} issues`;
     if (location.setupPercent < 100) return `${location.setupPercent}% ready`;
     if (location.locality) return location.locality;
     return "Ready";
@@ -603,207 +601,192 @@ export default function LocationsConfigurationPage({
                             return newId;
                         }}
                     />
-                : !selectedSite ?
-                    <div className="pb-4" data-testid="locations-fleet-composition">
-                        <ConfigScopeContextBar
-                            mode="organization"
-                            organizationLabel="Organization"
-                            objectLabel="Location"
-                            ownershipHint="Organization-wide configuration"
-                            onModeChange={(mode) => {
-                                if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
-                            }}
-                        />
-                        <div className="mt-3">
-                            <LocationsFleetLanding
-                                fleet={fleet}
-                                showInactive={showInactive}
-                                onShowInactiveChange={setShowInactive}
-                                search={search}
-                                onSearchChange={setSearch}
-                                onOpenLocation={(locationId) => openLocation(locationId)}
-                                onAddLocation={beginAddLocation}
-                                canMutate={canMutate}
-                            />
-                        </div>
-                    </div>
-                :   <div className="grid items-start gap-4 pb-4 xl:grid-cols-[12.5rem_minmax(0,1fr)]">
-                        <aside
-                            className="process-config-setup-card hidden self-start p-0 xl:block"
-                            aria-label="Location selector"
-                            data-testid="locations-object-selector"
-                        >
-                            <div className="flex items-start justify-between gap-2 px-3 pb-2 pt-3">
-                                <div>
-                                    <p className="config-typo-queue-section-label">Locations</p>
-                                    <p className="config-typo-sublabel mt-0.5">{visibleSites.length} shown</p>
+                :   <div
+                        className={`grid items-start gap-4 pb-4 ${
+                            selectedSite ? "xl:grid-cols-[16rem_minmax(0,1fr)]" : ""
+                        }`}
+                    >
+                        {selectedSite ?
+                            <aside
+                                className="process-config-setup-card hidden self-start p-0 xl:block"
+                                aria-label="Location selector"
+                                data-testid="locations-object-selector"
+                            >
+                                <div className="flex items-start justify-between gap-2 px-3 pb-2 pt-3">
+                                    <div>
+                                        <p className="config-typo-queue-section-label">Locations</p>
+                                        <p className="config-typo-sublabel mt-0.5">{visibleSites.length} shown</p>
+                                    </div>
+                                    <label className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/55">
+                                        <input
+                                            type="checkbox"
+                                            checked={showInactive}
+                                            onChange={(event) => setShowInactive(event.target.checked)}
+                                        />
+                                        Inactive
+                                    </label>
                                 </div>
-                                <label className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/55">
-                                    <input
-                                        type="checkbox"
-                                        checked={showInactive}
-                                        onChange={(event) => setShowInactive(event.target.checked)}
-                                    />
-                                    Inactive
+                                <label className="sr-only" htmlFor="locations-search">
+                                    Search locations
                                 </label>
-                            </div>
-                            <button
-                                type="button"
-                                className="mb-1.5 w-full px-3 py-1 text-left text-[11px] font-semibold text-[#007d68] hover:bg-alloy-bend-pine/[0.05]"
-                                onClick={returnToFleet}
-                                data-testid="locations-back-to-fleet"
-                            >
-                                ← All locations
-                            </button>
-                            <label className="sr-only" htmlFor="locations-search">
-                                Search locations
-                            </label>
-                            <input
-                                id="locations-search"
-                                type="search"
-                                value={search}
-                                onChange={(event) => setSearch(event.target.value)}
-                                placeholder="Search locations"
-                                className="config-runtime-input mx-2.5 mb-2 w-[calc(100%-1.25rem)]"
-                            />
-                            <div className="space-y-1 px-2 pb-3">
-                                {visibleSites.map((site) => {
-                                    const summary = fleetById.get(site.id);
-                                    const locality =
-                                        formatLocationLocality({ city: site.city, state: site.state }) ??
-                                        summary?.locality ??
-                                        null;
-                                    return (
-                                        <ConfigurationQueueItem
-                                            key={site.id}
-                                            variant="rail"
-                                            active={site.id === selectedId}
-                                            title={String(site.label ?? "").trim() || "Untitled location"}
-                                            subtitle={
-                                                summary ?
-                                                    locationSelectorSignal({ ...summary, locality })
-                                                :   site.is_active === false ?
-                                                    "Inactive"
-                                                :   "Active"
-                                            }
-                                            onClick={() => {
-                                                setSelectedId(site.id);
-                                                setEditingSite(false);
-                                                router.replace(locationWorkspaceHref(site.id, activeTab));
-                                            }}
-                                            testId={`locations-location-${site.id}`}
-                                        />
-                                    );
-                                })}
-                            </div>
-                        </aside>
-
-                        <main className="min-w-0 space-y-3" data-testid="locations-selected-location">
-                            <div className="xl:hidden">
-                                <button
-                                    type="button"
-                                    className="mb-2 text-[11px] font-semibold text-[#007d68]"
-                                    onClick={returnToFleet}
-                                    data-testid="locations-back-to-fleet-mobile"
-                                >
-                                    ← All locations
-                                </button>
-                                <label className="config-typo-field-label" htmlFor="locations-mobile-selector">
-                                    Location
-                                </label>
-                                <select
-                                    id="locations-mobile-selector"
-                                    className="config-runtime-select mt-1"
-                                    value={selectedSite.id}
-                                    onChange={(event) => {
-                                        setSelectedId(event.target.value);
-                                        setEditingSite(false);
-                                        router.replace(locationWorkspaceHref(event.target.value, activeTab));
-                                    }}
-                                >
-                                    {siteRows.map((site) => (
-                                        <option key={site.id} value={site.id}>
-                                            {String(site.label ?? "").trim() || "Untitled location"}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <section
-                                className="process-config-setup-card px-5 pt-4"
-                                data-testid="locations-hero"
-                            >
-                                <ConfigObjectHeader
-                                    size="hero"
-                                    name={model?.displayName ?? "Location"}
-                                    status={{
-                                        label: selectedSite.is_active === false ? "Inactive" : "Active",
-                                        tone: selectedSite.is_active === false ? "inactive" : "active",
-                                    }}
-                                    facts={identityFacts}
-                                    breadcrumb={
-                                        <ConfigScopeContextBar
-                                            mode="object"
-                                            organizationLabel="Organization"
-                                            objectLabel={model?.displayName ?? "Location"}
-                                            ownershipHint="Configured at this location"
-                                            onModeChange={(mode) => {
-                                                if (mode === "organization") returnToFleet();
-                                            }}
-                                        />
-                                    }
-                                    testId="locations-object-header"
+                                <input
+                                    id="locations-search"
+                                    type="search"
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    placeholder="Search locations"
+                                    className="config-runtime-input mx-2.5 mb-2 w-[calc(100%-1.25rem)]"
                                 />
+                                <div className="space-y-1 px-2 pb-3">
+                                    {visibleSites.map((site) => {
+                                        const summary = fleetById.get(site.id);
+                                        const locality =
+                                            formatLocationLocality({ city: site.city, state: site.state }) ??
+                                            summary?.locality ??
+                                            null;
+                                        return (
+                                            <ConfigurationQueueItem
+                                                key={site.id}
+                                                variant="rail"
+                                                active={site.id === selectedId}
+                                                title={String(site.label ?? "").trim() || "Untitled location"}
+                                                subtitle={
+                                                    summary ?
+                                                        locationSelectorSignal({ ...summary, locality })
+                                                    :   site.is_active === false ?
+                                                        "Inactive"
+                                                    :   "Active"
+                                                }
+                                                onClick={() => {
+                                                    setSelectedId(site.id);
+                                                    setEditingSite(false);
+                                                    router.replace(locationWorkspaceHref(site.id, activeTab));
+                                                }}
+                                                testId={`locations-location-${site.id}`}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </aside>
+                        :   null}
 
-                                <div
-                                    className="mt-4 flex overflow-x-auto border-t border-alloy-stone/25"
-                                    role="tablist"
-                                    aria-label="Location settings"
-                                >
-                                    {LOCATION_WORKSPACE_TABS.map((tab) => (
-                                        <button
-                                            key={tab.key}
-                                            type="button"
-                                            role="tab"
-                                            aria-selected={activeTab === tab.key && !editingSite}
-                                            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-xs font-semibold ${
-                                                activeTab === tab.key && !editingSite ?
-                                                    "border-[#00a283] text-[#007d68]"
-                                                :   "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
-                                            }`}
-                                            onClick={() => navigate(tab.key)}
-                                            data-testid={`locations-tab-${tab.key}`}
+                        <main
+                            className="min-w-0 space-y-3"
+                            data-testid={selectedSite ? "locations-selected-location" : "locations-fleet-composition"}
+                        >
+                            {selectedSite ?
+                                <div className="xl:hidden">
+                                    <label className="config-typo-field-label" htmlFor="locations-mobile-selector">
+                                        Location
+                                    </label>
+                                    <select
+                                        id="locations-mobile-selector"
+                                        className="config-runtime-select mt-1"
+                                        value={selectedSite.id}
+                                        onChange={(event) => {
+                                            setSelectedId(event.target.value);
+                                            setEditingSite(false);
+                                            router.replace(locationWorkspaceHref(event.target.value, activeTab));
+                                        }}
+                                    >
+                                        {siteRows.map((site) => (
+                                            <option key={site.id} value={site.id}>
+                                                {String(site.label ?? "").trim() || "Untitled location"}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            :   null}
+
+                            <ConfigScopeContextBar
+                                mode={selectedSite ? "object" : "organization"}
+                                organizationLabel="Organization"
+                                objectLabel={model?.displayName ?? "Location"}
+                                ownershipHint={selectedSite ? "This location" : "All locations"}
+                                onModeChange={(mode) => {
+                                    if (mode === "organization") returnToFleet();
+                                    else if (siteRows[0]) openLocation(siteRows[0].id);
+                                }}
+                            />
+
+                            {!selectedSite ?
+                                <LocationsFleetLanding
+                                    fleet={fleet}
+                                    showInactive={showInactive}
+                                    onShowInactiveChange={setShowInactive}
+                                    search={search}
+                                    onSearchChange={setSearch}
+                                    onOpenLocation={(locationId) => openLocation(locationId)}
+                                    onAddLocation={beginAddLocation}
+                                    canMutate={canMutate}
+                                />
+                            :   <>
+                                    <section
+                                        className="process-config-setup-card px-5 pt-3"
+                                        data-testid="locations-hero"
+                                    >
+                                        <ConfigObjectHeader
+                                            size="hero"
+                                            name={model?.displayName ?? "Location"}
+                                            status={{
+                                                label: selectedSite.is_active === false ? "Inactive" : "Active",
+                                                tone: selectedSite.is_active === false ? "inactive" : "active",
+                                            }}
+                                            facts={identityFacts}
+                                            testId="locations-object-header"
+                                        />
+
+                                        <div
+                                            className="mt-2.5 flex overflow-x-auto border-t border-alloy-stone/25"
+                                            role="tablist"
+                                            aria-label="Location settings"
                                         >
-                                            {tab.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </section>
+                                            {LOCATION_WORKSPACE_TABS.map((tab) => (
+                                                <button
+                                                    key={tab.key}
+                                                    type="button"
+                                                    role="tab"
+                                                    aria-selected={activeTab === tab.key && !editingSite}
+                                                    className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold ${
+                                                        activeTab === tab.key && !editingSite ?
+                                                            "border-[#00a283] text-[#007d68]"
+                                                        :   "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
+                                                    }`}
+                                                    onClick={() => navigate(tab.key)}
+                                                    data-testid={`locations-tab-${tab.key}`}
+                                                >
+                                                    {tab.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </section>
 
-                            {tabBody}
-                            {selectedSite && toursKeepAlive && !editingSite ?
-                                <div
-                                    className={activeTab === "tours" ? undefined : "hidden"}
-                                    data-testid="locations-tours-keepalive"
-                                >
-                                    <LocationToursPanel
-                                        locationId={selectedSite.id}
-                                        locationLabel={model?.displayName ?? ""}
-                                    />
-                                </div>
-                            :   null}
-                            {selectedSite && placementKeepAlive && !editingSite ?
-                                <div
-                                    className={activeTab === "placement" ? undefined : "hidden"}
-                                    data-testid="locations-placement-keepalive"
-                                >
-                                    <LocationPlacementPanel
-                                        rooms={selectedRooms}
-                                        onReviewRooms={() => navigate("rooms")}
-                                        canMutate={canMutate}
-                                    />
-                                </div>
-                            :   null}
+                                    {tabBody}
+                                    {toursKeepAlive && !editingSite ?
+                                        <div
+                                            className={activeTab === "tours" ? undefined : "hidden"}
+                                            data-testid="locations-tours-keepalive"
+                                        >
+                                            <LocationToursPanel
+                                                locationId={selectedSite.id}
+                                                locationLabel={model?.displayName ?? ""}
+                                            />
+                                        </div>
+                                    :   null}
+                                    {placementKeepAlive && !editingSite ?
+                                        <div
+                                            className={activeTab === "placement" ? undefined : "hidden"}
+                                            data-testid="locations-placement-keepalive"
+                                        >
+                                            <LocationPlacementPanel
+                                                rooms={selectedRooms}
+                                                onReviewRooms={() => navigate("rooms")}
+                                                canMutate={canMutate}
+                                            />
+                                        </div>
+                                    :   null}
+                                </>
+                            }
                         </main>
                     </div>
                 }

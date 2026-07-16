@@ -54,7 +54,9 @@ export function ConfigAttentionPanel({
     if (embedded) {
         return (
             <section className="min-w-0" data-testid={testId} data-config-surface="region">
-                <h2 className="config-typo-workspace-title mb-1.5">Needs attention</h2>
+                <h2 className="mb-2 text-[15px] font-semibold tracking-tight text-alloy-midnight">
+                    Needs attention
+                </h2>
                 {list}
             </section>
         );

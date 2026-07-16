@@ -32,25 +32,25 @@ describe("Configuration Runtime workspace primitives", () => {
             "data-config-glance-icon-well",
         );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).toContain(
-            "CONFIG_OBJECT_CELL",
-        );
-        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).toContain(
             "embedded",
         );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes.tsx")).toContain(
             'surface = "panel"',
         );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigScopeContextBar.tsx")).toContain(
-            "Configured at this location",
+            "This location",
         );
         expect(
             read("components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail.tsx"),
         ).toContain('data-config-surface="workspace"');
         expect(
             read("components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail.tsx"),
-        ).toContain("lg:grid-cols-[10.5rem_minmax(0,1fr)]");
+        ).toContain("lg:grid-cols-[13.5rem_minmax(0,1fr)]");
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigObjectHeader.tsx")).toContain(
             'size = "default"',
+        );
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).toContain(
+            "sm:divide-x",
         );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel.tsx")).toContain(
             "actionable.length === 0",

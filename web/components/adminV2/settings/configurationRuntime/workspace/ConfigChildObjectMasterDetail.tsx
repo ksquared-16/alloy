@@ -3,8 +3,8 @@
 import type { ReactNode } from "react";
 
 /**
- * Child-object page composition — narrow supporting queue + primary detail region.
- * Stone breathes between the two; detail owns the workspace.
+ * Child-object page composition — supporting queue + primary detail region.
+ * Detail owns the workspace; queue is navigation.
  */
 export function ConfigChildObjectMasterDetail({
     listTitle,
@@ -23,15 +23,12 @@ export function ConfigChildObjectMasterDetail({
 }) {
     return (
         <div
-            className="grid items-start gap-3 lg:grid-cols-[10.5rem_minmax(0,1fr)]"
+            className="grid items-start gap-3 lg:grid-cols-[13.5rem_minmax(0,1fr)]"
             data-testid={testId}
             data-config-surface="workspace"
         >
-            <aside
-                className="process-config-setup-card self-start p-0"
-                data-testid={`${testId}-list`}
-            >
-                <div className="flex items-start justify-between gap-2 px-2.5 py-2">
+            <aside className="process-config-setup-card self-start p-0" data-testid={`${testId}-list`}>
+                <div className="flex items-start justify-between gap-2 px-3 py-2">
                     <div>
                         <p className="config-typo-queue-section-label">{listTitle}</p>
                         {listSummary ?
@@ -40,7 +37,7 @@ export function ConfigChildObjectMasterDetail({
                     </div>
                     {listActions}
                 </div>
-                <div className="space-y-0.5 px-1.5 pb-2">{list}</div>
+                <div className="space-y-0.5 px-2 pb-2">{list}</div>
             </aside>
             <div
                 className="process-config-setup-card min-w-0 self-start px-5 py-4"
