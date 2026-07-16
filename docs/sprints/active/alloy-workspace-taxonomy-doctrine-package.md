@@ -8,11 +8,13 @@ supersedes: []
 # Alloy Workspace Taxonomy — Doctrine Package
 
 **Sprint:** `workspace-surface-hierarchy` (slot 5) → mission reframed as **Workspace Taxonomy**  
-**Status:** Proposed doctrine package — **not yet merged into `docs/platform/`**  
+**Status:** **Ratified and integrated** into `docs/platform/operator/alloy-visual-language.md` (July 2026). This sprint file is retained as execution history — **not** the canonical owner.  
 **Date:** 2026-07-16  
 **Depends on:** Accepted reconciliation (`workspace-surface-hierarchy-doctrine-reconciliation.md`)
 
-**Constraints honored:** No Runtime, navigation, BOS, interaction, or token changes. Operational Workspace Doctrine V3 remains **frozen**. This package defines the broader taxonomy V3 specializes.
+**Canonical owner after Phase 0:** [`../../platform/operator/alloy-visual-language.md`](../../platform/operator/alloy-visual-language.md)
+
+**Constraints honored:** No Runtime, navigation, BOS, interaction, or token changes. Operational Workspace Doctrine V3 remains **frozen**. This package defined the broader taxonomy V3 specializes.
 
 **Premise (accepted):** The missing doctrine is not a stone canvas. It is the taxonomy of Alloy workspaces and how each category composes one shared layering grammar differently.
 
@@ -30,7 +32,7 @@ supersedes: []
 | §6 | Cross-platform composition principles (Alloy language) |
 | §7 | Canonical ownership + rollout |
 
-Until ratified into platform docs, this file is **sprint truth for the proposal**, not encyclopedia truth.
+**Historical proposal body below** — prefer the canonical owner for current truth.
 
 ---
 

@@ -8,7 +8,8 @@ supersedes: []
 # Configuration Workspace Visual Language
 
 **Status:** Canonical. The visual specialization of `configuration-workspace-platform-doctrine.md`.
-**Builds on:** `alloy-visual-language.md` (the ten premises) and `operational-surface-design-system.md` (card grammar, tokens, System 5). This doc does **not** restate those; it adds what is specific to configuration, and explains *why* a configuration workspace feels different from both a settings form and an operational workspace.
+**Taxonomy role:** **W5 — Configuration Workspace** under the Shared Layering Grammar in [`alloy-visual-language.md`](./alloy-visual-language.md). White canvas is intentional; do **not** import the W4 Operational stone field.
+**Builds on:** `alloy-visual-language.md` (premises, taxonomy, Region vs Object) and `operational-surface-design-system.md` (card grammar, System 5). This doc does **not** restate those; it adds what is specific to configuration, and explains *why* a configuration workspace feels different from both a settings form and an operational workspace.
 
 > The prototype feels different because it is **calm, object-shaped, and consequence-first** — it looks like you are running a place, not editing its record.
 

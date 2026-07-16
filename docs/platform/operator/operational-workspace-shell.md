@@ -1,15 +1,17 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
 # Operational Workspace Shell
 
-**Status:** Canonical operator-UI doctrine (June 2026). Defines the one shell, header rhythm, and structural grammar every operational *module* surface inherits. Distinct from the [Drawer / Focus Panel](./drawer-system.md), which is record-detail; this doctrine governs **module workspaces** (Communications, Processing, Work Items, Analytics, and future Billing / Scheduling / Compliance).
+**Status:** Canonical operator-UI doctrine (June 2026; V3 presentation ownership clarified July 2026). Defines the one shell, header rhythm, and **structural** grammar every operational *module* surface inherits. Distinct from the [Drawer / Focus Panel](./drawer-system.md), which is record-detail; this doctrine governs **module workspaces** (Communications, Processing, Work Items, Analytics, and future Billing / Scheduling / Compliance).
 
-> **One shell, one interaction language, one structure.** Operational modules do not invent layouts. They inherit this shell. **Processing, Communications, Work Items, and Operational Intelligence are the four reference implementations.**
+**Taxonomy role:** Module modals are primarily **W4 — Operational Workspace**. Visual hierarchy, inset stone canvas, and KPI presentation are owned by **Operational Workspace Doctrine V3** in [`../core/navigation-and-workspace-doctrine.md`](../core/navigation-and-workspace-doctrine.md) (frozen). Parent taxonomy + Shared Layering Grammar: [`./alloy-visual-language.md`](./alloy-visual-language.md). Analytics (W6) shares structural modal hosting here but is **not** automatically V3 stone-certified.
+
+> **One shell, one interaction language, one structure.** Operational modules do not invent layouts. They inherit this shell. **Processing, Communications, and Work Items** are the V3-certified reference set; **Operational Intelligence** is a fourth structural reference with a known composition gap.
 
 ---
 
@@ -57,10 +59,10 @@ Modules pass `icon`, `title`, `titleId`, optional `actions` / `secondaryActions`
 
 Surfaces stack in this fixed order; each layer is optional but never reordered:
 
-1. **KPI / status strip** — `CompactKpiStrip` (`web/components/workspace/CompactKpiStrip.tsx`). One short row of semantic chips. Real or derived data only — never fabricated.
-2. **Work / Studio mode switch** — `AlloyModeSwitch` (`web/components/workspace/AlloyModeSwitch.tsx`), where the module has both runtime work and design-time setup.
-3. **Child-section nav** — sections *inside* the active mode, visually subordinate to the mode switch (a second tier, not a peer of Work/Studio). Render as a **lighter underline tab strip attached to a hairline baseline** (Communications' `CommsModalTabBar`), not a floating pill group, so the sections read as belonging to the mode context.
-4. **Queue / workspace body** — see the queue → workspace model below.
+1. **Operational health / activity metrics** — per **Doctrine V3**: Overview sections use compact **Today's activity** tiles in the landing body (`SurfaceHeaderKpiCard`); operational sections (Queue / Inbox / Studio) use flat `WorkspaceOperationalHealth` in the nav control band. Module adapters supply data only. `CompactKpiStrip` / `WorkspaceMetricTiles` are **legacy** — do not use for new W4 work.
+2. **Work / Studio mode switch** — `WorkspaceModeTabs` (via `WorkspaceModeNav`), where the module has both runtime work and design-time setup. (`AlloyModeSwitch` is legacy relative to the V3 stack.)
+3. **Child-section nav** — sections *inside* the active mode, visually subordinate to the mode switch (a second tier, not a peer of Work/Studio), via `WorkspaceSubTabs`.
+4. **Queue / workspace body** — see the queue → workspace model below; compose on the V3 inset stone field owned by `WorkspaceShell`.
 
 ---
 
@@ -214,14 +216,16 @@ Operational work must always expose a path back to the operating context. Wherev
 
 ## Shared primitives
 
-**Operational Workspace Doctrine V2 (July 2026, frozen).** Processing (Digital Mailroom) is the certified reference implementation. Certified adopters — **Communications** and **Work Items** — and all future operational modules (Scheduling, Attendance, Billing, Commercial, …) must compose the canonical stack below. Modules supply **data and tab content only**; they do not invent parallel shell chrome, module themes, or competing KPI components.
+**Operational Workspace Doctrine V3 (July 2026, frozen)** owns visual hierarchy, inset stone canvas, and KPI presentation for **W4** module modals — see [`../core/navigation-and-workspace-doctrine.md`](../core/navigation-and-workspace-doctrine.md). Processing (Digital Mailroom) is the certified reference implementation. Certified adopters — **Communications** and **Work Items** — and all future operational modules (Scheduling, Attendance, Billing, …) must compose the canonical stack below. Modules supply **data and tab content only**; they do not invent parallel shell chrome, module themes, or competing KPI components. The stone field is **W4-only** — not a universal Alloy canvas.
 
 | Concern | Doctrine primitive | Location |
 |---------|-------------------|----------|
 | Modal outer chrome + nav composition | `WorkspaceShell` | `web/components/workspace/WorkspaceShell.tsx` |
 | Header (icon + title + actions + Close) | `WorkspaceHeader` | `web/components/workspace/WorkspaceHeader.tsx` |
 | Work / Studio mode + section tabs | `WorkspaceModeNav` → `WorkspaceModeTabs` + `WorkspaceSubTabs` | `web/components/workspace/` |
-| KPI / status strip | `WorkspaceMetricTiles` | `web/components/workspace/WorkspaceMetricTiles.tsx` |
+| Overview activity tiles | `SurfaceHeaderKpiCard` in overview landing body | Presentation / overview landings |
+| Operational health (Queue / Inbox / Studio) | `WorkspaceOperationalHealth` | `web/components/workspace/WorkspaceOperationalHealth.tsx` |
+| Legacy boxed KPI tiles | `WorkspaceMetricTiles` (**do not use for new work**) | `web/components/workspace/WorkspaceMetricTiles.tsx` |
 | Execution / landing body | `WorkspaceSurface` | `web/components/workspace/WorkspaceSurface.tsx` |
 | Overview action tiles / contained panels | `WorkspaceCard` | `web/components/workspace/WorkspaceCard.tsx` |
 | Multi-column zone panels | `WorkspaceZonePanel` | `web/components/workspace/WorkspaceZonePanel.tsx` |
@@ -255,10 +259,10 @@ The first four operational modules. Future modules inherit this shell rather tha
 | **Work Items** | `MyTasksModal` → `WorkItemsShell` | Process rail → queue (filters secondary) | Selected item detail · Open record · empty state |
 | **Operational Intelligence** | `AnalyticsModal` → `AnalyticsWorkspacePanel` | Work/Studio → view strip | Dashboard · playbook · Configure entry |
 
-- **Processing** — `WorkspaceShell` stack → Work: Overview · Queue; Studio: Forms · Packets · Fields · Branding. Reference implementation for Doctrine V2.
-- **Communications** — same primitive stack (`doctrine-v2`); Work: Overview · Inbox · Announcements · Scheduled; Studio: Templates · Channels · Rules. Compose New in header on Overview/Inbox. No external Studio settings link — Channels/Rules embed existing setup surfaces.
-- **Work Items** — header (New task) → KPI strip → process rail → queue → workspace detail. No Work/Studio switch.
-- **Operational Intelligence** — header (Close only) → Work/Studio → view tabs. Work → Overview; Studio → Playbooks and Configure.
+- **Processing** — `WorkspaceShell` stack → Work: Overview · Queue; Studio: Forms · Packets · Fields · Branding. Reference implementation for Doctrine **V3**.
+- **Communications** — same V3 primitive stack; Work: Overview · Inbox · Announcements · Scheduled; Studio: Templates · Channels · Rules. Compose New in header on Overview/Inbox. No external Studio settings link — Channels/Rules embed existing setup surfaces.
+- **Work Items** — `WorkspaceShell` → Queue health via `WorkspaceOperationalHealth`; process rail → queue → workspace detail. No Work/Studio switch. Overview omits metric tiles by design.
+- **Operational Intelligence (W6)** — structural modal host today; **composition not V3-certified** (white panel path). Certify against Shared Layering Grammar before claiming W4 stone parity.
 
 ---
 
@@ -275,11 +279,11 @@ The left rail is the operator's anchor and must reflect the **active workspace**
 ## Rules for future modules
 
 1. Mount in `AdminV2WorkspaceBosModalShell`; never set custom width.
-2. Compose **`WorkspaceShell` → `WorkspaceHeader` → `WorkspaceMetricTiles` (when KPIs apply) → `WorkspaceModeTabs` / `WorkspaceSubTabs` → `WorkspaceSurface`** from `@/components/workspace/operational`. Do not hand-roll modal header bars or module-specific KPI strips.
+2. Compose **`WorkspaceShell` → `WorkspaceHeader` → `WorkspaceModeNav` (modes + sections + `WorkspaceOperationalHealth` when operational) → inset stone field → `WorkspaceSurface` / zones** from `@/components/workspace/doctrine`. Do not hand-roll modal header bars or module-specific KPI strips.
 3. Use `WorkspaceHeader` with icon + title + (optional) actions — optional subtitle for product taglines only; never hand-roll the header bar.
-4. Stack KPI strip → mode switch → child nav → body, in that order.
+4. Follow V3 metric placement: Overview activity tiles in landing body; operational health in nav band — never invent a third KPI pattern.
 5. Follow the **queue → workspace** model in the body (queue header + selection → detail/empty); a single-column queue is an acceptable waypoint, not a permanent shape.
-6. Reuse `WorkspaceMetricTiles` / `kpiSemantics`; never fabricate metrics or invent colors.
+6. Reuse `WorkspaceOperationalHealth` / overview activity tiles / `kpiSemantics`; never fabricate metrics or invent colors. Do not use `WorkspaceMetricTiles` for new work.
 7. If the module has design-time assets, use `WorkspaceModeTabs` and keep child sections subordinate via `WorkspaceSubTabs`.
 8. Register the modal in `workspaceModalCoordinator` and reflect it in the **left nav active state** via `useActiveAdminV2WorkspaceModal()`.
 9. Left app nav order is fixed: **Workspace · Inbox · Processing · Work Items · Analytics**.

@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
@@ -156,6 +156,8 @@ Full drawer rules: `../operator/drawer-system.md`.
 ## Alloy Operational Workspace Doctrine V3 (frozen)
 
 **Status:** **Frozen and certified** (July 2026).
+
+**Taxonomy role:** This section is the **frozen W4 (Operational Workspace) specialization** of the Shared Layering Grammar owned by [`../operator/alloy-visual-language.md`](../operator/alloy-visual-language.md). It does **not** define canvas treatment for Organization (W1), Execution (W2), Focus (W3), Configuration (W5), Analytics (W6), Embedded (W7), or Planning (W8). The inset River Stone field is **W4-only**.
 
 **Reference implementation:** **Processing (Digital Mailroom)** — every future operational workspace inherits this shell, hierarchy, tokens, and presentation patterns unchanged.
 
@@ -545,7 +547,8 @@ Operational refresh: `dispatchOperationalWorkRefresh` — see `web/lib/workItems
 ## Related
 
 - `business-process-system.md`
-- `../operator/operational-workspace-shell.md` — Operational Workspace Doctrine V2 (Processing reference; Communications adopter)
+- `../operator/alloy-visual-language.md` — Workspace Taxonomy + Shared Layering Grammar (parent of this V3 specialization)
+- `../operator/operational-workspace-shell.md` — W4 structural module shell (defers visual hierarchy to V3)
 - `../operator/canonical-interaction-model.md` — full interaction spine (Workspace → … → Field)
 - `../operator/interaction-grammar.md` — drawer preserves workspace/perspective/queue context
 - `../operator/queue-system.md`
