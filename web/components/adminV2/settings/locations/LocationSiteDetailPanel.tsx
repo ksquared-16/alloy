@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import {
+    normalizeUsLocationTimezone,
+    US_LOCATION_TIMEZONE_OPTIONS,
+} from "@/lib/locations/locationWorkspaceModel";
+import {
     ConfigurationDetailCard,
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import ConfigurationAdvancedSection from "@/components/adminV2/settings/locations/ConfigurationAdvancedSection";
 
 function metadataString(metadata: unknown, key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
@@ -33,6 +36,7 @@ export default function LocationSiteDetailPanel({
     const [postalCode, setPostalCode] = useState("");
     const [phone, setPhone] = useState("");
     const [timezone, setTimezone] = useState("");
+    const [storedTimezone, setStoredTimezone] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -45,7 +49,9 @@ export default function LocationSiteDetailPanel({
         setState((site.state ?? "").trim());
         setPostalCode(site.postal_code?.trim() ?? "");
         setPhone(metadataString(site.metadata, "site_phone"));
-        setTimezone(metadataString(site.metadata, "timezone"));
+        const storedTimezone = metadataString(site.metadata, "timezone");
+        setStoredTimezone(storedTimezone);
+        setTimezone(normalizeUsLocationTimezone(storedTimezone) ?? "");
         setActive(site.is_active !== false);
         setError(null);
     }, [site]);
@@ -129,16 +135,31 @@ export default function LocationSiteDetailPanel({
                 </label>
 
                 <label className="block space-y-1.5">
-                    <span className="config-typo-field-label">Timezone</span>
-                    <input
-                        type="text"
+                    <span className="config-typo-field-label">
+                        Time zone
+                    </span>
+                    <select
                         value={timezone}
                         disabled={!canMutate}
                         onChange={(e) => setTimezone(e.target.value)}
-                        placeholder="e.g. America/Chicago"
-                        className="config-runtime-input"
+                        className="config-runtime-select"
                         data-testid="locations-site-timezone"
-                    />
+                    >
+                        <option value="">Select a U.S. time zone</option>
+                        {US_LOCATION_TIMEZONE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                    <span className="config-typo-meta">
+                        Hours and closures display in this location&apos;s time zone.
+                    </span>
+                    {storedTimezone && !normalizeUsLocationTimezone(storedTimezone) && !timezone ?
+                        <span className="config-typo-meta text-amber-700">
+                            Choose a supported U.S. time zone to replace the current setting.
+                        </span>
+                    :   null}
                 </label>
 
                 <div>
@@ -178,7 +199,12 @@ export default function LocationSiteDetailPanel({
                                 setError(null);
                                 try {
                                     let metadata = mergeLocationMetadataField(site.metadata, "site_phone", phone.trim() || null);
-                                    metadata = mergeLocationMetadataField(metadata, "timezone", timezone.trim() || null);
+                                    const timezoneToPersist =
+                                        normalizeUsLocationTimezone(timezone) ??
+                                        (storedTimezone && !normalizeUsLocationTimezone(storedTimezone) ?
+                                            storedTimezone
+                                        :   null);
+                                    metadata = mergeLocationMetadataField(metadata, "timezone", timezoneToPersist);
                                     await onSave(site.id, {
                                         label: label.trim() || null,
                                         address1: address1.trim() || null,
@@ -200,16 +226,6 @@ export default function LocationSiteDetailPanel({
                     </ConfigurationPrimaryButton>
                 :   null}
 
-                <ConfigurationAdvancedSection testId="locations-site-advanced">
-                    <div>
-                        <span className="config-typo-field-label">Location ID</span>
-                        <p className="config-typo-meta mt-1 font-mono text-[11px]">{site.id}</p>
-                    </div>
-                    <div>
-                        <span className="config-typo-field-label">Location type</span>
-                        <p className="config-typo-meta mt-1">{site.location_type ?? "site"}</p>
-                    </div>
-                </ConfigurationAdvancedSection>
             </div>
         </ConfigurationDetailCard>
     );

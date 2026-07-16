@@ -12,7 +12,6 @@ import {
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import ConfigurationAdvancedSection from "@/components/adminV2/settings/locations/ConfigurationAdvancedSection";
 
 export default function LocationScheduleTemplateDetailPanel({
     pattern,
@@ -80,17 +79,6 @@ export default function LocationScheduleTemplateDetailPanel({
                     />
                 </label>
 
-                <label className="block space-y-1.5">
-                    <span className="config-typo-field-label">Schedule type</span>
-                    <input
-                        type="text"
-                        value={scheduleTypeKey}
-                        disabled={!canMutate}
-                        onChange={(e) => setScheduleTypeKey(e.target.value)}
-                        className="config-runtime-input font-mono text-sm"
-                    />
-                </label>
-
                 <div className="space-y-2">
                     <span className="config-typo-field-label">Weekdays</span>
                     <div className="flex flex-wrap gap-1.5">
@@ -152,20 +140,6 @@ export default function LocationScheduleTemplateDetailPanel({
                     </ConfigurationPrimaryButton>
                 :   null}
 
-                <ConfigurationAdvancedSection testId="locations-schedule-advanced">
-                    <div>
-                        <span className="config-typo-field-label">Pattern key</span>
-                        <p className="config-typo-meta mt-1 font-mono text-[11px]">{pattern.key}</p>
-                    </div>
-                    <div>
-                        <span className="config-typo-field-label">Pattern ID</span>
-                        <p className="config-typo-meta mt-1 font-mono text-[11px]">{pattern.id}</p>
-                    </div>
-                    <div>
-                        <span className="config-typo-field-label">Sort order</span>
-                        <p className="config-typo-meta mt-1">{pattern.sort_order}</p>
-                    </div>
-                </ConfigurationAdvancedSection>
             </div>
         </ConfigurationDetailCard>
     );
