@@ -23,14 +23,11 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("LocationsFleetLanding");
         expect(page).toContain("locations-object-selector");
         expect(page).toContain("locations-selected-location");
-        expect(page).toContain("locations-setup-progress");
-        expect(page).toContain("locations-overview-health");
-        expect(page).toContain("locations-overview-capacity");
-        expect(page).toContain("locations-overview-operations");
-        expect(page).toContain("ConfigObjectHeader");
-        expect(page).toContain("ConfigOperationalActions");
-        expect(page).toContain("ConfigScopeContextBar");
-        expect(page).toContain("ConfigApplyToDialog");
+        expect(page).toContain("LocationsCommandRailActions");
+        expect(page).toContain("LocationOverviewSurface");
+        expect(page).toContain("buildLocationIdentityFacts");
+        expect(page).toContain("xl:grid-cols-[14rem_minmax(0,1fr)]");
+        expect(page).not.toContain("ConfigOperationalActions");
         expect(page).not.toContain("Address not set up yet");
         expect(page).not.toContain("locations-section-queue");
         expect(page).not.toContain("SettingsPageHeader");
@@ -95,11 +92,10 @@ describe("Configuration Runtime — Locations", () => {
         const programs = read("components/adminV2/settings/locations/LocationProgramDetailPanel.tsx");
         const rooms = read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx");
         expect(programs).toContain("locations-program-summary-");
-        expect(programs).toContain("Rooms");
-        expect(programs).toContain("Status");
-        expect(programs).toContain("Capacity");
-        expect(programs).toContain("Age range");
-        expect(programs).toContain("locations-program-edit-");
+        expect(programs).toContain("ConfigChildObjectMasterDetail");
+        expect(programs).toContain("locations-program-age-unit");
+        expect(programs).toContain("What is configured");
+        expect(programs).toContain("Edit program");
         expect(rooms).toContain("Capacity & staffing");
         expect(rooms).toContain("Staffing thresholds");
         expect(rooms).toContain("Add staffing threshold");
@@ -143,11 +139,14 @@ describe("Configuration Runtime — Locations", () => {
         expect(panels).toContain("Employee");
         expect(panels).toContain("Application / waitlist date");
         expect(rankingFactors).toContain("Desired start date");
-        expect(panels).toContain("Manual priority");
         expect(panels).toContain("Tie-break");
+        expect(panels).toContain("Ordering mode");
         expect(panels).toContain("selectableCatalog");
-        expect(panels).toContain("Saved on this work unit, not this location");
-        expect(panels).toContain("applies at every location");
+        expect(panels).toContain("Saved on this Business Process, not this location");
+        expect(panels).toContain("Applies at every location");
+        expect(panels).toContain("Governing Business Process");
+        expect(panels).toContain("Ranking active");
+        expect(panels).not.toContain("Placement inventory");
         expect(rankingEditor).toContain("Available factors");
         expect(rankingEditor).toContain("onDragStart");
         expect(rankingEditor).toContain("onDrop");
@@ -155,16 +154,19 @@ describe("Configuration Runtime — Locations", () => {
         expect(rankingEditor).toContain("Move down");
     });
 
-    it("supports multiple schedule patterns and operational actions", () => {
+    it("supports multiple schedule patterns and shell-owned operational actions", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(page).toContain("+ Add Schedule Pattern");
         expect(page).toContain("Closures / Holidays");
         expect(page).toContain("+ Add Closure");
         expect(page).toContain("LocationSchedulePatternCreatePanel");
+        expect(page).toContain("LocationsCommandRailActions");
         expect(page).toContain("configure-capacity");
         expect(page).toContain("resolve-timezone");
         expect(page).toContain("apply-to");
-        expect(page).toContain("locations-operational-actions");
+        expect(read("components/adminV2/settings/locations/LocationsCommandRailActions.tsx")).toContain(
+            'actionsPlacementSurface="company"',
+        );
         expect(page).not.toContain("Publish Communications");
     });
 

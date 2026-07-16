@@ -13,14 +13,8 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     ConfigApplyToDialog,
-    ConfigAttentionPanel,
-    ConfigGlanceMetrics,
     ConfigObjectHeader,
-    ConfigOperationalActions,
-    ConfigOperationalReadiness,
     ConfigScopeContextBar,
-    ConfigWorkspaceCard,
-    type ConfigOperationalAction,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
@@ -33,9 +27,15 @@ import {
     LocationPlacementPanel,
     LocationToursPanel,
 } from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
+import { LocationOverviewSurface } from "@/components/adminV2/settings/locations/LocationOverviewSurface";
+import {
+    LocationsCommandRailActions,
+    type LocationsRailAction,
+} from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
 import LocationsFleetLanding from "@/components/adminV2/settings/locations/LocationsFleetLanding";
 import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
+import { buildLocationIdentityFacts } from "@/lib/locations/locationIdentityPresentation";
 import {
     buildLocationWorkspaceModel,
     buildLocationProgramOperationalSummaries,
@@ -70,9 +70,19 @@ export default function LocationsConfigurationPage({
     const [search, setSearch] = useState("");
     const [showInactive, setShowInactive] = useState(false);
     const [selectedRoomId, setSelectedRoomId] = useState<string | null>(initialTab === "rooms" ? initialItemId : null);
+    const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
+        initialTab === "programs" ? initialItemId : null,
+    );
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(
         initialTab === "schedule" ? initialItemId : null,
     );
+    const [toursKeepAlive, setToursKeepAlive] = useState(initialTab === "tours");
+    const [placementKeepAlive, setPlacementKeepAlive] = useState(initialTab === "placement");
+
+    useEffect(() => {
+        if (activeTab === "tours") setToursKeepAlive(true);
+        if (activeTab === "placement") setPlacementKeepAlive(true);
+    }, [activeTab]);
     const {
         selectedId,
         setSelectedId,
@@ -140,11 +150,16 @@ export default function LocationsConfigurationPage({
         selectedRoomId && selectedRooms.some((room) => room.id === selectedRoomId) ?
             selectedRoomId
         :   (selectedRooms[0]?.id ?? null);
+    const effectiveProgramId =
+        selectedProgramId && selectedPrograms.some((program) => program.id === selectedProgramId) ?
+            selectedProgramId
+        :   (selectedPrograms[0]?.id ?? null);
     const effectiveScheduleId =
         selectedScheduleId && selectedSchedules.some((schedule) => schedule.id === selectedScheduleId) ?
             selectedScheduleId
         :   (selectedSchedules[0]?.id ?? null);
     const selectedRoom = selectedRooms.find((room) => room.id === effectiveRoomId) ?? null;
+    const selectedProgram = selectedPrograms.find((program) => program.id === effectiveProgramId) ?? null;
     const selectedSchedule = selectedSchedules.find((schedule) => schedule.id === effectiveScheduleId) ?? null;
     const programSummaries = useMemo(
         () =>
@@ -231,6 +246,18 @@ export default function LocationsConfigurationPage({
         [programCategories, roomRows, schedulePatterns, siteRows],
     );
 
+    const identityFacts = useMemo(
+        () =>
+            selectedSite ?
+                buildLocationIdentityFacts({
+                    city: selectedSite.city,
+                    state: selectedSite.state,
+                    timezoneIana: model?.timezone,
+                })
+            :   [],
+        [model?.timezone, selectedSite],
+    );
+
     const openLocation = (locationId: string, tab: LocationWorkspaceTab = "overview") => {
         setSelectedId(locationId);
         setEditingSite(false);
@@ -263,197 +290,276 @@ export default function LocationsConfigurationPage({
         navigate(tab);
     };
 
-    const operationalActions = useMemo((): ConfigOperationalAction[] => {
-        if (!model) return [];
-        const actions: ConfigOperationalAction[] = [];
-        if (!model.timezone) {
-            actions.push({
-                id: "resolve-timezone",
-                label: "Set time zone",
-                reason: "Required for schedules and tours",
-                priority: "fix",
-            });
+    const beginAddLocation = () => {
+        setCreatingSite(true);
+        setEditingSite(false);
+        setError(null);
+    };
+
+    const addRoom = () => {
+        if (!selectedSite || !canMutate) return;
+        void (async () => {
+            try {
+                const newId = await createRoomUnit(
+                    selectedSite.id,
+                    `Room ${(selectedRooms.length + 1).toString()}`,
+                );
+                setSelectedRoomId(newId);
+                navigate("rooms", newId);
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Failed to add room");
+            }
+        })();
+    };
+
+    const railActions = useMemo((): LocationsRailAction[] => {
+        const actions: LocationsRailAction[] = [];
+
+        if (!selectedSite) {
+            if (canMutate) {
+                actions.push({
+                    id: "add-location",
+                    label: "Add Location",
+                    group: "manage",
+                    onClick: beginAddLocation,
+                });
+            }
+            return actions;
         }
-        if (model.roomsNeedingCapacity > 0 || model.configuredCapacity == null) {
+
+        if (!model) return actions;
+
+        const applyDisabled = !canMutate || siteRows.length < 2;
+        const applyReason =
+            !canMutate ? "You do not have permission to apply configuration"
+            : siteRows.length < 2 ? "Need at least two locations"
+            : undefined;
+
+        if (activeTab === "overview") {
+            if (!model.timezone) {
+                actions.push({
+                    id: "resolve-timezone",
+                    label: "Set time zone",
+                    group: "fix",
+                    reason: "Required for schedules and tours",
+                    onClick: () => setEditingSite(true),
+                });
+            }
+            if (model.roomsNeedingCapacity > 0 || model.configuredCapacity == null) {
+                actions.push({
+                    id: "configure-capacity",
+                    label: "Configure capacity",
+                    group: "fix",
+                    reason:
+                        model.roomsNeedingCapacity > 0 ?
+                            `${model.roomsNeedingCapacity} rooms need setup`
+                        :   "No capacity configured yet",
+                    onClick: () => navigate("rooms"),
+                });
+            }
+            if (selectedSchedules.length === 0) {
+                actions.push({
+                    id: "set-schedule",
+                    label: "Set weekly schedule",
+                    group: "fix",
+                    reason: "Hours this location operates",
+                    onClick: () => navigate("schedule"),
+                });
+            }
+            if (model.setupItems.find((item) => item.key === "tours")?.complete === false) {
+                actions.push({
+                    id: "fix-tours",
+                    label: "Set up tour availability",
+                    group: "fix",
+                    reason: "Tours are not configured yet",
+                    onClick: () => navigate("tours"),
+                });
+            }
+
+            if (canMutate) {
+                actions.push({
+                    id: "add-room",
+                    label: "Add room",
+                    group: "manage",
+                    onClick: addRoom,
+                });
+            }
+            actions.push({
+                id: "apply-to",
+                label: "Apply to other locations",
+                group: "manage",
+                disabled: applyDisabled,
+                reason: applyReason,
+                onClick: () => setApplyToOpen(true),
+            });
+            actions.push({
+                id: "edit-details",
+                label: "Edit location",
+                group: "manage",
+                onClick: () => setEditingSite(true),
+            });
+            actions.push({
+                id: "duplicate-location",
+                label: "Duplicate location",
+                group: "manage",
+                disabled: true,
+                reason: "Coming soon",
+                onClick: () => undefined,
+            });
+            actions.push(
+                {
+                    id: "manage-rooms",
+                    label: "Manage rooms",
+                    group: "manage",
+                    onClick: () => navigate("rooms"),
+                },
+                {
+                    id: "manage-programs",
+                    label: "Manage programs",
+                    group: "manage",
+                    onClick: () => navigate("programs"),
+                },
+            );
+            return actions;
+        }
+
+        if (activeTab === "programs") {
+            actions.push({
+                id: "add-program",
+                label: "Add program",
+                group: "manage",
+                disabled: !canMutate,
+                reason: canMutate ? undefined : "You do not have permission to add programs",
+                onClick: () => navigate("programs"),
+            });
+            if (effectiveProgramId) {
+                actions.push({
+                    id: "edit-program",
+                    label: "Edit selected program",
+                    group: "manage",
+                    disabled: !canMutate,
+                    onClick: () => navigate("programs", effectiveProgramId),
+                });
+            }
+            actions.push({
+                id: "apply-programs",
+                label: "Apply programs",
+                group: "manage",
+                disabled: applyDisabled,
+                reason: applyReason,
+                onClick: () => setApplyToOpen(true),
+            });
+            return actions;
+        }
+
+        if (activeTab === "rooms") {
+            if (canMutate) {
+                actions.push({
+                    id: "add-room",
+                    label: "Add room",
+                    group: "manage",
+                    onClick: addRoom,
+                });
+            }
             actions.push({
                 id: "configure-capacity",
                 label: "Configure capacity",
+                group: model.roomsNeedingCapacity > 0 || model.configuredCapacity == null ? "fix" : "manage",
                 reason:
                     model.roomsNeedingCapacity > 0 ?
                         `${model.roomsNeedingCapacity} rooms need setup`
-                    :   "No capacity configured yet",
-                priority: "fix",
+                    :   undefined,
+                onClick: () => navigate("rooms", effectiveRoomId),
             });
+            if (effectiveRoomId) {
+                actions.push({
+                    id: "adjust-room",
+                    label: "Adjust selected room",
+                    group: "manage",
+                    onClick: () => navigate("rooms", effectiveRoomId),
+                });
+            }
+            return actions;
         }
-        if (model.activeProgramCount === 0) {
+
+        if (activeTab === "schedule") {
             actions.push({
-                id: "offer-programs",
-                label: "Offer programs",
-                reason: "Programs connect rooms and placement",
-                priority: "next",
+                id: "add-schedule-pattern",
+                label: "Add schedule pattern",
+                group: "manage",
+                disabled: !canMutate,
+                onClick: () => {
+                    if (!canMutate) return;
+                    setCreatingSchedule(true);
+                    navigate("schedule");
+                },
             });
-        }
-        if (selectedSchedules.length === 0) {
             actions.push({
-                id: "set-schedule",
-                label: "Set weekly schedule",
-                reason: "Hours this location operates",
-                priority: "next",
+                id: "add-closure",
+                label: "Add closure",
+                group: "manage",
+                disabled: true,
+                reason: "Date-specific closure authoring is not available yet",
+                onClick: () => undefined,
+            });
+            actions.push({
+                id: "apply-schedule",
+                label: "Apply schedule",
+                group: "manage",
+                disabled: applyDisabled,
+                reason: applyReason,
+                onClick: () => setApplyToOpen(true),
+            });
+            return actions;
+        }
+
+        if (activeTab === "tours") {
+            actions.push({
+                id: "review-availability",
+                label: "Review availability",
+                group: "manage",
+                onClick: () => navigate("tours"),
+            });
+            return actions;
+        }
+
+        if (activeTab === "placement") {
+            actions.push({
+                id: "configure-ranking",
+                label: "Configure ranking",
+                group: "manage",
+                onClick: () => navigate("placement"),
+            });
+            return actions;
+        }
+
+        if (activeTab === "access") {
+            actions.push({
+                id: "manage-access",
+                label: "Manage access",
+                group: "manage",
+                onClick: () => navigate("access"),
             });
         }
-        actions.push(
-            {
-                id: "manage-rooms",
-                label: "Manage rooms",
-                priority: "manage",
-            },
-            {
-                id: "manage-tours",
-                label: "Tour availability",
-                priority: "manage",
-            },
-            {
-                id: "manage-placement",
-                label: "Placement rules",
-                priority: "manage",
-            },
-            {
-                id: "apply-to",
-                label: "Apply to other locations",
-                reason: "Push selected configuration",
-                priority: "manage",
-                disabled: !canMutate || siteRows.length < 2,
-            },
-            {
-                id: "edit-details",
-                label: "Edit location details",
-                priority: "manage",
-            },
-        );
+
         return actions;
-    }, [canMutate, model, selectedSchedules.length, siteRows.length]);
+    }, [
+        activeTab,
+        canMutate,
+        createRoomUnit,
+        effectiveProgramId,
+        effectiveRoomId,
+        model,
+        selectedRooms.length,
+        selectedSchedules.length,
+        selectedSite,
+        siteRows.length,
+    ]);
 
-    const runOperationalAction = (action: ConfigOperationalAction) => {
-        switch (action.id) {
-            case "resolve-timezone":
-            case "edit-details":
-                setEditingSite(true);
-                return;
-            case "configure-capacity":
-            case "manage-rooms":
-                navigate("rooms");
-                return;
-            case "offer-programs":
-                navigate("programs");
-                return;
-            case "set-schedule":
-                navigate("schedule");
-                return;
-            case "manage-tours":
-                navigate("tours");
-                return;
-            case "manage-placement":
-                navigate("placement");
-                return;
-            case "apply-to":
-                setApplyToOpen(true);
-                return;
-            default:
-                return;
-        }
-    };
-
-    const overview =
-        selectedSite && model ?
-            <div className="space-y-3" data-testid="locations-overview">
-                <div className="grid gap-3 lg:grid-cols-2" data-testid="locations-overview-health">
-                    <ConfigAttentionPanel
-                        items={model.attention}
-                        compact
-                        testId="locations-attention"
-                        onResolve={(item) => {
-                            const match = model.attention.find((entry) => entry.key === item.key);
-                            if (match) showSetupDestination(match.tab);
-                        }}
-                    />
-                    <ConfigGlanceMetrics
-                        title="What is configured"
-                        testId="locations-overview-capacity"
-                        metrics={[
-                            {
-                                key: "capacity",
-                                label: "Capacity",
-                                value:
-                                    model.configuredCapacity == null ?
-                                        "Not set up yet"
-                                    :   `${model.configuredCapacity}`,
-                                hint: model.roomsNeedingCapacity > 0 ? `${model.roomsNeedingCapacity} rooms need setup` : undefined,
-                                onSelect: () => navigate("rooms"),
-                            },
-                            {
-                                key: "rooms",
-                                label: "Rooms",
-                                value: String(model.activeRoomCount),
-                                onSelect: () => navigate("rooms"),
-                            },
-                            {
-                                key: "programs",
-                                label: "Programs",
-                                value: String(model.activeProgramCount),
-                                onSelect: () => navigate("programs"),
-                            },
-                            {
-                                key: "schedule",
-                                label: "Schedule",
-                                value:
-                                    selectedSchedules.length > 0 ?
-                                        formatWeekdaySelection(selectedSchedules[0]!.weekdays)
-                                    :   "Not set up yet",
-                                onSelect: () => navigate("schedule"),
-                            },
-                        ]}
-                    />
-                </div>
-
-                <ConfigWorkspaceCard title="How this location runs" compact testId="locations-overview-operations">
-                    <div className="divide-y divide-alloy-forge/10">
-                        {[
-                            {
-                                label: "Tours",
-                                value: "Availability and booking",
-                                tab: "tours" as const,
-                            },
-                            {
-                                label: "Placement",
-                                value: `${model.activeRoomCount} active rooms participate`,
-                                tab: "placement" as const,
-                            },
-                            {
-                                label: "Access",
-                                value: "Team permissions for this location",
-                                tab: "access" as const,
-                            },
-                        ].map((item) => (
-                            <button
-                                key={item.label}
-                                type="button"
-                                className="flex w-full items-center justify-between gap-3 py-2 text-left first:pt-0 last:pb-0"
-                                onClick={() => navigate(item.tab)}
-                            >
-                                <span className="text-sm font-medium text-alloy-midnight/80">{item.label}</span>
-                                <span className="config-typo-sublabel text-right">{item.value} →</span>
-                            </button>
-                        ))}
-                    </div>
-                </ConfigWorkspaceCard>
-
-                {applyNotice ?
-                    <p className="rounded-md border border-[#00a283]/20 bg-[#00a283]/5 px-3 py-2 text-xs text-[#007d68]">
-                        {applyNotice}
-                    </p>
-                :   null}
-            </div>
-        :   null;
+    const scheduleSummary =
+        selectedSchedules.length > 0 ?
+            formatWeekdaySelection(selectedSchedules[0]!.weekdays)
+        :   "Not set up yet";
 
     const tabBody = (() => {
         if (!selectedSite) return null;
@@ -476,29 +582,40 @@ export default function LocationsConfigurationPage({
                 </div>
             );
         }
-        if (activeTab === "overview") return overview;
+        if (activeTab === "overview" && model) {
+            return (
+                <div className="space-y-3">
+                    <LocationOverviewSurface
+                        model={model}
+                        scheduleSummary={scheduleSummary}
+                        onResolveAttention={showSetupDestination}
+                        onSelectReadinessArea={showSetupDestination}
+                        onOpenTab={navigate}
+                    />
+                    {applyNotice ?
+                        <p className="rounded-md border border-[#00a283]/20 bg-[#00a283]/5 px-3 py-2 text-xs text-[#007d68]">
+                            {applyNotice}
+                        </p>
+                    :   null}
+                </div>
+            );
+        }
         if (activeTab === "programs") {
             return (
-                <div className="space-y-2" data-testid="locations-programs">
-                    {selectedPrograms.length > 0 ?
-                        <div className="space-y-2">
-                            {selectedPrograms.map((program) => (
-                                <LocationProgramDetailPanel
-                                    key={program.id}
-                                    program={program}
-                                    summary={programSummaries.find((summary) => summary.id === program.id) ?? null}
-                                    siteLabel={model?.displayName ?? ""}
-                                    canMutate={canMutate}
-                                    onSave={patchProgramCategory}
-                                />
-                            ))}
-                        </div>
-                    :   <ConfigurationEmptyState
-                            title="No programs offered yet"
-                            description="Offer a program to connect rooms, age ranges, and capacity at this location."
-                        />
-                    }
-                </div>
+                <LocationProgramDetailPanel
+                    program={selectedProgram}
+                    summary={programSummaries.find((summary) => summary.id === effectiveProgramId) ?? null}
+                    siteLabel={model?.displayName ?? ""}
+                    canMutate={canMutate}
+                    onSave={patchProgramCategory}
+                    programs={selectedPrograms}
+                    selectedProgramId={effectiveProgramId}
+                    onSelectProgram={(programId) => {
+                        setSelectedProgramId(programId);
+                        navigate("programs", programId);
+                    }}
+                    ageUnitSelectOptions={ageUnitSelectOptions}
+                />
             );
         }
         if (activeTab === "rooms") {
@@ -516,24 +633,7 @@ export default function LocationsConfigurationPage({
                         setSelectedRoomId(roomId);
                         navigate("rooms", roomId);
                     }}
-                    onAddRoom={
-                        canMutate ?
-                            () => {
-                                void (async () => {
-                                    try {
-                                        const newId = await createRoomUnit(
-                                            selectedSite.id,
-                                            `Room ${(selectedRooms.length + 1).toString()}`,
-                                        );
-                                        setSelectedRoomId(newId);
-                                        navigate("rooms", newId);
-                                    } catch (e) {
-                                        setError(e instanceof Error ? e.message : "Failed to add room");
-                                    }
-                                })();
-                            }
-                        :   undefined
-                    }
+                    onAddRoom={canMutate ? addRoom : undefined}
                 />
             );
         }
@@ -633,29 +733,18 @@ export default function LocationsConfigurationPage({
             );
         }
         if (activeTab === "tours") {
-            return (
-                <LocationToursPanel
-                    key={selectedSite.id}
-                    locationId={selectedSite.id}
-                    locationLabel={model?.displayName ?? ""}
-                />
-            );
+            return null;
         }
         if (activeTab === "placement") {
-            return (
-                <LocationPlacementPanel
-                    key={selectedSite.id}
-                    rooms={selectedRooms}
-                    onReviewRooms={() => navigate("rooms")}
-                    canMutate={canMutate}
-                />
-            );
+            return null;
         }
         return <LocationAccessPanel key={selectedSite.id} locationId={selectedSite.id} />;
     })();
 
     return (
         <div className="process-config-page min-h-0 flex-1" data-testid="locations-configuration-page">
+            <LocationsCommandRailActions actions={railActions} />
+
             <ConfigurationContext
                 title="Locations"
                 actions={
@@ -663,11 +752,7 @@ export default function LocationsConfigurationPage({
                         <ConfigurationPrimaryButton
                             className="config-primary-btn--sm"
                             data-testid="locations-add-location"
-                            onClick={() => {
-                                setCreatingSite(true);
-                                setEditingSite(false);
-                                setError(null);
-                            }}
+                            onClick={beginAddLocation}
                         >
                             Add Location
                         </ConfigurationPrimaryButton>
@@ -726,15 +811,11 @@ export default function LocationsConfigurationPage({
                             search={search}
                             onSearchChange={setSearch}
                             onOpenLocation={(locationId) => openLocation(locationId)}
-                            onAddLocation={() => {
-                                setCreatingSite(true);
-                                setEditingSite(false);
-                                setError(null);
-                            }}
+                            onAddLocation={beginAddLocation}
                             canMutate={canMutate}
                         />
                     </>
-                :   <div className="grid min-h-full gap-3 xl:grid-cols-[14rem_minmax(0,1fr)_13rem]">
+                :   <div className="grid min-h-full gap-3 xl:grid-cols-[14rem_minmax(0,1fr)]">
                         <aside className="hidden xl:block" aria-label="Location selector">
                             <ConfigurationQueue
                                 title="Locations"
@@ -838,9 +919,7 @@ export default function LocationsConfigurationPage({
                                     label: selectedSite.is_active === false ? "Inactive" : "Active",
                                     tone: selectedSite.is_active === false ? "inactive" : "active",
                                 }}
-                                facts={[model?.address, model?.phone, model?.timezone].filter(
-                                    (value): value is string => Boolean(value),
-                                )}
+                                facts={identityFacts}
                                 actions={
                                     canMutate ?
                                         <button
@@ -880,31 +959,30 @@ export default function LocationsConfigurationPage({
                                 ))}
                             </div>
                             {tabBody}
-                        </main>
-
-                        <aside className="space-y-3" aria-label="Location actions and readiness">
-                            <ConfigOperationalActions
-                                actions={operationalActions}
-                                onSelect={runOperationalAction}
-                                testId="locations-operational-actions"
-                            />
-                            {model ?
-                                <ConfigOperationalReadiness
-                                    percent={model.setupPercent}
-                                    areas={model.setupItems.map((item) => ({
-                                        key: item.key,
-                                        label: item.label,
-                                        complete: item.complete,
-                                    }))}
-                                    onSelectArea={(area) => {
-                                        const match = model.setupItems.find((item) => item.key === area.key);
-                                        if (match) showSetupDestination(match.tab);
-                                    }}
-                                    compact
-                                    testId="locations-setup-progress"
-                                />
+                            {selectedSite && toursKeepAlive && !editingSite ?
+                                <div
+                                    className={activeTab === "tours" ? undefined : "hidden"}
+                                    data-testid="locations-tours-keepalive"
+                                >
+                                    <LocationToursPanel
+                                        locationId={selectedSite.id}
+                                        locationLabel={model?.displayName ?? ""}
+                                    />
+                                </div>
                             :   null}
-                        </aside>
+                            {selectedSite && placementKeepAlive && !editingSite ?
+                                <div
+                                    className={activeTab === "placement" ? undefined : "hidden"}
+                                    data-testid="locations-placement-keepalive"
+                                >
+                                    <LocationPlacementPanel
+                                        rooms={selectedRooms}
+                                        onReviewRooms={() => navigate("rooms")}
+                                        canMutate={canMutate}
+                                    />
+                                </div>
+                            :   null}
+                        </main>
                     </div>
                 }
             </ConfigurationShell>

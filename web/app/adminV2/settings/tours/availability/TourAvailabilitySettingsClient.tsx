@@ -58,6 +58,7 @@ export default function TourAvailabilitySettingsClient({
     }, [locFilter, locationId]);
 
     useEffect(() => {
+        if (embedded && locationId) return;
         void (async () => {
             try {
                 const res = await fetch("/api/admin/locations", {
@@ -69,7 +70,7 @@ export default function TourAvailabilitySettingsClient({
                 /* non-fatal */
             }
         })();
-    }, []);
+    }, [embedded, locationId]);
 
     useEffect(() => {
         void loadRules();

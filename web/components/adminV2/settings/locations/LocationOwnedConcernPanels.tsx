@@ -63,14 +63,12 @@ function ConcernSurface({
 
 export function LocationToursPanel({ locationId, locationLabel }: { locationId: string; locationLabel: string }) {
     return (
-        <ConcernSurface
-            title="Tours"
-            consequence="Decide when families can visit and how each booking window works."
-            status="Availability & booking"
-            testId="locations-tours-surface"
-        >
+        <section className="process-config-setup-card p-3" data-testid="locations-tours-surface" aria-label="Tours">
+            <p className="config-typo-sublabel mb-3 max-w-2xl">
+                Decide when families can visit and how each booking window works.
+            </p>
             <TourAvailabilitySettingsClient locationId={locationId} locationLabel={locationLabel} embedded />
-        </ConcernSurface>
+        </section>
     );
 }
 
@@ -186,117 +184,127 @@ export function LocationPlacementPanel({
     };
 
     return (
-        <ConcernSurface
-            title="Placement"
-            consequence="Set the priority order used when more families are waiting than this location can place."
-            status={loading ? "Loading ranking…" : enabled ? "Ranking active" : "Ranking off"}
-            testId="locations-placement-surface"
-            action={
-                <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-alloy-forge/10 p-3">
+        <div className="space-y-3" data-testid="locations-placement-surface">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p className="config-typo-sublabel max-w-2xl">
+                        Priority order used when more families are waiting than can be placed. Ranking is saved on the
+                        governing Business Process — not this location — and applies wherever that process runs.
+                    </p>
+                </div>
+                <span
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                        loading ? "border-alloy-forge/15 bg-alloy-stone/10 text-alloy-midnight/50"
+                        : enabled ?
+                            "border-[#00a283]/25 bg-[#00a283]/10 text-[#007d68]"
+                        :   "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
+                    }`}
+                    data-testid="locations-placement-status"
+                >
+                    {loading ? "Loading…" : enabled ? "● Ranking active" : "○ Ranking inactive"}
+                </span>
+            </div>
+
+            {error ?
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert">
+                    {error}
+                </p>
+            :   null}
+
+            {!loading && !selectedWorkUnit ?
+                <p className="config-typo-sublabel">No waitlist-enabled Business Process is available for ranking.</p>
+            : selectedWorkUnit ?
+                <fieldset disabled={!canMutate || saving} className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
                         <div>
-                            <p className="config-typo-meta">Placement inventory</p>
-                            <p className="mt-1 text-sm font-medium text-alloy-midnight/80">
-                                {activeRooms.length} participating {activeRooms.length === 1 ? "room" : "rooms"}
+                            <label className="config-typo-field-label" htmlFor="locations-placement-work-unit">
+                                Governing Business Process
+                            </label>
+                            <select
+                                id="locations-placement-work-unit"
+                                className="config-runtime-select mt-1"
+                                value={selectedId}
+                                onChange={(event) => setSelectedId(event.target.value)}
+                                data-testid="locations-placement-work-unit"
+                            >
+                                {workUnits.map((workUnit) => (
+                                    <option key={workUnit.id} value={workUnit.id}>
+                                        {workUnit.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="config-typo-meta mt-1" data-testid="locations-placement-persistence-scope">
+                                Saved on this Business Process, not this location. Applies at every location using{" "}
+                                {selectedWorkUnit.name}.
                             </p>
                         </div>
-                        <button
-                            type="button"
-                            className="text-xs font-medium text-[#007d68]"
-                            onClick={onReviewRooms}
-                            data-testid="locations-placement-review-rooms"
-                        >
-                            Review rooms
-                        </button>
+                        <div className="rounded-lg border border-alloy-forge/10 px-3 py-2">
+                            <p className="config-typo-meta">Rooms at this location</p>
+                            <p className="mt-1 text-sm font-medium text-alloy-midnight/80">
+                                {activeRooms.length} can participate in placement
+                            </p>
+                            <button
+                                type="button"
+                                className="mt-2 text-xs font-semibold text-[#007d68]"
+                                onClick={onReviewRooms}
+                                data-testid="locations-placement-review-rooms"
+                            >
+                                Review rooms →
+                            </button>
+                        </div>
                     </div>
 
-                    {error ?
-                        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert">
-                            {error}
-                        </p>
-                    :   null}
+                    <label className="flex items-center gap-2 text-sm font-medium text-alloy-midnight/80">
+                        <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(event) => setEnabled(event.target.checked)}
+                        />
+                        Use priority ranking
+                    </label>
 
-                    {!loading && !selectedWorkUnit ?
-                        <p className="config-typo-sublabel">No waitlist-enabled process is available for ranking.</p>
-                    : selectedWorkUnit ?
-                        <fieldset disabled={!canMutate || saving} className="space-y-4">
-                            <div>
-                                <label className="config-typo-field-label" htmlFor="locations-placement-work-unit">
-                                    Waitlist process
-                                </label>
-                                <select
-                                    id="locations-placement-work-unit"
-                                    className="config-runtime-select mt-1"
-                                    value={selectedId}
-                                    onChange={(event) => setSelectedId(event.target.value)}
-                                    data-testid="locations-placement-work-unit"
-                                >
-                                    {workUnits.map((workUnit) => (
-                                        <option key={workUnit.id} value={workUnit.id}>
-                                            {workUnit.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                <p className="config-typo-meta mt-1" data-testid="locations-placement-persistence-scope">
-                                    Saved on this work unit, not this location. The ranking applies at every location
-                                    using {selectedWorkUnit.name}.
-                                </p>
-                            </div>
-                            <label className="flex items-center gap-2 text-sm font-medium text-alloy-midnight/80">
-                                <input
-                                    type="checkbox"
-                                    checked={enabled}
-                                    onChange={(event) => setEnabled(event.target.checked)}
-                                />
-                                Use priority ranking
-                            </label>
+                    <div className="space-y-2" data-testid="locations-placement-priority-order">
+                        <div>
+                            <h3 className="config-typo-workspace-title">Priority factors</h3>
+                            <p className="config-typo-sublabel mt-1">
+                                The first matching factor wins. Move factors to set their order.
+                            </p>
+                        </div>
+                        <PriorityRuleOrderEditor
+                            order={ruleOrder}
+                            enabledKeys={enabledKeys}
+                            fallbackBucketKey={fallbackBucketKey}
+                            labels={{
+                                [TIER_EMPLOYEE_FAMILY_BUCKET]: "Employee",
+                                tier_sibling_enrolled: "Sibling — this location",
+                                tier_sister_center: "Sibling — another location",
+                                [TIER_GENERAL_WAITLIST_BUCKET]: "Standard waitlist",
+                            }}
+                            sources={{}}
+                            selectableCatalog
+                            disabled={!canMutate}
+                            onOrderChange={setRuleOrder}
+                            onEnabledKeysChange={setEnabledKeys}
+                        />
+                    </div>
 
-                            <div className="space-y-2" data-testid="locations-placement-priority-order">
-                                <div>
-                                    <h3 className="config-typo-workspace-title">Priority order</h3>
-                                    <p className="config-typo-sublabel mt-1">
-                                        The first matching priority wins. Move factors to set their order.
-                                    </p>
-                                </div>
-                                <PriorityRuleOrderEditor
-                                    order={ruleOrder}
-                                    enabledKeys={enabledKeys}
-                                    fallbackBucketKey={fallbackBucketKey}
-                                    labels={{
-                                        [TIER_EMPLOYEE_FAMILY_BUCKET]: "Employee",
-                                        tier_sibling_enrolled: "Sibling — this location",
-                                        tier_sister_center: "Sibling — another location",
-                                        [TIER_GENERAL_WAITLIST_BUCKET]: "Standard waitlist",
-                                    }}
-                                    sources={{}}
-                                    selectableCatalog
-                                    disabled={!canMutate}
-                                    onOrderChange={setRuleOrder}
-                                    onEnabledKeysChange={setEnabledKeys}
-                                />
-                            </div>
-
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-lg border border-alloy-forge/10 p-3">
-                                    <p className="config-typo-meta">Tie-break</p>
-                                    <ol className="mt-2 space-y-1 text-sm text-alloy-midnight/75">
-                                        {WAITLIST_RANKING_TIE_BREAKERS_V1.map((tieBreaker, index) => (
-                                            <li key={tieBreaker.order}>
-                                                {index + 1}. {tieBreaker.label === "Waitlist date" ? "Application / waitlist date" : tieBreaker.label}
-                                            </li>
-                                        ))}
-                                    </ol>
-                                </div>
-                                <div className="rounded-lg border border-alloy-forge/10 p-3">
-                                    <p className="config-typo-meta">Manual priority</p>
-                                    <p className="config-typo-sublabel mt-2">
-                                        Candidate-level manual priority overrides this order and is managed from the waitlist.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <fieldset className="space-y-2">
-                                <legend className="config-typo-field-label">Ordering mode</legend>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-lg border border-alloy-forge/10 p-3">
+                            <p className="config-typo-meta">Tie-break</p>
+                            <ol className="mt-2 space-y-1 text-sm text-alloy-midnight/75">
+                                {WAITLIST_RANKING_TIE_BREAKERS_V1.map((tieBreaker, index) => (
+                                    <li key={tieBreaker.order}>
+                                        {index + 1}.{" "}
+                                        {tieBreaker.label === "Waitlist date" ?
+                                            "Application / waitlist date"
+                                        :   tieBreaker.label}
+                                    </li>
+                                ))}
+                            </ol>
+                        </div>
+                        <div className="rounded-lg border border-alloy-forge/10 p-3">
+                            <p className="config-typo-meta">Ordering mode</p>
+                            <fieldset className="mt-2 space-y-2">
                                 <label className="flex items-start gap-2 text-sm text-alloy-midnight/75">
                                     <input
                                         className="mt-0.5"
@@ -318,24 +326,24 @@ export function LocationPlacementPanel({
                                     Order the waitlist by this priority
                                 </label>
                             </fieldset>
+                        </div>
+                    </div>
 
-                            {canMutate ?
-                                <button
-                                    type="button"
-                                    className="rounded-md bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                                    disabled={saving}
-                                    onClick={() => void savePolicy()}
-                                    data-testid="locations-placement-save"
-                                >
-                                    {saving ? "Saving…" : "Save ranking"}
-                                </button>
-                            :   null}
-                            {saved ? <p className="text-xs text-[#007d68]">Ranking saved.</p> : null}
-                        </fieldset>
+                    {canMutate ?
+                        <button
+                            type="button"
+                            className="rounded-md bg-[#00a283] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                            disabled={saving}
+                            onClick={() => void savePolicy()}
+                            data-testid="locations-placement-save"
+                        >
+                            {saving ? "Saving…" : "Save ranking"}
+                        </button>
                     :   null}
-                </div>
-            }
-        />
+                    {saved ? <p className="text-xs text-[#007d68]">Ranking saved.</p> : null}
+                </fieldset>
+            :   null}
+        </div>
     );
 }
 

@@ -167,13 +167,15 @@ export default function LocationRoomDetailPanel({
                     :   "Capacity is not set up yet — this room cannot be counted in location inventory."}
                 </ConfigConsequenceLine>
 
-                <div className="grid gap-3 lg:grid-cols-2">
-                    <ConfigAttentionPanel
-                        items={attention}
-                        compact
-                        testId="locations-room-attention"
-                        onResolve={() => setEditing(true)}
-                    />
+                <div className={`grid gap-3 ${attention.some((item) => item.grade !== "good") ? "lg:grid-cols-2" : ""}`}>
+                    {attention.some((item) => item.grade !== "good") ?
+                        <ConfigAttentionPanel
+                            items={attention}
+                            compact
+                            testId="locations-room-attention"
+                            onResolve={() => setEditing(true)}
+                        />
+                    :   null}
                     <ConfigWorkspaceCard title="What is configured" compact testId="locations-room-summary">
                         <dl className="space-y-1.5 text-sm text-alloy-midnight/80">
                             <div className="flex justify-between gap-3">

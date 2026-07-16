@@ -6,21 +6,30 @@ import type { LocationsFleetModel } from "@/lib/locations/locationWorkspaceModel
 function FleetCard({
     title,
     description,
+    icon,
     children,
     testId,
 }: {
     title: string;
     description?: string;
+    icon?: string;
     children: ReactNode;
     testId?: string;
 }) {
     return (
-        <section className="process-config-setup-card p-4" data-testid={testId}>
-            <div className="mb-3">
-                <h2 className="config-typo-workspace-title">{title}</h2>
-                {description ?
-                    <p className="config-typo-sublabel mt-1">{description}</p>
+        <section className="process-config-setup-card p-3.5" data-testid={testId}>
+            <div className="mb-2.5 flex items-center gap-2">
+                {icon ?
+                    <span className="text-base text-[#007d68]" aria-hidden>
+                        {icon}
+                    </span>
                 :   null}
+                <div>
+                    <h2 className="text-[13px] font-semibold tracking-tight text-alloy-midnight">{title}</h2>
+                    {description ?
+                        <p className="config-typo-sublabel mt-0.5">{description}</p>
+                    :   null}
+                </div>
             </div>
             {children}
         </section>
@@ -71,8 +80,8 @@ export default function LocationsFleetLanding({
     return (
         <div className="space-y-4" data-testid="locations-fleet-landing">
             <div className="grid gap-4 lg:grid-cols-3" data-testid="locations-fleet-rollups">
-                <FleetCard title="Operational readiness" testId="locations-fleet-readiness">
-                    <p className="text-2xl font-semibold tracking-tight text-alloy-midnight">
+                <FleetCard title="Operational readiness" icon="◎" testId="locations-fleet-readiness">
+                    <p className="text-xl font-semibold tracking-tight text-alloy-midnight">
                         {fleet.averageSetupPercent}%
                     </p>
                     <p className="config-typo-sublabel mt-1">
@@ -87,15 +96,15 @@ export default function LocationsFleetLanding({
                     </div>
                 </FleetCard>
 
-                <FleetCard title="Attention" testId="locations-fleet-attention-summary">
-                    <p className="text-2xl font-semibold tracking-tight text-alloy-midnight">{readinessLabel}</p>
+                <FleetCard title="Needs attention" icon="⚠" testId="locations-fleet-attention-summary">
+                    <p className="text-xl font-semibold tracking-tight text-alloy-midnight">{readinessLabel}</p>
                     <p className="config-typo-sublabel mt-1">
                         {fleet.locationsNeedingAttention}{" "}
                         {fleet.locationsNeedingAttention === 1 ? "location" : "locations"} need follow-up
                     </p>
                 </FleetCard>
 
-                <FleetCard title="Inventory" testId="locations-fleet-inventory">
+                <FleetCard title="Inventory" icon="▦" testId="locations-fleet-inventory">
                     <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-alloy-midnight/80">
                         <div>
                             <dt className="config-typo-sublabel">Locations</dt>
