@@ -30,7 +30,13 @@ describe("Configuration Runtime workspace primitives", () => {
             "data-config-glance-icon-well",
         );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigScopeContextBar.tsx")).toContain(
-            "Settings for",
+            "Configuration",
+        );
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel.tsx")).toContain(
+            "actionable.length === 0",
+        );
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel.tsx")).not.toContain(
+            "Everything looks good",
         );
     });
 

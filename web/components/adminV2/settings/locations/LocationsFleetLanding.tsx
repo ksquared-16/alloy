@@ -75,7 +75,7 @@ export default function LocationsFleetLanding({
             `${fleet.totalCritical} ${fleet.totalCritical === 1 ? "item needs" : "items need"} attention`
         : fleet.totalImprove > 0 ?
             `${fleet.totalImprove} ${fleet.totalImprove === 1 ? "improvement" : "improvements"} available`
-        :   "Everything looks good";
+        :   "None";
 
     return (
         <div className="space-y-4" data-testid="locations-fleet-landing">

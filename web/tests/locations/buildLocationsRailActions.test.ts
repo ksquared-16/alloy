@@ -35,6 +35,7 @@ describe("buildLocationsRailActions", () => {
         onAddLocation: vi.fn(),
         onEditLocation: vi.fn(),
         onAddRoom: vi.fn(),
+        onAddProgram: vi.fn(),
         onNavigate: vi.fn(),
         onApply: vi.fn(),
         onCreateSchedule: vi.fn(),
@@ -110,5 +111,26 @@ describe("buildLocationsRailActions", () => {
             "apply-rooms",
         ]);
         expect(actions.some((action) => action.id === "adjust-room")).toBe(false);
+    });
+
+    it("enables Add program on the programs tab", () => {
+        const actions = buildLocationsRailActions({
+            activeTab: "programs",
+            canMutate: true,
+            model: model(),
+            selectedSite: true,
+            siteCount: 2,
+            scheduleCount: 1,
+            roomCount: 2,
+            programCount: 0,
+            hasSelectedProgram: false,
+            hasSelectedRoom: false,
+            roomsNeedingCapacity: 0,
+            ...handlers,
+        });
+        const addProgram = actions.find((action) => action.id === "add-program");
+        expect(addProgram?.group).toBe("fix");
+        expect(addProgram?.reason).toBe("No programs offered yet");
+        expect(addProgram?.disabled).toBeFalsy();
     });
 });

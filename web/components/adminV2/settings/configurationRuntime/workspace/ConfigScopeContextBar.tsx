@@ -3,12 +3,12 @@
 import type { ConfigScopeMode } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 /**
- * Ownership context — organization defaults vs settings for the selected location.
- * Operator language only (no raw platform / implementation terminology).
+ * Configuration scope — Organization vs the selected location.
+ * Minimal operator language only.
  */
 export function ConfigScopeContextBar({
     mode,
-    organizationLabel = "Organization defaults",
+    organizationLabel = "Organization",
     objectLabel,
     onModeChange,
     ownershipHint,
@@ -18,16 +18,17 @@ export function ConfigScopeContextBar({
     organizationLabel?: string;
     objectLabel: string;
     onModeChange: (mode: ConfigScopeMode) => void;
+    /** Optional; prefer omitting — keep the bar scannable. */
     ownershipHint?: string;
     testId?: string;
 }) {
     return (
         <div
-            className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-alloy-forge/10 bg-gradient-to-r from-white to-alloy-bend-pine/[0.04] px-3 py-2.5"
+            className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-alloy-forge/10 bg-white px-3 py-2"
             data-testid={testId}
         >
             <p className="mr-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/40">
-                Settings for
+                Configuration
             </p>
             <button
                 type="button"
@@ -54,9 +55,7 @@ export function ConfigScopeContextBar({
                 {objectLabel}
             </button>
             {ownershipHint ?
-                <p className="ml-auto max-w-md text-right text-[11px] leading-snug text-alloy-midnight/50">
-                    {ownershipHint}
-                </p>
+                <p className="ml-auto text-[11px] text-alloy-midnight/45">{ownershipHint}</p>
             :   null}
         </div>
     );

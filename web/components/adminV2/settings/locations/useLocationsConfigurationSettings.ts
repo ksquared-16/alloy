@@ -300,6 +300,36 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         [refreshLocations],
     );
 
+    const createProgramCategory = useCallback(
+        async (siteId: string, label: string): Promise<string> => {
+            const res = await fetch("/api/admin/location-program-categories", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    location_id: siteId,
+                    label: label.trim() || "New program",
+                    is_active: true,
+                }),
+            });
+            const json = (await res.json().catch(() => ({}))) as {
+                category?: LocationProgramCategoryRow;
+                error?: string;
+            };
+            if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+            const created = json.category;
+            const newId = String(created?.id ?? "").trim();
+            if (!newId) throw new Error("Create failed: missing program id");
+            if (created) {
+                setProgramCategories((prev) => [...prev, created]);
+            } else {
+                await refreshPrograms();
+            }
+            return newId;
+        },
+        [refreshPrograms],
+    );
+
     const patchLocation = useCallback(
         async (id: string, body: Record<string, unknown>) => {
             const res = await fetch(`/api/admin/locations/${encodeURIComponent(id)}`, {
@@ -381,6 +411,7 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         selectedSchedulePattern,
         createSiteLocation,
         createRoomUnit,
+        createProgramCategory,
         patchLocation,
         patchProgramCategory,
         refresh,

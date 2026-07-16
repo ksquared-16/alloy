@@ -16,6 +16,7 @@ type BuildArgs = {
     onAddLocation: () => void;
     onEditLocation: () => void;
     onAddRoom: () => void;
+    onAddProgram: () => void;
     onNavigate: (tab: LocationWorkspaceTab, itemId?: string | null) => void;
     onApply: () => void;
     onCreateSchedule: () => void;
@@ -111,7 +112,7 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 id: "offer-programs",
                 label: "Offer a program",
                 group: "next",
-                onClick: () => args.onNavigate("programs"),
+                onClick: args.onAddProgram,
             });
         }
 
@@ -160,26 +161,13 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
 
     if (args.activeTab === "programs") {
         const actions: LocationsRailAction[] = [];
-        const incompleteProgram =
-            args.hasSelectedProgram &&
-            args.model.setupItems.find((item) => item.key === "programs")?.complete === false;
-        if (incompleteProgram || args.programCount === 0) {
-            actions.push({
-                id: "complete-program",
-                label: args.programCount === 0 ? "Offer a program" : "Complete program setup",
-                group: "fix",
-                reason: args.programCount === 0 ? "No programs offered yet" : "Selected program needs setup",
-                onClick: () => args.onNavigate("programs"),
-            });
-        }
         if (args.canMutate) {
             actions.push({
                 id: "add-program",
                 label: "Add program",
-                group: "next",
-                disabled: true,
-                reason: "Program create flow connects next",
-                onClick: () => undefined,
+                group: args.programCount === 0 ? "fix" : "next",
+                reason: args.programCount === 0 ? "No programs offered yet" : undefined,
+                onClick: args.onAddProgram,
             });
         }
         actions.push(applyAction("apply-programs", "Apply programs"));

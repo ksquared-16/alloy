@@ -86,13 +86,7 @@ describe("location workspace model", () => {
         expect(model.setupComplete).toBe(true);
         expect(model.criticalCount).toBe(0);
         expect(model.recommendedCount).toBe(0);
-        expect(model.attention).toEqual([
-            expect.objectContaining({
-                key: "all-good",
-                grade: "good",
-                label: "Everything looks good",
-            }),
-        ]);
+        expect(model.attention).toEqual([]);
     });
 
     it("keeps unknown capacity unknown and identifies partial setup", () => {

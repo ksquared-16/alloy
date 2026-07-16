@@ -90,27 +90,38 @@ describe("Configuration Runtime — Locations", () => {
         }
     });
 
-    it("uses summary-first programs and threshold staffing", () => {
+    it("uses summary-first programs and threshold staffing with distinct view/edit modes", () => {
         const programs = read("components/adminV2/settings/locations/LocationProgramDetailPanel.tsx");
         const rooms = read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx");
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(programs).toContain("locations-program-summary-");
+        expect(programs).toContain("locations-program-edit-");
         expect(programs).toContain("ConfigChildObjectMasterDetail");
         expect(programs).toContain("locations-program-age-unit");
         expect(programs).toContain("locations-program-ops");
         expect(programs).toContain("Configured here");
         expect(programs).toContain("Edit program");
         expect(programs).toContain("ConfigEditorSection");
+        expect(programs).toContain("Hours / operating rules");
+        expect(programs).toContain("onAddProgram");
+        expect(programs).not.toContain("Everything looks good");
         expect(rooms).toContain("Capacity / participation");
         expect(rooms).toContain("Staffing thresholds");
         expect(rooms).toContain("Add staffing threshold");
         expect(rooms).toContain("formatStaffingThreshold");
         expect(rooms).toContain("ConfigChildObjectMasterDetail");
         expect(rooms).toContain("locations-room-consequence");
+        expect(rooms).toContain("locations-room-ops");
+        expect(rooms).toContain("locations-room-edit");
         expect(rooms).toContain("Adjust room");
+        expect(rooms).toContain("Hours / operating rules");
         expect(rooms).toContain("ConfigEditorSection");
+        expect(rooms).not.toContain("Everything looks good");
         expect(rooms).not.toContain("Configure room");
-        expect(rooms).not.toContain("Set how many children this room holds and the staffing ratio together.");
-        expect(rooms.indexOf("Age range")).toBeLessThan(rooms.indexOf("locations-room-save"));
+        expect(page).toContain("createProgramCategory");
+        expect(page).toContain("onAddProgram");
+        expect(page).toContain("titleIcon");
+        expect(page).toContain('organizationLabel="Organization"');
     });
 
     it("does not repeat active tab titles as tab-body headers", () => {

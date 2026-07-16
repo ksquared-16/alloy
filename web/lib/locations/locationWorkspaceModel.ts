@@ -441,14 +441,7 @@ export function buildLocationWorkspaceModel(params: {
             tab: "schedule",
         });
     }
-    if (attention.length === 0) {
-        attention.push({
-            key: "all-good",
-            grade: "good",
-            label: "Everything looks good",
-            tab: "overview",
-        });
-    }
+    // Healthy locations have an empty attention list — UI collapses the section (no filler).
     const criticalCount = attention.filter((item) => item.grade === "fix").length;
     const incompleteSetupCount = setupItems.filter((item) => item.complete === false).length;
     const recommendedCount = incompleteSetupCount + attention.filter((item) => item.grade === "improve").length;

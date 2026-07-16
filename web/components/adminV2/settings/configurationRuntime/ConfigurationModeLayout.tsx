@@ -11,6 +11,7 @@ export function ConfigurationContext({
     eyebrow,
     title,
     subtitle,
+    titleIcon,
     actions,
     testId = "configuration-context",
     children,
@@ -18,6 +19,8 @@ export function ConfigurationContext({
     eyebrow?: string;
     title: string;
     subtitle?: string;
+    /** Optional product icon beside the page title (e.g. Locations MapPin). */
+    titleIcon?: ReactNode;
     actions?: ReactNode;
     testId?: string;
     children?: ReactNode;
@@ -31,7 +34,18 @@ export function ConfigurationContext({
                             {eyebrow}
                         </p>
                     :   null}
-                    <h1 className="config-typo-page-title process-config-context-title">{title}</h1>
+                    <div className="flex items-center gap-2.5">
+                        {titleIcon ?
+                            <span
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-alloy-bend-pine/[0.10] text-[#007d68]"
+                                data-testid={`${testId}-title-icon`}
+                                aria-hidden
+                            >
+                                {titleIcon}
+                            </span>
+                        :   null}
+                        <h1 className="config-typo-page-title process-config-context-title">{title}</h1>
+                    </div>
                     {subtitle ?
                         <p className="config-typo-sublabel process-config-context-summary mt-1 max-w-3xl">{subtitle}</p>
                     :   null}
@@ -194,10 +208,12 @@ export function ConfigurationPrimaryButton({
 export function ConfigurationEmptyState({
     title,
     description,
+    actions,
     testId = "configuration-empty-state",
 }: {
     title: string;
     description: string;
+    actions?: ReactNode;
     testId?: string;
 }) {
     return (
@@ -205,6 +221,9 @@ export function ConfigurationEmptyState({
             <div className="px-2 py-8 text-center">
                 <p className="config-typo-workspace-title">{title}</p>
                 <p className="config-typo-sublabel mx-auto mt-2 max-w-md">{description}</p>
+                {actions ?
+                    <div className="mt-4 flex justify-center">{actions}</div>
+                :   null}
             </div>
         </ConfigurationDetailCard>
     );

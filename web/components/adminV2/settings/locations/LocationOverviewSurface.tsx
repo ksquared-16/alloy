@@ -43,9 +43,14 @@ export function LocationOverviewSurface({
         model.configuredCapacity == null || model.roomsNeedingCapacity > 0;
     const scheduleNeedsAttention = scheduleSummary === "Not set up yet";
 
+    const hasAttention = attentionItems.some((item) => item.grade !== "good");
+
     return (
         <div className="space-y-4" data-testid="locations-overview">
-            <div className="grid gap-3 lg:grid-cols-2" data-testid="locations-overview-health">
+            <div
+                className={`grid gap-3 ${hasAttention ? "lg:grid-cols-2" : ""}`}
+                data-testid="locations-overview-health"
+            >
                 <ConfigAttentionPanel
                     items={attentionItems}
                     compact

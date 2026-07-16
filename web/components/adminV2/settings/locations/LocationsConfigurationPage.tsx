@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
     ConfigurationContext,
@@ -113,6 +114,7 @@ export default function LocationsConfigurationPage({
         selectedSite,
         createSiteLocation,
         createRoomUnit,
+        createProgramCategory,
         patchLocation,
         patchProgramCategory,
         roomCapacitySummaryForSite,
@@ -328,6 +330,22 @@ export default function LocationsConfigurationPage({
         })();
     };
 
+    const addProgram = () => {
+        if (!selectedSite || !canMutate) return;
+        void (async () => {
+            try {
+                const newId = await createProgramCategory(
+                    selectedSite.id,
+                    `Program ${(selectedPrograms.length + 1).toString()}`,
+                );
+                setSelectedProgramId(newId);
+                navigate("programs", newId);
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Failed to add program");
+            }
+        })();
+    };
+
     const railActions = useMemo(
         () =>
             buildLocationsRailActions({
@@ -345,6 +363,7 @@ export default function LocationsConfigurationPage({
                 onAddLocation: beginAddLocation,
                 onEditLocation: () => setEditingSite(true),
                 onAddRoom: addRoom,
+                onAddProgram: addProgram,
                 onNavigate: navigate,
                 onApply: () => setApplyToOpen(true),
                 onCreateSchedule: () => {
@@ -433,6 +452,7 @@ export default function LocationsConfigurationPage({
                         setSelectedProgramId(programId);
                         navigate("programs", programId);
                     }}
+                    onAddProgram={canMutate ? addProgram : undefined}
                     ageUnitSelectOptions={ageUnitSelectOptions}
                 />
             );
@@ -452,6 +472,7 @@ export default function LocationsConfigurationPage({
                         setSelectedRoomId(roomId);
                         navigate("rooms", roomId);
                     }}
+                    onAddRoom={canMutate ? addRoom : undefined}
                 />
             );
         }
@@ -539,7 +560,11 @@ export default function LocationsConfigurationPage({
         <div className="process-config-page min-h-0 flex-1" data-testid="locations-configuration-page">
             <LocationsCommandRailActions actions={railActions} />
 
-            <ConfigurationContext title="Locations" testId="locations-configuration-context" />
+            <ConfigurationContext
+                title="Locations"
+                titleIcon={<MapPin className="h-5 w-5" strokeWidth={2} />}
+                testId="locations-configuration-context"
+            />
 
             {error ?
                 <p
@@ -577,12 +602,11 @@ export default function LocationsConfigurationPage({
                     <>
                         <ConfigScopeContextBar
                             mode="organization"
-                            organizationLabel="Organization defaults"
-                            objectLabel="Select a location"
+                            organizationLabel="Organization"
+                            objectLabel="Location"
                             onModeChange={(mode) => {
                                 if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
                             }}
-                            ownershipHint="Organization defaults · Open a location to manage overrides"
                         />
                         <LocationsFleetLanding
                             fleet={fleet}
@@ -694,12 +718,11 @@ export default function LocationsConfigurationPage({
 
                             <ConfigScopeContextBar
                                 mode="object"
-                                organizationLabel="Organization defaults"
+                                organizationLabel="Organization"
                                 objectLabel={model?.displayName ?? "Location"}
                                 onModeChange={(mode) => {
                                     if (mode === "organization") returnToFleet();
                                 }}
-                                ownershipHint="Configured at this location · Overrides organization defaults where changed"
                             />
 
                             <ConfigObjectHeader
