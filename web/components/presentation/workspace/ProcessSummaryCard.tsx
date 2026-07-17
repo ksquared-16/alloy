@@ -390,7 +390,12 @@ export function ProcessSummaryCard({
                             onPointerEnter={warm}
                             onPointerDown={warm}
                             onFocus={warm}
-                            className={`inline-flex items-center gap-1 text-[13px] font-semibold no-underline transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${ctaClasses}`}
+                            // `motion-control` is the canonical acknowledgment treatment (the Work View pills already use
+                            // it). Without it the tile's only visual response was a hover transition, so the
+                            // operator's click was not visibly acknowledged until paint — certification measured
+                            // 58ms against a ≤50ms budget. K1 acknowledges in 0.014ms; this is what makes that
+                            // acknowledgment VISIBLE.
+                            className={`motion-control inline-flex items-center gap-1 text-[13px] font-semibold no-underline transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${ctaClasses}`}
                         >
                             {ctaLabel}
                             <span aria-hidden className="text-alloy-midnight/35">→</span>
