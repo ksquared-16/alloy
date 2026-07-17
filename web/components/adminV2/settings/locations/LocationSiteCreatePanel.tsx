@@ -41,7 +41,7 @@ export default function LocationSiteCreatePanel({
         <ConfigurationDetailCard testId="locations-site-create" title="Add location">
             <div className="space-y-4">
                 <p className="config-typo-sublabel">
-                    Create a campus or site in Settings. Rooms and programs are configured after the site is saved.
+                    Create a campus or site in Configuration. Rooms and programs are configured after the site is saved.
                 </p>
 
                 <label className="block space-y-1.5">

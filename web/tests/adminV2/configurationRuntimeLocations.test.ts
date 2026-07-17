@@ -100,7 +100,9 @@ describe("Configuration Runtime — Locations", () => {
         expect(landing).toContain("lg:grid-cols-[minmax(0,2fr)_minmax(18.75rem,1fr)]");
         expect(landing).toContain("locations-main-grid");
         expect(landing).toContain('title="Needs attention"');
-        expect(landing).toContain("attentionHighlights.slice(0, 3)");
+        expect(landing).toContain("attentionHighlights.slice(0, 5)");
+        expect(landing).toContain("No locations require attention.");
+        expect(landing).toContain("onOpenLocation(highlight.locationId, highlight.item.tab)");
         expect(landing).toContain("locations-attention-toggle");
         expect(landing).toContain("locations-list-card");
         expect(landing).toContain("locations-row-");
@@ -123,6 +125,19 @@ describe("Configuration Runtime — Locations", () => {
         const eightLocationFixture = Array.from({ length: 8 }, (_, index) => ({ id: `location-${index + 1}` }));
         expect(locationsCollectionUsesBoundedScroll(6)).toBe(false);
         expect(locationsCollectionUsesBoundedScroll(eightLocationFixture.length)).toBe(true);
+    });
+
+    it("freezes the Configuration Catalog and Collection Runtime templates", () => {
+        const doctrine = read("../docs/platform/operator/configuration-workspace-platform-doctrine.md");
+        expect(doctrine).toContain("Configuration Collection");
+        expect(doctrine).toContain("Configuration Object");
+        expect(doctrine).toContain("Configuration Detail Runtime");
+        expect(doctrine).toContain("Template A — Configuration Catalog");
+        expect(doctrine).toContain("Template B — Configuration Collection");
+        expect(doctrine).toContain("Cross-object triage");
+        expect(doctrine).toContain("Show the first five");
+        expect(doctrine).toContain("| Data Model | Collection Runtime |");
+        expect(doctrine).toContain("| Operational Calculations | Collection Runtime |");
     });
 
     it("uses the seven ready owned-concern tabs and owns Edit location on the object header", () => {

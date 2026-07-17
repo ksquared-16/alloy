@@ -660,7 +660,7 @@ export async function validateLifecycleActivationRuntime(
 
             checks.push({
                 id: "lifecycle_visibility_ui_parity",
-                label: "Queue visibility matches Settings counts",
+                label: "Queue visibility matches Configuration counts",
                 pass: recordsQueryPass,
                 href: recordsQueryHref,
                 detail: recordsQueryDetail,

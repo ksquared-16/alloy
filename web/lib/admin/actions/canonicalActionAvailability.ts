@@ -202,7 +202,7 @@ function evaluateAvailability(input: {
                 ...base,
                 reason: "not_in_db_placements",
                 unavailableMessage:
-                    "Add this action in Business Process or Settings → Actions to enable it here.",
+                    "Add this action in Business Process or Configuration → Actions to enable it here.",
             };
         }
     }

@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
-import type { LocationsCollectionModel } from "@/lib/locations/locationWorkspaceModel";
+import type {
+    LocationsCollectionModel,
+    LocationWorkspaceTab,
+} from "@/lib/locations/locationWorkspaceModel";
 
 function formatCapacity(value: number | null): string {
     if (value == null) return "Not set up yet";
@@ -29,7 +32,7 @@ export default function LocationsLanding({
     onShowInactiveChange: (next: boolean) => void;
     search: string;
     onSearchChange: (next: string) => void;
-    onOpenLocation: (locationId: string) => void;
+    onOpenLocation: (locationId: string, tab?: LocationWorkspaceTab | "general") => void;
     onAddLocation: () => void;
     canMutate: boolean;
 }) {
@@ -45,8 +48,8 @@ export default function LocationsLanding({
 
     const attentionPreview = showAllAttention ?
         collection.attentionHighlights
-    :   collection.attentionHighlights.slice(0, 3);
-    const hasMoreAttention = collection.attentionHighlights.length > 3;
+    :   collection.attentionHighlights.slice(0, 5);
+    const hasMoreAttention = collection.attentionHighlights.length > 5;
     const readinessLabel =
         collection.locationCount === 0 ? "No locations yet"
         : collection.totalCritical > 0 ?
@@ -284,7 +287,7 @@ export default function LocationsLanding({
                                     <button
                                         type="button"
                                         className="-mx-1 w-[calc(100%+0.5rem)] rounded-md px-1 py-0.5 text-left hover:bg-alloy-bend-pine/[0.04]"
-                                        onClick={() => onOpenLocation(highlight.locationId)}
+                                        onClick={() => onOpenLocation(highlight.locationId, highlight.item.tab)}
                                         data-testid={`locations-attention-${highlight.locationId}`}
                                     >
                                         <div className="flex items-start gap-2.5">
@@ -315,8 +318,9 @@ export default function LocationsLanding({
                             ))}
                         </ul>
                     :   <div className="rounded-md bg-alloy-bend-pine/[0.045] px-3 py-2.5">
-                            <p className="text-sm font-semibold text-alloy-midnight">No urgent issues</p>
-                            <p className="config-typo-sublabel mt-0.5">All active locations are in a healthy posture.</p>
+                            <p className="text-sm font-semibold text-alloy-midnight">
+                                No locations require attention.
+                            </p>
                         </div>
                     }
                     {hasMoreAttention ?

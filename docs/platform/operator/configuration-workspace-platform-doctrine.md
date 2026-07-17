@@ -26,6 +26,77 @@ This doctrine makes that philosophy explicit and binding.
 
 ---
 
+## Canonical Configuration Runtime hierarchy
+
+The platform hierarchy is frozen:
+
+```text
+Configuration
+  ↓
+Configuration Collection
+  ↓
+Configuration Object
+  ↓
+Configuration Detail Runtime
+```
+
+- **Configuration** is the control plane and navigation entry.
+- A **Configuration Collection** presents the objects an operator may configure.
+- A **Configuration Object** is one owned, addressable thing with identity, status, setup, and Attention.
+- A **Configuration Detail Runtime** is the object's workspace for understanding and changing its owned concerns.
+
+Reference implementations:
+
+```text
+Organization
+  ↓
+Configuration Domain Catalog
+
+Locations
+  ↓
+Location Collection
+  ↓
+Individual Location
+  ↓
+Location Runtime
+```
+
+The term **Collection** is canonical and domain-neutral. Do not substitute another landing archetype.
+
+### Frozen page templates
+
+Every Configuration landing inherits exactly one template:
+
+1. **Template A — Configuration Catalog.** Purpose: choose which configuration domain to configure. Organization is the reference implementation.
+2. **Template B — Configuration Collection.** Purpose: select which configuration object to configure, then enter its Detail Runtime. Locations is the reference implementation.
+
+Organization is the sole canonical Catalog Runtime. Configuration domains supply different collections, objects, data, and owned concerns; they may not invent a third landing pattern.
+
+### Expansion classification
+
+This classification authorizes later rebuilds; it does not implement them:
+
+| Configuration page | Template | Primary selection |
+|---|---|---|
+| Organization | Catalog Runtime | Configuration domain |
+| Locations | Collection Runtime | Location |
+| Programs | Collection Runtime | Program |
+| Access | Collection Runtime | Role or access assignment |
+| Communications | Collection Runtime | Communication configuration object |
+| Data Model | Collection Runtime | Data-model configuration object |
+| Business Processes | Collection Runtime | Business Process |
+| Automation | Collection Runtime | Automation |
+| Operational Intelligence | Collection Runtime | Intelligence configuration object |
+| Surfaces | Collection Runtime | Surface |
+| Entities | Collection Runtime | Entity |
+| Fields | Collection Runtime | Field |
+| Statuses | Collection Runtime | Status definition |
+| Operational Calculations | Collection Runtime | Calculation |
+
+Classification freezes presentation inheritance, not domain ownership, schema, API, or implementation sequencing.
+
+---
+
 ## The core realization
 
 Every configurable thing in Alloy is an **operational object**:
@@ -191,6 +262,14 @@ HTTP success, a toast, optimistic copy, or a closed editor is not persistence pr
 ### Attention model
 Attention is sourced from the substrate's resolution status plus a few product-level checks (no admin, no sender identity, thin availability). Rank Fix > Improve > Good; within a grade, by operational impact. Never show a global "Healthy" lozenge that can contradict an open Fix item — the item list is the truth.
 
+For a Configuration Collection, operational information has exactly three levels:
+
+1. **Collection Health** — compact signal cards answer only “How healthy is the collection?” They show posture, never issue detail.
+2. **Cross-object triage** — the Needs Attention panel is a priority-ordered, deduplicated, actionable queue. It contains one row per issue, may contain multiple issues for one object, and keeps equivalent issues on different objects separate because they are different work. Show the first five, then **View all** inline. When empty, say “No locations require attention” or the equivalent domain noun.
+3. **Object Context** — each collection row answers “Why is this object not ready?” with only that object's highest-priority issue. It does not reproduce the full triage queue.
+
+The triage queue is not another summary, inventory, or object list. This separation is binding for Locations and every future Collection Runtime.
+
 ### Setup Progress model
 Setup answers a **different** question: "have I finished configuring this object?" It is onboarding, monotonic, and per-owned-area. An area counts as done when it meets a stated minimum bar (or is explicitly marked "not applicable"). It is prominent while incomplete and **collapses to a single line at 100%** — it must never nag a running object. **Setup ≠ Attention:** a fully-set-up object can still have an Attention item. Keeping these separate is non-negotiable; collapsing them (or adding a third status) is the platform's most common self-inflicted confusion.
 
@@ -297,7 +376,7 @@ Locations demonstrates the whole platform: an **organization landing** (configur
 
 **Top-level landing distinction:** Organization presents the configuration domain catalog. Locations presents operational summary, Needs Attention, and a quiet Location collection with search, inactive filtering, Add Location, and direct entry into each Location workspace. The two pages share Configuration Runtime visual language without forcing the same object presentation. Detailed explanation remains inside the selected domain or Location runtime; no readiness, attention, mutation, or ownership logic moves into landing presentation.
 
-**Ownership model (binding):** Settings content owns configuration understanding. The shell owns contextual commands. BOS assists through the same platform boundaries. Inline controls remain local to their objects.
+**Ownership model (binding):** Configuration content owns configuration understanding. The shell owns contextual commands. BOS assists through the same platform boundaries. Inline controls remain local to their objects.
 
 **Reference child-object behavior:** Program offerings, Rooms/Delivery Resources, and Schedule use one master/detail grammar: the collection supports selection, the selected object owns the workspace, and create/edit are intentional modes that replace read summaries rather than stacking beneath them. Primary collection creation is available both in collection chrome and, where useful, the shell Actions rail. Operational Readiness visibly lists every authoritative dimension as **Complete**, **Needs setup**, or **Not assessed** (and **Not applicable** when a domain can prove that state); its percentage uses only assessed dimensions and must visibly reconcile with that list.
 
@@ -307,7 +386,7 @@ Organization Runtime V2 freezes Organization as publisher and Locations as consu
 
 Organization Runtime inherits the workspace grammar, not Location-specific nouns or storage. Its landing is `/organization`. Organization owns reusable pattern creation and target selection; Locations owns Programs offered, Rooms/Delivery Resources, local schedules, applied child objects, and their authoritative local read surfaces. Programs define reusable services; they do not own rooms, capacity, or scheduling. Apply must be published-revision-only, durable, auditable, response-confirmed for every selected Location, and deterministic enough to retry safely before it is exposed. Until a domain supplies resolved governance evidence, the landing says **Not assessed** rather than inferring inheritance or compliance.
 
-Implementation primitives live under `web/components/adminV2/settings/configurationRuntime/workspace/` and `LocationsCommandRailActions` (shell registration). Commercial, Communications, Scheduling, Staffing, Billing, and future Settings modules should compose them rather than inventing parallel UX.
+Implementation primitives live under `web/components/adminV2/settings/configurationRuntime/workspace/` and `LocationsCommandRailActions` (shell registration). Commercial, Communications, Scheduling, Staffing, Billing, and future Configuration modules should compose them rather than inventing parallel UX.
 
 The Placement tab presents the existing waitlist ranking policy without changing its owner. Ranking is currently persisted as `work_units.metadata.placement_priority_v1` on the selected eligible waitlist Work Unit and therefore applies anywhere that Work Unit runs; it is **not location-scoped**. The Locations workspace must disclose that scope while allowing selection and ordering only from the registered profile's supported operator factors. The fallback factor remains active and last, and the registered tie-break sequence remains runtime-owned.
 
@@ -346,7 +425,7 @@ Future engineers **must not** build:
 - **Raw implementation concepts** — version tables, effective-date pickers framed as versioning, null fields shown as `0`.
 - **Implementation-driven navigation** — an IA that mirrors the code's module boundaries rather than the operator's ownership model.
 - **Table editors as primary experiences.**
-- **Configuration pages with no object ownership** — a settings page that configures "capacity" in the abstract, owned by nothing.
+- **Configuration pages with no object ownership** — a page that configures "capacity" in the abstract, owned by nothing.
 - **A third status surface** competing with Attention and Setup Progress.
 - **A permanent help/resources rail** or live operational metrics (e.g. "tours scheduled today") on a configuration surface — configuration shows setup state, not live operations.
 

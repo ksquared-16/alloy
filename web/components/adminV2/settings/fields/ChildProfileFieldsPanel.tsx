@@ -119,7 +119,7 @@ export default function ChildProfileFieldsPanel() {
                                             >
                                                 Available inside the{" "}
                                                 <span className="font-medium">Children</span> collection on queue rows
-                                                when configured in Settings → Surfaces.
+                                                when configured in Configuration → Surfaces.
                                             </p>
                                         ) : null}
                                         {isGenderFieldDefinition(CUSTOMER_MEMBER_ENTITY_TYPE, row.field_key) &&

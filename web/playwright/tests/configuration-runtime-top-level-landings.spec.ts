@@ -92,6 +92,13 @@ test.describe("configuration-runtime-top-level-landings", () => {
             await expect(page.getByTestId("locations-search")).toBeVisible();
             await expect(page.getByTestId("locations-show-inactive")).toBeVisible();
             await expect(page.getByTestId("locations-add-location")).toBeVisible();
+            const attentionActions = page.locator(
+                'button[data-testid^="locations-attention-"]:not([data-testid="locations-attention-toggle"])',
+            );
+            expect(await attentionActions.count()).toBeLessThanOrEqual(5);
+            if (await page.getByTestId("locations-attention-toggle").isVisible()) {
+                await expect(attentionActions).toHaveCount(5);
+            }
 
             const signalCards = page.locator(
                 '[data-testid="locations-readiness"], [data-testid="locations-attention-summary"], [data-testid="locations-inventory"]',

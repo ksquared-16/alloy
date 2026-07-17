@@ -44,8 +44,8 @@ describe("canManageUsersAndRoles", () => {
 });
 
 describe("permissionUiArea", () => {
-    it("maps settings group to Settings/Admin", () => {
-        expect(permissionUiArea("settings")).toBe("Settings/Admin");
+    it("maps settings group to Configuration/Admin", () => {
+        expect(permissionUiArea("settings")).toBe("Configuration/Admin");
     });
 
     it("maps crm-ish groups to CRM", () => {

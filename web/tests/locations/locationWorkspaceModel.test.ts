@@ -203,8 +203,48 @@ describe("location workspace model", () => {
         expect(collection.totalConfiguredCapacity).toBe(12);
         expect(collection.locations[0]?.id).toBe("site-2");
         expect(collection.locations[0]?.criticalCount).toBeGreaterThan(0);
-        expect(collection.attentionHighlights.length).toBeGreaterThan(0);
+        expect(collection.attentionHighlights.map((highlight) => highlight.item.key)).toEqual([
+            "timezone",
+            "rooms",
+            "programs",
+            "schedule",
+        ]);
+        expect(collection.attentionHighlights.every((highlight) => highlight.locationId === "site-2")).toBe(true);
+        expect(collection.locations[0]?.topAttention?.key).toBe("timezone");
         expect(collection.locations.find((location) => location.id === "site-1")?.setupComplete).toBe(true);
+    });
+
+    it("builds a priority-ordered cross-location queue without collapsing distinct work", () => {
+        const collection = buildLocationsCollectionModel({
+            sites: [
+                site({ id: "site-2", label: "West Campus", metadata: {} }),
+                site({ id: "site-3", label: "North Campus", metadata: {} }),
+            ],
+            rooms: [],
+            programs: [],
+            schedules: [],
+        });
+
+        expect(collection.attentionHighlights).toHaveLength(8);
+        expect(
+            collection.attentionHighlights.slice(0, 2).map((highlight) => [
+                highlight.locationId,
+                highlight.item.key,
+            ]),
+        ).toEqual([
+            ["site-3", "timezone"],
+            ["site-2", "timezone"],
+        ]);
+        expect(
+            new Set(
+                collection.attentionHighlights.map(
+                    (highlight) => `${highlight.locationId}:${highlight.item.key}`,
+                ),
+            ).size,
+        ).toBe(collection.attentionHighlights.length);
+        expect(
+            collection.attentionHighlights.filter((highlight) => highlight.locationId === "site-2"),
+        ).toHaveLength(4);
     });
 
     it("limits location timezone choices to canonical United States IANA values", () => {

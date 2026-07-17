@@ -56,7 +56,10 @@ AdminV2 reveal gates, queue empty semantics, composed payload readiness — **pr
 ## Configuration doctrine
 
 - Config steers, code owns invariants
-- Four-plane settings model
+- Canonical hierarchy: Configuration → Configuration Collection → Configuration Object → Configuration Detail Runtime
+- Frozen landing templates: Configuration Catalog or Configuration Collection
+- Reference implementations: Organization catalog; Locations collection and Location Runtime
+- Canonical experience doctrine: `../operator/configuration-workspace-platform-doctrine.md`
 - Ownership: `../../system/configuration-ownership-doctrine.md`
 
 ---
@@ -87,6 +90,7 @@ Document **decisions**, not debates. Frozen areas:
 - BOS human-in-the-loop
 - AdminV2 reveal gates
 - **Alloy Operational Workspace Doctrine V2** (operational module modal presentation — frozen July 2026)
+- **Configuration Runtime hierarchy and Catalog/Collection templates** (frozen July 2026)
 
 Open areas stay in roadmap until frozen — then merge into platform docs.
 

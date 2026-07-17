@@ -123,7 +123,7 @@ export default function RuntimeMetadataReadOnlyPanel({
                                             </p>
                                         ) : (
                                             <p className="mt-1 leading-snug text-alloy-forge/55">
-                                                Not cataloged in Settings — may still be used by scripts, integrations, or future features.
+                                                Not cataloged in Configuration — may still be used by scripts, integrations, or future features.
                                             </p>
                                         )}
                                         {info?.schemaSummary ? (

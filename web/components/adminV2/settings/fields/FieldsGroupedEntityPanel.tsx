@@ -89,7 +89,7 @@ export default function FieldsGroupedEntityPanel({
                                                     >
                                                         Available in the{" "}
                                                         <span className="font-medium">Children</span> collection on queue
-                                                        rows when configured in Settings → Surfaces.
+                                                        rows when configured in Configuration → Surfaces.
                                                     </p>
                                                 ) : null}
                                                 {isGenderFieldDefinition(storageEntityType, field.field_key) &&

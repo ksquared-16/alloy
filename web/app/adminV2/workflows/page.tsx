@@ -471,7 +471,7 @@ export default function AdminV2WorkflowsPage() {
             variant="bridge"
             breadcrumbs={[
                 { href: WORKSPACE, label: "Workspace" },
-                { href: CANONICAL_ADMIN_CONFIG_LANDING, label: "Settings" },
+                { href: CANONICAL_ADMIN_CONFIG_LANDING, label: "Configuration" },
                 { label: "Workflows" },
             ]}
             title="Workflows"

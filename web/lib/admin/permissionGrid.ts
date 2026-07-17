@@ -17,7 +17,7 @@ export const PERMISSION_GRID_ROWS: readonly PermissionGridRow[] = [
     { id: "billing", label: "Billing / Payments", readKeys: ["billing.read"], writeKeys: ["billing.write"] },
     { id: "documents", label: "Documents", readKeys: ["documents.read"], writeKeys: ["documents.write"] },
     { id: "reports", label: "Reports / Analytics", readKeys: ["reports.read"], writeKeys: ["reports.write"] },
-    { id: "settings", label: "Settings", readKeys: ["settings.read"], writeKeys: ["settings.manage"] },
+    { id: "settings", label: "Configuration", readKeys: ["settings.read"], writeKeys: ["settings.manage"] },
     // Users & Roles is also enforced by server gate on `settings.users_roles` (write/manage).
     { id: "users_roles", label: "Users & Roles", readKeys: ["settings.users_roles.read"], writeKeys: ["settings.users_roles"] },
     { id: "workflows", label: "Workflows / Automation", readKeys: ["workflows.read"], writeKeys: ["workflows.write"] },

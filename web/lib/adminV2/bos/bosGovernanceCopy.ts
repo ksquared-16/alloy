@@ -66,7 +66,7 @@ export function resolveBosPolicyDenial(kind: BosPolicyDenialKind): BosPolicyDeni
                 headline: "Approval required",
                 reason: "Your role can review configuration proposals but cannot approve and apply.",
                 bullets: [CONFIG_ASSIST_APPLY_PERMISSION_COPY],
-                nextStep: "Ask an administrator to apply from Settings → Config proposals, or request apply access.",
+                nextStep: "Ask an administrator to apply from Configuration → Config proposals, or request apply access.",
             };
         default: {
             const _exhaustive: never = kind;

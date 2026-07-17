@@ -116,7 +116,7 @@ function entityTypeDisplayLabel(
 }
 
 const STATUSES_DEFAULT_SUBTITLE =
-    "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Settings diagnostics (read-only) or a future Workflow Status Configuration sprint.";
+    "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Configuration diagnostics (read-only) or a future Workflow Status Configuration sprint.";
 
 const STATUSES_ADMINV2_SUBTITLE =
     "Manage status names and order by category. Enrollment Participation is the child's enrollment participation state; Lead Statuses are lead durable state (Open / Closed); People Statuses are profile state. Stage position and work are configured in Business Processes.";

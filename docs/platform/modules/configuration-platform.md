@@ -9,20 +9,20 @@ supersedes: []
 
 **Status:** Canonical platform module doc.
 
-Settings control plane — config steers presentation within platform guardrails.
+Configuration control plane — configuration steers presentation within platform guardrails.
 
 ---
 
 ## Four-plane model (V1 shipped)
 
-| Plane | Settings route | Owns |
+| Plane | Configuration route | Owns |
 |-------|----------------|------|
 | Fields | `/settings/fields` | Field registry, types, visibility |
 | Field grouping | `/settings/field-sections` | Section labels |
 | Surfaces | `/settings/surfaces` | Surface composition (drawer, queue row, headers) |
 | Actions | `/settings/actions` | Org action placements |
 
-Plus: statuses, business processes, placement priority, org settings.
+Plus: statuses, business processes, placement priority, and organization configuration.
 
 ---
 
@@ -40,7 +40,7 @@ Plus: statuses, business processes, placement priority, org settings.
 | **`entity_layouts.doc`** | Canonical **visual surface layout** for drawer/queue composition (sections, fields, zones, `layoutEditorHidden`) | **Primary** — Layout Gallery + visual editor; opportunity drawer runtime adoption (Phase 4+) |
 | **`record_drawer_layouts.config_json`** | Legacy opportunity workflow v1 section order, show/hide, `field_placements_v1` | **Legacy** — still written by workflow v1 settings editors until per-org migration |
 
-Operators configuring opportunity drawer **composition** should use **Settings → Surfaces**. Legacy workflow v1 layout editors remain for field placement and section order until migrated; dual-write can produce conflicting visibility until cutover completes.
+Operators configuring opportunity drawer **composition** should use **Configuration → Surfaces**. Legacy workflow v1 layout editors remain for field placement and section order until migrated; dual-write can produce conflicting visibility until cutover completes.
 
 Kill switch for Phase 4 visual config at runtime: `LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG=0` (server) / `NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG=0` (client).
 
@@ -86,8 +86,8 @@ The Configuration Runtime is the platform-owned layer that sits beneath all conf
 | Scope (org vs location) | `lib/configRuntime/scope.ts` | Commercial, Layouts, Fields |
 | Ownership indicators | `components/configRuntime/OwnershipBadge.tsx` | Commercial |
 | Inheritance resolution | `resolveInherited()` in scope.ts | Commercial tuition rates |
-| Config workspace layout | `lib/adminV2/settingsPageLayout.ts` | All settings surfaces |
-| Configuration workspace domains | `lib/adminV2/configurationWorkspaceDomains.ts` | Settings index, nav |
+| Config workspace layout | `lib/adminV2/settingsPageLayout.ts` | All configuration surfaces |
+| Configuration workspace domains | `lib/adminV2/configurationWorkspaceDomains.ts` | Configuration landing and nav |
 | Configuration Domain Card | `components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard.tsx` | Organization and future publisher surfaces |
 
 **Extraction rule:** Only proven primitives move here. A primitive is proven when it appears in two or more independent configuration domains. Do not move Commercial-specific patterns here prematurely.
@@ -142,9 +142,9 @@ These belong to the Configuration Runtime eventually but are only Commercial-spe
 
 ---
 
-## Platform Configuration UX — Settings Home
+## Platform Configuration navigation
 
-The Settings index (`/settings`) is a **compact configuration table of contents** — divider-separated sections with a left identity column and right list of ~52px clickable rows, not dashboard tiles.
+**Configuration** is the operator-facing product language. `/organization` is the Configuration landing. Existing `/settings/*` URLs remain compatibility routes for domain surfaces; internal filenames and identifiers may retain `settings` where changing them would create migration risk.
 
 **Information architecture:**
 

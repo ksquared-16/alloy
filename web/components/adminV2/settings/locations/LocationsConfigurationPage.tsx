@@ -771,7 +771,9 @@ export default function LocationsConfigurationPage({
                                     onShowInactiveChange={setShowInactive}
                                     search={search}
                                     onSearchChange={setSearch}
-                                    onOpenLocation={(locationId) => openLocation(locationId)}
+                                    onOpenLocation={(locationId, tab) =>
+                                        openLocation(locationId, tab === "general" || tab == null ? "overview" : tab)
+                                    }
                                     onAddLocation={beginAddLocation}
                                     canMutate={canMutate}
                                 />
@@ -831,7 +833,7 @@ export default function LocationsConfigurationPage({
                                         <div
                                             className="mt-3.5 flex overflow-x-auto border-t border-alloy-stone/25"
                                             role="tablist"
-                                            aria-label="Location settings"
+                                            aria-label="Location configuration"
                                         >
                                             {LOCATION_WORKSPACE_TABS.map((tab) => (
                                                 <button

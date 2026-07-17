@@ -185,7 +185,7 @@ CSV source: `supabase/reference/*.csv` (8 files)
 | Routing detail | `system/routing-doctrine.md` |
 | Drawer VM contracts | `system/drawer-doctrine.md`, `drawer-operating-model-v1.md`, `drawer-view-model-runtime-contract.md` |
 | Operating Plan runtime | `system/operating-plan-runtime-doctrine.md` |
-| Configuration Runtime (Settings IA) | `system/configuration-runtime-design-alignment.md` |
+| Configuration Runtime (Configuration IA) | `system/configuration-runtime-design-alignment.md` |
 | Configuration Mode doctrine (frozen) | `system/configuration-mode-doctrine.md` |
 | Configuration Runtime V1 (frozen) | `system/configuration-runtime-v1.md` |
 | Organization Configuration Runtime V2 (frozen) | `system/organization-configuration-runtime-v2.md` |

@@ -145,6 +145,30 @@ export type LocationsCollectionModel = {
     attentionHighlights: LocationsCollectionAttentionHighlight[];
 };
 
+const LOCATION_ATTENTION_ISSUE_PRIORITY = new Map([
+    ["timezone", 0],
+    ["rooms", 1],
+    ["room-capacity", 1],
+    ["programs", 2],
+    ["schedule", 3],
+]);
+
+function compareLocationAttentionItems(
+    a: LocationWorkspaceAttentionItem,
+    b: LocationWorkspaceAttentionItem,
+): number {
+    const gradePriority = (item: LocationWorkspaceAttentionItem) =>
+        item.grade === "fix" ? 0
+        : item.grade === "improve" ? 1
+        : 2;
+    const gradeDelta = gradePriority(a) - gradePriority(b);
+    if (gradeDelta !== 0) return gradeDelta;
+    return (
+        (LOCATION_ATTENTION_ISSUE_PRIORITY.get(a.key) ?? 99) -
+        (LOCATION_ATTENTION_ISSUE_PRIORITY.get(b.key) ?? 99)
+    );
+}
+
 /**
  * Collection rollups use only known-complete dimensions (general, programs, rooms, schedule).
  * Tours / Placement / Access stay unknown until a location workspace loads them — they must
@@ -168,6 +192,7 @@ export function buildLocationsCollectionModel(params: {
     programs: LocationProgramCategoryRow[];
     schedules: { id: string; site_location_id: string; is_active: boolean }[];
 }): LocationsCollectionModel {
+    const actionableAttentionByLocation = new Map<string, LocationWorkspaceAttentionItem[]>();
     const locations: LocationsCollectionLocationSummary[] = params.sites.map((site) => {
         const siteSchedules = params.schedules.filter((schedule) => schedule.site_location_id === site.id);
         const workspace = buildLocationWorkspaceModel({
@@ -176,11 +201,15 @@ export function buildLocationsCollectionModel(params: {
             programs: params.programs,
             schedules: siteSchedules,
         });
+        actionableAttentionByLocation.set(
+            site.id,
+            workspace.attention.filter((item) => item.grade !== "good"),
+        );
         const collectionSetup = collectionSetupFromWorkspace(workspace);
         const topAttention =
-            workspace.attention.find((item) => item.grade === "fix") ??
-            workspace.attention.find((item) => item.grade === "improve") ??
-            null;
+            [...workspace.attention]
+                .filter((item) => item.grade !== "good")
+                .sort(compareLocationAttentionItems)[0] ?? null;
         const locality =
             [site.city, site.state]
                 .map((part) => String(part ?? "").trim())
@@ -206,23 +235,34 @@ export function buildLocationsCollectionModel(params: {
         if (a.criticalCount !== b.criticalCount) return b.criticalCount - a.criticalCount;
         if (a.improveCount !== b.improveCount) return b.improveCount - a.improveCount;
         if (a.setupPercent !== b.setupPercent) return a.setupPercent - b.setupPercent;
-        return a.displayName.localeCompare(b.displayName);
+        return a.displayName.localeCompare(b.displayName) || a.id.localeCompare(b.id);
     });
 
     const active = locations.filter((location) => location.isActive);
     const capacityValues = locations
         .map((location) => location.configuredCapacity)
         .filter((capacity): capacity is number => capacity != null && Number.isFinite(capacity));
-    const attentionHighlights: LocationsCollectionAttentionHighlight[] = [];
-    for (const location of locations) {
-        if (!location.topAttention || location.topAttention.grade === "good") continue;
-        attentionHighlights.push({
-            locationId: location.id,
-            locationName: location.displayName,
-            item: location.topAttention,
+    const locationPriority = new Map(locations.map((location, index) => [location.id, index]));
+    const seenAttention = new Set<string>();
+    const attentionHighlights = locations
+        .flatMap((location) =>
+            (actionableAttentionByLocation.get(location.id) ?? []).map((item) => ({
+                locationId: location.id,
+                locationName: location.displayName,
+                item,
+            })),
+        )
+        .filter((highlight) => {
+            const identity = `${highlight.locationId}:${highlight.item.key}`;
+            if (seenAttention.has(identity)) return false;
+            seenAttention.add(identity);
+            return true;
+        })
+        .sort((a, b) => {
+            const issueDelta = compareLocationAttentionItems(a.item, b.item);
+            if (issueDelta !== 0) return issueDelta;
+            return (locationPriority.get(a.locationId) ?? 999) - (locationPriority.get(b.locationId) ?? 999);
         });
-        if (attentionHighlights.length >= 8) break;
-    }
 
     const setupPercents = locations.map((location) => location.setupPercent);
     const averageSetupPercent =
