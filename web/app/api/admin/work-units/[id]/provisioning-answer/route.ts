@@ -23,13 +23,15 @@ import { composeWorkUnitProvisioningAnswer } from "@/lib/runtime/provisioning/wo
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: Promise<{ workUnitSlug: string }> },
+    { params }: { params: Promise<{ id: string }> },
 ) {
     // U-P1 — one authorization + one scope resolve for the entire answer.
     const gate = await loadAdminRouteGate();
     if (!gate.ok) return adminRouteGateFailureResponse(gate);
 
-    const { workUnitSlug } = await params;
+    // The segment is named `[id]` to match the sibling work-unit routes (Next requires one slug
+    // name per path position); the value is the canonical route SLUG.
+    const { id: workUnitSlug } = await params;
     const url = request.nextUrl.searchParams;
 
     // Attention is an INPUT carried by the request. The resource never derives it from the pathname:
