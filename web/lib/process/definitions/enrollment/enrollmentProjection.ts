@@ -71,7 +71,13 @@ async function fetchIn<T>(
 ): Promise<T[]> {
     const unique = Array.from(new Set(ids)).filter(Boolean);
     if (!unique.length) return [];
-    const CHUNK = 400;
+    // Chunk small enough that the serialized `.in.(...)` GET stays under the server's URI limit. Ids
+    // here are 36-char UUIDs (~37 chars each in the query), so 400 produced a ~15.6KB URL that the
+    // gateway rejected with 414/"URI too long" — the WU-scoped metric resolve 500'd on a work unit
+    // with 2400 opportunities, and because resolve batches keys, that one failure took the whole KPI
+    // settlement down with it. 100 UUIDs ≈ 3.9KB, comfortably under any reasonable limit; the loop
+    // already fetches every chunk, so correctness is unchanged.
+    const CHUNK = 100;
     const out: T[] = [];
     for (let i = 0; i < unique.length; i += CHUNK) {
         const { data, error } = await supabase

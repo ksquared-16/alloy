@@ -28,6 +28,7 @@ import { useCallback, useMemo } from "react";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
+import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { WorkUnitSurfaceModel, WorkUnitSurfaceIntents, QueueRowModel } from "./types";
 
@@ -42,11 +43,23 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     const focus = useCommittedFocus();
     const drawer = useAdminDrawer();
 
-    // The visible world, as a value. Null before the first commit — and a null model is never
-    // rendered as a Work Unit: K3's phase decides what is shown, not this hook.
-    const model = useMemo(
+    // The OPERATIONAL world, as a value — built PURELY from the committed snapshot, consulting no
+    // fetch. This is the first visible frame: reserved geometry, no Settlement. Null before the first
+    // commit — and a null model is never rendered as a Work Unit: K3's phase decides what is shown.
+    const operationalModel = useMemo(
         () => (focus.current ? workUnitSurfaceModelFromSnapshot(focus.current.snapshot) : null),
         [focus.current],
+    );
+
+    // D5 SETTLEMENT — the operator is already working; this fills the reserved KPI values AFTER commit.
+    // It cannot gate or reconstruct: `operationalModel` above is composed and renderable without it,
+    // and this only overlays values into already-laid-out slots. Returns `operationalModel` unchanged
+    // (same reference) until a real value lands, so the operational first paint is never re-rendered
+    // for nothing. See `useWorkUnitSettlement` for the discipline (deduped, no commit gate, no reflow).
+    const settlement = useWorkUnitSettlement(focus.current?.snapshot ?? null);
+    const model = useMemo(
+        () => (operationalModel ? mergeWorkUnitSettlement(operationalModel, settlement) : null),
+        [operationalModel, settlement],
     );
 
     // SUBJECT OWNERSHIP — settled, and worth recording because the wrong shape was tried twice.
