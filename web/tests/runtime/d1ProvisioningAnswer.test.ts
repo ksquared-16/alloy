@@ -83,8 +83,15 @@ describe("D1 — bounded Provisioning Answer", () => {
     it("2. rows come from the Work View projection — QueueService/lane tables are never touched", async () => {
         const supabase = stubSupabase();
         await composeWorkUnitProvisioningAnswer(request({ supabase }));
-        // Only the three tables the contract needs. No queue lane bundle, no queue_definitions read.
-        expect([...new Set(supabase.touched)].sort()).toEqual(["departments", "opportunities", "work_units"]);
+        // Records + Configuration only. `entity_layouts` is U-P7 published presentation
+        // configuration, resolved INSIDE the answer — that is the round-trip being removed, not one
+        // being added. What must never appear is a lane/QueueService read.
+        expect([...new Set(supabase.touched)].sort()).toEqual([
+            "departments", "entity_layouts", "opportunities", "work_units",
+        ]);
+        for (const laneTable of ["queue_definitions", "queues", "queue_lanes"]) {
+            expect(supabase.touched).not.toContain(laneTable);
+        }
     });
 
     it("3. default Record of Attention comes from the SAME evaluated page", async () => {
@@ -197,7 +204,13 @@ describe("D1 — bounded Provisioning Answer", () => {
         const supabase = stubSupabase();
         await composeWorkUnitProvisioningAnswer(request({ supabase }));
         const counts = supabase.touched.reduce<Record<string, number>>((m, t) => ({ ...m, [t]: (m[t] ?? 0) + 1 }), {});
-        expect(counts).toEqual({ work_units: 1, departments: 1, opportunities: 1 });
+        // The membership read happens EXACTLY ONCE — one Stage Membership evaluation, one page.
+        expect(counts.opportunities).toBe(1);
+        expect(counts.work_units).toBe(1);
+        expect(counts.departments).toBe(1);
+        // entity_layouts is read for U-P7 configuration (org + default layout records); it carries no
+        // membership and cannot duplicate an evaluation.
+        expect(counts.entity_layouts ?? 0).toBeGreaterThan(0);
     });
 
     it("14. the lane failure cannot affect this path — LIFECYCLE_QUEUE_FILTERS_EMPTY is unreachable", async () => {

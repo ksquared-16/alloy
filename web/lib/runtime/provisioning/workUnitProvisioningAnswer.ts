@@ -58,6 +58,12 @@ import {
     type OperationalSubjectQueueRow,
 } from "@/lib/adminV2/runtime/operationalSubject/resolveDefaultOperationalSubject";
 import { applyCanonicalWorkViewSort } from "./canonicalWorkViewSort";
+import {
+    resolveOperationalPresentation,
+    type OperationalPresentation,
+} from "./operationalPresentation";
+import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
+import { queueRowSurfaceIdForDepartment } from "@/lib/presentation/runtime/workUnitSurfaceConfigFetch";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
@@ -136,8 +142,12 @@ export type ProvisioningAnswer =
           focusPanelScopeState: FocusPanelScopeStateKind;
           currentBusinessState: CurrentBusinessState;
           primaryAction: TruthfulPrimaryAction;
-          /** U-P7 presentation composition required to render U-O1…U-O5 in FINAL layout. */
-          presentation: { queueLayoutId: string | null; focusPanelLayoutId: string | null; rowVariant: string };
+          /**
+           * U-P7 — the RESOLVED operational presentation composition, sufficient to render
+           * U-O1…U-O5 in FINAL layout with no further configuration request. Identifiers survive
+           * inside `provenance` as evidence; they are never the only renderable output.
+           */
+          presentation: OperationalPresentation;
           timings: ProvisioningTimings;
       }
     | {
@@ -153,7 +163,7 @@ export type ProvisioningAnswer =
           recordOfAttention: null;
           contextFrame: { workViewId: string; workViewLabel: string };
           focusPanelScopeState: FocusPanelScopeStateKind;
-          presentation: { queueLayoutId: string | null; focusPanelLayoutId: string | null; rowVariant: string };
+          presentation: OperationalPresentation;
           timings: ProvisioningTimings;
       }
     | {
@@ -181,6 +191,8 @@ export type ProvisioningTimings = {
     authorization_ms: number;
     work_unit_ms: number;
     configuration_ms: number;
+    /** U-P7 operational presentation resolution — inside the one answer, never a client round-trip. */
+    presentation_ms: number;
     records_ms: number;
     projection_ms: number;
     composition_ms: number;
@@ -257,7 +269,7 @@ export async function composeWorkUnitProvisioningAnswer(
 ): Promise<ProvisioningAnswer> {
     const t0 = now();
     const timings: ProvisioningTimings = {
-        authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0,
+        authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0,
         records_ms: 0, projection_ms: 0, composition_ms: 0, total_ms: 0,
     };
     const fail = (code: ProvisioningErrorCode, message: string, wu: ProvisioningAnswer extends never ? never : { id: string; key: string; name: string } | null = null): ProvisioningAnswer => {
@@ -312,11 +324,27 @@ export async function composeWorkUnitProvisioningAnswer(
         displayOrder: v.display_order ?? i,
     }));
     const contextFrame = { workViewId: activeView.id, workViewLabel: activeView.label };
-    const presentation = {
+    // ── U-P7: resolve the operational presentation composition server-side, into THIS answer. ──
+    // An identifier would be the round-trip U-P7 exists to remove; resolving here means the first
+    // visible frame is already in final layout and nothing re-lays out after commit.
+    const tPres = now();
+    const queueRowSurfaceId = queueRowSurfaceIdForDepartment(String(wuRow.department_id), deptRow?.metadata);
+    const rowLayout = await resolveQueueRowLayoutServer({
+        supabase: req.supabase,
+        orgId: req.orgId,
+        surfaceId: queueRowSurfaceId,
+        processKeyHint: process.key,
+    });
+    const presentation = await resolveOperationalPresentation({
+        supabase: req.supabase,
+        orgId: req.orgId,
+        fallbackTitle: workUnit.name,
         queueLayoutId: activeView.queue_layout_id?.trim() || null,
         focusPanelLayoutId: activeView.focus_panel_layout_id?.trim() || null,
-        rowVariant: rowVariantFromQueueDefinition(wuRow.queue_definition),
-    };
+        queueDefinition: wuRow.queue_definition,
+        queueRowLayoutConfig: rowLayout?.config ?? null,
+    });
+    timings.presentation_ms = now() - tPres;
 
     // ── §6: Row Grain explicit, Stage-owned. Grain-ambiguous config is refused honestly. ──
     const grain = resolveLensRowGrain(activeView, stages);
@@ -450,9 +478,3 @@ function strOrNull(v: unknown): string | null {
     return typeof v === "string" && v.length ? v : v == null ? null : String(v);
 }
 
-/** U-P7 — the row variant the queue must render in FINAL layout (never a post-commit reflow). */
-function rowVariantFromQueueDefinition(queueDefinition: unknown): string {
-    const ui = (queueDefinition as { ui?: { row_preview?: { variant?: unknown } } } | null)?.ui;
-    const v = ui?.row_preview?.variant;
-    return typeof v === "string" ? v : "basic";
-}
