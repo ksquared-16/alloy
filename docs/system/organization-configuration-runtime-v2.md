@@ -33,32 +33,30 @@ Runtime
 
 Organization owns reusable identity, defaults, requirements, and publication. A Location may consume, be assigned, or author an explicitly allowed override. Apply is reserved for durable creation or update of Location-owned objects through an authoritative domain provider.
 
-## Landing information architecture
+## Landing information architecture (V2.1 presentation)
 
-The Organization landing has five regions, in order:
+V2.1 refines presentation only. The runtime, ownership model, nine-domain registry, Programs model, and distribution contracts are unchanged.
 
-1. **Hero** — organization identity and its publisher role.
-2. **Configuration Health** — one calm, evidence-based runtime statement; unknown health remains **Not assessed**.
-3. **Configuration Domains** — responsive Configuration Domain Cards.
-4. **Consumers** — Locations and their resolved consumption/override posture.
-5. **Distribution** — the publish → consume → deliver model and the guarded Apply boundary.
+The Organization landing has three compact regions, in order:
 
-These regions compose existing Configuration Runtime primitives. They do not introduce dashboard widgets, a page-local action system, or a separate shell.
+1. **Compact header** — page identity, Organization identity/status, domain count, consuming Location count, Publish Required count, and aggregate health posture.
+2. **Configuration Domains** — the primary content and navigation, immediately after the header.
+3. **Consumers + Distribution** — a final two-thirds/one-third row with compact Location consumers and the Organization → Locations → Resources & Runtime flow.
+
+There is no separate hero card or full-width Configuration Health section. Detailed ownership and runtime explanation use progressive disclosure inside each domain. The landing optimizes for scanning and navigation.
 
 ## Configuration Domain Card
 
-A Configuration Domain Card is a reusable runtime object. Every card communicates:
+A Configuration Domain Card is a reusable landing navigation object. Every equal-height card communicates:
 
-- domain identity and operator home;
-- Organization as publisher;
+- domain identity;
 - publication status;
-- named runtime consumers;
-- inheritance or assignment posture;
-- override posture;
-- operational health;
-- the configuration concerns the domain owns, when that clarification is useful.
+- one concise description;
+- at most three concise owned concerns;
+- a compact Used By summary;
+- one Open affordance.
 
-Cards may vary naturally in height. They are navigable objects, not equalized metrics tiles. They preserve the Configuration Runtime visual rules: calm white object regions on the Stone canvas, one Bend Pine accent, quiet metadata, and honest unknowns.
+Publisher, operator home, detailed consumers, inheritance, overrides, health detail, and runtime prose belong inside the domain runtime. Cards are equal height and preserve the Configuration Runtime visual rules: calm white object regions on the Stone canvas, one Bend Pine accent, quiet metadata, and honest unknowns. Equal height supports scanning; it does not turn cards into dashboard metrics.
 
 Publication and health are separate. The registry may declare **Live after confirmed save** or **Publish required** as the publication contract; an actual Draft or Published state may appear only from authoritative domain evidence. Operational health remains Not assessed until its owner reports it. The landing never derives healthy, compliant, inherited, or complete from the existence of a route or configuration row.
 
@@ -123,7 +121,7 @@ There is no generic configuration-payload table. Configuration steers; code and 
 
 ## Freeze
 
-V2 freezes the Organization Runtime model, landing composition, nine-domain registry, Programs terminology, and publisher/consumer relationship. Future domains inherit this model. Downstream module implementation, schema migration, and authoritative health/apply providers are separate work.
+V2 freezes the Organization Runtime model, nine-domain registry, Programs terminology, and publisher/consumer relationship. V2.1 freezes the compact landing presentation and progressive-disclosure boundary. Future domains inherit this model. Downstream module implementation, schema migration, and authoritative health/apply providers are separate work.
 
 Locations remains the experiential reference implementation and is not redesigned by V2.
 

@@ -1,18 +1,14 @@
 import Link from "next/link";
-import { ArrowUpRight, CheckCircle2, CircleAlert, CircleHelp, RadioTower } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 import type {
-    ConfigurationHealthState,
     ConfigurationPublicationStatus,
     OrganizationConfigurationDomain,
 } from "@/lib/configRuntime/organizationRuntime";
 
-function stateTone(state: ConfigurationPublicationStatus | ConfigurationHealthState): string {
-    if (state === "live_on_save" || state === "published" || state === "ready") {
+function publicationTone(state: ConfigurationPublicationStatus): string {
+    if (state === "live_on_save" || state === "published") {
         return "border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.07] text-[#007d68]";
-    }
-    if (state === "attention") {
-        return "border-alloy-ember/20 bg-alloy-ember/[0.06] text-alloy-ember";
     }
     if (state === "publish_required" || state === "draft") {
         return "border-alloy-blue/20 bg-alloy-blue/[0.06] text-alloy-blue";
@@ -20,17 +16,18 @@ function stateTone(state: ConfigurationPublicationStatus | ConfigurationHealthSt
     return "border-alloy-forge/10 bg-alloy-stone/[0.08] text-alloy-midnight/50";
 }
 
-function HealthIcon({ state }: { state: ConfigurationHealthState }) {
-    if (state === "ready") return <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />;
-    if (state === "attention") return <CircleAlert className="h-3.5 w-3.5" aria-hidden />;
-    return <CircleHelp className="h-3.5 w-3.5" aria-hidden />;
+function publicationLabel(state: ConfigurationPublicationStatus): string {
+    if (state === "live_on_save") return "Live on save";
+    if (state === "publish_required") return "Publish required";
+    if (state === "published") return "Published";
+    if (state === "draft") return "Draft";
+    return "Not assessed";
 }
 
 /**
- * Configuration Domain Card — an organization-owned runtime object.
- *
- * This is not a dashboard tile. It presents identity, authority, publication,
- * consumers, inheritance, overrides, and health as one navigable object.
+ * Compact landing summary for one Organization Configuration Domain.
+ * Detailed ownership, inheritance, overrides, and health belong inside the
+ * domain runtime; this object is optimized for scanning and navigation.
  */
 export function ConfigDomainCard({
     domain,
@@ -41,118 +38,72 @@ export function ConfigDomainCard({
     icon: ReactNode;
     testId?: string;
 }) {
+    const ownedConfiguration = domain.ownedConfiguration?.slice(0, 3) ?? [];
+    const visibleConsumers = domain.consumers.slice(0, 2);
+    const additionalConsumerCount = Math.max(0, domain.consumers.length - visibleConsumers.length);
+
     return (
         <article
-            className="self-start break-inside-avoid overflow-hidden rounded-xl border border-alloy-forge/10 bg-white shadow-[0_1px_2px_rgba(19,33,43,0.04)]"
+            className="flex h-full min-h-[12.75rem] flex-col overflow-hidden rounded-xl border border-alloy-forge/10 bg-white shadow-[0_1px_2px_rgba(19,33,43,0.04)]"
             data-testid={testId}
             data-config-object="domain"
         >
-            <div className="border-b border-alloy-stone/25 px-4 pb-3.5 pt-4">
-                <div className="flex items-start gap-3">
+            <div className="flex flex-1 flex-col px-3.5 pb-3 pt-3.5">
+                <div className="flex items-start gap-2.5">
                     <span
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-alloy-bend-pine/[0.09] text-[#007d68]"
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-alloy-bend-pine/[0.09] text-[#007d68]"
                         aria-hidden
                     >
                         {icon}
                     </span>
                     <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-alloy-midnight/38">
-                                    Configuration domain
-                                </p>
-                                <h3 className="mt-0.5 text-[15px] font-semibold tracking-tight text-alloy-midnight">
-                                    {domain.label}
-                                </h3>
-                            </div>
+                        <div className="flex items-start justify-between gap-2">
+                            <h3 className="pt-0.5 text-[14px] font-semibold tracking-tight text-alloy-midnight">
+                                {domain.label}
+                            </h3>
                             <span
-                                className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${stateTone(domain.publication.status)}`}
+                                className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${publicationTone(domain.publication.status)}`}
                             >
-                                {domain.publication.label}
+                                {publicationLabel(domain.publication.status)}
                             </span>
                         </div>
-                        <p className="mt-2 text-[12px] leading-relaxed text-alloy-midnight/58">
+                        <p className="mt-1 line-clamp-2 min-h-8 text-[11px] leading-4 text-alloy-midnight/55">
                             {domain.description}
                         </p>
                     </div>
                 </div>
-            </div>
 
-            <div className="space-y-3 px-4 py-3.5">
-                <div className="flex items-start gap-2.5">
-                    <RadioTower className="mt-0.5 h-3.5 w-3.5 shrink-0 text-alloy-bend-pine" aria-hidden />
-                    <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/38">
-                            Publisher
-                        </p>
-                        <p className="mt-0.5 text-xs font-semibold text-alloy-midnight/75">
-                            {domain.publisherLabel}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-alloy-midnight/48">
-                            Managed in {domain.configurationOwner}
-                        </p>
-                    </div>
-                </div>
-
-                {domain.ownedConfiguration?.length ?
-                    <div className="border-t border-alloy-stone/20 pt-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/38">
-                            Owns
-                        </p>
-                        <ul className="mt-1.5 space-y-1 text-[11px] leading-snug text-alloy-midnight/58">
-                            {domain.ownedConfiguration.map((item) => (
-                                <li key={item} className="flex items-start gap-1.5">
-                                    <span className="mt-[0.4rem] h-1 w-1 shrink-0 rounded-full bg-alloy-bend-pine/65" />
-                                    <span>{item}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                :   null}
-
-                <div className="border-t border-alloy-stone/20 pt-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/38">
-                        Consumers
+                <div className="mt-2.5 border-t border-alloy-stone/20 pt-2.5">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.11em] text-alloy-midnight/38">
+                        Owns
                     </p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {domain.consumers.map((consumer) => (
-                            <span
-                                key={consumer}
-                                className="rounded-full border border-alloy-forge/10 bg-alloy-stone/[0.06] px-2 py-1 text-[10px] font-medium text-alloy-midnight/55"
-                            >
-                                {consumer}
-                            </span>
+                    <ul className="mt-1 min-h-[2.75rem] space-y-0.5 text-[10px] leading-[0.9rem] text-alloy-midnight/58">
+                        {ownedConfiguration.map((item) => (
+                            <li key={item} className="flex items-start gap-1.5">
+                                <span className="mt-[0.35rem] h-1 w-1 shrink-0 rounded-full bg-alloy-bend-pine/65" />
+                                <span>{item}</span>
+                            </li>
                         ))}
-                    </div>
+                    </ul>
                 </div>
 
-                <dl className="border-t border-alloy-stone/20 pt-3 text-[11px]">
-                    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2 py-1">
-                        <dt className="font-semibold text-alloy-midnight/42">Inheritance</dt>
-                        <dd className="text-alloy-midnight/62">{domain.inheritance.label}</dd>
-                    </div>
-                    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2 py-1">
-                        <dt className="font-semibold text-alloy-midnight/42">Overrides</dt>
-                        <dd className="text-alloy-midnight/62">{domain.override.label}</dd>
-                    </div>
-                    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2 py-1">
-                        <dt className="font-semibold text-alloy-midnight/42">Health</dt>
-                        <dd>
-                            <span
-                                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stateTone(domain.health.state)}`}
-                                title={domain.health.detail}
-                            >
-                                <HealthIcon state={domain.health.state} />
-                                {domain.health.label}
-                            </span>
-                        </dd>
-                    </div>
-                </dl>
+                <div className="mt-auto border-t border-alloy-stone/20 pt-2">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.11em] text-alloy-midnight/38">
+                        Used by
+                    </p>
+                    <p
+                        className="mt-0.5 truncate text-[10px] text-alloy-midnight/55"
+                        title={domain.consumers.join(", ")}
+                    >
+                        {visibleConsumers.join(" · ")}
+                        {additionalConsumerCount > 0 ? ` · +${additionalConsumerCount}` : ""}
+                    </p>
+                </div>
             </div>
 
             <Link
                 href={domain.href}
-                className="flex items-center justify-between border-t border-alloy-stone/25 bg-alloy-stone/[0.025] px-4 py-2.5 text-xs font-semibold text-[#007d68] transition-colors hover:bg-alloy-bend-pine/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-alloy-bend-pine/35"
+                className="flex items-center justify-between border-t border-alloy-stone/25 bg-alloy-stone/[0.025] px-3.5 py-2 text-[11px] font-semibold text-[#007d68] transition-colors hover:bg-alloy-bend-pine/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-alloy-bend-pine/35"
             >
                 Open {domain.label}
                 <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />

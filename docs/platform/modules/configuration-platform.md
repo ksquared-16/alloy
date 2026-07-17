@@ -112,7 +112,7 @@ It owns the reusable control contract, not domain payloads:
 
 - one system-of-record home and configuration owner per area;
 - Organization publishes reusable configuration and Locations consume it;
-- reusable Configuration Domain Cards expose identity, publication, consumers, inheritance, overrides, and health;
+- reusable Configuration Domain Cards summarize identity, publication, concise ownership, and consumers; domain runtimes disclose inheritance, overrides, and health detail;
 - platform → organization → location value resolution with explicit value presence;
 - availability/assignment kept distinct from value inheritance;
 - confirmed-save vs explicit-publish behavior;

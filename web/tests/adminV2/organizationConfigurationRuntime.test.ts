@@ -33,34 +33,45 @@ describe("Organization Configuration Runtime", () => {
         expect(page).not.toContain("createBrowserClient");
     });
 
-    it("presents the premium runtime composition without a settings table", () => {
+    it("puts compact operational metadata directly above domain navigation", () => {
         const page = read(
             "components/adminV2/settings/organization/OrganizationConfigurationPage.tsx",
         );
-        expect(page).toContain("organization-hero");
-        expect(page).toContain("Configuration health");
-        expect(page).toContain("Configuration domains");
+        expect(page).toContain("organization-configuration-summary");
+        expect(page).toContain("Configuration Domains");
+        expect(page).toContain("Consuming Locations");
+        expect(page).toContain("Publish Required");
+        expect(page).toContain("Health");
         expect(page).toContain("Consumers");
         expect(page).toContain("Distribution");
         expect(page).toContain("ConfigDomainCard");
-        expect(page).toContain("ConfigObjectHeader");
         expect(page).toContain("ConfigWorkspaceCard");
-        expect(page).toContain("grid items-start");
+        expect(page).toContain("auto-rows-fr items-stretch");
+        expect(page).toContain("xl:grid-cols-[minmax(0,2fr)_minmax(17rem,1fr)]");
+        expect(page.indexOf("Configuration Domains")).toBeLessThan(page.indexOf('title="Consumers"'));
+        expect(page).not.toContain("organization-hero");
+        expect(page).not.toContain("organization-configuration-health");
+        expect(page).not.toContain("ConfigObjectHeader");
         expect(page).not.toContain("organization-shared-configuration");
         expect(page).not.toContain("<table");
         expect(page).not.toContain("ConfigApplyToDialog");
     });
 
-    it("uses the reusable domain card to show the complete runtime object contract", () => {
+    it("keeps equal-height domain cards focused on scanning and navigation", () => {
         const card = read(
             "components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard.tsx",
         );
         expect(card).toContain('data-config-object="domain"');
-        for (const concern of ["Publisher", "Consumers", "Inheritance", "Overrides", "Health"]) {
-            expect(card).toContain(concern);
-        }
-        expect(card).toContain("domain.publication.label");
+        expect(card).toContain("h-full");
+        expect(card).toContain("slice(0, 3)");
+        expect(card).toContain("Owns");
+        expect(card).toContain("Used by");
+        expect(card).toContain("publicationLabel(domain.publication.status)");
         expect(card).toContain("domain.ownedConfiguration");
+        expect(card).not.toContain("domain.publisherLabel");
+        expect(card).not.toContain("domain.inheritance");
+        expect(card).not.toContain("domain.override");
+        expect(card).not.toContain("domain.health");
     });
 
     it("does not modify the frozen Locations implementation to host organization behavior", () => {

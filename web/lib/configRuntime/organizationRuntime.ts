@@ -202,6 +202,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Access health remains owned by the Access domain.",
         },
         distributionMode: "assignment",
+        ownedConfiguration: ["Roles and permissions", "Location assignments", "Department assignments"],
     },
     {
         key: "communications",
@@ -226,6 +227,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Sender and delivery health remains owned by Communications.",
         },
         distributionMode: "inherit",
+        ownedConfiguration: ["Channels and sender identity", "Templates", "Send rules"],
     },
     {
         key: "data-model",
@@ -300,6 +302,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Surface validity remains owned by Experience Builder.",
         },
         distributionMode: "inherit",
+        ownedConfiguration: ["Queue and row presentation", "Cards and Focus Panel", "Published surfaces"],
     },
     {
         key: "automation",
@@ -324,6 +327,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Execution health remains owned by Automation.",
         },
         distributionMode: "assignment",
+        ownedConfiguration: ["Workflow definitions", "Triggers", "Registered actions"],
     },
     {
         key: "operational-intelligence",
@@ -348,6 +352,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Calculation health remains owned by Operational Intelligence.",
         },
         distributionMode: "inherit",
+        ownedConfiguration: ["Calculations and metrics", "Targets", "Indicator definitions"],
     },
 ] as const;
 
