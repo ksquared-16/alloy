@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Read or amend a sprint's manifest — the record that means no prompt has to
+# restate who this sprint is, what phase it is in, what authority it holds, what
+# it receives, what it produces, or who receives its work.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/manifest.sh
+source "${SCRIPT_DIR}/lib/manifest.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-manifest <slot|worktree>              show the sprint card
+  alloy-manifest <slot|worktree> --json       show the full manifest
+  alloy-manifest <slot|worktree> --validate   schema check
+  alloy-manifest <slot|worktree> --gaps       list undeclared/inconsistent fields
+  alloy-manifest <slot|worktree> --set k=v..  amend (records history)
+
+Declared fields:
+  stage       discovery | constitution | realization | certification | promotion
+  role        product-office | engineering-director | worker | certifier | operator
+  lane        runtime | configuration | ux | documentation | infrastructure
+  posture.mutation      read-only | shared-read-only | isolated-mutable
+  posture.tenant_class  shared | disposable | production-like | none
+  constitutional_basis.type   contract-hash | declared-absent
+  initiative_key, handoff_target, promotion.target, certification.required
+
+Any field may be 'undeclared'. Absence is a value; silence is not a default.
+A shared tenant cannot certify execution — the ceiling is derived from posture,
+never asserted.
+EOF
+}
+
+resolve_name() {
+  local target="$1"
+  if [[ "$target" =~ ^[1-9][0-9]*$ ]]; then
+    alloy_find_metadata_by_slot "$target" 2>/dev/null || alloy_die "no worktree in slot $target"
+  else
+    printf '%s' "$target"
+  fi
+}
+
+main() {
+  if [[ $# -eq 0 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 0; fi
+
+  alloy_load_config
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+  alloy_require_cmd node
+
+  local target="$1"; shift
+  local name
+  name="$(resolve_name "$target")"
+
+  local mode="card"
+  local -a sets=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) mode="json"; shift ;;
+      --validate) mode="validate"; shift ;;
+      --gaps) mode="gaps"; shift ;;
+      --set) mode="set"; shift ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *) sets+=("$1"); shift ;;
+    esac
+  done
+
+  case "$mode" in
+    card)
+      if ! alloy_manifest_exists "$name"; then
+        printf 'Worktree:  %s\n' "$name"
+        alloy_manifest_card "$name"
+        printf '\nThis worktree was created before the sprint manifest existed.\n'
+        printf 'Its declarations are unknown, not assumed. New sprints started with\n'
+        printf 'alloy-sprint-start carry one.\n'
+        exit 0
+      fi
+      printf 'Worktree:  %s\n' "$name"
+      alloy_manifest_card "$name"
+      local gaps
+      gaps="$(alloy_manifest_gaps "$name")"
+      if [[ -n "$gaps" ]]; then
+        printf '\nUndeclared or inconsistent:\n'
+        printf '%s\n' "$gaps" | while IFS= read -r g; do
+          [[ -n "$g" ]] && printf '  - %s\n' "$g"
+        done
+      fi
+      ;;
+    json)
+      alloy_manifest_exists "$name" || alloy_die "no manifest for $name"
+      alloy_manifest_io show "$(alloy_manifest_path "$name")"
+      ;;
+    validate)
+      alloy_manifest_exists "$name" || alloy_die "no manifest for $name"
+      alloy_manifest_validate "$name"
+      ;;
+    gaps)
+      alloy_manifest_exists "$name" || alloy_die "no manifest for $name"
+      local g
+      g="$(alloy_manifest_gaps "$name")"
+      if [[ -z "$g" ]]; then
+        printf 'no gaps — every field is declared and consistent\n'
+        exit 0
+      fi
+      printf '%s\n' "$g"
+      exit 1
+      ;;
+    set)
+      alloy_manifest_exists "$name" || alloy_manifest_init "$name" "$(alloy_find_slot_by_name "$name" 2>/dev/null || echo 0)"
+      [[ ${#sets[@]} -gt 0 ]] || alloy_die "--set requires key=value pairs"
+      alloy_manifest_set "$name" "${sets[@]}"
+      alloy_manifest_append_history "$name" "amended" "${sets[*]}"
+      alloy_info "manifest updated: $name"
+      alloy_manifest_card "$name"
+      ;;
+  esac
+}
+
+main "$@"

@@ -765,6 +765,10 @@ alloy_worker_resume_one() {
 # --- Status table ---
 
 alloy_worker_status_table() {
+  if [[ -f "${ALLOY_LOCAL_DEV_ROOT}/lib/manifest.sh" ]] && ! declare -F alloy_manifest_exists >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    source "${ALLOY_LOCAL_DEV_ROOT}/lib/manifest.sh"
+  fi
   # Ensure verify helpers when available
   if [[ -f "${ALLOY_LOCAL_DEV_ROOT}/lib/verify.sh" ]]; then
     # shellcheck source=/dev/null
@@ -779,16 +783,16 @@ alloy_worker_status_table() {
   printf 'base: %s\n' "$(alloy_base_ref_status)"
   printf 'A/B is relative to the base above; alloy-worker-status --refresh fetches first.\n'
   printf '\n'
-  printf '%-4s %-22s %-7s %-28s %-36s %-7s %-9s %-10s %-8s %-5s %-8s %-8s\n' \
-    "SLOT" "SPRINT" "PROV" "WORKTREE" "BRANCH" "GIT" "A/B" "AGENT" "SERVER" "PORT" "AUTH" "HEALTH"
+  printf '%-4s %-20s %-7s %-13s %-18s %-24s %-7s %-8s %-9s %-8s %-5s %-7s\n' \
+    "SLOT" "SPRINT" "PROV" "STAGE" "POSTURE" "WORKTREE" "GIT" "A/B" "AGENT" "SERVER" "PORT" "HEALTH"
   printf '%s\n' "$(printf '%.0s-' {1..160})"
 
   local i found name sprint prov branch git_state ahead behind lifecycle server port auth health path
   for ((i = 1; i <= ALLOY_MAX_AGENTS; i++)); do
     port="$(alloy_slot_to_port "$i")"
     if ! found="$(alloy_find_metadata_by_slot "$i" 2>/dev/null)"; then
-      printf '%-4s %-22s %-7s %-28s %-36s %-7s %-9s %-10s %-8s %-5s %-8s %-8s\n' \
-        "$i" "-" "-" "(free)" "-" "-" "-" "-" "stopped" "$port" "-" "ok"
+      printf '%-4s %-20s %-7s %-13s %-18s %-24s %-7s %-8s %-9s %-8s %-5s %-7s\n' \
+        "$i" "-" "-" "-" "-" "(free)" "-" "-" "-" "stopped" "$port" "ok"
       continue
     fi
     name="$found"
@@ -815,13 +819,25 @@ alloy_worker_status_table() {
     local summary
     summary="$(alloy_slot_health_summary "$name")"
     health="$(printf '%s' "$summary" | sed -n 's/.*health=\([^ ]*\).*/\1/p')"
+    # Declarations from the manifest. A worktree without one reads "unknown" --
+    # never a guess. Absence is a value.
+    local stage posture_m posture_t posture_s
+    stage="unknown"; posture_s="unknown"
+    if declare -F alloy_manifest_exists >/dev/null 2>&1 && alloy_manifest_exists "$name"; then
+      stage="$(alloy_manifest_get "$name" stage)"
+      posture_m="$(alloy_manifest_get "$name" posture.mutation)"
+      posture_t="$(alloy_manifest_get "$name" posture.tenant_class)"
+      posture_s="${posture_m}/${posture_t}"
+    fi
+
     # Truncate long fields for table
-    sprint="${sprint:0:22}"
-    name="${name:0:28}"
-    branch="${branch:0:36}"
-    printf '%-4s %-22s %-7s %-28s %-36s %-7s %-9s %-10s %-8s %-5s %-8s %-8s\n' \
-      "$i" "$sprint" "$prov" "$name" "$branch" "$git_state" "${ahead}/${behind}" \
-      "$lifecycle" "$server" "$port" "$auth" "$health"
+    sprint="${sprint:0:20}"
+    name="${name:0:24}"
+    stage="${stage:0:13}"
+    posture_s="${posture_s:0:18}"
+    printf '%-4s %-20s %-7s %-13s %-18s %-24s %-7s %-8s %-9s %-8s %-5s %-7s\n' \
+      "$i" "$sprint" "$prov" "$stage" "$posture_s" "$name" "$git_state" "${ahead}/${behind}" \
+      "$lifecycle" "$server" "$port" "$health"
   done
 }
 

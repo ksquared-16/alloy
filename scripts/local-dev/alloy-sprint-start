@@ -9,12 +9,22 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/agent.sh"
 # shellcheck source=lib/sprint-ops.sh
 source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+# shellcheck source=lib/manifest.sh
+source "${SCRIPT_DIR}/lib/manifest.sh"
 
 usage() {
   cat <<'EOF'
 Usage: alloy-sprint-start <name> --provider <cursor|claude> [--slot auto|N]
                           [--with-server|--without-server]
                           [--objective <text>] [--dry-run-open]
+                          [--stage <discovery|constitution|realization|certification|promotion>]
+                          [--role <product-office|engineering-director|worker|certifier|operator>]
+                          [--lane <runtime|configuration|ux|documentation|infrastructure>]
+                          [--posture <read-only|shared-read-only|isolated-mutable>]
+                          [--tenant <shared|disposable|production-like|none>]
+                          [--initiative <key>] [--handoff-to <role>]
+                          [--promotion-target <ref>]
+                          [--constitution <hash> | --no-constitution <reason>]
 
 Starts a managed six-slot sprint worker:
   - selects only an available slot (fail closed if occupied/unhealthy)
@@ -23,12 +33,20 @@ Starts a managed six-slot sprint worker:
   - installs worktree-local dependencies (never symlinks node_modules)
   - prepares managed env and validates repository boundaries
   - starts localhost only with --with-server (default: without)
+  - writes the sprint manifest (stage, role, lane, posture, basis, handoff,
+    certification ceiling, promotion target, canonical root) so no prompt has to
+    restate them
   - generates worker instructions + readiness summary
   - opens the chosen provider on the exact worktree
+
+Undeclared fields are recorded as 'undeclared' and warned about. Set
+ALLOY_SPRINT_REQUIRE_MANIFEST=1 to refuse an incomplete manifest instead.
 
 Examples:
   alloy-sprint-start queue-perf --provider cursor
   alloy-sprint-start queue-perf --provider claude --slot 3 --with-server
+  alloy-sprint-start m7-cert --provider claude --stage certification \
+      --role certifier --posture isolated-mutable --tenant disposable
 EOF
 }
 
@@ -39,6 +57,10 @@ main() {
   fi
 
   local name="" provider="" slot="auto" with_server=0 objective="" dry_open=0
+  local stage="undeclared" role="undeclared" lane="undeclared"
+  local posture="undeclared" tenant="undeclared"
+  local initiative_key="null" handoff_to="undeclared" promotion_target="undeclared"
+  local basis_type="undeclared" basis_value="null" basis_reason="null"
   local -a positional=()
 
   while [[ $# -gt 0 ]]; do
@@ -82,6 +104,26 @@ main() {
         dry_open=1
         shift
         ;;
+      --stage) stage="${2:?--stage requires a value}"; shift 2 ;;
+      --stage=*) stage="${1#--stage=}"; shift ;;
+      --role) role="${2:?--role requires a value}"; shift 2 ;;
+      --role=*) role="${1#--role=}"; shift ;;
+      --lane) lane="${2:?--lane requires a value}"; shift 2 ;;
+      --lane=*) lane="${1#--lane=}"; shift ;;
+      --posture) posture="${2:?--posture requires a value}"; shift 2 ;;
+      --posture=*) posture="${1#--posture=}"; shift ;;
+      --tenant) tenant="${2:?--tenant requires a value}"; shift 2 ;;
+      --tenant=*) tenant="${1#--tenant=}"; shift ;;
+      --initiative) initiative_key="${2:?--initiative requires a key}"; shift 2 ;;
+      --initiative=*) initiative_key="${1#--initiative=}"; shift ;;
+      --handoff-to) handoff_to="${2:?--handoff-to requires a role}"; shift 2 ;;
+      --handoff-to=*) handoff_to="${1#--handoff-to=}"; shift ;;
+      --promotion-target) promotion_target="${2:?--promotion-target requires a ref}"; shift 2 ;;
+      --promotion-target=*) promotion_target="${1#--promotion-target=}"; shift ;;
+      --constitution) basis_type="contract-hash"; basis_value="${2:?--constitution requires a hash}"; shift 2 ;;
+      --constitution=*) basis_type="contract-hash"; basis_value="${1#--constitution=}"; shift ;;
+      --no-constitution) basis_type="declared-absent"; basis_reason="${2:?--no-constitution requires a reason}"; shift 2 ;;
+      --no-constitution=*) basis_type="declared-absent"; basis_reason="${1#--no-constitution=}"; shift ;;
       -h|--help)
         usage
         exit 0
@@ -149,6 +191,28 @@ main() {
   alloy_set_worker_lifecycle "$wt_name" "active"
   alloy_load_metadata "$wt_name"
 
+  # The Sprint Manifest. Written before deps, env, or the provider, because it is
+  # what every later step and every future reader consults instead of a prompt.
+  alloy_require_cmd node
+  alloy_manifest_init "$wt_name" "$resolved_slot"
+  alloy_manifest_set "$wt_name" \
+    "sprint_name=${name}" \
+    "objective=${objective}" \
+    "stage=${stage}" \
+    "role=${role}" \
+    "lane=${lane}" \
+    "posture.mutation=${posture}" \
+    "posture.tenant_class=${tenant}" \
+    "initiative_key=${initiative_key}" \
+    "handoff_target=${handoff_to}" \
+    "promotion.target=${promotion_target}" \
+    "constitutional_basis.type=${basis_type}" \
+    "constitutional_basis.value=${basis_value}" \
+    "constitutional_basis.reason=${basis_reason}"
+  alloy_manifest_record_root "$wt_name"
+  alloy_manifest_append_history "$wt_name" "sprint-start" "slot ${resolved_slot} provider ${provider}"
+  alloy_manifest_enforce_or_warn "$wt_name"
+
   alloy_sprint_install_deps "$ALLOY_WORKTREE_PATH" "$wt_name"
 
   # Prepare managed env (auth paths remain optional until login).
@@ -202,6 +266,9 @@ Sprint started
   path:     ${ALLOY_WORKTREE_PATH}
   port:     ${port}
   server:   $(alloy_server_state_for "$wt_name")
+
+Root:     ${ALLOY_REPO} (canonical) — alloy-root
+$(alloy_manifest_card "$wt_name" | sed 's/^/  /')
 
 Overnight:
   alloy-worker-pause ${resolved_slot}
