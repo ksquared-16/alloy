@@ -84,8 +84,8 @@ rediscover them:
 - **Promoting `operationalResolutionContracts` out of `location/`** (R4) — the new contract
   **reuses** it in place; the physical move is a behavior-preserving refactor left for a
   later phase to avoid touching production importers in a first sprint.
-- **Config-change event propagation (R5 / Phase 4)**, consumer adapter proof (Phase 5), and
-  everything gated on OE P3.
+- **Consumer adapter proof (Phase 5)** and everything gated on OE P3.
+  (Config-change event propagation — R5 / Phase 4 — is now **implemented**; see below.)
 
 ## Consumer Migration (Phase 5) — intentionally skipped: no migration targets existed
 
@@ -135,3 +135,40 @@ follow-on mission.
   `scheduleExpectationCore` / `actualCompliance`'s non-verdict outputs onto the runtime, with
   verdicts staying frozen in place. Genuine consumer migration belongs here, not in a
   synthetic Phase 5.
+
+## Phase 4 — Configuration Event Propagation (implemented)
+
+Completes the runtime substrate by wiring calculation-related configuration authoring into
+the existing platform event model, following the frozen roadmap (doc `04` §Part 6 / Phase 4).
+The propagation chain is **Configuration → Event → Invalidation → Runtime**, and it reuses the
+canonical event layer — **no second propagation mechanism, no polling, no scheduler, no
+persistence, no cache system** outside existing platform patterns.
+
+**What shipped** (`web/lib/operationalCalculations/propagation/`):
+
+- **Stage 1 — authoring event.** A committed ratio or capacity rule change (create · version ·
+  retire · void) emits a typed `operational_calculation_config_changed` event onto the existing
+  `emitEvent` → `workflow_events` envelope, carrying org · rule type · change kind · scope ·
+  effective window · the affected calculation keys. Emission is **best-effort** (a committed
+  config write is never failed by an event-layer hiccup) and **exactly-once per mutation**.
+  Only ratio + capacity rules emit; operating-window / schedule-rule authoring (Scheduling
+  family) does not.
+- **Stage 2 — invalidation predicate.** A **pure** predicate (`calculationResultInvalidatedBy`)
+  decides staleness from scope containment + effective-window coverage + rule-type→key mapping.
+  It computes nothing, performs no IO, and never invokes a handler, the runtime, or a clock.
+- The **runtime is untouched** — it never observes configuration mutations, and its
+  injected-clock determinism is preserved. Capacity is computed live and cached nowhere, so V1
+  needs only stages 1–2 (§6.5); stages 3–4 (recalculation / consumer refresh) are not required
+  and are not introduced.
+
+**Emission point.** Events are emitted in `configRuleAuthoringService` (the authoring path,
+matching the platform's dominant `emitEvent` precedent), sourced from the persisted rule row so
+scope is precise (no over-invalidation). Void uses a small additive `onVoided` hook on the
+internal versioning helper; API responses are unchanged.
+
+**Certification.** 19 pure propagation tests + 6 authoring-wiring tests (exactly-once emission,
+no emission on failed writes, no emission for out-of-scope Scheduling config); existing config
+authoring service + route tests unchanged; production typecheck and changed-file lint clean.
+
+**Recommended next phase:** **Phase 6 (Childcare Operational convergence)** — where the real
+calculation consumers (Scheduling family, compliance-seam non-verdict values) live.
