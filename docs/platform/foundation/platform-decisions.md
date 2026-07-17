@@ -63,25 +63,25 @@ free-text authority claims remain readable but can never bind.
 
 ## 2026-07 — Documentation Platform v1.0 frozen
 
-**Decision:**
+**Decision:**  
 Documentation is **production infrastructure**. Active doctrine has **one canonical owner** per concept. Feature work that changes platform behavior updates its owning canonical document in the **same change**. Sprint, audit, closeout, and archive material do **not** redefine current doctrine. No additional **broad** documentation reorganization is planned.
 
-**Why:**
+**Why:**  
 Canonical ownership, governance, docs-lint/CI, handbook onboarding, history separation, curation, and repository certification are complete. The repository must maintain documentation **incrementally** with feature work rather than periodically rebuilding it.
 
-**Consequences:**
-- New docs fit established lifecycle and placement rules.
-- Documentation regressions are CI-governed.
+**Consequences:**  
+- New docs fit established lifecycle and placement rules.  
+- Documentation regressions are CI-governed.  
 - Future cleanup is ordinary maintenance — not a new platform initiative.
 
-**Canonical owners:**
-- [`../governance/documentation-governance.md`](../governance/documentation-governance.md)
-- [`alloy-platform-handbook.md`](./alloy-platform-handbook.md)
-- [`../milestones/documentation-rebaseline-v2-certification.md`](../milestones/documentation-rebaseline-v2-certification.md)
-- `docs/sprints/completed/documentation-rebaseline-v2/00-closeout.md` *(initiative history — not current doctrine)*
+**Canonical owners:**  
+- [`../governance/documentation-governance.md`](../governance/documentation-governance.md)  
+- [`alloy-platform-handbook.md`](./alloy-platform-handbook.md)  
+- [`../milestones/documentation-rebaseline-v2-certification.md`](../milestones/documentation-rebaseline-v2-certification.md)  
+- `docs/sprints/completed/documentation-rebaseline-v2/00-closeout.md` *(initiative history — not current doctrine)*  
 - [`../../README.md`](../../README.md)
 
-**Status:** Active
+**Status:** Active  
 
 **Superseded by:** —
 
@@ -89,22 +89,22 @@ Canonical ownership, governance, docs-lint/CI, handbook onboarding, history sepa
 
 ## 2026-07 — Business Process is the operator-facing execution model
 
-**Decision:**
+**Decision:**  
 Operators think in **Business Process → Stage / Work View → Record**. Work units and queue definitions remain **implementation/runtime** constructs. **Status does not replace** stage, work, or outcome.
 
-**Why:**
+**Why:**  
 Alloy is an operations OS, not a CRM-first, work-unit-first, or queue-as-truth product. The operator model must stay stable across domains.
 
-**Consequences:**
+**Consequences:**  
 Surfaces, language, and new domains orient to Business Processes first. Runtime constructs may exist underneath but must not become the primary nouns in product or platform docs.
 
-**Canonical owners:**
-- [`../core/business-process-system.md`](../core/business-process-system.md)
-- [`../core/status-and-state-system.md`](../core/status-and-state-system.md)
-- [`../modules/business-process-execution-platform.md`](../modules/business-process-execution-platform.md)
+**Canonical owners:**  
+- [`../core/business-process-system.md`](../core/business-process-system.md)  
+- [`../core/status-and-state-system.md`](../core/status-and-state-system.md)  
+- [`../modules/business-process-execution-platform.md`](../modules/business-process-execution-platform.md)  
 - [`alloy-platform-handbook.md`](./alloy-platform-handbook.md) (Ch. 2–3)
 
-**Status:** Active
+**Status:** Active  
 
 **Superseded by:** —
 
@@ -112,25 +112,25 @@ Surfaces, language, and new domains orient to Business Processes first. Runtime 
 
 ## 2026-07 — One truth and one owner per platform concern
 
-**Decision:**
+**Decision:**  
 Every durable concern has **one canonical owner**. Queue rows are **previews**; record/entity resolvers provide authoritative detail. Configuration **steers** behavior and presentation; **code owns** invariants and executable semantics. Status belongs to a **named subject grain**.
 
-**Why:**
+**Why:**  
 Parallel doctrine and dual sources of truth produce operator distrust and implementation churn. Ownership must be discoverable and enforced.
 
-**Consequences:**
+**Consequences:**  
 Do not introduce a second owner for an already-owned concern. Prefer config and vertical presets over industry-specific branches in shared modules. Treat queue payloads as selection, not truth.
 
-**Canonical owners:**
-- [`../core/entity-model.md`](../core/entity-model.md)
-- [`../core/record-system.md`](../core/record-system.md)
-- [`../core/status-and-state-system.md`](../core/status-and-state-system.md)
-- [`../core/data/status-architecture.md`](../core/data/status-architecture.md)
-- [`../modules/configuration-platform.md`](../modules/configuration-platform.md)
-- [`../operator/queue-system.md`](../operator/queue-system.md)
+**Canonical owners:**  
+- [`../core/entity-model.md`](../core/entity-model.md)  
+- [`../core/record-system.md`](../core/record-system.md)  
+- [`../core/status-and-state-system.md`](../core/status-and-state-system.md)  
+- [`../core/data/status-architecture.md`](../core/data/status-architecture.md)  
+- [`../modules/configuration-platform.md`](../modules/configuration-platform.md)  
+- [`../operator/queue-system.md`](../operator/queue-system.md)  
 - [`../governance/design-and-operational-doctrine.md`](../governance/design-and-operational-doctrine.md)
 
-**Status:** Active
+**Status:** Active  
 
 **Superseded by:** —
 
@@ -138,23 +138,23 @@ Do not introduce a second owner for an already-owned concern. Prefer config and 
 
 ## 2026-07 — Runtime is stable infrastructure
 
-**Decision:**
+**Decision:**  
 Runtime work proceeds by **correcting ownership domains**, not rediscovering or multiplying runtimes. **One runtime owner** per concern. Compatibility paths are **migration mechanisms** and must be deleted after parity. Primary operational surfaces reveal as **stable, complete** experiences (coordinated reveal; no false empties).
 
-**Why:**
+**Why:**  
 Architecture discovery is finished for OS Runtime / Presentation Runtime. Remaining work is product completion and ownership cleanup inside the locked model.
 
-**Consequences:**
+**Consequences:**  
 Do not invent parallel reveal engines, shells, or ownership trees. Prefetch is allowed; partial above-fold reveal is not. Update ownership maps when moving runtimes.
 
-**Canonical owners:**
-- [`../runtime/operational-runtime-doctrine.md`](../runtime/operational-runtime-doctrine.md)
-- [`os-runtime-map.md`](./os-runtime-map.md)
-- [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md)
-- [`../governance/runtime-ownership-migration-map.md`](../governance/runtime-ownership-migration-map.md)
+**Canonical owners:**  
+- [`../runtime/operational-runtime-doctrine.md`](../runtime/operational-runtime-doctrine.md)  
+- [`os-runtime-map.md`](./os-runtime-map.md)  
+- [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md)  
+- [`../governance/runtime-ownership-migration-map.md`](../governance/runtime-ownership-migration-map.md)  
 - [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md)
 
-**Status:** Active
+**Status:** Active  
 
 **Superseded by:** —
 
@@ -162,22 +162,22 @@ Do not invent parallel reveal engines, shells, or ownership trees. Prefetch is a
 
 ## 2026-07 — AI remains human-in-the-loop
 
-**Decision:**
+**Decision:**  
 BOS may **assist, recommend, explain, and prepare**. Authoritative or irreversible decisions remain governed by **validated platform actions** and **human confirmation**. AI does **not** create parallel mutation paths.
 
-**Why:**
+**Why:**  
 Alloy’s trust model requires the same records, permissions, workflows, events, and audit paths for AI-assisted work as for human operators.
 
-**Consequences:**
+**Consequences:**  
 No privileged client-side service-role shortcuts “for AI.” Recommendations stay grounded in platform commands and config. Product pauses on agent expansion do not change this law.
 
-**Canonical owners:**
-- [`../modules/ai-platform.md`](../modules/ai-platform.md)
-- [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)
-- [`../../system/bos-identity-doctrine.md`](../../system/bos-identity-doctrine.md)
+**Canonical owners:**  
+- [`../modules/ai-platform.md`](../modules/ai-platform.md)  
+- [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)  
+- [`../../system/bos-identity-doctrine.md`](../../system/bos-identity-doctrine.md)  
 - [`../../product/bos-foundation.md`](../../product/bos-foundation.md)
 
-**Status:** Active
+**Status:** Active  
 
 **Superseded by:** —
 
@@ -185,22 +185,22 @@ No privileged client-side service-role shortcuts “for AI.” Recommendations s
 
 ## 2026-07 — Configuration is object-centric
 
-**Decision:**
+**Decision:**  
 Operators configure **operational objects** — Location, Program, Room, Commercial Offering, Business Process, Communication Template, Automation, Role, Surface, Field — **not records, tables, or CRUD forms**. Configuration is an operational experience. Every configuration domain inherits **one** platform (the Configuration Workspace Platform); no domain invents its own configuration experience. **Locations is the reference implementation.**
 
-**Why:**
+**Why:**  
 Building Locations surfaced that the operator is *running a place*, not editing its row. Designed as CRUD, configuration becomes a form to decode; designed as an operational experience — object, health, attention, the parts you own — it becomes obvious. CRUD-first, database-first, and drawer-over-table configuration are prohibited because they expose implementation (providers, precedence, versioning) the operator must never meet, and because per-domain reinvention forks the platform.
 
-**Consequences:**
+**Consequences:**  
 New configuration domains adopt the platform's object model, workspace anatomy, two-status model (Attention + Setup Progress), business-language and quiet-inheritance rules, and inline/focused editing. No large CRUD forms, edit drawers over tables, provider/precedence terminology, configuration-precedence UI, implementation-driven navigation, generic forms, or object-less settings pages. Commercial Configuration validates the platform as a second consumer; future domains reference Locations.
 
-**Canonical owners:**
-- [`../operator/configuration-workspace-platform-doctrine.md`](../operator/configuration-workspace-platform-doctrine.md)
-- [`../operator/configuration-workspace-visual-language.md`](../operator/configuration-workspace-visual-language.md)
-- [`../operator/configuration-workspace-component-library.md`](../operator/configuration-workspace-component-library.md)
+**Canonical owners:**  
+- [`../operator/configuration-workspace-platform-doctrine.md`](../operator/configuration-workspace-platform-doctrine.md)  
+- [`../operator/configuration-workspace-visual-language.md`](../operator/configuration-workspace-visual-language.md)  
+- [`../operator/configuration-workspace-component-library.md`](../operator/configuration-workspace-component-library.md)  
 - [`../modules/configuration-platform.md`](../modules/configuration-platform.md) *(control-plane substrate — orthogonal layer)*
 
-**Status:** Active
+**Status:** Active  
 
 **Superseded by:** —
 
