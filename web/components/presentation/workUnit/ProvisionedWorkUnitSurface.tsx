@@ -16,6 +16,7 @@ import { useCommittedWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime/u
 import { runtimeLabelProps, PRESENTATION_RUNTIME_LABELS } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { useCommittedFocus } from "@/lib/runtime/kernel/RuntimeKernelContext";
+import { OperationalSubjectProvider } from "@/components/presentation/workUnit/OperationalSubjectContext";
 
 export function ProvisionedWorkUnitSurface() {
     const { model, intents } = useCommittedWorkUnitSurfaceRuntime();
@@ -27,6 +28,8 @@ export function ProvisionedWorkUnitSurface() {
     if (!model || !committed) return null;
 
     const snapshot = committed.snapshot;
+    // The operational variant, narrowed once. Empty/error terminals carry no subject truth.
+    const op = snapshot.terminal === "operational" ? snapshot : null;
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitSurface)}
@@ -57,7 +60,36 @@ export function ProvisionedWorkUnitSurface() {
                 key={committed.surfaceId}
                 className="motion-surface-enter-forward flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:items-stretch"
             >
-                <WorkUnitSurfaceBodyFromModel model={model} intents={intents} />
+                {/* The Focus Panel's operational truth comes from the COMMITTED SNAPSHOT — not from
+                    a record VM fetch. D1 already resolved Situation/Decision/Action (U-P5/U-O4/U-O5);
+                    reading them here is what makes the first visible frame operational instead of
+                    "named but unresolved". */}
+                <OperationalSubjectProvider
+                    subjectId={op ? op.recordOfAttention.id : null}
+                    situation={
+                        op
+                            ? {
+                                  stageKey: op.currentBusinessState.stageKey,
+                                  stageLabel: op.currentBusinessState.stageLabel,
+                                  purpose: op.currentBusinessState.purpose,
+                                  workTemplateLabel: op.currentBusinessState.workTemplateLabel,
+                                  required: op.currentBusinessState.required,
+                              }
+                            : null
+                    }
+                    decision={
+                        op
+                            ? {
+                                  workViewId: op.contextFrame.workViewId,
+                                  workViewLabel: op.contextFrame.workViewLabel,
+                                  scopeState: op.focusPanelScopeState,
+                              }
+                            : null
+                    }
+                    action={op ? { actionRef: op.primaryAction.actionRef, label: op.primaryAction.label } : null}
+                >
+                    <WorkUnitSurfaceBodyFromModel model={model} intents={intents} />
+                </OperationalSubjectProvider>
             </div>
         </div>
     );

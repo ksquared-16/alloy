@@ -23,23 +23,71 @@ export type OperationalSubject = {
     subjectId: string | null;
     /** Record of Truth entity type for the committed subject. */
     entityType: "opportunity" | null;
+    /**
+     * The FIRST-SIGHT operational truth, straight from the committed D1 snapshot.
+     *
+     * The Focus Panel used to derive Situation/Decision/Action from its record VM — a FETCH — so it
+     * rendered "named but unresolved" chrome after Operational Commit and gated the terminal on a
+     * Settlement request. D1 already carries all of this (U-P5/U-O4/U-O5). The panel reads it here.
+     * Null only when nothing is committed (empty/error terminals).
+     */
+    situation: {
+        stageKey: string;
+        stageLabel: string;
+        /** Why this stage exists — the Situation half of Situation → Decision → Action. */
+        purpose: string | null;
+        workTemplateLabel: string;
+        required: boolean;
+    } | null;
+    /** Decision context — the lens the operator entered from, and their scope within it. */
+    decision: {
+        workViewId: string;
+        workViewLabel: string;
+        scopeState: "in_scope" | "no_active_view" | "out_of_scope";
+    } | null;
+    /** U-O5 — capability, not decoration. */
+    action: { actionRef: string; label: string } | null;
 };
 
-const Ctx = createContext<OperationalSubject>({ subjectId: null, entityType: null });
+const EMPTY: OperationalSubject = {
+    subjectId: null, entityType: null, situation: null, decision: null, action: null,
+};
+const Ctx = createContext<OperationalSubject>(EMPTY);
 
 /** Fed from the committed model — never from the drawer, never resolved locally. */
 export function OperationalSubjectProvider({
     subjectId,
+    situation,
+    decision,
+    action,
     children,
 }: {
     subjectId: string | null;
+    situation?: OperationalSubject["situation"];
+    decision?: OperationalSubject["decision"];
+    action?: OperationalSubject["action"];
     children: ReactNode;
 }) {
     const value = useMemo<OperationalSubject>(
-        () => ({ subjectId, entityType: subjectId ? "opportunity" : null }),
-        [subjectId],
+        () => ({
+            subjectId,
+            entityType: subjectId ? "opportunity" : null,
+            situation: situation ?? null,
+            decision: decision ?? null,
+            action: action ?? null,
+        }),
+        [subjectId, situation, decision, action],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/**
+ * OPERATIONAL resolution — the D4 meaning. True when the committed snapshot has given the panel a
+ * subject, its current business state, and a truthful action. Deliberately independent of any
+ * Settlement fetch: Detail/History arriving later must never make the operator's panel "unresolved".
+ */
+export function isOperationallyResolved(s: OperationalSubject): boolean {
+    return s.subjectId != null && s.situation != null && s.action != null;
 }
 
 /** The one read for "who is the operator working on". */
