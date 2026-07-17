@@ -8,8 +8,12 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { EmitEventInput } from "@/lib/emitEvent";
 
-const emitEventMock = vi.hoisted(() => vi.fn(async () => "evt-1"));
+const emitEventMock = vi.hoisted(() => vi.fn(async (input: EmitEventInput) => {
+    void input;
+    return "evt-1";
+}));
 vi.mock("@/lib/emitEvent", () => ({ emitEvent: emitEventMock }));
 
 import {
@@ -40,7 +44,7 @@ function setup() {
 
 function lastPayload() {
     expect(emitEventMock).toHaveBeenCalledTimes(1);
-    const arg = emitEventMock.mock.calls[0][0] as { event_type: string; payload: Record<string, unknown> };
+    const arg = emitEventMock.mock.calls[0][0];
     expect(arg.event_type).toBe(OPERATIONAL_CALCULATION_CONFIG_CHANGED_EVENT);
     return arg.payload;
 }
