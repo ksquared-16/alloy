@@ -7,9 +7,9 @@ supersedes: []
 
 # Workspace Surface Hierarchy — Doctrine Reconciliation
 
-**Sprint:** `workspace-surface-hierarchy` (slot 5)  
-**Artifact type:** Investigation / ownership reconciliation — **not** platform doctrine  
-**Date:** 2026-07-16  
+**Sprint:** `workspace-surface-hierarchy` (slot 5)
+**Artifact type:** Investigation / ownership reconciliation — **not** platform doctrine
+**Date:** 2026-07-16
 **Status:** Paused for review before visual inventory
 
 This report corrects the sprint premise against the repository. It does **not** invent a parallel Workspace Surface Hierarchy. Frozen operational hierarchy remains authoritative for its declared scope.
@@ -20,8 +20,8 @@ This report corrects the sprint premise against the repository. It does **not** 
 
 ### Owner (frozen five-layer hierarchy)
 
-**Document:** `docs/platform/core/navigation-and-workspace-doctrine.md`  
-**Section:** `Alloy Operational Workspace Doctrine V3 (frozen)`  
+**Document:** `docs/platform/core/navigation-and-workspace-doctrine.md`
+**Section:** `Alloy Operational Workspace Doctrine V3 (frozen)`
 **Subsection:** `Visual hierarchy (five layers — frozen)`
 
 **Status in doc:** Frozen and certified (July 2026).
@@ -133,19 +133,19 @@ Classification key:
 
 ### Question answers
 
-1. **What visual hierarchy is already canonical?**  
+1. **What visual hierarchy is already canonical?**
    The five-layer Operational Workspace Doctrine V3 hierarchy in `navigation-and-workspace-doctrine.md`, executed by `web/components/workspace/*`.
 
-2. **What surface categories does it explicitly govern?**  
+2. **What surface categories does it explicitly govern?**
    AdminV2 **operational module modals** (Processing reference; Communications / Work Items certified; future operational modals inherit).
 
-3. **Limited to operational module modals, or wider platform?**  
+3. **Limited to operational module modals, or wider platform?**
    **Limited to operational module modals** by explicit text and by `WorkspaceShell` exclusion comments. Wider platform surfaces have other owners (System 5, configuration visual language, command center).
 
-4. **Which requested surfaces are already covered?**  
+4. **Which requested surfaces are already covered?**
    Processing, Communications, Work Items, and (by inheritance claim) future operational modals including Commercial. Queues/landings **inside** those modals.
 
-5. **Which remain genuinely uncovered (for shared layering grammar)?**  
+5. **Which remain genuinely uncovered (for shared layering grammar)?**
    Organization landing, Work Unit/queue-and-focus composition, Focus Panel region philosophy relative to V3 vocabulary, Configuration/Settings/Locations composition (region vs card), Dialogs, Analytics certification gap, Planning, Embedded workspace mapping.
 
 6. **Overlaps / conflicts / inconsistent vocabulary?**
@@ -159,7 +159,7 @@ Classification key:
    | “Canvas” overload | V3 Layer 2 = stone workspace field; System 5 / config / command center say **white canvas** — same word, different layers |
    | Dual operational-shell docs | `navigation-and-workspace-doctrine.md` (V3) vs `operational-workspace-shell.md` (structural + partially superseded presentation) |
 
-7. **Which existing document should own the generalized doctrine?**  
+7. **Which existing document should own the generalized doctrine?**
    Do **not** create a new parallel owner named “Workspace Surface Hierarchy.”
 
    Recommended ownership split (one truth per concern):
@@ -206,23 +206,23 @@ Smallest truthful documentation change:
 
 ### Remaining investigation (approved next steps only after this review)
 
-1. **Category composition map (docs-only)**  
+1. **Category composition map (docs-only)**
    For each category in the table above, map: shell / canvas / working region / object / control — using existing owners’ vocabulary. Output: amendment draft for `alloy-visual-language.md` (not a new owner).
 
-2. **Targeted visual inventory (gap surfaces only)**  
-   Inventory composition of: Organization landing, Work Unit + Focus Panel, Configuration Runtime / Locations / Settings, Analytics modal, Dialogs, Planning (if any UI).  
+2. **Targeted visual inventory (gap surfaces only)**
+   Inventory composition of: Organization landing, Work Unit + Focus Panel, Configuration Runtime / Locations / Settings, Analytics modal, Dialogs, Planning (if any UI).
    Skip full re-inventory of Processing / Communications / Work Items except as **reference baselines**.
 
-3. **Region vs Object vs Card reconciliation**  
+3. **Region vs Object vs Card reconciliation**
    Compare V3 containment doctrine (“spacing over boxes”) with Configuration (“sections as rows inside one card”) and System 5 card grammar. Produce one vocabulary table for amendments — no UI.
 
-4. **Stale-pointer cleanup PR plan**  
+4. **Stale-pointer cleanup PR plan**
    List exact paragraphs to amend in `design-and-operational-doctrine.md` and `operational-workspace-shell.md` (and optional code comment sync).
 
-5. **Implementation roadmap (recommendations only)**  
+5. **Implementation roadmap (recommendations only)**
    Rollout order for *future* UI work after doctrine amendments are approved — likely: (a) doc pointer fixes, (b) Configuration region/card discipline (Locations as candidate), (c) Analytics V3 certification gap, (d) org landing / Focus Panel only if category map says they need change.
 
-6. **External product study**  
+6. **External product study**
    Downgraded: optional, non-authoritative, only after Alloy gaps are named. Must not override frozen V3 or configuration white-canvas rules.
 
 ### Explicit non-goals until approval

@@ -7,9 +7,9 @@ supersedes: []
 
 # Alloy Workspace Taxonomy — Doctrine Package
 
-**Sprint:** `workspace-surface-hierarchy` (slot 5) → mission reframed as **Workspace Taxonomy**  
-**Status:** **Ratified and integrated** into `docs/platform/operator/alloy-visual-language.md` (July 2026). This sprint file is retained as execution history — **not** the canonical owner.  
-**Date:** 2026-07-16  
+**Sprint:** `workspace-surface-hierarchy` (slot 5) → mission reframed as **Workspace Taxonomy**
+**Status:** **Ratified and integrated** into `docs/platform/operator/alloy-visual-language.md` (July 2026). This sprint file is retained as execution history — **not** the canonical owner.
+**Date:** 2026-07-16
 **Depends on:** Accepted reconciliation (`workspace-surface-hierarchy-doctrine-reconciliation.md`)
 
 **Canonical owner after Phase 0:** [`../../platform/operator/alloy-visual-language.md`](../../platform/operator/alloy-visual-language.md)
@@ -214,7 +214,7 @@ Derived from platform doctrine and shipped surfaces. Proposed list rejected wher
 
 ## 2.1 Law
 
-**Every workspace inherits the same layering grammar.**  
+**Every workspace inherits the same layering grammar.**
 **Composition varies by category. The grammar does not.**
 
 This grammar is **structural**, not a color system. Canvas treatment is a *category composition choice* at Layer C, not a new grammar.

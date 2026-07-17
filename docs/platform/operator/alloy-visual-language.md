@@ -209,7 +209,7 @@ W4 Operational and W5 Configuration are sibling places opened from shell navigat
 
 ### Law
 
-**Every workspace inherits the same layering grammar.**  
+**Every workspace inherits the same layering grammar.**
 **Composition varies by category. The grammar does not.**
 
 Color and token values **express** layer responsibility; they do **not** define the layers. Canvas treatment (stone vs white vs ambient) is a **category composition choice at Layer C**, not a second grammar.
