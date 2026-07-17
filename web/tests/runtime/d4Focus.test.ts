@@ -14,6 +14,12 @@ import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProv
 
 const IDENT = { tenant: "org-1", principal: "user-1" };
 
+/** ProvisioningAnswer is a discriminated union; the `error` variant carries neither field. */
+const lensOf = (s: Readonly<ProvisioningAnswer> | undefined) =>
+    s && s.terminal !== "error" ? s.activeWorkView.id : null;
+const frameOf = (s: Readonly<ProvisioningAnswer> | undefined) =>
+    s && s.terminal !== "error" ? s.contextFrame.workViewId : null;
+
 const snapshot = (outcome: PreparationOutcome, lens = "new_leads"): ProvisioningAnswer =>
     ({
         terminal: outcome,
@@ -188,7 +194,7 @@ describe("D4 — K3 Focus", () => {
         // SAME surface identity across the movement — zero reconstruction.
         expect(k3.get().current!.surfaceId).toBe(surfaceBefore);
         expect(subj.lens).toBe("new_leads");
-        expect(k3.get().current!.snapshot.terminal !== "error" && k3.get().current!.snapshot.contextFrame.workViewId).toBe("new_leads");
+        expect(frameOf(k3.get().current!.snapshot)).toBe("new_leads");
     });
 
     it("19-22. rapid intents: latest wins; a superseded terminal can NEVER commit", () => {
@@ -202,11 +208,11 @@ describe("D4 — K3 Focus", () => {
         // The stale lens terminal arrives LATE — after attention has moved on. It must not commit.
         expect(k3.onPreparationTerminal(terminal(stale, "operational", "tours"))).toBe(false);
         expect(instr.onStaleCommitPrevented).toHaveBeenCalled();
-        expect(k3.get().current!.snapshot.terminal !== "error" && k3.get().current!.snapshot.activeWorkView.id).not.toBe("tours");
+        expect(lensOf(k3.get().current!.snapshot)).not.toBe("tours");
 
         // The newest commits.
         expect(k3.onPreparationTerminal(terminal(newest, "operational", "follow_up"))).toBe(true);
-        expect(k3.get().current!.snapshot.terminal !== "error" && k3.get().current!.snapshot.activeWorkView.id).toBe("follow_up");
+        expect(lensOf(k3.get().current!.snapshot)).toBe("follow_up");
     });
 
     it("Focus never un-commits — commitVersion is monotonic and current is never nulled by movement", () => {
