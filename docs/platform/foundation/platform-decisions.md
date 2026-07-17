@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-14
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
@@ -201,5 +201,31 @@ New configuration domains adopt the platform's object model, workspace anatomy, 
 - [`../modules/configuration-platform.md`](../modules/configuration-platform.md) *(control-plane substrate — orthogonal layer)*
 
 **Status:** Active  
+
+**Superseded by:** —
+
+---
+
+## 2026-07 — One shared workspace grammar; category-specific composition
+
+**Decision:**
+Alloy has **one Shared Layering Grammar** (Application Shell → Workspace Frame → Workspace Canvas → Working Regions → Objects → Controls → Selection) and an **Alloy Workspace Taxonomy (W1–W8)**. Every workspace inherits the grammar; categories compose Canvas, Regions, and Objects differently on purpose. **W4 Operational** keeps the frozen inset River Stone field (Operational Workspace Doctrine V3). **W5 Configuration** keeps an intentional white canvas. **Cards represent objects; regions organize work.** Specialist doctrines remain category-owned.
+
+**Why:**
+White-on-white and card-mosaic failures were misread as a missing universal stone canvas. The durable gap is taxonomy and composition — not a single background for every surface. A parallel “Workspace Surface Hierarchy” owner would violate one-truth / one-owner.
+
+**Consequences:**
+- Name the workspace category before composing UI.
+- Do not import W4 stone into W5 (or vice versa) to “fix hierarchy.”
+- Do not treat every grouped area as a card.
+- Do not reopen frozen V3 when amending parent taxonomy.
+- Future Planning (W8) and Analytics (W6) certification must declare composition against the shared grammar explicitly.
+
+**Canonical owners:**
+- [`../operator/alloy-visual-language.md`](../operator/alloy-visual-language.md) — taxonomy, grammar, Region/Object
+- [`../core/navigation-and-workspace-doctrine.md`](../core/navigation-and-workspace-doctrine.md) — W4 V3 frozen
+- [`../operator/configuration-workspace-visual-language.md`](../operator/configuration-workspace-visual-language.md) — W5
+
+**Status:** Active
 
 **Superseded by:** —

@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
@@ -38,7 +38,7 @@ AdminV2 reveal gates, queue empty semantics, composed payload readiness — **pr
 - Canonical interaction model (primitives): `../operator/canonical-interaction-model.md`
 - Interaction grammar (laws): `../operator/interaction-grammar.md`
 - Operator story (lived flow): `../operator/operator-story.md`
-- Alloy visual language (look/feel; bridge into mockups): `../operator/alloy-visual-language.md`
+- Alloy visual language (look/feel; **Workspace Taxonomy W1–W8 + Shared Layering Grammar A–G**): `../operator/alloy-visual-language.md`
 - Alloy Runtime Specification (synthesis; read before building any domain): `../operator/alloy-runtime-specification.md`
 - Cross-cutting operational UX (planes/domains): `../core/operational-ux-doctrine.md`
 
@@ -49,7 +49,8 @@ AdminV2 reveal gates, queue empty semantics, composed payload readiness — **pr
 - Typography: `../../system/typography-and-presentation-doctrine.md`
 - BOS identity: `../../system/bos-identity-doctrine.md`
 - Queue record rows: `../../system/queue-record-doctrine.md`
-- **Alloy Operational Workspace Doctrine V2** (operational module modals): `../core/navigation-and-workspace-doctrine.md` — **frozen** (July 2026); inset stone field, universal `WorkspaceMetricTiles`, certified Processing / Communications / Work Items; components: `web/components/workspace/doctrine.ts`
+- **Workspace Taxonomy + Shared Layering Grammar** (parent visual composition): `../operator/alloy-visual-language.md`
+- **Alloy Operational Workspace Doctrine V3** (W4 operational module modals only): `../core/navigation-and-workspace-doctrine.md` — **frozen** (July 2026); inset stone field specialization; Overview activity tiles (`SurfaceHeaderKpiCard`) + operational `WorkspaceOperationalHealth`; certified Processing / Communications / Work Items; components: `web/components/workspace/doctrine.ts`. Stone field is **not** universal across all workspace categories.
 
 ---
 
@@ -86,7 +87,8 @@ Document **decisions**, not debates. Frozen areas:
 - Queue preview boundary
 - BOS human-in-the-loop
 - AdminV2 reveal gates
-- **Alloy Operational Workspace Doctrine V2** (operational module modal presentation — frozen July 2026)
+- **Alloy Operational Workspace Doctrine V3** (W4 operational module modal presentation — frozen July 2026)
+- **Alloy Workspace Taxonomy + Shared Layering Grammar** (`../operator/alloy-visual-language.md` — July 2026)
 
 Open areas stay in roadmap until frozen — then merge into platform docs.
 

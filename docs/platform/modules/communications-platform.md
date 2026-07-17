@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
@@ -57,9 +57,9 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 | **`/adminV2/communications`** | Direct URL | Deprecated notice — not in nav |
 | **`/admin/communications`** | Legacy path | Deprecated / non-primary |
 
-### Modal navigation (Operational Workspace Doctrine V2)
+### Modal navigation (Operational Workspace Doctrine V3)
 
-Communications composes `@/components/workspace/doctrine` — same primitive stack as Processing (Digital Mailroom). Presentation only; send/thread/announcement/template runtimes unchanged.
+Communications composes `@/components/workspace/doctrine` — same W4 primitive stack as Processing (Digital Mailroom). Presentation only; send/thread/announcement/template runtimes unchanged.
 
 | Mode | Sections |
 |------|----------|
@@ -164,8 +164,9 @@ Sprint closeout: `../../sprints/archive/2026-07/communications-activity-sprint-c
 ## Related
 
 - `../../archive/2026-06-product/communications.md` (transitional expanded reference)
-- `../operator/operational-workspace-shell.md` — modal workspace shell + Doctrine V2 primitives
+- `../operator/alloy-visual-language.md` — Workspace Taxonomy (W4) + Shared Layering Grammar
+- `../operator/operational-workspace-shell.md` — modal workspace structural shell (defers visual hierarchy to V3)
 - `../../sprints/archive/06_2026/communications-v2/operator-surface-consolidation.md`
-- `../../sprints/archive/07_2026/communications-product-shell-translation/README.md` — Communications Doctrine V2 adoption closeout
+- `../../sprints/archive/07_2026/communications-product-shell-translation/README.md` — Communications Doctrine V2 adoption closeout (historical)
 - `docs/schema/schema-policies-and-security.md`
 - `docs/audits/supabase-schema-alignment-audit.md`

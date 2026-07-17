@@ -1,14 +1,15 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
 # Configuration Workspace Visual Language
 
 **Status:** Canonical. The visual specialization of `configuration-workspace-platform-doctrine.md`.
-**Builds on:** `alloy-visual-language.md` (the ten premises) and `operational-surface-design-system.md` (card grammar, tokens, System 5). This doc does **not** restate those; it adds what is specific to configuration, and explains *why* a configuration workspace feels different from both a settings form and an operational workspace.
+**Taxonomy role:** **W5 — Configuration Workspace** under the Shared Layering Grammar in [`alloy-visual-language.md`](./alloy-visual-language.md). White canvas is intentional; do **not** import the W4 Operational stone field.
+**Builds on:** `alloy-visual-language.md` (premises, taxonomy, Region vs Object) and `operational-surface-design-system.md` (card grammar, System 5). This doc does **not** restate those; it adds what is specific to configuration, and explains *why* a configuration workspace feels different from both a settings form and an operational workspace.
 
 > The prototype feels different because it is **calm, object-shaped, and consequence-first** — it looks like you are running a place, not editing its record.
 
@@ -30,7 +31,7 @@ The feeling has three sources, and every visual decision serves one of them:
 
 Configuration uses the **Alloy Configuration-Platform** visual system (the `config-*` token family), not the marketing palette and not the legacy Alloy-Blue admin kit.
 
-- **Workspace canvas:** a quiet Stone field. White is reserved for meaningful object-owned regions so hierarchy comes from composition rather than a wall of cards.
+- **Workspace canvas:** intentional white. Hierarchy comes from regions, spacing, alignment, headings, and restrained containment — not from importing the W4 River Stone field or building a wall of cards.
 - **The single accent is Bend Pine `#00A283`** — used for the active tab, the selected object, positive/available state, and the primary action. It is the *only* accent. (Note: `alloy-pine` is a slate token, not green; the green is `alloy-bend-pine`.)
 - **Ink:** `alloy-midnight` / `alloy-forge` for text, stepped by opacity (`/85`, `/55`, `/45`) to build hierarchy without new colors.
 - **Warning/attention:** `alloy-ember` for Fix-grade items and destructive intent, sparingly. Blue (`alloy-blue`) for informational/Improve and scheduled state.
@@ -44,13 +45,13 @@ Color is meaning, never decoration: green = good/available/active, amber = atten
 
 White space is the primary tool of calm. Configuration surfaces are **less dense** than operational queues on purpose — the operator is deliberating, not triaging.
 
-- Section rhythm is generous: cards separated by `space-y-4`, content within a card by `space-y-3`.
+- Section rhythm is generous: regions separated by deliberate whitespace; contained objects use consistent internal rhythm.
 - A card breathes: `p-4`, `rounded-xl`, a hairline border (`~rgba(89,103,139,0.14)` / `border-alloy-forge/10`), a whisper shadow.
 - A healthy object's Overview should have **visible empty space**. If a configuration screen feels full, it is doing too much.
 
 ## Workspace canvas, regions, and objects
 
-The Stone workspace canvas is the field on which the selected configuration object is understood and operated. White regions sit on that field only when they carry a coherent operator answer: identity, operating picture, readiness, attention, an owned capability, or a focused editor.
+The white workspace canvas is the continuous field on which the selected configuration object is understood and operated. Regions create hierarchy through spacing, alignment, headings, hairlines, and — only where useful — restrained Stone secondary fills or contained surfaces.
 
 - A **Region** groups one answer or one operational concern. It may be white, but it is not automatically a card and does not imply independent navigation.
 - An **Object** has identity, status, selection, view/edit state, and usually a URL-addressable workspace. Do not make a region look like a selectable object.
