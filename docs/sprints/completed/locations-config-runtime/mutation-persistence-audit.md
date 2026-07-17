@@ -1,7 +1,7 @@
 # Locations Configuration Runtime — mutation persistence audit
 
-**Status:** Release-blocking audit complete for every mutation provider available in the local organization.  
-**Evidence date:** 2026-07-16.  
+**Status:** Release-blocking audit complete for every mutation provider available in the local organization.
+**Evidence date:** 2026-07-16.
 **Method:** mutate through the UI, inspect the authoritative mutation response, verify local state, hard-refresh, reopen the same object, verify the read surface, then restore or delete all audit data.
 
 ## Mutation matrix

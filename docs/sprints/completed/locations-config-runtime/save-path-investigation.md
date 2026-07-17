@@ -1,7 +1,7 @@
 # Priority 0 — Location save hang investigation
 
-**Status:** Root cause confirmed; critical-path fix implemented.  
-**Surface:** Locations Configuration Runtime → Edit location → Save location  
+**Status:** Root cause confirmed; critical-path fix implemented.
+**Surface:** Locations Configuration Runtime → Edit location → Save location
 **Worktree:** `wt2-locations-config-runtime`
 
 ## Root cause
@@ -28,5 +28,5 @@ Not an optimistic-UI failure, duplicate PATCH, `revalidatePath` loop, or stuck s
 
 ## Classification
 
-**In scope for this sprint:** yes — save trustworthiness blocks further UI certification.  
+**In scope for this sprint:** yes — save trustworthiness blocks further UI certification.
 **Unrelated platform debt:** the N+1 schedule fanout and heavy members fetch remain; documented above, not fixed in this pass.

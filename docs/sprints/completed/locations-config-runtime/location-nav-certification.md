@@ -1,7 +1,7 @@
 # Location Navigation certification — section 2 (reopened)
 
 **Status:** Approved and frozen for Configuration Runtime V1.
-**Header:** Frozen.  
+**Header:** Frozen.
 **Comparison:** [`location-nav-visual-comparison.md`](./location-nav-visual-comparison.md)
 
 ## Material visual changes (this pass)
@@ -30,10 +30,10 @@
 
 ## Final row-information rule
 
-1. Name  
-2. Locality / short place line (when available)  
-3. Active / Inactive status pill  
-4. One operational signal — attention when Fix items exist  
+1. Name
+2. Locality / short place line (when available)
+3. Active / Inactive status pill
+4. One operational signal — attention when Fix items exist
 
 Never readiness %. No fabricated photos (MapPin glyph tile instead).
 

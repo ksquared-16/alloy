@@ -1,7 +1,7 @@
 # Overview certification — section 3
 
 **Status:** Certified and frozen for Configuration Runtime V1.
-**Frozen:** Header, Location Navigation.  
+**Frozen:** Header, Location Navigation.
 **Sources:** Directional “At a glance” mock + current Overview screenshot + configuration visual language.
 
 **Screenshots:** `screenshots/overview-before.png`, `screenshots/overview-after.png`, `screenshots/121-overview-final.png`

@@ -1,7 +1,7 @@
 # Locations header certification — section 1
 
-**Status:** Approved and frozen. Do not revisit unless a later certified section exposes a true architectural conflict.  
-**Sources:** Jul 16 North Campus directional mock + [`configuration-workspace-visual-language.md`](../../../platform/operator/configuration-workspace-visual-language.md).  
+**Status:** Approved and frozen. Do not revisit unless a later certified section exposes a true architectural conflict.
+**Sources:** Jul 16 North Campus directional mock + [`configuration-workspace-visual-language.md`](../../../platform/operator/configuration-workspace-visual-language.md).
 **Note:** A separate comparison document was not available in the workspace at plan time.
 
 ## Critique — why the mock feels premium

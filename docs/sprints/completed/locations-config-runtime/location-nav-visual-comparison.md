@@ -1,6 +1,6 @@
 # Location Navigation — mock / current / proposed
 
-**Status:** Comparison locked before material visual re-implementation.  
+**Status:** Comparison locked before material visual re-implementation.
 **Scope:** Location Navigation rail only.
 
 ## Side-by-side
@@ -17,22 +17,22 @@
 
 ## Visible differences we will implement
 
-1. Wider rail — obvious column proportion change vs detail workspace.  
-2. Collection header that reads as a workspace, not a queue section label.  
-3. Add Location obvious in the collection chrome.  
-4. Search + filter icon as a composed control row.  
-5. Rows with glyph, name, locality, status pill (and attention when present).  
-6. Selected row as a bordered object card, not a tinted list item.  
+1. Wider rail — obvious column proportion change vs detail workspace.
+2. Collection header that reads as a workspace, not a queue section label.
+3. Add Location obvious in the collection chrome.
+4. Search + filter icon as a composed control row.
+5. Rows with glyph, name, locality, status pill (and attention when present).
+6. Selected row as a bordered object card, not a tinted list item.
 7. Taller row density so place identity has room.
 
 ## Explicit non-goals
 
-- No fabricated photos  
-- No “View all locations” footer  
-- No header / Overview / other tab changes  
-- No readiness percentages in rows  
+- No fabricated photos
+- No “View all locations” footer
+- No header / Overview / other tab changes
+- No readiness percentages in rows
 
 ## Reference images
 
-- Mock: project assets directional Locations nav mock  
-- Current before: `screenshots/nav-before.png` / prior `nav-after.png` (compact queue)  
+- Mock: project assets directional Locations nav mock
+- Current before: `screenshots/nav-before.png` / prior `nav-after.png` (compact queue)
