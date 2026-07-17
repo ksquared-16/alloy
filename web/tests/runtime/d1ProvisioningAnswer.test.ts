@@ -188,16 +188,37 @@ describe("D1 — bounded Provisioning Answer", () => {
         // The lens set carries identity only — a count here would be Settlement leaking into U-P.
         if (a.terminal !== "operational") throw new Error("expected operational");
         for (const lens of a.lensSet) expect(Object.keys(lens).sort()).toEqual(["displayOrder", "id", "label"]);
-        // Rows carry recognition fields only.
-        expect(Object.keys(a.rows[0]).sort()).toEqual(["id", "stageKey", "statusKey", "title", "updatedAt"]);
+        // Rows carry recognition fields + the U-O2 row context the compact row renders from.
+        // `context` is OPERATIONAL (U-O2: "enough to recognise and select"), not Settlement — U-P7's
+        // rowSlots describe its geometry, so it must arrive WITH the rows or the surface re-lays out.
+        expect(Object.keys(a.rows[0]).sort()).toEqual(["context", "id", "stageKey", "statusKey", "title", "updatedAt"]);
+        // …and the context itself must carry no Settlement.
+        const ctxJson = JSON.stringify(a.rows.map((r) => r.context));
+        for (const forbidden of ["formattedValue", "kpi", "activity_feed", "communications", "related_records"]) {
+            expect(ctxJson).not.toContain(`"${forbidden}"`);
+        }
     });
 
-    it("11. payload is bounded — rows never exceed one page", async () => {
+    it("11. payload is bounded BY THE PAGE — not by the base row set", async () => {
         const a = await composeWorkUnitProvisioningAnswer(request());
         if (a.terminal !== "operational") throw new Error("expected operational");
+        // The ratified budgets (Authorization Part 8) are all TIME budgets — no payload byte budget
+        // is ratified. "Bounded" therefore means: the answer scales with ONE page, never with the
+        // 500-row base set or the 2400-row work unit. That is the invariant worth pinning.
         expect(a.rows.length).toBeLessThanOrEqual(PROVISIONING_ROW_PAGE_CAP);
+
         const bytes = Buffer.byteLength(JSON.stringify(a), "utf8");
-        expect(bytes).toBeLessThan(64 * 1024);
+        const perRow = (bytes - Buffer.byteLength(JSON.stringify({ ...a, rows: [] }), "utf8")) / a.rows.length;
+        // Proportional to the page. The synthetic fixture measures ~640 B/row post
+        // `projectQueuePreviewRowContexts`; the LIVE representative seed measures ~1069 B/row
+        // (richer names/contacts), so the ceiling is set above live reality rather than to the
+        // fixture — a bound only the fixture can pass would hide a real regression. Raw
+        // (unprojected) context measured ~1.0 KB/row on the fixture alone, so this still fails
+        // loudly if the compact projection is bypassed. No byte budget is ratified (Part 8 is all
+        // time budgets); this guards unbounded growth, it does not invent a budget.
+        expect(perRow).toBeLessThan(1400);
+        // A whole-answer ceiling that still fails loudly if the page cap or the projection breaks.
+        expect(bytes).toBeLessThan(128 * 1024);
     });
 
     it("12. no duplicate membership evaluation — each table is read exactly once", async () => {

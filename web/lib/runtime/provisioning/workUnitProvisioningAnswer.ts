@@ -63,6 +63,12 @@ import {
     type OperationalPresentation,
 } from "./operationalPresentation";
 import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
+import {
+    enrichOperationalProjectionRows,
+    queueRowContextOf,
+    type EnrichableProjectionRow,
+} from "./operationalProjectionEnrichment";
+import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { queueRowSurfaceIdForDepartment } from "@/lib/presentation/runtime/workUnitSurfaceConfigFetch";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
@@ -86,6 +92,13 @@ export type ProvisioningRow = {
     updatedAt: string | null;
     /** Recognition fields — enough to recognise and select (U-O2). Nothing more. */
     title: string | null;
+    /**
+     * U-O2 — the resolved row context the canonical compact row renders from. Without it, U-P7's
+     * rowSlots would describe geometry for data the answer never carried, and the renderer would have
+     * to fetch it after commit: presentation gating truth, or a post-commit re-layout. Both forbidden.
+     * Null only when enrichment is unavailable — the row still renders through honest fallbacks.
+     */
+    context: QueueRowContext | null;
 };
 
 /** U-O1 orientation: the active lens indicated among its lens set. Identity only — NO counts. */
@@ -354,7 +367,9 @@ export async function composeWorkUnitProvisioningAnswer(
     const tRec = now();
     const { data: baseRows, error: rowErr } = await req.supabase
         .from("opportunities")
-        .select("id, org_id, work_unit_id, status_key, stage_key, updated_at, name")
+        // Widened for U-O2: primary_person_id/location_id/metadata feed the shared CRM enrichment;
+        // title/name feed the context builder's honest fallbacks.
+        .select("id, org_id, work_unit_id, status_key, stage_key, updated_at, name, title, metadata, primary_person_id, location_id, customer_id")
         .eq("org_id", req.orgId)
         .eq("work_unit_id", workUnit.id)
         .limit(500);
@@ -373,12 +388,27 @@ export async function composeWorkUnitProvisioningAnswer(
     timings.projection_ms = now() - tProj;
 
     const tComp = now();
-    const rows: ProvisioningRow[] = page.map((r) => ({
+    // U-O2 enrichment over the BOUNDED PAGE only — cost scales with what the operator can see.
+    // Additive: the page in is the page out, in the same canonical order. Membership was decided
+    // upstream by the projection and is never re-evaluated here.
+    const enriched = await enrichOperationalProjectionRows({
+        supabase: req.supabase,
+        orgId: req.orgId,
+        rows: page as unknown as EnrichableProjectionRow[],
+        queue: {
+            key: activeView.id,
+            label: activeView.label,
+            lifecycle_key: process.key,
+            subject_grain: "case",
+        },
+    });
+    const rows: ProvisioningRow[] = enriched.map((r) => ({
         id: String((r as Record<string, unknown>).id),
         stageKey: strOrNull((r as Record<string, unknown>).stage_key),
         statusKey: strOrNull((r as Record<string, unknown>).status_key),
         updatedAt: strOrNull((r as Record<string, unknown>).updated_at),
         title: strOrNull((r as Record<string, unknown>).name),
+        context: queueRowContextOf(r as Record<string, unknown>),
     }));
 
     // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. ──
