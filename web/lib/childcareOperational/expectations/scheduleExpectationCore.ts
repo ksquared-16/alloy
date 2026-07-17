@@ -13,10 +13,11 @@ import {
     compareIsoDates,
     ISO_DATE_RE,
 } from "@/lib/childcareOperational/effectiveDating";
-import {
-    requiredStaffForChildren,
-    type RatioTier,
-} from "@/lib/childcareOperational/config/ratioRules";
+import { type RatioTier } from "@/lib/childcareOperational/config/ratioRules";
+// Staffing resolves through the canonical Ratio surface (Operational Calculation
+// truth runtime), not the raw tier primitive — single source of truth. Parity is
+// guaranteed for single-room tier lists and gated by canonicalRatioParity.test.ts.
+import { resolveRequiredStaffForChildren } from "@/lib/childcareOperational/capacity/resolveRatio";
 
 export type OperationalAgreementInput = {
     id: string;
@@ -214,7 +215,7 @@ export function computeExpectedStaffingByRoomDate(
     resolveTiers: (roomLocationId: string, date: string) => readonly RatioTier[]
 ): ExpectedStaffingEntry[] {
     return occupancy.map((o) => {
-        const { requiredStaff, exceedsDefinedTiers } = requiredStaffForChildren(
+        const { requiredStaff, exceedsDefinedTiers } = resolveRequiredStaffForChildren(
             resolveTiers(o.roomLocationId, o.date),
             o.childCount
         );

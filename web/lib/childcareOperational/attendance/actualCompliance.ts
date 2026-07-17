@@ -16,7 +16,11 @@
  * (a placeholder, not a failure) and a staff_data_unavailable warning is emitted.
  */
 
-import { requiredStaffForChildren, type RatioTier } from "@/lib/childcareOperational/config/ratioRules";
+import { type RatioTier } from "@/lib/childcareOperational/config/ratioRules";
+// Staffing resolves through the canonical Ratio surface (Operational Calculation
+// truth runtime), keeping expected (L3) and actual (L4) on one resolver. Parity is
+// byte-identical for single-room tier lists; gated by canonicalRatioParity.test.ts.
+import { resolveRequiredStaffForChildren } from "@/lib/childcareOperational/capacity/resolveRatio";
 import { effectiveAttendanceEvents } from "@/lib/childcareOperational/attendance/attendanceFold";
 import type { ChildAttendanceEventRow } from "@/lib/childcareOperational/attendance/attendanceTypes";
 
@@ -113,7 +117,7 @@ export function computeActualStaffingByRoomDate(
     resolveTiers: (roomLocationId: string, date: string) => readonly RatioTier[]
 ): ActualStaffingEntry[] {
     return occupancy.map((o) => {
-        const { requiredStaff, exceedsDefinedTiers } = requiredStaffForChildren(
+        const { requiredStaff, exceedsDefinedTiers } = resolveRequiredStaffForChildren(
             resolveTiers(o.roomLocationId, o.date),
             o.childCount
         );
