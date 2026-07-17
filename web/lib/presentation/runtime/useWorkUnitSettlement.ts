@@ -7,62 +7,87 @@
  * snapshot (D4); its reserved regions — laid-out but value-less — are what Settlement fills. Settlement
  * enriches the operational world; it never constructs it.
  *
- * Governing: runtime-implementation-authorization.md — U-S5 (KPI values are Settlement), and the
- * Settlement boundary rendered in `workUnitSurfaceModelFromSnapshot.ts` ("`pending: true` is the whole
- * Settlement contract in one flag: the slot is laid out now; D5 fills it").
+ * Governing: runtime-implementation-authorization.md — U-S5 (KPI values), U-S6 (view counts, queue
+ * total), U-S7 (right-rail actions), all Settlement; and the Settlement boundary rendered in
+ * `workUnitSurfaceModelFromSnapshot.ts` ("`pending: true` is the whole Settlement contract in one
+ * flag: the slot is laid out now; D5 fills it").
  *
- * WHAT THIS OWNS: the Work Unit header KPI VALUES. The committed model carries the KPI GEOMETRY
- * (slot, label, icon, accent, sourceKey) with `pending: true` and no value; this hook resolves the
- * value for each slot's `sourceKey` and hands it back so the renderer drops it into the ALREADY
- * reserved slot — a value that never flashed a placeholder that then flips to a number.
+ * WHAT THIS OWNS — the four reserved regions of the committed Work Unit surface:
+ *   - KPI VALUES (U-S5): each header slot's `sourceKey`, resolved WU-scoped through the deduped OIP
+ *     warm cache the Workspace surface already uses.
+ *   - WORK VIEW COUNTS (U-S6): each pill count, from the SERVER-RESOLVED count locator (D1's
+ *     `settlement.workViewCountTargets`) fed straight to `useWorkViewTotalsState` — the one canonical,
+ *     deduped, batched count owner. The client NEVER recomputes a location or reads config.
+ *   - QUEUE TOTAL (U-S6): the active lens's authoritative total — the SAME location as its pill count,
+ *     so it costs no extra request. This is the total, never the returned page length.
+ *   - RIGHT-RAIL ACTIONS (U-S7): the deferred secondary actions, from the server-resolved right-rail
+ *     locator (`settlement.rightRailTarget`) via the existing right-rail bundle. This never touches the
+ *     snapshot-owned primary Action, Current Work, Context Frame, or Record of Attention.
  *
- * DISCIPLINE (the Settlement rules, enforced by construction):
- *   - Never gates commit — this hook runs on the ALREADY-committed snapshot; the operational model is
- *     built and rendered without ever consulting it (see `useCommittedWorkUnitSurfaceRuntime`).
- *   - Never constructs / reconstructs — it returns VALUES, not geometry or surfaces. The merge is a
- *     field overlay onto the reserved slot; nothing remounts.
- *   - No duplicate requests — resolution reuses `useOperationalAnswers`, the OIP warm cache the
- *     Workspace surface already uses: snapshot seed, shared subscribe, SWR prefetch, all deduped by a
- *     scope key of (siteId, workUnitId, keys). Two surfaces asking for the same scope share one fetch.
- *   - Never changes operational truth — it touches only `formattedValue`/`pending` on KPI slots.
- *
- * NOT YET SETTLED (bounded, and deliberately NOT forced): Work View pill counts, queue total, and the
- * right-rail actions are ALSO reserved on this surface. Filling them needs a per-lens canonical count
- * location (host work unit + base queue key) and the work unit's department id — server-resolved facts
- * the FROZEN D1 answer does not carry (its `workUnit` is `{id,key,name}`; its `lensSet` is
- * `{id,label,displayOrder}`). Settling them cleanly wants those locators emitted by D1 once, NOT a
- * client re-fetch of the config bundle (that would re-introduce the four-request waterfall D4 deleted
- * and risk the very duplicate requests this layer forbids). That is a D1-carries-settlement-locators
- * item, out of scope while D1 is frozen — recorded here rather than hacked around.
+ * DISCIPLINE (the Settlement rules, by construction):
+ *   - Never gates commit — every value here is resolved on the ALREADY-committed snapshot; the
+ *     operational model is built and rendered without ever consulting Settlement.
+ *   - Never constructs / reconstructs — returns VALUES, not geometry or surfaces; the merge is a field
+ *     overlay onto reserved slots. If D1's locators are `unavailable`, Settlement fills nothing and
+ *     reports honest region states — the surface stays operational.
+ *   - No duplicate requests — KPIs reuse the OIP warm cache; counts/total reuse `useWorkViewTotals`
+ *     (batched, session-cached, SWR-deduped); the right-rail fetch is deduped by `dedupeAdminFetch`.
+ *   - No client configuration waterfall / no QueueService — the client only consumes RESOLVED locators.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { useOperationalAnswers } from "./useOperationalAnswers";
+import {
+    useWorkViewTotalsState,
+    workViewTotalKey,
+    type WorkViewTotalTarget,
+} from "./useWorkViewTotals";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { isKnownOipMetricKey } from "@/lib/metrics/registry";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { WorkUnitSurfaceModel } from "./types";
+
+/** Honest per-region state — quiet at pending/error (reserved geometry), value at resolved. */
+export type SettlementRegionStatus = "pending" | "resolved" | "empty" | "error";
 
 export type WorkUnitSettlement = {
     /** KPI values keyed by OipMetricKey (the slot `sourceKey`). Null until the first resolve lands. */
     kpiValues: ResolvedMetricMap | null;
+    /** Work View counts keyed by workViewId (host resolution already applied). */
+    viewCounts: Map<string, number | null>;
+    /** The active lens's authoritative total. */
+    queueTotal: number | null;
+    /** Deferred right-rail secondary actions. Null until fetched. */
+    rightRailActions: ResolvedActionForClient[] | null;
+    /** Baked right-rail scope for the command rail (from the server locator). */
+    departmentId: string | null;
+    workUnitId: string | null;
+    /** Honest states, one per reserved region. */
+    regions: {
+        kpi: SettlementRegionStatus;
+        counts: SettlementRegionStatus;
+        queueTotal: SettlementRegionStatus;
+        rightRail: SettlementRegionStatus;
+    };
 };
+
+const EMPTY_COUNTS = new Map<string, number | null>();
 
 /** Resolve the deferred values for a committed Work Unit surface. Null snapshot → nothing to settle. */
 export function useWorkUnitSettlement(snapshot: ProvisioningAnswer | null): WorkUnitSettlement {
-    // `error` carries no reserved regions to fill (no lens, no subject, no KPI); everything else does.
+    // `error` carries no reserved regions to fill; operational/empty do.
     const operational = snapshot && snapshot.terminal !== "error" ? snapshot : null;
     const workUnitId = operational?.workUnit.id ?? null;
+    const locators = operational?.settlement ?? null;
 
-    // Metrics may be site-filtered on the Workspace; scope to the same site so a KPI reads the same
-    // value the operator saw one surface ago. Optional context — absent outside the workspace tree.
     const siteFilter = useWorkspaceSiteFilter();
     const siteId = siteFilter?.selectedSiteId ?? null;
 
-    // The value keys to resolve = the committed header slots' source identifiers. Distinct + known only:
-    // an unknown key would resolve to nothing and only widen the request.
-    const keys = useMemo<OipMetricKey[]>(() => {
+    // ── KPI VALUES (U-S5). Keys = the committed header slots' source identifiers. ──
+    const kpiKeys = useMemo<OipMetricKey[]>(() => {
         if (!operational) return [];
         const seen = new Set<string>();
         const out: OipMetricKey[] = [];
@@ -75,34 +100,172 @@ export function useWorkUnitSettlement(snapshot: ProvisioningAnswer | null): Work
         }
         return out;
     }, [operational]);
+    const { resolved: kpiValues, settled: kpiSettled } = useOperationalAnswers({ siteId, workUnitId, keys: kpiKeys });
 
-    const { resolved } = useOperationalAnswers({ siteId, workUnitId, keys });
-    return { kpiValues: resolved };
+    // ── WORK VIEW COUNTS + QUEUE TOTAL (U-S6). Targets come STRAIGHT from D1's resolved locators. ──
+    const targets = useMemo<WorkViewTotalTarget[]>(() => {
+        if (!locators || locators.status !== "resolved") return [];
+        return locators.workViewCountTargets.map((t) => ({
+            viewId: t.workViewId,
+            workUnitId: t.hostWorkUnitId,
+            baseQueueKey: t.baseQueueKey,
+        }));
+    }, [locators]);
+    const totalsState = useWorkViewTotalsState({
+        targets,
+        selectedSiteId: siteId,
+        enabled: targets.length > 0,
+    });
+
+    // Re-key totals by workViewId (the canonical host is folded in), so the merge is a plain view lookup.
+    const viewCounts = useMemo<Map<string, number | null>>(() => {
+        if (!locators || locators.status !== "resolved" || targets.length === 0) return EMPTY_COUNTS;
+        const out = new Map<string, number | null>();
+        for (const t of locators.workViewCountTargets) {
+            out.set(t.workViewId, totalsState.totals.get(workViewTotalKey(t.hostWorkUnitId, t.workViewId)) ?? null);
+        }
+        return out;
+    }, [locators, targets.length, totalsState.totals]);
+
+    const queueTotal = useMemo<number | null>(() => {
+        if (!locators || locators.status !== "resolved" || !locators.queueTotalTarget) return null;
+        const q = locators.queueTotalTarget;
+        return totalsState.totals.get(workViewTotalKey(q.hostWorkUnitId, q.workViewId)) ?? null;
+    }, [locators, totalsState.totals]);
+
+    // ── RIGHT-RAIL ACTIONS (U-S7). Deferred secondary actions from the resolved right-rail locator. ──
+    const rightRailTarget = locators && locators.status === "resolved" ? locators.rightRailTarget : null;
+    const rightRailKey = rightRailTarget ? `${rightRailTarget.departmentId}|${rightRailTarget.workUnitId}` : null;
+    const [rightRail, setRightRail] = useState<{ key: string; actions: ResolvedActionForClient[] } | { key: string; error: true } | null>(null);
+    const rightRailArmed = useRef<string | null>(null);
+    useEffect(() => {
+        if (!rightRailTarget || !rightRailKey) return;
+        if (rightRailArmed.current === rightRailKey) return; // dedup: same surface, already fetching/fetched
+        rightRailArmed.current = rightRailKey;
+        const ctrl = new AbortController();
+        const url =
+            `/api/admin/actions/right-rail-bundle?department_id=${encodeURIComponent(rightRailTarget.departmentId)}` +
+            `&work_unit_id=${encodeURIComponent(rightRailTarget.workUnitId)}`;
+        void dedupeAdminFetch(url, { signal: ctrl.signal })
+            .then(async (res) => {
+                if (!res.ok) throw new Error(`right-rail ${res.status}`);
+                const body = (await res.json()) as { actions?: ResolvedActionForClient[] };
+                if (!ctrl.signal.aborted) setRightRail({ key: rightRailKey, actions: body.actions ?? [] });
+            })
+            .catch(() => {
+                // Settlement error is quiet: the rail keeps its reserved anchor; commit is untouched.
+                if (!ctrl.signal.aborted) setRightRail({ key: rightRailKey, error: true });
+            });
+        return () => ctrl.abort();
+    }, [rightRailTarget, rightRailKey]);
+    // The right-rail slot for THIS surface (ignore a stale result from a previous surface).
+    const rightRailForSurface = rightRail && rightRailKey && rightRailKey === rightRail.key ? rightRail : null;
+    const rightRailActions = rightRailForSurface && "actions" in rightRailForSurface ? rightRailForSurface.actions : null;
+
+    // ── Honest per-region states. Pending and error are visually quiet (reserved geometry). ──
+    const regions = useMemo<WorkUnitSettlement["regions"]>(() => {
+        const locatorsResolved = !!locators && locators.status === "resolved";
+        // When locators are absent the snapshot has none yet (pending); when present but `unavailable`,
+        // that region genuinely cannot settle (error) — but the surface stays operational regardless.
+        const locatorFailState: SettlementRegionStatus = locators ? "error" : "pending";
+
+        const kpi: SettlementRegionStatus =
+            kpiKeys.length === 0 ? "empty" : kpiValues && kpiSettled ? "resolved" : "pending";
+
+        const counts: SettlementRegionStatus = !locatorsResolved
+            ? locatorFailState
+            : targets.length === 0
+              ? "empty"
+              : totalsState.settled
+                ? "resolved"
+                : "pending";
+
+        const queueTotal: SettlementRegionStatus = !locatorsResolved
+            ? locatorFailState
+            : !locators.queueTotalTarget
+              ? "empty"
+              : totalsState.settled
+                ? "resolved"
+                : "pending";
+
+        const rightRail: SettlementRegionStatus = !locatorsResolved
+            ? locatorFailState
+            : !locators.rightRailTarget
+              ? "empty"
+              : rightRailForSurface === null
+                ? "pending"
+                : "error" in rightRailForSurface
+                  ? "error"
+                  : rightRailForSurface.actions.length > 0
+                    ? "resolved"
+                    : "empty";
+
+        return { kpi, counts, queueTotal, rightRail };
+    }, [locators, kpiKeys.length, kpiValues, kpiSettled, targets.length, totalsState.settled, rightRailForSurface]);
+
+    return {
+        kpiValues,
+        viewCounts,
+        queueTotal,
+        rightRailActions,
+        departmentId: rightRailTarget?.departmentId ?? null,
+        workUnitId,
+        regions,
+    };
 }
 
 /**
  * Overlay settled values onto the reserved model. PURE — a field merge, never a rebuild.
  *
- * Returns the SAME model reference when nothing has settled or nothing matched, so the operational
- * first paint re-renders zero times until a real value is in hand; then it fills the reserved KPI slot
- * (`pending: false`) without touching any other field — no operational truth, no geometry, no reflow.
+ * Returns the SAME model reference when nothing has settled, so the operational first paint re-renders
+ * zero times until a real value is in hand; then it fills reserved slots (KPI value, pill count, queue
+ * total, right-rail actions) without touching any operational field — no operational truth, no geometry,
+ * no reflow. The snapshot-owned primary Action is never touched.
  */
 export function mergeWorkUnitSettlement(
     model: WorkUnitSurfaceModel,
     settlement: WorkUnitSettlement,
 ): WorkUnitSurfaceModel {
-    const kpiValues = settlement.kpiValues;
-    if (!kpiValues) return model;
-
     let changed = false;
-    const kpis = model.header.kpis.map((k) => {
-        const item = k.sourceKey ? kpiValues[k.sourceKey as OipMetricKey] : undefined;
-        // Only a resolved value with real text fills the slot; a no-data resolve leaves it reserved
-        // rather than flipping it to an empty string that reads as "loaded but blank".
-        if (!item || !item.formatted_value) return k;
+
+    // KPI VALUES.
+    let kpis = model.header.kpis;
+    if (settlement.kpiValues) {
+        kpis = model.header.kpis.map((k) => {
+            const item = k.sourceKey ? settlement.kpiValues![k.sourceKey as OipMetricKey] : undefined;
+            if (!item || !item.formatted_value) return k;
+            changed = true;
+            return { ...k, formattedValue: item.formatted_value, pending: false };
+        });
+    }
+
+    // WORK VIEW COUNTS.
+    let workViews = model.workViews;
+    if (settlement.viewCounts.size > 0) {
+        workViews = model.workViews.map((v) => {
+            const c = settlement.viewCounts.get(v.id);
+            if (typeof c !== "number") return v;
+            changed = true;
+            return { ...v, count: c };
+        });
+    }
+
+    // QUEUE TOTAL — authoritative total, distinct from the returned page length (`rows`).
+    let queue = model.queue;
+    if (typeof settlement.queueTotal === "number" && settlement.queueTotal !== model.queue.totalCount) {
         changed = true;
-        return { ...k, formattedValue: item.formatted_value, pending: false };
-    });
+        queue = { ...model.queue, totalCount: settlement.queueTotal };
+    }
+
+    // RIGHT-RAIL ACTIONS (secondary only — the snapshot-owned primary Action is elsewhere and untouched).
+    let rightRailActions = model.rightRailActions;
+    let departmentId = model.departmentId;
+    if (settlement.rightRailActions && settlement.rightRailActions.length > 0) {
+        changed = true;
+        rightRailActions = settlement.rightRailActions;
+        departmentId = settlement.departmentId ?? model.departmentId;
+    }
+
     if (!changed) return model;
-    return { ...model, header: { ...model.header, kpis } };
+    return { ...model, header: { ...model.header, kpis }, workViews, queue, rightRailActions, departmentId };
 }
