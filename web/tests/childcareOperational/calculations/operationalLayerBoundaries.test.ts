@@ -53,14 +53,16 @@ function offenders(relRoots: readonly string[], pattern: RegExp): string[] {
 
 describe("operational layer boundaries", () => {
     it("the truth runtime never imports the frozen Operational Expectations ledger", () => {
-        expect(offenders(["lib/childcareOperational"], AUTHORED_LEDGER_IMPORT)).toEqual([]);
+        expect(
+            offenders(["lib/operationalCalculations", "lib/childcareOperational"], AUTHORED_LEDGER_IMPORT),
+        ).toEqual([]);
     });
 
     it("the analytics calculation registry never imports the frozen Operational Expectations ledger", () => {
         expect(offenders(["lib/analytics/calculations"], AUTHORED_LEDGER_IMPORT)).toEqual([]);
     });
 
-    it("the scheduling calculation family never imports the analytics/OIP scalar registry", () => {
-        expect(offenders(["lib/childcareOperational/calculations"], ANALYTICS_CALC_IMPORT)).toEqual([]);
+    it("the Operational Calculations truth runtime never imports the analytics/OIP scalar registry", () => {
+        expect(offenders(["lib/operationalCalculations"], ANALYTICS_CALC_IMPORT)).toEqual([]);
     });
 });

@@ -8,9 +8,9 @@
  * throws on an unregistered key (the generalized `isKnownOipMetricKey` gate,
  * doc 05 §8.3). A key that names math that does not exist cannot resolve.
  *
- * V1 registers exactly one family (Resource Requirements & Capacity). Adding a
- * future family is a registration — append its Definitions here — never a
- * redesign of this module.
+ * Registered families: Resource Requirements & Capacity (V1) and Scheduling &
+ * Occupancy (Phase 6). Adding a future family is a registration — append its
+ * Definitions here — never a redesign of this module.
  *
  * Governing architecture (frozen):
  *   docs/sprints/07_2026/operational-calculations-architecture/05-registration-architecture.md
@@ -22,6 +22,7 @@ import type {
 } from "@/lib/operationalCalculations/definition";
 import type { OperationalCalculationFamily } from "@/lib/operationalCalculations/resultContract";
 import { RESOURCE_AND_CAPACITY_DEFINITIONS } from "@/lib/operationalCalculations/families/resourceRequirementsAndCapacity";
+import { SCHEDULING_DEFINITIONS } from "@/lib/operationalCalculations/families/scheduling";
 
 /**
  * The registered families, in registration order. Future families are appended
@@ -29,6 +30,7 @@ import { RESOURCE_AND_CAPACITY_DEFINITIONS } from "@/lib/operationalCalculations
  */
 const REGISTERED_DEFINITIONS: readonly OperationalCalculationDefinition[] = [
     ...RESOURCE_AND_CAPACITY_DEFINITIONS,
+    ...SCHEDULING_DEFINITIONS,
 ];
 
 function buildRegistry(

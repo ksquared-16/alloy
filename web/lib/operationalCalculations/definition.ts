@@ -50,6 +50,10 @@ export const SUPPORTED_RULE_SHAPES = [
     "fixed_ratio",
     "capacity_kind",
     "licensed_ceiling",
+    // Schedule-derived facts (occupancy from committed schedule assignments +
+    // placements) are not config-rule shaped. Added as the Scheduling family
+    // registered (doc: the closed set extends in code as new families register).
+    "schedule_derived",
 ] as const;
 
 export type CalculationRuleShape = (typeof SUPPORTED_RULE_SHAPES)[number];

@@ -126,16 +126,20 @@ const capBase: CapacityCalculationRequest["params"] = {
 
 // ---------------------------------------------------------------------------
 
-describe("registry — the four keys are registered and resolution fails closed", () => {
-    it("registers exactly the four V1 keys", () => {
+describe("registry — the registered keys resolve and resolution fails closed", () => {
+    it("registers the resource/capacity family (V1) plus the scheduling/occupancy family (Phase 6)", () => {
         const keys = listOperationalCalculationDefinitions()
             .map((d) => d.key)
             .sort();
         expect(keys).toEqual([
             "capacity.remaining",
             "capacity.room_binding",
+            "occupancy.actual",
+            "occupancy.expected",
             "resource.ratio",
             "resource.required_staff",
+            "scheduling.actual_staffing",
+            "scheduling.expected_staffing",
         ]);
     });
 
@@ -155,7 +159,10 @@ describe("registry — the four keys are registered and resolution fails closed"
             "capacity.room_binding",
         ]);
         expect(listOperationalCalculationDefinitionsByFamily("resource_requirements")).toHaveLength(2);
-        expect(listOperationalCalculationDefinitionsByConsumer("scheduling")).toHaveLength(4);
+        expect(listOperationalCalculationDefinitionsByFamily("occupancy")).toHaveLength(2);
+        expect(listOperationalCalculationDefinitionsByFamily("scheduling")).toHaveLength(2);
+        // All four resource/capacity defs plus all four scheduling/occupancy defs declare `scheduling`.
+        expect(listOperationalCalculationDefinitionsByConsumer("scheduling")).toHaveLength(8);
     });
 
     it("every registered definition carries the V1 governance core", () => {
