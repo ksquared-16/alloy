@@ -35,7 +35,7 @@ function ActionGroup({
                 {label}
             </p>
             <CommandRailExecutableActionList
-                actions={actions.map(({ group: _g, ...action }) => ({
+                actions={actions.map((action) => ({
                     ...action,
                     emphasized: action.emphasized ?? label === "Fix now",
                     "data-testid": action["data-testid"] ?? `locations-rail-${action.id}`,
@@ -78,7 +78,7 @@ export function LocationsCommandRailActions({ actions }: { actions: LocationsRai
                             </button>
                             {moreOpen ?
                                 <CommandRailExecutableActionList
-                                    actions={more.map(({ group: _g, ...action }) => ({
+                                    actions={more.map((action) => ({
                                         ...action,
                                         "data-testid": action["data-testid"] ?? `locations-rail-${action.id}`,
                                     }))}
