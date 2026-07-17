@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
@@ -103,6 +103,26 @@ The Configuration Runtime is the platform-owned layer that sits beneath all conf
 
 Future domains inherit the Locations experience grammar and consume the relevant control-plane primitives proven by Commercial. These are complementary references, not competing implementations.
 
+### Organization Configuration Runtime
+
+The Organization Configuration Runtime is the organization-owned layer above Locations. Its landing is `/settings/organization`; its implementation contract is `../../system/organization-configuration-runtime-v1.md`.
+
+It owns the reusable control contract, not domain payloads:
+
+- one system-of-record home and configuration owner per area;
+- platform → organization → location value resolution with explicit value presence;
+- availability/assignment kept distinct from value inheritance;
+- confirmed-save vs explicit-publish behavior;
+- distribution modes: inherit, assignment, apply, or none;
+- provider-gated, published-revision Apply plans with deterministic retry identity;
+- cross-location posture that preserves **Not assessed** when a domain has not supplied evidence.
+
+Domains keep their authoritative tables, validation, mutation paths, and runtime consumers. No generic JSON configuration store sits between Organization Runtime and those systems.
+
+**Apply is not inheritance.** Inherited values continue to resolve from their owner. Apply durably creates or updates Location-owned objects through a registered domain provider. The action remains hidden until that provider can return an audit id, the authoritative published revision, and a result for every selected Location.
+
+Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
+
 ### Primitives NOT yet extracted (deferred)
 
 These belong to the Configuration Runtime eventually but are only Commercial-specific today:
@@ -111,7 +131,7 @@ These belong to the Configuration Runtime eventually but are only Commercial-spe
 - Bulk rate operations
 - Compare locations
 - Impact analysis
-- Change preview / publish flow
+- Domain-specific change preview / publish authoring
 
 ---
 
@@ -123,7 +143,7 @@ The Settings index (`/settings`) is a **compact configuration table of contents*
 
 | Chapter | Primary entries |
 |---------|-----------------|
-| Organization | Locations, Access, Communications |
+| Organization | Organization settings, Locations, Access, Communications |
 | Data Model | Entities, Fields, Statuses, Operational Calculations |
 | Operations | Processes, Surfaces, Automation |
 | Business | Commercial |

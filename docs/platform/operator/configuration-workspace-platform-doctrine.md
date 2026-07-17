@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: [docs/system/configuration-workspace-doctrine.md, docs/system/configuration-workspace-v1-doctrine.md]
 ---
 
@@ -301,9 +301,9 @@ Locations demonstrates the whole platform: an **organization landing** (configur
 
 **Reference Overview behavior:** the first row answers “What is this object?” with a two-thirds operational glance and a one-third readiness explanation. The second row answers “What needs me?” with equal-weight Attention and owned-capability regions. Attention keeps problem, impact, and action together. Capability state is explicit rather than inferred from decorative cards. Empty Attention disappears rather than manufacturing healthy filler.
 
-Future Organization-owned Program, Schedule, and Tour Pattern creation may apply authoritative patterns to Locations through a registered copy/apply provider. That evolution reuses this object workspace; it does not move Location-owned mutations into the Organization UI or introduce an optimistic “Apply” action before a durable provider exists.
+Organization Runtime V1 now owns the shared declaration and provider boundary for future Organization-owned Program, Schedule, and Tour Pattern creation. Authoritative patterns may apply to Locations only after their domain registers a durable copy/apply provider. That evolution reuses this object workspace; it does not move Location-owned mutations into the Organization UI or introduce an optimistic “Apply” action before a durable provider exists.
 
-Organization Runtime inherits the workspace grammar, not Location-specific nouns or storage. Organization owns reusable pattern creation and target selection; Locations owns the applied child objects and their authoritative local read surfaces. Apply must be durable, auditable, response-confirmed, and idempotent enough to retry safely before it is exposed.
+Organization Runtime inherits the workspace grammar, not Location-specific nouns or storage. Its landing is `/settings/organization`. Organization owns reusable pattern creation and target selection; Locations owns the applied child objects and their authoritative local read surfaces. Apply must be published-revision-only, durable, auditable, response-confirmed for every selected Location, and deterministic enough to retry safely before it is exposed. Until a domain supplies resolved governance evidence, the landing says **Not assessed** rather than inferring inheritance or compliance.
 
 Implementation primitives live under `web/components/adminV2/settings/configurationRuntime/workspace/` and `LocationsCommandRailActions` (shell registration). Commercial, Communications, Scheduling, Staffing, Billing, and future Settings modules should compose them rather than inventing parallel UX.
 
@@ -354,7 +354,7 @@ Future engineers **must not** build:
 
 - **Supersedes** `../../system/configuration-workspace-doctrine.md` (which named Data Model / `/settings/fields` as *the* reference implementation) and `../../system/configuration-workspace-v1-doctrine.md` (ownership-domain IA). Their still-valid ownership rules are carried forward above and in `configuration-ownership-doctrine.md`. The reference implementation for the configuration *experience* is now **Locations**; earlier docs' reference surfaces (Data Model, Processes) remain valid **examples** of the plane/domain model but are no longer the experiential reference.
 - **Object-centric reframes plane-centric, at a different layer.** The four-plane control-plane model (Fields/Grouping/Surfaces/Actions) governs *what a configuration object's sections may contain*; this doctrine governs *how the operator experiences the object*. They are orthogonal layers, not competitors.
-- **Open reconciliation (flagged, not resolved here):** the frozen surface-ownership matrix (`configuration-ownership-doctrine.md`) and the proposed four-owner + inheritance model (`../core/configuration-ownership-and-inheritance.md`) use different owner taxonomies. This doctrine consumes ownership from whichever the platform ratifies; the two ownership docs must be reconciled before Locations implementation begins.
+- **Reconciled (Organization Runtime V1):** the frozen surface-ownership matrix names the one authoring home; the ratified four-owner model (`../core/configuration-ownership-and-inheritance.md`) separates business, operational, configuration, and runtime responsibility. Its configuration owner must equal that authoring home, so it creates no second edit surface.
 
 ---
 

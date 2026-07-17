@@ -9,7 +9,7 @@ supersedes: []
 
 **Status:** Frozen — July 2026
 
-Configuration Runtime V1 is **frozen**. All operator Configuration surfaces use a single shared shell and ownership model. **Locations is the reference implementation for Configuration Runtime V1.** The next implementation consumer is Organization Configuration Runtime and the Settings landing experience; it inherits this model rather than redesigning it.
+Configuration Runtime V1 is **frozen**. All operator Configuration surfaces use a single shared shell and ownership model. **Locations is the reference implementation for Configuration Runtime V1.** Organization Configuration Runtime is the first post-freeze implementation consumer; it inherits this model rather than redesigning it.
 
 Locations is feature-frozen after this closeout. Further Locations work is limited to bug fixes, security fixes, and corrections required to preserve the frozen contracts.
 
@@ -20,6 +20,7 @@ Locations is feature-frozen after this closeout. Further Locations work is limit
 | Page | Route |
 |------|-------|
 | Settings index | `/settings` |
+| Organization | `/settings/organization` |
 | Processes | `/settings/processes` |
 | Statuses | `/settings/statuses` |
 | Fields | `/settings/fields` |
@@ -28,6 +29,8 @@ Locations is feature-frozen after this closeout. Further Locations work is limit
 | Locations | `/settings/locations` |
 
 Future surfaces (Surfaces, Operational Intelligence, Automation) inherit the same shell — no page-specific layout hacks.
+
+Organization Configuration Runtime owns shared ownership, inheritance, publication, distribution, and cross-location governance contracts above Locations. See `organization-configuration-runtime-v1.md`.
 
 ## Shell geometry (frozen)
 

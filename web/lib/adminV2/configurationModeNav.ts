@@ -10,6 +10,7 @@ const settings = adminSettingsSubpathHref;
 export type ConfigurationPlatformSectionId = "organization" | "data_model" | "operations" | "business";
 
 export type ConfigurationModeNavIcon =
+    | "organization"
     | "processes"
     | "layouts"
     | "fields"
@@ -48,6 +49,13 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         label: "Organization",
         description: "Manage the foundation of your organization.",
         items: [
+            {
+                href: settings("organization"),
+                label: "Organization settings",
+                description: "Shared configuration, ownership, inheritance, and location governance.",
+                icon: "organization",
+                testId: "config-mode-nav-organization",
+            },
             {
                 href: settings("locations"),
                 label: "Locations",

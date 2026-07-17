@@ -65,8 +65,8 @@ export const CONFIGURATION_JOURNEY_STEPS = [
     {
         step: 1,
         label: "Organization",
-        summary: "Locations, access, and communications.",
-        href: settings("locations"),
+        summary: "Shared configuration, locations, access, and communications.",
+        href: settings("organization"),
     },
     {
         step: 2,
@@ -94,6 +94,12 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         label: "Organization",
         description: "Who uses the system and where.",
         items: [
+            {
+                href: settings("organization"),
+                label: "Organization settings",
+                description: "Shared configuration, ownership, inheritance, and location governance.",
+                emphasis: true,
+            },
             {
                 href: settings("locations"),
                 label: "Locations",
