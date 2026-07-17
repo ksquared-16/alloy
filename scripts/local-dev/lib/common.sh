@@ -6,6 +6,13 @@ set -euo pipefail
 
 ALLOY_LOCAL_DEV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Shared Read Core — the single implementation of read interpretation. The
+# mutation runtime layers its side-effecting behaviour (config sourcing, mkdir,
+# git mutation, process control) ABOVE these read-only primitives. See
+# lib/read-core.sh and SHARED-READ-CORE.md.
+# shellcheck source=lib/read-core.sh
+source "${ALLOY_LOCAL_DEV_ROOT}/lib/read-core.sh"
+
 alloy_die() {
   printf 'error: %s\n' "$*" >&2
   exit 1
@@ -32,8 +39,9 @@ alloy_iso_now() {
 }
 
 # Production default runtime root (path name only — never secrets).
+# Delegates to the Shared Read Core so the default lives in exactly one place.
 alloy_default_runtime_root() {
-  printf '%s/.local/state/alloy-dev' "$HOME"
+  alloy_rc_default_runtime_root
 }
 
 # Derive every runtime subdirectory from the single authoritative root.
@@ -105,12 +113,14 @@ alloy_load_config() {
   fi
   alloy_resolve_runtime_paths "$ALLOY_RUNTIME_ROOT"
   export ALLOY_CONFIG_FILE
-  ALLOY_MAX_AGENTS="${ALLOY_MAX_AGENTS:-6}"
-  ALLOY_CANONICAL_PORT="${ALLOY_CANONICAL_PORT:-3000}"
-  ALLOY_FIRST_AGENT_PORT="${ALLOY_FIRST_AGENT_PORT:-3011}"
-  ALLOY_BASE_REMOTE="${ALLOY_BASE_REMOTE:-origin}"
-  ALLOY_BASE_BRANCH="${ALLOY_BASE_BRANCH:-staging}"
-  ALLOY_WEB_DIR="${ALLOY_WEB_DIR:-web}"
+  # Default constants come from the Shared Read Core (one source of truth), so
+  # the inspection and mutation runtimes can never disagree on a default.
+  ALLOY_MAX_AGENTS="${ALLOY_MAX_AGENTS:-$ALLOY_RC_DEFAULT_MAX_AGENTS}"
+  ALLOY_CANONICAL_PORT="${ALLOY_CANONICAL_PORT:-$ALLOY_RC_DEFAULT_CANONICAL_PORT}"
+  ALLOY_FIRST_AGENT_PORT="${ALLOY_FIRST_AGENT_PORT:-$ALLOY_RC_DEFAULT_FIRST_AGENT_PORT}"
+  ALLOY_BASE_REMOTE="${ALLOY_BASE_REMOTE:-$ALLOY_RC_DEFAULT_BASE_REMOTE}"
+  ALLOY_BASE_BRANCH="${ALLOY_BASE_BRANCH:-$ALLOY_RC_DEFAULT_BASE_BRANCH}"
+  ALLOY_WEB_DIR="${ALLOY_WEB_DIR:-$ALLOY_RC_DEFAULT_WEB_DIR}"
   ALLOY_PM="${ALLOY_PM:-npm}"
   NODE_OPTIONS_DEFAULT="${NODE_OPTIONS_DEFAULT:---max-old-space-size=4096}"
   ALLOY_CLEAN_ARTIFACT_AGE_HOURS="${ALLOY_CLEAN_ARTIFACT_AGE_HOURS:-24}"
@@ -263,9 +273,9 @@ alloy_write_kv_file() {
 #
 # Trust rule: a surface may state only what it read. An absent field must read
 # as absent, never as the last slot that had one.
-ALLOY_OPTIONAL_METADATA_FIELDS="ALLOY_AGENT_ROLE ALLOY_AGENT_STATUS ALLOY_AGENT_INSTRUCTIONS \
-ALLOY_AGENT_OPENED_AT ALLOY_AGENT_CLOSED_AT ALLOY_SPRINT_NAME ALLOY_SPRINT_OBJECTIVE \
-ALLOY_WORKER_LIFECYCLE ALLOY_PROVIDER_SESSION_ID ALLOY_PAUSE_RECORDED_AT ALLOY_FINISHED_AT"
+# The canonical field list lives in the Shared Read Core (single schema); this
+# is a reference to it, not a second copy.
+ALLOY_OPTIONAL_METADATA_FIELDS="$ALLOY_RC_METADATA_OPTIONAL_FIELDS"
 
 alloy_reset_optional_metadata() {
   local key
@@ -291,32 +301,15 @@ alloy_load_metadata() {
   [[ -n "${ALLOY_AGENT:-}" ]] || alloy_die "metadata missing ALLOY_AGENT for $name"
 }
 
+# Metadata discovery is owned by the Shared Read Core. (The slot lookup there
+# PARSES metadata rather than sourcing it — same result, and it removes an
+# executable-file source from this path.)
 alloy_list_metadata_names() {
-  local f base
-  shopt -s nullglob
-  for f in "$ALLOY_METADATA_DIR"/*.env; do
-    base="$(basename "$f" .env)"
-    printf '%s\n' "$base"
-  done
-  shopt -u nullglob
+  alloy_rc_list_metadata "$ALLOY_METADATA_DIR"
 }
 
 alloy_find_metadata_by_slot() {
-  local slot="$1"
-  local name meta_slot
-  while IFS= read -r name; do
-    [[ -n "$name" ]] || continue
-    meta_slot="$(
-      # shellcheck disable=SC1090
-      source "$(alloy_metadata_path "$name")"
-      printf '%s' "${ALLOY_WORKTREE_SLOT:-}"
-    )"
-    if [[ "$meta_slot" == "$slot" ]]; then
-      printf '%s\n' "$name"
-      return 0
-    fi
-  done < <(alloy_list_metadata_names)
-  return 1
+  alloy_rc_resolve_slot "$ALLOY_METADATA_DIR" "$1"
 }
 
 # Normalize a git remote URL for comparison: scp-style and URL forms of the
@@ -438,16 +431,7 @@ alloy_base_ref_status() {
 }
 
 alloy_port_listener_pid() {
-  local port="$1"
-  local line pid
-  if alloy_have_cmd lsof; then
-    line="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $2}' || true)"
-    if [[ -n "${line:-}" ]]; then
-      printf '%s\n' "$line"
-      return 0
-    fi
-  fi
-  return 1
+  alloy_rc_port_pid "$1"
 }
 
 alloy_port_in_use() {
@@ -541,35 +525,16 @@ alloy_worktree_is_dirty() {
   [[ -n "$out" ]]
 }
 
-# Filtered porcelain (ignores agent marker files). stdout only.
+# Dirty-state evaluation (the "ignore agent marker + next-env.d.ts" business
+# rule) is owned by the Shared Read Core, so the mutation and inspection runtimes
+# can never classify the same worktree differently.
 alloy_worktree_dirty_porcelain() {
-  local path="$1"
-  local out
-  out="$(alloy_git "$path" status --porcelain 2>/dev/null || true)"
-  printf '%s\n' "$out" | grep -vE '^\?\? \.env\.local\.agent$' || true
+  alloy_rc_dirty_porcelain "$1"
 }
 
 # stdout: clean | next-env-only | dirty
-# next-env-only: sole dirty path is ALLOY_WEB_DIR/next-env.d.ts (Next.js dev regeneration).
 alloy_worktree_dirty_classification() {
-  local path="$1"
-  local web_rel="${ALLOY_WEB_DIR:-web}/next-env.d.ts"
-  local out line file_path
-  out="$(alloy_worktree_dirty_porcelain "$path")"
-  if [[ -z "$out" ]]; then
-    printf 'clean'
-    return
-  fi
-  while IFS= read -r line; do
-    [[ -n "$line" ]] || continue
-    file_path="${line:3}"
-    if [[ "$file_path" == "$web_rel" ]]; then
-      continue
-    fi
-    printf 'dirty'
-    return
-  done <<<"$out"
-  printf 'next-env-only'
+  alloy_rc_dirty_classification "$1" "${ALLOY_WEB_DIR:-web}"
 }
 
 alloy_current_branch() {
@@ -586,30 +551,14 @@ alloy_dir_size() {
   fi
 }
 
-# Raw byte size of a regular file (BSD stat -f %z, GNU stat -c %s). Never reads contents.
+# Raw byte size of a regular file. Owned by the Shared Read Core.
 alloy_file_byte_size() {
-  local path="$1"
-  local bytes=""
-  [[ -f "$path" ]] || return 1
-  bytes="$(stat -f '%z' "$path" 2>/dev/null || stat -c '%s' "$path" 2>/dev/null || true)"
-  [[ -n "$bytes" ]] || return 1
-  printf '%s' "$bytes"
+  alloy_rc_file_bytes "$1"
 }
 
+# Human-readable IEC size. Owned by the Shared Read Core (identical contract).
 alloy_human_bytes() {
-  local bytes="$1"
-  [[ "$bytes" =~ ^[0-9]+$ ]] || return 1
-  if alloy_have_cmd numfmt; then
-    numfmt --to=iec-i --suffix=B "$bytes" 2>/dev/null && return 0
-  fi
-  # Portable fallback when numfmt is unavailable (common on macOS).
-  awk -v b="$bytes" 'BEGIN {
-    split("B KB MB GB TB", u, " ");
-    i = 1; v = b + 0;
-    while (v >= 1024 && i < 5) { v /= 1024; i++ }
-    if (i == 1) printf "%d%s\n", v, u[i];
-    else printf "%.1f%s\n", v, u[i];
-  }'
+  alloy_rc_human_bytes "$1"
 }
 
 # Human-readable size for a file or directory. Never reads file contents.

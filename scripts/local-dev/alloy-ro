@@ -91,23 +91,17 @@ verb_root() {
     toplevel="$(_ro_resolve_dir "$(alloy_ro_git_toplevel "$here")")"
   fi
 
+  # Classification is owned by the Shared Read Core (same implementation as
+  # alloy-root); this interface keeps its own detail wording.
   local class detail sanctioned=0
-  if [[ -z "$toplevel" ]]; then
-    class="outside"; detail="not inside a git repository"
-  elif [[ "$toplevel" == "$canon" ]]; then
-    class="canonical"; detail="the canonical repository"; sanctioned=1
-  elif [[ "$toplevel" == "$wt_root"/* ]]; then
-    class="managed-worktree"; detail="a managed worktree under ALLOY_WORKTREE_ROOT"; sanctioned=1
-  else
-    class="unmanaged"; detail="a git repository that is neither canonical nor a managed worktree"
-    local r rr
-    for r in $retired_roots; do
-      rr="$(_ro_resolve_dir "$r")"
-      if [[ "$toplevel" == "$rr" || "$toplevel" == "$rr"/* ]]; then
-        class="retired"; detail="a RETIRED engineering root"; break
-      fi
-    done
-  fi
+  class="$(alloy_rc_classify_root "$toplevel" "$canon" "$wt_root" "$retired_roots")"
+  case "$class" in
+    outside)          detail="not inside a git repository" ;;
+    canonical)        detail="the canonical repository"; sanctioned=1 ;;
+    managed-worktree) detail="a managed worktree under ALLOY_WORKTREE_ROOT"; sanctioned=1 ;;
+    retired)          detail="a RETIRED engineering root" ;;
+    unmanaged)        detail="a git repository that is neither canonical nor a managed worktree" ;;
+  esac
 
   local branch="?" remote="(no remote)" ab="?/?"
   if [[ -n "$toplevel" ]]; then

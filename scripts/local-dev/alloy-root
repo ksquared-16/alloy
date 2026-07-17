@@ -77,33 +77,17 @@ main() {
   canon="$(resolve_dir "${ALLOY_REPO:-/nonexistent}")"
   wt_root="$(resolve_dir "${ALLOY_WORKTREE_ROOT:-/nonexistent}")"
 
-  local class="outside" detail="" sanctioned=0
-  if [[ -z "$toplevel" ]]; then
-    class="outside"
-    detail="not inside a git repository"
-  elif [[ "$toplevel" == "$canon" ]]; then
-    class="canonical"
-    detail="the canonical repository"
-    sanctioned=1
-  elif [[ "$toplevel" == "$wt_root"/* ]]; then
-    class="managed-worktree"
-    detail="a managed worktree under ALLOY_WORKTREE_ROOT"
-    sanctioned=1
-  else
-    local retired
-    for retired in $ALLOY_RETIRED_ROOTS; do
-      retired="$(resolve_dir "$retired")"
-      if [[ "$toplevel" == "$retired" || "$toplevel" == "$retired"/* ]]; then
-        class="retired"
-        detail="a RETIRED engineering root — see docs/platform/governance/agent-repo-boundaries.md §1"
-        break
-      fi
-    done
-    if [[ "$class" != "retired" ]]; then
-      class="unmanaged"
-      detail="a git repository that is neither the canonical repo nor a managed worktree"
-    fi
-  fi
+  # Classification is owned by the Shared Read Core; this command keeps its own
+  # presentation (detail strings, sanctioned wording).
+  local class detail="" sanctioned=0
+  class="$(alloy_rc_classify_root "$toplevel" "$canon" "$wt_root" "$ALLOY_RETIRED_ROOTS")"
+  case "$class" in
+    outside)          detail="not inside a git repository" ;;
+    canonical)        detail="the canonical repository"; sanctioned=1 ;;
+    managed-worktree) detail="a managed worktree under ALLOY_WORKTREE_ROOT"; sanctioned=1 ;;
+    retired)          detail="a RETIRED engineering root — see docs/platform/governance/agent-repo-boundaries.md §1" ;;
+    unmanaged)        detail="a git repository that is neither the canonical repo nor a managed worktree" ;;
+  esac
 
   if [[ "$quiet" -eq 1 ]]; then
     printf '%s\n' "$class"
