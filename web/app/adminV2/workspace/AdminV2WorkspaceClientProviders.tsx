@@ -15,6 +15,7 @@ import { OperationalModeEntryProvider } from "@/lib/adminV2/runtime/operationalS
 import { WorkspaceRouteVmProvider } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
 import { EMPTY_WORKSPACE_ROUTE_VM, type WorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 import { SurfaceHostProvider } from "@/lib/experience/surfaceHost/SurfaceHostContext";
+import { RuntimeKernelProvider } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import type { CSSProperties, ReactNode } from "react";
 
 interface AdminV2WorkspaceClientProvidersProps {
@@ -108,11 +109,22 @@ export default function AdminV2WorkspaceClientProviders({
                     style={workspaceScrollStyle}
                   >
                     <WorkspaceRouteVmProvider value={workspaceRouteVm}>
-                      {/* Surface Host (NAV-1 (A)) — the canonical client-context owner of
-                          operational-surface focus. Always mounted; no flag, no parallel mode.
-                          Phase 1 is inert by implementation: a passive observer of surface state
-                          (renders children unchanged, no render takeover, no nav interception). */}
-                      <SurfaceHostProvider>{children}</SurfaceHostProvider>
+                      {/* THE RUNTIME KERNEL — mounted ABOVE the Surface Host and OUTSIDE the route
+                          subtree, so exactly ONE AttentionOwner / ProvisioningRuntime / FocusOwner
+                          governs both retained surfaces and survives every Workspace ⇄ Work Unit
+                          movement. Mounting it inside either surface would recreate the kernel on
+                          navigation and destroy the retention it exists to provide.
+                          tenant/principal are the retention boundary: a retained context may never
+                          cross a tenant. */}
+                      <RuntimeKernelProvider
+                        tenant={typeof orgId === "string" ? orgId : ""}
+                        principal={principalUserId ?? ""}
+                      >
+                        {/* Surface Host (NAV-1 (A)) — the canonical client-context owner of
+                            operational-surface focus. Always mounted; no flag, no parallel mode.
+                            It now assigns surface roles from COMMITTED FOCUS, not the pathname. */}
+                        <SurfaceHostProvider>{children}</SurfaceHostProvider>
+                      </RuntimeKernelProvider>
                     </WorkspaceRouteVmProvider>
                   </div>
                   <AdminEntityDrawer />

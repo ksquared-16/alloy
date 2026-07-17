@@ -3,7 +3,7 @@
  * Only WorkUnitSurface calls the runtime hook; everything else is a pure presenter.
  */
 
-export { WorkUnitSurface } from "./WorkUnitSurface";
+export { WorkUnitSurfaceBodyFromModel } from "./WorkUnitSurface";
 export { WorkUnitHeader } from "./WorkUnitHeader";
 export { WorkViewPillStrip } from "./WorkViewPillStrip";
 export { QueueRegion } from "./QueueRegion";

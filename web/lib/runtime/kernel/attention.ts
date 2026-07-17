@@ -20,6 +20,9 @@
  * therefore expressed as ordinal depth, and the Law of Scope Supersession is a comparison on it.
  */
 
+/** The Workspace surface's attention target. It is a place the operator attends, like any other. */
+export const WORKSPACE_ATTENTION_TARGET = "workspace";
+
 /** SURFACE ⊃ LENS ⊃ SUBJECT ⊃ ASPECT — coarser is a smaller number (Kernel :153). */
 export const ATTENTION_SCOPE = { SURFACE: 0, LENS: 1, SUBJECT: 2, ASPECT: 3 } as const;
 export type AttentionScope = (typeof ATTENTION_SCOPE)[keyof typeof ATTENTION_SCOPE];
@@ -286,16 +289,31 @@ export function attentionFromUrl(
     source: AttentionHydration["source"] = "direct_url",
 ): AttentionHydration | null {
     const m = url.pathname.match(/\/workspace\/work-unit\/([^/?#]+)/);
-    if (!m) return null;
-    return {
-        tenant: identity.tenant,
-        principal: identity.principal,
-        target: decodeURIComponent(m[1]),
-        lens: url.searchParams.get("work_view_id"),
-        subject: url.searchParams.get("subject_id"),
-        aspect: url.searchParams.get("aspect"),
-        source,
-    };
+    if (m) {
+        return {
+            tenant: identity.tenant,
+            principal: identity.principal,
+            target: decodeURIComponent(m[1]),
+            lens: url.searchParams.get("work_view_id"),
+            subject: url.searchParams.get("subject_id"),
+            aspect: url.searchParams.get("aspect"),
+            source,
+        };
+    }
+    // The Workspace is a surface too. A cold /workspace must establish attention, or the operator's
+    // first gesture would have no context to move FROM.
+    if (/\/workspace\/?$/.test(url.pathname)) {
+        return {
+            tenant: identity.tenant,
+            principal: identity.principal,
+            target: WORKSPACE_ATTENTION_TARGET,
+            lens: null,
+            subject: null,
+            aspect: null,
+            source,
+        };
+    }
+    return null;
 }
 
 /** The projection K3 commits to history in D4. Committed Focus → URL; never the reverse. */

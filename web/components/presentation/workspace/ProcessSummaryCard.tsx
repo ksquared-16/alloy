@@ -1,4 +1,5 @@
 "use client";
+import type { MouseEvent as ReactMouseEvent } from "react";
 
 /**
  * Presentation Runtime V2 — WS.PROCESS_SUMMARY_CARD.
@@ -43,6 +44,9 @@ import {
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { WorkViewList } from "./WorkViewList";
+import { useRuntimeKernelOptional } from "@/lib/runtime/kernel/RuntimeKernelContext";
+import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { ProcessCardGlyph } from "./ProcessCardGlyph";
 import {
     WS_KPI_CARD_CHROME,
@@ -200,6 +204,27 @@ export function ProcessSummaryCard({
     );
     const warm = () => {
         if (slug) void warmWorkUnitSlugRoute(slug, "workspace_tile");
+    };
+
+    // ── THE OPERATOR GESTURE — K1, not the router. ──
+    // Normal activation is an ATTENTION MOVEMENT: it is accepted and acknowledged synchronously,
+    // K2 begins preparing immediately, and the Workspace yields — all before any navigation could
+    // have committed. The router is never allowed to reveal the destination; reveal belongs to K3
+    // and only a K2 terminal may cause it.
+    // Modifier/middle clicks fall through to the browser deliberately: opening a new tab is a
+    // request for a NEW DOCUMENT, which hydrates its own attention from the URL on cold load
+    // (Art 2.4). Keyboard activation arrives here as a click, so pointer and keyboard share this
+    // one adapter.
+    const kernel = useRuntimeKernelOptional();
+    const { orgId, principalUserId } = useWorkspaceOrg();
+    const onGesture = (e: ReactMouseEvent<HTMLAnchorElement>) => {
+        if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        // No attention yet (the Workspace has not hydrated) → let the browser navigate. A gesture is
+        // never a URL read, so it must not hydrate; the destination document will hydrate itself.
+        if (!kernel || !slug || !orgId || !kernel.attention.get()) return;
+        e.preventDefault();
+        const lens = new URL(drillHref, "http://x").searchParams.get("work_view_id");
+        kernel.attention.move({ scope: ATTENTION_SCOPE.SURFACE, target: slug, lens, source: "pointer" });
     };
 
     const todaysWork = useMemo(
@@ -369,12 +394,17 @@ export function ProcessSummaryCard({
                     ) : (
                         <Link
                             href={drillHref}
-                            // Heavy Work Unit route — never eagerly prefetch on viewport (a wall of
-                            // process cards would storm the router). Warming is intentional only:
-                            // the deduped `warm` fires on pointer/focus intent.
+                            // The href stays: it is the honest ADDRESS of the destination, so
+                            // copy-link, open-in-new-tab and modifier-click keep working through the
+                            // browser (a new document hydrates attention from the URL on cold load —
+                            // Art 2.4). But normal in-app activation is an ATTENTION MOVEMENT, not a
+                            // navigation: `onGesture` preventDefaults and enters K1 instead. The
+                            // router must never reveal the Work Unit, because reveal belongs to K3
+                            // and only a K2 terminal may cause it.
                             prefetch={false}
                             aria-label={`Open ${process.label}`}
                             data-process-cta
+                            onClick={onGesture}
                             onPointerEnter={warm}
                             onPointerDown={warm}
                             onFocus={warm}
