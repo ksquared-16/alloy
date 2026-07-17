@@ -2,20 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin } from "lucide-react";
+import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
     ConfigurationContext,
     ConfigurationEmptyState,
-    ConfigurationQueue,
+    ConfigurationPrimaryButton,
     ConfigurationQueueItem,
+    ConfigurationSecondaryButton,
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
+    ConfigChildObjectMasterDetail,
     ConfigObjectHeader,
     ConfigScopeContextBar,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
+import LocationRoomCreatePanel from "@/components/adminV2/settings/locations/LocationRoomCreatePanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
@@ -59,6 +62,7 @@ export default function LocationsConfigurationPage({
     const { canMutate } = useAdminAuth();
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
+    const [creatingRoom, setCreatingRoom] = useState(false);
     const [creatingSchedule, setCreatingSchedule] = useState(false);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
         Record<string, Partial<Record<"tours" | "placement" | "access", boolean>>>
@@ -249,6 +253,8 @@ export default function LocationsConfigurationPage({
         setSelectedId(locationId);
         setEditingSite(false);
         setCreatingSite(false);
+        setCreatingRoom(false);
+        setCreatingSchedule(false);
         setActiveTab(tab);
         router.replace(locationWorkspaceHref(locationId, tab));
     };
@@ -256,6 +262,7 @@ export default function LocationsConfigurationPage({
     const returnToFleet = () => {
         setSelectedId(null);
         setEditingSite(false);
+        setCreatingRoom(false);
         setCreatingSchedule(false);
         setActiveTab("overview");
         router.replace(locationsFleetHref());
@@ -265,6 +272,7 @@ export default function LocationsConfigurationPage({
         if (!selectedSite) return;
         setActiveTab(tab);
         setEditingSite(false);
+        setCreatingRoom(false);
         setCreatingSchedule(false);
         router.replace(locationWorkspaceHref(selectedSite.id, tab, itemId));
     };
@@ -285,18 +293,12 @@ export default function LocationsConfigurationPage({
 
     const addRoom = () => {
         if (!selectedSite || !canMutate) return;
-        void (async () => {
-            try {
-                const newId = await createRoomUnit(
-                    selectedSite.id,
-                    `Room ${(selectedRooms.length + 1).toString()}`,
-                );
-                setSelectedRoomId(newId);
-                navigate("rooms", newId);
-            } catch (e) {
-                setError(e instanceof Error ? e.message : "Failed to add room");
-            }
-        })();
+        setActiveTab("rooms");
+        setEditingSite(false);
+        setCreatingSchedule(false);
+        setCreatingRoom(true);
+        setError(null);
+        router.replace(locationWorkspaceHref(selectedSite.id, "rooms"));
     };
 
     const addProgram = () => {
@@ -451,28 +453,91 @@ export default function LocationsConfigurationPage({
                     canMutate={canMutate}
                     onSave={patchLocation}
                     rooms={selectedRooms}
-                    selectedRoomId={effectiveRoomId}
+                    selectedRoomId={creatingRoom ? null : effectiveRoomId}
                     onSelectRoom={(roomId) => {
                         setSelectedRoomId(roomId);
                         navigate("rooms", roomId);
                     }}
                     onAddRoom={canMutate ? addRoom : undefined}
+                    locationHasSchedule={selectedSchedules.length > 0}
+                    scheduleSummary={scheduleSummary}
+                    createDetail={
+                        creatingRoom ?
+                            <LocationRoomCreatePanel
+                                siteLabel={model?.displayName ?? ""}
+                                programOptions={programOptionsForSite(selectedSite.id)}
+                                ageUnitSelectOptions={ageUnitSelectOptions}
+                                onCancel={() => setCreatingRoom(false)}
+                                onCreate={async (input) => {
+                                    const newId = await createRoomUnit(selectedSite.id, input);
+                                    setCreatingRoom(false);
+                                    setSelectedRoomId(newId);
+                                    navigate("rooms", newId);
+                                }}
+                            />
+                        :   undefined
+                    }
                 />
             );
         }
         if (activeTab === "schedule") {
             return (
                 <div className="space-y-3" data-testid="locations-schedule">
-                    <section className="process-config-setup-card p-4" data-testid="locations-schedule-patterns">
-                        <div>
-                            <h3 className="config-typo-workspace-title">Schedule Patterns</h3>
-                            <p className="config-typo-sublabel mt-1">
-                                Reusable weekly attendance patterns offered by this location. Use Actions to add a
-                                pattern.
-                            </p>
-                        </div>
-                        <div className="mt-4">
-                            {creatingSchedule ?
+                    <ConfigChildObjectMasterDetail
+                        listTitle="Schedule patterns"
+                        listSummary={`${selectedSchedules.length} ${
+                            selectedSchedules.length === 1 ? "pattern" : "patterns"
+                        }`}
+                        testId="locations-schedule-patterns"
+                        listActions={
+                            canMutate ?
+                                <ConfigurationPrimaryButton
+                                    className="px-2 py-1 text-[11px]"
+                                    onClick={() => setCreatingSchedule(true)}
+                                    data-testid="locations-schedule-add"
+                                >
+                                    + Add pattern
+                                </ConfigurationPrimaryButton>
+                            :   null
+                        }
+                        list={
+                            selectedSchedules.length > 0 ?
+                                selectedSchedules.map((schedule) => {
+                                    const selected = schedule.id === effectiveScheduleId && !creatingSchedule;
+                                    return (
+                                        <ConfigurationQueueItem
+                                            key={schedule.id}
+                                            variant="rail"
+                                            active={selected}
+                                            muted={!schedule.is_active}
+                                            title={schedule.label}
+                                            subtitle={`${schedule.is_active ? "Active" : "Inactive"} · ${formatWeekdaySelection(schedule.weekdays)}`}
+                                            leading={
+                                                <span
+                                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                                                        !schedule.is_active ?
+                                                            "bg-alloy-midnight/[0.04] text-alloy-midnight/35"
+                                                        : selected ?
+                                                            "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine"
+                                                        :   "bg-alloy-midnight/[0.04] text-alloy-bend-pine"
+                                                    }`}
+                                                >
+                                                    <CalendarDays className="h-4 w-4" strokeWidth={2} />
+                                                </span>
+                                            }
+                                            onClick={() => {
+                                                setCreatingSchedule(false);
+                                                setSelectedScheduleId(schedule.id);
+                                                navigate("schedule", schedule.id);
+                                            }}
+                                            testId={`locations-schedule-${schedule.id}`}
+                                        />
+                                    );
+                                })
+                            :   <p className="config-typo-sublabel">No recurring patterns yet.</p>
+                        }
+                        detail={
+                            creatingSchedule ?
                                 <LocationSchedulePatternCreatePanel
                                     locationId={selectedSite.id}
                                     onCancel={() => setCreatingSchedule(false)}
@@ -483,55 +548,43 @@ export default function LocationsConfigurationPage({
                                         navigate("schedule", created.id);
                                     }}
                                 />
-                            :   <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
-                                    <ConfigurationQueue title="Schedule patterns">
-                                        <div className="divide-y divide-alloy-stone/18 border-t border-alloy-stone/20">
-                                            {selectedSchedules.length > 0 ?
-                                                selectedSchedules.map((schedule) => (
-                                                    <ConfigurationQueueItem
-                                                        key={schedule.id}
-                                                        variant="rail"
-                                                        active={schedule.id === effectiveScheduleId}
-                                                        title={schedule.label}
-                                                        subtitle={formatWeekdaySelection(schedule.weekdays)}
-                                                        onClick={() => {
-                                                            setSelectedScheduleId(schedule.id);
-                                                            navigate("schedule", schedule.id);
-                                                        }}
-                                                        testId={`locations-schedule-${schedule.id}`}
-                                                    />
-                                                ))
-                                            :   <p className="config-typo-sublabel px-2 py-3">
-                                                    Set weekly hours to get started.
-                                                </p>}
-                                        </div>
-                                    </ConfigurationQueue>
-                                    <LocationScheduleTemplateDetailPanel
-                                        pattern={selectedSchedule}
-                                        siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
-                                        canMutate={canMutate}
-                                        onUpdated={(row) => {
-                                            setSchedulePatterns((prev) =>
-                                                prev.map((p) => (p.id === row.id ? row : p)),
-                                            );
-                                        }}
-                                        onError={setError}
-                                    />
-                                </div>
-                            }
-                        </div>
-                    </section>
+                            :   <LocationScheduleTemplateDetailPanel
+                                    pattern={selectedSchedule}
+                                    siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
+                                    canMutate={canMutate}
+                                    onUpdated={(row) => {
+                                        setSchedulePatterns((prev) =>
+                                            prev.map((pattern) => (pattern.id === row.id ? row : pattern)),
+                                        );
+                                    }}
+                                    onError={setError}
+                                />
+                        }
+                    />
 
                     <section className="process-config-setup-card p-4" data-testid="locations-schedule-closures">
-                        <div>
-                            <h3 className="config-typo-workspace-title">Closures / Holidays</h3>
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="config-typo-workspace-title">Closures and exceptions</h3>
+                                <p className="config-typo-sublabel mt-1">
+                                    Date-specific changes stay distinct from recurring weekly patterns.
+                                </p>
+                            </div>
+                            <ConfigurationSecondaryButton
+                                disabled
+                                title="Closure records are not available in the current schedule provider."
+                                data-testid="locations-schedule-add-closure"
+                            >
+                                Add closure
+                            </ConfigurationSecondaryButton>
+                        </div>
+                        <div className="mt-4 rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-3">
+                            <p className="text-sm font-medium text-alloy-midnight">No closure provider available</p>
                             <p className="config-typo-sublabel mt-1">
-                                Full-day closures and holiday exceptions belong to this location.
+                                Add Closure is unavailable until date-specific exceptions have an authoritative
+                                persistence source.
                             </p>
                         </div>
-                        <p className="config-typo-sublabel mt-4">
-                            No date-specific closure records are available in the current schedule configuration.
-                        </p>
                     </section>
                 </div>
             );

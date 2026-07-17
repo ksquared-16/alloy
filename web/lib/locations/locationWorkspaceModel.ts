@@ -364,7 +364,7 @@ export function buildLocationWorkspaceModel(params: {
     const setupItems: LocationWorkspaceSetupItem[] = [
         {
             key: "general",
-            label: "General",
+            label: "Location details",
             tab: "general",
             complete: generalComplete,
         },

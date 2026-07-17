@@ -118,7 +118,7 @@ export function LocationOverviewSurface({
                         data-testid="locations-setup-progress"
                         data-config-surface="region"
                     >
-                        <div className="mb-2 flex items-start justify-between gap-3">
+                        <div className="mb-2">
                             <div className="min-w-0">
                                 <h2
                                     className={
@@ -135,19 +135,6 @@ export function LocationOverviewSurface({
                                     </p>
                                 :   null}
                             </div>
-                            {model.setupPercent < 100 ?
-                                <div
-                                    className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-                                    style={{
-                                        background: `conic-gradient(#00a283 ${model.setupPercent}%, rgba(89,103,139,0.12) 0)`,
-                                    }}
-                                    aria-hidden
-                                >
-                                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-alloy-midnight">
-                                        {model.setupPercent}%
-                                    </div>
-                                </div>
-                            :   null}
                         </div>
                         <ConfigOperationalReadiness
                             percent={model.setupPercent}
@@ -229,7 +216,7 @@ export function LocationOverviewSurface({
                         >
                             {readyPct > 0 ?
                                 <span
-                                    className="h-full bg-[#00a283]"
+                                    className="h-full bg-alloy-bend-pine"
                                     style={{ width: `${readyPct}%` }}
                                 />
                             :   null}
@@ -242,7 +229,7 @@ export function LocationOverviewSurface({
                         </div>
                         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-alloy-midnight/55">
                             <span className="inline-flex items-center gap-1.5">
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#00a283]" aria-hidden />
+                                <span className="h-1.5 w-1.5 rounded-full bg-alloy-bend-pine" aria-hidden />
                                 Ready: {roomsWithCapacity}
                             </span>
                             <span className="inline-flex items-center gap-1.5">

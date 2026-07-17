@@ -35,6 +35,12 @@ export const LOCATION_CONFIG_SECTIONS: { key: LocationConfigSection; label: stri
     { key: "operational_rules", label: "Operational Rules" },
 ];
 
+export type LocationRoomCreateInput = {
+    label: string;
+    is_active: boolean;
+    metadata: Record<string, unknown>;
+};
+
 function isSite(row: LocationHierarchyRow): boolean {
     return String(row.location_type ?? "").trim() === "site";
 }
@@ -279,12 +285,13 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
     );
 
     const createRoomUnit = useCallback(
-        async (siteId: string, label: string): Promise<string> => {
+        async (siteId: string, input: LocationRoomCreateInput): Promise<string> => {
             const payload = {
                 location_type: "unit",
                 parent_location_id: siteId,
-                label: label.trim() || "New room",
-                is_active: true,
+                label: input.label.trim() || "New room",
+                is_active: input.is_active,
+                metadata: input.metadata,
             };
             const res = await fetch("/api/admin/locations", {
                 method: "POST",

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { DoorOpen } from "lucide-react";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
@@ -13,8 +14,10 @@ import {
 } from "@/lib/locations/locationWorkspaceModel";
 import {
     ConfigurationEmptyState,
+    ConfigurationInlineButton,
     ConfigurationPrimaryButton,
     ConfigurationQueueItem,
+    ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     CONFIG_OBJECT_CELL,
@@ -30,6 +33,9 @@ function roomAttention(params: {
     capacity: string;
     programKey: string;
     thresholds: StaffingThreshold[];
+    ageFrom: string;
+    ageTo: string;
+    locationHasSchedule: boolean;
 }): ConfigAttentionItem[] {
     const items: ConfigAttentionItem[] = [];
     if (!params.capacity.trim()) {
@@ -59,6 +65,24 @@ function roomAttention(params: {
             nextLabel: "Add staffing",
         });
     }
+    if (!params.ageFrom.trim() && !params.ageTo.trim()) {
+        items.push({
+            key: "age",
+            grade: "improve",
+            label: "Age range is not set",
+            consequence: "Operators cannot confirm who this room serves.",
+            nextLabel: "Set age range",
+        });
+    }
+    if (!params.locationHasSchedule) {
+        items.push({
+            key: "hours",
+            grade: "improve",
+            label: "Location hours are not set",
+            consequence: "This room has no recurring operating pattern to inherit.",
+            nextLabel: "Set location hours",
+        });
+    }
     return items;
 }
 
@@ -73,6 +97,9 @@ export default function LocationRoomDetailPanel({
     selectedRoomId,
     onSelectRoom,
     onAddRoom,
+    locationHasSchedule,
+    scheduleSummary,
+    createDetail,
 }: {
     room: LocationHierarchyRow | null;
     siteLabel: string;
@@ -84,6 +111,9 @@ export default function LocationRoomDetailPanel({
     selectedRoomId: string | null;
     onSelectRoom: (roomId: string) => void;
     onAddRoom?: () => void;
+    locationHasSchedule: boolean;
+    scheduleSummary: string;
+    createDetail?: ReactNode;
 }) {
     const [label, setLabel] = useState("");
     const [capacity, setCapacity] = useState("");
@@ -142,6 +172,9 @@ export default function LocationRoomDetailPanel({
         capacity,
         programKey,
         thresholds: configuredThresholds,
+        ageFrom,
+        ageTo,
+        locationHasSchedule,
     });
     const programLabel =
         programOptions.find((program) => program.key === programKey)?.label ??
@@ -167,7 +200,8 @@ export default function LocationRoomDetailPanel({
     };
 
     const detail =
-        !room ?
+        createDetail ? createDetail
+        : !room ?
             rooms.length === 0 ?
                 <ConfigurationEmptyState
                     testId="locations-room-workspace-empty"
@@ -198,50 +232,29 @@ export default function LocationRoomDetailPanel({
                     status={{ label: "Editing", tone: "attention" }}
                     facts={[programLabel ?? "", siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                     actions={
-                        <button
-                            type="button"
-                            className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                        <ConfigurationSecondaryButton
                             onClick={cancelEdit}
                             data-testid="locations-room-cancel-edit"
                         >
                             Cancel
-                        </button>
+                        </ConfigurationSecondaryButton>
                     }
                     testId="locations-room-header"
                 />
 
                 <div className="space-y-2.5" data-testid="locations-room-editor">
                     <ConfigEditorSection title="Identity" testId="locations-room-editor-identity">
-                        <div className="grid gap-2.5 sm:grid-cols-2">
-                            <label className="block space-y-1">
-                                <span className="config-typo-field-label">Name</span>
-                                <input
-                                    type="text"
-                                    value={label}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setLabel(e.target.value)}
-                                    className="config-runtime-input"
-                                    data-testid="locations-room-name"
-                                />
-                            </label>
-                            <label className="block space-y-1">
-                                <span className="config-typo-field-label">Program</span>
-                                <select
-                                    value={programKey}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setProgramKey(e.target.value)}
-                                    className="config-runtime-select"
-                                    data-testid="locations-room-program"
-                                >
-                                    <option value="">—</option>
-                                    {programOptions.map((p) => (
-                                        <option key={p.id} value={p.key}>
-                                            {p.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                        </div>
+                        <label className="block max-w-md space-y-1">
+                            <span className="config-typo-field-label">Name</span>
+                            <input
+                                type="text"
+                                value={label}
+                                disabled={!canMutate}
+                                onChange={(e) => setLabel(e.target.value)}
+                                className="config-runtime-input"
+                                data-testid="locations-room-name"
+                            />
+                        </label>
                         <label className="flex items-center gap-2">
                             <input
                                 type="checkbox"
@@ -255,12 +268,35 @@ export default function LocationRoomDetailPanel({
                     </ConfigEditorSection>
 
                     <ConfigEditorSection
-                        title="Capacity / participation"
-                        description="How many children this room can hold, and staffing thresholds."
+                        title="Program participation"
+                        description="The program this room serves."
+                        testId="locations-room-editor-program"
+                    >
+                        <label className="block max-w-md space-y-1">
+                            <span className="config-typo-field-label">Program</span>
+                            <select
+                                value={programKey}
+                                disabled={!canMutate}
+                                onChange={(e) => setProgramKey(e.target.value)}
+                                className="config-runtime-select"
+                                data-testid="locations-room-program"
+                            >
+                                <option value="">Not assigned</option>
+                                {programOptions.map((program) => (
+                                    <option key={program.id} value={program.key}>
+                                        {program.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </ConfigEditorSection>
+
+                    <ConfigEditorSection
+                        title="Capacity"
+                        description="How many children this room can hold."
                         testId="locations-room-editor-capacity"
                     >
-                        <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)]">
-                            <label className="block space-y-1">
+                        <label className="block max-w-36 space-y-1">
                                 <span className="config-typo-field-label">Capacity</span>
                                 <input
                                     type="number"
@@ -271,8 +307,15 @@ export default function LocationRoomDetailPanel({
                                     className="config-runtime-input"
                                     data-testid="locations-room-capacity"
                                 />
-                            </label>
-                            <div className="space-y-2" data-testid="locations-room-ratio-thresholds">
+                        </label>
+                    </ConfigEditorSection>
+
+                    <ConfigEditorSection
+                        title="Staffing thresholds"
+                        description="How staffing scales with the number of children."
+                        testId="locations-room-editor-staffing"
+                    >
+                        <div className="space-y-2" data-testid="locations-room-ratio-thresholds">
                                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                                     <span className="config-typo-field-label">Staffing thresholds</span>
                                     <span className="config-typo-meta">Staff → max children</span>
@@ -344,9 +387,7 @@ export default function LocationRoomDetailPanel({
                                         :   null}
                                     </div>
                                 ))}
-                                <button
-                                    type="button"
-                                    className="text-xs font-medium text-[#007d68] disabled:opacity-40"
+                                <ConfigurationInlineButton
                                     disabled={!canMutate}
                                     onClick={() =>
                                         setStaffingThresholds((current) => [
@@ -360,8 +401,7 @@ export default function LocationRoomDetailPanel({
                                     data-testid="locations-room-ratio-add-threshold"
                                 >
                                     + Add staffing threshold
-                                </button>
-                            </div>
+                                </ConfigurationInlineButton>
                         </div>
                     </ConfigEditorSection>
 
@@ -404,7 +444,11 @@ export default function LocationRoomDetailPanel({
                         description="Rooms follow this location’s weekly hours."
                         testId="locations-room-editor-schedule"
                     >
-                        <p className="text-sm text-alloy-midnight/75">Uses {siteLabel} hours</p>
+                        <p className="text-sm text-alloy-midnight/75">
+                            {locationHasSchedule ?
+                                `Uses ${siteLabel} hours · ${scheduleSummary}`
+                            :   "Location hours are not set up yet"}
+                        </p>
                     </ConfigEditorSection>
 
                     {error ?
@@ -487,14 +531,12 @@ export default function LocationRoomDetailPanel({
                             >
                                 {saving ? "Saving…" : "Save room"}
                             </ConfigurationPrimaryButton>
-                            <button
-                                type="button"
-                                className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-medium text-alloy-midnight/65"
+                            <ConfigurationSecondaryButton
                                 onClick={cancelEdit}
                                 disabled={saving}
                             >
                                 Cancel
-                            </button>
+                            </ConfigurationSecondaryButton>
                         </div>
                     :   null}
                 </div>
@@ -507,14 +549,12 @@ export default function LocationRoomDetailPanel({
                     facts={[programLabel ?? "", siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                     actions={
                         canMutate ?
-                            <button
-                                type="button"
-                                className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                            <ConfigurationSecondaryButton
                                 onClick={beginEdit}
                                 data-testid="locations-room-toggle-edit"
                             >
-                                Adjust room
-                            </button>
+                                Edit room
+                            </ConfigurationSecondaryButton>
                         :   null
                     }
                     testId="locations-room-header"
@@ -566,9 +606,12 @@ export default function LocationRoomDetailPanel({
                         {
                             key: "hours",
                             label: "Hours",
-                            value: "Location hours",
-                            hint: `Uses ${siteLabel} hours`,
-                            tone: "ready",
+                            value: locationHasSchedule ? "Location hours" : "Not set",
+                            hint:
+                                locationHasSchedule ?
+                                    `${scheduleSummary} · uses ${siteLabel} hours`
+                                :   "Set recurring location hours",
+                            tone: locationHasSchedule ? "ready" : "attention",
                         },
                         {
                             key: "status",
@@ -610,17 +653,16 @@ export default function LocationRoomDetailPanel({
     return (
         <ConfigChildObjectMasterDetail
             listTitle="Rooms"
-            listSummary="Capacity per room"
+            listSummary={`${rooms.length} ${rooms.length === 1 ? "room" : "rooms"}`}
             listActions={
                 canMutate && onAddRoom ?
-                    <button
-                        type="button"
-                        className="text-xs font-semibold text-[#007d68]"
+                    <ConfigurationPrimaryButton
+                        className="px-2 py-1 text-[11px]"
                         onClick={onAddRoom}
                         data-testid="locations-room-add"
                     >
-                        + Add
-                    </button>
+                        + Add room
+                    </ConfigurationPrimaryButton>
                 :   null
             }
             testId="locations-rooms"
@@ -628,13 +670,34 @@ export default function LocationRoomDetailPanel({
                 rooms.length > 0 ?
                     rooms.map((entry) => {
                         const md = readLocationMetadataPresentation(entry.metadata);
+                        const inactive = entry.is_active === false;
+                        const selected = entry.id === selectedRoomId;
+                        const setupSignal =
+                            !md.capacity ? "Needs capacity"
+                            : !md.category ? "Needs program"
+                            : !md.student_teacher_ratio ? "Needs staffing"
+                            :   `${md.capacity} capacity`;
                         return (
                             <ConfigurationQueueItem
                                 key={entry.id}
                                 variant="rail"
-                                active={entry.id === selectedRoomId}
+                                active={selected}
                                 title={String(entry.label ?? "").trim() || "Untitled room"}
-                                subtitle={md.capacity ? `${md.capacity} capacity` : "No capacity"}
+                                subtitle={`${inactive ? "Inactive" : "Active"} · ${setupSignal}`}
+                                muted={inactive}
+                                leading={
+                                    <span
+                                        className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                                            inactive ?
+                                                "bg-alloy-midnight/[0.04] text-alloy-midnight/35"
+                                            : selected ?
+                                                "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine"
+                                            :   "bg-alloy-midnight/[0.04] text-alloy-bend-pine"
+                                        }`}
+                                    >
+                                        <DoorOpen className="h-4 w-4" strokeWidth={2} />
+                                    </span>
+                                }
                                 onClick={() => onSelectRoom(entry.id)}
                                 testId={`locations-room-${entry.id}`}
                             />

@@ -1,5 +1,6 @@
 "use client";
 
+import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type { LocationsFleetModel } from "@/lib/locations/locationWorkspaceModel";
 
@@ -61,7 +62,7 @@ export default function LocationsFleetLanding({
                         </p>
                         <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-alloy-stone/25">
                             <div
-                                className="h-full rounded-full bg-[#00a283]"
+                                className="h-full rounded-full bg-alloy-bend-pine"
                                 style={{ width: `${Math.min(100, Math.max(0, fleet.averageSetupPercent))}%` }}
                             />
                         </div>
@@ -152,7 +153,7 @@ export default function LocationsFleetLanding({
                                             <p className="mt-1 text-[11px] text-alloy-midnight/45">
                                                 {highlight.locationName}
                                             </p>
-                                            <p className="mt-1.5 text-xs font-semibold text-[#007d68]">
+                                            <p className="mt-1.5 text-xs font-semibold text-alloy-bend-pine">
                                                 {(highlight.item.nextLabel ?? "Open location") + " →"}
                                             </p>
                                         </div>
@@ -189,14 +190,12 @@ export default function LocationsFleetLanding({
                         Inactive
                     </label>
                     {canMutate ?
-                        <button
-                            type="button"
-                            className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                        <ConfigurationPrimaryButton
                             onClick={onAddLocation}
                             data-testid="locations-fleet-add-location"
                         >
                             Add Location
-                        </button>
+                        </ConfigurationPrimaryButton>
                     :   null}
                 </div>
 
@@ -211,13 +210,12 @@ export default function LocationsFleetLanding({
                             :   "Try a different search or include inactive locations."}
                         </p>
                         {canMutate && fleet.locationCount === 0 ?
-                            <button
-                                type="button"
-                                className="mt-4 text-xs font-semibold text-[#007d68]"
+                            <ConfigurationPrimaryButton
+                                className="mt-4"
                                 onClick={onAddLocation}
                             >
-                                Add Location →
-                            </button>
+                                Add Location
+                            </ConfigurationPrimaryButton>
                         :   null}
                     </div>
                 :   <ul className="space-y-1.5" data-testid="locations-fleet-list">

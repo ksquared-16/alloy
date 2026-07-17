@@ -145,6 +145,7 @@ export async function createSchedulePattern(input: {
     schedule_type_key: string;
     weekdays: number[];
     sort_order?: number;
+    is_active?: boolean;
 }): Promise<SchedulePatternRow> {
     const res = await fetch("/api/admin/schedule-patterns", {
         method: "POST",

@@ -991,13 +991,6 @@
     width: 2.25rem;
     height: 2.25rem;
     border-radius: 0.55rem;
-    background: color-mix(in srgb, var(--cr-midnight) 5%, white);
-    color: color-mix(in srgb, var(--cr-midnight) 50%, transparent);
-}
-
-.locations-collection-row__glyph--selected {
-    background: color-mix(in srgb, var(--cr-pine) 16%, white);
-    color: #007d68;
 }
 
 .locations-collection-row__body {

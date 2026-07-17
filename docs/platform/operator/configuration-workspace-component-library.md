@@ -49,7 +49,7 @@ The read-only "is this object healthy?" surface. Presents derived state (capacit
 The live, ranked list answering "is anything wrong or improvable right now?" Items are graded Fix / Improve / Good, each one-tap actionable and self-clearing. Empty state: "Everything looks good." No timestamp, no global health badge. This **is** the health model.
 
 ### Setup Progress
-The onboarding completeness surface: a percentage donut plus a per-owned-area checklist, each linking to finish. Prominent while incomplete; **collapses to a single line at 100%**. Distinct from Attention by responsibility and by placement (rail vs body). **Unknown areas (`complete === null`) are excluded from the denominator** — unknown is never incomplete.
+The onboarding completeness surface: a percentage/progress indicator plus a concise per-owned-area checklist, each linking to its configuration concern. Every row names its state as **Complete**, **Needs setup**, **Not assessed**, or **Not applicable** when the domain can prove it. The percentage visibly reconciles with assessed rows. Distinct from Attention by responsibility: Setup Progress explains readiness; it does not create a second task list. **Unknown areas (`complete === null`) are excluded from the denominator** — unknown is never incomplete.
 
 ### Operational Action Model
 Ranked actions on the command rail, grouped **Fix now → Do next → Manage**. Domains supply actions from Attention + high-frequency operations; the primitive only groups and presents. Replaces ad-hoc “Quick actions” button lists.

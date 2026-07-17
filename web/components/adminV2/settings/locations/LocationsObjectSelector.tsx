@@ -11,7 +11,7 @@ import {
     QUEUE_ROW_CARD_SHELL_CLASS,
     QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
-import { ConfigurationSecondaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 
 type FleetSummary = {
     criticalCount: number;
@@ -90,14 +90,14 @@ export function LocationsObjectSelector({
                     <div className="flex min-w-0 items-center gap-2">
                         <h2 className="locations-collection-rail__title">Locations</h2>
                         {canMutate ?
-                            <ConfigurationSecondaryButton
-                                className="shrink-0 px-2 py-1 text-[11px]"
+                            <ConfigurationPrimaryButton
+                                className="shrink-0 gap-1 px-2 py-1 text-[11px]"
                                 onClick={onAddLocation}
                                 data-testid="locations-nav-add-location"
                             >
                                 <Plus className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
                                 Add location
-                            </ConfigurationSecondaryButton>
+                            </ConfigurationPrimaryButton>
                         :   null}
                     </div>
                     <p className="locations-collection-rail__count">{sites.length} shown</p>
@@ -180,7 +180,11 @@ export function LocationsObjectSelector({
                             :   null}
                             <span
                                 className={`locations-collection-row__glyph ${
-                                    selected ? "locations-collection-row__glyph--selected" : ""
+                                    inactive ?
+                                        "bg-alloy-midnight/[0.04] text-alloy-midnight/35"
+                                    : selected ?
+                                        "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine"
+                                    :   "bg-alloy-midnight/[0.04] text-alloy-bend-pine"
                                 }`}
                                 aria-hidden
                             >

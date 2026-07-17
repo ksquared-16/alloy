@@ -69,7 +69,10 @@ describe("Configuration Runtime workspace primitives", () => {
         );
         expect(readiness).toContain("complete !== null");
         expect(readiness).toContain("Not assessed");
-        expect(readiness).toContain("Operational readiness complete");
+        expect(readiness).toContain("assessed areas complete");
+        expect(readiness).toContain("Needs setup");
+        expect(readiness).toContain('role="progressbar"');
+        expect(readiness).not.toContain("Review areas");
     });
 
     it("scopes Apply To as a dialog for create/confirm-style selection", () => {

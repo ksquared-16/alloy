@@ -141,14 +141,15 @@ describe("Configuration Runtime — Locations", () => {
         expect(programs).toContain("locations-program-age-unit");
         expect(programs).toContain("locations-program-ops");
         expect(programs).toContain("Operating picture");
-        expect(programs).toContain("Relationships");
+        expect(programs).not.toContain("Relationships");
         expect(programs).not.toContain("Set here");
         expect(programs).toContain("Edit program");
         expect(programs).toContain("ConfigEditorSection");
         expect(programs).toContain('title="Schedule"');
         expect(programs).toContain("onAddProgram");
         expect(programs).not.toContain("Everything looks good");
-        expect(rooms).toContain("Capacity / participation");
+        expect(rooms).toContain('title="Program participation"');
+        expect(rooms).toContain('title="Capacity"');
         expect(rooms).toContain("Staffing thresholds");
         expect(rooms).toContain("Add staffing threshold");
         expect(rooms).toContain("formatStaffingThreshold");
@@ -156,7 +157,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(rooms).toContain("locations-room-consequence");
         expect(rooms).toContain("locations-room-ops");
         expect(rooms).toContain("locations-room-edit");
-        expect(rooms).toContain("Adjust room");
+        expect(rooms).toContain("Edit room");
         expect(rooms).toContain("Hours / operating rules");
         expect(rooms).toContain("ConfigEditorSection");
         expect(rooms).not.toContain("Everything looks good");
@@ -184,6 +185,9 @@ describe("Configuration Runtime — Locations", () => {
         expect(programs).toContain("ConfigurationSecondaryButton");
         expect(programs).not.toContain("#00a283");
         expect(programs).not.toContain("#007d68");
+        expect(selector).toContain("ConfigurationPrimaryButton");
+        expect(selector).toContain("text-alloy-bend-pine");
+        expect(selector).toContain("text-alloy-midnight/35");
     });
 
     it("opens Schedule creation without immediately clearing create mode", () => {
@@ -197,6 +201,7 @@ describe("Configuration Runtime — Locations", () => {
     it("requires authoritative mutation responses and preserves Room ownership on create", () => {
         const settings = read("components/adminV2/settings/locations/useLocationsConfigurationSettings.ts");
         const locationsRoute = read("app/api/admin/locations/route.ts");
+        const roomCreate = read("components/adminV2/settings/locations/LocationRoomCreatePanel.tsx");
         const ownedConcerns = read("components/adminV2/settings/locations/LocationOwnedConcernPanels.tsx");
         const tours = read("app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx");
 
@@ -206,6 +211,8 @@ describe("Configuration Runtime — Locations", () => {
         expect(locationsRoute).toContain("parent_location_id is required for room units");
         expect(locationsRoute).toContain("Parent location must be a site in this organization");
         expect(locationsRoute).toContain("parent_location_id,");
+        expect(roomCreate).toContain("locations-room-create-save");
+        expect(roomCreate).toContain("student_teacher_ratio");
         expect(ownedConcerns).toContain("Waitlist ranking save was not confirmed");
         expect(ownedConcerns).toContain("Location access save was not confirmed");
         expect(tours).toContain("Tour availability creation was not confirmed");
@@ -260,13 +267,28 @@ describe("Configuration Runtime — Locations", () => {
     it("supports multiple schedule patterns and shell-owned operational actions", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         const rail = read("lib/locations/buildLocationsRailActions.ts");
-        expect(page).toContain("Closures / Holidays");
+        const create = read("components/adminV2/settings/locations/LocationSchedulePatternCreatePanel.tsx");
+        const detail = read("components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel.tsx");
+        const service = read("lib/childcareOperational/schedulePatternService.ts");
+        const route = read("app/api/admin/schedule-patterns/route.ts");
+        expect(page).toContain("Closures and exceptions");
         expect(page).toContain("LocationSchedulePatternCreatePanel");
+        expect(page).toContain("ConfigChildObjectMasterDetail");
+        expect(page).toContain('data-testid="locations-schedule-add"');
+        expect(page).toContain("No closure provider available");
         expect(page).toContain("LocationsCommandRailActions");
         expect(page).toContain("buildLocationsRailActions");
         expect(page).not.toContain('data-testid="locations-add-location"');
         expect(page).toContain('data-testid="locations-edit-location"');
-        expect(page).not.toContain("+ Add Schedule Pattern");
+        expect(create).toContain("locations-schedule-create-active");
+        expect(create).toContain("is_active: active");
+        expect(create).toContain("border-alloy-bend-pine bg-alloy-bend-pine text-white");
+        expect(detail).toContain("locations-schedule-edit");
+        expect(detail).toContain("locations-schedule-weekdays-view");
+        expect(detail).not.toContain("#00a283");
+        expect(detail).not.toContain("#007d68");
+        expect(service).toContain("is_active: input.isActive ?? true");
+        expect(route).toContain('typeof body.is_active === "boolean"');
         expect(rail).toContain('id: "configure-capacity"');
         expect(rail).toContain('id: "resolve-timezone"');
         expect(rail).not.toContain('label: "Apply to other locations"');

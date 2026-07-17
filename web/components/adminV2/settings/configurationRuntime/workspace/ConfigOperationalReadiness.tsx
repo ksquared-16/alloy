@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { CheckCircle2, CircleAlert, CircleHelp } from "lucide-react";
 import type { ConfigReadinessArea } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 
 /**
  * Operational Readiness — "Have I finished configuring what we can assess?"
  * Unknown areas (complete === null) are excluded from the denominator.
- * Collapses to a single calm line at 100%.
+ * The visible area list reconciles the percentage without becoming a task list.
  * When `embedded`, skips outer card chrome (for Overview composition).
  */
 export function ConfigOperationalReadiness({
@@ -25,102 +25,89 @@ export function ConfigOperationalReadiness({
     embedded?: boolean;
     testId?: string;
 }) {
-    const [expanded, setExpanded] = useState(false);
     const known = areas.filter((area) => area.complete !== null);
+    const completed = known.filter((area) => area.complete === true);
     const incomplete = known.filter((area) => area.complete === false);
     const unknown = areas.filter((area) => area.complete === null);
 
-    const body =
-        percent >= 100 && incomplete.length === 0 ?
-            <>
-                <p className="text-sm font-medium text-[#007d68]" data-testid={`${testId}-complete`}>
-                    Operational readiness complete ✓
-                </p>
-                {unknown.length > 0 ?
-                    <p className="config-typo-sublabel mt-1">
-                        {unknown.length} {unknown.length === 1 ? "area" : "areas"} not assessed yet
+    const body = (
+        <>
+            <div className="flex items-end justify-between gap-3">
+                <div>
+                    <p
+                        className="text-2xl font-semibold tracking-tight text-alloy-midnight"
+                        data-testid={`${testId}-percent`}
+                    >
+                        {percent}%
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/50">
+                        {completed.length} of {known.length} assessed areas complete
+                        {unknown.length > 0 ? ` · ${unknown.length} not assessed` : ""}
+                    </p>
+                </div>
+                {incomplete.length > 0 ?
+                    <p className="text-[11px] font-medium text-alloy-ember">
+                        {incomplete.length} {incomplete.length === 1 ? "area needs" : "areas need"} setup
                     </p>
                 :   null}
-            </>
-        :   <>
-                {!embedded ?
-                    <div className="flex items-end gap-3">
-                        <p className="text-2xl font-semibold tracking-tight text-alloy-midnight">{percent}%</p>
-                        <div className="pb-0.5 text-xs text-alloy-midnight/55">
-                            {incomplete.length} remaining
-                            {unknown.length > 0 ?
-                                <span className="ml-1 text-alloy-midnight/40">· {unknown.length} not assessed</span>
-                            :   null}
-                        </div>
-                    </div>
-                :   <p className="text-xs text-alloy-midnight/55">
-                        {incomplete.length} remaining
-                        {unknown.length > 0 ?
-                            <span className="ml-1 text-alloy-midnight/40">· {unknown.length} not assessed</span>
-                        :   null}
-                    </p>
-                }
-                {!embedded ?
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-alloy-forge/10">
-                        <div
-                            className="h-full rounded-full bg-[#00a283]"
-                            style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-                        />
-                    </div>
-                :   null}
-                <button
-                    type="button"
-                    className="mt-2 text-xs font-semibold text-[#007d68]"
-                    onClick={() => setExpanded((current) => !current)}
-                    aria-expanded={expanded}
-                >
-                    {expanded ? "Hide areas" : "Review areas"}
-                </button>
-                {expanded ?
-                    <ul className="mt-2 divide-y divide-alloy-forge/10 border-t border-alloy-forge/10">
-                        {areas.map((area) => (
-                            <li key={area.key}>
-                                <button
-                                    type="button"
-                                    className="flex w-full items-center justify-between py-1.5 text-xs"
-                                    onClick={() => onSelectArea?.(area)}
-                                    disabled={!onSelectArea}
+            </div>
+            <div
+                className="mt-2 h-1.5 overflow-hidden rounded-full bg-alloy-forge/10"
+                role="progressbar"
+                aria-label="Operational readiness"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent}
+            >
+                <div
+                    className="h-full rounded-full bg-alloy-bend-pine"
+                    style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+                />
+            </div>
+            <ul className="mt-3 divide-y divide-alloy-forge/10 border-y border-alloy-forge/10">
+                {areas.map((area) => {
+                    const status =
+                        area.complete === true ? "Complete"
+                        : area.complete === false ? "Needs setup"
+                        :   "Not assessed";
+                    const icon =
+                        area.complete === true ?
+                            <CheckCircle2 className="h-3.5 w-3.5 text-alloy-bend-pine" aria-hidden />
+                        : area.complete === false ?
+                            <CircleAlert className="h-3.5 w-3.5 text-alloy-ember" aria-hidden />
+                        :   <CircleHelp className="h-3.5 w-3.5 text-alloy-midnight/35" aria-hidden />;
+                    return (
+                        <li key={area.key}>
+                            <button
+                                type="button"
+                                className="flex w-full items-center justify-between gap-3 py-2 text-xs hover:bg-alloy-bend-pine/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-alloy-bend-pine/35"
+                                onClick={() => onSelectArea?.(area)}
+                                disabled={!onSelectArea}
+                            >
+                                <span className="font-medium text-alloy-midnight/75">{area.label}</span>
+                                <span
+                                    className={`inline-flex items-center gap-1.5 ${
+                                        area.complete === true ? "text-alloy-bend-pine"
+                                        : area.complete === false ? "text-alloy-ember"
+                                        :   "text-alloy-midnight/45"
+                                    }`}
                                 >
-                                    <span className="text-alloy-midnight/70">{area.label}</span>
-                                    <span
-                                        className={
-                                            area.complete === true ? "text-[#007d68]"
-                                            : area.complete === false ?
-                                                "text-amber-700"
-                                            :   "text-alloy-midnight/40"
-                                        }
-                                    >
-                                        {area.complete === true ?
-                                            "Ready"
-                                        : area.complete === false ?
-                                            "Finish"
-                                        :   "Not assessed"}
-                                    </span>
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                :   null}
-            </>;
+                                    {icon}
+                                    {status}
+                                </span>
+                            </button>
+                        </li>
+                    );
+                })}
+            </ul>
+        </>
+    );
 
     if (embedded) {
         return (
             <div data-testid={testId}>
                 {body}
             </div>
-        );
-    }
-
-    if (percent >= 100 && incomplete.length === 0) {
-        return (
-            <ConfigWorkspaceCard compact={compact} testId={testId}>
-                {body}
-            </ConfigWorkspaceCard>
         );
     }
 

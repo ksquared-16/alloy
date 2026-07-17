@@ -6,13 +6,16 @@ import {
     WEEKDAY_OPTIONS,
     type SchedulePatternRow,
 } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import {
+    ConfigurationPrimaryButton,
+    ConfigurationSecondaryButton,
+} from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 
 const WEEKDAY_CHIP_SELECTED =
-    "rounded-full border border-[#00a283]/35 bg-[#00a283]/12 text-[#007d68]";
+    "rounded-full border border-alloy-bend-pine bg-alloy-bend-pine text-white";
 const WEEKDAY_CHIP_IDLE =
-    "rounded-full border border-alloy-forge/15 text-alloy-midnight/55 hover:border-alloy-forge/25";
+    "rounded-full border border-alloy-forge/20 bg-white text-alloy-midnight/55 hover:border-alloy-bend-pine/40 hover:text-alloy-bend-pine";
 
 function patternKey(label: string): string {
     const stem = label
@@ -35,6 +38,7 @@ export default function LocationSchedulePatternCreatePanel({
 }) {
     const [label, setLabel] = useState("");
     const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+    const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -81,6 +85,16 @@ export default function LocationSchedulePatternCreatePanel({
                     ))}
                 </div>
             </div>
+            <label className="flex items-center gap-2">
+                <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={(event) => setActive(event.target.checked)}
+                    className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                    data-testid="locations-schedule-create-active"
+                />
+                <span className="config-typo-sublabel">Active pattern</span>
+            </label>
             {error ?
                 <p role="alert" className="text-sm text-red-800">
                     {error}
@@ -101,6 +115,7 @@ export default function LocationSchedulePatternCreatePanel({
                                     label: label.trim(),
                                     schedule_type_key: "weekly",
                                     weekdays,
+                                    is_active: active,
                                 };
                                 const created = await createSchedulePattern(input);
                                 if (
@@ -126,14 +141,12 @@ export default function LocationSchedulePatternCreatePanel({
                 >
                     {saving ? "Adding…" : "Add schedule pattern"}
                 </ConfigurationPrimaryButton>
-                <button
-                    type="button"
-                    className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-medium text-alloy-midnight/65"
+                <ConfigurationSecondaryButton
                     onClick={onCancel}
                     disabled={saving}
                 >
                     Cancel
-                </button>
+                </ConfigurationSecondaryButton>
             </div>
         </section>
     );

@@ -64,7 +64,7 @@ export function ConfigConsequenceLine({
 }) {
     return (
         <p
-            className="rounded-md border border-[#00a283]/12 bg-[#00a283]/[0.04] px-3 py-2 text-sm leading-snug text-alloy-midnight/75"
+            className="rounded-md border border-alloy-bend-pine/15 bg-alloy-bend-pine/[0.04] px-3 py-2 text-sm leading-snug text-alloy-midnight/75"
             data-testid={testId}
         >
             {children}

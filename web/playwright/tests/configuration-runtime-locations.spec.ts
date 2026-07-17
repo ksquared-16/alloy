@@ -91,6 +91,7 @@ test.describe("configuration-runtime-locations", () => {
         });
         await expect(page.locator('[data-testid^="locations-program-summary-"]').first()).toBeVisible();
         await expect(page.getByTestId("locations-program-ops")).toBeVisible();
+        await expect(page.getByTestId("locations-programs")).not.toContainText("Relationships");
 
         await page.getByTestId("locations-tab-rooms").click();
         await page.waitForTimeout(400);
@@ -117,7 +118,22 @@ test.describe("configuration-runtime-locations", () => {
         await page.getByTestId("locations-tab-schedule").click();
         await expect(page.getByTestId("locations-schedule-patterns")).toBeVisible();
         await expect(page.getByTestId("locations-schedule-closures")).toBeVisible();
-        await expect(page.getByTestId("locations-rail-add-schedule-pattern")).toBeVisible();
+        await expect(page.getByTestId("locations-schedule-add")).toBeVisible();
+        await page.getByTestId("locations-schedule-add").click();
+        await expect(page.getByTestId("locations-schedule-create")).toBeVisible();
+        await expect(page.getByTestId("locations-schedule-create-active")).toBeChecked();
+        await expect(
+            page.getByTestId("locations-schedule-create-weekdays").getByRole("button", { name: "Mon" }),
+        ).toHaveAttribute("aria-pressed", "true");
+        await page.getByRole("button", { name: "Cancel" }).last().click();
+        const railScheduleAction = page.getByTestId("locations-rail-add-schedule-pattern");
+        if (!(await railScheduleAction.isVisible().catch(() => false))) {
+            await page.getByRole("button", { name: /^Actions \(/ }).click();
+        }
+        await expect(railScheduleAction).toBeVisible();
+        await railScheduleAction.click();
+        await expect(page.getByTestId("locations-schedule-create")).toBeVisible();
+        await page.getByRole("button", { name: "Cancel" }).last().click();
         await page.screenshot({
             path: path.join(screenshotDir, "05-schedule.png"),
             fullPage: true,

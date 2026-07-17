@@ -431,24 +431,6 @@ export default function LocationProgramDetailPanel({
                     </dl>
                 </section>
 
-                <section data-testid="locations-program-relationships">
-                    <h2 className="config-typo-workspace-title mb-2">Relationships</h2>
-                    <dl className="divide-y divide-alloy-forge/10 border-y border-alloy-forge/10">
-                        <div className="flex items-baseline justify-between gap-4 py-2.5">
-                            <dt className="text-sm font-semibold text-alloy-midnight">Location</dt>
-                            <dd className="text-right text-sm text-alloy-midnight/60">{siteLabel || "This location"}</dd>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-4 py-2.5">
-                            <dt className="text-sm font-semibold text-alloy-midnight">Participation</dt>
-                            <dd className="text-right text-sm text-alloy-midnight/60">
-                                {(summary?.roomCount ?? 0) === 0 ?
-                                    "No rooms assigned"
-                                :   `${summary?.roomCount} ${(summary?.roomCount ?? 0) === 1 ? "room" : "rooms"} assigned`}
-                            </dd>
-                        </div>
-                    </dl>
-                </section>
-
                 <ConfigAttentionPanel
                     items={attention}
                     compact
@@ -466,13 +448,13 @@ export default function LocationProgramDetailPanel({
             testId="locations-programs"
             listActions={
                 canMutate && onAddProgram ?
-                    <ConfigurationSecondaryButton
+                    <ConfigurationPrimaryButton
                         className="px-2 py-1 text-[11px]"
                         onClick={onAddProgram}
                         data-testid="locations-program-add"
                     >
                         + Add program
-                    </ConfigurationSecondaryButton>
+                    </ConfigurationPrimaryButton>
                 :   null
             }
             list={

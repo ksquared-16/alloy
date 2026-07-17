@@ -165,6 +165,7 @@ export function ConfigurationQueueItem({
     active,
     title,
     subtitle,
+    leading,
     trailing,
     onClick,
     testId,
@@ -179,6 +180,7 @@ export function ConfigurationQueueItem({
     active: boolean;
     title: string;
     subtitle?: string | null;
+    leading?: ReactNode;
     trailing?: ReactNode;
     onClick: () => void;
     testId?: string;
@@ -207,7 +209,12 @@ export function ConfigurationQueueItem({
             {variant === "rail" && active ?
                 <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} />
             :   null}
-            <div className="flex min-w-0 w-full items-start justify-between gap-2">
+            <div className="flex min-w-0 w-full items-start gap-2.5">
+                {leading ?
+                    <span className="shrink-0" aria-hidden>
+                        {leading}
+                    </span>
+                :   null}
                 <div className="min-w-0 flex-1 text-left">
                     <p
                         className={`${variant === "rail" ? "text-[13px] font-semibold leading-4 text-alloy-midnight" : "config-typo-queue-item-title"} ${
@@ -226,7 +233,9 @@ export function ConfigurationQueueItem({
                         </p>
                     :   null}
                 </div>
-                {trailing}
+                {trailing ?
+                    <span className="shrink-0">{trailing}</span>
+                :   null}
             </div>
         </button>
     );
