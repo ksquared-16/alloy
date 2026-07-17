@@ -57,6 +57,20 @@ supersedes: []
 
 Local certification: fresh isolated migration replay, 17/17 database checks, integration scenarios including identity-review gate coverage, Processing + resolver tests on isolated serial execution, production/test typechecks, and production build.
 
+### July 2026 — Operational Calculation Definition Registry V1 (promotion candidate)
+
+**Locally certified; branch on `origin/staging` tip; awaiting PR merge to staging; not deployed.** The first engineering realization of the frozen Operational Calculations architecture (**architecture owned by** `../core/operational-calculations.md`; sprint constitution authored on the predecessor architecture branch and promoted separately). Establishes the registration substrate and the first reference family over existing resolvers — **changing no production behavior**.
+
+- **Definition → Handler → Runtime → Result** — the four canonical layers as a dedicated platform module (`web/lib/operationalCalculations/`): a declarative Definition contract, a code-owned Handler abstraction (`{kind:"pure"|"oip"}`), a deterministic injected-clock Runtime, and a typed, family-shaped Result contract (non-scalar values; resolution states, never verdicts).
+- **Canonical Operational Calculations Registry** — fail-closed key resolution (unknown key / unsupported handler throw); reuses the existing `@/lib/location/operationalResolutionContracts` primitives.
+- **Resource Requirements & Capacity reference family** — four registered keys (`resource.required_staff`, `resource.ratio`, `capacity.room_binding`, `capacity.remaining`), each a thin adapter over the **already-authoritative** `resolveRatio` / `resolveOperationalCapacity`. No new math; `staffed` stays null (G3); beyond-range tier ⇒ `incomplete`, never a coerced number.
+
+**Precise scope.** Additive, new files only — no existing source modified; the wrapped resolvers have zero production consumers. **Explicitly not included:** OIP-registry convergence (the existing metric registry remains transitional and untouched, no overlapping keys), consumer migration, persistence, events, Operational Expectations / judgments, APIs, configuration surfaces, and operator UI.
+
+Local certification: 24 registry/runtime/family conformance tests; existing ratio & capacity resolver tests and the Phase-A canonical-contracts certification unchanged; production typecheck. A detailed realization record ships with the sprint branch under `docs/sprints/07_2026/operational-calculations-registry-v1/`.
+
+**Documentation dependencies (recorded, not performed here):** the doctrine amendments elevating `../core/operational-calculations.md` to first-class-registry language, and any capability-inventory placement for a derived-truth registry, are governance decisions sequenced for the doctrine phase — not part of this reconciliation.
+
 ---
 
 ### July 2026 — Platform Stabilization Complete

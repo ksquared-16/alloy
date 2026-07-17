@@ -9,8 +9,10 @@ supersedes: []
 
 **Sprint:** operational-calc-registry-v1 · slot 5 · **engineering (realization, not discovery)**
 **Base:** `origin/staging` @ `d8e969f0b`
-**Governing authority (frozen):** the seven architecture documents in
-[`../operational-calculations-architecture/`](../operational-calculations-architecture/)
+**Governing authority (frozen):** the seven architecture documents under
+`docs/sprints/07_2026/operational-calculations-architecture/` (authored by the
+predecessor sprint; promoted on their own branch — not present on this branch, so
+referenced by path rather than link until they land on `staging`).
 
 > This sprint realizes the accepted architecture. It performs no architectural
 > discovery, redesigns nothing, introduces no judgments, and implements no
@@ -21,7 +23,7 @@ supersedes: []
 ## What was built
 
 Roadmap **Phase 2 (registration substrate)** + **Phase 3 (Resource Requirements &
-Capacity conformance)** — the [First Implementation Mission](../operational-calculations-architecture/04-realization-plan.md#part-10--first-implementation-mission).
+Capacity conformance)** — the First Implementation Mission (`operational-calculations-architecture/04-realization-plan.md` Part 10, on the predecessor branch).
 
 A dedicated platform home, `web/lib/operationalCalculations/`, implementing the four
 frozen layers (**Definition → Handler → Runtime → Result**):
