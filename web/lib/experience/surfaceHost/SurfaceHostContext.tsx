@@ -33,7 +33,7 @@ import {
 } from "@/lib/experience/surfaceHost/surfaceHostState";
 import { surfaceHostShouldRenderWorkUnit } from "@/lib/experience/surfaceHost/surfaceHostRender";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
-import { attentionFromUrl, ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
+import { attentionFromUrl, ATTENTION_SCOPE, WORKSPACE_ATTENTION_TARGET } from "@/lib/runtime/kernel/attention";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { ProvisionedWorkUnitSurface } from "@/components/presentation/workUnit/ProvisionedWorkUnitSurface";
 
@@ -128,9 +128,11 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
 
     // ── THE VISIBLE DECISION — committed Focus, and nothing else. ──
     // Not the pathname, not a mount, not a readiness conjunction, not a timer.
+    // The Workspace is an attention target, but it is NOT a Work Unit. Only a committed Work Unit
+    // focus may render the Work Unit surface — otherwise the Workspace provisions itself as a Work
+    // Unit and honestly reports that no such work unit exists.
     const committed = focus.current;
-    const showWorkUnit =
-        committed != null && surfaceHostShouldRenderWorkUnit(surfaceRefFromPath(`/workspace/work-unit/${committed.ref.target}`));
+    const showWorkUnit = committed != null && committed.ref.target !== WORKSPACE_ATTENTION_TARGET;
 
     return (
         <SurfaceHostContext.Provider value={value}>

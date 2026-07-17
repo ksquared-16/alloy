@@ -70,6 +70,7 @@ import {
 } from "./operationalProjectionEnrichment";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { queueRowSurfaceIdForDepartment } from "@/lib/presentation/runtime/workUnitSurfaceConfigFetch";
+import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
@@ -296,11 +297,15 @@ export async function composeWorkUnitProvisioningAnswer(
 
     // ── Work Unit identity + its department, in ONE round trip. ──
     const tWu = now();
+    // The ROUTE SLUG is hyphenated ("new-leads"); the platform KEY is underscored ("new_leads").
+    // `workUnitRouteSlugToKey` is the canonical mapping — a raw slug lookup matches nothing and
+    // turns every Work Unit into a terminal error.
+    const workUnitKey = workUnitRouteSlugToKey(req.workUnitSlug.trim());
     const { data: wuRow, error: wuErr } = await req.supabase
         .from("work_units")
         .select("id, key, name, org_id, department_id, queue_definition")
         .eq("org_id", req.orgId)
-        .eq("key", req.workUnitSlug)
+        .eq("key", workUnitKey || req.workUnitSlug)
         .maybeSingle();
     timings.work_unit_ms = now() - tWu;
     if (wuErr) return fail("records_unavailable", `work unit lookup failed: ${wuErr.message}`);

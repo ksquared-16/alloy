@@ -18,7 +18,7 @@
  * only thing that can reveal a surface is a K2 terminal outcome reaching K3.
  */
 import { createContext, useContext, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
-import { AttentionOwner, urlFromAttention, type AttentionRef } from "./attention";
+import { AttentionOwner, urlFromAttention, WORKSPACE_ATTENTION_TARGET, type AttentionRef } from "./attention";
 import { ProvisioningRuntime } from "./provisioning";
 import { FocusOwner, type FocusState } from "./focus";
 import { workUnitEntryResourceClient } from "./workUnitEntryResourceClient";
@@ -109,6 +109,12 @@ export function RuntimeKernelProvider({
         // waits on the other, and neither waits on the router.
         attention.subscribe((e) => {
             focus.onAttentionMoved(e.ref);
+            // The Workspace is an attention target, but it has NO Work Unit Preparation Contract —
+            // its surface is route-owned until D5 gives it one. Asking the Work Unit entry resource
+            // for it would fire a doomed request and commit an honest "no work unit 'workspace'"
+            // error for a surface that is perfectly fine. Attention still moves; only preparation
+            // is skipped.
+            if (e.ref.target === WORKSPACE_ATTENTION_TARGET) return;
             void provisioning.onAttentionMoved(e).then((terminal) => {
                 // `null` = the preparation was disposed (superseded/cancelled). Disposal is not an
                 // outcome and never reaches Focus — Kernel §K2: "there is no fourth outcome".

@@ -38,19 +38,29 @@ const WU = { id: "00000000-0000-4000-8000-000000000030", key: "new_leads", name:
  */
 function stubSupabase(opts?: { rows?: Array<Record<string, unknown>>; metadata?: unknown; rowError?: string }) {
     const touched: string[] = [];
+    const keysQueried: string[] = [];
     const client = {
         touched,
+        keysQueried,
         from(table: string) {
             touched.push(table);
+            const eqs: Array<[string, unknown]> = [];
             const builder: Record<string, unknown> = {
                 select: () => builder,
-                eq: () => builder,
+                eq: (col: string, val: unknown) => {
+                    eqs.push([col, val]);
+                    return builder;
+                },
                 limit: async () =>
                     opts?.rowError
                         ? { data: null, error: { message: opts.rowError } }
                         : { data: opts?.rows ?? fixture.rows, error: null },
                 maybeSingle: async () => {
                     if (table === "work_units") {
+                        // HONEST: answer only for the key actually queried. The DB holds `new_leads`.
+                        const key = eqs.find(([c]) => c === "key")?.[1];
+                        keysQueried.push(String(key));
+                        if (key !== "new_leads") return { data: null, error: null };
                         return { data: { ...WU, org_id: ORG, department_id: "dept-1", queue_definition: { ui: { row_preview: { variant: "crm_compact" } } } }, error: null };
                     }
                     return { data: { id: "dept-1", metadata: opts?.metadata ?? fixture.metadata }, error: null };
@@ -59,7 +69,10 @@ function stubSupabase(opts?: { rows?: Array<Record<string, unknown>>; metadata?:
             return builder;
         },
     };
-    return client as unknown as Parameters<typeof composeWorkUnitProvisioningAnswer>[0]["supabase"] & { touched: string[] };
+    return client as unknown as Parameters<typeof composeWorkUnitProvisioningAnswer>[0]["supabase"] & {
+        touched: string[];
+        keysQueried: string[];
+    };
 }
 
 const request = (over: Partial<Parameters<typeof composeWorkUnitProvisioningAnswer>[0]> = {}) => ({
@@ -78,6 +91,25 @@ describe("D1 — bounded Provisioning Answer", () => {
         // 150 admitted by stage; the answer is bounded to ONE page.
         expect(a.rows.length).toBe(Math.min(150, PROVISIONING_ROW_PAGE_CAP));
         expect(a.rows.every((r) => r.stageKey === "lead")).toBe(true);
+    });
+
+    it("1b. the ROUTE SLUG is mapped to the platform KEY — hyphens are not underscores", async () => {
+        // The browser found this: routes are hyphenated ("new-leads"), platform keys are
+        // underscored ("new_leads"). A raw slug lookup matches NOTHING, so every Work Unit became a
+        // terminal error — while the old stub answered regardless of key and hid it.
+        const supabase = stubSupabase();
+        const a = await composeWorkUnitProvisioningAnswer(
+            request({ supabase, workUnitSlug: "new-leads" }),
+        );
+        expect(supabase.keysQueried).toContain("new_leads");
+        expect(a.terminal).toBe("operational");
+    });
+
+    it("1c. an unknown work unit is an HONEST error, not a fabricated surface", async () => {
+        const a = await composeWorkUnitProvisioningAnswer(request({ workUnitSlug: "does-not-exist" }));
+        expect(a.terminal).toBe("error");
+        if (a.terminal !== "error") return;
+        expect(a.code).toBe("work_unit_not_found");
     });
 
     it("2. rows come from the Work View projection — QueueService/lane tables are never touched", async () => {
