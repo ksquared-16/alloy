@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     buildLocationIdentityFacts,
     formatLocationLocality,
+    formatLocationShortPlaceLine,
     formatLocationTimezoneLabel,
 } from "@/lib/locations/locationIdentityPresentation";
 
@@ -37,5 +38,22 @@ describe("location identity presentation", () => {
                 timezoneIana: "America/Toronto",
             }),
         ).toEqual([]);
+    });
+
+    it("builds a one-line place string preferring locality over street", () => {
+        expect(
+            formatLocationShortPlaceLine({
+                address1: "123 Main",
+                city: "Bend",
+                state: "OR",
+            }),
+        ).toBe("Bend, Oregon");
+        expect(
+            formatLocationShortPlaceLine({
+                address1: "123 Main",
+                city: null,
+                state: null,
+            }),
+        ).toBe("123 Main");
     });
 });

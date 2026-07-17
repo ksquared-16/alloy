@@ -45,9 +45,12 @@ describe("Configuration Runtime workspace primitives", () => {
         ).toContain('data-config-surface="workspace"');
         expect(
             read("components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail.tsx"),
-        ).toContain("lg:grid-cols-[13.5rem_minmax(0,1fr)]");
+        ).toContain("lg:grid-cols-[16rem_minmax(0,1fr)]");
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigObjectHeader.tsx")).toContain(
             'size = "default"',
+        );
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigObjectHeader.tsx")).toContain(
+            "factsContent",
         );
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigGlanceMetrics.tsx")).toContain(
             "sm:divide-x",

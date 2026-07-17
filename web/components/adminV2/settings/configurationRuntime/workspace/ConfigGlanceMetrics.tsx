@@ -26,11 +26,14 @@ export function ConfigGlanceMetrics({
     metrics,
     testId = "config-glance-metrics",
     embedded = false,
+    /** Metrics only — parent owns the region title/chrome (e.g. Overview At a glance). */
+    bare = false,
 }: {
     title?: string;
     metrics: ConfigGlanceMetric[];
     testId?: string;
     embedded?: boolean;
+    bare?: boolean;
 }) {
     const body = (
         <div className="grid grid-cols-2 gap-y-3 sm:grid-cols-4 sm:divide-x sm:divide-alloy-stone/20">
@@ -87,6 +90,14 @@ export function ConfigGlanceMetrics({
             })}
         </div>
     );
+
+    if (bare) {
+        return (
+            <div data-testid={testId} data-config-surface="region">
+                {body}
+            </div>
+        );
+    }
 
     if (embedded) {
         return (

@@ -37,7 +37,6 @@ describe("buildLocationsRailActions", () => {
         onAddRoom: vi.fn(),
         onAddProgram: vi.fn(),
         onNavigate: vi.fn(),
-        onApply: vi.fn(),
         onCreateSchedule: vi.fn(),
     };
 
@@ -47,7 +46,6 @@ describe("buildLocationsRailActions", () => {
             canMutate: true,
             model: model({ timezone: null, roomsNeedingCapacity: 1, configuredCapacity: null }),
             selectedSite: true,
-            siteCount: 3,
             scheduleCount: 0,
             roomCount: 2,
             programCount: 1,
@@ -63,8 +61,8 @@ describe("buildLocationsRailActions", () => {
             "configure-capacity",
         ]);
         expect(actions.some((action) => action.id === "set-schedule" && action.group === "next")).toBe(true);
-        expect(actions.some((action) => action.id === "apply-to" && action.group === "manage")).toBe(true);
-        expect(actions.some((action) => action.id === "edit-details" && action.group === "manage")).toBe(true);
+        expect(actions.some((action) => action.id.startsWith("apply"))).toBe(false);
+        expect(actions.some((action) => action.id === "edit-details")).toBe(false);
         expect(actions.some((action) => action.id === "duplicate-location")).toBe(false);
         expect(actions.some((action) => action.id === "add-closure")).toBe(false);
         expect(actions.some((action) => action.id === "go-rooms" && action.group === "more")).toBe(true);
@@ -80,7 +78,6 @@ describe("buildLocationsRailActions", () => {
             canMutate: true,
             model: null,
             selectedSite: false,
-            siteCount: 2,
             scheduleCount: 0,
             roomCount: 0,
             programCount: 0,
@@ -101,7 +98,6 @@ describe("buildLocationsRailActions", () => {
             canMutate: true,
             model: model({ roomsNeedingCapacity: 2 }),
             selectedSite: true,
-            siteCount: 2,
             scheduleCount: 1,
             roomCount: 3,
             programCount: 1,
@@ -114,18 +110,16 @@ describe("buildLocationsRailActions", () => {
         expect(actions.map((action) => action.id)).toEqual([
             "configure-capacity",
             "add-room",
-            "apply-rooms",
         ]);
         expect(actions.some((action) => action.id === "adjust-room")).toBe(false);
     });
 
-    it("enables Add program on the programs tab", () => {
+    it("keeps Add program in collection chrome and hides unimplemented Apply", () => {
         const actions = buildLocationsRailActions({
             activeTab: "programs",
             canMutate: true,
             model: model(),
             selectedSite: true,
-            siteCount: 2,
             scheduleCount: 1,
             roomCount: 2,
             programCount: 0,
@@ -135,19 +129,15 @@ describe("buildLocationsRailActions", () => {
             firstRoomNeedingCapacityId: null,
             ...handlers,
         });
-        const addProgram = actions.find((action) => action.id === "add-program");
-        expect(addProgram?.group).toBe("fix");
-        expect(addProgram?.reason).toBe("No programs offered yet");
-        expect(addProgram?.disabled).toBeFalsy();
+        expect(actions).toEqual([]);
     });
 
-    it("disables Apply with an intentional reason when only one location exists", () => {
+    it("never exposes Apply until an authoritative copy substrate exists", () => {
         const actions = buildLocationsRailActions({
             activeTab: "overview",
             canMutate: true,
             model: model(),
             selectedSite: true,
-            siteCount: 1,
             scheduleCount: 1,
             roomCount: 1,
             programCount: 1,
@@ -157,8 +147,6 @@ describe("buildLocationsRailActions", () => {
             firstRoomNeedingCapacityId: null,
             ...handlers,
         });
-        const apply = actions.find((action) => action.id === "apply-to");
-        expect(apply?.disabled).toBe(true);
-        expect(apply?.reason).toBe("Need at least two locations");
+        expect(actions.some((action) => action.id.startsWith("apply"))).toBe(false);
     });
 });

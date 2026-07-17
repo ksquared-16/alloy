@@ -199,6 +199,25 @@ export async function POST(request: NextRequest) {
         if (locTypeInput) location_type = locTypeInput;
     }
 
+    const parent_location_id =
+        typeof body.parent_location_id === "string" && body.parent_location_id.trim()
+            ? body.parent_location_id.trim()
+            : null;
+    if (location_type === "unit" && !parent_location_id) {
+        return NextResponse.json({ error: "parent_location_id is required for room units" }, { status: 400 });
+    }
+    if (parent_location_id) {
+        const { data: parent } = await supabase
+            .from("locations")
+            .select("id, location_type")
+            .eq("id", parent_location_id)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        if (!parent || String(parent.location_type ?? "").trim() !== "site") {
+            return NextResponse.json({ error: "Parent location must be a site in this organization" }, { status: 400 });
+        }
+    }
+
     const is_primary = customer_id ? !!body.is_primary : false;
     const is_active = body.is_active !== false;
     const address1 = typeof body.address1 === "string" ? (body.address1 as string).trim() || null : null;
@@ -260,6 +279,7 @@ export async function POST(request: NextRequest) {
         label,
         location_type,
         location_type_id: location_type_id ?? null,
+        parent_location_id,
         is_primary,
         is_active,
         address1,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 
 type LocationOpt = { id: string; label: string | null };
 
@@ -85,8 +86,11 @@ export default function TourAvailabilitySettingsClient({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ is_active: !r.is_active }),
             });
-            const j = (await res.json()) as { error?: string };
+            const j = (await res.json()) as { rule?: RuleRow; error?: string };
             if (!res.ok) throw new Error(j.error ?? res.statusText);
+            if (!j.rule || !mutationResponseContainsPatch(j.rule as unknown as Record<string, unknown>, { is_active: !r.is_active })) {
+                throw new Error("Tour availability save was not confirmed by the authoritative response.");
+            }
             await loadRules();
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
@@ -260,25 +264,33 @@ function NewRuleForm({
             setMsg("Choose a location");
             return;
         }
+        const payload = {
+            location_id: location_id.trim(),
+            day_of_week,
+            start_time: `${start_time}:00`,
+            end_time: `${end_time}:00`,
+            timezone: timezone.trim(),
+            slot_duration_minutes,
+            buffer_minutes,
+            max_bookings_per_slot,
+            approval_required,
+        };
         const res = await fetch("/api/admin/tours/availability-rules", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                location_id: location_id.trim(),
-                day_of_week,
-                start_time: `${start_time}:00`,
-                end_time: `${end_time}:00`,
-                timezone: timezone.trim(),
-                slot_duration_minutes,
-                buffer_minutes,
-                max_bookings_per_slot,
-                approval_required,
-            }),
+            body: JSON.stringify(payload),
         });
-        const j = (await res.json()) as { error?: string };
+        const j = (await res.json()) as { rule?: RuleRow; error?: string };
         if (!res.ok) {
             setMsg(j.error ?? res.statusText);
+            return;
+        }
+        if (
+            !j.rule ||
+            !mutationResponseContainsPatch(j.rule as unknown as Record<string, unknown>, payload)
+        ) {
+            setMsg("Tour availability creation was not confirmed by the authoritative response.");
             return;
         }
         await onCreated();

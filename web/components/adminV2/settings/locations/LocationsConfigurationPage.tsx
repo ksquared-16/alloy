@@ -12,7 +12,6 @@ import {
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
-    ConfigApplyToDialog,
     ConfigObjectHeader,
     ConfigScopeContextBar,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
@@ -27,17 +26,15 @@ import {
     LocationPlacementPanel,
     LocationToursPanel,
 } from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
+import { LocationIdentityFactsRow } from "@/components/adminV2/settings/locations/LocationIdentityFactsRow";
 import { LocationOverviewSurface } from "@/components/adminV2/settings/locations/LocationOverviewSurface";
 import { LocationsCommandRailActions } from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
+import { LocationsObjectSelector } from "@/components/adminV2/settings/locations/LocationsObjectSelector";
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
 import LocationsFleetLanding from "@/components/adminV2/settings/locations/LocationsFleetLanding";
 import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
 import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
 import { buildLocationsRailActions } from "@/lib/locations/buildLocationsRailActions";
-import {
-    buildLocationIdentityFacts,
-    formatLocationLocality,
-} from "@/lib/locations/locationIdentityPresentation";
 import {
     buildLocationWorkspaceModel,
     buildLocationProgramOperationalSummaries,
@@ -48,20 +45,6 @@ import {
     type LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-
-function locationSelectorSignal(location: {
-    criticalCount: number;
-    improveCount: number;
-    setupPercent: number;
-    locality: string | null;
-    isActive: boolean;
-}): string {
-    if (!location.isActive) return "Inactive";
-    if (location.criticalCount > 0) return `${location.criticalCount} issues`;
-    if (location.setupPercent < 100) return `${location.setupPercent}% ready`;
-    if (location.locality) return location.locality;
-    return "Ready";
-}
 
 export default function LocationsConfigurationPage({
     initialLocationId = null,
@@ -77,8 +60,6 @@ export default function LocationsConfigurationPage({
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
     const [creatingSchedule, setCreatingSchedule] = useState(false);
-    const [applyToOpen, setApplyToOpen] = useState(false);
-    const [applyNotice, setApplyNotice] = useState<string | null>(null);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
         Record<string, Partial<Record<"tours" | "placement" | "access", boolean>>>
     >({});
@@ -187,10 +168,11 @@ export default function LocationsConfigurationPage({
         [selectedPrograms, selectedRooms],
     );
 
+    const selectedSiteId = selectedSite?.id ?? null;
     useEffect(() => {
-        if (!selectedSite) return;
+        if (!selectedSiteId) return;
         let cancelled = false;
-        const locationId = selectedSite.id;
+        const locationId = selectedSiteId;
         void Promise.all([
             fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
                 credentials: "include",
@@ -235,7 +217,7 @@ export default function LocationsConfigurationPage({
         return () => {
             cancelled = true;
         };
-    }, [selectedSite]);
+    }, [selectedSiteId]);
 
     const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
     const model =
@@ -261,18 +243,6 @@ export default function LocationsConfigurationPage({
                 schedules: schedulePatterns,
             }),
         [programCategories, roomRows, schedulePatterns, siteRows],
-    );
-
-    const identityFacts = useMemo(
-        () =>
-            selectedSite ?
-                buildLocationIdentityFacts({
-                    city: selectedSite.city,
-                    state: selectedSite.state,
-                    timezoneIana: model?.timezone,
-                })
-            :   [],
-        [model?.timezone, selectedSite],
     );
 
     const openLocation = (locationId: string, tab: LocationWorkspaceTab = "overview") => {
@@ -372,7 +342,6 @@ export default function LocationsConfigurationPage({
                 canMutate,
                 model,
                 selectedSite: Boolean(selectedSite),
-                siteCount: siteRows.length,
                 scheduleCount: selectedSchedules.length,
                 roomCount: selectedRooms.length,
                 programCount: selectedPrograms.length,
@@ -385,11 +354,9 @@ export default function LocationsConfigurationPage({
                 onAddRoom: addRoom,
                 onAddProgram: addProgram,
                 onNavigate: navigate,
-                onApply: () => setApplyToOpen(true),
                 onCreateSchedule: () => {
                     if (!canMutate) return;
                     setCreatingSchedule(true);
-                    navigate("schedule");
                 },
             }),
         [
@@ -449,11 +416,6 @@ export default function LocationsConfigurationPage({
                         onSelectReadinessArea={showSetupDestination}
                         onOpenTab={navigate}
                     />
-                    {applyNotice ?
-                        <p className="rounded-md border border-[#00a283]/20 bg-[#00a283]/5 px-3 py-2 text-xs text-[#007d68]">
-                            {applyNotice}
-                        </p>
-                    :   null}
                 </div>
             );
         }
@@ -587,11 +549,13 @@ export default function LocationsConfigurationPage({
         <div className="process-config-page min-h-0 flex-1" data-testid="locations-configuration-page">
             <LocationsCommandRailActions actions={railActions} />
 
-            <ConfigurationContext
-                title="Locations"
-                titleIcon={<MapPin className="h-5 w-5" strokeWidth={2} />}
-                testId="locations-configuration-context"
-            />
+            {!selectedSite && !initialLocationId ?
+                <ConfigurationContext
+                    title="Locations"
+                    titleIcon={<MapPin className="h-5 w-5" strokeWidth={2} />}
+                    testId="locations-configuration-context"
+                />
+            :   null}
 
             {error ?
                 <p
@@ -627,71 +591,26 @@ export default function LocationsConfigurationPage({
                     />
                 :   <div
                         className={`grid items-start gap-4 pb-4 ${
-                            selectedSite ? "xl:grid-cols-[16rem_minmax(0,1fr)]" : ""
+                            selectedSite ? "xl:grid-cols-[20.5rem_minmax(0,1fr)]" : ""
                         }`}
                     >
                         {selectedSite ?
-                            <aside
-                                className="process-config-setup-card hidden self-start p-0 xl:block"
-                                aria-label="Location selector"
-                                data-testid="locations-object-selector"
-                            >
-                                <div className="flex items-start justify-between gap-2 px-3 pb-2 pt-3">
-                                    <div>
-                                        <p className="config-typo-queue-section-label">Locations</p>
-                                        <p className="config-typo-sublabel mt-0.5">{visibleSites.length} shown</p>
-                                    </div>
-                                    <label className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/55">
-                                        <input
-                                            type="checkbox"
-                                            checked={showInactive}
-                                            onChange={(event) => setShowInactive(event.target.checked)}
-                                        />
-                                        Inactive
-                                    </label>
-                                </div>
-                                <label className="sr-only" htmlFor="locations-search">
-                                    Search locations
-                                </label>
-                                <input
-                                    id="locations-search"
-                                    type="search"
-                                    value={search}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                    placeholder="Search locations"
-                                    className="config-runtime-input mx-2.5 mb-2 w-[calc(100%-1.25rem)]"
-                                />
-                                <div className="space-y-1 px-2 pb-3">
-                                    {visibleSites.map((site) => {
-                                        const summary = fleetById.get(site.id);
-                                        const locality =
-                                            formatLocationLocality({ city: site.city, state: site.state }) ??
-                                            summary?.locality ??
-                                            null;
-                                        return (
-                                            <ConfigurationQueueItem
-                                                key={site.id}
-                                                variant="rail"
-                                                active={site.id === selectedId}
-                                                title={String(site.label ?? "").trim() || "Untitled location"}
-                                                subtitle={
-                                                    summary ?
-                                                        locationSelectorSignal({ ...summary, locality })
-                                                    :   site.is_active === false ?
-                                                        "Inactive"
-                                                    :   "Active"
-                                                }
-                                                onClick={() => {
-                                                    setSelectedId(site.id);
-                                                    setEditingSite(false);
-                                                    router.replace(locationWorkspaceHref(site.id, activeTab));
-                                                }}
-                                                testId={`locations-location-${site.id}`}
-                                            />
-                                        );
-                                    })}
-                                </div>
-                            </aside>
+                            <LocationsObjectSelector
+                                sites={visibleSites}
+                                selectedId={selectedId}
+                                showInactive={showInactive}
+                                onShowInactiveChange={setShowInactive}
+                                search={search}
+                                onSearchChange={setSearch}
+                                canMutate={canMutate}
+                                onAddLocation={beginAddLocation}
+                                fleetById={fleetById}
+                                onSelect={(locationId) => {
+                                    setSelectedId(locationId);
+                                    setEditingSite(false);
+                                    router.replace(locationWorkspaceHref(locationId, activeTab));
+                                }}
+                            />
                         :   null}
 
                         <main
@@ -722,16 +641,17 @@ export default function LocationsConfigurationPage({
                                 </div>
                             :   null}
 
-                            <ConfigScopeContextBar
-                                mode={selectedSite ? "object" : "organization"}
-                                organizationLabel="Organization"
-                                objectLabel={model?.displayName ?? "Location"}
-                                ownershipHint={selectedSite ? "This location" : "All locations"}
-                                onModeChange={(mode) => {
-                                    if (mode === "organization") returnToFleet();
-                                    else if (siteRows[0]) openLocation(siteRows[0].id);
-                                }}
-                            />
+                            {!selectedSite ?
+                                <ConfigScopeContextBar
+                                    mode="organization"
+                                    organizationLabel="Organization"
+                                    objectLabel="Location"
+                                    ownershipHint="All locations"
+                                    onModeChange={(mode) => {
+                                        if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
+                                    }}
+                                />
+                            :   null}
 
                             {!selectedSite ?
                                 <LocationsFleetLanding
@@ -746,7 +666,7 @@ export default function LocationsConfigurationPage({
                                 />
                             :   <>
                                     <section
-                                        className="process-config-setup-card px-5 pt-3"
+                                        className="process-config-setup-card px-5 pb-0 pt-4"
                                         data-testid="locations-hero"
                                     >
                                         <ConfigObjectHeader
@@ -756,12 +676,49 @@ export default function LocationsConfigurationPage({
                                                 label: selectedSite.is_active === false ? "Inactive" : "Active",
                                                 tone: selectedSite.is_active === false ? "inactive" : "active",
                                             }}
-                                            facts={identityFacts}
+                                            breadcrumb={
+                                                <nav
+                                                    className="flex flex-wrap items-center gap-1.5 text-[11px] text-alloy-midnight/45"
+                                                    aria-label="Location ownership"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="font-medium underline-offset-2 hover:text-alloy-midnight/70 hover:underline"
+                                                        onClick={returnToFleet}
+                                                        data-testid="locations-breadcrumb-fleet"
+                                                    >
+                                                        Locations
+                                                    </button>
+                                                    <span aria-hidden="true">›</span>
+                                                    <span className="font-semibold text-alloy-midnight/65">
+                                                        {model?.displayName ?? "Location"}
+                                                    </span>
+                                                </nav>
+                                            }
+                                            factsContent={
+                                                <LocationIdentityFactsRow
+                                                    city={selectedSite.city}
+                                                    state={selectedSite.state}
+                                                    timezoneIana={model?.timezone}
+                                                />
+                                            }
+                                            actions={
+                                                canMutate && !editingSite ?
+                                                    <button
+                                                        type="button"
+                                                        className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                                        onClick={() => setEditingSite(true)}
+                                                        data-testid="locations-edit-location"
+                                                    >
+                                                        Edit location
+                                                    </button>
+                                                :   undefined
+                                            }
                                             testId="locations-object-header"
                                         />
 
                                         <div
-                                            className="mt-2.5 flex overflow-x-auto border-t border-alloy-stone/25"
+                                            className="mt-3.5 flex overflow-x-auto border-t border-alloy-stone/25"
                                             role="tablist"
                                             aria-label="Location settings"
                                         >
@@ -816,26 +773,6 @@ export default function LocationsConfigurationPage({
                 }
             </ConfigurationShell>
 
-            <ConfigApplyToDialog
-                open={applyToOpen}
-                title="Apply configuration to…"
-                description="Choose other locations that should receive configuration from this location."
-                targets={siteRows
-                    .filter((site) => site.id !== selectedSite?.id)
-                    .map((site) => ({
-                        id: site.id,
-                        label: String(site.label ?? "").trim() || "Untitled location",
-                        subtitle: [site.city, site.state].filter(Boolean).join(", ") || undefined,
-                    }))}
-                confirmLabel="Apply"
-                onClose={() => setApplyToOpen(false)}
-                onApply={async (targetIds) => {
-                    // Substrate push is deferred; establish the reusable Apply To interaction now.
-                    setApplyNotice(
-                        `Ready to apply to ${targetIds.length} ${targetIds.length === 1 ? "location" : "locations"}. Configuration push connects next without changing this interaction.`,
-                    );
-                }}
-            />
         </div>
     );
 }

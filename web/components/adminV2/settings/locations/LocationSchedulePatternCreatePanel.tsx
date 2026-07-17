@@ -7,6 +7,7 @@ import {
     type SchedulePatternRow,
 } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 
 const WEEKDAY_CHIP_SELECTED =
     "rounded-full border border-[#00a283]/35 bg-[#00a283]/12 text-[#007d68]";
@@ -94,13 +95,24 @@ export default function LocationSchedulePatternCreatePanel({
                             setSaving(true);
                             setError(null);
                             try {
-                                const created = await createSchedulePattern({
+                                const input = {
                                     site_location_id: locationId,
                                     key: patternKey(label),
                                     label: label.trim(),
                                     schedule_type_key: "weekly",
                                     weekdays,
-                                });
+                                };
+                                const created = await createSchedulePattern(input);
+                                if (
+                                    !mutationResponseContainsPatch(
+                                        created as unknown as Record<string, unknown>,
+                                        input,
+                                    )
+                                ) {
+                                    throw new Error(
+                                        "Schedule creation was not confirmed by the authoritative response.",
+                                    );
+                                }
                                 onCreated(created);
                             } catch (cause) {
                                 setError(

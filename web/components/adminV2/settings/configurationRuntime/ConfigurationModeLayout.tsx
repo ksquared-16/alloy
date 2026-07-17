@@ -1,6 +1,12 @@
 "use client";
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import {
+    QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
+    QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
+    QUEUE_ROW_CARD_SHELL_CLASS,
+    QUEUE_ROW_SELECTED_RAIL_CLASS,
+} from "@/lib/presentation/runtime/queueRowCardShell";
 
 /** Frozen Configuration Runtime V1 shell geometry — see docs/system/configuration-runtime-v1.md */
 export const CONFIGURATION_SHELL_SECTION_QUEUE_WIDTH_PX = 260;
@@ -163,36 +169,61 @@ export function ConfigurationQueueItem({
     onClick,
     testId,
     wrapTitle = false,
+    /** Muted / subordinate row (e.g. Inactive objects). */
+    muted = false,
+    /** When true, exposes listbox option semantics (use inside role="listbox"). */
+    listboxOption = false,
     /** `rail` = Processing-like nav row. `card` = legacy floating tile. */
     variant = "card",
 }: {
     active: boolean;
     title: string;
-    subtitle?: string;
+    subtitle?: string | null;
     trailing?: ReactNode;
     onClick: () => void;
     testId?: string;
     wrapTitle?: boolean;
+    muted?: boolean;
+    listboxOption?: boolean;
     variant?: "card" | "rail";
 }) {
     const className =
         variant === "rail" ?
-            `process-config-nav-item w-full text-left ${active ? "process-config-nav-item--active" : ""}`
+            `${QUEUE_ROW_CARD_SHELL_CLASS} min-h-[3.6rem] shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-bend-pine ${
+                active ? QUEUE_ROW_CARD_SELECTED_BORDER_CLASS : QUEUE_ROW_CARD_IDLE_BORDER_CLASS
+            } ${muted && !active ? "opacity-60" : ""}`
         :   `process-config-work-view-list-card ${active ? "process-config-work-view-list-card--active" : ""}`;
 
     return (
         <button
             type="button"
+            role={listboxOption ? "option" : undefined}
             onClick={onClick}
             className={className}
             data-testid={testId}
             aria-current={active ? "true" : undefined}
+            aria-selected={listboxOption ? active : undefined}
         >
-            <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 text-left">
-                    <p className={`config-typo-queue-item-title ${wrapTitle ? "whitespace-normal" : "truncate"}`}>{title}</p>
+            {variant === "rail" && active ?
+                <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} />
+            :   null}
+            <div className="flex min-w-0 w-full items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 text-left">
+                    <p
+                        className={`${variant === "rail" ? "text-[13px] font-semibold leading-4 text-alloy-midnight" : "config-typo-queue-item-title"} ${
+                            wrapTitle ? "whitespace-normal" : "truncate"
+                        }`}
+                    >
+                        {title}
+                    </p>
                     {subtitle ?
-                        <p className={`config-typo-sublabel mt-0.5 ${wrapTitle ? "whitespace-pre-line" : "truncate"}`}>{subtitle}</p>
+                        <p
+                            className={`${variant === "rail" ? "mt-0.5 text-[11px] leading-4 text-alloy-midnight/60" : "config-typo-sublabel mt-0.5"} ${
+                                wrapTitle ? "whitespace-pre-line" : "truncate"
+                            }`}
+                        >
+                            {subtitle}
+                        </p>
                     :   null}
                 </div>
                 {trailing}
@@ -207,7 +238,43 @@ export function ConfigurationPrimaryButton({
     ...props
 }: ButtonHTMLAttributes<HTMLButtonElement>) {
     return (
-        <button type="button" className={`config-primary-btn ${className}`.trim()} {...props}>
+        <button
+            type="button"
+            className={`inline-flex items-center justify-center rounded-md border border-alloy-bend-pine bg-alloy-bend-pine px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-alloy-bend-pine/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40 focus-visible:ring-offset-1 active:bg-alloy-bend-pine/90 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+            {...props}
+        >
+            {children}
+        </button>
+    );
+}
+
+export function ConfigurationSecondaryButton({
+    className = "",
+    children,
+    ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+    return (
+        <button
+            type="button"
+            className={`inline-flex items-center justify-center rounded border border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.08] px-3 py-1.5 text-xs font-medium text-alloy-bend-pine transition-colors hover:bg-alloy-bend-pine/[0.12] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40 focus-visible:ring-offset-1 active:bg-alloy-bend-pine/[0.16] disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+            {...props}
+        >
+            {children}
+        </button>
+    );
+}
+
+export function ConfigurationInlineButton({
+    className = "",
+    children,
+    ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+    return (
+        <button
+            type="button"
+            className={`inline-flex items-center rounded text-xs font-semibold text-alloy-bend-pine transition-colors hover:text-alloy-bend-pine/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+            {...props}
+        >
             {children}
         </button>
     );

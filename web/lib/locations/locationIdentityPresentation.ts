@@ -83,6 +83,21 @@ export function formatLocationLocality(parts: {
 }
 
 /**
+ * One-line place identity for object selectors — locality preferred;
+ * street alone when locality is missing. Never multi-line.
+ */
+export function formatLocationShortPlaceLine(parts: {
+    address1?: string | null;
+    city?: string | null;
+    state?: string | null;
+}): string | null {
+    const locality = formatLocationLocality(parts);
+    if (locality) return locality;
+    const street = String(parts.address1 ?? "").trim();
+    return street || null;
+}
+
+/**
  * Identity fact line for a location header.
  * Priority: locality → friendly timezone. Omit entirely when neither is representable.
  * Joined as `Bend, Oregon · Pacific Time` when both exist.

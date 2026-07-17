@@ -27,6 +27,7 @@ import {
     filterWaitlistRankingEligibleWorkUnits,
     pickDefaultWaitlistRankingWorkUnitId,
 } from "@/lib/orchestration/placement/waitlistRankingPolicyWorkUnits";
+import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 
 function ConcernSurface({
     title,
@@ -172,8 +173,18 @@ export function LocationPlacementPanel({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ metadata: { placement_priority_v1: layer } }),
             });
-            const json = (await response.json().catch(() => ({}))) as { error?: string };
+            const json = (await response.json().catch(() => ({}))) as {
+                metadata?: Record<string, unknown>;
+                error?: string;
+            };
             if (!response.ok) throw new Error(json.error ?? "Waitlist ranking policy could not be saved.");
+            if (
+                !mutationResponseContainsPatch(json as Record<string, unknown>, {
+                    metadata: { placement_priority_v1: layer },
+                })
+            ) {
+                throw new Error("Waitlist ranking save was not confirmed by the authoritative response.");
+            }
             await loadPolicy();
             setSaved(true);
         } catch (cause) {
@@ -433,8 +444,15 @@ export function LocationAccessPanel({ locationId }: { locationId: string }) {
                     site_location_ids: nextSiteIds,
                 }),
             });
-            const json = (await response.json().catch(() => ({}))) as { error?: string };
+            const json = (await response.json().catch(() => ({}))) as {
+                site_location_ids?: string[];
+                error?: string;
+            };
             if (!response.ok) throw new Error(json.error ?? "Location access could not be saved.");
+            const confirmedIds = new Set(json.site_location_ids ?? []);
+            if (confirmedIds.size !== nextSiteIds.length || nextSiteIds.some((id) => !confirmedIds.has(id))) {
+                throw new Error("Location access save was not confirmed by the authoritative response.");
+            }
             await loadMembers();
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Location access could not be saved.");

@@ -6,7 +6,6 @@ type BuildArgs = {
     canMutate: boolean;
     model: LocationWorkspaceModel | null;
     selectedSite: boolean;
-    siteCount: number;
     scheduleCount: number;
     roomCount: number;
     programCount: number;
@@ -20,7 +19,6 @@ type BuildArgs = {
     onAddRoom: () => void;
     onAddProgram: () => void;
     onNavigate: (tab: LocationWorkspaceTab, itemId?: string | null) => void;
-    onApply: () => void;
     onCreateSchedule: () => void;
 };
 
@@ -43,21 +41,6 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
     }
 
     if (!args.model) return [];
-
-    const applyDisabled = !args.canMutate || args.siteCount < 2;
-    const applyReason =
-        !args.canMutate ? "You do not have permission"
-        : args.siteCount < 2 ? "Need at least two locations"
-        : undefined;
-
-    const applyAction = (id: string, label: string): LocationsRailAction => ({
-        id,
-        label,
-        group: "manage",
-        disabled: applyDisabled,
-        reason: applyReason,
-        onClick: args.onApply,
-    });
 
     const openCapacityWork = () => {
         args.onNavigate("rooms", args.firstRoomNeedingCapacityId);
@@ -122,15 +105,7 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
             });
         }
 
-        actions.push(applyAction("apply-to", "Apply to other locations"));
-        if (args.canMutate) {
-            actions.push({
-                id: "edit-details",
-                label: "Edit location",
-                group: "manage",
-                onClick: args.onEditLocation,
-            });
-        }
+        // Primary "Edit location" lives on the object header (not duplicated here).
 
         if (args.canMutate && args.roomCount > 0) {
             actions.push({
@@ -172,18 +147,9 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
     }
 
     if (args.activeTab === "programs") {
-        const actions: LocationsRailAction[] = [];
-        if (args.canMutate) {
-            actions.push({
-                id: "add-program",
-                label: "Add program",
-                group: args.programCount === 0 ? "fix" : "next",
-                reason: args.programCount === 0 ? "No programs offered yet" : undefined,
-                onClick: args.onAddProgram,
-            });
-        }
-        actions.push(applyAction("apply-programs", "Apply to other locations"));
-        return actions;
+        // Collection chrome owns Add. Cross-location apply stays hidden until
+        // an authoritative copy substrate exists.
+        return [];
     }
 
     if (args.activeTab === "rooms") {
@@ -208,7 +174,6 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 onClick: args.onAddRoom,
             });
         }
-        actions.push(applyAction("apply-rooms", "Apply to other locations"));
         return actions;
     }
 
@@ -231,24 +196,11 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
                 onClick: args.onCreateSchedule,
             });
         }
-        actions.push(applyAction("apply-schedule", "Apply to other locations"));
         return actions;
     }
 
     if (args.activeTab === "tours") {
-        return [
-            applyAction("apply-tours", "Apply to other locations"),
-            ...(args.canMutate ?
-                [
-                    {
-                        id: "edit-details",
-                        label: "Edit location",
-                        group: "manage" as const,
-                        onClick: args.onEditLocation,
-                    },
-                ]
-            :   []),
-        ];
+        return [];
     }
 
     if (args.activeTab === "placement") {
@@ -264,16 +216,8 @@ export function buildLocationsRailActions(args: BuildArgs): LocationsRailAction[
     }
 
     if (args.activeTab === "access") {
-        return args.canMutate ?
-                [
-                    {
-                        id: "edit-details",
-                        label: "Edit location",
-                        group: "manage",
-                        onClick: args.onEditLocation,
-                    },
-                ]
-            :   [];
+        // Edit location is owned by the object header.
+        return [];
     }
 
     return [];

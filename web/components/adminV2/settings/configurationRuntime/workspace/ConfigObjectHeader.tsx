@@ -10,6 +10,7 @@ export function ConfigObjectHeader({
     name,
     status,
     facts = [],
+    factsContent,
     breadcrumb,
     actions,
     testId = "config-object-header",
@@ -19,6 +20,8 @@ export function ConfigObjectHeader({
     status?: { label: string; tone: "active" | "inactive" | "attention" };
     /** Only include facts that have real values — never "not set" placeholders. */
     facts?: string[];
+    /** Optional rich facts row (icons, etc.). When set, replaces the joined `facts` string. */
+    factsContent?: ReactNode;
     breadcrumb?: ReactNode;
     actions?: ReactNode;
     testId?: string;
@@ -26,6 +29,11 @@ export function ConfigObjectHeader({
 }) {
     const visibleFacts = facts.map((fact) => fact.trim()).filter(Boolean);
     const isHero = size === "hero";
+    const factsNode =
+        factsContent ??
+        (visibleFacts.length > 0 ?
+            <p className="mt-1.5 text-[12px] leading-snug text-alloy-midnight/50">{visibleFacts.join(" · ")}</p>
+        :   null);
 
     return (
         <header
@@ -34,9 +42,11 @@ export function ConfigObjectHeader({
             data-config-header-size={size}
         >
             {breadcrumb ?
-                <div className="mb-1">{breadcrumb}</div>
+                <div className="mb-1.5" data-testid={`${testId}-breadcrumb`}>
+                    {breadcrumb}
+                </div>
             :   null}
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                         <h1
@@ -62,14 +72,10 @@ export function ConfigObjectHeader({
                             </span>
                         :   null}
                     </div>
-                    {visibleFacts.length > 0 ?
-                        <p className="mt-1 text-[12px] leading-snug text-alloy-midnight/50">
-                            {visibleFacts.join(" · ")}
-                        </p>
-                    :   null}
+                    {factsNode}
                 </div>
                 {actions ?
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2 pt-0.5">{actions}</div>
                 :   null}
             </div>
         </header>

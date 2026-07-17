@@ -16,6 +16,7 @@ import {
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 
 export default function LocationScheduleTemplateDetailPanel({
     pattern,
@@ -123,12 +124,23 @@ export default function LocationScheduleTemplateDetailPanel({
                             void (async () => {
                                 setSaving(true);
                                 try {
-                                    const updated = await patchSchedulePattern(pattern.id, {
+                                    const patch = {
                                         label: label.trim(),
                                         schedule_type_key: scheduleTypeKey.trim(),
                                         weekdays,
                                         is_active: active,
-                                    });
+                                    };
+                                    const updated = await patchSchedulePattern(pattern.id, patch);
+                                    if (
+                                        !mutationResponseContainsPatch(
+                                            updated as unknown as Record<string, unknown>,
+                                            patch,
+                                        )
+                                    ) {
+                                        throw new Error(
+                                            "Schedule save was not confirmed by the authoritative response.",
+                                        );
+                                    }
                                     onUpdated(updated);
                                 } catch (e) {
                                     onError(e instanceof Error ? e.message : "Save failed");

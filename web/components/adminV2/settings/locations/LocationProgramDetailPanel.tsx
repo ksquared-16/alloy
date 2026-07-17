@@ -7,9 +7,9 @@ import {
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
     ConfigurationQueueItem,
+    ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
-    CONFIG_OBJECT_CELL,
     ConfigAttentionPanel,
     ConfigChildObjectMasterDetail,
     ConfigConsequenceLine,
@@ -155,7 +155,6 @@ export default function LocationProgramDetailPanel({
                     actions={
                         canMutate && onAddProgram ?
                             <ConfigurationPrimaryButton
-                                className="config-primary-btn--sm"
                                 onClick={onAddProgram}
                                 data-testid="locations-program-empty-add"
                             >
@@ -177,14 +176,12 @@ export default function LocationProgramDetailPanel({
                     status={{ label: "Editing", tone: "attention" }}
                     facts={[siteLabel ? `Offered at ${siteLabel}` : ""].filter(Boolean)}
                     actions={
-                        <button
-                            type="button"
-                            className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                        <ConfigurationSecondaryButton
                             onClick={cancelEdit}
                             data-testid={`locations-program-cancel-${program.id}`}
                         >
                             Cancel
-                        </button>
+                        </ConfigurationSecondaryButton>
                     }
                     testId="locations-program-header"
                 />
@@ -215,7 +212,7 @@ export default function LocationProgramDetailPanel({
                     </ConfigEditorSection>
 
                     <ConfigEditorSection
-                        title="Capacity / participation"
+                        title="Capacity"
                         description="Participation is derived from rooms assigned to this program."
                         testId="locations-program-editor-participation"
                     >
@@ -271,7 +268,7 @@ export default function LocationProgramDetailPanel({
                     </ConfigEditorSection>
 
                     <ConfigEditorSection
-                        title="Hours / operating rules"
+                        title="Schedule"
                         description="Programs follow this location’s weekly hours."
                         testId="locations-program-editor-schedule"
                     >
@@ -301,7 +298,6 @@ export default function LocationProgramDetailPanel({
                     {canMutate ?
                         <div className="flex flex-wrap gap-2 pt-1">
                             <ConfigurationPrimaryButton
-                                className="config-primary-btn--sm"
                                 disabled={saving}
                                 data-testid="locations-program-save"
                                 onClick={() => {
@@ -339,19 +335,17 @@ export default function LocationProgramDetailPanel({
                             >
                                 {saving ? "Saving…" : "Save program"}
                             </ConfigurationPrimaryButton>
-                            <button
-                                type="button"
-                                className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-medium text-alloy-midnight/65"
+                            <ConfigurationSecondaryButton
                                 onClick={cancelEdit}
                                 disabled={saving}
                             >
                                 Cancel
-                            </button>
+                            </ConfigurationSecondaryButton>
                         </div>
                     :   null}
                 </div>
             </div>
-        :   <div className="space-y-3" data-testid={`locations-program-summary-${program.id}`}>
+        :   <div className="space-y-4" data-testid={`locations-program-summary-${program.id}`}>
                 <ConfigObjectHeader
                     size="hero"
                     name={summary?.label ?? program.label}
@@ -359,14 +353,12 @@ export default function LocationProgramDetailPanel({
                     facts={[siteLabel ? `Offered at ${siteLabel}` : ""].filter(Boolean)}
                     actions={
                         canMutate ?
-                            <button
-                                type="button"
-                                className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                            <ConfigurationSecondaryButton
                                 onClick={beginEdit}
                                 data-testid={`locations-program-edit-${program.id}`}
                             >
                                 Edit program
-                            </button>
+                            </ConfigurationSecondaryButton>
                         :   null
                     }
                     testId="locations-program-header"
@@ -382,87 +374,86 @@ export default function LocationProgramDetailPanel({
                     :   "No rooms are assigned to this program yet."}
                 </ConfigConsequenceLine>
 
-                <div
-                    className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
-                    data-testid="locations-program-ops"
-                >
-                    {[
-                        {
-                            key: "status",
-                            label: "Status",
-                            value: status.label,
-                            hint: active ? "Offered at this location" : "Not currently offered",
-                            tone: status.tone,
-                        },
-                        {
-                            key: "rooms",
-                            label: "Rooms",
-                            value: String(summary?.roomCount ?? 0),
-                            hint: "Classrooms using this program",
-                            tone: (summary?.roomCount ?? 0) === 0 ? "attention" : "ready",
-                        },
-                        {
-                            key: "capacity",
-                            label: "Capacity",
-                            value:
-                                summary?.configuredCapacity == null ?
-                                    "Not set"
-                                :   String(summary.configuredCapacity),
-                            hint:
-                                summary?.configuredCapacity == null ?
-                                    "From participating rooms"
-                                :   "Children across assigned rooms",
-                            tone: summary?.configuredCapacity == null ? "attention" : "ready",
-                        },
-                        {
-                            key: "age",
-                            label: "Age range",
-                            value: ageDisplay === "Age range not set" ? "Not set" : ageDisplay,
-                            hint: "Who this program serves",
-                            tone:
-                                ageDisplay === "Age range not set" || ageDisplay === "Not set" ?
-                                    "attention"
-                                :   "ready",
-                        },
-                        {
-                            key: "schedule",
-                            label: "Operating hours",
-                            value: locationHasSchedule ? "Location hours" : "Not set",
-                            hint: scheduleLine,
-                            tone: locationHasSchedule ? "ready" : "attention",
-                        },
-                        {
-                            key: "ownership",
-                            label: "Ownership",
-                            value: "Set here",
-                            hint: "Location setting",
-                            tone: "ready",
-                        },
-                    ].map((card) => (
-                        <div
-                            key={card.key}
-                            className={CONFIG_OBJECT_CELL}
-                            data-testid={`locations-program-metric-${card.key}`}
-                        >
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
-                                {card.label}
-                            </p>
-                            <p
-                                className={`mt-0.5 text-base font-semibold leading-tight ${
-                                    card.tone === "attention" ? "text-alloy-ember" : "text-alloy-midnight"
-                                }`}
+                <section className="border-y border-alloy-forge/10 py-4" data-testid="locations-program-ops">
+                    <h2 className="config-typo-workspace-title mb-3">Operating picture</h2>
+                    <dl className="grid grid-cols-2">
+                        {[
+                            {
+                                key: "rooms",
+                                label: "Participating rooms",
+                                value: String(summary?.roomCount ?? 0),
+                                hint: "Classrooms using this program",
+                                attention: (summary?.roomCount ?? 0) === 0,
+                            },
+                            {
+                                key: "capacity",
+                                label: "Capacity",
+                                value:
+                                    summary?.configuredCapacity == null ?
+                                        "Not set"
+                                    :   String(summary.configuredCapacity),
+                                hint: "Across participating rooms",
+                                attention: summary?.configuredCapacity == null,
+                            },
+                            {
+                                key: "age",
+                                label: "Age range",
+                                value: ageDisplay === "Age range not set" ? "Not set" : ageDisplay,
+                                hint: "Who this program serves",
+                                attention: ageDisplay === "Age range not set" || ageDisplay === "Not set",
+                            },
+                            {
+                                key: "schedule",
+                                label: "Schedule",
+                                value: locationHasSchedule ? "Location hours" : "Not set",
+                                hint: scheduleSummary || "Weekly hours unavailable",
+                                attention: !locationHasSchedule,
+                            },
+                        ].map((metric) => (
+                            <div
+                                key={metric.key}
+                                className="min-w-0 border-t border-alloy-forge/10 px-3 py-3 odd:pl-0 even:border-l first:border-t-0 [&:nth-child(2)]:border-t-0"
+                                data-testid={`locations-program-metric-${metric.key}`}
                             >
-                                {card.value}
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{card.hint}</p>
+                                <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                    {metric.label}
+                                </dt>
+                                <dd
+                                    className={`mt-1 text-lg font-semibold leading-tight ${
+                                        metric.attention ? "text-alloy-ember" : "text-alloy-midnight"
+                                    }`}
+                                >
+                                    {metric.value}
+                                </dd>
+                                <dd className="mt-1 text-[11px] leading-snug text-alloy-midnight/50">{metric.hint}</dd>
+                            </div>
+                        ))}
+                    </dl>
+                </section>
+
+                <section data-testid="locations-program-relationships">
+                    <h2 className="config-typo-workspace-title mb-2">Relationships</h2>
+                    <dl className="divide-y divide-alloy-forge/10 border-y border-alloy-forge/10">
+                        <div className="flex items-baseline justify-between gap-4 py-2.5">
+                            <dt className="text-sm font-semibold text-alloy-midnight">Location</dt>
+                            <dd className="text-right text-sm text-alloy-midnight/60">{siteLabel || "This location"}</dd>
                         </div>
-                    ))}
-                </div>
+                        <div className="flex items-baseline justify-between gap-4 py-2.5">
+                            <dt className="text-sm font-semibold text-alloy-midnight">Participation</dt>
+                            <dd className="text-right text-sm text-alloy-midnight/60">
+                                {(summary?.roomCount ?? 0) === 0 ?
+                                    "No rooms assigned"
+                                :   `${summary?.roomCount} ${(summary?.roomCount ?? 0) === 1 ? "room" : "rooms"} assigned`}
+                            </dd>
+                        </div>
+                    </dl>
+                </section>
 
                 <ConfigAttentionPanel
                     items={attention}
                     compact
                     embedded
+                    actionAlign="trailing"
                     testId="locations-program-attention"
                     onResolve={beginEdit}
                 />
@@ -471,30 +462,30 @@ export default function LocationProgramDetailPanel({
     return (
         <ConfigChildObjectMasterDetail
             listTitle="Programs"
-            listSummary="Offerings"
+            listSummary={`${programs.length} ${programs.length === 1 ? "program" : "programs"}`}
             testId="locations-programs"
             listActions={
                 canMutate && onAddProgram ?
-                    <button
-                        type="button"
-                        className="text-xs font-semibold text-[#007d68]"
+                    <ConfigurationSecondaryButton
+                        className="px-2 py-1 text-[11px]"
                         onClick={onAddProgram}
                         data-testid="locations-program-add"
                     >
-                        + Add
-                    </button>
+                        + Add program
+                    </ConfigurationSecondaryButton>
                 :   null
             }
             list={
                 programs.length > 0 ?
                     programs.map((entry) => {
                         const entrySummary = summaries.find((item) => item.id === entry.id);
+                        const roomCount = entrySummary?.roomCount ?? 0;
                         const subtitle =
                             entry.is_active === false ? "Inactive"
-                            : (entrySummary?.roomCount ?? 0) === 0 ? "No rooms"
+                            : roomCount === 0 ? "Active · no rooms"
                             : entrySummary?.configuredCapacity == null ?
-                                `${entrySummary.roomCount} rooms`
-                            :   `${entrySummary.roomCount} rooms · ${entrySummary.configuredCapacity}`;
+                                `Active · ${roomCount} ${roomCount === 1 ? "room" : "rooms"}`
+                            :   `Active · ${roomCount} ${roomCount === 1 ? "room" : "rooms"} · ${entrySummary.configuredCapacity} capacity`;
                         return (
                             <ConfigurationQueueItem
                                 key={entry.id}

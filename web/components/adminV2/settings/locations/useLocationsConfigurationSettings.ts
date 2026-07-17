@@ -18,6 +18,7 @@ import {
 } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import type { LocationSiteCreateInput } from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
+import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 
 export type LocationConfigSection =
     | "locations"
@@ -246,71 +247,78 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         async (input: LocationSiteCreateInput): Promise<string> => {
             let metadata = mergeLocationMetadataField(null, "site_phone", input.phone.trim() || null);
             metadata = mergeLocationMetadataField(metadata, "timezone", input.timezone.trim() || null);
+            const payload = {
+                location_type: "site",
+                label: input.label.trim() || null,
+                address1: input.address1.trim() || null,
+                city: input.city.trim() || null,
+                state: input.state.trim() || null,
+                postal_code: input.postal_code.trim() || null,
+                is_active: input.is_active,
+                metadata,
+            };
             const res = await fetch("/api/admin/locations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({
-                    location_type: "site",
-                    label: input.label.trim() || null,
-                    address1: input.address1.trim() || null,
-                    city: input.city.trim() || null,
-                    state: input.state.trim() || null,
-                    postal_code: input.postal_code.trim() || null,
-                    is_active: input.is_active,
-                    metadata,
-                }),
+                body: JSON.stringify(payload),
             });
-            const json = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
             if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
             const newId = String(json.id ?? "").trim();
-            if (!newId) throw new Error("Create failed: missing location id");
+            if (!newId || !mutationResponseContainsPatch(json as Record<string, unknown>, payload)) {
+                throw new Error("Location creation was not confirmed by the authoritative response.");
+            }
+            setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
             window.dispatchEvent(
                 new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
             );
-            await refreshLocations();
             return newId;
         },
-        [refreshLocations],
+        [],
     );
 
     const createRoomUnit = useCallback(
         async (siteId: string, label: string): Promise<string> => {
+            const payload = {
+                location_type: "unit",
+                parent_location_id: siteId,
+                label: label.trim() || "New room",
+                is_active: true,
+            };
             const res = await fetch("/api/admin/locations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({
-                    location_type: "unit",
-                    parent_location_id: siteId,
-                    label: label.trim() || "New room",
-                    is_active: true,
-                }),
+                body: JSON.stringify(payload),
             });
-            const json = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
             if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
             const newId = String(json.id ?? "").trim();
-            if (!newId) throw new Error("Create failed: missing room id");
+            if (!newId || !mutationResponseContainsPatch(json as Record<string, unknown>, payload)) {
+                throw new Error("Room creation was not confirmed by the authoritative response.");
+            }
+            setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
             window.dispatchEvent(
                 new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
             );
-            await refreshLocations();
             return newId;
         },
-        [refreshLocations],
+        [],
     );
 
     const createProgramCategory = useCallback(
         async (siteId: string, label: string): Promise<string> => {
+            const payload = {
+                location_id: siteId,
+                label: label.trim() || "New program",
+                is_active: true,
+            };
             const res = await fetch("/api/admin/location-program-categories", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({
-                    location_id: siteId,
-                    label: label.trim() || "New program",
-                    is_active: true,
-                }),
+                body: JSON.stringify(payload),
             });
             const json = (await res.json().catch(() => ({}))) as {
                 category?: LocationProgramCategoryRow;
@@ -319,15 +327,17 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
             const created = json.category;
             const newId = String(created?.id ?? "").trim();
-            if (!newId) throw new Error("Create failed: missing program id");
-            if (created) {
-                setProgramCategories((prev) => [...prev, created]);
-            } else {
-                await refreshPrograms();
+            if (
+                !newId ||
+                !created ||
+                !mutationResponseContainsPatch(created as unknown as Record<string, unknown>, payload)
+            ) {
+                throw new Error("Program creation was not confirmed by the authoritative response.");
             }
+            setProgramCategories((prev) => [...prev, created]);
             return newId;
         },
-        [refreshPrograms],
+        [],
     );
 
     const patchLocation = useCallback(
@@ -338,11 +348,18 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
                 credentials: "include",
                 body: JSON.stringify(body),
             });
-            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
             if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
-            await refreshLocations();
+            if (!json.id || !mutationResponseContainsPatch(json as Record<string, unknown>, body)) {
+                throw new Error("Location save was not confirmed by the authoritative response.");
+            }
+            // Apply the PATCH row into local state. Do not await a full hierarchy GET on the
+            // save critical path — that was blocking "Saving…" for the entire org reload.
+            setRows((prev) =>
+                prev.map((row) => (row.id === id ? { ...row, ...json, id: row.id } : row)),
+            );
         },
-        [refreshLocations],
+        [],
     );
 
     const patchProgramCategory = useCallback(
@@ -359,13 +376,19 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             };
             if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
             const updated = json.categories?.[0];
-            if (updated) {
-                setProgramCategories((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
-            } else {
-                await refreshPrograms();
+            if (
+                !updated ||
+                updated.id !== categoryId ||
+                !mutationResponseContainsPatch(
+                    updated as unknown as Record<string, unknown>,
+                    patch as Record<string, unknown>,
+                )
+            ) {
+                throw new Error("Program save was not confirmed by the authoritative response.");
             }
+            setProgramCategories((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
         },
-        [refreshPrograms],
+        [],
     );
 
     const roomCapacitySummaryForSite = useCallback(

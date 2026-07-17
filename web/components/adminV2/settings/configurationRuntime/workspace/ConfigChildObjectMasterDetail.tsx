@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 /**
  * Child-object page composition — supporting queue + primary detail region.
  * Detail owns the workspace; queue is navigation.
+ * Canonical reference: Locations → Programs (Rooms and future children inherit).
  */
 export function ConfigChildObjectMasterDetail({
     listTitle,
@@ -23,24 +24,29 @@ export function ConfigChildObjectMasterDetail({
 }) {
     return (
         <div
-            className="grid items-start gap-3 lg:grid-cols-[13.5rem_minmax(0,1fr)]"
+            className="config-child-workspace grid items-start gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]"
             data-testid={testId}
             data-config-surface="workspace"
         >
-            <aside className="process-config-setup-card self-start p-0" data-testid={`${testId}-list`}>
-                <div className="flex items-start justify-between gap-2 px-3 py-2">
-                    <div>
-                        <p className="config-typo-queue-section-label">{listTitle}</p>
+            <aside
+                className="config-child-workspace__list process-config-setup-card self-start overflow-hidden p-0"
+                data-testid={`${testId}-list`}
+            >
+                <div className="config-child-workspace__list-header">
+                    <div className="min-w-0 flex-1">
+                        <h2 className="config-child-workspace__list-title">{listTitle}</h2>
                         {listSummary ?
-                            <p className="config-typo-sublabel mt-0.5">{listSummary}</p>
+                            <p className="config-child-workspace__list-summary">{listSummary}</p>
                         :   null}
                     </div>
-                    {listActions}
+                    {listActions ?
+                        <div className="shrink-0">{listActions}</div>
+                    :   null}
                 </div>
-                <div className="space-y-0.5 px-2 pb-2">{list}</div>
+                <div className="config-child-workspace__list-body">{list}</div>
             </aside>
             <div
-                className="process-config-setup-card min-w-0 self-start px-5 py-4"
+                className="config-child-workspace__detail process-config-setup-card min-w-0 self-start px-5 py-5"
                 data-testid={`${testId}-detail`}
             >
                 {detail}
@@ -58,7 +64,7 @@ export function ConfigConsequenceLine({
 }) {
     return (
         <p
-            className="rounded-md border border-[#00a283]/12 bg-[#00a283]/[0.04] px-2.5 py-1.5 text-sm leading-snug text-alloy-midnight/75"
+            className="rounded-md border border-[#00a283]/12 bg-[#00a283]/[0.04] px-3 py-2 text-sm leading-snug text-alloy-midnight/75"
             data-testid={testId}
         >
             {children}
