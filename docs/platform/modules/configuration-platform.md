@@ -185,6 +185,12 @@ Only Programs supports this runtime in V1. Other Configuration domains do not
 gain publication behavior by inference; adoption requires a domain-owned
 revision model and a registered durable adapter.
 
+**Registry ownership:** Organization Configuration Runtime owns the domain
+registry and distribution-mode declarations. Programs is the V1 consumer that
+registers `distributionMode: "assignment"` and supplies the `programs.v1`
+adapter. Domains that need Apply continue to use the existing Apply plan/provider
+contract; Programs does not.
+
 ### Primitives NOT yet extracted (deferred)
 
 These belong to the Configuration Runtime eventually but are only Commercial-specific today:

@@ -1,6 +1,6 @@
 ---
 owner: sprint
-status: sprint
+status: completed
 last_reviewed: 2026-07-17
 concept: configuration-publication-runtime-v1
 supersedes: []
@@ -8,9 +8,11 @@ supersedes: []
 
 # Configuration Publication Runtime V1
 
-Reference consumer: Programs. This document records implementation evidence and
-authorization; canonical behavior belongs in
-`docs/platform/modules/configuration-platform.md` as it becomes real.
+**Completed.** Certification closeout:
+`docs/sprints/completed/configuration-publication-runtime-v1-closeout.md`.
+
+Reference consumer: Programs. Canonical behavior lives in
+`docs/platform/modules/configuration-platform.md`.
 
 ## Phase 0 current-state map
 
