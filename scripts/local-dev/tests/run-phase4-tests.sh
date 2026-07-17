@@ -360,5 +360,17 @@ echo "== Product Runtime V1 =="
 assert_ok "product runtime focused tests" bash "$ROOT/tests/test-product-runtime.sh"
 
 echo
+echo "== Fail-closed promotion suite (TM-5) =="
+set +e
+bash "$ROOT/tests/test-fail-closed-promotion.sh"
+failclosed_rc=$?
+set -e
+if [[ "$failclosed_rc" -eq 0 ]]; then
+  pass "fail-closed promotion suite"
+else
+  fail "fail-closed promotion suite"
+fi
+
+echo
 echo "Phase 4 results: PASS=$PASS FAIL=$FAIL"
 [[ "$FAIL" -eq 0 ]]
