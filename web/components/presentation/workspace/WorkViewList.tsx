@@ -130,7 +130,10 @@ function RowCounts({ view, showCounts }: { view: WorkViewLinkModel; showCounts: 
 
     if (primaryCount == null && view.count == null) {
         return (
-            <span aria-hidden className="inline-block h-3.5 w-5 animate-pulse rounded bg-alloy-midnight/10" />
+            // RESERVED SETTLEMENT GEOMETRY — Work View counts are Settlement (U-S6). The badge
+            // reserves its width so the row never reflows when the count settles; it does not
+            // animate, because visible construction is budgeted at 0.
+            <span aria-hidden data-settlement-reserved="count" className="inline-block h-3.5 w-5 rounded bg-alloy-midnight/[0.06]" />
         );
     }
 
