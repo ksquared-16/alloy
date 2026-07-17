@@ -61,6 +61,11 @@ public,communication_template_versions,BASE TABLE,true,false,true
 public,communication_templates,BASE TABLE,true,false,true
 public,communication_threads,BASE TABLE,true,false,true
 public,config_layout_assist_proposals,BASE TABLE,true,false,true
+public,configuration_consumptions,BASE TABLE,true,false,true
+public,configuration_delivery_attempts,BASE TABLE,true,false,true
+public,configuration_distribution_runs,BASE TABLE,true,false,true
+public,configuration_distribution_targets,BASE TABLE,true,false,true
+public,configuration_publications,BASE TABLE,true,false,true
 public,consumption_event_types,BASE TABLE,true,false,true
 public,consumption_events,BASE TABLE,true,false,true
 public,contact_tags,BASE TABLE,true,false,true
@@ -136,6 +141,10 @@ public,metric_rollups,BASE TABLE,true,false,true
 public,metric_snapshots,BASE TABLE,true,false,true
 public,metric_visualizations,BASE TABLE,true,false,true
 public,mutation_events,BASE TABLE,true,false,true
+public,operational_authorities,BASE TABLE,true,false,true
+public,operational_authority_assignments,BASE TABLE,true,false,true
+public,operational_expectation_ratifications,BASE TABLE,true,false,true
+public,operational_expectations,BASE TABLE,true,false,true
 public,operational_tasks,BASE TABLE,true,false,true
 public,opportunities,BASE TABLE,true,false,true
 public,opportunity_customer_members,BASE TABLE,true,false,true
@@ -183,8 +192,11 @@ public,processing_exceptions,BASE TABLE,true,false,true
 public,processing_facts,BASE TABLE,true,false,true
 public,processing_plan_operations,BASE TABLE,true,false,true
 public,processing_resolutions,BASE TABLE,true,false,true
+public,program_drafts,BASE TABLE,true,false,true
 public,program_offering_variants,BASE TABLE,true,false,true
 public,program_offerings,BASE TABLE,true,false,true
+public,program_revisions,BASE TABLE,true,false,true
+public,programs,BASE TABLE,true,false,true
 public,quotes,BASE TABLE,true,false,true
 public,record_actions,BASE TABLE,true,false,true
 public,record_drawer_layouts,BASE TABLE,true,false,true

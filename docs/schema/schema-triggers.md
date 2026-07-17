@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-13 · **Trigger count:** 229
+**Generated:** 2026-07-17 · **Trigger count:** 244
 
 | Table | Trigger | Event | Function |
 |-------|---------|-------|----------|
@@ -54,6 +54,10 @@
 | `communication_template_versions` | `trg_sync_communication_template_version_legacy` | INSERT BEFORE | CREATE TRIGGER trg_sync_communication_template_version_legacy BEFORE INSERT OR U |
 | `communication_template_versions` | `trg_sync_communication_template_version_legacy` | UPDATE BEFORE | CREATE TRIGGER trg_sync_communication_template_version_legacy BEFORE INSERT OR U |
 | `config_layout_assist_proposals` | `trg_config_layout_assist_proposals_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_config_layout_assist_proposals_updated_at BEFORE UPDATE ON co |
+| `configuration_delivery_attempts` | `trg_configuration_delivery_attempts_immutable` | DELETE BEFORE | CREATE TRIGGER trg_configuration_delivery_attempts_immutable BEFORE DELETE OR UP |
+| `configuration_delivery_attempts` | `trg_configuration_delivery_attempts_immutable` | UPDATE BEFORE | CREATE TRIGGER trg_configuration_delivery_attempts_immutable BEFORE DELETE OR UP |
+| `configuration_publications` | `trg_configuration_publications_immutable` | DELETE BEFORE | CREATE TRIGGER trg_configuration_publications_immutable BEFORE DELETE OR UPDATE  |
+| `configuration_publications` | `trg_configuration_publications_immutable` | UPDATE BEFORE | CREATE TRIGGER trg_configuration_publications_immutable BEFORE DELETE OR UPDATE  |
 | `consumption_event_types` | `trg_consumption_event_types_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_consumption_event_types_updated_at BEFORE UPDATE ON consumpti |
 | `consumption_events` | `trg_consumption_events_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_consumption_events_updated_at BEFORE UPDATE ON consumption_ev |
 | `contacts` | `trg_contacts_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_contacts_updated_at BEFORE UPDATE ON contacts FOR EACH ROW EX |
@@ -131,6 +135,15 @@
 | `locations` | `trg_locations_parent_same_org` | INSERT BEFORE | CREATE TRIGGER trg_locations_parent_same_org BEFORE INSERT OR UPDATE OF parent_l |
 | `locations` | `trg_locations_parent_same_org` | UPDATE BEFORE | CREATE TRIGGER trg_locations_parent_same_org BEFORE INSERT OR UPDATE OF parent_l |
 | `locations` | `trg_locations_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_locations_updated_at BEFORE UPDATE ON locations FOR EACH ROW  |
+| `operational_authority_assignments` | `trg_prevent_oe_authority_assignments_mutation` | DELETE BEFORE | CREATE TRIGGER trg_prevent_oe_authority_assignments_mutation BEFORE DELETE OR UP |
+| `operational_authority_assignments` | `trg_prevent_oe_authority_assignments_mutation` | UPDATE BEFORE | CREATE TRIGGER trg_prevent_oe_authority_assignments_mutation BEFORE DELETE OR UP |
+| `operational_authority_assignments` | `trg_validate_oe_authority_assignment` | INSERT BEFORE | CREATE TRIGGER trg_validate_oe_authority_assignment BEFORE INSERT ON operational |
+| `operational_expectation_ratifications` | `trg_prevent_oe_ratifications_mutation` | DELETE BEFORE | CREATE TRIGGER trg_prevent_oe_ratifications_mutation BEFORE DELETE OR UPDATE ON  |
+| `operational_expectation_ratifications` | `trg_prevent_oe_ratifications_mutation` | UPDATE BEFORE | CREATE TRIGGER trg_prevent_oe_ratifications_mutation BEFORE DELETE OR UPDATE ON  |
+| `operational_expectation_ratifications` | `trg_validate_oe_ratification` | INSERT BEFORE | CREATE TRIGGER trg_validate_oe_ratification BEFORE INSERT ON operational_expecta |
+| `operational_expectations` | `trg_prevent_operational_expectations_mutation` | DELETE BEFORE | CREATE TRIGGER trg_prevent_operational_expectations_mutation BEFORE DELETE OR UP |
+| `operational_expectations` | `trg_prevent_operational_expectations_mutation` | UPDATE BEFORE | CREATE TRIGGER trg_prevent_operational_expectations_mutation BEFORE DELETE OR UP |
+| `operational_expectations` | `trg_validate_operational_expectations_lineage` | INSERT BEFORE | CREATE TRIGGER trg_validate_operational_expectations_lineage BEFORE INSERT ON op |
 | `operational_tasks` | `trg_operational_tasks_org_entity` | INSERT BEFORE | CREATE TRIGGER trg_operational_tasks_org_entity BEFORE INSERT OR UPDATE OF org_i |
 | `operational_tasks` | `trg_operational_tasks_org_entity` | UPDATE BEFORE | CREATE TRIGGER trg_operational_tasks_org_entity BEFORE INSERT OR UPDATE OF org_i |
 | `operational_tasks` | `trg_operational_tasks_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_operational_tasks_updated_at BEFORE UPDATE ON operational_tas |
@@ -184,6 +197,8 @@
 | `processing_plan_operations` | `trg_processing_plan_operations_immutable` | UPDATE BEFORE | CREATE TRIGGER trg_processing_plan_operations_immutable BEFORE DELETE OR UPDATE  |
 | `program_offering_variants` | `program_offering_variants_updated_at` | UPDATE BEFORE | CREATE TRIGGER program_offering_variants_updated_at BEFORE UPDATE ON program_off |
 | `program_offerings` | `program_offerings_updated_at` | UPDATE BEFORE | CREATE TRIGGER program_offerings_updated_at BEFORE UPDATE ON program_offerings F |
+| `program_revisions` | `trg_program_revisions_immutable` | DELETE BEFORE | CREATE TRIGGER trg_program_revisions_immutable BEFORE DELETE OR UPDATE ON progra |
+| `program_revisions` | `trg_program_revisions_immutable` | UPDATE BEFORE | CREATE TRIGGER trg_program_revisions_immutable BEFORE DELETE OR UPDATE ON progra |
 | `quotes` | `trg_quotes_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_quotes_updated_at BEFORE UPDATE ON quotes FOR EACH ROW EXECUT |
 | `record_drawer_layouts` | `trg_record_drawer_layouts_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_record_drawer_layouts_updated_at BEFORE UPDATE ON record_draw |
 | `recurrence_plans` | `trg_recurrence_updated_at` | UPDATE BEFORE | CREATE TRIGGER trg_recurrence_updated_at BEFORE UPDATE ON recurrence_plans FOR E |

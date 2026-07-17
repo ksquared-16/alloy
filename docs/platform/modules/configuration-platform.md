@@ -130,6 +130,54 @@ The frozen registry contains Locations, Programs, Access, Communications, Data M
 
 Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
 
+### Configuration Publication Runtime V1
+
+The Configuration Publication Runtime is the reusable control plane for domains
+that require explicit Organization publication and durable Location delivery.
+Programs is the first and only reference consumer in V1.
+
+The runtime owns:
+
+- immutable publication identity over a domain-owned revision;
+- deterministic, target-set-aware distribution plans;
+- one persisted result per selected Location;
+- append-only delivery attempts under the same retry identity;
+- honest completed, partial-failure, and failed run projections;
+- Location consumption pointers to published revisions;
+- field-policy evaluation (`organization_locked`,
+  `location_may_override`, `location_must_supply`, `runtime_derived`);
+- server-authoritative effective-value resolution with explicit value presence;
+- generic publication and delivery history records.
+
+Domains own:
+
+- editable draft payloads and validation;
+- immutable revision payloads;
+- the provider that previews and performs each authoritative consumer write;
+- domain-specific eligibility, conflicts, required inputs, and operator language;
+- local override storage and validation;
+- downstream runtime consumption.
+
+There is no generic configuration-payload table. The generic runtime references
+the immutable domain revision by identity and checksum. A retry reuses the
+original distribution run and executes failed targets only; successful targets
+remain authoritative and are not duplicated.
+
+Programs proves the boundary through:
+
+- `programs`, `program_drafts`, and immutable `program_revisions`;
+- generic `configuration_publications`, distribution runs/targets, append-only
+  attempts, and consumption pointers;
+- the `programs.v1` provider;
+- server-side impact preview and effective-value resolution;
+- Location Program offerings linked to a consumed revision while preserving
+  Location-owned availability, evidence, metadata, resource relationships, and
+  stable compatibility ids.
+
+Only Programs supports this runtime in V1. Other Configuration domains do not
+gain publication behavior by inference; adoption requires a domain-owned
+revision model and a registered durable provider.
+
 ### Primitives NOT yet extracted (deferred)
 
 These belong to the Configuration Runtime eventually but are only Commercial-specific today:
@@ -137,8 +185,9 @@ These belong to the Configuration Runtime eventually but are only Commercial-spe
 - Effective dating / scheduled changes
 - Bulk rate operations
 - Compare locations
-- Impact analysis
-- Domain-specific change preview / publish authoring
+- Cross-domain impact analysis
+- Scheduled or future-dated publication
+- Approval, branching, and rollback orchestration
 
 ---
 

@@ -308,6 +308,229 @@ BEGIN
 END;
 $function$
 "
+public,apply_program_publication_target_v1,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_run_id uuid, p_location_id uuid, p_actor_user_id uuid",jsonb,"CREATE OR REPLACE FUNCTION public.apply_program_publication_target_v1(p_org_id uuid, p_run_id uuid, p_location_id uuid, p_actor_user_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_run public.configuration_distribution_runs%ROWTYPE;
+    v_target public.configuration_distribution_targets%ROWTYPE;
+    v_publication public.configuration_publications%ROWTYPE;
+    v_revision public.program_revisions%ROWTYPE;
+    v_location public.locations%ROWTYPE;
+    v_consumption public.configuration_consumptions%ROWTYPE;
+    v_category public.location_program_categories%ROWTYPE;
+    v_existing_revision_id uuid;
+    v_attempt_number integer;
+    v_disposition text;
+    v_event_id uuid;
+BEGIN
+    SELECT * INTO v_run
+    FROM public.configuration_distribution_runs
+    WHERE id = p_run_id AND org_id = p_org_id
+    FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'distribution_run_not_found' USING ERRCODE = 'P0002'; END IF;
+    IF v_run.domain_key <> 'programs' OR v_run.provider_key <> 'programs.v1' THEN
+        RAISE EXCEPTION 'distribution_provider_mismatch' USING ERRCODE = '23514';
+    END IF;
+
+    SELECT * INTO v_target
+    FROM public.configuration_distribution_targets
+    WHERE run_id = p_run_id AND org_id = p_org_id AND location_id = p_location_id
+    FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'distribution_target_not_found' USING ERRCODE = 'P0002'; END IF;
+
+    IF v_target.status IN ('applied', 'unchanged') THEN
+        RETURN jsonb_build_object(
+            'target_id', v_target.id,
+            'location_id', p_location_id,
+            'status', v_target.status,
+            'idempotent', true,
+            'result', v_target.result
+        );
+    END IF;
+
+    SELECT * INTO v_publication
+    FROM public.configuration_publications
+    WHERE id = v_run.publication_id AND org_id = p_org_id AND domain_key = 'programs';
+    IF NOT FOUND THEN RAISE EXCEPTION 'published_program_revision_required' USING ERRCODE = '23514'; END IF;
+
+    SELECT * INTO v_revision
+    FROM public.program_revisions
+    WHERE id = v_publication.revision_id
+      AND org_id = p_org_id
+      AND program_id = v_publication.subject_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'program_revision_not_found' USING ERRCODE = 'P0002'; END IF;
+
+    SELECT * INTO v_location
+    FROM public.locations
+    WHERE id = p_location_id
+      AND org_id = p_org_id
+      AND location_type = 'site'
+      AND coalesce(is_active, true) = true;
+    IF NOT FOUND THEN RAISE EXCEPTION 'location_not_eligible' USING ERRCODE = '23514'; END IF;
+
+    SELECT program_revision_id INTO v_existing_revision_id
+    FROM public.location_program_categories
+    WHERE org_id = p_org_id
+      AND location_id = p_location_id
+      AND key = v_revision.program_key
+    FOR UPDATE;
+
+    INSERT INTO public.configuration_consumptions (
+        org_id,
+        domain_key,
+        subject_id,
+        location_id,
+        publication_id,
+        revision_id,
+        delivered_by_run_id
+    )
+    VALUES (
+        p_org_id,
+        'programs',
+        v_revision.program_id,
+        p_location_id,
+        v_publication.id,
+        v_revision.id,
+        p_run_id
+    )
+    ON CONFLICT (org_id, domain_key, subject_id, location_id)
+    DO UPDATE SET
+        publication_id = EXCLUDED.publication_id,
+        revision_id = EXCLUDED.revision_id,
+        delivered_by_run_id = EXCLUDED.delivered_by_run_id,
+        consumed_at = now(),
+        updated_at = now()
+    RETURNING * INTO v_consumption;
+
+    INSERT INTO public.location_program_categories (
+        org_id,
+        location_id,
+        key,
+        label,
+        sort_order,
+        is_active,
+        metadata,
+        updated_at,
+        program_id,
+        program_revision_id,
+        configuration_consumption_id
+    )
+    VALUES (
+        p_org_id,
+        p_location_id,
+        v_revision.program_key,
+        v_revision.label,
+        100,
+        false,
+        '{}'::jsonb,
+        now(),
+        v_revision.program_id,
+        v_revision.id,
+        v_consumption.id
+    )
+    ON CONFLICT (org_id, location_id, key)
+    DO UPDATE SET
+        label = EXCLUDED.label,
+        program_id = EXCLUDED.program_id,
+        program_revision_id = EXCLUDED.program_revision_id,
+        configuration_consumption_id = EXCLUDED.configuration_consumption_id,
+        updated_at = now()
+    RETURNING * INTO v_category;
+
+    v_disposition := CASE
+        WHEN v_existing_revision_id = v_revision.id THEN 'unchanged'
+        ELSE 'applied'
+    END;
+    v_attempt_number := v_target.attempt_count + 1;
+
+    INSERT INTO public.workflow_events (
+        org_id,
+        event_type,
+        entity_type,
+        entity_id,
+        action_type,
+        payload,
+        occurred_at
+    )
+    VALUES (
+        p_org_id,
+        'configuration.program.delivered',
+        'program',
+        v_revision.program_id,
+        'apply_to_location',
+        jsonb_build_object(
+            'domain_key', 'programs',
+            'run_id', p_run_id,
+            'publication_id', v_publication.id,
+            'revision_id', v_revision.id,
+            'location_id', p_location_id,
+            'disposition', v_disposition,
+            'consumption_id', v_consumption.id,
+            'location_program_category_id', v_category.id,
+            'actor_user_id', p_actor_user_id
+        ),
+        now()
+    )
+    RETURNING id INTO v_event_id;
+
+    INSERT INTO public.configuration_delivery_attempts (
+        org_id,
+        run_id,
+        target_id,
+        location_id,
+        attempt_number,
+        status,
+        result,
+        audit_event_id,
+        attempted_by
+    )
+    VALUES (
+        p_org_id,
+        p_run_id,
+        v_target.id,
+        p_location_id,
+        v_attempt_number,
+        v_disposition,
+        jsonb_build_object(
+            'publication_id', v_publication.id,
+            'revision_id', v_revision.id,
+            'consumption_id', v_consumption.id,
+            'location_program_category_id', v_category.id
+        ),
+        v_event_id,
+        p_actor_user_id
+    );
+
+    UPDATE public.configuration_distribution_targets
+    SET status = v_disposition,
+        attempt_count = v_attempt_number,
+        result = jsonb_build_object(
+            'publication_id', v_publication.id,
+            'revision_id', v_revision.id,
+            'consumption_id', v_consumption.id,
+            'location_program_category_id', v_category.id
+        ),
+        error_code = null,
+        error_message = null,
+        updated_at = now()
+    WHERE id = v_target.id
+    RETURNING * INTO v_target;
+
+    RETURN jsonb_build_object(
+        'target_id', v_target.id,
+        'location_id', p_location_id,
+        'status', v_target.status,
+        'idempotent', false,
+        'audit_event_id', v_event_id,
+        'result', v_target.result
+    );
+END;
+$function$
+"
 public,audit_cleaning_quote_pricing_matrix_legacy_parity,function,sql,STABLE,true,,record,"CREATE OR REPLACE FUNCTION public.audit_cleaning_quote_pricing_matrix_legacy_parity()
  RETURNS TABLE(slice_kind text, service_key text, tier_key text, frequency_key text, legacy_cents integer, matrix_cents integer, detail text)
  LANGUAGE sql
@@ -503,6 +726,103 @@ AS $function$
   WHERE r.detail IS NOT NULL;
 $function$
 "
+public,author_operational_expectation,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_actor_user_id uuid, p_act jsonb",jsonb,"CREATE OR REPLACE FUNCTION public.author_operational_expectation(p_org_id uuid, p_actor_user_id uuid, p_act jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_key text := nullif(p_act->>'idempotency_key','');
+    v_fingerprint text := p_act->>'payload_fingerprint';
+    v_existing public.operational_expectations%ROWTYPE;
+    v_new public.operational_expectations%ROWTYPE;
+    v_mutation_id uuid := gen_random_uuid();
+    v_verb text := p_act->>'verb';
+    v_modality text := p_act->>'modality';
+    v_author_class text := p_act->>'author_class';
+    v_authority_key text := p_act->>'authority_key';
+    v_transition text := nullif(p_act->>'transition_type','');
+    v_supersedes uuid := nullif(p_act->>'supersedes_expectation_id','')::uuid;
+    v_valid_from timestamptz := (p_act->>'valid_from')::timestamptz;
+    -- authority resolution inputs (server-trusted; NOT a caller standing choice)
+    v_holder_id text := nullif(p_act->>'authority_holder_id','');
+    v_scope_type text := COALESCE(nullif(p_act->>'authority_scope_type',''), 'organization');
+    v_scope_id text := nullif(p_act->>'authority_scope_id','');
+    v_standing text;
+    v_assignment uuid;
+    v_matched_scope text;
+BEGIN
+    IF v_key IS NULL THEN RAISE EXCEPTION 'oe_missing_idempotency_key' USING ERRCODE = '22023'; END IF;
+
+    -- Compute standing AUTHORITATIVELY. predicted → model; AI → proposed; else a
+    -- held-authority holder self-ratifies to binding, otherwise proposed.
+    IF v_modality = 'predicted' THEN
+        v_standing := 'model';
+    ELSIF v_author_class = 'ai' THEN
+        v_standing := 'proposed';
+    ELSE
+        v_assignment := public.resolve_held_operational_authority(
+            p_org_id, v_author_class, COALESCE(v_holder_id, p_actor_user_id::text), v_authority_key, v_scope_type, v_scope_id, now());
+        IF v_assignment IS NOT NULL THEN
+            v_standing := 'binding';
+            v_matched_scope := v_scope_type;
+        ELSE
+            v_standing := 'proposed';
+        END IF;
+    END IF;
+
+    BEGIN
+        INSERT INTO public.operational_expectations (
+            org_id, authority_key, author_class, modality, subject_kind, subject_ref, condition,
+            temporal_frame, beneficiary, verb, transition_type, supersedes_expectation_id, standing,
+            footprint, valid_from, valid_to, config_version_ref, authored_by_user_id, authored_by_label,
+            idempotency_key, payload_fingerprint, authority_assignment_id, authority_matched_scope
+        ) VALUES (
+            p_org_id, v_authority_key, v_author_class, v_modality, p_act->>'subject_kind', p_act->'subject_ref',
+            p_act->'condition', p_act->'temporal_frame',
+            CASE WHEN p_act->'beneficiary' = 'null'::jsonb THEN NULL ELSE p_act->'beneficiary' END,
+            v_verb, v_transition, v_supersedes, v_standing, COALESCE(p_act->'footprint','{}'::jsonb),
+            v_valid_from, nullif(p_act->>'valid_to','')::timestamptz,
+            CASE WHEN p_act->'config_version_ref' = 'null'::jsonb THEN NULL ELSE p_act->'config_version_ref' END,
+            p_actor_user_id, nullif(p_act->>'authored_by_label',''), v_key, v_fingerprint, v_assignment, v_matched_scope
+        ) RETURNING * INTO v_new;
+
+        INSERT INTO public.mutation_events (
+            org_id, mutation_id, command_key, domain, subject_id, subject_type,
+            previous_state, new_state, operator_id, origin, context_payload, committed_at, effective_at
+        ) VALUES (
+            p_org_id, v_mutation_id, 'author_expectation', 'operational_expectations', v_new.id, 'operational_expectation',
+            v_supersedes::text, v_verb || ':' || v_modality || ':' || v_standing, p_actor_user_id::text, 'api',
+            jsonb_build_object('expectation_id', v_new.id, 'verb', v_verb, 'modality', v_modality,
+                'transition_type', v_transition, 'standing', v_standing, 'authority_key', v_authority_key,
+                'authority_assignment_id', v_assignment, 'authority_matched_scope', v_matched_scope,
+                'self_ratified', (v_standing = 'binding'), 'lineage_root_id', v_new.lineage_root_id,
+                'idempotency_key', v_key),
+            now(), v_valid_from
+        );
+
+        RETURN jsonb_build_object('ok', true, 'disposition', 'created', 'idempotent', false,
+            'expectation_id', v_new.id, 'authoring_act_event_id', v_mutation_id, 'verb', v_new.verb,
+            'modality', v_new.modality, 'transition_type', v_new.transition_type, 'standing', v_new.standing,
+            'self_ratified', (v_new.standing = 'binding'), 'authority_assignment_id', v_assignment,
+            'supersedes_expectation_id', v_new.supersedes_expectation_id, 'lineage_root_id', v_new.lineage_root_id,
+            'authored_at', v_new.authored_at);
+
+    EXCEPTION WHEN unique_violation THEN
+        SELECT * INTO v_existing FROM public.operational_expectations WHERE org_id = p_org_id AND idempotency_key = v_key;
+        IF NOT FOUND THEN RAISE; END IF;
+        IF v_existing.payload_fingerprint IS DISTINCT FROM v_fingerprint THEN RAISE EXCEPTION 'oe_idempotency_conflict' USING ERRCODE = '23505'; END IF;
+        RETURN jsonb_build_object('ok', true, 'disposition', 'existing', 'idempotent', true,
+            'expectation_id', v_existing.id, 'authoring_act_event_id', v_existing.id, 'verb', v_existing.verb,
+            'modality', v_existing.modality, 'transition_type', v_existing.transition_type, 'standing', v_existing.standing,
+            'self_ratified', (v_existing.standing = 'binding'), 'authority_assignment_id', v_existing.authority_assignment_id,
+            'supersedes_expectation_id', v_existing.supersedes_expectation_id, 'lineage_root_id', v_existing.lineage_root_id,
+            'authored_at', v_existing.authored_at);
+    END;
+END;
+$function$
+"
 public,bump_communication_thread_last_message_at,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.bump_communication_thread_last_message_at()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -550,6 +870,17 @@ BEGIN
         RETURNING t.*
     )
     SELECT * FROM updated;
+END;
+$function$
+"
+public,configuration_publication_immutable_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.configuration_publication_immutable_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+    RAISE EXCEPTION '% rows are immutable; publish or append a new record instead', TG_TABLE_NAME
+        USING ERRCODE = '0A000';
 END;
 $function$
 "
@@ -1039,6 +1370,56 @@ BEGIN
 END;
 $function$
 "
+public,finalize_configuration_distribution_run_v1,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_run_id uuid",jsonb,"CREATE OR REPLACE FUNCTION public.finalize_configuration_distribution_run_v1(p_org_id uuid, p_run_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_pending integer;
+    v_failed integer;
+    v_succeeded integer;
+    v_status text;
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM public.configuration_distribution_runs
+        WHERE id = p_run_id AND org_id = p_org_id
+    ) THEN
+        RAISE EXCEPTION 'distribution_run_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    SELECT
+        count(*) FILTER (WHERE status = 'pending'),
+        count(*) FILTER (WHERE status = 'failed'),
+        count(*) FILTER (WHERE status IN ('applied', 'unchanged'))
+    INTO v_pending, v_failed, v_succeeded
+    FROM public.configuration_distribution_targets
+    WHERE run_id = p_run_id AND org_id = p_org_id;
+
+    v_status := CASE
+        WHEN v_pending > 0 THEN 'running'
+        WHEN v_failed = 0 THEN 'completed'
+        WHEN v_succeeded > 0 THEN 'partial_failure'
+        ELSE 'failed'
+    END;
+
+    UPDATE public.configuration_distribution_runs
+    SET status = v_status,
+        started_at = coalesce(started_at, now()),
+        completed_at = CASE WHEN v_pending = 0 THEN now() ELSE null END
+    WHERE id = p_run_id AND org_id = p_org_id;
+
+    RETURN jsonb_build_object(
+        'run_id', p_run_id,
+        'status', v_status,
+        'pending', v_pending,
+        'failed', v_failed,
+        'succeeded', v_succeeded
+    );
+END;
+$function$
+"
 public,fn_job_split_bps,function,plpgsql,VOLATILE,false,p_job_number integer,record,"CREATE OR REPLACE FUNCTION public.fn_job_split_bps(p_job_number integer)
  RETURNS TABLE(contractor_bps integer, alloy_bps integer)
  LANGUAGE plpgsql
@@ -1254,6 +1635,23 @@ BEGIN
 
   is_manual_quote := false;
   RETURN NEXT;
+END;
+$function$
+"
+public,grant_operational_authority_assignment,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_authority_key text, p_holder_type text, p_holder_id text, p_scope_type text, p_scope_id text, p_effective_start timestamp with time zone, p_effective_end timestamp with time zone, p_actor uuid",uuid,"CREATE OR REPLACE FUNCTION public.grant_operational_authority_assignment(p_org_id uuid, p_authority_key text, p_holder_type text, p_holder_id text, p_scope_type text, p_scope_id text, p_effective_start timestamp with time zone, p_effective_end timestamp with time zone, p_actor uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE v_id uuid;
+BEGIN
+    INSERT INTO public.operational_authority_assignments
+        (org_id, authority_key, holder_type, holder_id, scope_type, scope_id, status, effective_start, effective_end, granted_by)
+    VALUES (p_org_id, p_authority_key, p_holder_type, p_holder_id, COALESCE(p_scope_type,'organization'), p_scope_id,
+        'granted', COALESCE(p_effective_start, now()), p_effective_end, p_actor)
+    RETURNING id INTO v_id;
+    RETURN v_id;
 END;
 $function$
 "
@@ -1577,6 +1975,35 @@ begin
 end;
 $function$
 "
+public,prevent_oe_authority_assignments_mutation,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.prevent_oe_authority_assignments_mutation()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'operational_authority_assignments is append-only: % not allowed (grant/revoke via a new row).', TG_OP USING ERRCODE = '0A000';
+END;
+$function$
+"
+public,prevent_oe_ratifications_mutation,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.prevent_oe_ratifications_mutation()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'operational_expectation_ratifications is append-only: % is not allowed.', TG_OP
+        USING ERRCODE = '0A000';
+END;
+$function$
+"
+public,prevent_operational_expectations_mutation,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.prevent_operational_expectations_mutation()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'operational_expectations is append-only: % is not allowed. Author a revise/correct/replace/cancel act (a new row) instead.', TG_OP
+        USING ERRCODE = '0A000';
+END;
+$function$
+"
 public,processing_commit_attempts_append_only_guard,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.processing_commit_attempts_append_only_guard()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1637,6 +2064,233 @@ BEGIN
         RETURN p_refs ->> substring(p_val FROM 2);
     END IF;
     RETURN p_val;
+END;
+$function$
+"
+public,publish_program_revision_v1,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_program_id uuid, p_actor_user_id uuid, p_payload_checksum text",jsonb,"CREATE OR REPLACE FUNCTION public.publish_program_revision_v1(p_org_id uuid, p_program_id uuid, p_actor_user_id uuid, p_payload_checksum text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_program public.programs%ROWTYPE;
+    v_draft public.program_drafts%ROWTYPE;
+    v_revision public.program_revisions%ROWTYPE;
+    v_publication public.configuration_publications%ROWTYPE;
+    v_revision_number integer;
+    v_event_id uuid;
+BEGIN
+    IF nullif(btrim(p_payload_checksum), '') IS NULL THEN
+        RAISE EXCEPTION 'program_publish_checksum_required' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT * INTO v_program
+    FROM public.programs
+    WHERE id = p_program_id AND org_id = p_org_id
+    FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'program_not_found' USING ERRCODE = 'P0002';
+    END IF;
+    IF v_program.lifecycle_status = 'retired' THEN
+        RAISE EXCEPTION 'program_retired' USING ERRCODE = '23514';
+    END IF;
+
+    SELECT * INTO v_draft
+    FROM public.program_drafts
+    WHERE program_id = p_program_id AND org_id = p_org_id
+    FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'program_draft_not_found' USING ERRCODE = 'P0002';
+    END IF;
+    IF v_draft.draft_status <> 'validated'
+       OR jsonb_array_length(v_draft.validation_errors) > 0 THEN
+        RAISE EXCEPTION 'program_draft_not_validated' USING ERRCODE = '23514';
+    END IF;
+
+    SELECT coalesce(max(revision_number), 0) + 1 INTO v_revision_number
+    FROM public.program_revisions
+    WHERE org_id = p_org_id AND program_id = p_program_id;
+
+    INSERT INTO public.program_revisions (
+        org_id,
+        program_id,
+        revision_number,
+        program_key,
+        label,
+        description,
+        category,
+        eligibility,
+        audience,
+        required_resource_type,
+        qualification_requirements,
+        default_policy_refs,
+        default_commercial_posture,
+        payload_checksum,
+        published_by,
+        source_draft_id
+    )
+    VALUES (
+        p_org_id,
+        p_program_id,
+        v_revision_number,
+        v_program.program_key,
+        v_draft.label,
+        v_draft.description,
+        v_draft.category,
+        v_draft.eligibility,
+        v_draft.audience,
+        v_draft.required_resource_type,
+        v_draft.qualification_requirements,
+        v_draft.default_policy_refs,
+        v_draft.default_commercial_posture,
+        btrim(p_payload_checksum),
+        p_actor_user_id,
+        v_draft.id
+    )
+    RETURNING * INTO v_revision;
+
+    INSERT INTO public.workflow_events (
+        org_id,
+        event_type,
+        entity_type,
+        entity_id,
+        action_type,
+        payload,
+        occurred_at
+    )
+    VALUES (
+        p_org_id,
+        'configuration.program.published',
+        'program',
+        p_program_id,
+        'publish',
+        jsonb_build_object(
+            'domain_key', 'programs',
+            'program_id', p_program_id,
+            'revision_id', v_revision.id,
+            'revision_number', v_revision.revision_number,
+            'payload_checksum', v_revision.payload_checksum,
+            'actor_user_id', p_actor_user_id
+        ),
+        now()
+    )
+    RETURNING id INTO v_event_id;
+
+    INSERT INTO public.configuration_publications (
+        org_id,
+        domain_key,
+        subject_id,
+        revision_id,
+        revision_number,
+        payload_checksum,
+        published_by,
+        published_at,
+        audit_event_id
+    )
+    VALUES (
+        p_org_id,
+        'programs',
+        p_program_id,
+        v_revision.id,
+        v_revision.revision_number,
+        v_revision.payload_checksum,
+        p_actor_user_id,
+        v_revision.published_at,
+        v_event_id
+    )
+    RETURNING * INTO v_publication;
+
+    UPDATE public.program_drafts
+    SET base_revision_id = v_revision.id,
+        updated_by = p_actor_user_id,
+        updated_at = now()
+    WHERE id = v_draft.id;
+
+    RETURN jsonb_build_object(
+        'program_id', p_program_id,
+        'revision_id', v_revision.id,
+        'revision_number', v_revision.revision_number,
+        'publication_id', v_publication.id,
+        'audit_event_id', v_event_id,
+        'published_at', v_publication.published_at
+    );
+END;
+$function$
+"
+public,ratify_operational_expectation,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_actor_user_id uuid, p_ratification jsonb",jsonb,"CREATE OR REPLACE FUNCTION public.ratify_operational_expectation(p_org_id uuid, p_actor_user_id uuid, p_ratification jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_expectation_id uuid := (p_ratification->>'expectation_id')::uuid;
+    v_key text := nullif(p_ratification->>'idempotency_key','');
+    v_fingerprint text := p_ratification->>'payload_fingerprint';
+    v_new public.operational_expectation_ratifications%ROWTYPE;
+    v_existing public.operational_expectation_ratifications%ROWTYPE;
+    v_mutation_id uuid := gen_random_uuid();
+    v_event_id uuid;
+    v_exp_authority text; v_exp_subject text; v_exp_modality text; v_exp_standing text;
+    v_assignment uuid; v_scope_type text; v_scope_id text;
+BEGIN
+    IF v_expectation_id IS NULL THEN RAISE EXCEPTION 'oe_ratification_missing_expectation' USING ERRCODE = '22023'; END IF;
+
+    -- Read the expectation's own authority + subject to resolve sufficiency.
+    SELECT authority_key, subject_kind, modality, standing INTO v_exp_authority, v_exp_subject, v_exp_modality, v_exp_standing
+    FROM public.operational_expectations WHERE id = v_expectation_id AND org_id = p_org_id;
+    IF v_exp_authority IS NULL THEN RAISE EXCEPTION 'oe_ratification_expectation_not_found' USING ERRCODE = '23503'; END IF;
+
+    -- AUTHORITY SUFFICIENCY (the ratifier is a human; AI never holds authority).
+    v_scope_type := COALESCE(nullif(p_ratification->>'authority_scope_type',''), 'subject_type');
+    v_scope_id := COALESCE(nullif(p_ratification->>'authority_scope_id',''), v_exp_subject);
+    v_assignment := public.resolve_held_operational_authority(
+        p_org_id, 'human', p_actor_user_id::text, v_exp_authority, v_scope_type, v_scope_id, now());
+    IF v_assignment IS NULL THEN
+        RAISE EXCEPTION 'oe_insufficient_authority' USING ERRCODE = '42501';
+    END IF;
+
+    BEGIN
+        INSERT INTO public.operational_expectation_ratifications (
+            org_id, expectation_id, prior_standing, new_standing, ratifier_authority_key,
+            ratified_by_user_id, ratified_by_label, rationale, idempotency_key, payload_fingerprint, metadata
+        ) VALUES (
+            p_org_id, v_expectation_id, 'proposed', 'binding', v_exp_authority,
+            p_actor_user_id, nullif(p_ratification->>'ratified_by_label',''), nullif(p_ratification->>'rationale',''),
+            v_key, v_fingerprint, jsonb_build_object('authority_assignment_id', v_assignment, 'matched_scope', v_scope_type)
+        ) RETURNING * INTO v_new;
+
+        INSERT INTO public.mutation_events (
+            org_id, mutation_id, command_key, domain, subject_id, subject_type,
+            previous_state, new_state, operator_id, origin, context_payload, committed_at, effective_at
+        ) VALUES (
+            p_org_id, v_mutation_id, 'ratify_expectation', 'operational_expectations', v_expectation_id, 'operational_expectation',
+            v_new.prior_standing, 'binding', p_actor_user_id::text, 'api',
+            jsonb_build_object('ratification_id', v_new.id, 'expectation_id', v_expectation_id, 'authority_key', v_exp_authority,
+                'authority_assignment_id', v_assignment, 'matched_scope', v_scope_type, 'prior_standing', v_new.prior_standing,
+                'new_standing', 'binding', 'idempotency_key', v_key),
+            now(), v_new.ratified_at
+        );
+
+        RETURN jsonb_build_object('ok', true, 'disposition', 'created', 'idempotent', false,
+            'ratification_id', v_new.id, 'expectation_id', v_expectation_id, 'new_standing', 'binding',
+            'authority_assignment_id', v_assignment, 'authoring_act_event_id', v_mutation_id, 'ratified_at', v_new.ratified_at);
+
+    EXCEPTION WHEN unique_violation THEN
+        SELECT * INTO v_existing FROM public.operational_expectation_ratifications
+        WHERE org_id = p_org_id AND expectation_id = v_expectation_id ORDER BY ratified_at ASC LIMIT 1;
+        IF NOT FOUND THEN RAISE; END IF;
+        IF v_fingerprint IS NOT NULL AND v_existing.payload_fingerprint IS NOT NULL AND v_existing.payload_fingerprint IS DISTINCT FROM v_fingerprint THEN
+            RAISE EXCEPTION 'oe_ratification_conflict' USING ERRCODE = '23505'; END IF;
+        SELECT mutation_id INTO v_event_id FROM public.mutation_events
+        WHERE org_id = p_org_id AND domain = 'operational_expectations' AND subject_id = v_expectation_id AND command_key = 'ratify_expectation'
+        ORDER BY committed_at ASC LIMIT 1;
+        RETURN jsonb_build_object('ok', true, 'disposition', 'existing', 'idempotent', true,
+            'ratification_id', v_existing.id, 'expectation_id', v_expectation_id, 'new_standing', 'binding',
+            'authority_assignment_id', (v_existing.metadata->>'authority_assignment_id'),
+            'authoring_act_event_id', COALESCE(v_event_id, v_existing.id), 'ratified_at', v_existing.ratified_at);
+    END;
 END;
 $function$
 "
@@ -1901,6 +2555,160 @@ BEGIN
         'retired_charge_ids', to_jsonb(v_retired),
         'created_charge_ids', to_jsonb(v_created_chg)
     );
+END;
+$function$
+"
+public,record_configuration_delivery_failure_v1,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_run_id uuid, p_location_id uuid, p_actor_user_id uuid, p_error_code text, p_error_message text",jsonb,"CREATE OR REPLACE FUNCTION public.record_configuration_delivery_failure_v1(p_org_id uuid, p_run_id uuid, p_location_id uuid, p_actor_user_id uuid, p_error_code text, p_error_message text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_run public.configuration_distribution_runs%ROWTYPE;
+    v_target public.configuration_distribution_targets%ROWTYPE;
+    v_attempt_number integer;
+    v_event_id uuid;
+    v_message text := coalesce(nullif(btrim(p_error_message), ''), 'Delivery failed');
+BEGIN
+    SELECT * INTO v_run
+    FROM public.configuration_distribution_runs
+    WHERE id = p_run_id AND org_id = p_org_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'distribution_run_not_found' USING ERRCODE = 'P0002'; END IF;
+
+    SELECT * INTO v_target
+    FROM public.configuration_distribution_targets
+    WHERE run_id = p_run_id AND org_id = p_org_id AND location_id = p_location_id
+    FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'distribution_target_not_found' USING ERRCODE = 'P0002'; END IF;
+    IF v_target.status IN ('applied', 'unchanged') THEN
+        RETURN jsonb_build_object('target_id', v_target.id, 'status', v_target.status, 'idempotent', true);
+    END IF;
+
+    v_attempt_number := v_target.attempt_count + 1;
+    INSERT INTO public.workflow_events (
+        org_id,
+        event_type,
+        entity_type,
+        entity_id,
+        action_type,
+        payload,
+        occurred_at
+    )
+    VALUES (
+        p_org_id,
+        'configuration.delivery.failed',
+        'configuration_publication',
+        v_run.publication_id,
+        'apply_to_location',
+        jsonb_build_object(
+            'domain_key', v_run.domain_key,
+            'run_id', p_run_id,
+            'location_id', p_location_id,
+            'error_code', coalesce(nullif(btrim(p_error_code), ''), 'delivery_failed'),
+            'error_message', v_message,
+            'actor_user_id', p_actor_user_id
+        ),
+        now()
+    )
+    RETURNING id INTO v_event_id;
+
+    INSERT INTO public.configuration_delivery_attempts (
+        org_id,
+        run_id,
+        target_id,
+        location_id,
+        attempt_number,
+        status,
+        error_code,
+        error_message,
+        audit_event_id,
+        attempted_by
+    )
+    VALUES (
+        p_org_id,
+        p_run_id,
+        v_target.id,
+        p_location_id,
+        v_attempt_number,
+        'failed',
+        coalesce(nullif(btrim(p_error_code), ''), 'delivery_failed'),
+        v_message,
+        v_event_id,
+        p_actor_user_id
+    );
+
+    UPDATE public.configuration_distribution_targets
+    SET status = 'failed',
+        attempt_count = v_attempt_number,
+        error_code = coalesce(nullif(btrim(p_error_code), ''), 'delivery_failed'),
+        error_message = v_message,
+        updated_at = now()
+    WHERE id = v_target.id
+    RETURNING * INTO v_target;
+
+    RETURN jsonb_build_object(
+        'target_id', v_target.id,
+        'location_id', p_location_id,
+        'status', 'failed',
+        'audit_event_id', v_event_id,
+        'error_code', v_target.error_code,
+        'error_message', v_target.error_message
+    );
+END;
+$function$
+"
+public,resolve_held_operational_authority,function,plpgsql,STABLE,true,"p_org_id uuid, p_holder_type text, p_holder_id text, p_authority_key text, p_scope_type text, p_scope_id text, p_effective_at timestamp with time zone",uuid,"CREATE OR REPLACE FUNCTION public.resolve_held_operational_authority(p_org_id uuid, p_holder_type text, p_holder_id text, p_authority_key text, p_scope_type text, p_scope_id text, p_effective_at timestamp with time zone)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE v_assignment uuid;
+BEGIN
+    -- AI never holds ratifying authority.
+    IF p_holder_type = 'ai' THEN RETURN NULL; END IF;
+    -- Authority must be governed + active at the effective time.
+    IF NOT EXISTS (
+        SELECT 1 FROM public.operational_authorities a
+        WHERE a.org_id = p_org_id AND a.authority_key = p_authority_key AND a.is_active
+          AND a.effective_start <= p_effective_at AND (a.effective_end IS NULL OR a.effective_end >= p_effective_at)
+    ) THEN RETURN NULL; END IF;
+    -- An active, in-scope, non-revoked grant for this holder.
+    SELECT g.id INTO v_assignment
+    FROM public.operational_authority_assignments g
+    WHERE g.org_id = p_org_id AND g.authority_key = p_authority_key
+      AND g.holder_type = p_holder_type AND g.holder_id = p_holder_id
+      AND g.status = 'granted'
+      AND g.effective_start <= p_effective_at AND (g.effective_end IS NULL OR g.effective_end >= p_effective_at)
+      AND (g.scope_type = 'organization' OR (g.scope_type = p_scope_type AND g.scope_id = p_scope_id))
+      AND NOT EXISTS (
+          SELECT 1 FROM public.operational_authority_assignments r
+          WHERE r.supersedes_assignment_id = g.id AND r.status = 'revoked'
+            AND r.effective_start <= p_effective_at
+      )
+    ORDER BY (g.scope_type = 'organization'), g.effective_start DESC
+    LIMIT 1;
+    RETURN v_assignment;
+END;
+$function$
+"
+public,revoke_operational_authority_assignment,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_assignment_id uuid, p_actor uuid",uuid,"CREATE OR REPLACE FUNCTION public.revoke_operational_authority_assignment(p_org_id uuid, p_assignment_id uuid, p_actor uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE v_id uuid; v_auth text; v_ht text; v_hid text; v_st text; v_sid text;
+BEGIN
+    SELECT authority_key, holder_type, holder_id, scope_type, scope_id INTO v_auth, v_ht, v_hid, v_st, v_sid
+    FROM public.operational_authority_assignments WHERE id = p_assignment_id AND org_id = p_org_id AND status = 'granted';
+    IF v_auth IS NULL THEN RAISE EXCEPTION 'oe_authority_assignment: grant % not found in org', p_assignment_id USING ERRCODE = '23503'; END IF;
+    INSERT INTO public.operational_authority_assignments
+        (org_id, authority_key, holder_type, holder_id, scope_type, scope_id, status, supersedes_assignment_id, granted_by)
+    VALUES (p_org_id, v_auth, v_ht, v_hid, v_st, v_sid, 'revoked', p_assignment_id, p_actor)
+    RETURNING id INTO v_id;
+    RETURN v_id;
 END;
 $function$
 "
@@ -2406,6 +3214,23 @@ begin
 
   return new;
 end;
+$function$
+"
+public,upsert_operational_authority,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_authority_key text, p_label text, p_description text, p_kind text, p_is_active boolean, p_actor uuid",uuid,"CREATE OR REPLACE FUNCTION public.upsert_operational_authority(p_org_id uuid, p_authority_key text, p_label text, p_description text, p_kind text, p_is_active boolean, p_actor uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE v_id uuid;
+BEGIN
+    INSERT INTO public.operational_authorities (org_id, authority_key, label, description, authority_kind, is_active, created_by)
+    VALUES (p_org_id, p_authority_key, p_label, p_description, COALESCE(p_kind,'operational'), COALESCE(p_is_active,true), p_actor)
+    ON CONFLICT (org_id, authority_key) DO UPDATE SET label = EXCLUDED.label, description = EXCLUDED.description,
+        authority_kind = EXCLUDED.authority_kind, is_active = EXCLUDED.is_active
+    RETURNING id INTO v_id;
+    RETURN v_id;
+END;
 $function$
 "
 public,user_belongs_to_org,function,sql,STABLE,true,target_org_id uuid,boolean,"CREATE OR REPLACE FUNCTION public.user_belongs_to_org(target_org_id uuid)
@@ -2992,6 +3817,109 @@ BEGIN
     END IF;
     IF doc_org <> row_org THEN
         RAISE EXCEPTION 'form_submission_signatures: drawn asset document.org_id must match submission.org_id';
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_oe_authority_assignment,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_oe_authority_assignment()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE prior_org uuid;
+BEGIN
+    NEW.recorded_at := now();
+    IF NOT EXISTS (SELECT 1 FROM public.operational_authorities a WHERE a.org_id = NEW.org_id AND a.authority_key = NEW.authority_key) THEN
+        RAISE EXCEPTION 'oe_authority_assignment: authority % is not governed in this org', NEW.authority_key USING ERRCODE = '23503';
+    END IF;
+    IF NEW.supersedes_assignment_id IS NOT NULL THEN
+        SELECT org_id INTO prior_org FROM public.operational_authority_assignments WHERE id = NEW.supersedes_assignment_id;
+        IF prior_org IS NULL OR prior_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'oe_authority_assignment: revocation must supersede a same-org grant' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_oe_ratification,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_oe_ratification()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    exp_org uuid;
+    exp_modality text;
+    exp_standing text;
+    exp_root uuid;
+BEGIN
+    NEW.ratified_at := now(); -- server-assigned, non-forgeable
+
+    SELECT e.org_id, e.modality, e.standing, e.lineage_root_id
+    INTO exp_org, exp_modality, exp_standing, exp_root
+    FROM public.operational_expectations e
+    WHERE e.id = NEW.expectation_id;
+
+    IF exp_org IS NULL THEN
+        RAISE EXCEPTION 'oe_ratification: expectation % not found', NEW.expectation_id USING ERRCODE = '23503';
+    END IF;
+    IF exp_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'oe_ratification: cross-org ratification is forbidden' USING ERRCODE = '23514';
+    END IF;
+    IF exp_modality NOT IN ('required', 'prohibited', 'intended', 'committed') THEN
+        RAISE EXCEPTION 'oe_ratification: only deontic/commissive expectations are ratifiable (got %)', exp_modality USING ERRCODE = '23514';
+    END IF;
+    IF exp_standing <> 'proposed' THEN
+        RAISE EXCEPTION 'oe_ratification: only a proposed expectation may be ratified (got %)', exp_standing USING ERRCODE = '23514';
+    END IF;
+
+    NEW.prior_standing := exp_standing;
+    IF NEW.lineage_root_id IS NULL THEN
+        NEW.lineage_root_id := COALESCE(exp_root, NEW.expectation_id);
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_operational_expectations_lineage,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_operational_expectations_lineage()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    prior_org uuid;
+    prior_root uuid;
+BEGIN
+    -- Recorded (transaction) time is ALWAYS server-assigned — a caller may not
+    -- forge it. Valid/effective time (valid_from) is separate and author-supplied.
+    -- Immutability is guaranteed by the append-only trigger (no UPDATE).
+    NEW.authored_at := now();
+
+    IF NEW.verb = 'create' THEN
+        -- A create roots its own lineage.
+        IF NEW.lineage_root_id IS NULL THEN
+            NEW.lineage_root_id := NEW.id;
+        ELSIF NEW.lineage_root_id <> NEW.id THEN
+            RAISE EXCEPTION 'operational_expectations: a create must root its own lineage' USING ERRCODE = '23514';
+        END IF;
+    ELSE
+        SELECT e.org_id, e.lineage_root_id
+        INTO prior_org, prior_root
+        FROM public.operational_expectations e
+        WHERE e.id = NEW.supersedes_expectation_id;
+
+        IF prior_org IS NULL THEN
+            RAISE EXCEPTION 'operational_expectations: supersedes_expectation_id % not found', NEW.supersedes_expectation_id
+                USING ERRCODE = '23503';
+        END IF;
+        IF prior_org <> NEW.org_id THEN
+            RAISE EXCEPTION 'operational_expectations: supersession must target a row on the same org' USING ERRCODE = '23514';
+        END IF;
+        -- Inherit the lineage root; default it when not supplied.
+        IF NEW.lineage_root_id IS NULL THEN
+            NEW.lineage_root_id := COALESCE(prior_root, NEW.supersedes_expectation_id);
+        ELSIF NEW.lineage_root_id <> COALESCE(prior_root, NEW.supersedes_expectation_id) THEN
+            RAISE EXCEPTION 'operational_expectations: lineage_root_id must match the superseded row''s root' USING ERRCODE = '23514';
+        END IF;
     END IF;
 
     RETURN NEW;

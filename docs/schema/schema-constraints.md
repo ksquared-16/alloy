@@ -2,7 +2,7 @@
 
 **Status:** Generated reference. **Do not edit by hand.**
 
-**Generated:** 2026-07-13 · **Constraint count:** 1191
+**Generated:** 2026-07-17 · **Constraint count:** 1296
 
 | Table | Name | Type | Definition |
 |-------|------|------|------------|
@@ -374,6 +374,46 @@
 | `config_layout_assist_proposals` | `chk_config_layout_assist_proposals_state` | CHECK | CHECK (state = ANY (ARRAY['draft'::text, 'reviewed'::text, 'approved'::text, 'rejected'::text, 'appl |
 | `config_layout_assist_proposals` | `config_layout_assist_proposals_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
 | `config_layout_assist_proposals` | `config_layout_assist_proposals_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `configuration_consumptions` | `configuration_consumptions_delivered_by_run_id_fkey` | FOREIGN KEY | FOREIGN KEY (delivered_by_run_id) REFERENCES configuration_distribution_runs(id) ON DELETE RESTRICT |
+| `configuration_consumptions` | `configuration_consumptions_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT |
+| `configuration_consumptions` | `configuration_consumptions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `configuration_consumptions` | `configuration_consumptions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `configuration_consumptions` | `configuration_consumptions_publication_id_fkey` | FOREIGN KEY | FOREIGN KEY (publication_id) REFERENCES configuration_publications(id) ON DELETE RESTRICT |
+| `configuration_consumptions` | `configuration_consumptions_subject_location_unique` | UNIQUE | UNIQUE (org_id, domain_key, subject_id, location_id) |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_attempt_number_check` | CHECK | CHECK (attempt_number > 0) |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_attempted_by_fkey` | FOREIGN KEY | FOREIGN KEY (attempted_by) REFERENCES auth.users(id) ON DELETE SET NULL |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_audit_event_id_fkey` | FOREIGN KEY | FOREIGN KEY (audit_event_id) REFERENCES workflow_events(id) ON DELETE SET NULL |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_error_shape` | CHECK | CHECK (status = 'failed'::text AND error_message IS NOT NULL OR status <> 'failed'::text) |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_run_id_fkey` | FOREIGN KEY | FOREIGN KEY (run_id) REFERENCES configuration_distribution_runs(id) ON DELETE RESTRICT |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_status_check` | CHECK | CHECK (status = ANY (ARRAY['applied'::text, 'unchanged'::text, 'failed'::text])) |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_target_id_fkey` | FOREIGN KEY | FOREIGN KEY (target_id) REFERENCES configuration_distribution_targets(id) ON DELETE RESTRICT |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_target_number_unique` | UNIQUE | UNIQUE (target_id, attempt_number) |
+| `configuration_distribution_runs` | `configuration_distribution_runs_created_by_fkey` | FOREIGN KEY | FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL |
+| `configuration_distribution_runs` | `configuration_distribution_runs_idempotency_unique` | UNIQUE | UNIQUE (org_id, idempotency_key) |
+| `configuration_distribution_runs` | `configuration_distribution_runs_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `configuration_distribution_runs` | `configuration_distribution_runs_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `configuration_distribution_runs` | `configuration_distribution_runs_provider_version_check` | CHECK | CHECK (provider_version > 0) |
+| `configuration_distribution_runs` | `configuration_distribution_runs_publication_id_fkey` | FOREIGN KEY | FOREIGN KEY (publication_id) REFERENCES configuration_publications(id) ON DELETE RESTRICT |
+| `configuration_distribution_runs` | `configuration_distribution_runs_status_check` | CHECK | CHECK (status = ANY (ARRAY['planned'::text, 'running'::text, 'completed'::text, 'partial_failure'::t |
+| `configuration_distribution_targets` | `configuration_distribution_targets_attempt_count_check` | CHECK | CHECK (attempt_count >= 0) |
+| `configuration_distribution_targets` | `configuration_distribution_targets_error_shape` | CHECK | CHECK (status = 'failed'::text AND error_message IS NOT NULL OR status <> 'failed'::text) |
+| `configuration_distribution_targets` | `configuration_distribution_targets_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT |
+| `configuration_distribution_targets` | `configuration_distribution_targets_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `configuration_distribution_targets` | `configuration_distribution_targets_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `configuration_distribution_targets` | `configuration_distribution_targets_run_id_fkey` | FOREIGN KEY | FOREIGN KEY (run_id) REFERENCES configuration_distribution_runs(id) ON DELETE CASCADE |
+| `configuration_distribution_targets` | `configuration_distribution_targets_run_location_unique` | UNIQUE | UNIQUE (run_id, location_id) |
+| `configuration_distribution_targets` | `configuration_distribution_targets_status_check` | CHECK | CHECK (status = ANY (ARRAY['pending'::text, 'applied'::text, 'unchanged'::text, 'failed'::text])) |
+| `configuration_publications` | `configuration_publications_audit_event_id_fkey` | FOREIGN KEY | FOREIGN KEY (audit_event_id) REFERENCES workflow_events(id) ON DELETE SET NULL |
+| `configuration_publications` | `configuration_publications_domain_nonempty` | CHECK | CHECK (char_length(btrim(domain_key)) > 0) |
+| `configuration_publications` | `configuration_publications_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `configuration_publications` | `configuration_publications_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `configuration_publications` | `configuration_publications_published_by_fkey` | FOREIGN KEY | FOREIGN KEY (published_by) REFERENCES auth.users(id) ON DELETE SET NULL |
+| `configuration_publications` | `configuration_publications_revision_number_check` | CHECK | CHECK (revision_number > 0) |
+| `configuration_publications` | `configuration_publications_revision_unique` | UNIQUE | UNIQUE (org_id, domain_key, revision_id) |
+| `configuration_publications` | `configuration_publications_subject_number_unique` | UNIQUE | UNIQUE (org_id, domain_key, subject_id, revision_number) |
 | `consumption_event_types` | `consumption_event_types_end_after_start` | CHECK | CHECK (effective_end IS NULL OR effective_end >= effective_start) |
 | `consumption_event_types` | `consumption_event_types_family_nonempty` | CHECK | CHECK (char_length(btrim(source_family)) > 0) |
 | `consumption_event_types` | `consumption_event_types_key_nonempty` | CHECK | CHECK (char_length(btrim(event_key)) > 0) |
@@ -715,10 +755,13 @@
 | `ledger_transactions` | `ledger_transactions_schedule_id_fkey` | FOREIGN KEY | FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE SET NULL |
 | `ledger_transactions` | `ledger_transactions_status_check` | CHECK | CHECK (status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'failed'::text, 'reversed'::text])) |
 | `ledger_transactions` | `ledger_transactions_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL |
+| `location_program_categories` | `location_program_categories_configuration_consumption_id_fkey` | FOREIGN KEY | FOREIGN KEY (configuration_consumption_id) REFERENCES configuration_consumptions(id) ON DELETE SET N |
 | `location_program_categories` | `location_program_categories_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE |
 | `location_program_categories` | `location_program_categories_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
 | `location_program_categories` | `location_program_categories_org_location_key_unique` | UNIQUE | UNIQUE (org_id, location_id, key) |
 | `location_program_categories` | `location_program_categories_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `location_program_categories` | `location_program_categories_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE RESTRICT |
+| `location_program_categories` | `location_program_categories_program_revision_id_fkey` | FOREIGN KEY | FOREIGN KEY (program_revision_id) REFERENCES program_revisions(id) ON DELETE RESTRICT |
 | `location_tags` | `location_tags_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE |
 | `location_tags` | `location_tags_pkey` | PRIMARY KEY | PRIMARY KEY (location_id, tag_id) |
 | `location_tags` | `location_tags_tag_id_fkey` | FOREIGN KEY | FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE |
@@ -771,6 +814,41 @@
 | `metric_visualizations` | `metric_visualizations_type_check` | CHECK | CHECK (visualization_type = ANY (ARRAY['kpi_card'::text, 'trend_card'::text, 'sparkline'::text, 'lin |
 | `mutation_events` | `mutation_events_origin_check` | CHECK | CHECK (origin = ANY (ARRAY['operator'::text, 'automation'::text, 'api'::text, 'system'::text])) |
 | `mutation_events` | `mutation_events_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `operational_authorities` | `operational_authorities_effective_window` | CHECK | CHECK (effective_end IS NULL OR effective_end >= effective_start) |
+| `operational_authorities` | `operational_authorities_key_nonempty` | CHECK | CHECK (char_length(btrim(authority_key)) > 0) |
+| `operational_authorities` | `operational_authorities_kind_check` | CHECK | CHECK (authority_kind = ANY (ARRAY['operational'::text, 'licensing'::text, 'policy'::text, 'process' |
+| `operational_authorities` | `operational_authorities_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `operational_authorities` | `operational_authorities_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `operational_authority_assignments` | `oe_authority_assignments_effective_window` | CHECK | CHECK (effective_end IS NULL OR effective_end >= effective_start) |
+| `operational_authority_assignments` | `oe_authority_assignments_holder_type_check` | CHECK | CHECK (holder_type = ANY (ARRAY['human'::text, 'policy'::text, 'process'::text, 'external'::text])) |
+| `operational_authority_assignments` | `oe_authority_assignments_revocation_shape` | CHECK | CHECK (status = 'granted'::text AND supersedes_assignment_id IS NULL OR status = 'revoked'::text AND |
+| `operational_authority_assignments` | `oe_authority_assignments_scope_shape` | CHECK | CHECK (scope_type = 'organization'::text AND scope_id IS NULL OR scope_type <> 'organization'::text  |
+| `operational_authority_assignments` | `oe_authority_assignments_scope_type_check` | CHECK | CHECK (scope_type = ANY (ARRAY['organization'::text, 'location'::text, 'business_process'::text, 'su |
+| `operational_authority_assignments` | `oe_authority_assignments_status_check` | CHECK | CHECK (status = ANY (ARRAY['granted'::text, 'revoked'::text])) |
+| `operational_authority_assignments` | `operational_authority_assignments_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `operational_authority_assignments` | `operational_authority_assignments_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `operational_authority_assignments` | `operational_authority_assignments_supersedes_assignment_id_fkey` | FOREIGN KEY | FOREIGN KEY (supersedes_assignment_id) REFERENCES operational_authority_assignments(id) ON DELETE RE |
+| `operational_expectation_ratifications` | `oe_ratifications_new_standing_binding` | CHECK | CHECK (new_standing = 'binding'::text) |
+| `operational_expectation_ratifications` | `oe_ratifications_prior_standing_check` | CHECK | CHECK (prior_standing = ANY (ARRAY['proposed'::text, 'model'::text, 'binding'::text])) |
+| `operational_expectation_ratifications` | `operational_expectation_ratifications_expectation_id_fkey` | FOREIGN KEY | FOREIGN KEY (expectation_id) REFERENCES operational_expectations(id) ON DELETE RESTRICT |
+| `operational_expectation_ratifications` | `operational_expectation_ratifications_lineage_root_id_fkey` | FOREIGN KEY | FOREIGN KEY (lineage_root_id) REFERENCES operational_expectations(id) ON DELETE RESTRICT |
+| `operational_expectation_ratifications` | `operational_expectation_ratifications_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `operational_expectation_ratifications` | `operational_expectation_ratifications_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `operational_expectations` | `operational_expectations_author_class_check` | CHECK | CHECK (author_class = ANY (ARRAY['human'::text, 'policy'::text, 'process'::text, 'ai'::text, 'extern |
+| `operational_expectations` | `operational_expectations_create_link_shape` | CHECK | CHECK (verb = 'create'::text AND supersedes_expectation_id IS NULL AND transition_type IS NULL OR ve |
+| `operational_expectations` | `operational_expectations_lineage_root_id_fkey` | FOREIGN KEY | FOREIGN KEY (lineage_root_id) REFERENCES operational_expectations(id) ON DELETE RESTRICT |
+| `operational_expectations` | `operational_expectations_modality_check` | CHECK | CHECK (modality = ANY (ARRAY['required'::text, 'prohibited'::text, 'intended'::text, 'committed'::te |
+| `operational_expectations` | `operational_expectations_no_self_reference` | CHECK | CHECK (supersedes_expectation_id IS NULL OR supersedes_expectation_id <> id) |
+| `operational_expectations` | `operational_expectations_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `operational_expectations` | `operational_expectations_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `operational_expectations` | `operational_expectations_standing_check` | CHECK | CHECK (standing = ANY (ARRAY['proposed'::text, 'binding'::text, 'model'::text])) |
+| `operational_expectations` | `operational_expectations_subject_ref_present` | CHECK | CHECK (subject_ref IS NOT NULL AND subject_ref <> 'null'::jsonb) |
+| `operational_expectations` | `operational_expectations_supersedes_expectation_id_fkey` | FOREIGN KEY | FOREIGN KEY (supersedes_expectation_id) REFERENCES operational_expectations(id) ON DELETE RESTRICT |
+| `operational_expectations` | `operational_expectations_temporal_frame_present` | CHECK | CHECK (jsonb_typeof(temporal_frame) = 'object'::text AND temporal_frame <> '{}'::jsonb) |
+| `operational_expectations` | `operational_expectations_transition_type_check` | CHECK | CHECK (transition_type IS NULL OR (transition_type = ANY (ARRAY['revision'::text, 'correction'::text |
+| `operational_expectations` | `operational_expectations_valid_window` | CHECK | CHECK (valid_to IS NULL OR valid_to >= valid_from) |
+| `operational_expectations` | `operational_expectations_verb_check` | CHECK | CHECK (verb = ANY (ARRAY['create'::text, 'revise'::text, 'correct'::text, 'replace'::text, 'cancel': |
+| `operational_expectations` | `operational_expectations_verb_transition_map` | CHECK | CHECK (verb = 'create'::text AND transition_type IS NULL OR verb = 'revise'::text AND transition_typ |
 | `operational_tasks` | `operational_tasks_entity_id_fkey` | FOREIGN KEY | FOREIGN KEY (entity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
 | `operational_tasks` | `operational_tasks_entity_link_check` | CHECK | CHECK (entity_type IS NULL AND entity_id IS NULL OR entity_type = 'opportunities'::text AND entity_i |
 | `operational_tasks` | `operational_tasks_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
@@ -984,6 +1062,17 @@
 | `processing_resolutions` | `processing_resolutions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
 | `processing_resolutions` | `processing_resolutions_superseded_by_fkey` | FOREIGN KEY | FOREIGN KEY (superseded_by) REFERENCES processing_resolutions(id) ON DELETE SET NULL |
 | `processing_resolutions` | `uq_processing_resolutions_case_subject_generation` | UNIQUE | UNIQUE (case_id, subject_ref, generation_id) |
+| `program_drafts` | `program_drafts_base_revision_id_fkey` | FOREIGN KEY | FOREIGN KEY (base_revision_id) REFERENCES program_revisions(id) ON DELETE SET NULL |
+| `program_drafts` | `program_drafts_created_by_fkey` | FOREIGN KEY | FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL |
+| `program_drafts` | `program_drafts_draft_status_check` | CHECK | CHECK (draft_status = ANY (ARRAY['draft'::text, 'validated'::text])) |
+| `program_drafts` | `program_drafts_label_nonempty` | CHECK | CHECK (char_length(btrim(label)) > 0) |
+| `program_drafts` | `program_drafts_one_per_program` | UNIQUE | UNIQUE (org_id, program_id) |
+| `program_drafts` | `program_drafts_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `program_drafts` | `program_drafts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `program_drafts` | `program_drafts_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE |
+| `program_drafts` | `program_drafts_updated_by_fkey` | FOREIGN KEY | FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL |
+| `program_drafts` | `program_drafts_validated_by_fkey` | FOREIGN KEY | FOREIGN KEY (validated_by) REFERENCES auth.users(id) ON DELETE SET NULL |
+| `program_drafts` | `program_drafts_validation_shape` | CHECK | CHECK (draft_status = 'draft'::text OR draft_status = 'validated'::text AND validated_at IS NOT NULL |
 | `program_offering_variants` | `program_offering_variants_offering_id_fkey` | FOREIGN KEY | FOREIGN KEY (offering_id) REFERENCES program_offerings(id) ON DELETE CASCADE |
 | `program_offering_variants` | `program_offering_variants_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
 | `program_offering_variants` | `program_offering_variants_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
@@ -991,6 +1080,22 @@
 | `program_offerings` | `program_offerings_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
 | `program_offerings` | `program_offerings_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
 | `program_offerings` | `program_offerings_unique` | UNIQUE | UNIQUE (org_id, program_key, attendance_type) |
+| `program_revisions` | `program_revisions_checksum_nonempty` | CHECK | CHECK (char_length(btrim(payload_checksum)) > 0) |
+| `program_revisions` | `program_revisions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `program_revisions` | `program_revisions_org_program_number_unique` | UNIQUE | UNIQUE (org_id, program_id, revision_number) |
+| `program_revisions` | `program_revisions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `program_revisions` | `program_revisions_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE RESTRICT |
+| `program_revisions` | `program_revisions_published_by_fkey` | FOREIGN KEY | FOREIGN KEY (published_by) REFERENCES auth.users(id) ON DELETE SET NULL |
+| `program_revisions` | `program_revisions_revision_number_check` | CHECK | CHECK (revision_number > 0) |
+| `program_revisions` | `program_revisions_source_draft_id_fkey` | FOREIGN KEY | FOREIGN KEY (source_draft_id) REFERENCES program_drafts(id) ON DELETE RESTRICT |
+| `programs` | `programs_created_by_fkey` | FOREIGN KEY | FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL |
+| `programs` | `programs_key_nonempty` | CHECK | CHECK (char_length(btrim(program_key)) >= 2 AND char_length(btrim(program_key)) <= 64) |
+| `programs` | `programs_lifecycle_status_check` | CHECK | CHECK (lifecycle_status = ANY (ARRAY['active'::text, 'retired'::text])) |
+| `programs` | `programs_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `programs` | `programs_org_key_unique` | UNIQUE | UNIQUE (org_id, program_key) |
+| `programs` | `programs_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `programs` | `programs_retired_by_fkey` | FOREIGN KEY | FOREIGN KEY (retired_by) REFERENCES auth.users(id) ON DELETE SET NULL |
+| `programs` | `programs_retirement_shape` | CHECK | CHECK (lifecycle_status = 'active'::text AND retired_at IS NULL OR lifecycle_status = 'retired'::tex |
 | `quotes` | `chk_quotes_amounts_nonnegative` | CHECK | CHECK ((subtotal_cents IS NULL OR subtotal_cents >= 0) AND discount_cents >= 0 AND tax_cents >= 0 AN |
 | `quotes` | `quotes_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL |
 | `quotes` | `quotes_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE |

@@ -4,15 +4,15 @@
 
 **Regenerate:** `npm run export:supabase-schema` then `node scripts/generate-schema-docs.mjs`
 
-**Generated:** 2026-07-13
+**Generated:** 2026-07-17
 
 ## Summary
 
 | Kind | Count |
 |------|------:|
-| Base tables (`public`) | 232 |
+| Base tables (`public`) | 244 |
 | Views (`public`) | 2 |
-| Tables with RLS enabled | 232 |
+| Tables with RLS enabled | 244 |
 
 ## Base tables
 
@@ -80,6 +80,11 @@
 | `communication_templates` | true | false | 2 |
 | `communication_threads` | true | false | 2 |
 | `config_layout_assist_proposals` | true | false | 4 |
+| `configuration_consumptions` | true | false | 2 |
+| `configuration_delivery_attempts` | true | false | 2 |
+| `configuration_distribution_runs` | true | false | 2 |
+| `configuration_distribution_targets` | true | false | 2 |
+| `configuration_publications` | true | false | 2 |
 | `consumption_event_types` | true | false | 4 |
 | `consumption_events` | true | false | 4 |
 | `contact_tags` | true | false | 1 |
@@ -155,6 +160,10 @@
 | `metric_snapshots` | true | false | 2 |
 | `metric_visualizations` | true | false | 2 |
 | `mutation_events` | true | false | 1 |
+| `operational_authorities` | true | false | 2 |
+| `operational_authority_assignments` | true | false | 2 |
+| `operational_expectation_ratifications` | true | false | 2 |
+| `operational_expectations` | true | false | 2 |
 | `operational_tasks` | true | false | 4 |
 | `opportunities` | true | false | 5 |
 | `opportunity_customer_members` | true | false | 5 |
@@ -202,8 +211,11 @@
 | `processing_facts` | true | false | 3 |
 | `processing_plan_operations` | true | false | 2 |
 | `processing_resolutions` | true | false | 4 |
+| `program_drafts` | true | false | 2 |
 | `program_offering_variants` | true | false | 5 |
 | `program_offerings` | true | false | 5 |
+| `program_revisions` | true | false | 2 |
+| `programs` | true | false | 2 |
 | `quotes` | true | false | 1 |
 | `record_actions` | true | false | 2 |
 | `record_drawer_layouts` | true | false | 5 |
