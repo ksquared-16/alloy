@@ -17,25 +17,105 @@ See: scripts/local-dev/ENGINEERING-MANAGER.md
 EOF
 }
 
+# Reasons behind the classification, so the package explains itself rather than
+# asserting a word.
+#
+# File-backed on purpose: classify_promotion is invoked in a command
+# substitution, so a shell array mutated inside it would not survive the
+# subshell. This mirrors the KEY=value channel alloy_agent_ready_evaluate uses.
+CLASSIFY_REASONS_FILE="${CLASSIFY_REASONS_FILE:-${TMPDIR:-/tmp}/alloy-classify-reasons.$$}"
+classify_reason() { printf '%s\n' "$1" >>"$CLASSIFY_REASONS_FILE"; }
+classify_reasons_reset() { : >"$CLASSIFY_REASONS_FILE"; }
+classify_reasons_count() {
+  [[ -s "$CLASSIFY_REASONS_FILE" ]] || { printf '0'; return; }
+  wc -l <"$CLASSIFY_REASONS_FILE" | tr -d ' '
+}
+classify_reasons_print() {
+  [[ -s "$CLASSIFY_REASONS_FILE" ]] || return 0
+  sed 's/^/- /' "$CLASSIFY_REASONS_FILE"
+}
+
 classify_promotion() {
   local key="$1"
   local base="$2"
   local blockers=0
+  local risks_total=0
+  classify_reasons_reset
 
-  # Check tasks complete
-  local tid st
+  # An initiative with no tasks has produced no evidence. Absence of work is not
+  # readiness.
+  local task_count=0
+
+  # Check tasks complete, and that each complete task carries its own evidence.
+  #
+  # A task's evidence depends on what kind of task it is:
+  #   - an implementation task produces reports/<tid>-result.json
+  #   - a review task produces reviews/<tid>-review.json (REVIEW-PIPELINE.md:
+  #     "Default review task: task-002")
+  # A complete task carrying NEITHER has claimed completion without evidence.
+  local tid st rp rv n
   for tid in $(alloy_engineering_list_tasks "$key"); do
+    task_count=$((task_count + 1))
     st="$(alloy_engineering_task_status "$(alloy_engineering_task_path "$key" "$tid")")"
-    [[ "$st" == "complete" ]] || blockers=$((blockers + 1))
+    if [[ "$st" != "complete" ]]; then
+      blockers=$((blockers + 1))
+      classify_reason "task ${tid}: ${st} (not complete)"
+      continue
+    fi
+
+    rp="${base}/reports/${tid}-result.json"
+    rv="${base}/reviews/${tid}-review.json"
+
+    if [[ -f "$rp" ]]; then
+      # Fail closed on unassessable risk.
+      #
+      # Risk previously came from a hardcoded reports/task-001-result.json read
+      # as `... || echo 1`, so a MISSING or unreadable report yielded risks=1 and
+      # classified as READY_WITH_KNOWN_RISKS — strictly MORE promotable than the
+      # truth. Absent evidence is not "one known risk"; it is an unassessable
+      # claim. The hardcoding also meant multi-task initiatives were assessed
+      # from one task's report, and an initiative without a task-001 always took
+      # the fallback silently.
+      n="$(node -e "
+        const r = require('${rp}');
+        const k = (r.risks || []).length;
+        if (!Number.isInteger(k)) process.exit(1);
+        console.log(k);
+      " 2>/dev/null)" || n=""
+      if [[ -z "$n" ]]; then
+        blockers=$((blockers + 1))
+        classify_reason "task ${tid}: result report unreadable — risk not assessable"
+        continue
+      fi
+      risks_total=$((risks_total + n))
+      [[ "$n" == "0" ]] || classify_reason "task ${tid}: ${n} risk(s) reported"
+    elif [[ -f "$rv" ]]; then
+      # A review task. Its verdict is assessed by the review gate below; it
+      # contributes no implementation risk of its own.
+      :
+    else
+      blockers=$((blockers + 1))
+      classify_reason "task ${tid}: complete but carries no evidence (no reports/${tid}-result.json, no reviews/${tid}-review.json) — not assessable"
+      continue
+    fi
   done
+
+  if [[ "$task_count" -eq 0 ]]; then
+    blockers=$((blockers + 1))
+    classify_reason "initiative has no tasks — nothing to assess"
+  fi
 
   # Check completed final review. Advisory reviews never contribute to READY.
   local review_status="missing"
   if [[ -f "$base/reviews/task-002-review.json" ]]; then
     review_status="$(node -e "console.log(require('${base}/reviews/task-002-review.json').status)")"
-    [[ "$review_status" == "fail" || "$review_status" == "blocked" ]] && blockers=$((blockers + 1))
+    if [[ "$review_status" == "fail" || "$review_status" == "blocked" ]]; then
+      blockers=$((blockers + 1))
+      classify_reason "review task-002: ${review_status}"
+    fi
   else
     blockers=$((blockers + 1))
+    classify_reason "review task-002: missing (reviews/task-002-review.json)"
   fi
   local final_review_ready
   final_review_ready="$(node -e "
@@ -47,22 +127,26 @@ classify_promotion() {
       r.contributes_to_ready === true
     ) ? 'yes' : 'no');
   ")"
-  [[ "$final_review_ready" == "yes" ]] || blockers=$((blockers + 1))
+  if [[ "$final_review_ready" != "yes" ]]; then
+    blockers=$((blockers + 1))
+    classify_reason "no completed final review contributing to READY (advisory reviews never promote)"
+  fi
 
   local open_decisions
   open_decisions="$(alloy_engineering_human_decisions_count "$key")"
-  [[ "$open_decisions" != "0" ]] && echo "BLOCKED_ON_HUMAN_DECISION" && return
+  if [[ "$open_decisions" != "0" ]]; then
+    classify_reason "${open_decisions} open human decision(s)"
+    echo "BLOCKED_ON_HUMAN_DECISION"
+    return
+  fi
 
   [[ "$blockers" -gt 0 ]] && echo "NOT_READY" && return
 
-  local risks
-  risks="$(node -e "
-    const r = require('${base}/reports/task-001-result.json');
-    console.log((r.risks||[]).length);
-  " 2>/dev/null || echo 1)"
-  if [[ "$risks" != "0" ]]; then
+  # Every task's risk evidence was present and readable to reach this point.
+  if [[ "$risks_total" -gt 0 ]]; then
     echo "READY_WITH_KNOWN_RISKS"
   else
+    classify_reason "all tasks complete, all risk reports present and empty, final review passed"
     echo "READY"
   fi
 }
@@ -134,6 +218,14 @@ main() {
     printf -- '- Candidate code/doc matches are bounded text-search results, not semantic conclusions.\n'
     printf '\n## Promotion recommendation\n\n'
     printf '**%s**\n\n' "$rec_class"
+    printf '### Why this classification\n\n'
+    if [[ "$(classify_reasons_count)" == "0" ]]; then
+      printf -- '- (no findings recorded)\n'
+    else
+      classify_reasons_print
+    fi
+    printf '\nMissing evidence never softens this verdict: an absent or unreadable\n'
+    printf 'result report classifies NOT_READY, never READY_WITH_KNOWN_RISKS.\n\n'
     printf '## Push / PR commands (NOT executed)\n\n'
     node -e "
       const d = require('${base}/state.json');
@@ -150,6 +242,8 @@ main() {
 classification: $rec_class
 generated_at: "$(alloy_iso_now)"
 push_merge_requires_approval: true
+reasons:
+$(if [[ "$(classify_reasons_count)" == "0" ]]; then printf '  - (none recorded)\n'; else classify_reasons_print | sed 's/^- /  - /'; fi)
 EOF
 
   cat >"$final_dir/commit-map.md" <<EOF

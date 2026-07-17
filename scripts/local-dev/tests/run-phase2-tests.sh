@@ -236,5 +236,17 @@ else
 fi
 
 echo
+echo "== Sprint manifest suite (TM-1) =="
+set +e
+bash "$ROOT/tests/test-sprint-manifest.sh"
+manifest_rc=$?
+set -e
+if [[ "$manifest_rc" -eq 0 ]]; then
+  pass "sprint manifest suite"
+else
+  fail "sprint manifest suite"
+fi
+
+echo
 echo "Phase 2 results: PASS=$PASS FAIL=$FAIL"
 [[ "$FAIL" -eq 0 ]]

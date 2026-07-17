@@ -249,11 +249,37 @@ alloy_write_kv_file() {
   mv "$tmp" "$path"
 }
 
+# Optional metadata fields. Absent from a metadata file when a worktree was
+# created by a Phase 1/2 command rather than alloy-sprint-start, or when the
+# sprint never set them.
+#
+# These MUST be cleared before sourcing any metadata file. Metadata is sourced
+# into the caller's scope, so a field absent from file B silently retains the
+# value sourced from file A. That is how alloy-worker-status attributed slot 2's
+# sprint name to slot 3: wt3's metadata has no ALLOY_SPRINT_NAME, so
+# "${ALLOY_SPRINT_NAME:-fallback}" never reached its fallback — the variable was
+# set, just set by the previous row. Mandatory fields are guarded by the
+# assertions in alloy_load_metadata; optional fields had no such guard.
+#
+# Trust rule: a surface may state only what it read. An absent field must read
+# as absent, never as the last slot that had one.
+ALLOY_OPTIONAL_METADATA_FIELDS="ALLOY_AGENT_ROLE ALLOY_AGENT_STATUS ALLOY_AGENT_INSTRUCTIONS \
+ALLOY_AGENT_OPENED_AT ALLOY_AGENT_CLOSED_AT ALLOY_SPRINT_NAME ALLOY_SPRINT_OBJECTIVE \
+ALLOY_WORKER_LIFECYCLE ALLOY_PROVIDER_SESSION_ID ALLOY_PAUSE_RECORDED_AT ALLOY_FINISHED_AT"
+
+alloy_reset_optional_metadata() {
+  local key
+  for key in $ALLOY_OPTIONAL_METADATA_FIELDS; do
+    unset "$key"
+  done
+}
+
 alloy_load_metadata() {
   local name="$1"
   local path
   path="$(alloy_metadata_path "$name")"
   [[ -f "$path" ]] || alloy_die "unknown worktree metadata: $name ($path)"
+  alloy_reset_optional_metadata
   # shellcheck disable=SC1090
   source "$path"
   [[ "${ALLOY_WORKTREE_NAME:-}" == "$name" ]] || \
@@ -293,23 +319,60 @@ alloy_find_metadata_by_slot() {
   return 1
 }
 
+# Normalize a git remote URL for comparison: scp-style and URL forms of the
+# same remote must compare equal (git@host:owner/repo.git == https://host/owner/repo).
+alloy_normalize_remote_url() {
+  local url="$1"
+  url="${url%.git}"
+  url="${url#ssh://}"
+  url="${url#https://}"
+  url="${url#http://}"
+  url="${url#git://}"
+  url="${url#*@}"          # strip user@
+  url="${url/://}"          # scp-style host:path -> host/path
+  printf '%s' "$url"
+}
+
+# Verify ALLOY_REPO is a usable canonical checkout.
+#
+# Scope note (honest naming): this verifies that the canonical repo is a real,
+# reachable, non-worktree checkout with the expected remote. It does NOT verify
+# that the agent is standing in it, and it cannot — a misrooted agent never
+# invokes the toolkit at all. Ambient root identity is answered by alloy-root
+# (TM-2), not here.
 alloy_verify_canonical_repo() {
   local repo="${ALLOY_REPO:-}"
   [[ -n "$repo" ]] || alloy_die "ALLOY_REPO is not set"
-  [[ -d "$repo/.git" || -f "$repo/.git" ]] || \
+  if [[ ! -d "$repo/.git" && ! -f "$repo/.git" ]]; then
     alloy_die "ALLOY_REPO is not a git repository: $repo"
+  fi
+  # A linked worktree has .git as a FILE containing "gitdir:". The canonical
+  # checkout must be the real clone: managed worktrees are cut from it, and a
+  # worktree-of-a-worktree is never the intended root.
+  if [[ -f "$repo/.git" ]]; then
+    alloy_die "ALLOY_REPO is a linked git worktree, not the canonical checkout: $repo"
+  fi
   (
     cd "$repo"
     git rev-parse --is-inside-work-tree >/dev/null 2>&1
   ) || alloy_die "cannot access git repository at $repo"
 
-  local remote_url expected=""
+  local remote_url
   remote_url="$(cd "$repo" && git remote get-url "$ALLOY_BASE_REMOTE" 2>/dev/null || true)"
   if [[ -z "$remote_url" ]]; then
     alloy_die "remote '$ALLOY_BASE_REMOTE' missing in $repo"
   fi
-  if [[ "$remote_url" != *alloy* && "$remote_url" != *Alloy* ]]; then
-    alloy_warn "remote URL does not look like Alloy: $remote_url"
+  # Exact identity when configured; otherwise a heuristic that says so.
+  local expected="${ALLOY_REPO_EXPECTED_REMOTE:-}"
+  if [[ -n "$expected" ]]; then
+    local got_n exp_n
+    got_n="$(alloy_normalize_remote_url "$remote_url")"
+    exp_n="$(alloy_normalize_remote_url "$expected")"
+    if [[ "$got_n" != "$exp_n" ]]; then
+      alloy_die "ALLOY_REPO remote mismatch: $repo points at '$remote_url', expected '$expected' (ALLOY_REPO_EXPECTED_REMOTE)"
+    fi
+  elif [[ "$remote_url" != *alloy* && "$remote_url" != *Alloy* ]]; then
+    alloy_warn "remote URL does not look like Alloy (name heuristic, not verification): $remote_url"
   fi
 }
 
@@ -326,6 +389,52 @@ alloy_repo_fetch() {
 
 alloy_base_ref() {
   printf '%s/%s' "$ALLOY_BASE_REMOTE" "$ALLOY_BASE_BRANCH"
+}
+
+# Refresh the base ref in the canonical repo. Linked worktrees share the object
+# store, so one fetch makes every slot's ahead/behind current. Returns non-zero
+# when the refresh could not happen (offline, no repo) so callers can say so
+# rather than silently reporting against a stale ref.
+alloy_refresh_base_ref() {
+  local repo="${ALLOY_REPO:-}"
+  [[ -n "$repo" && -d "$repo/.git" ]] || return 1
+  GIT_TERMINAL_PROMPT=0 git -C "$repo" fetch --quiet \
+    "$ALLOY_BASE_REMOTE" "$ALLOY_BASE_BRANCH" >/dev/null 2>&1 || return 1
+  return 0
+}
+
+# Describe the base ref an ahead/behind count is measured against, including how
+# stale it is.
+#
+# Trust rule: ahead/behind is computed against whatever origin/staging happens
+# to be cached locally, and the reporting paths never fetch. A worktree 1481
+# commits behind can therefore print "behind: 0" — technically true of the
+# cached ref, operationally a lie. The count is not wrong; the count is
+# *relative*, and a surface that prints it must say relative to what.
+alloy_base_ref_status() {
+  local repo="${ALLOY_REPO:-}"
+  local base sha age
+  base="$(alloy_base_ref)"
+  sha="unknown"
+  age="never fetched"
+  if [[ -n "$repo" && -d "$repo/.git" ]]; then
+    sha="$(git -C "$repo" rev-parse --short "$base" 2>/dev/null || echo "unknown")"
+    local fetch_head="$repo/.git/FETCH_HEAD"
+    if [[ -f "$fetch_head" ]]; then
+      local mtime now delta
+      mtime="$(stat -f %m "$fetch_head" 2>/dev/null || stat -c %Y "$fetch_head" 2>/dev/null || echo "")"
+      if [[ -n "$mtime" ]]; then
+        now="$(date +%s)"
+        delta=$((now - mtime))
+        if (( delta < 90 )); then age="fetched ${delta}s ago"
+        elif (( delta < 5400 )); then age="fetched $((delta / 60))m ago"
+        elif (( delta < 172800 )); then age="fetched $((delta / 3600))h ago"
+        else age="fetched $((delta / 86400))d ago"
+        fi
+      fi
+    fi
+  fi
+  printf '%s @ %s (%s)' "$base" "$sha" "$age"
 }
 
 alloy_port_listener_pid() {

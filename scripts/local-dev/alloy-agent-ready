@@ -59,11 +59,23 @@ main() {
   trusted_source="$(alloy_server_env_source_path)"
 
   echo "Agent ready check — ${name} (slot ${slot})"
-  echo "Result: ${status}"
+  echo "Result: ${status} (L1: slot bootstrapped) — CAN WORK BEGIN?"
+  echo
+  # A verdict names the level it reached and never implies a level it did not
+  # test. READY answers "can work begin"; NOTHING here answers "would CI pass" --
+  # this command's overlap with CI is empty, not partial. Nine deliverables were
+  # reported "lint green" from a non-blocking local variant while CI's blocking
+  # mode had caught a defect, because the toolkit offered no signal that a local
+  # check and its CI counterpart differ. It offers one now.
+  echo "NOT checked here: typecheck, tests, lint, build, docs-lint."
+  echo "  READY   = can work begin?        <- this command (env, auth, server, branch)"
+  echo "  GATE    = would CI likely pass?  <- alloy-validate typecheck|test|build|imports"
+  echo "  CERTIFY = can this be promoted?  <- evidence at a level; L5 never self-issued"
+  echo "Independent questions. READY is not a fitness verdict."
   echo
   echo "Git"
   echo "  branch:        ${branch} (expected ${ALLOY_WORKTREE_BRANCH})"
-  echo "  ahead/behind:  ${ahead}/${behind} vs $(alloy_base_ref)"
+  echo "  ahead/behind:  ${ahead}/${behind} vs $(alloy_base_ref_status)"
   echo "  staging SHA:   ${staging_sha}"
   echo
   echo "Application"

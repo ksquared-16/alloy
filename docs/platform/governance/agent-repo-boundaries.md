@@ -19,36 +19,71 @@ supersedes: []
 
 ## 1. Canonical repo ownership
 
+**One canonical engineering root: `/Users/Kelly/Alloy`.** Every agent, both providers.
+
 | Path | Role |
 |------|------|
-| **`/Users/Kelly/Alloy`** | **Cursor / main staging workspace** — platform, runtime, settings, workspace, lifecycle, scheduling, billing, attendance, general staging docs |
-| **`/Users/Kelly/Alloy-Claude`** | **Claude / Cowork specialist workspace** — POS, documents/forms, communications, sprint packages, design reviews, architecture reviews |
+| **`/Users/Kelly/Alloy`** | **The canonical repository.** The only sanctioned engineering root, for Cursor and Claude alike. All sprints start here via `alloy-sprint-start`; all work happens in the managed worktree it returns. |
+| **`/Users/Kelly/Code/alloy-worktrees/wt<N>-<name>`** | **Managed worktrees** — where implementation actually happens. Created from latest `origin/staging` by the toolkit. Never hand-created. |
+| **`/Users/Kelly/Alloy-Claude`** | **RETIRED as an engineering root (July 2026).** No longer sanctioned for any repository work — no code, no docs, no sprint packages, no design or architecture reviews. Preserved read-only for its unmerged history. Do not start new work here. |
 | **`/Users/Kelly/Claude/Projects/Alloy`** | **Deprecated** planning-doc folder — not a code repo; do not treat as source of truth |
 
-**Rule:** One agent, one repo per session. Never mix paths.
+**Rule:** One canonical root. Work only in the worktree the toolkit returns.
+
+### Why the specialist workspace was retired
+
+This table previously assigned `/Users/Kelly/Alloy-Claude` to Claude as a specialist
+workspace for *"sprint packages, design reviews, architecture reviews."* That split
+produced the failure it was meant to prevent:
+
+- **It sanctioned the wrong root.** An agent doing exactly what this table told it to
+  do — a design review, in Alloy-Claude — was working on a clone **1481 commits behind
+  `origin/staging` that did not contain `scripts/local-dev` at all.** It was obeying
+  doctrine, not violating it. The Toolkit Phase 2 design and realization plan were both
+  written that way before being carried here.
+- **It contradicted the Cursor rule.** `.cursor/rules/repo-boundry.mdc` says never touch
+  Alloy-Claude. Both statements were canonical, and they were opposites.
+- **A second clone cannot stay current.** Ownership by *topic* has no mechanism to keep a
+  clone rebased. The specialist repo drifts, and drift is invisible until something is
+  built on it.
+
+The concern the split addressed — two agents colliding — is already solved, and solved
+better, by **managed worktrees**: one canonical repo, N isolated worktrees, each cut from
+fresh `origin/staging`, each with its own slot and port, allocated fail-closed. That is
+isolation without divergence.
+
+### Supporting existing Alloy-Claude work
+
+Retirement is forward-looking. Work already in that clone is not abandoned:
+
+- The clone stays on disk. Nothing is deleted, force-pushed, or rewritten.
+- Unmerged commits reach `staging` the normal way: push the branch, open a PR, review, merge.
+- Content that belongs in the canonical repo is carried over by copying the files into a
+  managed worktree and committing them there — as `toolkit-phase-2.md` and
+  `toolkit-phase-2-realization-plan.md` were.
+- **New** work begins only from `/Users/Kelly/Alloy` via `alloy-sprint-start`.
 
 ---
 
 ## 2. Agent responsibilities
 
-### Cursor (`/Users/Kelly/Alloy`)
+**Both providers work from the same canonical root, in separate managed worktrees.**
+Neither provider owns a repository. Agents are separated by **slot**, not by clone, and
+never by topic.
 
-- Platform architecture and canonical docs (`docs/platform/`, `docs/schema/`)
-- Runtime: AdminV2, workspace, drawers, queues, reveal/performance
-- Settings / configuration control plane
-- Lifecycle / business process builder integration
-- Scheduling, billing, attendance (platform layers)
-- General staging documentation, tooling, approved hotfixes on `staging`
+| Provider | Root | Isolation |
+|----------|------|-----------|
+| Cursor | `/Users/Kelly/Alloy` | its own managed worktree + slot + port |
+| Claude / Cowork | `/Users/Kelly/Alloy` | its own managed worktree + slot + port |
 
-### Claude / Cowork (`/Users/Kelly/Alloy-Claude`)
+There is no topic-based ownership split. Platform, runtime, POS, documents/forms,
+communications, tooling, and reviews are all done from the canonical root — the work
+decides the *lane*, never the *clone*.
 
-- POS
-- Documents and forms (deep implementation)
-- Communications (implementation and sprint packages)
-- Sprint packages and handoff bundles
-- Design reviews and architecture reviews in specialist lanes
-
-**Overlap resolution:** Shared truth lives on **`origin/staging`** after reviewed merge. Do not duplicate canonical platform doctrine in the specialist repo without syncing back.
+**Overlap resolution:** shared truth lives on **`origin/staging`** after reviewed merge.
+Because every worktree is cut from `origin/staging` and rebased with
+`alloy-worktree-sync`, there is no second clone to drift out of sync and nothing to
+"sync back."
 
 ---
 
@@ -57,18 +92,34 @@ supersedes: []
 Run before any read, edit, commit, or push:
 
 ```bash
+alloy-root
+```
+
+`alloy-root` answers the question this section used to ask by hand: **is the directory I
+am standing in a sanctioned root, and is it current?** It reports the canonical repo, the
+managed worktree (if any), the sprint root, the base ref and its staleness, and it
+**refuses with `--strict` when `$PWD` is not sanctioned** — naming the retired clone by
+name when that is where you are.
+
+Manual equivalent, if the toolkit is not installed:
+
+```bash
 pwd
 git branch --show-current
 git status --short
 git remote -v
+git rev-list --count HEAD..origin/staging   # how far behind you actually are
 ```
 
 **Confirm:**
 
-- `pwd` matches the assigned repo for this agent
+- `pwd` is the canonical repo or a managed worktree under `ALLOY_WORKTREE_ROOT` —
+  **never `/Users/Kelly/Alloy-Claude`** (retired, §1)
 - Branch matches the agent's allowed workflow (see §4)
 - Working tree is understood (no surprise cross-repo files)
-- `origin` points at `github.com:ksquared-16/alloy.git` (or expected remote for that clone)
+- `origin` points at `github.com:ksquared-16/alloy.git`
+- **You are not on a stale base.** A clone can be current with `origin` and still sit on a
+  branch a thousand commits behind it. The behind-count is the check that catches it.
 
 ---
 
