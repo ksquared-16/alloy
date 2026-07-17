@@ -108,6 +108,11 @@ ALLOY_MAX_ACTIVE_PROVIDERS="3"
 ALLOY_MAX_RUNNING_SERVERS="3"
 ALLOY_MAX_CONCURRENT_INSTALLS="1"
 ALLOY_MAX_CONCURRENT_HEAVY_JOBS="1"
+# Runtime Resource Orchestration V1 — max concurrent backing-infrastructure
+# runtimes (Supabase stacks). OBSERVATIONAL ONLY in Runtime Registry & Inspection
+# V1: `alloy-ro runtime-capacity` reports over-budget status; nothing is blocked,
+# stopped, or provisioned. Enforcement arrives in a later phase.
+ALLOY_MAX_ACTIVE_RUNTIMES="2"
 # When macOS memory pressure reaches this level, refuse/defer heavy work (never auto-kill workers).
 # Values: warn | critical | off
 ALLOY_MEMORY_PRESSURE_THRESHOLD="warn"

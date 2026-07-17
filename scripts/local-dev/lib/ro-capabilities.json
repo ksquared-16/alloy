@@ -65,6 +65,21 @@
     "git": ["rev-parse", "status --porcelain", "rev-list --count", "remote get-url", "config --get", "symbolic-ref", "show-ref", "for-each-ref", "cat-file", "describe"],
     "other": ["lsof (inspection)", "ps (inspection)", "stat", "find (type f listing)", "awk", "basename", "cut", "sort", "seq", "kill -0 (existence check; delivers no signal)"]
   },
+  "runtime_access": {
+    "policy": "observe, never control — Runtime Registry & Inspection V1",
+    "docker_read_only": ["docker ps -a --format <field-restricted>", "docker stats --no-stream --format <field-restricted>"],
+    "docker_forbidden": ["start", "stop", "restart", "kill", "rm", "prune", "exec", "inspect", "top", "logs", "compose", "create"],
+    "fields_read": ["container id", "name", "image", "state", "status string", "published ports", "labels: com.supabase.cli.project / com.docker.compose.project / com.docker.compose.service", "MemUsage", "CPUPerc"],
+    "redaction": {
+      "guarantee": "secrets are physically unreachable — the field-restricted format never reads them",
+      "never_read_or_emitted": ["container Command/Args/Entrypoint", "environment variables", "arbitrary labels", "Supabase service keys / JWTs", "certificates", "private keys", "authorization headers", "mount paths", ".env file contents"]
+    },
+    "registry": {
+      "location": "<runtime-root>/runtimes/<runtime-id>.env",
+      "parsed_not_sourced": true,
+      "written_by": "alloy-runtime-register (explicit, mutating, OUTSIDE alloy-ro); alloy-ro never writes"
+    }
+  },
   "verbs": {
     "root": {
       "summary": "Classify a directory as canonical | managed-worktree | retired | unmanaged | outside and whether it is sanctioned.",
@@ -105,6 +120,36 @@
     "capabilities": {
       "summary": "Emit this machine-readable capability declaration.",
       "args": "",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-list": {
+      "summary": "Registered + discovered runtimes, reconciled. Observe only.",
+      "args": "",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-status": {
+      "summary": "One runtime: services, health, ports, inferred association.",
+      "args": "<runtime-id|namespace>",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-capacity": {
+      "summary": "Configured vs observed active runtimes + aggregate memory/cpu. Observational; enforces nothing.",
+      "args": "",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-discover": {
+      "summary": "Live Docker discovery of Supabase runtime stacks (registry not consulted).",
+      "args": "",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-containers": {
+      "summary": "Redacted container list for a runtime. Never emits command/env/secrets.",
+      "args": "<runtime-id|namespace>",
       "reads": true, "writes": false, "network": false, "process_control": false,
       "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
     }

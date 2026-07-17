@@ -25,6 +25,8 @@ ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
 source "${SCRIPT_DIR}/lib/ro-config.sh"
 # shellcheck source=lib/ro.sh
 source "${SCRIPT_DIR}/lib/ro.sh"
+# shellcheck source=lib/runtime-core.sh
+source "${SCRIPT_DIR}/lib/runtime-core.sh"
 
 ALLOY_RO_CAPABILITIES_FILE="${SCRIPT_DIR}/lib/ro-capabilities.json"
 
@@ -56,6 +58,11 @@ Verbs (all read-only; safe under `Bash(alloy-ro *)`):
   dev-status [target]      Dev-server / tracked-port listener status.
   agent-evidence <target>  List evidence artifacts (names/sizes/mtimes) for a slot.
   capabilities             Machine-readable capability declaration for this surface.
+  runtime-list             Registered + discovered runtimes, reconciled (observe only).
+  runtime-status <id|ns>   One runtime: services, health, ports, association.
+  runtime-capacity         Configured vs observed runtimes + aggregate memory/cpu.
+  runtime-discover         Live Docker discovery of Supabase runtimes (registry ignored).
+  runtime-containers <id|ns>  Redacted container list (no command/env/secrets).
   help                     This help.
   version                  Print surface version.
 
@@ -450,6 +457,256 @@ verb_capabilities() {
 }
 
 # ---------------------------------------------------------------------------
+# runtime inspection (Runtime Registry & Inspection V1 — observe, never control)
+# ---------------------------------------------------------------------------
+# Resolve a runtime-id or project namespace to a namespace; "" if not found.
+_rt_resolve_ns() {
+  local arg="$1" ns2 rns
+  if [[ -f "$(alloy_rt_registry_path "$arg")" ]]; then
+    rns="$(alloy_rt_registry_namespace "$arg")"; [[ -n "$rns" ]] && { printf '%s' "$rns"; return 0; }
+  fi
+  [[ "$arg" == rt:unregistered:* ]] && { printf '%s' "${arg#rt:unregistered:}"; return 0; }
+  while IFS= read -r ns2; do [[ "$ns2" == "$arg" ]] && { printf '%s' "$arg"; return 0; }; done < <(alloy_rt_all_namespaces)
+  return 1
+}
+_rt_id_for_ns() {
+  local ns="$1" id; id="$(alloy_rt_registry_id_for_namespace "$ns" 2>/dev/null || true)"
+  [[ -n "$id" ]] && printf '%s' "$id" || printf 'rt:unregistered:%s' "$ns"
+}
+_rt_reg_field() {   # <ns> <registry-key> -> value or "unknown"
+  local ns="$1" key="$2" id v; id="$(alloy_rt_registry_id_for_namespace "$ns" 2>/dev/null || true)"
+  [[ -n "$id" ]] || { printf 'unknown'; return; }
+  v="$(alloy_rt_reg_get "$(alloy_rt_registry_path "$id")" "$key" 2>/dev/null || true)"
+  [[ -n "$v" ]] && printf '%s' "$v" || printf 'unknown'
+}
+# Space-joined inferred worktree names for a namespace (association is evidence).
+_rt_assoc_worktrees() {
+  local ns="$1" wt prov out=""
+  while IFS=$'\x1f' read -r wt prov; do [[ -n "$wt" ]] && out="${out}${out:+ }${wt}"; done < <(alloy_rt_infer_worktrees "$ns")
+  printf '%s' "$out"
+}
+_rt_missing_services() {   # expected core/full services not observed
+  local ns="$1" observed="$2" s out=""
+  observed=" $observed "
+  for s in $ALLOY_RT_EXPECTED_SERVICES; do [[ "$observed" == *" $s "* ]] || out="${out}${out:+ }${s}"; done
+  printf '%s' "$out"
+}
+
+verb_runtime_capacity() {
+  [[ $# -eq 0 ]] || _ro_die_usage "runtime-capacity takes no arguments"
+  alloy_rt_init
+  local avail active max remaining over containers mem_b mem cpu ns
+  if alloy_rt_docker_available; then avail=true; else avail=false; fi
+  active="$(alloy_rt_active_runtime_count)"; [[ "$active" =~ ^[0-9]+$ ]] || active=0
+  max="$ALLOY_RT_MAX_ACTIVE"
+  remaining=$(( max - active ))
+  [[ "$active" -gt "$max" ]] && over=true || over=false
+  containers="$(alloy_rt_active_container_total)"
+  mem_b="$(alloy_rt_capacity_memory_bytes)"
+  [[ "$mem_b" =~ ^[0-9]+$ ]] && mem="$(alloy_rc_human_bytes "$mem_b" 2>/dev/null || echo unknown)" || { mem=unknown; mem_b=null; }
+  cpu="unknown"; local csum="" have=0
+  while IFS= read -r ns; do
+    [[ -n "$ns" ]] || continue
+    local c; c="$(alloy_rt_ns_field "$ns" cpu_percent)"
+    [[ "$c" =~ ^[0-9.]+$ ]] && { csum="$(awk -v a="${csum:-0}" -v b="$c" 'BEGIN{printf "%.2f",a+b}')"; have=1; }
+  done < <(alloy_rt_discovered_namespaces)
+  [[ "$have" -eq 1 ]] && cpu="$csum"
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv_raw docker_available "$avail"; printf ','
+    alloy_ro_json_kv_raw max_active_runtimes "$max"; printf ','
+    alloy_ro_json_kv_raw active_runtimes "$active"; printf ','
+    alloy_ro_json_kv_raw remaining_capacity "$remaining"; printf ','
+    alloy_ro_json_kv_raw over_budget "$over"; printf ','
+    alloy_ro_json_kv_raw active_containers "${containers:-0}"; printf ','
+    alloy_ro_json_kv_raw aggregate_memory_bytes "$mem_b"; printf ','
+    alloy_ro_json_kv aggregate_memory "$mem"; printf ','
+    alloy_ro_json_kv aggregate_cpu_percent "$cpu"
+    printf '}\n'
+  else
+    printf 'Runtime capacity (observational — nothing is enforced, stopped, or provisioned)\n'
+    printf '  docker:             %s\n' "$avail"
+    printf '  configured max:     %s\n' "$max"
+    printf '  observed active:    %s\n' "$active"
+    printf '  remaining:          %s\n' "$remaining"
+    printf '  over budget:        %s\n' "$([[ "$over" == true ]] && echo YES || echo no)"
+    printf '  active containers:  %s\n' "${containers:-0}"
+    printf '  aggregate memory:   %s\n' "$mem"
+    printf '  aggregate cpu:      %s%s\n' "$cpu" "$([[ "$cpu" == unknown ]] || echo '%')"
+  fi
+  return "$EX_OK"
+}
+
+_rt_emit_summary_json() {   # <ns>
+  local ns="$1" st health cstate run total ports assoc owner class rid reg
+  reg="$(alloy_rt_reconcile_status "$ns")"
+  health="$(alloy_rt_ns_field "$ns" health)"; cstate="$(alloy_rt_ns_field "$ns" container_state)"
+  run="$(alloy_rt_ns_field "$ns" running_count)"; total="$(alloy_rt_ns_field "$ns" total_count)"
+  ports="$(alloy_rt_ns_field "$ns" ports)"; assoc="$(_rt_assoc_worktrees "$ns")"
+  owner="$(_rt_reg_field "$ns" ALLOY_RT_OWNER_MISSION_KEY)"; class="$(_rt_reg_field "$ns" ALLOY_RT_RUNTIME_CLASS)"
+  rid="$(_rt_id_for_ns "$ns")"
+  printf '{'
+  alloy_ro_json_kv runtime_id "$rid"; printf ','
+  alloy_ro_json_kv project_namespace "$ns"; printf ','
+  alloy_ro_json_kv registration "$reg"; printf ','
+  alloy_ro_json_kv owner_mission_key "$owner"; printf ','
+  alloy_ro_json_kv runtime_class "$class"; printf ','
+  alloy_ro_json_kv provider supabase; printf ','
+  alloy_ro_json_kv health "$health"; printf ','
+  alloy_ro_json_kv container_state "$cstate"; printf ','
+  alloy_ro_json_kv_raw running_containers "${run:-0}"; printf ','
+  alloy_ro_json_kv_raw total_containers "${total:-0}"; printf ','
+  alloy_ro_json_kv ports "$ports"; printf ','
+  alloy_ro_json_kv associated_worktrees "$assoc"; printf ','
+  alloy_ro_json_kv association "$([[ -n "$assoc" ]] && echo inferred || echo none)"
+  printf '}'
+}
+
+verb_runtime_list() {
+  [[ $# -eq 0 ]] || _ro_die_usage "runtime-list takes no arguments"
+  alloy_rt_init
+  local ns first=1 any=0
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv_raw docker_available "$(alloy_rt_docker_available && echo true || echo false)"; printf ','
+    alloy_ro_json_kv_raw unrelated_containers "$(alloy_rt_unrelated_container_count)"; printf ','
+    printf '"runtimes":['
+    while IFS= read -r ns; do
+      [[ -n "$ns" ]] || continue
+      [[ "$first" -eq 1 ]] || printf ','; first=0; any=1
+      _rt_emit_summary_json "$ns"
+    done < <(alloy_rt_all_namespaces)
+    printf ']}\n'
+  else
+    printf 'docker: %s   unrelated containers: %s\n\n' \
+      "$(alloy_rt_docker_available && echo available || echo unavailable)" "$(alloy_rt_unrelated_container_count)"
+    printf '%-26s %-11s %-9s %-8s %-6s %s\n' NAMESPACE REGISTRATION HEALTH STATE CTNRS OWNER
+    printf -- '-%.0s' {1..78}; printf '\n'
+    while IFS= read -r ns; do
+      [[ -n "$ns" ]] || continue; any=1
+      printf '%-26.26s %-11s %-9s %-8s %-6s %s\n' \
+        "$ns" "$(alloy_rt_reconcile_status "$ns")" "$(alloy_rt_ns_field "$ns" health)" \
+        "$(alloy_rt_ns_field "$ns" container_state)" \
+        "$(alloy_rt_ns_field "$ns" running_count)/$(alloy_rt_ns_field "$ns" total_count)" \
+        "$(_rt_reg_field "$ns" ALLOY_RT_OWNER_MISSION_KEY)"
+    done < <(alloy_rt_all_namespaces)
+    [[ "$any" -eq 0 ]] && printf '(no runtimes discovered or registered)\n'
+  fi
+  return "$EX_OK"
+}
+
+verb_runtime_discover() {
+  [[ $# -eq 0 ]] || _ro_die_usage "runtime-discover takes no arguments"
+  alloy_rt_init
+  local ns first=1
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv_raw docker_available "$(alloy_rt_docker_available && echo true || echo false)"; printf ','
+    alloy_ro_json_kv_raw unrelated_containers "$(alloy_rt_unrelated_container_count)"; printf ','
+    printf '"discovered":['
+    while IFS= read -r ns; do
+      [[ -n "$ns" ]] || continue
+      [[ "$first" -eq 1 ]] || printf ','; first=0
+      _rt_emit_summary_json "$ns"
+    done < <(alloy_rt_discovered_namespaces)
+    printf ']}\n'
+  else
+    printf 'Live runtime discovery (Docker; registry not consulted)\n'
+    printf '  docker: %s   unrelated containers: %s\n\n' \
+      "$(alloy_rt_docker_available && echo available || echo unavailable)" "$(alloy_rt_unrelated_container_count)"
+    local any=0
+    while IFS= read -r ns; do
+      [[ -n "$ns" ]] || continue; any=1
+      printf '  %-26.26s state=%-8s health=%-9s services=[%s]\n' \
+        "$ns" "$(alloy_rt_ns_field "$ns" container_state)" "$(alloy_rt_ns_field "$ns" health)" \
+        "$(alloy_rt_ns_field "$ns" observed_services)"
+    done < <(alloy_rt_discovered_namespaces)
+    [[ "$any" -eq 0 ]] && printf '  (no Supabase runtimes running)\n'
+  fi
+  return "$EX_OK"
+}
+
+verb_runtime_status() {
+  [[ $# -eq 1 ]] || _ro_die_usage "runtime-status requires exactly one runtime-id or namespace"
+  alloy_rt_init
+  local ns; ns="$(_rt_resolve_ns "$1" 2>/dev/null || true)"
+  [[ -n "$ns" ]] || { printf 'alloy-ro: no runtime for: %s\n' "$1" >&2; exit "$EX_NOTFOUND"; }
+  local observed missing assoc
+  observed="$(alloy_rt_ns_field "$ns" observed_services)"
+  missing="$(_rt_missing_services "$ns" "$observed")"
+  assoc="$(_rt_assoc_worktrees "$ns")"
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv_raw schema_version "$ALLOY_RT_SCHEMA_VERSION"; printf ','
+    alloy_ro_json_kv runtime_id "$(_rt_id_for_ns "$ns")"; printf ','
+    alloy_ro_json_kv project_namespace "$ns"; printf ','
+    alloy_ro_json_kv registration "$(alloy_rt_reconcile_status "$ns")"; printf ','
+    alloy_ro_json_kv owner_mission_key "$(_rt_reg_field "$ns" ALLOY_RT_OWNER_MISSION_KEY)"; printf ','
+    alloy_ro_json_kv runtime_class "$(_rt_reg_field "$ns" ALLOY_RT_RUNTIME_CLASS)"; printf ','
+    alloy_ro_json_kv provider supabase; printf ','
+    alloy_ro_json_kv health "$(alloy_rt_ns_field "$ns" health)"; printf ','
+    alloy_ro_json_kv container_state "$(alloy_rt_ns_field "$ns" container_state)"; printf ','
+    alloy_ro_json_kv_raw running_containers "$(alloy_rt_ns_field "$ns" running_count)"; printf ','
+    alloy_ro_json_kv_raw total_containers "$(alloy_rt_ns_field "$ns" total_count)"; printf ','
+    alloy_ro_json_kv expected_services "$ALLOY_RT_EXPECTED_SERVICES"; printf ','
+    alloy_ro_json_kv observed_services "$observed"; printf ','
+    alloy_ro_json_kv missing_services "$missing"; printf ','
+    alloy_ro_json_kv ports "$(alloy_rt_ns_field "$ns" ports)"; printf ','
+    alloy_ro_json_kv associated_worktrees "$assoc"; printf ','
+    alloy_ro_json_kv association "$([[ -n "$assoc" ]] && echo inferred || echo none)"; printf ','
+    alloy_ro_json_kv registered_at "$(_rt_reg_field "$ns" ALLOY_RT_REGISTERED_AT)"
+    printf '}\n'
+  else
+    printf 'runtime:      %s\n' "$(_rt_id_for_ns "$ns")"
+    printf 'namespace:    %s\n' "$ns"
+    printf 'registration: %s\n' "$(alloy_rt_reconcile_status "$ns")"
+    printf 'owner:        %s\n' "$(_rt_reg_field "$ns" ALLOY_RT_OWNER_MISSION_KEY)"
+    printf 'class:        %s\n' "$(_rt_reg_field "$ns" ALLOY_RT_RUNTIME_CLASS)"
+    printf 'provider:     supabase\n'
+    printf 'health:       %s\n' "$(alloy_rt_ns_field "$ns" health)"
+    printf 'state:        %s (%s/%s running)\n' "$(alloy_rt_ns_field "$ns" container_state)" \
+      "$(alloy_rt_ns_field "$ns" running_count)" "$(alloy_rt_ns_field "$ns" total_count)"
+    printf 'observed:     %s\n' "$observed"
+    printf 'missing:      %s\n' "${missing:-（none）}"
+    printf 'ports:        %s\n' "$(alloy_rt_ns_field "$ns" ports)"
+    printf 'association:  %s%s\n' "${assoc:-（none）}" "$([[ -n "$assoc" ]] && echo '  [inferred — evidence, not ownership]')"
+  fi
+  return "$EX_OK"
+}
+
+verb_runtime_containers() {
+  [[ $# -eq 1 ]] || _ro_die_usage "runtime-containers requires exactly one runtime-id or namespace"
+  alloy_rt_init
+  local ns; ns="$(_rt_resolve_ns "$1" 2>/dev/null || true)"
+  [[ -n "$ns" ]] || { printf 'alloy-ro: no runtime for: %s\n' "$1" >&2; exit "$EX_NOTFOUND"; }
+  local sid name svc state cstat ports first=1
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'; alloy_ro_json_kv project_namespace "$ns"; printf ',"containers":['
+    while IFS=$'\x1f' read -r sid name svc state cstat ports; do
+      [[ -n "$sid" ]] || continue
+      [[ "$first" -eq 1 ]] || printf ','; first=0
+      printf '{'
+      alloy_ro_json_kv id "$sid"; printf ','
+      alloy_ro_json_kv name "$name"; printf ','
+      alloy_ro_json_kv service "$svc"; printf ','
+      alloy_ro_json_kv state "$state"; printf ','
+      alloy_ro_json_kv status "$cstat"; printf ','
+      alloy_ro_json_kv ports "$ports"
+      printf '}'
+    done < <(alloy_rt_ns_containers "$ns")
+    printf ']}\n'
+  else
+    printf 'containers for %s (command/env intentionally omitted)\n' "$ns"
+    printf '  %-13s %-28s %-8s %-8s %s\n' ID SERVICE STATE PORTS NAME
+    while IFS=$'\x1f' read -r sid name svc state cstat ports; do
+      [[ -n "$sid" ]] || continue
+      printf '  %-13s %-28.28s %-8s %-8s %s\n' "$sid" "$svc" "$state" "$ports" "$name"
+    done < <(alloy_rt_ns_containers "$ns")
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
 # argument parsing & dispatch (fail closed)
 # ---------------------------------------------------------------------------
 main() {
@@ -481,6 +738,11 @@ main() {
     dev-status)      verb_dev_status "${rest[@]}" ;;
     agent-evidence)  verb_agent_evidence "${rest[@]}" ;;
     capabilities)    verb_capabilities "${rest[@]}" ;;
+    runtime-list)       verb_runtime_list "${rest[@]}" ;;
+    runtime-status)     verb_runtime_status "${rest[@]}" ;;
+    runtime-capacity)   verb_runtime_capacity "${rest[@]}" ;;
+    runtime-discover)   verb_runtime_discover "${rest[@]}" ;;
+    runtime-containers) verb_runtime_containers "${rest[@]}" ;;
     help)            usage ;;
     version)         printf 'alloy-ro %s\n' "$ALLOY_RO_VERSION" ;;
     *)               _ro_die_usage "unknown verb: $verb" ;;
