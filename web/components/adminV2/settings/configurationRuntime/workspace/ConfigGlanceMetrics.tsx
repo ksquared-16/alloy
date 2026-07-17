@@ -28,15 +28,23 @@ export function ConfigGlanceMetrics({
     embedded = false,
     /** Metrics only — parent owns the region title/chrome (e.g. Overview At a glance). */
     bare = false,
+    layout = "row",
 }: {
     title?: string;
     metrics: ConfigGlanceMetric[];
     testId?: string;
     embedded?: boolean;
     bare?: boolean;
+    layout?: "row" | "grid";
 }) {
     const body = (
-        <div className="grid grid-cols-2 gap-y-3 sm:grid-cols-4 sm:divide-x sm:divide-alloy-stone/20">
+        <div
+            className={
+                layout === "grid" ?
+                    "grid grid-cols-2 gap-x-5 gap-y-5"
+                :   "grid grid-cols-2 gap-y-3 sm:grid-cols-4 sm:divide-x sm:divide-alloy-stone/20"
+            }
+        >
             {metrics.map((metric) => {
                 const content = (
                     <div className="min-w-0">
@@ -45,7 +53,7 @@ export function ConfigGlanceMetrics({
                                 <span
                                     className={
                                         metric.tone === "attention" ? "text-alloy-ember"
-                                        :   "text-[#007d68]"
+                                        :   "text-alloy-bend-pine"
                                     }
                                     data-config-glance-icon-well=""
                                 >
@@ -68,7 +76,8 @@ export function ConfigGlanceMetrics({
                         :   null}
                     </div>
                 );
-                const cellClass = "px-0 sm:px-4 first:sm:pl-0 last:sm:pr-0";
+                const cellClass =
+                    layout === "grid" ? "px-0" : "px-0 sm:px-4 first:sm:pl-0 last:sm:pr-0";
                 if (metric.onSelect) {
                     return (
                         <button

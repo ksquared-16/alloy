@@ -7,7 +7,7 @@ supersedes: [docs/system/configuration-workspace-doctrine.md, docs/system/config
 
 # Configuration Workspace Platform Doctrine
 
-**Status:** Canonical. Reference implementation in progress — **Locations** (Phase B).
+**Status:** Canonical. **Locations Version 1 is the frozen reference implementation.**
 **Companion evidence:** the Operational Configuration Experience prototype (`web/app/adminV2/settings/prototypes/operational-configuration`), its product spec (`docs/system/operational-configuration-experience-product-spec.md`), and its engineering blueprint (`docs/system/operational-configuration-platform-phase-b-blueprint.md`).
 **Builds on:** `alloy-visual-language.md`, `canonical-interaction-model.md`, `operational-surface-design-system.md`, `focus-panel-architecture-vocabulary.md`. **Consumes (does not redefine):** `../modules/configuration-platform.md` (control plane), `../../system/configuration-ownership-doctrine.md` (ownership matrix), `../../system/configuration-mode-doctrine.md` (shell geometry).
 
@@ -274,6 +274,10 @@ Locations demonstrates the whole platform: an **organization landing** (configur
 **Ownership model (binding):** Settings content owns configuration understanding. The shell owns contextual commands. BOS assists through the same platform boundaries. Inline controls remain local to their objects.
 
 **Reference child-object behavior:** Programs, Rooms, and Schedule use one master/detail grammar: the collection supports selection, the selected object owns the workspace, and create/edit are intentional modes that replace read summaries rather than stacking beneath them. Primary collection creation is available both in collection chrome and, where useful, the shell Actions rail. Operational Readiness visibly lists every authoritative dimension as **Complete**, **Needs setup**, or **Not assessed** (and **Not applicable** when a domain can prove that state); its percentage uses only assessed dimensions and must visibly reconcile with that list.
+
+**Reference Overview behavior:** the first row answers “What is this object?” with a two-thirds operational glance and a one-third readiness explanation. The second row answers “What needs me?” with equal-weight Attention and owned-capability regions. Attention keeps problem, impact, and action together. Capability state is explicit rather than inferred from decorative cards. Empty Attention disappears rather than manufacturing healthy filler.
+
+Future Organization-owned Program, Schedule, and Tour Pattern creation may apply authoritative patterns to Locations through a registered copy/apply provider. That evolution reuses this object workspace; it does not move Location-owned mutations into the Organization UI or introduce an optimistic “Apply” action before a durable provider exists.
 
 Implementation primitives live under `web/components/adminV2/settings/configurationRuntime/workspace/` and `LocationsCommandRailActions` (shell registration). Commercial, Communications, Scheduling, Staffing, Billing, and future Settings modules should compose them rather than inventing parallel UX.
 

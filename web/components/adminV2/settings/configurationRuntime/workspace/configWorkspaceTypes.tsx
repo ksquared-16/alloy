@@ -77,6 +77,7 @@ export function ConfigWorkspaceCard({
     testId,
     compact = false,
     surface = "panel",
+    className = "",
 }: {
     title?: string;
     description?: string;
@@ -84,11 +85,12 @@ export function ConfigWorkspaceCard({
     testId?: string;
     compact?: boolean;
     surface?: ConfigSurface;
+    className?: string;
 }) {
     if (surface === "region") {
         return (
             <section
-                className={`${compact ? "pt-3" : "pt-4"} border-t border-alloy-stone/25`}
+                className={`${compact ? "pt-3" : "pt-4"} border-t border-alloy-stone/25 ${className}`.trim()}
                 data-testid={testId}
                 data-config-surface="region"
             >
@@ -107,7 +109,7 @@ export function ConfigWorkspaceCard({
 
     return (
         <section
-            className={`process-config-setup-card ${compact ? "p-3.5" : "p-4"}`}
+            className={`process-config-setup-card ${compact ? "p-3.5" : "p-4"} ${className}`.trim()}
             data-testid={testId}
             data-config-surface="panel"
         >

@@ -46,18 +46,23 @@ describe("Configuration Runtime — Locations", () => {
         expect(read("lib/locations/locationSelectorSignal.ts")).not.toContain("setupPercent");
         expect(selector).toContain("QUEUE_ROW_CARD_SELECTED_BORDER_CLASS");
         expect(selector).toContain("QUEUE_ROW_SELECTED_RAIL_CLASS");
-        expect(read("components/adminV2/settings/locations/LocationOverviewSurface.tsx")).toContain(
+        const overview = read("components/adminV2/settings/locations/LocationOverviewSurface.tsx");
+        expect(overview).toContain(
             "locations-overview-at-a-glance",
         );
-        expect(read("components/adminV2/settings/locations/LocationOverviewSurface.tsx")).toContain(
+        expect(overview).toContain(
             "locations-overview-capacity-bar",
         );
-        expect(read("components/adminV2/settings/locations/LocationOverviewSurface.tsx")).toContain(
-            'actionAlign="trailing"',
-        );
-        expect(read("components/adminV2/settings/locations/LocationOverviewSurface.tsx")).not.toContain(
+        expect(overview).toContain('actionAlign="inline"');
+        expect(overview).toContain("xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]");
+        expect(overview).toContain('data-testid="locations-overview-action-row"');
+        expect(overview).toContain("lg:grid-cols-2");
+        expect(overview).toContain('className="h-full"');
+        expect(overview).not.toContain(
             "locations-overview-operating-now",
         );
+        expect(selector).not.toContain("bg-alloy-bend-pine/[0.14]");
+        expect(selector).not.toContain("bg-alloy-midnight/[0.04]");
         expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel.tsx")).toContain(
             "consequence",
         );
@@ -187,7 +192,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(programs).not.toContain("#007d68");
         expect(selector).toContain("ConfigurationPrimaryButton");
         expect(selector).toContain("text-alloy-bend-pine");
-        expect(selector).toContain("text-alloy-midnight/35");
+        expect(selector).toContain("text-alloy-midnight/30");
     });
 
     it("opens Schedule creation without immediately clearing create mode", () => {

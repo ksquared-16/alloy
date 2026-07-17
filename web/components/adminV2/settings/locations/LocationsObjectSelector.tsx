@@ -181,10 +181,10 @@ export function LocationsObjectSelector({
                             <span
                                 className={`locations-collection-row__glyph ${
                                     inactive ?
-                                        "bg-alloy-midnight/[0.04] text-alloy-midnight/35"
+                                        "text-alloy-midnight/30"
                                     : selected ?
-                                        "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine"
-                                    :   "bg-alloy-midnight/[0.04] text-alloy-bend-pine"
+                                        "text-alloy-bend-pine"
+                                    :   "text-alloy-bend-pine/75"
                                 }`}
                                 aria-hidden
                             >
