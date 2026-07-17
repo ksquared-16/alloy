@@ -7,6 +7,15 @@ import type { NextConfig } from "next";
 /** App lives in `web/` while Alloy repo root also has package-lock.json; Turbopack must use this dir as root so chunks/runtime resolve correctly. */
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 
+// Loud, unmissable announcement when the in-build typecheck is skipped — a skipped typecheck must
+// never pass silently. See `typescript.ignoreBuildErrors` below. Off by default.
+if (process.env.SKIP_BUILD_TYPECHECK === "1") {
+  console.warn(
+    "\n⚠️  SKIP_BUILD_TYPECHECK=1 — next build's in-build typecheck is DISABLED for this build.\n" +
+      "   Types are NOT gated by this build. Validate out-of-band: `tsc --noEmit`. Never use for CI/promotion/certification.\n",
+  );
+}
+
 /**
  * The commit this bundle was built from — inlined at build time so the RUNNING deploy can prove its
  * own SHA (data-build-sha in the DOM, GET /api/runtime-info, a console line). Prefers the host's git
@@ -44,8 +53,12 @@ const nextConfig: NextConfig = {
     /**
      * Opt-in escape hatch for the local certification loop, which rebuilds the production bundle
      * repeatedly and validates types out-of-band via `tsc --noEmit`. Setting SKIP_BUILD_TYPECHECK=1
-     * skips `next build`'s redundant in-build typecheck to shave minutes per iteration. OFF by default,
-     * so CI and every normal build still fail on type errors.
+     * skips `next build`'s redundant in-build typecheck to shave minutes per iteration.
+     *
+     * STRICT + OFF BY DEFAULT: only the exact string "1" enables it, so a stray "true"/"yes"/"0" does
+     * NOT. It is set nowhere in CI, scripts, .env, or the toolkit config — a promotion/release build
+     * cannot inherit it. When it IS active the build announces it loudly (below), so a skipped
+     * typecheck can never pass silently. The final certification build must run WITHOUT this set.
      */
     ignoreBuildErrors: process.env.SKIP_BUILD_TYPECHECK === "1",
   },
