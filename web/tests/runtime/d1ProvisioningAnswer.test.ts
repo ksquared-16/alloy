@@ -259,7 +259,11 @@ describe("D1 — bounded Provisioning Answer", () => {
         const counts = supabase.touched.reduce<Record<string, number>>((m, t) => ({ ...m, [t]: (m[t] ?? 0) + 1 }), {});
         // The membership read happens EXACTLY ONCE — one Stage Membership evaluation, one page.
         expect(counts.opportunities).toBe(1);
-        expect(counts.work_units).toBe(1);
+        // work_units is read TWICE, and both reads are bounded and non-membership: once for the
+        // surface unit's identity (above), and once (in parallel, D5) for the department's units, which
+        // the Settlement LOCATORS need to resolve each lens's canonical count location. The second read
+        // carries no membership evaluation and is Settlement-only — it can never duplicate the page.
+        expect(counts.work_units).toBe(2);
         expect(counts.departments).toBe(1);
         // entity_layouts is read for U-P7 configuration (org + default layout records); it carries no
         // membership and cannot duplicate an evaluation.

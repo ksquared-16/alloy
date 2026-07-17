@@ -46,6 +46,12 @@ import {
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import {
+    loadSettlementLocators,
+    SETTLEMENT_LOCATORS_UNAVAILABLE,
+    type SettlementLocators,
+} from "./settlementLocators";
+import type { WorkViewCanonicalLocationWorkUnitRow } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
+import {
     lifecycleBuilderFromDepartmentMetadata,
     activeLifecycleProcess,
     activeStagesForProcess,
@@ -162,6 +168,12 @@ export type ProvisioningAnswer =
            * inside `provenance` as evidence; they are never the only renderable output.
            */
           presentation: OperationalPresentation;
+          /**
+           * D5 — SETTLEMENT-ONLY locators. Server-resolved locations Settlement uses to fill the
+           * reserved Work View counts, queue total, and right rail AFTER commit. The operational
+           * renderer never reads this; a `status: "unavailable"` here never makes the surface non-operational.
+           */
+          settlement: SettlementLocators;
           timings: ProvisioningTimings;
       }
     | {
@@ -178,6 +190,8 @@ export type ProvisioningAnswer =
           contextFrame: { workViewId: string; workViewLabel: string };
           focusPanelScopeState: FocusPanelScopeStateKind;
           presentation: OperationalPresentation;
+          /** D5 — Settlement-only locators (see the operational variant). */
+          settlement: SettlementLocators;
           timings: ProvisioningTimings;
       }
     | {
@@ -314,12 +328,21 @@ export async function composeWorkUnitProvisioningAnswer(
 
     // ── Configuration: Business Process, stages, lenses. ONE fetch. ──
     const tCfg = now();
-    const { data: deptRow, error: deptErr } = await req.supabase
-        .from("departments")
-        .select("id, metadata")
-        .eq("id", wuRow.department_id)
-        .maybeSingle();
+    // The department config AND its work units in ONE parallel round trip. The units are Settlement-only
+    // (they resolve canonical count locations, D5); fetching them alongside the config adds no latency,
+    // and a failure here degrades Settlement to `unavailable` without ever failing the operational answer.
+    const [deptResult, deptWorkUnitsResult] = await Promise.all([
+        req.supabase.from("departments").select("id, metadata").eq("id", wuRow.department_id).maybeSingle(),
+        req.supabase
+            .from("work_units")
+            .select("id, key, name, department_id, is_active, sort_order, queue_definition")
+            .eq("org_id", req.orgId)
+            .eq("department_id", wuRow.department_id),
+    ]);
+    const { data: deptRow, error: deptErr } = deptResult;
     if (deptErr) return fail("records_unavailable", `configuration lookup failed: ${deptErr.message}`, workUnit);
+    // Settlement-only: never gates commit. A fetch error here just yields no units → `unavailable`.
+    const deptWorkUnits = (deptWorkUnitsResult.error ? [] : deptWorkUnitsResult.data ?? []) as WorkViewCanonicalLocationWorkUnitRow[];
 
     const builder = lifecycleBuilderFromDepartmentMetadata(deptRow?.metadata);
     const process = activeLifecycleProcess(builder);
@@ -342,6 +365,22 @@ export async function composeWorkUnitProvisioningAnswer(
         displayOrder: v.display_order ?? i,
     }));
     const contextFrame = { workViewId: activeView.id, workViewLabel: activeView.label };
+
+    // ── D5 SETTLEMENT LOCATORS — server-resolved, additive, Settlement-only. ──
+    // The units are already in hand (parallel fetch above), so this is a PURE resolution: no extra
+    // round trip, no I/O on the commit path. It cannot fail the answer — `loadSettlementLocators`
+    // swallows every error into `unavailable`. The operational renderer never reads this field.
+    const settlement: SettlementLocators = wuRow.department_id
+        ? await loadSettlementLocators({
+              supabase: req.supabase,
+              orgId: req.orgId,
+              departmentId: String(wuRow.department_id),
+              workViews,
+              activeWorkViewId: activeView.id,
+              surfaceWorkUnitId: workUnit.id,
+              deptWorkUnits,
+          })
+        : SETTLEMENT_LOCATORS_UNAVAILABLE;
     // ── U-P7: resolve the operational presentation composition server-side, into THIS answer. ──
     // An identifier would be the round-trip U-P7 exists to remove; resolving here means the first
     // visible frame is already in final layout and nothing re-lays out after commit.
@@ -433,6 +472,7 @@ export async function composeWorkUnitProvisioningAnswer(
             contextFrame,
             focusPanelScopeState: resolveFocusPanelScope({ record: null, activeView }).kind,
             presentation,
+            settlement,
             timings,
         };
     }
@@ -502,6 +542,7 @@ export async function composeWorkUnitProvisioningAnswer(
             workTemplateKey: template.template_key,
         },
         presentation,
+        settlement,
         timings,
     };
     timings.composition_ms = now() - tComp;
