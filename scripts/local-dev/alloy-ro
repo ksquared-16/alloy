@@ -1,0 +1,496 @@
+#!/usr/bin/env bash
+# alloy-ro — Alloy Autonomous Inspection Surface V1.
+#
+# A single, genuinely read-only entrypoint for autonomous agents. Every verb is
+# one trust class: inspection only. An `alloy-ro` invocation never writes files,
+# creates directories, modifies git state, fetches, installs, signals processes,
+# opens applications/browsers, loads credentials, deletes anything, executes
+# user-controlled configuration as shell, or exposes a flag that turns the
+# operation into a mutation. Unknown verbs and unsupported flags fail closed.
+#
+# Because the whole surface satisfies that constitution, the operator permission
+#   Bash(alloy-ro *)
+# can be granted without authorizing mutation. See lib/ro-capabilities.json and
+# AUTONOMOUS-INSPECTION-SURFACE.md.
+#
+# Exit codes:
+#   0  success
+#   2  usage error — unknown verb or unsupported flag (fail closed)
+#   3  not found — a requested slot/worktree/target does not exist
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+# shellcheck source=lib/ro-config.sh
+source "${SCRIPT_DIR}/lib/ro-config.sh"
+# shellcheck source=lib/ro.sh
+source "${SCRIPT_DIR}/lib/ro.sh"
+
+ALLOY_RO_CAPABILITIES_FILE="${SCRIPT_DIR}/lib/ro-capabilities.json"
+
+EX_OK=0
+EX_USAGE=2
+EX_NOTFOUND=3
+
+JSON=0
+
+_ro_die_usage() {
+  printf 'alloy-ro: %s\n' "$1" >&2
+  printf "Run 'alloy-ro help' for the verb list.\n" >&2
+  exit "$EX_USAGE"
+}
+
+usage() {
+  cat <<'EOF'
+alloy-ro — Alloy Autonomous Inspection Surface V1 (read-only)
+
+Usage:
+  alloy-ro <verb> [target] [--json]
+
+Verbs (all read-only; safe under `Bash(alloy-ro *)`):
+  root [path]              Classify a directory: canonical | managed-worktree |
+                           retired | unmanaged | outside, and whether sanctioned.
+  runtime-paths            Resolved runtime path NAMES (never secrets, never mkdir).
+  worker-status            Six-slot managed sprint status table (no fetch).
+  agent-status [target]    Managed agent/slot detail (all, or one slot|name).
+  dev-status [target]      Dev-server / tracked-port listener status.
+  agent-evidence <target>  List evidence artifacts (names/sizes/mtimes) for a slot.
+  capabilities             Machine-readable capability declaration for this surface.
+  help                     This help.
+  version                  Print surface version.
+
+Options:
+  --json                   Emit JSON instead of human-readable text.
+  -h, --help               Show this help.
+
+Guarantees: no writes, no mkdir, no git mutation, no network, no process control,
+no credential loading, no deletion, no arbitrary execution. User configuration is
+PARSED, never sourced. Unknown verbs and unsupported flags fail closed (exit 2).
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# verb: root
+# ---------------------------------------------------------------------------
+_ro_resolve_dir() {
+  local d="$1"
+  ( cd "$d" 2>/dev/null && pwd -P ) || printf '%s' "$d"
+}
+
+verb_root() {
+  [[ $# -le 1 ]] || _ro_die_usage "root takes at most one path argument"
+  alloy_ro_config_init
+  local here toplevel canon wt_root retired_roots
+  here="$(_ro_resolve_dir "${1:-$PWD}")"
+  canon="$(_ro_resolve_dir "${ALLOY_RO_REPO:-/nonexistent}")"
+  wt_root="$(_ro_resolve_dir "${ALLOY_RO_WORKTREE_ROOT:-/nonexistent}")"
+  retired_roots="${ALLOY_RETIRED_ROOTS:-$HOME/Alloy-Claude}"
+
+  toplevel=""
+  if alloy_ro_is_git_worktree "$here"; then
+    toplevel="$(_ro_resolve_dir "$(alloy_ro_git_toplevel "$here")")"
+  fi
+
+  local class detail sanctioned=0
+  if [[ -z "$toplevel" ]]; then
+    class="outside"; detail="not inside a git repository"
+  elif [[ "$toplevel" == "$canon" ]]; then
+    class="canonical"; detail="the canonical repository"; sanctioned=1
+  elif [[ "$toplevel" == "$wt_root"/* ]]; then
+    class="managed-worktree"; detail="a managed worktree under ALLOY_WORKTREE_ROOT"; sanctioned=1
+  else
+    class="unmanaged"; detail="a git repository that is neither canonical nor a managed worktree"
+    local r rr
+    for r in $retired_roots; do
+      rr="$(_ro_resolve_dir "$r")"
+      if [[ "$toplevel" == "$rr" || "$toplevel" == "$rr"/* ]]; then
+        class="retired"; detail="a RETIRED engineering root"; break
+      fi
+    done
+  fi
+
+  local branch="?" remote="(no remote)" ab="?/?"
+  if [[ -n "$toplevel" ]]; then
+    branch="$(alloy_ro_git_branch "$toplevel")"
+    remote="$(alloy_ro_git "$toplevel" remote get-url "${ALLOY_RO_BASE_REMOTE}" 2>/dev/null || echo '(no remote)')"
+    ab="$(alloy_ro_git_ahead_behind "$toplevel")"
+  fi
+
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv root "$here"; printf ','
+    alloy_ro_json_kv class "$class"; printf ','
+    alloy_ro_json_kv detail "$detail"; printf ','
+    alloy_ro_json_kv_raw sanctioned "$([[ $sanctioned -eq 1 ]] && echo true || echo false)"; printf ','
+    alloy_ro_json_kv canonical "${ALLOY_RO_REPO:-}"; printf ','
+    alloy_ro_json_kv repo "${toplevel:-}"; printf ','
+    alloy_ro_json_kv branch "$branch"; printf ','
+    alloy_ro_json_kv remote "$remote"; printf ','
+    alloy_ro_json_kv ahead_behind "$ab"
+    printf '}\n'
+  else
+    printf 'Root:       %s\n' "$here"
+    printf 'Class:      %s — %s\n' "$class" "$detail"
+    printf 'Canonical:  %s\n' "${ALLOY_RO_REPO:-(unset)}"
+    [[ -n "$toplevel" ]] && {
+      printf 'Repo:       %s\n' "$toplevel"
+      printf 'Branch:     %s\n' "$branch"
+      printf 'Remote:     %s\n' "$remote"
+      printf 'Ahead/Behind (cached %s/%s @ %s): %s\n' \
+        "$ALLOY_RO_BASE_REMOTE" "$ALLOY_RO_BASE_BRANCH" "$(alloy_ro_base_ref_sha)" "$ab"
+    }
+    printf '\n%s for Alloy engineering work.\n' \
+      "$([[ $sanctioned -eq 1 ]] && echo 'SANCTIONED' || echo 'NOT SANCTIONED')"
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# verb: runtime-paths
+# ---------------------------------------------------------------------------
+verb_runtime_paths() {
+  [[ $# -eq 0 ]] || _ro_die_usage "runtime-paths takes no arguments"
+  alloy_ro_config_init
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv config_file "$ALLOY_RO_CFG_USER"; printf ','
+    alloy_ro_json_kv runtime_root "$ALLOY_RO_RUNTIME_ROOT"; printf ','
+    alloy_ro_json_kv metadata_dir "$ALLOY_RO_METADATA_DIR"; printf ','
+    alloy_ro_json_kv pids_dir "$ALLOY_RO_PIDS_DIR"; printf ','
+    alloy_ro_json_kv logs_dir "$ALLOY_RO_LOGS_DIR"; printf ','
+    alloy_ro_json_kv locks_dir "$ALLOY_RO_LOCKS_DIR"; printf ','
+    alloy_ro_json_kv auth_dir "$ALLOY_RO_AUTH_DIR"; printf ','
+    alloy_ro_json_kv evidence_dir "$ALLOY_RO_EVIDENCE_DIR"; printf ','
+    alloy_ro_json_kv initiatives_dir "$ALLOY_RO_INITIATIVES_DIR"; printf ','
+    alloy_ro_json_kv_raw runtime_root_exists "$([[ -d $ALLOY_RO_RUNTIME_ROOT ]] && echo true || echo false)"
+    printf '}\n'
+  else
+    printf 'config_file      %s\n' "$ALLOY_RO_CFG_USER"
+    printf 'runtime_root     %s%s\n' "$ALLOY_RO_RUNTIME_ROOT" \
+      "$([[ -d $ALLOY_RO_RUNTIME_ROOT ]] || printf ' (not present)')"
+    printf 'metadata_dir     %s\n' "$ALLOY_RO_METADATA_DIR"
+    printf 'pids_dir         %s\n' "$ALLOY_RO_PIDS_DIR"
+    printf 'logs_dir         %s\n' "$ALLOY_RO_LOGS_DIR"
+    printf 'locks_dir        %s\n' "$ALLOY_RO_LOCKS_DIR"
+    printf 'auth_dir         %s\n' "$ALLOY_RO_AUTH_DIR"
+    printf 'evidence_dir     %s\n' "$ALLOY_RO_EVIDENCE_DIR"
+    printf 'initiatives_dir  %s\n' "$ALLOY_RO_INITIATIVES_DIR"
+    printf '\n(Path names only. No secrets. No directory was created to report this.)\n'
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# shared: read one worktree's live state into _RO_* fields (read-only)
+# ---------------------------------------------------------------------------
+_ro_load_worktree() {
+  local name="$1" meta
+  meta="$(alloy_ro_metadata_path "$name")"
+  _RO_NAME="$name"
+  _RO_SLOT="$(alloy_ro_meta_get "$meta" ALLOY_WORKTREE_SLOT 2>/dev/null || echo '?')"
+  _RO_PATH="$(alloy_ro_meta_get "$meta" ALLOY_WORKTREE_PATH 2>/dev/null || echo '')"
+  _RO_BRANCH_META="$(alloy_ro_meta_get "$meta" ALLOY_WORKTREE_BRANCH 2>/dev/null || echo '?')"
+  _RO_AGENT="$(alloy_ro_meta_get "$meta" ALLOY_AGENT 2>/dev/null || echo '?')"
+  _RO_PORT="$(alloy_ro_meta_get "$meta" PORT 2>/dev/null || echo '?')"
+  _RO_SPRINT="$(alloy_ro_meta_get "$meta" ALLOY_SPRINT_NAME 2>/dev/null || echo '')"
+  _RO_LIFECYCLE="$(alloy_ro_meta_get "$meta" ALLOY_WORKER_LIFECYCLE 2>/dev/null || echo '')"
+  _RO_AGENT_STATUS="$(alloy_ro_meta_get "$meta" ALLOY_AGENT_STATUS 2>/dev/null || echo '')"
+
+  _RO_GIT="unknown"; _RO_AB="?/?"; _RO_BRANCH_LIVE="?"
+  if [[ -n "$_RO_PATH" && -d "$_RO_PATH" ]] && alloy_ro_is_git_worktree "$_RO_PATH"; then
+    _RO_GIT="$(alloy_ro_git_dirty "$_RO_PATH")"
+    _RO_AB="$(alloy_ro_git_ahead_behind "$_RO_PATH")"
+    _RO_BRANCH_LIVE="$(alloy_ro_git_branch "$_RO_PATH")"
+  elif [[ -n "$_RO_PATH" && ! -d "$_RO_PATH" ]]; then
+    _RO_GIT="missing"
+  fi
+
+  _RO_SERVER="stopped"; _RO_SERVER_PID=""
+  if [[ "$_RO_PORT" =~ ^[0-9]+$ ]]; then
+    if _RO_SERVER_PID="$(alloy_ro_port_pid "$_RO_PORT" 2>/dev/null)"; then
+      _RO_SERVER="running"
+    else
+      _RO_SERVER_PID=""
+    fi
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# verb: worker-status  (canonical six-slot sprint status)
+# ---------------------------------------------------------------------------
+verb_worker_status() {
+  [[ $# -eq 0 ]] || _ro_die_usage "worker-status takes no arguments (--refresh is not read-only and is unsupported)"
+  alloy_ro_config_init
+  local max="${ALLOY_RO_MAX_AGENTS:-6}" slot name
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv base "${ALLOY_RO_BASE_REMOTE}/${ALLOY_RO_BASE_BRANCH}"; printf ','
+    alloy_ro_json_kv base_sha "$(alloy_ro_base_ref_sha)"; printf ','
+    alloy_ro_json_kv_raw fetched false; printf ','   # this surface never fetches
+    printf '"slots":['
+  else
+    printf 'base: %s @ %s (cached; alloy-ro never fetches)\n\n' \
+      "${ALLOY_RO_BASE_REMOTE}/${ALLOY_RO_BASE_BRANCH}" "$(alloy_ro_base_ref_sha)"
+    printf '%-4s %-22s %-7s %-8s %-7s %-6s %-5s\n' SLOT SPRINT PROV GIT A/B SERVER PORT
+    printf -- '-%.0s' {1..70}; printf '\n'
+  fi
+
+  local first=1
+  for slot in $(seq 1 "$max"); do
+    name="$(alloy_ro_resolve_target "$slot" 2>/dev/null || true)"
+    if [[ -n "$name" ]]; then
+      _ro_load_worktree "$name"
+    else
+      _RO_NAME=""; _RO_SLOT="$slot"; _RO_SPRINT=""; _RO_AGENT=""; _RO_GIT=""; _RO_AB=""; _RO_SERVER=""; _RO_PORT=""
+    fi
+    if [[ "$JSON" -eq 1 ]]; then
+      [[ "$first" -eq 1 ]] || printf ','
+      first=0
+      printf '{'
+      alloy_ro_json_kv_raw slot "$slot"; printf ','
+      alloy_ro_json_kv_raw occupied "$([[ -n $_RO_NAME ]] && echo true || echo false)"; printf ','
+      alloy_ro_json_kv worktree "${_RO_NAME:-}"; printf ','
+      alloy_ro_json_kv sprint "${_RO_SPRINT:-}"; printf ','
+      alloy_ro_json_kv provider "${_RO_AGENT:-}"; printf ','
+      alloy_ro_json_kv git "${_RO_GIT:-}"; printf ','
+      alloy_ro_json_kv ahead_behind "${_RO_AB:-}"; printf ','
+      alloy_ro_json_kv server "${_RO_SERVER:-}"; printf ','
+      alloy_ro_json_kv port "${_RO_PORT:-}"
+      printf '}'
+    else
+      if [[ -n "$_RO_NAME" ]]; then
+        printf '%-4s %-22.22s %-7.7s %-8s %-7s %-6s %-5s\n' \
+          "$slot" "${_RO_SPRINT:-${_RO_NAME}}" "${_RO_AGENT}" "${_RO_GIT}" "${_RO_AB}" "${_RO_SERVER}" "${_RO_PORT}"
+      else
+        printf '%-4s %-22s %-7s %-8s %-7s %-6s %-5s\n' "$slot" "(free)" "-" "-" "-" "-" "-"
+      fi
+    fi
+  done
+  if [[ "$JSON" -eq 1 ]]; then printf ']}\n'; fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# verb: agent-status
+# ---------------------------------------------------------------------------
+_ro_agent_emit_one() {
+  local name="$1" leading_comma="$2"
+  _ro_load_worktree "$name"
+  if [[ "$JSON" -eq 1 ]]; then
+    [[ "$leading_comma" -eq 1 ]] && printf ','
+    printf '{'
+    alloy_ro_json_kv worktree "$_RO_NAME"; printf ','
+    alloy_ro_json_kv slot "$_RO_SLOT"; printf ','
+    alloy_ro_json_kv provider "$_RO_AGENT"; printf ','
+    alloy_ro_json_kv path "$_RO_PATH"; printf ','
+    alloy_ro_json_kv branch "$_RO_BRANCH_LIVE"; printf ','
+    alloy_ro_json_kv branch_expected "$_RO_BRANCH_META"; printf ','
+    alloy_ro_json_kv git "$_RO_GIT"; printf ','
+    alloy_ro_json_kv ahead_behind "$_RO_AB"; printf ','
+    alloy_ro_json_kv sprint "$_RO_SPRINT"; printf ','
+    alloy_ro_json_kv lifecycle "$_RO_LIFECYCLE"; printf ','
+    alloy_ro_json_kv agent_status "$_RO_AGENT_STATUS"; printf ','
+    alloy_ro_json_kv server "$_RO_SERVER"; printf ','
+    alloy_ro_json_kv port "$_RO_PORT"
+    printf '}'
+  else
+    printf 'slot %s: %s\n' "$_RO_SLOT" "$_RO_NAME"
+    printf '  provider:  %s\n' "$_RO_AGENT"
+    printf '  path:      %s\n' "$_RO_PATH"
+    printf '  branch:    %s (expected %s)\n' "$_RO_BRANCH_LIVE" "$_RO_BRANCH_META"
+    printf '  git:       %s  ahead/behind %s\n' "$_RO_GIT" "$_RO_AB"
+    [[ -n "$_RO_SPRINT" ]] && printf '  sprint:    %s\n' "$_RO_SPRINT"
+    [[ -n "$_RO_LIFECYCLE" ]] && printf '  lifecycle: %s\n' "$_RO_LIFECYCLE"
+    printf '  server:    %s (port %s)\n' "$_RO_SERVER" "$_RO_PORT"
+  fi
+}
+
+verb_agent_status() {
+  [[ $# -le 1 ]] || _ro_die_usage "agent-status takes at most one target"
+  alloy_ro_config_init
+  local target="${1:-}" name
+  if [[ -n "$target" ]]; then
+    name="$(alloy_ro_resolve_target "$target" 2>/dev/null || true)"
+    [[ -n "$name" ]] || { printf 'alloy-ro: no managed worktree for target: %s\n' "$target" >&2; exit "$EX_NOTFOUND"; }
+    [[ "$JSON" -eq 1 ]] && printf '{"agents":['
+    _ro_agent_emit_one "$name" 0
+    [[ "$JSON" -eq 1 ]] && printf ']}\n'
+    return "$EX_OK"
+  fi
+  # All managed worktrees.
+  local any=0 first=1
+  [[ "$JSON" -eq 1 ]] && printf '{"agents":['
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    any=1
+    _ro_agent_emit_one "$name" "$([[ $first -eq 0 ]] && echo 1 || echo 0)"
+    first=0
+    [[ "$JSON" -eq 0 ]] && printf '\n'
+  done < <(alloy_ro_list_metadata)
+  if [[ "$JSON" -eq 1 ]]; then
+    printf ']}\n'
+  elif [[ "$any" -eq 0 ]]; then
+    printf 'No managed worktrees found (runtime metadata directory empty or absent).\n'
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# verb: dev-status
+# ---------------------------------------------------------------------------
+verb_dev_status() {
+  [[ $# -le 1 ]] || _ro_die_usage "dev-status takes at most one target"
+  alloy_ro_config_init
+  local target="${1:-}" name first=1 any=0
+  [[ "$JSON" -eq 1 ]] && printf '{"servers":['
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    if [[ -n "$target" ]]; then
+      local rn; rn="$(alloy_ro_resolve_target "$target" 2>/dev/null || true)"
+      [[ "$name" == "$rn" ]] || continue
+    fi
+    any=1
+    _ro_load_worktree "$name"
+    if [[ "$JSON" -eq 1 ]]; then
+      [[ "$first" -eq 0 ]] && printf ','
+      first=0
+      printf '{'
+      alloy_ro_json_kv worktree "$_RO_NAME"; printf ','
+      alloy_ro_json_kv_raw slot "$([[ "$_RO_SLOT" =~ ^[0-9]+$ ]] && echo "$_RO_SLOT" || echo null)"; printf ','
+      alloy_ro_json_kv port "$_RO_PORT"; printf ','
+      alloy_ro_json_kv server "$_RO_SERVER"; printf ','
+      alloy_ro_json_kv server_pid "${_RO_SERVER_PID:-}"
+      printf '}'
+    else
+      printf '%-4s %-34.34s port %-5s %-8s %s\n' \
+        "$_RO_SLOT" "$_RO_NAME" "$_RO_PORT" "$_RO_SERVER" "${_RO_SERVER_PID:+pid $_RO_SERVER_PID}"
+    fi
+  done < <(alloy_ro_list_metadata)
+  if [[ "$JSON" -eq 1 ]]; then
+    printf ']}\n'
+  elif [[ "$any" -eq 0 ]]; then
+    [[ -n "$target" ]] && { printf 'alloy-ro: no managed worktree for target: %s\n' "$target" >&2; exit "$EX_NOTFOUND"; }
+    printf 'No managed worktrees found (no runtime metadata).\n'
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# verb: agent-evidence
+# ---------------------------------------------------------------------------
+verb_agent_evidence() {
+  [[ $# -eq 1 ]] || _ro_die_usage "agent-evidence requires exactly one target (slot|name)"
+  alloy_ro_config_init
+  local target="$1" name dir
+  name="$(alloy_ro_resolve_target "$target" 2>/dev/null || true)"
+  [[ -n "$name" ]] || { printf 'alloy-ro: no managed worktree for target: %s\n' "$target" >&2; exit "$EX_NOTFOUND"; }
+  dir="${ALLOY_RO_EVIDENCE_DIR}/${name}"
+
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv worktree "$name"; printf ','
+    alloy_ro_json_kv evidence_dir "$dir"; printf ','
+    alloy_ro_json_kv_raw exists "$([[ -d $dir ]] && echo true || echo false)"; printf ','
+    printf '"artifacts":['
+  else
+    printf 'evidence for %s\n  dir: %s\n' "$name" "$dir"
+  fi
+
+  local first=1 count=0 f rel bytes mtime
+  if [[ -d "$dir" ]]; then
+    while IFS= read -r f; do
+      [[ -n "$f" ]] || continue
+      count=$((count + 1))
+      rel="${f#"$dir"/}"
+      bytes="$(alloy_ro_file_bytes "$f" 2>/dev/null || echo 0)"
+      mtime="$(alloy_ro_file_mtime "$f" 2>/dev/null || echo unknown)"
+      if [[ "$JSON" -eq 1 ]]; then
+        [[ "$first" -eq 0 ]] && printf ','
+        first=0
+        printf '{'
+        alloy_ro_json_kv name "$rel"; printf ','
+        alloy_ro_json_kv_raw bytes "${bytes:-0}"; printf ','
+        alloy_ro_json_kv size "$(alloy_ro_human_bytes "${bytes:-0}")"; printf ','
+        alloy_ro_json_kv modified "$mtime"
+        printf '}'
+      else
+        printf '  %-48s %8s  %s\n' "$rel" "$(alloy_ro_human_bytes "${bytes:-0}")" "$mtime"
+      fi
+    done < <(find "$dir" -type f 2>/dev/null | sort)
+  fi
+
+  if [[ "$JSON" -eq 1 ]]; then
+    printf ']}\n'
+  elif [[ "$count" -eq 0 ]]; then
+    printf '  (no evidence artifacts)\n'
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# verb: capabilities
+# ---------------------------------------------------------------------------
+verb_capabilities() {
+  [[ $# -eq 0 ]] || _ro_die_usage "capabilities takes no arguments"
+  [[ -r "$ALLOY_RO_CAPABILITIES_FILE" ]] || {
+    printf 'alloy-ro: capability declaration missing: %s\n' "$ALLOY_RO_CAPABILITIES_FILE" >&2
+    exit "$EX_NOTFOUND"
+  }
+  if [[ "$JSON" -eq 1 ]]; then
+    cat "$ALLOY_RO_CAPABILITIES_FILE"
+  else
+    printf 'Capability declaration: %s\n\n' "$ALLOY_RO_CAPABILITIES_FILE"
+    # Human summary without requiring a JSON tool: list verbs + the surface-level
+    # mutation-sensitive posture (all false by construction).
+    printf 'Surface-level posture (every value certifies read-only):\n'
+    printf '  writes=false network=false process_control=false git_mutation=false\n'
+    printf '  deletion=false arbitrary_execution=false credential_access=false\n\n'
+    printf 'Verbs:\n'
+    local v
+    for v in root runtime-paths worker-status agent-status dev-status agent-evidence capabilities; do
+      printf '  %-16s reads=true  (all mutation-sensitive capabilities false)\n' "$v"
+    done
+    printf '\nFull machine-readable declaration: alloy-ro capabilities --json\n'
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# argument parsing & dispatch (fail closed)
+# ---------------------------------------------------------------------------
+main() {
+  local verb=""
+  local -a rest=()
+  local a
+  # First pass: pull global flags; collect verb + positional args; reject any
+  # unsupported flag (this is where mutation-style flags fail closed).
+  for a in "$@"; do
+    case "$a" in
+      --json) JSON=1 ;;
+      -h|--help) usage; exit "$EX_OK" ;;
+      --version) printf 'alloy-ro %s\n' "$ALLOY_RO_VERSION"; exit "$EX_OK" ;;
+      --*) _ro_die_usage "unsupported flag: $a (only --json is accepted; mutation flags are refused by design)" ;;
+      -?*) _ro_die_usage "unsupported flag: $a" ;;
+      *)
+        if [[ -z "$verb" ]]; then verb="$a"; else rest+=("$a"); fi
+        ;;
+    esac
+  done
+
+  [[ -n "$verb" ]] || { usage; exit "$EX_OK"; }
+
+  case "$verb" in
+    root)            verb_root "${rest[@]}" ;;
+    runtime-paths)   verb_runtime_paths "${rest[@]}" ;;
+    worker-status)   verb_worker_status "${rest[@]}" ;;
+    agent-status)    verb_agent_status "${rest[@]}" ;;
+    dev-status)      verb_dev_status "${rest[@]}" ;;
+    agent-evidence)  verb_agent_evidence "${rest[@]}" ;;
+    capabilities)    verb_capabilities "${rest[@]}" ;;
+    help)            usage ;;
+    version)         printf 'alloy-ro %s\n' "$ALLOY_RO_VERSION" ;;
+    *)               _ro_die_usage "unknown verb: $verb" ;;
+  esac
+}
+
+main "$@"

@@ -172,7 +172,10 @@ for f in \
   "$ROOT"/alloy-worker-status \
   "$ROOT"/alloy-worker-report \
   "$ROOT"/alloy-engineering-certify \
-  "$ROOT"/lib/engineering-certify.sh
+  "$ROOT"/lib/engineering-certify.sh \
+  "$ROOT"/alloy-ro \
+  "$ROOT"/lib/ro.sh \
+  "$ROOT"/lib/ro-config.sh
 do
   if [[ "$f" == *.mjs ]]; then node --check "$f"; else bash -n "$f"; fi
   pass "syntax $(basename "$f")"
@@ -352,6 +355,9 @@ echo "== Engineering certification =="
 assert_ok "artifact quality focused tests" bash "$ROOT/tests/test-engineering-artifact-quality.sh"
 assert_ok "review mode focused tests" bash "$ROOT/tests/test-engineering-review-modes.sh"
 assert_ok "engineering certify harness" bash "$ROOT/tests/test-engineering-certify.sh"
+
+echo "== Autonomous Inspection Surface (alloy-ro) =="
+assert_ok "alloy-ro constitution tests" bash "$ROOT/tests/test-alloy-ro.sh"
 
 echo "== Runtime isolation =="
 assert_ok "runtime isolation focused tests" bash "$ROOT/tests/test-runtime-isolation.sh"

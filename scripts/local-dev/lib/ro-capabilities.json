@@ -1,0 +1,117 @@
+{
+  "surface": "alloy-ro",
+  "title": "Alloy Autonomous Inspection Surface",
+  "version": "1.0.0",
+  "trust_class": "read-only",
+  "permission_rule": "Bash(alloy-ro *)",
+  "constitution": "Every verb is read-only: no writes, no directory creation, no git-ref/index/worktree mutation, no network fetch, no package install, no process launch/stop/signal/recover, no application or browser launch, no credential loading, no deletion, no arbitrary command execution, and no execution of user-controlled configuration as shell. User configuration and runtime metadata are PARSED, never sourced. Unknown verbs and unsupported flags fail closed.",
+  "capability_keys": [
+    "reads",
+    "writes",
+    "network",
+    "process_control",
+    "git_mutation",
+    "deletion",
+    "arbitrary_execution",
+    "credential_access"
+  ],
+  "surface_capabilities": {
+    "reads": true,
+    "writes": false,
+    "network": false,
+    "process_control": false,
+    "git_mutation": false,
+    "deletion": false,
+    "arbitrary_execution": false,
+    "credential_access": false
+  },
+  "config_access": {
+    "policy": "parse-only, never sourced; fail closed on shell-active values",
+    "files_read": [
+      "<toolkit>/alloy-config.example",
+      "${ALLOY_CONFIG_FILE:-$HOME/.config/alloy-dev/config}",
+      "<runtime>/metadata/*.env"
+    ],
+    "config_keys_read": [
+      "ALLOY_REPO",
+      "ALLOY_RUNTIME_ROOT",
+      "ALLOY_WORKTREE_ROOT",
+      "ALLOY_CONFIG_DIR",
+      "ALLOY_BASE_REMOTE",
+      "ALLOY_BASE_BRANCH",
+      "ALLOY_WEB_DIR",
+      "ALLOY_FIRST_AGENT_PORT",
+      "ALLOY_CANONICAL_PORT",
+      "ALLOY_MAX_AGENTS"
+    ],
+    "metadata_keys_read": [
+      "ALLOY_WORKTREE_SLOT",
+      "ALLOY_WORKTREE_PATH",
+      "ALLOY_WORKTREE_BRANCH",
+      "ALLOY_AGENT",
+      "PORT",
+      "ALLOY_SPRINT_NAME",
+      "ALLOY_WORKER_LIFECYCLE",
+      "ALLOY_AGENT_STATUS"
+    ],
+    "never_reads": [
+      "secret values",
+      "credentials",
+      "storage-state contents",
+      ".env value contents"
+    ]
+  },
+  "read_only_subprocess_allowlist": {
+    "git": ["rev-parse", "status --porcelain", "rev-list --count", "remote get-url", "config --get", "symbolic-ref", "show-ref", "for-each-ref", "cat-file", "describe"],
+    "other": ["lsof (inspection)", "ps (inspection)", "stat", "find (type f listing)", "awk", "basename", "cut", "sort", "seq", "kill -0 (existence check; delivers no signal)"]
+  },
+  "verbs": {
+    "root": {
+      "summary": "Classify a directory as canonical | managed-worktree | retired | unmanaged | outside and whether it is sanctioned.",
+      "args": "[path]",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-paths": {
+      "summary": "Print resolved runtime path names (never secrets). Does not create directories.",
+      "args": "",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "worker-status": {
+      "summary": "Six-slot managed sprint status table. Never fetches (no --refresh).",
+      "args": "",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "agent-status": {
+      "summary": "Managed agent/slot detail for all slots or one target.",
+      "args": "[slot|name]",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "dev-status": {
+      "summary": "Dev-server / tracked-port listener status per managed worktree.",
+      "args": "[slot|name]",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "agent-evidence": {
+      "summary": "List evidence artifact names/sizes/mtimes for a slot. Never reads artifact contents; missing directory reads as empty.",
+      "args": "<slot|name>",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "capabilities": {
+      "summary": "Emit this machine-readable capability declaration.",
+      "args": "",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    }
+  },
+  "excluded_from_surface": {
+    "note": "These remain their own commands and continue to require explicit human approval. They are unreachable through alloy-ro.",
+    "deferred_pending_safe_extraction": ["health", "audit", "ai-health", "agent-ready", "initiative-status", "product-status", "product-decisions"],
+    "rejected_mutation_or_flag": ["clean (delete)", "manifest --set (write)", "worker-doctor --recover (process)", "cert-leak-clean (delete)", "* --refresh (network fetch)"]
+  }
+}

@@ -82,6 +82,7 @@ COMMANDS=(
   alloy-runtime-paths
   alloy-cert-leak-report
   alloy-cert-leak-clean
+  alloy-ro
 )
 
 alloy_looks_like_toolkit_install() {

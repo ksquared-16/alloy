@@ -282,6 +282,17 @@ Operating rules:
 | `alloy-health` / `alloy-audit` | daily vs deep read-only reports |
 | `alloy-clean` | report-first cleanup helpers |
 
+### Autonomous Inspection Surface (`alloy-ro`)
+
+A single, genuinely read-only entrypoint for autonomous agents, safe to grant via
+`Bash(alloy-ro *)` without authorizing mutation. It does **not** wrap the existing
+inspection commands — it re-implements the reads against a non-executing config
+parser and a read-only subprocess allowlist, creates no directories, and fails
+closed on unknown verbs and mutation flags. Verbs: `root`, `runtime-paths`,
+`worker-status`, `agent-status`, `dev-status`, `agent-evidence`, `capabilities`
+(each with `--json`). See [`AUTONOMOUS-INSPECTION-SURFACE.md`](AUTONOMOUS-INSPECTION-SURFACE.md)
+and the machine-readable declaration in `lib/ro-capabilities.json`.
+
 ### Phase 2 — managed agents
 
 | Command | Purpose |

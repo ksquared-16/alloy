@@ -13,6 +13,16 @@ alloy-ai-health
 alloy-agent-status
 alloy-clean report
 
+# Autonomous Inspection Surface — genuinely read-only, safe under Bash(alloy-ro *)
+# See AUTONOMOUS-INSPECTION-SURFACE.md
+alloy-ro root
+alloy-ro worker-status
+alloy-ro agent-status 3 --json
+alloy-ro dev-status
+alloy-ro agent-evidence 3
+alloy-ro runtime-paths
+alloy-ro capabilities --json
+
 # Phase 2 managed agent lifecycle
 alloy-agent-create my-initiative              # first free slot + default AI for that slot
 alloy-agent-create my-initiative claude
