@@ -86,3 +86,52 @@ rediscover them:
   later phase to avoid touching production importers in a first sprint.
 - **Config-change event propagation (R5 / Phase 4)**, consumer adapter proof (Phase 5), and
   everything gated on OE P3.
+
+## Consumer Migration (Phase 5) — intentionally skipped: no migration targets existed
+
+A follow-on mission attempted **Consumer Migration V1** — routing existing production
+consumers of the four calculations (`resource.required_staff`, `resource.ratio`,
+`capacity.room_binding`, `capacity.remaining`) through the runtime. It was **intentionally
+skipped after discovery**: there are **no production consumers to migrate**. This confirms
+the frozen plan's own predictions — **R8** (*"canonical capacity resolver has zero
+consumers"*), the Phase 3 rationale (*"`resolveOperationalCapacity` has zero production
+consumers — the whole reason it is first"*), and **R11 / Phase 5** (*the consumer surface
+"may not exist yet — this could be net-new UI, scope creep — assess before committing"*).
+
+**Evidence (reproducible; roots searched = `app components lib hooks`, excluding tests and
+the new registry):**
+
+- The **composed resolvers** the four keys wrap — `resolveOperationalCapacity` and
+  `resolveRatio` — have **zero** production importers.
+- The entire `web/lib/childcareOperational/capacity/` implementation dir has **zero**
+  external production importers.
+- The **only** non-test importer of the composed resolvers is now the registry itself
+  (`web/lib/operationalCalculations/families/resourceRequirementsAndCapacity.ts`).
+- Production code that imports the lower-level *primitives* (`ratioRules`, `capacityRules`,
+  `regulatoryCeiling`) does **not** consume the four calculation results — each such site is
+  out of scope for this mission and was correctly left untouched:
+  - `attendance/actualCompliance.ts`, `attendance/buildActualComplianceReadModel.ts` — the
+    **frozen "Judgment awaiting P3" verdict seam** (`over_capacity`/`understaffed`); must not
+    move (doc `04` §1.2, §7.4).
+  - `expectations/scheduleExpectationCore.ts`, `expectations/buildScheduleExpectations.ts` —
+    the **Scheduling family** (a different family → Phase 6).
+  - `config/roomConfigResolvers.ts`, `config/configRuleAuthoringService.ts` — **L1 config
+    authoring/reading** (they *produce* the config the registry reads; not calculation
+    consumers).
+
+No consumer was manufactured and **no operator UI was created** — forcing a consumer into
+existence would be the net-new-UI scope creep R11 warns against. No code changed in this
+follow-on mission.
+
+### Recommended next phase (from the frozen roadmap)
+
+- **Highest value, fully in-scope-safe — Phase 4 (Configuration event propagation, R5):**
+  wire `emitEvent` into `configRuleAuthoringService` and the metric-definition route and
+  define the invalidation predicate, reusing existing cache-invalidation machinery. It needs
+  **no consumer**, and capacity — being live-computed — needs only stages 1–2. This validates
+  propagation without inventing a consumer.
+- **Where real consumers actually live — Phase 6 (Childcare Operational convergence):**
+  register the Scheduling-family and compliance-seam *values* as calculations and converge
+  `scheduleExpectationCore` / `actualCompliance`'s non-verdict outputs onto the runtime, with
+  verdicts staying frozen in place. Genuine consumer migration belongs here, not in a
+  synthetic Phase 5.
