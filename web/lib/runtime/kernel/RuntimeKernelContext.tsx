@@ -109,6 +109,12 @@ export function RuntimeKernelProvider({
         // waits on the other, and neither waits on the router.
         attention.subscribe((e) => {
             focus.onAttentionMoved(e.ref);
+            // Render the movement the INSTANT it is accepted — before K2 has an answer. This is what
+            // lets the outgoing surface visibly YIELD within the legibility budget (C-36): Focus has
+            // just set the yielding/divergent phase, and Presentation must see it now, not at commit.
+            // Without this notify the phase change was invisible until the terminal landed, so the yield
+            // was modelled but never rendered.
+            notify();
             // The Workspace is an attention target, but it has NO Work Unit Preparation Contract —
             // its surface is route-owned until D5 gives it one. Asking the Work Unit entry resource
             // for it would fire a doomed request and commit an honest "no work unit 'workspace'"

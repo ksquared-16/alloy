@@ -330,24 +330,86 @@ async function install(page: Page, sel: typeof L) {
             requestAnimationFrame(tick);
         };
 
-        // Transition legibility: the first visible change ANYWHERE in the operational surface after intent.
+        // ACK + LEGIBLE are two DISTINCT constitutional promises, measured on two DISTINCT elements:
+        //   ACK      — "first visual response on the TOUCHED element"          (authorization line 254)
+        //   LEGIBLE  — "first visual evidence of movement: the OUTGOING's yield" (line 255; line 535:
+        //              "the outgoing surface, NEVER the incoming").
         w.__certArm = (rowSel: string) => {
             const el = document.querySelector(rowSel) as HTMLElement | null;
             if (!el) return false;
-            const sig = () => { const c = getComputedStyle(el); return `${c.backgroundColor}|${c.boxShadow}|${c.borderColor}|${c.opacity}`; };
-            const rootSig = () => { const r = visibleRoot() as HTMLElement | null; if (!r) return ""; const c = getComputedStyle(r); return `${c.opacity}|${c.transform}|${c.filter}`; };
-            let baseRow = sig(), baseRoot = rootSig();
+
+            // ── ACK. The touched element's first visual response. The canonical acknowledgment is
+            //    `.motion-control:active { transform: scale(0.98) }` — a TRANSFORM — so the response set
+            //    MUST include transform and outline, not just paint-color properties (the previous set
+            //    omitted transform and was structurally blind to the canonical primitive). Timing is
+            //    anchored to the transition/animation START, which is paint-accurate; a rAF poll
+            //    quantizes to ~16.7ms frame boundaries, and that error is a third of the 50ms budget.
+            const ackSig = () => {
+                const c = getComputedStyle(el);
+                return `${c.transform}|${c.outlineWidth}|${c.outlineColor}|${c.backgroundColor}|${c.boxShadow}|${c.borderColor}|${c.opacity}`;
+            };
+
+            // ── LEGIBLE. The OUTGOING surface's yield. Captured as a STABLE element reference at intent —
+            //    the surface the operator is LEAVING — and watched for its recede. The previous harness
+            //    watched `visibleRoot()`, which re-queries every frame and flips to the INCOMING surface
+            //    at commit, so it could only ever report LEGIBLE == commit (line-535 violation).
+            const outgoingSig = (elm: HTMLElement | null) => {
+                if (!elm || !elm.isConnected) return null;
+                const c = getComputedStyle(elm);
+                return `${c.opacity}|${c.transform}|${c.filter}`;
+            };
+
+            let baseAck = ackSig();
+            let outgoing: HTMLElement | null = null;
+            let baseOutgoing: string | null = null;
+            let intentTimelineTime = 0;
+
+            const recordAck = (ms: number) => {
+                if (m.acknowledgment_ms == null) { m.acknowledgment_ms = Math.max(0, ms); log("ACK"); }
+            };
+            // Paint-accurate ACK: the touched element's own transition/animation STARTING is the response.
+            const onStart = (ev: Event) => {
+                if (m.t0 != null && ev.target === el) recordAck((ev as AnimationEvent).timeStamp - m.t0);
+            };
+            el.addEventListener("transitionstart", onStart);
+            el.addEventListener("animationstart", onStart);
+
             const ackTick = () => {
                 if (m.t0 == null) return;
-                if (m.acknowledgment_ms == null && sig() !== baseRow) { m.acknowledgment_ms = now() - m.t0; log("ACK"); }
-                if (m.transition_legibility_ms == null && rootSig() !== baseRoot) { m.transition_legibility_ms = now() - m.t0; log("LEGIBLE"); }
+                // Fallback for an instant (non-transitioned) response — and the sole path for LEGIBLE.
+                if (m.acknowledgment_ms == null && ackSig() !== baseAck) {
+                    // Prefer the running animation's true start time over this frame's timestamp.
+                    const anims = el.getAnimations ? el.getAnimations() : [];
+                    const started = anims
+                        .map((a) => a.startTime)
+                        .filter((x): x is number => typeof x === "number" && x >= 0);
+                    if (started.length && typeof document.timeline?.currentTime === "number") {
+                        recordAck(Math.min(...started) - intentTimelineTime);
+                    } else {
+                        recordAck(now() - m.t0);
+                    }
+                }
+                if (m.transition_legibility_ms == null && outgoing) {
+                    const s = outgoingSig(outgoing);
+                    if (s != null && s !== baseOutgoing) { m.transition_legibility_ms = now() - m.t0; log("LEGIBLE"); }
+                }
                 if (m.acknowledgment_ms != null && m.transition_legibility_ms != null) return;
                 requestAnimationFrame(ackTick);
             };
             el.addEventListener("pointerdown", () => {
                 if (m.t0 != null) return;
-                baseRow = sig(); baseRoot = rootSig();
-                m.t0 = now(); log("INTENT");
+                baseAck = ackSig();
+                // The outgoing surface = whatever the operator is looking at when intent lands. The
+                // Surface Host renders it as the sole `[data-surface-slot]`; fall back to the surfaces.
+                outgoing =
+                    (document.querySelector('[data-surface-slot]') as HTMLElement | null) ||
+                    (document.querySelector(S.wsSurface) as HTMLElement | null) ||
+                    (document.querySelector(S.wuSurface) as HTMLElement | null);
+                baseOutgoing = outgoingSig(outgoing);
+                m.t0 = now();
+                intentTimelineTime =
+                    typeof document.timeline?.currentTime === "number" ? document.timeline.currentTime : now();
+                log("INTENT");
                 requestAnimationFrame(tick); requestAnimationFrame(ackTick);
             }, { capture: true, once: true });
             return true;

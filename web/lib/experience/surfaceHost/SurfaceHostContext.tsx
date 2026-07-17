@@ -134,9 +134,39 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     const committed = focus.current;
     const showWorkUnit = committed != null && committed.ref.target !== WORKSPACE_ATTENTION_TARGET;
 
+    // ── THE OUTGOING YIELD (C-36) — the Workspace visibly recedes the instant the operator commits to
+    //    leaving it, and is HELD (mounted, out of the way) once the Work Unit reveals. The kernel models
+    //    this as the `yielding` phase; the Workspace is Presentation-owned (not a K3 surface — a known D5
+    //    gap), so the recede is decided here from the divergence between `desired` and committed Focus.
+    //    Not a timer: the recede begins on intent and is superseded by the atomic commit, never gated by
+    //    a clock. Before this, the Workspace simply stayed on screen beneath the Work Unit — the modelled
+    //    yield was never rendered, so the operator's movement had no legible outgoing evidence.
+    const movingToWorkUnit = focus.desired != null && focus.desired.target !== WORKSPACE_ATTENTION_TARGET;
+    const outgoingYielding = !showWorkUnit && movingToWorkUnit && focus.phase !== "stable";
+    const slot = showWorkUnit ? "held" : outgoingYielding ? "outgoing" : "current";
+
     return (
         <SurfaceHostContext.Provider value={value}>
-            {children}
+            <div
+                data-surface-slot={slot}
+                // `held` = a Work Unit has revealed; the Workspace is retained (mounted, scroll preserved)
+                // but display:none so the incoming surface owns the whole region. `outgoing` = receding,
+                // non-interactive. `current` = the live, interactive Workspace.
+                className={`flex min-h-0 flex-1 flex-col ${
+                    showWorkUnit ? "hidden" : outgoingYielding ? "motion-recede pointer-events-none" : ""
+                }`.trim()}
+                // Report the rendered recede back to Focus so the yield→hold handshake is driven by the
+                // choreography, not by tests. In the `yielding` phase this advances K3 and fires the
+                // legibility instrumentation; on a cold Workspace→Work Unit move (no K3 `current` to
+                // yield) it is a no-op, which is correct.
+                onAnimationStart={(e) => {
+                    if (e.animationName && e.animationName.startsWith("motion-recede")) {
+                        kernel.focus.markYieldLegible();
+                    }
+                }}
+            >
+                {children}
+            </div>
             {showWorkUnit ? <ProvisionedWorkUnitSurface /> : null}
         </SurfaceHostContext.Provider>
     );
