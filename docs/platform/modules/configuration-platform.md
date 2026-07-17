@@ -106,7 +106,7 @@ Future domains inherit the Locations experience grammar and consume the relevant
 
 ### Organization Configuration Runtime V2
 
-The Organization Configuration Runtime is the organization-owned publishing layer above Locations. Its landing is `/settings/organization`; its frozen implementation contract is `../../system/organization-configuration-runtime-v2.md`.
+The Organization Configuration Runtime is the organization-owned publishing layer above Locations. Its landing is `/organization`; its frozen implementation contract is `../../system/organization-configuration-runtime-v2.md`.
 
 It owns the reusable control contract, not domain payloads:
 
@@ -150,7 +150,7 @@ The Settings index (`/settings`) is a **compact configuration table of contents*
 
 | Chapter | Primary entries |
 |---------|-----------------|
-| Organization | Organization settings, Locations, Access, Communications |
+| Organization | Organization landing, Locations, Access, Communications |
 | Data Model | Entities, Fields, Statuses, Operational Calculations |
 | Operations | Processes, Surfaces, Automation |
 | Business | Programs (`/settings/commercial` compatibility route) |

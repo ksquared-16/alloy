@@ -35,16 +35,16 @@ import { LocationOverviewSurface } from "@/components/adminV2/settings/locations
 import { LocationsCommandRailActions } from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
 import { LocationsObjectSelector } from "@/components/adminV2/settings/locations/LocationsObjectSelector";
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
-import LocationsFleetLanding from "@/components/adminV2/settings/locations/LocationsFleetLanding";
+import LocationsLanding from "@/components/adminV2/settings/locations/LocationsLanding";
 import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
 import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
 import { buildLocationsRailActions } from "@/lib/locations/buildLocationsRailActions";
 import {
     buildLocationWorkspaceModel,
     buildLocationProgramOperationalSummaries,
-    buildLocationsFleetModel,
+    buildLocationsCollectionModel,
     LOCATION_WORKSPACE_TABS,
-    locationsFleetHref,
+    locationsLandingHref,
     locationWorkspaceHref,
     type LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
@@ -238,9 +238,9 @@ export default function LocationsConfigurationPage({
             })
         :   null;
 
-    const fleet = useMemo(
+    const locationsCollection = useMemo(
         () =>
-            buildLocationsFleetModel({
+            buildLocationsCollectionModel({
                 sites: siteRows,
                 rooms: roomRows,
                 programs: programCategories,
@@ -262,14 +262,14 @@ export default function LocationsConfigurationPage({
         router.replace(locationWorkspaceHref(locationId, tab));
     };
 
-    const returnToFleet = () => {
+    const returnToLocations = () => {
         setSelectedId(null);
         setEditingSite(false);
         setCreatingProgram(false);
         setCreatingRoom(false);
         setCreatingSchedule(false);
         setActiveTab("overview");
-        router.replace(locationsFleetHref());
+        router.replace(locationsLandingHref());
     };
 
     const navigate = useCallback(
@@ -385,10 +385,10 @@ export default function LocationsConfigurationPage({
         ],
     );
 
-    const fleetById = useMemo(() => {
-        const map = new Map(fleet.locations.map((location) => [location.id, location]));
+    const locationSummaryById = useMemo(() => {
+        const map = new Map(locationsCollection.locations.map((location) => [location.id, location]));
         return map;
-    }, [fleet.locations]);
+    }, [locationsCollection.locations]);
 
     const scheduleSummary =
         selectedSchedules.length > 0 ?
@@ -634,48 +634,50 @@ export default function LocationsConfigurationPage({
             <LocationsCommandRailActions actions={railActions} />
 
             {!selectedSite && !initialLocationId ?
-                <ConfigurationContext
-                    title="Locations"
-                    titleIcon={<MapPin className="h-5 w-5" strokeWidth={2} />}
-                    testId="locations-configuration-context"
-                >
-                    {!loading ?
-                        <div
-                            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-alloy-stone/25 pt-2"
-                            data-testid="locations-fleet-posture"
-                        >
-                            <ConfigScopeContextBar
-                                mode="organization"
-                                organizationLabel="Organization"
-                                objectLabel="Location"
-                                ownershipHint="All locations"
-                                onModeChange={(mode) => {
-                                    if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
-                                }}
-                            />
-                            <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-alloy-midnight/52">
-                                <li>
-                                    <strong className="font-semibold text-alloy-midnight">
-                                        {fleet.activeLocationCount}
-                                    </strong>{" "}
-                                    Active Locations
-                                </li>
-                                <li>
-                                    <strong className="font-semibold text-alloy-midnight">
-                                        {fleet.averageSetupPercent}%
-                                    </strong>{" "}
-                                    Average Readiness
-                                </li>
-                                <li>
-                                    <strong className="font-semibold text-alloy-midnight">
-                                        {fleet.locationsNeedingAttention}
-                                    </strong>{" "}
-                                    Need Attention
-                                </li>
-                            </ul>
-                        </div>
-                    :   null}
-                </ConfigurationContext>
+                <div className="max-w-[72rem]" data-testid="locations-content-column">
+                    <ConfigurationContext
+                        title="Locations"
+                        titleIcon={<MapPin className="h-5 w-5" strokeWidth={2} />}
+                        testId="locations-configuration-context"
+                    >
+                        {!loading ?
+                            <div
+                                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-alloy-stone/25 pt-2"
+                                data-testid="locations-collection-posture"
+                            >
+                                <ConfigScopeContextBar
+                                    mode="organization"
+                                    organizationLabel="Organization"
+                                    objectLabel="Location"
+                                    ownershipHint="All locations"
+                                    onModeChange={(mode) => {
+                                        if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
+                                    }}
+                                />
+                                <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-alloy-midnight/52">
+                                    <li>
+                                        <strong className="font-semibold text-alloy-midnight">
+                                            {locationsCollection.activeLocationCount}
+                                        </strong>{" "}
+                                        Active Locations
+                                    </li>
+                                    <li>
+                                        <strong className="font-semibold text-alloy-midnight">
+                                            {locationsCollection.averageSetupPercent}%
+                                        </strong>{" "}
+                                        Average Readiness
+                                    </li>
+                                    <li>
+                                        <strong className="font-semibold text-alloy-midnight">
+                                            {locationsCollection.locationsNeedingAttention}
+                                        </strong>{" "}
+                                        Need Attention
+                                    </li>
+                                </ul>
+                            </div>
+                        :   null}
+                    </ConfigurationContext>
+                </div>
             :   null}
 
             {error ?
@@ -699,7 +701,7 @@ export default function LocationsConfigurationPage({
                         canMutate={canMutate}
                         onCancel={() => {
                             setCreatingSite(false);
-                            if (!selectedSite) router.replace(locationsFleetHref());
+                            if (!selectedSite) router.replace(locationsLandingHref());
                         }}
                         onCreate={async (input) => {
                             const newId = await createSiteLocation(input);
@@ -725,7 +727,7 @@ export default function LocationsConfigurationPage({
                                 onSearchChange={setSearch}
                                 canMutate={canMutate}
                                 onAddLocation={beginAddLocation}
-                                fleetById={fleetById}
+                                locationSummaryById={locationSummaryById}
                                 onSelect={(locationId) => {
                                     setSelectedId(locationId);
                                     setEditingSite(false);
@@ -735,8 +737,8 @@ export default function LocationsConfigurationPage({
                         :   null}
 
                         <main
-                            className="min-w-0 space-y-3"
-                            data-testid={selectedSite ? "locations-selected-location" : "locations-fleet-composition"}
+                            className={`min-w-0 space-y-2.5 ${selectedSite ? "" : "max-w-[72rem]"}`}
+                            data-testid={selectedSite ? "locations-selected-location" : "locations-composition"}
                         >
                             {selectedSite ?
                                 <div className="xl:hidden">
@@ -763,8 +765,8 @@ export default function LocationsConfigurationPage({
                             :   null}
 
                             {!selectedSite ?
-                                <LocationsFleetLanding
-                                    fleet={fleet}
+                                <LocationsLanding
+                                    collection={locationsCollection}
                                     showInactive={showInactive}
                                     onShowInactiveChange={setShowInactive}
                                     search={search}
@@ -793,8 +795,8 @@ export default function LocationsConfigurationPage({
                                                     <button
                                                         type="button"
                                                         className="font-medium underline-offset-2 hover:text-alloy-midnight/70 hover:underline"
-                                                        onClick={returnToFleet}
-                                                        data-testid="locations-breadcrumb-fleet"
+                                                        onClick={returnToLocations}
+                                                        data-testid="locations-breadcrumb-collection"
                                                     >
                                                         Locations
                                                     </button>

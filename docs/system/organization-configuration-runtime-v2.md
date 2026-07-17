@@ -8,7 +8,7 @@ supersedes: [docs/system/organization-configuration-runtime-v1.md]
 # Organization Configuration Runtime V2
 
 **Status:** Frozen July 2026.  
-**Route:** `/settings/organization`  
+**Route:** `/organization`
 **Reference experience:** frozen Locations Configuration Runtime V1.
 
 Organization is the **publisher** of reusable configuration. Locations are the primary **consumers**. Domain runtimes remain authoritative for their payloads and operational effects.

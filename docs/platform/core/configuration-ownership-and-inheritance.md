@@ -222,12 +222,12 @@ Lives in the **frozen Configuration Runtime shell** (Settings index → Context 
 ### Concept A — Organization-first (inheritance is the hero)
 - **Layout:** the **Compare-locations matrix** is the main surface (rows = config items / programs, cols = sites); cells show inherited vs overridden; edit org defaults, override per cell.
 - **Strengths:** makes ownership/override explicit and central; ideal for multi-site chains; the lock/applies-to pattern is native and front-and-center.
-- **Weaknesses:** overwhelming for single-site orgs; reads as "managing a fleet," not "configuring my business"; the tuition grid is nested inside a bigger matrix.
+- **Weaknesses:** overwhelming for single-site orgs; reads as managing a portfolio rather than configuring the business; the tuition grid is nested inside a bigger matrix.
 
 ### Concept B — Program-first (V1 + a scope lens)
 - **Layout:** the Program workspace (rail + Tuition hero) with a **Location lens** in the Scope Context bar; each value shows provenance + inline override.
 - **Strengths:** matches the operator mental model; inheritance is contextual, never overwhelming; single-site orgs barely notice scope.
-- **Weaknesses:** cross-location comparison needs a lens switch (no at-a-glance matrix); fleet managers want the grid view.
+- **Weaknesses:** cross-location comparison needs a lens switch (no at-a-glance matrix); multi-location operators may still want the grid view.
 
 ### Concept C — Commercial-first (a configuration hub)
 - **Layout:** a **Commercial Configuration hub** of tiles — Programs & Tuition · Funding · Fees · Policies · Accounting · Simulator — each opening its surface; a global scope lens persists across all.

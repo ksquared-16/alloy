@@ -88,8 +88,8 @@ export function parseLocationWorkspaceTab(raw: string | string[] | null | undefi
     return LOCATION_WORKSPACE_TABS.some((tab) => tab.key === value) ? (value as LocationWorkspaceTab) : "overview";
 }
 
-/** Org-level Locations fleet landing — no location selected. */
-export function locationsFleetHref(): string {
+/** Organization-level Locations landing — no location selected. */
+export function locationsLandingHref(): string {
     return "/settings/locations";
 }
 
@@ -108,7 +108,7 @@ export function locationWorkspaceHref(
     return `/settings/locations${search ? `?${search}` : ""}`;
 }
 
-export type LocationsFleetLocationSummary = {
+export type LocationsCollectionLocationSummary = {
     id: string;
     displayName: string;
     isActive: boolean;
@@ -123,13 +123,13 @@ export type LocationsFleetLocationSummary = {
     topAttention: LocationWorkspaceAttentionItem | null;
 };
 
-export type LocationsFleetAttentionHighlight = {
+export type LocationsCollectionAttentionHighlight = {
     locationId: string;
     locationName: string;
     item: LocationWorkspaceAttentionItem;
 };
 
-export type LocationsFleetModel = {
+export type LocationsCollectionModel = {
     locationCount: number;
     activeLocationCount: number;
     inactiveLocationCount: number;
@@ -141,16 +141,16 @@ export type LocationsFleetModel = {
     totalConfiguredCapacity: number | null;
     totalRooms: number;
     totalPrograms: number;
-    locations: LocationsFleetLocationSummary[];
-    attentionHighlights: LocationsFleetAttentionHighlight[];
+    locations: LocationsCollectionLocationSummary[];
+    attentionHighlights: LocationsCollectionAttentionHighlight[];
 };
 
 /**
- * Fleet setup uses only known-complete dimensions (general, programs, rooms, schedule).
+ * Collection rollups use only known-complete dimensions (general, programs, rooms, schedule).
  * Tours / Placement / Access stay unknown until a location workspace loads them — they must
  * not depress org rollups as incomplete (doctrine: unknown is never zero / fabricated).
  */
-function fleetSetupFromWorkspace(model: LocationWorkspaceModel): {
+function collectionSetupFromWorkspace(model: LocationWorkspaceModel): {
     setupPercent: number;
     setupComplete: boolean;
 } {
@@ -162,13 +162,13 @@ function fleetSetupFromWorkspace(model: LocationWorkspaceModel): {
     return { setupPercent, setupComplete: setupPercent === 100 };
 }
 
-export function buildLocationsFleetModel(params: {
+export function buildLocationsCollectionModel(params: {
     sites: LocationHierarchyRow[];
     rooms: LocationHierarchyRow[];
     programs: LocationProgramCategoryRow[];
     schedules: { id: string; site_location_id: string; is_active: boolean }[];
-}): LocationsFleetModel {
-    const locations: LocationsFleetLocationSummary[] = params.sites.map((site) => {
+}): LocationsCollectionModel {
+    const locations: LocationsCollectionLocationSummary[] = params.sites.map((site) => {
         const siteSchedules = params.schedules.filter((schedule) => schedule.site_location_id === site.id);
         const workspace = buildLocationWorkspaceModel({
             site,
@@ -176,7 +176,7 @@ export function buildLocationsFleetModel(params: {
             programs: params.programs,
             schedules: siteSchedules,
         });
-        const fleetSetup = fleetSetupFromWorkspace(workspace);
+        const collectionSetup = collectionSetupFromWorkspace(workspace);
         const topAttention =
             workspace.attention.find((item) => item.grade === "fix") ??
             workspace.attention.find((item) => item.grade === "improve") ??
@@ -193,8 +193,8 @@ export function buildLocationsFleetModel(params: {
             locality,
             criticalCount: workspace.criticalCount,
             improveCount: workspace.attention.filter((item) => item.grade === "improve").length,
-            setupPercent: fleetSetup.setupPercent,
-            setupComplete: fleetSetup.setupComplete,
+            setupPercent: collectionSetup.setupPercent,
+            setupComplete: collectionSetup.setupComplete,
             activeRoomCount: workspace.activeRoomCount,
             activeProgramCount: workspace.activeProgramCount,
             configuredCapacity: workspace.configuredCapacity,
@@ -213,7 +213,7 @@ export function buildLocationsFleetModel(params: {
     const capacityValues = locations
         .map((location) => location.configuredCapacity)
         .filter((capacity): capacity is number => capacity != null && Number.isFinite(capacity));
-    const attentionHighlights: LocationsFleetAttentionHighlight[] = [];
+    const attentionHighlights: LocationsCollectionAttentionHighlight[] = [];
     for (const location of locations) {
         if (!location.topAttention || location.topAttention.grade === "good") continue;
         attentionHighlights.push({

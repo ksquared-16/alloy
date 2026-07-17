@@ -13,7 +13,7 @@ supersedes: []
 
 | Surface | Owns | Does **not** own |
 |---------|------|------------------|
-| **Organization settings** | Domain registry, publisher/consumer model, inheritance, publication, distribution, and cross-location governance contracts | Domain payloads, Location-owned objects, duplicate domain editors |
+| **Organization** | Domain registry, publisher/consumer model, inheritance, publication, distribution, and cross-location governance contracts | Domain payloads, Location-owned objects, duplicate domain editors |
 | **Programs** | Reusable service catalog, categories, eligibility, licensing/resource requirements, commercial/funding/billing defaults, publication | Rooms/Delivery Resources, capacity, schedules, local operational truth |
 | **Locations** | Campuses, Programs offered, Rooms/Delivery Resources, and local schedule templates | Program identity, process behavior, surface presentation |
 | **Fields** | Canonical data definitions — types, labels, formats, validation | Drawer placement, stage requiredness, action behavior |

@@ -8,6 +8,7 @@ loadEnv({ path: path.join(__dirname, "../../.env.local") });
 const VIEWPORTS = [
     { name: "desktop", width: 1440, height: 900 },
     { name: "laptop", width: 1366, height: 768 },
+    { name: "wide", width: 1728, height: 1000 },
 ] as const;
 const managedStorageState = process.env.PLAYWRIGHT_STORAGE_STATE?.trim();
 
@@ -32,24 +33,38 @@ async function expectNoClippedContent(objects: Locator) {
 
 async function openRoute(page: Page, path: string, testId: string) {
     await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await expect(page).toHaveURL(new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\?.*)?$`), {
+        timeout: 120_000,
+    });
+    await expect(page.getByRole("progressbar", { name: "Preparing workspace" })).toHaveCount(0, {
+        timeout: 120_000,
+    });
     await expect(page.getByTestId(testId)).toBeVisible({ timeout: 60_000 });
 }
 
 test.describe("configuration-runtime-top-level-landings", () => {
-    test("Organization and Locations stay dense, equal-height, and responsive", async ({ page }, testInfo) => {
+    test("Organization catalog and Locations collection remain responsive", async ({ page }, testInfo) => {
         test.setTimeout(600_000);
         if (!managedStorageState) await ensureAdminPlaywrightSession(page);
+        const consoleErrors: string[] = [];
+        const failedRequests: string[] = [];
+        page.on("console", (message) => {
+            if (message.type() === "error") consoleErrors.push(message.text());
+        });
+        page.on("requestfailed", (request) => {
+            failedRequests.push(`${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`);
+        });
 
         for (const viewport of VIEWPORTS) {
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
 
-            await openRoute(page, "/settings/organization", "organization-configuration-page");
+            await openRoute(page, "/organization", "organization-configuration-page");
             const domains = page.locator('[data-testid^="organization-domain-"]');
             await expect(domains).toHaveCount(9);
             await expectEqualHeights(domains);
             await expectNoClippedContent(domains);
-            await expect(page.getByTestId("organization-consumers")).toBeVisible();
-            await expect(page.getByTestId("organization-distribution")).toBeVisible();
+            await expect(page.getByTestId("organization-consumers")).toBeVisible({ timeout: 60_000 });
+            await expect(page.getByTestId("organization-distribution")).toBeVisible({ timeout: 60_000 });
 
             const organizationGrid = page.getByTestId("organization-configuration-domains");
             expect(
@@ -68,39 +83,38 @@ test.describe("configuration-runtime-top-level-landings", () => {
                 animations: "disabled",
             });
 
-            await openRoute(page, "/settings/locations", "locations-fleet-landing");
-            await expect(page.getByTestId("locations-fleet-posture")).toBeVisible();
-            await expect(page.getByTestId("locations-fleet-search")).toBeVisible();
-            await expect(page.getByTestId("locations-fleet-show-inactive")).toBeVisible();
-            await expect(page.getByTestId("locations-fleet-add-location")).toBeVisible();
+            await openRoute(page, "/settings/locations", "locations-landing");
+            await expect(page.getByTestId("locations-collection-posture")).toBeVisible();
+            await expect(page.getByTestId("locations-operational-summary")).toBeVisible();
+            await expect(page.getByTestId("locations-attention-list")).toBeVisible();
+            await expect(page.getByTestId("locations-search")).toBeVisible();
+            await expect(page.getByTestId("locations-show-inactive")).toBeVisible();
+            await expect(page.getByTestId("locations-add-location")).toBeVisible();
 
-            const locationTiles = page.locator('[data-testid^="locations-fleet-tile-"]');
-            expect(await locationTiles.count()).toBeGreaterThan(0);
-            await expectEqualHeights(locationTiles);
-            await expectNoClippedContent(locationTiles);
-            await expect(page.getByTestId("locations-fleet-attention-list")).toBeVisible();
-            await expect(page.getByTestId("locations-fleet-summary")).toBeVisible();
+            const locationRows = page.locator('[data-testid^="locations-row-"]');
+            expect(await locationRows.count()).toBeGreaterThan(0);
+            await expectNoClippedContent(locationRows);
+            await expect(locationRows.last()).toBeVisible();
+            await expect(page.getByTestId("locations-list")).toHaveAttribute("data-scroll-mode", "natural");
 
-            const fleetSurfaceBox = await page.getByTestId("locations-fleet-surface").boundingBox();
-            const fleetSummaryBox = await page.getByTestId("locations-fleet-supporting-summary").boundingBox();
-            expect(fleetSurfaceBox).not.toBeNull();
-            expect(fleetSummaryBox).not.toBeNull();
-            expect(fleetSummaryBox?.x ?? 0).toBeGreaterThan(
-                (fleetSurfaceBox?.x ?? 0) + (fleetSurfaceBox?.width ?? 0) - 1,
-            );
+            const contentColumn = page.getByTestId("locations-content-column");
+            const landing = page.getByTestId("locations-landing");
+            const [contentBox, landingBox] = await Promise.all([contentColumn.boundingBox(), landing.boundingBox()]);
+            expect(contentBox).not.toBeNull();
+            expect(landingBox).not.toBeNull();
+            expect(contentBox?.width ?? Infinity).toBeLessThanOrEqual(1152.5);
+            expect(landingBox?.width ?? Infinity).toBeLessThanOrEqual(1152.5);
+            expect(Math.abs((contentBox?.x ?? 0) - (landingBox?.x ?? 0))).toBeLessThanOrEqual(24);
 
-            const fleetScroll = page.getByTestId("locations-fleet-scroll");
-            expect(
-                await fleetScroll.evaluate((element) => ({
-                    overflowY: getComputedStyle(element).overflowY,
-                    maxHeight: getComputedStyle(element).maxHeight,
-                })),
-            ).toMatchObject({ overflowY: "auto" });
-
-            const locationsGrid = page.getByTestId("locations-fleet-grid");
-            expect(
-                await locationsGrid.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
-            ).toBe(true);
+            const summaryBox = await page.getByTestId("locations-operational-summary").boundingBox();
+            const attentionBox = await page.getByTestId("locations-attention-list").boundingBox();
+            const listBox = await page.getByTestId("locations-list-card").boundingBox();
+            expect(summaryBox).not.toBeNull();
+            expect(attentionBox).not.toBeNull();
+            expect(listBox).not.toBeNull();
+            expect(attentionBox?.y ?? 0).toBeGreaterThan((summaryBox?.y ?? 0) + (summaryBox?.height ?? 0) - 1);
+            expect(listBox?.y ?? 0).toBeGreaterThan((attentionBox?.y ?? 0) + (attentionBox?.height ?? 0) - 1);
+            expect(await landing.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
 
             await page.screenshot({
                 path: testInfo.outputPath(`locations-${viewport.name}.png`),
@@ -109,11 +123,17 @@ test.describe("configuration-runtime-top-level-landings", () => {
             });
 
             if (viewport.name === "desktop") {
-                await locationTiles.first().click();
+                expect(
+                    await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 2),
+                ).toBe(true);
+                await locationRows.first().click();
                 await expect(page.getByTestId("locations-selected-location")).toBeVisible({
                     timeout: 60_000,
                 });
             }
         }
+
+        expect(consoleErrors).toEqual([]);
+        expect(failedRequests).toEqual([]);
     });
 });

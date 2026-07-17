@@ -8,6 +8,7 @@
 
 import {
     adminSettingsSubpathHref,
+    CANONICAL_ORGANIZATION_BASE,
     CANONICAL_SETTINGS_BASE,
 } from "@/lib/admin/canonicalAdminRoutes";
 
@@ -94,12 +95,6 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         label: "Organization",
         description: "Who uses the system and where.",
         items: [
-            {
-                href: settings("organization"),
-                label: "Organization settings",
-                description: "Shared configuration, ownership, inheritance, and location governance.",
-                emphasis: true,
-            },
             {
                 href: settings("locations"),
                 label: "Locations",
@@ -261,6 +256,7 @@ export const CONFIGURATION_WORKSPACE_ADVANCED_ITEMS: readonly ConfigurationWorks
 
 export function configurationWorkspaceDomainForPath(pathname: string): ConfigurationWorkspaceDomainId | null {
     const normalized = pathname.replace(/\/$/, "") || CANONICAL_SETTINGS_BASE;
+    if (normalized === CANONICAL_ORGANIZATION_BASE) return "organization";
     const canonical =
         normalized === "/admin" || normalized === "/admin/settings"
             ? CANONICAL_SETTINGS_BASE

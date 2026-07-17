@@ -32,18 +32,18 @@ test.describe("configuration-runtime-locations", () => {
         await expect(page.getByTestId("locations-configuration-page")).toBeVisible({
             timeout: 60_000,
         });
-        await expect(page.getByTestId("locations-fleet-landing")).toBeVisible({
+        await expect(page.getByTestId("locations-landing")).toBeVisible({
             timeout: 60_000,
         });
         await page.screenshot({
-            path: path.join(screenshotDir, "00-locations-fleet-landing.png"),
+            path: path.join(screenshotDir, "00-locations-landing.png"),
             fullPage: true,
             animations: "disabled",
         });
 
-        const firstFleetTile = page.locator('[data-testid^="locations-fleet-tile-"]').first();
-        await expect(firstFleetTile).toBeVisible({ timeout: 30_000 });
-        await firstFleetTile.click();
+        const firstLocationRow = page.locator('[data-testid^="locations-row-"]').first();
+        await expect(firstLocationRow).toBeVisible({ timeout: 30_000 });
+        await firstLocationRow.click();
         await expect(page.getByTestId("locations-selected-location")).toBeVisible({
             timeout: 60_000,
         });
@@ -191,11 +191,11 @@ test.describe("configuration-runtime-locations", () => {
         await expect(page.getByTestId("locations-configuration-page")).toBeVisible({
             timeout: 60_000,
         });
-        await expect(page.getByTestId("locations-fleet-landing")).toBeVisible({
+        await expect(page.getByTestId("locations-landing")).toBeVisible({
             timeout: 60_000,
         });
 
-        const addBtn = page.getByTestId("locations-fleet-add-location");
+        const addBtn = page.getByTestId("locations-add-location");
         await expect(addBtn).toBeVisible({ timeout: 30_000 });
         await addBtn.click();
         await expect(page.getByTestId("locations-site-create")).toBeVisible({

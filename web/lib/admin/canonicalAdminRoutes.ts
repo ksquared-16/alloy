@@ -7,10 +7,10 @@
  * - `/workspace/work-unit/:workUnitSlug/:recordId` — drawer URL state
  *
  * **Admin / config:**
- * - `/settings` — Configuration landing (Alloy OS Configuration Runtime canonical)
+ * - `/organization` — Organization configuration landing
  * - `/settings/*` — settings sub-surfaces
  * - `/admin/settings/*` — compatibility redirect → `/settings/*`
- * - `/admin` — compatibility redirect → `/settings`
+ * - `/settings`, `/settings/organization`, `/admin` — compatibility redirects → `/organization`
  *
  * **Legacy:**
  * - `/legacy-admin` — archived old admin
@@ -23,6 +23,9 @@ export const CANONICAL_ADMIN_BASE = "/admin" as const;
 
 /** Alloy OS Configuration Runtime — canonical Settings base URL. */
 export const CANONICAL_SETTINGS_BASE = "/settings" as const;
+
+/** Canonical Organization configuration landing. */
+export const CANONICAL_ORGANIZATION_BASE = "/organization" as const;
 
 /** Legacy admin implementation base (financials, old list pages, unmigrated system). */
 export const LEGACY_ADMIN_BASE = "/legacy-admin" as const;
@@ -39,8 +42,8 @@ export const CANONICAL_OPERATOR_BASE = "/workspace" as const;
 /** Phase G — work-unit queue route prefix. */
 export const CANONICAL_OPERATOR_WORK_UNIT_PREFIX = `${CANONICAL_OPERATOR_BASE}/work-unit` as const;
 
-/** Admin / settings / config landing — Alloy OS Configuration Runtime. */
-export const CANONICAL_ADMIN_CONFIG_LANDING = CANONICAL_SETTINGS_BASE;
+/** Organization configuration landing. */
+export const CANONICAL_ADMIN_CONFIG_LANDING = CANONICAL_ORGANIZATION_BASE;
 
 /**
  * Path prefixes served by the canonical AdminV2 app (rewrite targets).
@@ -49,6 +52,7 @@ export const CANONICAL_ADMIN_CONFIG_LANDING = CANONICAL_SETTINGS_BASE;
 export const CANONICAL_ADMIN_PATH_PREFIXES = [
     `${CANONICAL_ADMIN_BASE}/workspace`,
     `${CANONICAL_ADMIN_BASE}/settings`,
+    CANONICAL_ORGANIZATION_BASE,
     `${CANONICAL_SETTINGS_BASE}`,
     `${CANONICAL_ADMIN_BASE}/forms`,
     `${CANONICAL_ADMIN_BASE}/workflows`,
@@ -66,6 +70,7 @@ export const CANONICAL_ADMIN_PATH_PREFIXES = [
 export function isCanonicalAdminPath(pathname: string): boolean {
     const p = pathname.trim();
     if (p === CANONICAL_ADMIN_BASE) return true;
+    if (p === CANONICAL_ORGANIZATION_BASE) return true;
     if (p === CANONICAL_SETTINGS_BASE || p.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) return true;
     return CANONICAL_ADMIN_PATH_PREFIXES.some(
         (prefix) => p === prefix || p.startsWith(`${prefix}/`),
@@ -89,10 +94,11 @@ export function normalizeTransitionalAdminPath(pathname: string): string | null 
         return CANONICAL_ADMIN_CONFIG_LANDING;
     }
     if (p.startsWith(`${TRANSITIONAL_ADMIN_V2_BASE}/settings/`)) {
-        return `${CANONICAL_SETTINGS_BASE}${p.slice(`${TRANSITIONAL_ADMIN_V2_BASE}/settings`.length)}`;
+        const normalized = `${CANONICAL_SETTINGS_BASE}${p.slice(`${TRANSITIONAL_ADMIN_V2_BASE}/settings`.length)}`;
+        return normalized === `${CANONICAL_SETTINGS_BASE}/organization` ? CANONICAL_ADMIN_CONFIG_LANDING : normalized;
     }
     if (p === `${TRANSITIONAL_ADMIN_V2_BASE}/settings`) {
-        return CANONICAL_SETTINGS_BASE;
+        return CANONICAL_ADMIN_CONFIG_LANDING;
     }
     if (p.startsWith(`${TRANSITIONAL_ADMIN_V2_BASE}/`)) {
         return `${CANONICAL_ADMIN_BASE}${p.slice(TRANSITIONAL_ADMIN_V2_BASE.length)}`;
@@ -101,19 +107,21 @@ export function normalizeTransitionalAdminPath(pathname: string): string | null 
         return CANONICAL_ADMIN_CONFIG_LANDING;
     }
     if (p.startsWith("/admin/v2/settings/")) {
-        return `${CANONICAL_SETTINGS_BASE}${p.slice("/admin/v2/settings".length)}`;
+        const normalized = `${CANONICAL_SETTINGS_BASE}${p.slice("/admin/v2/settings".length)}`;
+        return normalized === `${CANONICAL_SETTINGS_BASE}/organization` ? CANONICAL_ADMIN_CONFIG_LANDING : normalized;
     }
     if (p === "/admin/v2/settings") {
-        return CANONICAL_SETTINGS_BASE;
+        return CANONICAL_ADMIN_CONFIG_LANDING;
     }
     if (p.startsWith("/admin/v2/")) {
         return `${CANONICAL_ADMIN_BASE}${p.slice("/admin/v2".length)}`;
     }
     if (p.startsWith("/adminv2/settings/")) {
-        return `${CANONICAL_SETTINGS_BASE}${p.slice("/adminv2/settings".length)}`;
+        const normalized = `${CANONICAL_SETTINGS_BASE}${p.slice("/adminv2/settings".length)}`;
+        return normalized === `${CANONICAL_SETTINGS_BASE}/organization` ? CANONICAL_ADMIN_CONFIG_LANDING : normalized;
     }
     if (p === "/adminv2/settings") {
-        return CANONICAL_SETTINGS_BASE;
+        return CANONICAL_ADMIN_CONFIG_LANDING;
     }
     if (p.startsWith("/adminv2/")) {
         return `${CANONICAL_ADMIN_BASE}${p.slice("/adminv2".length)}`;
@@ -130,6 +138,7 @@ export function isOperatorAdminPath(pathname: string): boolean {
     return (
         p === CANONICAL_ADMIN_BASE ||
         p.startsWith(`${CANONICAL_ADMIN_BASE}/`) ||
+        p === CANONICAL_ORGANIZATION_BASE ||
         p === CANONICAL_SETTINGS_BASE ||
         p.startsWith(`${CANONICAL_SETTINGS_BASE}/`) ||
         p === LEGACY_ADMIN_BASE ||
@@ -143,26 +152,34 @@ export function isOperatorAdminPath(pathname: string): boolean {
     );
 }
 
-/** Normalize browser pathname to canonical settings paths (`/settings/...`). */
+/** Normalize browser pathname to the Organization landing or canonical settings subpaths. */
 export function normalizeToCanonicalSettingsPath(pathname: string): string {
     const trimmed = pathname.trim();
-    if (trimmed === "/admin" || trimmed === "/admin/settings") {
-        return CANONICAL_SETTINGS_BASE;
+    if (
+        trimmed === "/admin" ||
+        trimmed === "/admin/settings" ||
+        trimmed === CANONICAL_SETTINGS_BASE ||
+        trimmed === `${CANONICAL_SETTINGS_BASE}/organization` ||
+        trimmed === CANONICAL_ORGANIZATION_BASE
+    ) {
+        return CANONICAL_ADMIN_CONFIG_LANDING;
     }
     if (trimmed.startsWith("/admin/settings/")) {
-        return `${CANONICAL_SETTINGS_BASE}${trimmed.slice("/admin/settings".length)}`;
+        const normalized = `${CANONICAL_SETTINGS_BASE}${trimmed.slice("/admin/settings".length)}`;
+        return normalized === `${CANONICAL_SETTINGS_BASE}/organization` ? CANONICAL_ADMIN_CONFIG_LANDING : normalized;
     }
-    if (trimmed === CANONICAL_SETTINGS_BASE || trimmed.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) {
+    if (trimmed.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) {
         return trimmed;
     }
     if (trimmed === TRANSITIONAL_ADMIN_V2_BASE || trimmed === "/admin/v2" || trimmed === "/adminv2") {
-        return CANONICAL_SETTINGS_BASE;
+        return CANONICAL_ADMIN_CONFIG_LANDING;
     }
     if (trimmed.startsWith(`${TRANSITIONAL_ADMIN_V2_BASE}/settings/`)) {
-        return `${CANONICAL_SETTINGS_BASE}${trimmed.slice(`${TRANSITIONAL_ADMIN_V2_BASE}/settings`.length)}`;
+        const normalized = `${CANONICAL_SETTINGS_BASE}${trimmed.slice(`${TRANSITIONAL_ADMIN_V2_BASE}/settings`.length)}`;
+        return normalized === `${CANONICAL_SETTINGS_BASE}/organization` ? CANONICAL_ADMIN_CONFIG_LANDING : normalized;
     }
     if (trimmed === `${TRANSITIONAL_ADMIN_V2_BASE}/settings`) {
-        return CANONICAL_SETTINGS_BASE;
+        return CANONICAL_ADMIN_CONFIG_LANDING;
     }
     return trimmed;
 }
@@ -179,6 +196,7 @@ export function normalizeToCanonicalAdminPath(pathname: string): string {
 
     const settingsNormalized = normalizeToCanonicalSettingsPath(trimmed);
     if (
+        settingsNormalized === CANONICAL_ADMIN_CONFIG_LANDING ||
         settingsNormalized === CANONICAL_SETTINGS_BASE ||
         settingsNormalized.startsWith(`${CANONICAL_SETTINGS_BASE}/`)
     ) {
@@ -224,6 +242,7 @@ export function isCanonicalWorkspacePath(pathname: string): boolean {
 
 export function isCanonicalSettingsPath(pathname: string): boolean {
     const p = normalizeToCanonicalAdminPath(pathname.trim());
+    if (p === CANONICAL_ORGANIZATION_BASE) return true;
     if (p === CANONICAL_SETTINGS_BASE || p.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) return true;
     if (p === CANONICAL_ADMIN_CONFIG_LANDING) return true;
     return matchesCanonicalPrefix(pathname, `${CANONICAL_ADMIN_BASE}/settings`);
@@ -301,7 +320,7 @@ export const LAYOUTS_SETTINGS_HREF = SURFACES_SETTINGS_HREF;
 /** Build `/settings/:subpath` for product nav (never `/adminV2/settings/...`). */
 export function adminSettingsSubpathHref(subpath: string): string {
     const trimmed = subpath.trim().replace(/^\//, "").replace(/^settings\/?/, "");
-    if (!trimmed) return ADMIN_SETTINGS_SUBPATH_PREFIX;
+    if (!trimmed || trimmed === "organization") return CANONICAL_ADMIN_CONFIG_LANDING;
     return `${ADMIN_SETTINGS_SUBPATH_PREFIX}/${trimmed}`;
 }
 
@@ -321,29 +340,39 @@ export function canonicalAdminHref(path: string): string {
     if (trimmed.startsWith(TRANSITIONAL_ADMIN_V2_BASE)) {
         const suffix = trimmed.slice(TRANSITIONAL_ADMIN_V2_BASE.length);
         if (suffix === "/settings" || suffix.startsWith("/settings/")) {
-            return `${CANONICAL_SETTINGS_BASE}${suffix.slice("/settings".length)}`;
+            const normalized = `${CANONICAL_SETTINGS_BASE}${suffix.slice("/settings".length)}`;
+            return normalized === CANONICAL_SETTINGS_BASE || normalized === `${CANONICAL_SETTINGS_BASE}/organization`
+                ? CANONICAL_ADMIN_CONFIG_LANDING
+                : normalized;
         }
         return `${CANONICAL_ADMIN_BASE}${suffix}`;
     }
     if (trimmed.startsWith("/admin/v2")) {
         const suffix = trimmed.slice("/admin/v2".length);
         if (suffix === "/settings" || suffix.startsWith("/settings/")) {
-            return `${CANONICAL_SETTINGS_BASE}${suffix.slice("/settings".length)}`;
+            const normalized = `${CANONICAL_SETTINGS_BASE}${suffix.slice("/settings".length)}`;
+            return normalized === CANONICAL_SETTINGS_BASE || normalized === `${CANONICAL_SETTINGS_BASE}/organization`
+                ? CANONICAL_ADMIN_CONFIG_LANDING
+                : normalized;
         }
         return `${CANONICAL_ADMIN_BASE}${suffix}`;
     }
     if (trimmed.startsWith("/adminv2")) {
         const suffix = trimmed.slice("/adminv2".length);
         if (suffix === "/settings" || suffix.startsWith("/settings/")) {
-            return `${CANONICAL_SETTINGS_BASE}${suffix.slice("/settings".length)}`;
+            const normalized = `${CANONICAL_SETTINGS_BASE}${suffix.slice("/settings".length)}`;
+            return normalized === CANONICAL_SETTINGS_BASE || normalized === `${CANONICAL_SETTINGS_BASE}/organization`
+                ? CANONICAL_ADMIN_CONFIG_LANDING
+                : normalized;
         }
         return `${CANONICAL_ADMIN_BASE}${suffix}`;
     }
     if (trimmed.startsWith("/admin/settings/")) {
-        return `${CANONICAL_SETTINGS_BASE}${trimmed.slice("/admin/settings".length)}`;
+        const normalized = `${CANONICAL_SETTINGS_BASE}${trimmed.slice("/admin/settings".length)}`;
+        return normalized === `${CANONICAL_SETTINGS_BASE}/organization` ? CANONICAL_ADMIN_CONFIG_LANDING : normalized;
     }
     if (trimmed === "/admin/settings" || trimmed === "/admin") {
-        return CANONICAL_SETTINGS_BASE;
+        return CANONICAL_ADMIN_CONFIG_LANDING;
     }
     return trimmed;
 }

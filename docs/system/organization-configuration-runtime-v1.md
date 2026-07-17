@@ -9,7 +9,7 @@ superseded_by: [docs/system/organization-configuration-runtime-v2.md]
 # Organization Configuration Runtime V1
 
 **Status:** Superseded by `organization-configuration-runtime-v2.md`. Retained as the V1 contract history.
-**Route:** `/settings/organization`  
+**Route:** `/organization`
 **Reference experience:** frozen Locations Configuration Runtime V1.
 
 The Organization Configuration Runtime is the organization-owned layer above Locations. It defines how configuration areas declare ownership, publish changes, reach Locations, and expose cross-location posture without moving Location-owned truth into the Organization workspace.
@@ -94,7 +94,7 @@ The Organization landing inherits the Locations workspace grammar:
 - no page-local duplicate action system;
 - no Apply dialog without an authoritative provider.
 
-The Settings index remains the compact configuration table of contents. **Organization settings** is the first entry in its Organization chapter; Locations remains a separate owned surface.
+The Organization landing is the configuration entry point. Locations remains a separate owned surface.
 
 ## Locations freeze
 

@@ -22,20 +22,23 @@ function normalizedPathname(pathname: string): string {
 type Crumb = { label: string; href: string | null };
 
 function crumbsForPath(path: string): Crumb[] {
+    if (path === CANONICAL_ADMIN_CONFIG_LANDING) {
+        return [{ label: "Organization", href: null }];
+    }
     const settingsPath =
         path === CANONICAL_ADMIN_CONFIG_LANDING || path.startsWith(`${CANONICAL_ADMIN_CONFIG_LANDING}/`)
             ? path.replace(CANONICAL_ADMIN_CONFIG_LANDING, SETTINGS_ROOT)
             : path;
     if (!settingsPath.startsWith(SETTINGS_ROOT)) {
-        return [{ label: "Settings", href: null }];
+        return [{ label: "Organization", href: null }];
     }
 
     const tail = settingsPath.slice(SETTINGS_ROOT.length);
     if (tail === "" || tail === "/") {
-        return [{ label: "Platform Configuration", href: null }];
+        return [{ label: "Organization", href: null }];
     }
 
-    const base: Crumb[] = [{ label: "Platform Configuration", href: CANONICAL_ADMIN_CONFIG_LANDING }];
+    const base: Crumb[] = [{ label: "Organization", href: CANONICAL_ADMIN_CONFIG_LANDING }];
 
     if (tail.startsWith("/documents/document-fields")) {
         base.push({ label: "Document field definitions", href: null });
@@ -155,7 +158,7 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     const remainder = tail.replace(/^\//, "").replace(/\/$/, "") || "Page";
-    return [{ label: "Settings", href: CANONICAL_ADMIN_CONFIG_LANDING }, { label: remainder, href: null }];
+    return [{ label: "Organization", href: CANONICAL_ADMIN_CONFIG_LANDING }, { label: remainder, href: null }];
 }
 
 function crumbActive(href: string, path: string): boolean {
@@ -171,7 +174,7 @@ export default function SettingsHierarchyBreadcrumb() {
 
     return (
         <nav
-            aria-label="Settings hierarchy"
+            aria-label="Organization configuration hierarchy"
             className="flex flex-wrap items-center gap-1 text-[13px] leading-snug"
             style={{ color: derived.textSecondary }}
         >

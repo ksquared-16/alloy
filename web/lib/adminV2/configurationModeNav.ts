@@ -50,13 +50,6 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         description: "Manage the foundation of your organization.",
         items: [
             {
-                href: settings("organization"),
-                label: "Organization settings",
-                description: "Shared configuration, ownership, inheritance, and location governance.",
-                icon: "organization",
-                testId: "config-mode-nav-organization",
-            },
-            {
                 href: settings("locations"),
                 label: "Locations",
                 description: "Sites, Programs offered, delivery resources, and local schedules.",

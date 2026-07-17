@@ -20,7 +20,7 @@ Locations is feature-frozen after this closeout. Further Locations work is limit
 | Page | Route |
 |------|-------|
 | Settings index | `/settings` |
-| Organization | `/settings/organization` |
+| Organization | `/organization` |
 | Processes | `/settings/processes` |
 | Statuses | `/settings/statuses` |
 | Fields | `/settings/fields` |
