@@ -1,13 +1,14 @@
 ---
 owner: runtime
-status: canonical
+status: superseded
 last_reviewed: 2026-07-17
 supersedes: []
+superseded_by: [docs/system/organization-configuration-runtime-v2.md]
 ---
 
 # Organization Configuration Runtime V1
 
-**Status:** Implemented July 2026.  
+**Status:** Superseded by `organization-configuration-runtime-v2.md`. Retained as the V1 contract history.
 **Route:** `/settings/organization`  
 **Reference experience:** frozen Locations Configuration Runtime V1.
 

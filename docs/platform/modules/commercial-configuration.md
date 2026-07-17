@@ -5,15 +5,15 @@ last_reviewed: 2026-07-12
 supersedes: []
 ---
 
-# Commercial Configuration
+# Commercial Configuration (Compatibility Runtime)
 
-**Status:** ✅ **Commercial Platform V1 — SHIPPED & FROZEN (2026-07-03).** Now spans Programs & Tuition, the unified Catalog (Commercial Products: fees/add-ons/deposits), Commercial & Revenue Categories, and GL Account integration. Canonical architecture: **[Commercial Platform V1](../commercial/commercial-platform-v1.md)**.
+**Status:** ✅ **Commercial Platform V1 — SHIPPED & FROZEN (2026-07-03).** **Programs** is now the operator-facing domain; Commercial remains the internal runtime/route name until a separately authorized module migration. Canonical architecture: **[Commercial Platform V1](../commercial/commercial-platform-v1.md)**.
 
 ---
 
 ## Purpose
 
-Commercial Configuration is the first production consumer of the Configuration Runtime. It owns the business structure of an operator's offering: what programs they run and what they charge for them.
+Commercial Configuration is the first production consumer of the Configuration Runtime. It prices and financially interprets what the organization-owned Programs catalog defines; it does not own Program identity.
 
 Commercial Configuration surfaces feel like "I am configuring my business" — not "I am configuring software."
 
@@ -50,13 +50,13 @@ Implemented via `lib/configRuntime/scope.ts` — `ConfigScope`, `ConfigOwner`, `
 
 **Storage:** `location_program_categories` (existing table, per-site).
 
-**Ownership:** Location. Each site owns its own program list. Org-level program catalog is the union of all site programs, seeded from common defaults (Infant, Toddler, Preschool, Pre-K, School Age).
+**Ownership:** Organization. Programs define a reusable service catalog. Locations choose which Programs they offer.
 
-**Inheritance:** Programs are location-owned — there is no org-level override. Each site configures exactly the programs it offers.
+**Inheritance:** Program identity is organization-owned; Location participation is availability/assignment. Rooms/Delivery Resources, capacity, and schedules are not Program-owned.
 
 **Operator model:** "Which programs does this location offer?" Not "which settings does this location have."
 
-**Backend reused:** `location_program_categories` + `/api/admin/location-program-categories` (GET, POST, PATCH). No new tables.
+**Compatibility backend:** `location_program_categories` + `/api/admin/location-program-categories` (GET, POST, PATCH) currently represent per-Location availability. Organization Configuration Runtime V2 does not migrate this storage or implement the downstream Programs module.
 
 ---
 
@@ -102,13 +102,13 @@ Implemented via `lib/configRuntime/scope.ts` — `ConfigScope`, `ConfigOwner`, `
 - **Accounting** — chart of accounts, revenue recognition
 - **Simulator** — what-if tuition modeling
 
-These are scoped out of V1. Do not build them until Programs & Tuition is stable.
+These are scoped out of V1. Program-owned commercial, funding, and billing **defaults** remain declarations on the reusable service; authoritative pricing, funding, and billing behavior stays with the corresponding domain runtime.
 
 ---
 
 ## Backend gaps
 
-None in V1. The backend for Programs reuses `location_program_categories`. The tuition grid adds `commercial_tuition_rates` — a genuine new domain, not a workaround.
+Commercial V1 is complete on its frozen substrate. The Programs target has one explicit compatibility gap: `location_program_categories` still carries per-Location identity and availability together. A future Programs migration must introduce authoritative organization catalog identity without changing the V2 ownership model. This sprint does not perform that migration. The tuition grid remains in `commercial_tuition_rates`.
 
 The schedule type vocabulary (`childcare_schedule_type` option set) is an org option set today. Future work: per-location schedule offerings. This is deferred.
 

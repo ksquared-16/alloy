@@ -9,21 +9,59 @@
 export type ConfigurationAuthority = "platform" | "organization" | "location";
 export type ConfigurationInheritanceKind = "value" | "availability" | "none";
 export type ConfigurationPublicationMode = "immediate" | "explicit";
+export type ConfigurationPublicationStatus =
+    | "live_on_save"
+    | "publish_required"
+    | "published"
+    | "draft"
+    | "not_assessed";
 export type ConfigurationDistributionMode = "inherit" | "apply" | "assignment" | "none";
+export type ConfigurationOverrideState = "available" | "not_allowed" | "not_assessed";
+export type ConfigurationHealthState = "ready" | "attention" | "not_assessed";
+export type OrganizationConfigurationDomainIcon =
+    | "locations"
+    | "programs"
+    | "access"
+    | "communications"
+    | "data-model"
+    | "business-processes"
+    | "surfaces"
+    | "automation"
+    | "intelligence";
 
 export type OrganizationConfigurationDomain = {
     key: string;
+    /** Compatibility runtime/route noun when operator language has moved forward. */
+    internalRuntimeKey?: string;
     label: string;
     description: string;
     href: string;
+    icon: OrganizationConfigurationDomainIcon;
+    publisherLabel: string;
     configurationOwner: string;
     runtimeOwner: string;
+    consumers: readonly string[];
     inheritance: {
         kind: ConfigurationInheritanceKind;
         path: readonly ConfigurationAuthority[];
+        label: string;
     };
-    publicationMode: ConfigurationPublicationMode;
+    publication: {
+        mode: ConfigurationPublicationMode;
+        status: ConfigurationPublicationStatus;
+        label: string;
+    };
+    override: {
+        state: ConfigurationOverrideState;
+        label: string;
+    };
+    health: {
+        state: ConfigurationHealthState;
+        label: string;
+        detail: string;
+    };
     distributionMode: ConfigurationDistributionMode;
+    ownedConfiguration?: readonly string[];
     /** Registered only after the domain has a durable, auditable apply implementation. */
     applyProviderKey?: string;
 };
@@ -88,78 +126,227 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
     {
         key: "locations",
         label: "Locations",
-        description: "Sites and the operational objects each site owns.",
+        description: "Consumers of organization configuration and owners of local delivery resources.",
         href: "/settings/locations",
+        icon: "locations",
+        publisherLabel: "Organization",
         configurationOwner: "Locations",
         runtimeOwner: "Location and operational runtimes",
-        inheritance: { kind: "none", path: ["organization", "location"] },
-        publicationMode: "immediate",
+        consumers: ["Location Runtime", "Operational Runtime"],
+        inheritance: {
+            kind: "none",
+            path: ["organization", "location"],
+            label: "Locations own local delivery configuration",
+        },
+        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        override: { state: "not_allowed", label: "Local objects are authoritative" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Location readiness remains authoritative in Locations.",
+        },
         distributionMode: "none",
+        ownedConfiguration: ["Sites", "Programs offered", "Rooms and delivery resources", "Local schedules"],
+    },
+    {
+        key: "programs",
+        internalRuntimeKey: "commercial",
+        label: "Programs",
+        description: "Reusable service catalog published by the organization for every business vertical.",
+        href: "/settings/commercial",
+        icon: "programs",
+        publisherLabel: "Organization",
+        configurationOwner: "Programs",
+        runtimeOwner: "Programs and Commercial Runtime",
+        consumers: ["Locations", "Enrollment", "Commercial", "Billing"],
+        inheritance: {
+            kind: "availability",
+            path: ["organization", "location"],
+            label: "Organization publishes; Locations choose what they offer",
+        },
+        publication: { mode: "explicit", status: "publish_required", label: "Publish required" },
+        override: { state: "available", label: "Locations control availability, not Program identity" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Programs will report health from its authoritative catalog.",
+        },
+        distributionMode: "apply",
+        ownedConfiguration: [
+            "Catalog and categories",
+            "Eligibility and licensing requirements",
+            "Required resource types",
+            "Commercial, funding, and billing defaults",
+        ],
     },
     {
         key: "access",
         label: "Access",
-        description: "Organization roles with location and department assignments.",
+        description: "Organization roles, permissions, and assignments to operational contexts.",
         href: "/settings/users-roles",
+        icon: "access",
+        publisherLabel: "Organization",
         configurationOwner: "Access",
         runtimeOwner: "Authorization",
-        inheritance: { kind: "availability", path: ["organization", "location"] },
-        publicationMode: "immediate",
+        consumers: ["Locations", "Departments", "All operator runtimes"],
+        inheritance: {
+            kind: "availability",
+            path: ["organization", "location"],
+            label: "Roles are shared; assignments choose where they apply",
+        },
+        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        override: { state: "available", label: "Assignments vary by location or department" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Access health remains owned by the Access domain.",
+        },
         distributionMode: "assignment",
     },
     {
         key: "communications",
         label: "Communications",
-        description: "Shared channels, templates, and send rules with local availability.",
+        description: "Shared channels, templates, sender identity, and delivery rules.",
         href: "/settings/communications",
+        icon: "communications",
+        publisherLabel: "Organization",
         configurationOwner: "Communications",
-        runtimeOwner: "Communications",
-        inheritance: { kind: "value", path: ["platform", "organization", "location"] },
-        publicationMode: "immediate",
+        runtimeOwner: "Communications Runtime",
+        consumers: ["Locations", "Business Processes", "Operators"],
+        inheritance: {
+            kind: "value",
+            path: ["platform", "organization", "location"],
+            label: "Organization values flow to Locations unless an override is allowed",
+        },
+        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        override: { state: "available", label: "Local differences are domain-controlled" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Sender and delivery health remains owned by Communications.",
+        },
         distributionMode: "inherit",
     },
     {
         key: "data-model",
-        label: "Data model",
-        description: "Organization vocabulary shared by records and configured surfaces.",
+        label: "Data Model",
+        description: "Organization vocabulary shared by records, processes, and configured surfaces.",
         href: "/settings/entities",
+        icon: "data-model",
+        publisherLabel: "Organization",
         configurationOwner: "Data Model",
-        runtimeOwner: "Record and entity runtimes",
-        inheritance: { kind: "value", path: ["platform", "organization"] },
-        publicationMode: "immediate",
+        runtimeOwner: "Record and Entity Runtimes",
+        consumers: ["Records", "Business Processes", "Surfaces"],
+        inheritance: {
+            kind: "value",
+            path: ["platform", "organization"],
+            label: "Platform definitions may be specialized by the organization",
+        },
+        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        override: { state: "not_allowed", label: "Shared organization vocabulary" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Definition health remains owned by Data Model.",
+        },
         distributionMode: "inherit",
+        ownedConfiguration: ["Entities", "Fields", "Statuses", "Option sets and relationships"],
     },
     {
-        key: "operations",
-        label: "Operations",
-        description: "Processes, operating plans, and automation shared by the organization.",
+        key: "business-processes",
+        label: "Business Processes",
+        description: "Reusable stages, Work Views, operating plans, outcomes, and process actions.",
         href: "/settings/processes",
-        configurationOwner: "Processes and Automation",
+        icon: "business-processes",
+        publisherLabel: "Organization",
+        configurationOwner: "Business Processes",
         runtimeOwner: "Business Process Runtime",
-        inheritance: { kind: "availability", path: ["platform", "organization", "location"] },
-        publicationMode: "immediate",
+        consumers: ["Locations", "Workspaces", "Operational Records"],
+        inheritance: {
+            kind: "availability",
+            path: ["platform", "organization", "location"],
+            label: "Organization defines processes; operational contexts choose availability",
+        },
+        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        override: { state: "available", label: "Availability may vary by operational context" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Process readiness remains owned by Business Processes.",
+        },
         distributionMode: "assignment",
+        ownedConfiguration: ["Stages and Work Views", "Operating plans", "Outcomes and requirements"],
     },
     {
         key: "surfaces",
         label: "Surfaces",
-        description: "Published presentation used by queues, rows, cards, and Focus Panel.",
+        description: "Published presentation for queues, rows, cards, and Focus Panel.",
         href: "/settings/surfaces",
+        icon: "surfaces",
+        publisherLabel: "Organization",
         configurationOwner: "Surfaces",
         runtimeOwner: "Presentation Runtime",
-        inheritance: { kind: "value", path: ["platform", "organization"] },
-        publicationMode: "explicit",
+        consumers: ["Workspaces", "Queues", "Focus Panel"],
+        inheritance: {
+            kind: "value",
+            path: ["platform", "organization"],
+            label: "Published organization surfaces drive presentation",
+        },
+        publication: { mode: "explicit", status: "publish_required", label: "Publish required" },
+        override: { state: "not_allowed", label: "Assignments select a published surface" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Surface validity remains owned by Experience Builder.",
+        },
         distributionMode: "inherit",
     },
     {
-        key: "commercial",
-        label: "Commercial",
-        description: "Organization defaults with location-specific availability and overrides.",
-        href: "/settings/commercial",
-        configurationOwner: "Commercial Configuration",
-        runtimeOwner: "Commercial and consumption runtimes",
-        inheritance: { kind: "value", path: ["organization", "location"] },
-        publicationMode: "immediate",
+        key: "automation",
+        label: "Automation",
+        description: "Reusable workflows, triggers, and registered actions.",
+        href: "/admin/workflows",
+        icon: "automation",
+        publisherLabel: "Organization",
+        configurationOwner: "Automation",
+        runtimeOwner: "Workflow Runtime",
+        consumers: ["Business Processes", "Records", "Communications"],
+        inheritance: {
+            kind: "availability",
+            path: ["platform", "organization", "location"],
+            label: "Organization automation is enabled where it should run",
+        },
+        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        override: { state: "available", label: "Enablement and parameters may vary by context" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Execution health remains owned by Automation.",
+        },
+        distributionMode: "assignment",
+    },
+    {
+        key: "operational-intelligence",
+        label: "Operational Intelligence",
+        description: "Shared calculations, metrics, targets, and indicator placement.",
+        href: "/settings/calculations",
+        icon: "intelligence",
+        publisherLabel: "Organization",
+        configurationOwner: "Operational Intelligence",
+        runtimeOwner: "Metrics Runtime",
+        consumers: ["Workspaces", "Business Processes", "Analytics"],
+        inheritance: {
+            kind: "value",
+            path: ["platform", "organization", "location"],
+            label: "Definitions are shared; targets may vary by context",
+        },
+        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        override: { state: "available", label: "Targets may vary by operational context" },
+        health: {
+            state: "not_assessed",
+            label: "Not assessed",
+            detail: "Calculation health remains owned by Operational Intelligence.",
+        },
         distributionMode: "inherit",
     },
 ] as const;
@@ -171,7 +358,11 @@ export function organizationConfigurationDomains(): readonly OrganizationConfigu
 export function organizationConfigurationDomain(
     domainKey: string,
 ): OrganizationConfigurationDomain | null {
-    return CONFIGURATION_DOMAINS.find((domain) => domain.key === domainKey) ?? null;
+    return (
+        CONFIGURATION_DOMAINS.find(
+            (domain) => domain.key === domainKey || domain.internalRuntimeKey === domainKey,
+        ) ?? null
+    );
 }
 
 export function canApplyOrganizationConfiguration(

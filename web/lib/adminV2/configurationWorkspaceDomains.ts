@@ -103,7 +103,7 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
             {
                 href: settings("locations"),
                 label: "Locations",
-                description: "Sites, rooms, programs, and schedules per location.",
+                description: "Sites, Programs offered, delivery resources, and local schedules.",
             },
             {
                 href: settings("users-roles"),
@@ -223,13 +223,13 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     },
     {
         id: "commercial",
-        label: "Commercial",
-        description: "Programs, tuition, and business rates.",
+        label: "Programs",
+        description: "Reusable services and their organization defaults.",
         items: [
             {
                 href: "/settings/commercial",
-                label: "Programs & tuition",
-                description: "Programs, offerings, tuition rates, catalog, policies, and the simulator.",
+                label: "Programs",
+                description: "Service catalog, categories, eligibility, requirements, and defaults.",
             },
         ],
     },

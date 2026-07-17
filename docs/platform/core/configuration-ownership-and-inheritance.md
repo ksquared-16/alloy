@@ -7,11 +7,11 @@ supersedes: []
 
 # Configuration Ownership & Inheritance — Core Platform Doctrine
 
-**Status:** Ratified core platform doctrine — Organization Configuration Runtime V1
+**Status:** Ratified core platform doctrine — Organization Configuration Runtime V2
 **Date:** 2026-06-30
 **Sits beside:** Business Process · Operational Truth · Entity Model · Record System · [Commercial Operating Model](commercial-operating-model.md)
 **Extends (does not replace):** `docs/system/configuration-ownership-doctrine.md` (surface-ownership matrix) and `docs/system/configuration-runtime-v1.md` (the frozen settings shell). This doctrine adds the **inheritance + override** dimension those lack, and the **four-owner** model.
-**Mandate:** Define how every configurable object in Alloy is *owned*, *inherited*, and *overridden* — one pattern for Financials, Communications, Branding, Scheduling, Workflows, Policies, Access, and every future module. Runtime contract: `../../system/organization-configuration-runtime-v1.md`.
+**Mandate:** Define how every configurable object in Alloy is *owned*, *inherited*, and *overridden* — one pattern for Financials, Communications, Branding, Scheduling, Workflows, Policies, Access, and every future module. Runtime contract: `../../system/organization-configuration-runtime-v2.md`.
 
 > **The discovery:** the Commercial Configuration mockup didn't expose a Financials problem. It exposed that Alloy has no canonical answer to **"who owns configuration, and how does it inherit?"** Pricing is just the first object to need it. Get this right and you've solved it for every configurable object.
 
@@ -24,7 +24,7 @@ The frozen surface-ownership matrix and this four-owner model are complementary:
 
 “Configuration owner” is the bridge: it must equal the authoring home in the frozen surface matrix. The other three owners are responsibility lenses, not additional edit surfaces. Therefore the four-owner model does not permit duplicate authoring or weaken the one-system-of-record rule.
 
-Organization Runtime V1 implements the shared declaration, platform → organization → location value resolution, provider-gated distribution plan, and cross-location posture. Individual domains still own their payloads and must register authoritative read/apply behavior before the organization surface claims a resolved or applied state.
+Organization Runtime V2 implements the shared declaration, publisher/consumer card model, platform → organization → location value resolution, provider-gated distribution plan, and cross-location posture. Individual domains still own their payloads and must register authoritative read/apply behavior before the organization surface claims a resolved or applied state.
 
 ---
 
@@ -65,7 +65,7 @@ Every configurable object has four owners. They are usually **different**, and c
 |---|---|---|---|
 | **Commercial owner** | What gives it business meaning / what does it attach to commercially? | The **Program** (it's *that program's* tuition) | n/a (a program *is* the commercial unit) |
 | **Operational owner** | Where is it delivered / executed? | n/a (price isn't delivered) | The **Site / Room** (where children attend) |
-| **Configuration owner** | Where is it authored, and along what scope does it inherit? | **Commercial Config**, scope `org→site→program→room` | **Programs catalog** (today: Locations), scope `org→site` |
+| **Configuration owner** | Where is it authored, and along what scope does it inherit? | **Commercial Config**, scope `org→site→program→room` | **Organization Programs catalog**, with Location availability |
 | **Runtime owner** | What consumes it to produce behavior? | The **Consumption Resolver / billing** | **Enrollment, scheduling, attendance** |
 
 **Why four, not one:** the operator authors tuition in *Commercial Config* (configuration owner), but it belongs to a *Program* (commercial owner), is delivered at a *Room* (operational owner), and is consumed by the *resolver* (runtime owner). Each owner answers a different design question; a page must know which it is for every object it shows.
@@ -79,13 +79,15 @@ Every configurable object has four owners. They are usually **different**, and c
 This is the rule the mockup violated by implying Financial Configuration would recreate Programs. It must **consume** them.
 
 - **Commercial Configuration** *owns*: Tuition, Funding, Fees & Add-Ons, Financial Policies, Accounting mapping. *References*: Programs, Rooms, Locations.
-- **Locations / Operations** *owns*: Sites, Rooms, (today) Program categories, Schedule templates, Capacity rules. *References*: the tuition/programs summary (read-only).
+- **Locations / Operations** *owns*: Sites, Programs offered, Rooms/Delivery Resources, local Schedule templates, Capacity rules. *References*: Program identity and commercial defaults (read-only).
 - **Communications** *owns*: channels, templates, send rules. **Branding** *owns*: tokens/assets. **Automation** *owns*: Workflows, Actions. **Admin** *owns*: Users, Roles, Access.
 
 **Reference contract:** a referencing surface shows the object's identity + a *"managed in <home> ↗"* deep link, never an editor. A program's page shows its tuition (read-only, "managed in Commercial Config"); the tuition grid shows its program (read-only, "managed in Programs").
 
-### The one ownership shift this doctrine implies
-Programs are **site-scoped** today (`location_program_categories`, `UNIQUE(org_id, location_id, key)`). The ownership model wants **Program identity to be org-level** (one "Toddler" catalog entry) that is **offered at** sites (availability) and whose tuition is authored in Commercial Config (value). Target: a `programs` catalog at org scope + per-site availability; current per-site categories become the availability layer. *(Design note, not a migration here.)*
+### Programs ownership shift
+Organization Runtime V2 ratifies **Program identity as organization-owned** (one "Toddler", "Personal Training", "Physical Therapy", or "Oil Change" catalog entry) and **offered at** Locations through availability. Current `location_program_categories` rows remain a compatibility representation of per-Location availability until a separate Programs migration. This runtime change does not migrate storage.
+
+Programs do not own Rooms/Delivery Resources, capacity, or schedules. A Location chooses what it offers; its resources deliver those Programs; resource and operational runtimes own capacity and scheduling truth.
 
 ---
 
@@ -157,7 +159,7 @@ Every configurable value, everywhere in Alloy, shows:
 ### 5b. Beyond the locked/unlock example (improvements)
 The prompt's "🔒 locked → unlock → select locations → override" is the seed. Generalized and improved:
 - **Provenance everywhere** (not just on override) — inheriting values say where they came from.
-- **Compare-across-scopes view** — a matrix (rows = items, cols = sites) showing inherited vs overridden cells; the home for fleet operators.
+- **Compare-across-scopes view** — a matrix (rows = items, cols = sites) showing inherited vs overridden cells; the home for multi-location operators.
 - **Cascade-impact preview** — "Changing the org default affects 2 sites and 240 enrollments" before save.
 - **Override hygiene** — count overrides ("3 sites differ"), one-click *reset to inherited*, warn on override sprawl.
 - **Availability == the same control** — toggling "offered at North Campus" is the availability face of the same Inheritance Control.

@@ -82,6 +82,7 @@ Cards communicate **state, not schema** (premise 3 of `alloy-visual-language.md`
 - **List card** — ranked or ordered rows with a per-row action (Attention, closures, activity, programs), divided by hairlines, not boxed individually.
 - **Editor card** — inline fields plus a live consequence sentence plus one save.
 - **Readiness region** — an explained percentage/progress bar plus the authoritative per-area states that reconcile it.
+- **Configuration Domain Card** — a publisher-landing object with identity, publication, consumers, inheritance, overrides, and health. A responsive object grid is allowed here because each card is a navigable configuration object, not a metric widget; cards need not be equal height.
 
 Sections are **structured rows inside one card**, not a mosaic of separate cards. The doctrine is: prefer `border-b` rows within a section over a grid of boxes. A configuration workspace is a small number of calm sections, not a wall of tiles.
 

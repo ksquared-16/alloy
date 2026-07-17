@@ -16,10 +16,19 @@ const applyDomain: OrganizationConfigurationDomain = {
     label: "Schedule patterns",
     description: "Reusable weekly patterns.",
     href: "/settings/schedules",
+    icon: "business-processes",
+    publisherLabel: "Organization",
     configurationOwner: "Scheduling",
     runtimeOwner: "Scheduling",
-    inheritance: { kind: "value", path: ["organization", "location"] },
-    publicationMode: "explicit",
+    consumers: ["Locations"],
+    inheritance: {
+        kind: "value",
+        path: ["organization", "location"],
+        label: "Organization publishes; Locations consume",
+    },
+    publication: { mode: "explicit", status: "published", label: "Published" },
+    override: { state: "available", label: "Locations may differ" },
+    health: { state: "ready", label: "Ready", detail: "Ready to apply." },
     distributionMode: "apply",
     applyProviderKey: "schedule-pattern-apply-v1",
 };
@@ -29,11 +38,29 @@ describe("Organization Configuration Runtime", () => {
         const domains = organizationConfigurationDomains();
         expect(new Set(domains.map((domain) => domain.key)).size).toBe(domains.length);
         expect(domains.every((domain) => domain.configurationOwner.trim().length > 0)).toBe(true);
+        expect(domains.map((domain) => domain.key)).toEqual([
+            "locations",
+            "programs",
+            "access",
+            "communications",
+            "data-model",
+            "business-processes",
+            "surfaces",
+            "automation",
+            "operational-intelligence",
+        ]);
         expect(organizationConfigurationDomain("locations")?.distributionMode).toBe("none");
-        expect(organizationConfigurationDomain("commercial")?.inheritance.path).toEqual([
+        expect(organizationConfigurationDomain("programs")?.inheritance.path).toEqual([
             "organization",
             "location",
         ]);
+        expect(organizationConfigurationDomain("commercial")?.key).toBe("programs");
+        expect(organizationConfigurationDomain("programs")?.consumers).toContain("Locations");
+        expect(
+            organizationConfigurationDomain("programs")?.ownedConfiguration?.every(
+                (item) => !/capacity|rooms?/i.test(item),
+            ),
+        ).toBe(true);
     });
 
     it("resolves the nearest explicitly present layer without losing falsy values", () => {
@@ -166,13 +193,13 @@ describe("Organization Configuration Runtime", () => {
                     {
                         locationId: "loc-a",
                         locationLabel: "Downtown",
-                        domainKey: "commercial",
+                        domainKey: "programs",
                         posture: "inherited",
                     },
                     {
                         locationId: "loc-b",
                         locationLabel: "North",
-                        domainKey: "commercial",
+                        domainKey: "programs",
                         posture: "not_assessed",
                     },
                 ],

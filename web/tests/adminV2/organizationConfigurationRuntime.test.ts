@@ -17,6 +17,9 @@ describe("Organization Configuration Runtime", () => {
             "Locations",
         ]);
         expect(organization?.items[0]?.href).toBe("/settings/organization");
+        expect(CONFIGURATION_MODE_NAV_GROUPS.flatMap((group) => group.items).find(
+            (item) => item.href === "/settings/commercial",
+        )?.label).toBe("Programs");
         expect(read("app/adminV2/settings/page.tsx")).toContain("SettingsConfigurationHub");
     });
 
@@ -30,18 +33,34 @@ describe("Organization Configuration Runtime", () => {
         expect(page).not.toContain("createBrowserClient");
     });
 
-    it("presents ownership, publication, inheritance, and provider-gated distribution", () => {
+    it("presents the premium runtime composition without a settings table", () => {
         const page = read(
             "components/adminV2/settings/organization/OrganizationConfigurationPage.tsx",
         );
-        expect(page).toContain("Shared configuration");
-        expect(page).toContain("Publication");
-        expect(page).toContain("Apply to locations");
-        expect(page).toContain("Configuration posture not assessed");
-        expect(page).toContain("Apply to locations stays hidden");
+        expect(page).toContain("organization-hero");
+        expect(page).toContain("Configuration health");
+        expect(page).toContain("Configuration domains");
+        expect(page).toContain("Consumers");
+        expect(page).toContain("Distribution");
+        expect(page).toContain("ConfigDomainCard");
         expect(page).toContain("ConfigObjectHeader");
         expect(page).toContain("ConfigWorkspaceCard");
+        expect(page).toContain("grid items-start");
+        expect(page).not.toContain("organization-shared-configuration");
+        expect(page).not.toContain("<table");
         expect(page).not.toContain("ConfigApplyToDialog");
+    });
+
+    it("uses the reusable domain card to show the complete runtime object contract", () => {
+        const card = read(
+            "components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard.tsx",
+        );
+        expect(card).toContain('data-config-object="domain"');
+        for (const concern of ["Publisher", "Consumers", "Inheritance", "Overrides", "Health"]) {
+            expect(card).toContain(concern);
+        }
+        expect(card).toContain("domain.publication.label");
+        expect(card).toContain("domain.ownedConfiguration");
     });
 
     it("does not modify the frozen Locations implementation to host organization behavior", () => {

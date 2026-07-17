@@ -22,6 +22,8 @@ Offerings are **operational primitives** — they describe what a family is enro
 
 **Programs domain owns offerings.** Commercial consumes them.
 
+Programs are organization-owned reusable services. Locations choose which Programs they offer. Rooms or other Delivery Resources may deliver a Program, but they are not children owned by that Program.
+
 ```
 Programs
 └── Program (key: "infant", "toddler", ...)
@@ -63,16 +65,16 @@ Offerings are **org-level per program_key**. There is no per-location offering v
 |---|---|
 | **Commercial** | Rates attach to offering_id + cadence_key |
 | **Enrollment** (planned) | Families enroll into a specific offering |
-| **Scheduling** (planned) | Capacity is tracked per offering |
+| **Scheduling** (planned) | Uses offering identity for demand and assignment; capacity remains resource-owned |
 | **Attendance** (planned) | Expected days/hours derived from offering |
 | **Analytics** (planned) | Revenue and occupancy reporting |
 | **AI** (planned) | Wait-list placement, demand forecasting |
 
-## Rooms
+## Rooms and Delivery Resources
 
-Rooms are **operational children of programs**, not of offerings. A Toddler room belongs to the Toddler program for scheduling and headcount. Room assignment does not affect pricing — tuition is set at the offering level.
+Rooms are **Location-owned Delivery Resources**, not Program containers. A resource may be assigned to deliver one or more Programs for scheduling and operational execution. That assignment does not move resource identity, capacity, or scheduling ownership into Programs and does not affect pricing — commercial defaults remain attached to the Program/Offering model.
 
-Room management lives in the Locations surface.
+Resource management, capacity, and local scheduling live in the Locations and operational runtimes.
 
 ## V1 → V2 migration path
 

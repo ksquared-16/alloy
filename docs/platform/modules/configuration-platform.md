@@ -88,6 +88,7 @@ The Configuration Runtime is the platform-owned layer that sits beneath all conf
 | Inheritance resolution | `resolveInherited()` in scope.ts | Commercial tuition rates |
 | Config workspace layout | `lib/adminV2/settingsPageLayout.ts` | All settings surfaces |
 | Configuration workspace domains | `lib/adminV2/configurationWorkspaceDomains.ts` | Settings index, nav |
+| Configuration Domain Card | `components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard.tsx` | Organization and future publisher surfaces |
 
 **Extraction rule:** Only proven primitives move here. A primitive is proven when it appears in two or more independent configuration domains. Do not move Commercial-specific patterns here prematurely.
 
@@ -103,13 +104,15 @@ The Configuration Runtime is the platform-owned layer that sits beneath all conf
 
 Future domains inherit the Locations experience grammar and consume the relevant control-plane primitives proven by Commercial. These are complementary references, not competing implementations.
 
-### Organization Configuration Runtime
+### Organization Configuration Runtime V2
 
-The Organization Configuration Runtime is the organization-owned layer above Locations. Its landing is `/settings/organization`; its implementation contract is `../../system/organization-configuration-runtime-v1.md`.
+The Organization Configuration Runtime is the organization-owned publishing layer above Locations. Its landing is `/settings/organization`; its frozen implementation contract is `../../system/organization-configuration-runtime-v2.md`.
 
 It owns the reusable control contract, not domain payloads:
 
 - one system-of-record home and configuration owner per area;
+- Organization publishes reusable configuration and Locations consume it;
+- reusable Configuration Domain Cards expose identity, publication, consumers, inheritance, overrides, and health;
 - platform → organization → location value resolution with explicit value presence;
 - availability/assignment kept distinct from value inheritance;
 - confirmed-save vs explicit-publish behavior;
@@ -120,6 +123,10 @@ It owns the reusable control contract, not domain payloads:
 Domains keep their authoritative tables, validation, mutation paths, and runtime consumers. No generic JSON configuration store sits between Organization Runtime and those systems.
 
 **Apply is not inheritance.** Inherited values continue to resolve from their owner. Apply durably creates or updates Location-owned objects through a registered domain provider. The action remains hidden until that provider can return an audit id, the authoritative published revision, and a result for every selected Location.
+
+The frozen registry contains Locations, Programs, Access, Communications, Data Model, Business Processes, Surfaces, Automation, and Operational Intelligence. Automation and Operational Intelligence remain first-class because the ownership matrix already gives each a distinct owner.
+
+**Programs** is operator language for the reusable service catalog. The `/settings/commercial` route and Commercial Runtime names may remain internal compatibility details. Locations choose Programs offered and own Rooms/Delivery Resources and local schedules; resource/runtime systems own capacity. Organization Runtime V2 does not implement or migrate those downstream domains.
 
 Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
 
@@ -146,7 +153,7 @@ The Settings index (`/settings`) is a **compact configuration table of contents*
 | Organization | Organization settings, Locations, Access, Communications |
 | Data Model | Entities, Fields, Statuses, Operational Calculations |
 | Operations | Processes, Surfaces, Automation |
-| Business | Commercial |
+| Business | Programs (`/settings/commercial` compatibility route) |
 
 **Presentation primitives:** `ConfigurationSection`, `ConfigurationSectionItem`, `config-platform-*` CSS in `configurationRuntime.css`. IA source: `lib/adminV2/configurationModeNav.ts`.
 

@@ -30,7 +30,7 @@ Locations is feature-frozen after this closeout. Further Locations work is limit
 
 Future surfaces (Surfaces, Operational Intelligence, Automation) inherit the same shell — no page-specific layout hacks.
 
-Organization Configuration Runtime owns shared ownership, inheritance, publication, distribution, and cross-location governance contracts above Locations. See `organization-configuration-runtime-v1.md`.
+Organization Configuration Runtime V2 owns the frozen publisher/consumer, domain-card, inheritance, publication, distribution, and cross-location governance contracts above Locations. See `organization-configuration-runtime-v2.md`.
 
 ## Shell geometry (frozen)
 
@@ -58,7 +58,7 @@ The `/settings` landing uses a **compact context row** only:
 
 | Surface | Owns |
 |---------|------|
-| **Locations** | Campuses, programs, rooms, and schedule templates |
+| **Locations** | Campuses, Programs offered, Rooms/Delivery Resources, and local schedule templates |
 | **Fields** | Canonical data definitions |
 | **Statuses** | Status vocabulary |
 | **Processes** | Behavior — stages, Work Views (including catch-all views with empty `filters_v1`), operating plan, process actions |
@@ -97,7 +97,7 @@ The frozen Locations surface includes:
 - organization landing and first-class Location selector;
 - object hero and owned-concern tabs;
 - two-row Overview composition (operational glance + explained readiness; attention + owned capabilities);
-- Program, Room, and Schedule master/detail with distinct create, view, and edit modes;
+- Program-offering, Room/Delivery Resource, and Schedule master/detail with distinct create, view, and edit modes;
 - Tour Window create/edit, Placement Business Process + Stage ranking, and location Access editing;
 - shell-owned contextual actions, BOS assistance through the same boundaries, and inline actions attached to their affected object;
 - authoritative mutation confirmation plus local summary/readiness updates and hard-refresh persistence.

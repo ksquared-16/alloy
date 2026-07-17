@@ -73,6 +73,9 @@ A per-object or per-section rollup of substrate resolution status into a single 
 ### Configuration Object List
 The set of object rows within the Sidebar (or a grid, for a no-selection tab). Each row carries object identity + status + a one-line derived signal ("Holds 11 · 2 open"), and marks incomplete objects ("Needs setup") honestly.
 
+### Configuration Domain Card
+The publisher-landing object for one configuration domain. It carries domain identity, one operator home, publisher, publication status, named consumers, inheritance posture, override posture, and operational health. Cards are responsive, navigable runtime objects and may vary naturally in height; they are not dashboard metrics. The canonical implementation is the Organization Configuration Runtime V2.
+
 ### Configuration Status Badge
 The object's active/inactive (or domain-equivalent) state as a soft, dotted chip. Calm, small, meaningful — Bend-Pine for good/active, Stone for inactive, ember reserved for problem states.
 
