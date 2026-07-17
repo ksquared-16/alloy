@@ -41,7 +41,12 @@ const nextConfig: NextConfig = {
   typescript: {
     /** Production build typecheck — app + API routes only (excludes tests/scripts). */
     tsconfigPath: "./tsconfig.build.json",
-    /** Local cert loops may skip the redundant build-time pass only after standalone typechecks succeed. */
+    /**
+     * Opt-in escape hatch for the local certification loop, which rebuilds the production bundle
+     * repeatedly and validates types out-of-band via `tsc --noEmit`. Setting SKIP_BUILD_TYPECHECK=1
+     * skips `next build`'s redundant in-build typecheck to shave minutes per iteration. OFF by default,
+     * so CI and every normal build still fail on type errors.
+     */
     ignoreBuildErrors: process.env.SKIP_BUILD_TYPECHECK === "1",
   },
   turbopack: {
