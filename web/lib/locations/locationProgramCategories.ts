@@ -14,6 +14,15 @@ export type LocationProgramCategoryRow = {
     sort_order?: number | null;
     is_active?: boolean | null;
     metadata?: Record<string, unknown> | null;
+    /** Null on legacy local-only compatibility rows. */
+    program_id?: string | null;
+    /** Published Organization revision consumed by this Location. */
+    program_revision_id?: string | null;
+    configuration_consumption_id?: string | null;
+    /** The only Program identity-adjacent value Locations may override in V1. */
+    local_description_override?: string | null;
+    /** Location-owned evidence required for local readiness. */
+    local_authorization_evidence?: string | null;
 };
 
 export type LocationProgramCategorySelectOption = {

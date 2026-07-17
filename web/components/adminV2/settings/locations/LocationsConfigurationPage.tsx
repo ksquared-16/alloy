@@ -29,7 +29,6 @@ import {
     LocationPlacementPanel,
     LocationToursPanel,
 } from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
-import LocationProgramCreatePanel from "@/components/adminV2/settings/locations/LocationProgramCreatePanel";
 import { LocationIdentityFactsRow } from "@/components/adminV2/settings/locations/LocationIdentityFactsRow";
 import { LocationOverviewSurface } from "@/components/adminV2/settings/locations/LocationOverviewSurface";
 import { LocationsCommandRailActions } from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
@@ -63,7 +62,6 @@ export default function LocationsConfigurationPage({
     const { canMutate } = useAdminAuth();
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
-    const [creatingProgram, setCreatingProgram] = useState(false);
     const [creatingRoom, setCreatingRoom] = useState(false);
     const [creatingSchedule, setCreatingSchedule] = useState(false);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
@@ -96,7 +94,6 @@ export default function LocationsConfigurationPage({
         selectedSite,
         createSiteLocation,
         createRoomUnit,
-        createProgramCategory,
         patchLocation,
         patchProgramCategory,
         roomCapacitySummaryForSite,
@@ -253,7 +250,6 @@ export default function LocationsConfigurationPage({
         setSelectedId(locationId);
         setEditingSite(false);
         setCreatingSite(false);
-        setCreatingProgram(false);
         setCreatingRoom(false);
         setCreatingSchedule(false);
         if (tab === "tours") setToursKeepAlive(true);
@@ -265,7 +261,6 @@ export default function LocationsConfigurationPage({
     const returnToLocations = () => {
         setSelectedId(null);
         setEditingSite(false);
-        setCreatingProgram(false);
         setCreatingRoom(false);
         setCreatingSchedule(false);
         setActiveTab("overview");
@@ -277,7 +272,6 @@ export default function LocationsConfigurationPage({
             if (!selectedSite) return;
             setActiveTab(tab);
             setEditingSite(false);
-            setCreatingProgram(false);
             setCreatingRoom(false);
             setCreatingSchedule(false);
             if (tab === "tours") setToursKeepAlive(true);
@@ -305,7 +299,6 @@ export default function LocationsConfigurationPage({
         if (!selectedSite || !canMutate) return;
         setActiveTab("rooms");
         setEditingSite(false);
-        setCreatingProgram(false);
         setCreatingSchedule(false);
         setCreatingRoom(true);
         setError(null);
@@ -314,14 +307,8 @@ export default function LocationsConfigurationPage({
 
     const addProgram = useCallback(() => {
         if (!selectedSite || !canMutate) return;
-        setActiveTab("programs");
-        setEditingSite(false);
-        setCreatingRoom(false);
-        setCreatingSchedule(false);
-        setCreatingProgram(true);
-        setError(null);
-        router.replace(locationWorkspaceHref(selectedSite.id, "programs"));
-    }, [canMutate, router, selectedSite, setError]);
+        router.push("/settings/commercial/programs");
+    }, [canMutate, router, selectedSite]);
 
     const firstRoomNeedingCapacityId = useMemo(() => {
         const match = selectedRooms.find((room) => !readLocationMetadataPresentation(room.metadata).capacity);
@@ -442,29 +429,13 @@ export default function LocationsConfigurationPage({
                     canMutate={canMutate}
                     onSave={patchProgramCategory}
                     programs={selectedPrograms}
-                    selectedProgramId={creatingProgram ? null : effectiveProgramId}
+                    selectedProgramId={effectiveProgramId}
                     onSelectProgram={(programId) => {
                         setSelectedProgramId(programId);
                         navigate("programs", programId);
                     }}
                     onAddProgram={canMutate ? addProgram : undefined}
                     ageUnitSelectOptions={ageUnitSelectOptions}
-                    createDetail={
-                        creatingProgram ?
-                            <LocationProgramCreatePanel
-                                siteLabel={model?.displayName ?? ""}
-                                ageUnitSelectOptions={ageUnitSelectOptions}
-                                scheduleSummary={scheduleSummary}
-                                onCancel={() => setCreatingProgram(false)}
-                                onCreate={async (input) => {
-                                    const newId = await createProgramCategory(selectedSite.id, input);
-                                    setCreatingProgram(false);
-                                    setSelectedProgramId(newId);
-                                    navigate("programs", newId);
-                                }}
-                            />
-                        :   undefined
-                    }
                 />
             );
         }

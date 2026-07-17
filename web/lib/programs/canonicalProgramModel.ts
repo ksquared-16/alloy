@@ -20,6 +20,8 @@ export type CanonicalProgramStatus = "active" | "inactive";
 
 /** Where a resolved program identity/label was derived from (explainability). */
 export type CanonicalProgramSource =
+    /** An immutable Organization Program revision. */
+    | "published_revision"
     /** The canonical `program_key` vocabulary (option set today). */
     | "vocabulary"
     /** A per-location availability row (`location_program_categories`). */
@@ -35,6 +37,9 @@ export type CanonicalProgram = {
     description: string | null;
     status: CanonicalProgramStatus;
     source: CanonicalProgramSource;
+    /** Present when identity came from the Configuration Publication Runtime. */
+    revisionId?: string;
+    revisionNumber?: number;
 };
 
 /**

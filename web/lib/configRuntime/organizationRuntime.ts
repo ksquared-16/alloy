@@ -91,13 +91,16 @@ export type OrganizationDistributionPlan = {
 
 export type OrganizationDistributionTargetResult = {
     locationId: string;
-    status: "applied" | "unchanged";
+    status: "applied" | "unchanged" | "failed";
+    errorCode?: string;
+    errorMessage?: string;
 };
 
 export type OrganizationDistributionResult = {
     auditId: string;
     authoritativeRevision: string;
     targets: OrganizationDistributionTargetResult[];
+    status?: "completed" | "partial_failure" | "failed";
 };
 
 export type OrganizationConfigurationApplyProvider = {
@@ -153,7 +156,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         internalRuntimeKey: "commercial",
         label: "Programs",
         description: "Reusable service catalog published by the organization for every business vertical.",
-        href: "/settings/commercial",
+        href: "/settings/commercial/programs",
         icon: "programs",
         publisherLabel: "Organization",
         configurationOwner: "Programs",
@@ -172,6 +175,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Programs will report health from its authoritative catalog.",
         },
         distributionMode: "apply",
+        applyProviderKey: "programs.v1",
         ownedConfiguration: [
             "Catalog & categories",
             "Eligibility & licensing",

@@ -93,6 +93,8 @@ export default function LocationProgramDetailPanel({
             is_active?: boolean;
             sort_order?: number;
             metadata?: Record<string, unknown>;
+            local_description_override?: string | null;
+            local_authorization_evidence?: string | null;
         },
     ) => Promise<void>;
     programs: LocationProgramCategoryRow[];
@@ -109,6 +111,8 @@ export default function LocationProgramDetailPanel({
     const [ageTo, setAgeTo] = useState("");
     const [ageUnit, setAgeUnit] = useState("");
     const [defaultRoomTypes, setDefaultRoomTypes] = useState("");
+    const [localDescription, setLocalDescription] = useState("");
+    const [localAuthorizationEvidence, setLocalAuthorizationEvidence] = useState("");
     const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -121,6 +125,8 @@ export default function LocationProgramDetailPanel({
         setAgeTo(readMeta(program.metadata, "age_range_to"));
         setAgeUnit(readMeta(program.metadata, "age_range_unit"));
         setDefaultRoomTypes(readMeta(program.metadata, "default_room_types"));
+        setLocalDescription(program.local_description_override ?? "");
+        setLocalAuthorizationEvidence(program.local_authorization_evidence ?? "");
         setActive(program.is_active !== false);
         setError(null);
         setEditing(false);
@@ -142,6 +148,8 @@ export default function LocationProgramDetailPanel({
         setAgeTo(readMeta(program.metadata, "age_range_to"));
         setAgeUnit(readMeta(program.metadata, "age_range_unit"));
         setDefaultRoomTypes(readMeta(program.metadata, "default_room_types"));
+        setLocalDescription(program.local_description_override ?? "");
+        setLocalAuthorizationEvidence(program.local_authorization_evidence ?? "");
         setActive(program.is_active !== false);
         setError(null);
         setEditing(false);
@@ -177,7 +185,10 @@ export default function LocationProgramDetailPanel({
                     size="hero"
                     name={summary?.label ?? program.label}
                     status={{ label: "Editing", tone: "attention" }}
-                    facts={[siteLabel ? `Offered at ${siteLabel}` : ""].filter(Boolean)}
+                    facts={[
+                        siteLabel ? `Offered at ${siteLabel}` : "",
+                        program.program_revision_id ? "Identity from Organization" : "Legacy local Program",
+                    ].filter(Boolean)}
                     actions={
                         <ConfigurationSecondaryButton
                             onClick={cancelEdit}
@@ -192,16 +203,24 @@ export default function LocationProgramDetailPanel({
                 <div className="space-y-2.5" data-testid="locations-program-editor">
                     <ConfigEditorSection title="Identity" testId="locations-program-editor-identity">
                         <label className="block space-y-1">
-                            <span className="config-typo-field-label">Name</span>
+                            <span className="config-typo-field-label">
+                                Name · {program.program_revision_id ? "Organization" : "Legacy local"}
+                            </span>
                             <input
                                 type="text"
                                 value={label}
-                                disabled={!canMutate}
+                                disabled={!canMutate || Boolean(program.program_revision_id)}
                                 onChange={(e) => setLabel(e.target.value)}
                                 className="config-runtime-input"
                                 data-testid="locations-program-name"
                             />
                         </label>
+                        {program.program_revision_id ?
+                            <p className="text-xs text-alloy-midnight/50">
+                                Program identity comes from the published Organization revision and cannot be changed
+                                here.
+                            </p>
+                        :   null}
                         <label className="flex items-center gap-2">
                             <input
                                 type="checkbox"
@@ -213,6 +232,28 @@ export default function LocationProgramDetailPanel({
                             <span className="config-typo-sublabel">Active program</span>
                         </label>
                     </ConfigEditorSection>
+
+                    {program.program_revision_id ?
+                        <ConfigEditorSection
+                            title="Permitted local difference"
+                            description="The Organization owns Program identity. This Location may provide a local description."
+                            testId="locations-program-editor-override"
+                        >
+                            <label className="block space-y-1">
+                                <span className="config-typo-field-label">Local description</span>
+                                <textarea
+                                    value={localDescription}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setLocalDescription(e.target.value)}
+                                    className="config-runtime-input min-h-20"
+                                    placeholder="Uses the Organization description"
+                                />
+                            </label>
+                            <p className="text-xs text-alloy-midnight/45">
+                                Source: {localDescription.trim() ? "Location override" : "Organization"}
+                            </p>
+                        </ConfigEditorSection>
+                    :   null}
 
                     <ConfigEditorSection
                         title="Capacity"
@@ -279,6 +320,21 @@ export default function LocationProgramDetailPanel({
                     </ConfigEditorSection>
 
                     <ConfigEditorSection title="Advanced" testId="locations-program-editor-advanced">
+                        {program.program_revision_id ?
+                            <label className="mb-3 block space-y-1">
+                                <span className="config-typo-field-label">Local authorization evidence</span>
+                                <textarea
+                                    value={localAuthorizationEvidence}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setLocalAuthorizationEvidence(e.target.value)}
+                                    placeholder="License, approval, or local authorization reference"
+                                    className="config-runtime-input min-h-20"
+                                />
+                                <span className="block text-xs text-alloy-midnight/45">
+                                    Source: Location · required for local readiness
+                                </span>
+                            </label>
+                        :   null}
                         <label className="block space-y-1">
                             <span className="config-typo-field-label">Default room types</span>
                             <input
@@ -323,9 +379,17 @@ export default function LocationProgramDetailPanel({
                                                 else delete metadata[k];
                                             }
                                             await onSave(program.id, {
-                                                label: label.trim(),
+                                                ...(program.program_revision_id ? {} : { label: label.trim() }),
                                                 is_active: active,
                                                 metadata,
+                                                ...(program.program_revision_id
+                                                    ? {
+                                                          local_description_override:
+                                                              localDescription.trim() || null,
+                                                          local_authorization_evidence:
+                                                              localAuthorizationEvidence.trim() || null,
+                                                      }
+                                                    : {}),
                                             });
                                             setEditing(false);
                                         } catch (e) {
@@ -353,7 +417,10 @@ export default function LocationProgramDetailPanel({
                     size="hero"
                     name={summary?.label ?? program.label}
                     status={{ label: status.label, tone: status.tone }}
-                    facts={[siteLabel ? `Offered at ${siteLabel}` : ""].filter(Boolean)}
+                    facts={[
+                        siteLabel ? `Offered at ${siteLabel}` : "",
+                        program.program_revision_id ? "Published by Organization" : "Legacy local Program",
+                    ].filter(Boolean)}
                     actions={
                         canMutate ?
                             <ConfigurationSecondaryButton
@@ -376,6 +443,35 @@ export default function LocationProgramDetailPanel({
                         }.`
                     :   "No rooms are assigned to this program yet."}
                 </ConfigConsequenceLine>
+
+                {program.program_revision_id ?
+                    <section
+                        className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/8 px-4 py-3"
+                        data-testid="locations-program-effective-sources"
+                    >
+                        <h2 className="config-typo-field-label">Effective value sources</h2>
+                        <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                            <div>
+                                <dt className="text-alloy-midnight/45">Identity and requirements</dt>
+                                <dd className="font-medium text-alloy-midnight">Organization</dd>
+                            </div>
+                            <div>
+                                <dt className="text-alloy-midnight/45">Description</dt>
+                                <dd className="font-medium text-alloy-midnight">
+                                    {program.local_description_override?.trim() ? "Location override" : "Organization"}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-alloy-midnight/45">Offered here and authorization</dt>
+                                <dd className="font-medium text-alloy-midnight">Location</dd>
+                            </div>
+                            <div>
+                                <dt className="text-alloy-midnight/45">Resources, capacity, schedule</dt>
+                                <dd className="font-medium text-alloy-midnight">Runtime derived</dd>
+                            </div>
+                        </dl>
+                    </section>
+                :   null}
 
                 <section className="border-y border-alloy-forge/10 py-4" data-testid="locations-program-ops">
                     <h2 className="config-typo-workspace-title mb-3">Operating picture</h2>

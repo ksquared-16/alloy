@@ -1,9 +1,7 @@
-import { redirect } from "next/navigation";
+import ProgramsPublicationWorkspace from "@/components/adminV2/settings/programs/ProgramsPublicationWorkspace";
 
 export const dynamic = "force-dynamic";
 
-// Consolidated: Commercial has one operator home — the tabbed workspace at
-// /settings/commercial (Programs & tuition is its first tab).
 export default function SettingsCommercialProgramsPage() {
-    redirect("/settings/commercial");
+    return <ProgramsPublicationWorkspace />;
 }

@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { slugifyLocationProgramCategoryKey } from "@/lib/locations/locationProgramCategories";
-
-const PROGRAM_CATEGORY_KEY_RE = /^[a-z0-9_]{2,64}$/;
 
 type CategoryRow = {
     id: string;
@@ -14,9 +11,17 @@ type CategoryRow = {
     sort_order: number | null;
     is_active: boolean;
     metadata: Record<string, unknown>;
+    program_id: string | null;
+    program_revision_id: string | null;
+    configuration_consumption_id: string | null;
+    local_description_override: string | null;
+    local_authorization_evidence: string | null;
     created_at: string;
     updated_at: string | null;
 };
+
+const CATEGORY_SELECT =
+    "id, org_id, location_id, key, label, sort_order, is_active, metadata, program_id, program_revision_id, configuration_consumption_id, local_description_override, local_authorization_evidence, created_at, updated_at";
 
 export function buildProgramCategoryPatch(
     raw: Record<string, unknown>,
@@ -42,6 +47,24 @@ export function buildProgramCategoryPatch(
         }
         patch.metadata = raw.metadata;
     }
+    if (raw.local_description_override !== undefined) {
+        if (raw.local_description_override !== null && typeof raw.local_description_override !== "string") {
+            return { ok: false, error: "local_description_override must be text or null" };
+        }
+        patch.local_description_override =
+            typeof raw.local_description_override === "string"
+                ? raw.local_description_override.trim() || null
+                : null;
+    }
+    if (raw.local_authorization_evidence !== undefined) {
+        if (raw.local_authorization_evidence !== null && typeof raw.local_authorization_evidence !== "string") {
+            return { ok: false, error: "local_authorization_evidence must be text or null" };
+        }
+        patch.local_authorization_evidence =
+            typeof raw.local_authorization_evidence === "string"
+                ? raw.local_authorization_evidence.trim() || null
+                : null;
+    }
     return { ok: true, patch };
 }
 
@@ -58,6 +81,14 @@ function mapCategoryRow(r: Record<string, unknown>): CategoryRow {
             r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                 ? (r.metadata as Record<string, unknown>)
                 : {},
+        program_id: (r.program_id as string | null | undefined) ?? null,
+        program_revision_id: (r.program_revision_id as string | null | undefined) ?? null,
+        configuration_consumption_id:
+            (r.configuration_consumption_id as string | null | undefined) ?? null,
+        local_description_override:
+            (r.local_description_override as string | null | undefined) ?? null,
+        local_authorization_evidence:
+            (r.local_authorization_evidence as string | null | undefined) ?? null,
         created_at: String(r.created_at ?? ""),
         updated_at: (r.updated_at as string | null | undefined) ?? null,
     };
@@ -80,9 +111,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     let q = supabase
         .from("location_program_categories")
-        .select(
-            "id, org_id, location_id, key, label, sort_order, is_active, metadata, created_at, updated_at"
-        )
+        .select(CATEGORY_SELECT)
         .eq("org_id", ctx.orgId)
         .order("sort_order", { ascending: true })
         .order("label", { ascending: true });
@@ -139,14 +168,31 @@ export async function PATCH(request: NextRequest) {
 
         if (Object.keys(patch).length <= 1) continue;
 
+        const { data: current, error: currentError } = await supabase
+            .from("location_program_categories")
+            .select("program_revision_id")
+            .eq("id", id)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        if (currentError) {
+            return NextResponse.json({ error: currentError.message }, { status: 400 });
+        }
+        if (
+            (current as { program_revision_id?: string | null } | null)?.program_revision_id
+            && Object.prototype.hasOwnProperty.call(patch, "label")
+        ) {
+            return NextResponse.json(
+                { error: "Published Program identity is managed by the Organization." },
+                { status: 409 },
+            );
+        }
+
         const { data, error } = await supabase
             .from("location_program_categories")
             .update(patch)
             .eq("id", id)
             .eq("org_id", ctx.orgId)
-            .select(
-                "id, org_id, location_id, key, label, sort_order, is_active, metadata, created_at, updated_at"
-            )
+            .select(CATEGORY_SELECT)
             .maybeSingle();
 
         if (error) {
@@ -161,7 +207,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 /** POST: create a program category for one site location. */
-export async function POST(request: NextRequest) {
+export async function POST() {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
@@ -170,97 +216,11 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    let body: Record<string, unknown> = {};
-    try {
-        body = (await request.json()) as Record<string, unknown>;
-    } catch {
-        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-    }
-
-    const locationId = String(body.location_id ?? "").trim();
-    const label = String(body.label ?? "").trim();
-    const rawKey = String(body.key ?? "").trim();
-    const key = rawKey ? slugifyLocationProgramCategoryKey(rawKey) : slugifyLocationProgramCategoryKey(label);
-    const sortOrder =
-        body.sort_order != null && body.sort_order !== "" ? Number(body.sort_order) : null;
-    const isActive = body.is_active !== false;
-    const metadata =
-        body.metadata === undefined ? {}
-        : body.metadata != null && typeof body.metadata === "object" && !Array.isArray(body.metadata) ?
-            body.metadata
-        :   null;
-
-    if (!locationId) {
-        return NextResponse.json({ error: "location_id is required" }, { status: 400 });
-    }
-    if (!label) {
-        return NextResponse.json({ error: "label is required" }, { status: 400 });
-    }
-    if (metadata == null) {
-        return NextResponse.json({ error: "metadata must be an object" }, { status: 400 });
-    }
-    if (!PROGRAM_CATEGORY_KEY_RE.test(key)) {
-        return NextResponse.json({ error: "Invalid program category key" }, { status: 400 });
-    }
-
-    const supabase = createAdminClient();
-    const { data: siteRow, error: siteErr } = await supabase
-        .from("locations")
-        .select("id, location_type")
-        .eq("org_id", ctx.orgId)
-        .eq("id", locationId)
-        .maybeSingle();
-
-    if (siteErr) {
-        return NextResponse.json({ error: siteErr.message }, { status: 500 });
-    }
-    if (!siteRow) {
-        return NextResponse.json({ error: "Location not found" }, { status: 404 });
-    }
-    if (String((siteRow as { location_type?: string }).location_type ?? "").trim() !== "site") {
-        return NextResponse.json(
-            { error: "Program categories can only be added to site locations" },
-            { status: 400 }
-        );
-    }
-
-    let resolvedSortOrder = sortOrder;
-    if (resolvedSortOrder == null || !Number.isFinite(resolvedSortOrder)) {
-        const { data: existing } = await supabase
-            .from("location_program_categories")
-            .select("sort_order")
-            .eq("org_id", ctx.orgId)
-            .eq("location_id", locationId)
-            .order("sort_order", { ascending: false })
-            .limit(1);
-        const top = existing?.[0] as { sort_order?: number | null } | undefined;
-        const max = top?.sort_order != null ? Number(top.sort_order) : 0;
-        resolvedSortOrder = max > 0 ? max + 10 : 10;
-    }
-
-    const { data, error } = await supabase
-        .from("location_program_categories")
-        .insert({
-            org_id: ctx.orgId,
-            location_id: locationId,
-            key,
-            label,
-            sort_order: resolvedSortOrder,
-            is_active: isActive,
-            metadata,
-            updated_at: new Date().toISOString(),
-        })
-        .select(
-            "id, org_id, location_id, key, label, sort_order, is_active, metadata, created_at, updated_at"
-        )
-        .single();
-
-    if (error) {
-        const msg = error.message.includes("location_program_categories_org_location_key_unique")
-            ? "A program with this key already exists for this site"
-            : error.message;
-        return NextResponse.json({ error: msg }, { status: 400 });
-    }
-
-    return NextResponse.json({ category: mapCategoryRow(data as Record<string, unknown>) }, { status: 201 });
+    return NextResponse.json(
+        {
+            error:
+                "Programs are created and published by the Organization. Apply a published Program to this Location.",
+        },
+        { status: 409 },
+    );
 }

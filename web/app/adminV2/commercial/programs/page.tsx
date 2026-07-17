@@ -1,7 +1,7 @@
-import ProgramsConfigWorkspace from "@/components/adminV2/commercial/ProgramsConfigWorkspace";
+import ProgramsPublicationWorkspace from "@/components/adminV2/settings/programs/ProgramsPublicationWorkspace";
 
 export const dynamic = "force-dynamic";
 
 export default function ProgramsPage() {
-    return <ProgramsConfigWorkspace />;
+    return <ProgramsPublicationWorkspace />;
 }

@@ -41,6 +41,25 @@ describe("location program category PATCH contract", () => {
         });
     });
 
+    it("normalizes the two permitted Location-owned publication fields", () => {
+        expect(
+            buildProgramCategoryPatch(
+                {
+                    local_description_override: " Downtown description ",
+                    local_authorization_evidence: " License 123 ",
+                },
+                "2026-07-17T00:00:00.000Z",
+            ),
+        ).toEqual({
+            ok: true,
+            patch: {
+                local_description_override: "Downtown description",
+                local_authorization_evidence: "License 123",
+                updated_at: "2026-07-17T00:00:00.000Z",
+            },
+        });
+    });
+
     it("rejects invalid metadata and non-numeric sort order", () => {
         expect(buildProgramCategoryPatch({ metadata: [] })).toEqual({
             ok: false,

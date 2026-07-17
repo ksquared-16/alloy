@@ -39,6 +39,52 @@ export async function resolveProgramsForOrganization(
     orgId: string,
     options: { allowLegacyFallback?: boolean } = {}
 ): Promise<CanonicalProgram[]> {
+    const { data: publicationRows, error: publicationError } = await supabase
+        .from("configuration_publications")
+        .select("subject_id, revision_id, revision_number")
+        .eq("org_id", orgId)
+        .eq("domain_key", "programs")
+        .order("revision_number", { ascending: false });
+    const publicationUnavailable =
+        publicationError?.code === "42P01"
+        || publicationError?.code === "PGRST205";
+    if (publicationError && !publicationUnavailable) throw new Error(publicationError.message);
+
+    const latestByProgram = new Map<string, Record<string, unknown>>();
+    for (const row of (publicationRows ?? []) as Array<Record<string, unknown>>) {
+        const programId = str(row.subject_id);
+        if (programId && !latestByProgram.has(programId)) latestByProgram.set(programId, row);
+    }
+    const revisionIds = [...latestByProgram.values()]
+        .map((row) => str(row.revision_id))
+        .filter((id): id is string => id != null);
+    if (revisionIds.length > 0) {
+        const { data: revisionRows, error: revisionError } = await supabase
+            .from("program_revisions")
+            .select("id, program_id, revision_number, program_key, label, description")
+            .eq("org_id", orgId)
+            .in("id", revisionIds);
+        if (revisionError) throw new Error(revisionError.message);
+        return ((revisionRows ?? []) as Array<Record<string, unknown>>)
+            .map((row): CanonicalProgram | null => {
+                const key = str(row.program_key);
+                const label = str(row.label);
+                const id = str(row.id);
+                if (!key || !label || !id) return null;
+                return {
+                    key,
+                    label,
+                    description: str(row.description),
+                    status: "active",
+                    source: "published_revision",
+                    revisionId: id,
+                    revisionNumber: intOr(row.revision_number, 1),
+                };
+            })
+            .filter((program): program is CanonicalProgram => program != null)
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }
+
     const { items, source } = await loadProgramVocabulary(supabase, orgId, options);
     const programSource = vocabularySourceToProgramSource(source);
     return items.map((item) => ({
@@ -89,16 +135,36 @@ export async function resolveProgramsForLocation(
     if (!locationId) return [];
     const { data, error } = await supabase
         .from("location_program_categories")
-        .select("id, org_id, location_id, key, label, sort_order, is_active")
+        .select("id, org_id, location_id, key, label, sort_order, is_active, program_revision_id")
         .eq("org_id", orgId)
         .eq("location_id", locationId);
     if (error) throw new Error(error.message);
 
-    return ((data ?? []) as Array<Record<string, unknown>>)
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const revisionIds = [...new Set(
+        rows.map((row) => str(row.program_revision_id)).filter((id): id is string => id != null),
+    )];
+    const revisionsById = new Map<string, Record<string, unknown>>();
+    if (revisionIds.length > 0) {
+        const { data: revisionRows, error: revisionError } = await supabase
+            .from("program_revisions")
+            .select("id, revision_number, program_key, label, description")
+            .eq("org_id", orgId)
+            .in("id", revisionIds);
+        if (revisionError) throw new Error(revisionError.message);
+        for (const row of (revisionRows ?? []) as Array<Record<string, unknown>>) {
+            const id = str(row.id);
+            if (id) revisionsById.set(id, row);
+        }
+    }
+
+    return rows
         .map((row, index): CanonicalProgramAvailability | null => {
             const availabilityId = str(row.id);
-            const key = str(row.key);
-            const label = str(row.label);
+            const revisionId = str(row.program_revision_id);
+            const revision = revisionId ? revisionsById.get(revisionId) : undefined;
+            const key = str(revision?.program_key) ?? str(row.key);
+            const label = str(revision?.label) ?? str(row.label);
             const rowLocationId = str(row.location_id);
             // Defensive: a category row must belong to the requested location.
             if (!availabilityId || !key || !label || rowLocationId !== locationId) return null;
@@ -107,9 +173,11 @@ export async function resolveProgramsForLocation(
             return {
                 key,
                 label,
-                description: null,
+                description: str(revision?.description),
                 status: isActive ? "active" : "inactive",
-                source: "location_availability",
+                source: revision ? "published_revision" : "location_availability",
+                revisionId: revisionId ?? undefined,
+                revisionNumber: revision ? intOr(revision.revision_number, 1) : undefined,
                 locationId,
                 availabilityId,
                 sortOrder: intOr(row.sort_order, index),
