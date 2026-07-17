@@ -54,7 +54,7 @@ export function ConfigLayoutAssistApplyOutcomeList({
                     className="inline-block text-[10px] font-semibold text-alloy-blue hover:underline"
                     data-config-assist-layout-integrity-link="true"
                 >
-                    Check layout integrity in Configuration → Layouts
+                    Check layout integrity in Configuration → Surfaces
                 </CommandSurfaceCardLink>
             :   null}
         </div>

@@ -43,7 +43,7 @@ Organization Configuration Runtime V2 is frozen. Organization publishes reusable
 Organization configuration needed one canonical ownership and distribution model above the frozen Locations experience. Treating Programs as Location-owned room containers conflated reusable service identity with operational delivery.
 
 **Consequences:**
-Future Settings domains use the Configuration Domain Card and publisher/consumer contract. Commercial may remain an internal compatibility runtime/route name, but operator language is Programs. No downstream domain may infer health, expose Apply without authoritative delivery, or move resource/capacity/scheduling truth into Programs.
+Future Configuration domains use the Configuration Domain Card and publisher/consumer contract. Commercial may remain an internal compatibility runtime/route name, but operator language is Programs. No downstream domain may infer health, expose Apply without authoritative delivery, or move resource/capacity/scheduling truth into Programs.
 
 **Canonical owners:** [`../../system/organization-configuration-runtime-v2.md`](../../system/organization-configuration-runtime-v2.md), [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../core/configuration-ownership-and-inheritance.md`](../core/configuration-ownership-and-inheritance.md).
 

@@ -11,7 +11,7 @@ supersedes: [../../archive/2026-06-presentation-runtime/presentation-runtime-doc
 
 **Completion (July 2026):** All surfaces render through one Presentation Runtime — Workspace, Work Unit, Focus Panel, Left Nav, and the **Right Rail** (the last slice: `RightRailSurface` now consumes the resolved `right_rail_actions` lane and executes through the existing action runtime — see [`docs/archive/2026-06-handoffs/work-unit-right-rail-presentation-v2-handoff.md`](../../archive/2026-06-handoffs/work-unit-right-rail-presentation-v2-handoff.md)). Motion, warm-loading, and transition continuity are unified on the operational motion tokens. Legacy retirement is underway: the Work Unit shadow-VM path is removed; the remaining orphaned `routeShellPipeline` render adapter is scoped for a follow-up (it shares a symbol with a still-live perf-trace module — see the handoff §6).
 
-**Thread closeout (July 2026):** Queue Row Builder, Workspace/Work Unit surfaces, and Settings legacy cleanup are frozen complete on `origin/staging` `c99e381f3`. Canonical handoff: `docs/sprints/archive/07_2026/presentation-surfaces-settings-thread-closeout.md` (historical: `../../sprints/archive/07_2026/presentation-surfaces-settings-thread-closeout.md`).
+**Thread closeout (July 2026):** Queue Row Builder, Workspace/Work Unit surfaces, and Configuration legacy cleanup are frozen complete on `origin/staging` `c99e381f3`. Canonical handoff: `docs/sprints/archive/07_2026/presentation-surfaces-settings-thread-closeout.md` (historical: `../../sprints/archive/07_2026/presentation-surfaces-settings-thread-closeout.md`).
 
 **Scope:** Presentation composition only. Backend, APIs, entities, queue model, calculations,
 configuration, surface definitions, runtime state, Focus Panel internals, and the navigation
@@ -59,7 +59,7 @@ runtime label (`data-runtime-label`), and has exactly one render site. No duplic
 
 | Concern | Rule |
 | --- | --- |
-| **Authoring** | **Settings → Surfaces → Workspaces → Workspace Header** (first item; process summaries follow) |
+| **Authoring** | **Configuration → Surfaces → Workspaces → Workspace Header** (first item; process summaries follow) |
 | **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="workspace_header"`, config in `doc.metadata.workspaceHeaderSurface` |
 | **KPI source** | Operational Calculations registry — same resolve path as Work Unit header metrics (`useOperationalAnswers` + OIP warm cache). No parallel KPI system. |
 | **KPI = operational signals** | The org-level signals the mockup calls "Work View Signals" (Needs attention, Overdue work, SLA/at-risk) ARE these KPI slots — configured Operational Calculations, not a separate rail. There is no standalone signals right rail; the shell command rail is actions-only. |
@@ -79,7 +79,7 @@ Work-view pills render **below** the header — never above or competing with KP
 
 | Concern | Rule |
 | --- | --- |
-| **Authoring** | **Settings → Surfaces → Work Units → Work Unit Header** (full-bleed builder — same shell as Workspace Header) |
+| **Authoring** | **Configuration → Surfaces → Work Units → Work Unit Header** (full-bleed builder — same shell as Workspace Header) |
 | **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="work_unit_header"`, config in `doc.metadata.workUnitHeaderSurface` |
 | **KPI source** | Operational Calculations — `useOperationalAnswers` scoped with `workUnitId`. Same metric-card grammar as Workspace Header. |
 | **Presentation** | Shared `WorkspaceHeader` presenter with `variant="work-unit"` — builder preview and runtime match (icon/accent, no-data `—`) |
@@ -95,7 +95,7 @@ behavior — one card per real configured business process.
 
 | Concern | Rule |
 | --- | --- |
-| **Authoring** | **Settings → Surfaces → Workspaces → {Process} Summary** (one editor per lifecycle process) |
+| **Authoring** | **Configuration → Surfaces → Workspaces → {Process} Summary** (one editor per lifecycle process) |
 | **Persistence** | `entity_layouts`, `surface="workspace"`, `layoutKey="workspace_processes"`, config in `doc.metadata.workspaceProcessSurface` |
 | **Metrics** | Primary + supporting signals from Operational Calculations registry (`useOperationalAnswers` + `resolvePrimarySignal`). Metric **layout** (inline vs stacked) is presentation-only config (`ProcessCardConfig.metricPresentation`, default `inline`) — same calculations + labels either way; no calculation logic in presentation. |
 | **Health state** | Real, not fabricated: the Primary Signal's KPI `status` → `signalStateFromKpiStatus` → `SignalState` → the status pill word (`STATE_WORD`) + Alloy semantic token. A process has **no universal health score**; the pill reflects the selected calculation. Builder preview and runtime derive it the same way. |
@@ -172,7 +172,7 @@ Both surfaces render the configured Work Views for the process — the same list
 `work_views_v1`. No hardcoded arrays. No Enrollment-specific UI. No Pipeline-specific UI.
 
 **Row icon ownership.** The Work View owns its row glyph. It is assigned per view in the Surface
-Builder (**Settings → Surfaces → Workspaces → {Process} Summary → Work View icons**) and persisted
+Builder (**Configuration → Surfaces → Workspaces → {Process} Summary → Work View icons**) and persisted
 on the Workspace Process Surface config as `workViewIconById` (keyed by `work_view_id`, falling back
 to the lane `platformKey` for stage-backed lanes). The runtime resolves it via `resolveWorkViewIcon`
 in `useWorkspaceSurfaceRuntime`; a view with no assignment renders the shared neutral fallback glyph
@@ -214,7 +214,7 @@ Calculations, queue fetch, reveal gates, and config contracts are unchanged.
 ### Explicitly out of scope (deferred)
 
 - Grouped operator views (`kind: grouped`, parent/child Work View containers) — rejected; catch-all + flat views remain the model.
-- Settings Runtime preview migration onto `CondensedQueueRow` — separate sprint.
+- Configuration Runtime preview migration onto `CondensedQueueRow` — separate sprint.
 - Browser-authenticated visual sign-off in CI — manual operator review only.
 
 ## Navigation
@@ -233,7 +233,7 @@ Focus Panel. No dead queue page. No duplicate runtime. No layered presentation.
 **Success test:** "Where is the Work Unit header rendered?" / "Where are Work Views rendered?" /
 "Where are Queue Rows rendered?" / "Where does the Focus Panel open?" — each has exactly one answer.
 
-## Architectural boundary — Presentation Runtime vs Settings Runtime
+## Architectural boundary — Presentation Runtime vs Configuration Runtime
 
 The operator product and the configuration product are **two distinct runtimes**. They share
 primitives (the `CondensedQueueRow` presenter, published surface configs) but they are not the
@@ -249,7 +249,7 @@ Presentation Runtime        ← THIS doctrine (the only operator-facing presenta
     Left Nav    (shell)
     Right Rail  (shell / RR.*)
 
-Settings Runtime            ← separate; configures what Presentation Runtime renders
+Configuration Runtime       ← separate; configures what Presentation Runtime renders
     Surface Builder         (components/adminV2/settings/surfaces/*)
     Queue Row Builder       (QueueRowBuilderV2 + QueueRecordLayoutSettingsPanel)
     Focus Panel Builder     (composition surface editors)
@@ -258,12 +258,12 @@ Settings Runtime            ← separate; configures what Presentation Runtime r
 
 **`OperationalQueueRecordRow` (and its subtree — `QueueRecordScopedColumn`,
 `QueueRecordFieldRenderer`, `QueueRowActionsMenu`, `QueueRowOpenZone`, `queueRowQuickActionHelpers`)
-is classified as Settings Runtime, NOT Presentation Runtime legacy.** It is the live renderer for
+is classified as Configuration Runtime, NOT Presentation Runtime legacy.** It is the live renderer for
 the `/settings` Queue Row layout editor + preview (`QueueRecordLayoutPreview`,
 `compositionFieldAdapter`). It is deliberately **retained**. The operator product does not use it —
 operator queue rows render exclusively through `CondensedQueueRow` (`WU.QUEUE_ROW`).
 
-Migrating the Settings Runtime preview/editor onto the shared `CondensedQueueRow` presenter is
+Migrating the Configuration Runtime preview/editor onto the shared `CondensedQueueRow` presenter is
 **out of scope for Presentation Runtime V2** — it belongs to the Runtime Adoption / SurfaceRenderer
 sprint (PR #64).
 
@@ -271,7 +271,7 @@ sprint (PR #64).
 
 Only after the new presentation works: delete the old **Presentation Runtime** tree, obsolete
 adapters, obsolete tests, obsolete render paths. Two presentation runtimes never coexist past
-cutover. **Do not** delete Settings Runtime code in this pass — it is a live, separate product.
+cutover. **Do not** delete Configuration Runtime code in this pass — it is a live, separate product.
 
 ## Retirement record (as executed)
 
@@ -291,7 +291,7 @@ corrected ownership audit proved had **zero production references** (one batch p
 | 3 | `LayoutRuntimeQueueRowView` + `…ErrorBoundary` / `…ErrorCard` / `…Hold` + 2 dead tests (one guarding shell files already deleted in the cutover) |
 | 4 | `QueueRecordConfigColumn`, `QueueRowLinkedFieldButton`, `QueueRowOpenBackdrop`, `enrollmentQueueRowPreviewPolicy` (+ test) |
 
-**Not deleted (correctly retained):** the `OperationalQueueRecordRow` Settings Runtime subtree —
+**Not deleted (correctly retained):** the `OperationalQueueRecordRow` Configuration Runtime subtree —
 the prior handoff mis-listed `OperationalQueueRecordRow` as deletable and mis-listed
 `LayoutRuntimeQueueRowView` as still-live; the corrected audit reversed both.
 

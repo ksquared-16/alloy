@@ -187,7 +187,7 @@ Row 3: readiness_kpi · tour_summary
 Row 4: communications · documents
 ```
 
-Operators may rearrange via **Settings → Surfaces → Focus Panels**. Card placement is never hardcoded in the component.
+Operators may rearrange via **Configuration → Surfaces → Focus Panels**. Card placement is never hardcoded in the component.
 
 ---
 

@@ -226,7 +226,7 @@ export default function LayoutProofClient() {
             {/* Deprecation-prep notice (Goal 3): the builder preview is now the primary surface. */}
             <div className="mb-4 rounded-md border border-[rgba(39,63,82,0.18)] bg-[#F6F8FC] px-3 py-2 text-[12px]" style={{ color: MUTED }}>
                 <strong style={{ color: TEXT }}>Internal preview.</strong> This standalone proof is slated to become internal-only — the builder preview in{" "}
-                <a className="text-[#00458C] underline" href="/adminV2/settings/layouts">Configuration → Layouts</a>{" "}now renders the same drawer, queue, and waitlist cards live while you edit. Kept for now for full-data review; not a primary navigation surface.
+                <a className="text-[#00458C] underline" href="/adminV2/settings/layouts">Configuration → Surfaces</a>{" "}now renders the same drawer, queue, and waitlist cards live while you edit. Kept for now for full-data review; not a primary navigation surface.
             </div>
 
             {/* Work-unit-style Lead list */}

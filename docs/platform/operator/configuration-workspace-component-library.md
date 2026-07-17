@@ -39,7 +39,7 @@ A calm, self-contained block for one concern: a plain headline, quiet supporting
 ### Command Rail
 The object-scoped rail holding Quick Actions and (where useful) the object's Attention/Setup. Restrained by doctrine — a short action list and one or two status cards, never a dashboard.
 
-**Settings ownership (proven by Locations):** Configuration content pages **do not** render a page-local Actions card. Contextual commands register into the **platform shell Actions rail** (above BOS) via `WorkspaceCommandRailRegistrar` / `LocationsCommandRailActions`. The page owns understanding and state; the shell owns commands; BOS remains a separate assist surface. Inline controls stay attached to the content object they affect.
+**Configuration ownership (proven by Locations):** Configuration content pages **do not** render a page-local Actions card. Contextual commands register into the **platform shell Actions rail** (above BOS) via `WorkspaceCommandRailRegistrar` / `LocationsCommandRailActions`. The page owns understanding and state; the shell owns commands; BOS remains a separate assist surface. Inline controls stay attached to the content object they affect.
 
 ---
 

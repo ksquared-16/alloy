@@ -248,7 +248,7 @@ export default function FieldSectionsClient({
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                     <AdminPageHeader
                         title="Field grouping catalog"
-                        subtitle="Labels and ordering for field_definitions.section_key by entity. Separate from Configuration → Layouts (runtime drawer)."
+                        subtitle="Labels and ordering for field_definitions.section_key by entity. Separate from Configuration → Surfaces (runtime drawer)."
                     />
                     {newSectionAction}
                 </div>

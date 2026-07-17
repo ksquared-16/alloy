@@ -63,7 +63,7 @@ The acceptance bar is **perceptual**: the operator never notices loading, constr
 
 - These laws **extend** the locked `adminv2-runtime-performance-doctrine.md`; where that doctrine specifies reveal gates, cache keys, request-ownership, and known-empty semantics, those remain the protected mechanism. This doctrine adds the **product-feel acceptance bar** the gates must satisfy on the four primary flows.
 - A change is **doctrine-conformant** only if, on both cold and warm paths, the surface reveals once (Law 1), chrome is stable (Law 2), no construction is visible (Law 3), each region has one owner (Law 4), the first-paint bundle is complete (Law 5), navigation is seamless (Law 6), intent is warmed (Law 7), and saves are continuous (Law 8).
-- **Settings surfaces are a later extension**, not in this phase's scope; the same laws will apply when a `SettingsSurfaceViewModel` is adopted.
+- **Configuration surfaces are a later extension**, not in this phase's scope; the same laws will apply when a `SettingsSurfaceViewModel` is adopted.
 
 ---
 

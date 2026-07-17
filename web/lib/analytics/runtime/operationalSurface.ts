@@ -260,8 +260,8 @@ export async function buildOperationalSurfaceModel(
 
     dataNotes.push(
         metricsSource === "configured"
-            ? `Metrics are configured in Configuration → Analytics → "Where it appears" (${metricList.length} placed). Live in this modal.`
-            : `Showing default metrics — place metrics in Configuration → Analytics → "Where it appears" to customize this modal.`,
+            ? `Metrics are configured in Configuration → Operational Calculations → "Where it appears" (${metricList.length} placed). Live in this modal.`
+            : `Showing default metrics — place metrics in Configuration → Operational Calculations → "Where it appears" to customize this modal.`,
     );
 
     // 2) Real breakdown (open opportunities by status), with per-segment queue drills.

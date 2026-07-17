@@ -213,7 +213,7 @@ V1 was a Program-first workspace with a Tuition grid. **V2 keeps that and adds t
 | **Effective dates** | "Apply from…" on every change; scheduled-change banners. |
 
 ### 7c. Shell
-Lives in the **frozen Configuration Runtime shell** (Settings index → Context Queue 260px → Object Queue 320px → Workspace). Commercial Config is a Context Queue entry; Programs are the Object Queue; the Tuition workspace is the flex pane. The Scope Context bar spans the workspace top.
+Lives in the **frozen Configuration Runtime shell** (Configuration landing → Context Queue 260px → Object Queue 320px → Workspace). Commercial Config is a Context Queue entry; Programs are the Object Queue; the Tuition workspace is the flex pane. The Scope Context bar spans the workspace top.
 
 ---
 
@@ -255,7 +255,7 @@ The same three pieces — **system-of-record rule** (§3), **scope ladder + reso
 | Module | System of record | Inherits along | Kind | Override example |
 |---|---|---|---|---|
 | **Communications** | Communications | platform→org→site | value + availability | Org template; Downtown overrides the signature |
-| **Branding** | Brand/Settings | org→site | value | Org palette; one campus has its own logo |
+| **Branding** | Brand/Configuration | org→site | value | Org palette; one campus has its own logo |
 | **Scheduling (hours)** | Locations | org→site→room | value | Site hours; Room 2A opens earlier |
 | **Attendance rules** | Operations | org→site→program→room | value | Late-pickup threshold per program |
 | **Workflows / Actions** | Automation | platform→org→site | availability (+ params) | Enable a workflow at two sites only |
@@ -280,7 +280,7 @@ The same three pieces — **system-of-record rule** (§3), **scope ladder + reso
 | **Financial Policies** | Org/Program | — | Commercial Config · org→site→program→room | resolver, billing, collections |
 | **Charge Templates** | Program/Org | — | Commercial Config · org (→site) | charge resolution |
 | **Communications** | Org | Site | Communications · platform→org→site | comms engine |
-| **Branding** | Org | Site | Brand/Settings · org→site | every rendered surface |
+| **Branding** | Org | Site | Brand/Configuration · org→site | every rendered surface |
 | **Workflows / Actions** | Org | Site | Automation · platform→org→site | execution engine |
 | **Scheduling** | — | Site/Room | Locations · org→site→room | attendance, billing |
 | **Attendance** | — | Room | Operations · org→site→program→room | consumption pipeline |

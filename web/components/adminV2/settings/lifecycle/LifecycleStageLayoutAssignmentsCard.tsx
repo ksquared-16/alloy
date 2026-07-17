@@ -152,7 +152,7 @@ export default function LifecycleStageLayoutAssignmentsCard({
                 Assign published layouts for <span className="font-medium text-alloy-midnight">{stageLabel}</span>.
                 Create or edit layouts in{" "}
                 <Link href={LAYOUTS_SETTINGS_HREF} className="font-medium text-alloy-pine hover:underline">
-                    Configuration → Layouts
+                    Configuration → Surfaces
                 </Link>
                 .
             </p>

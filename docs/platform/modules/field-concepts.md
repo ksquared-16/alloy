@@ -8,7 +8,7 @@ supersedes: []
 # Field Concepts — Business Fields, Calculated Fields, Runtime Signals
 
 **Status:** Active — July 2026  
-**Reference workspace:** Settings → Data Model (`/settings/fields`)
+**Reference workspace:** Configuration → Data Model (`/settings/fields`)
 
 Alloy separates three operator concepts. They are **not** interchangeable.
 
@@ -16,7 +16,7 @@ Alloy separates three operator concepts. They are **not** interchangeable.
 
 ## Ownership, projection, and surface availability (doctrine)
 
-**Settings → Fields models canonical data ownership.** Surfaces determine contextual availability. Consumers may project fields from one owner onto another subject. Projection does not change ownership.
+**Configuration → Fields models canonical data ownership.** Surfaces determine contextual availability. Consumers may project fields from one owner onto another subject. Projection does not change ownership.
 
 Required flow:
 

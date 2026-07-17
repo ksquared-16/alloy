@@ -95,7 +95,7 @@ On a top-level no-selection landing, presentation follows the collection's opera
 ## Navigation (tabs & breadcrumb)
 
 - **Tabs** are the object's owned concerns. The active tab is Bend-Pine text over a Bend-Pine underline; idle tabs are muted with no underline. Tabs are quiet — they name concerns, not features.
-- **Breadcrumb** is the ownership path in business language (Settings › Prototypes › … or Locations › Downtown Campus › Toddler Room), with the current object bold and ancestors as links. It reads as *where this object sits*, never as a URL.
+- **Breadcrumb** is the ownership path in business language (Configuration › Prototypes › … or Locations › Downtown Campus › Toddler Room), with the current object bold and ancestors as links. It reads as *where this object sits*, never as a URL.
 
 ## Badges & status
 

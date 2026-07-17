@@ -353,9 +353,9 @@ Focus Panel composer grid areas in the same column normalize into a vertical sta
 
 ## 13. Final QA cleanup — canonical catalog, relationship sections, composer state
 
-### Canonical Settings Fields catalog
+### Canonical Configuration Fields catalog
 
-Identity field pickers consume `filterCanonicalDataProviders({ consumer: "focus_panel" })` grouped by Settings category metadata (`categoryKey` → `platformCategoryLabel`). Derived display fields (`child.name`, etc.) are excluded from selectable options.
+Identity field pickers consume `filterCanonicalDataProviders({ consumer: "focus_panel" })` grouped by Configuration category metadata (`categoryKey` → `platformCategoryLabel`). Derived display fields (`child.name`, etc.) are excluded from selectable options.
 
 ### Explicit empty vs default seed
 
@@ -392,7 +392,7 @@ Shared compose shell uses flex/min-height scroll ownership; categorized field pi
 Relationship Sections → Canonical Fields → Disclosure Layers → Runtime
 ```
 
-The Focus Panel Builder does not own field definitions. It consumes the Settings Fields catalog (`focus_panel` consumer), filters by namespace, groups by configured category metadata, and authors disclosure placement and policy.
+The Focus Panel Builder does not own field definitions. It consumes the Configuration Fields catalog (`focus_panel` consumer), filters by namespace, groups by configured category metadata, and authors disclosure placement and policy.
 
 ### Relationship sections
 
@@ -408,7 +408,7 @@ Runtime resolves contacts into the highest-priority matching section once. Child
 
 ### Canonical field consumption readiness
 
-When Canonical Field Consumer Convergence lands, new fields registered in Settings → Fields appear in Focus Panel pickers automatically via `filterCanonicalDataProviders`. Focus Panel adds no parallel labels, categories, or ownership metadata.
+When Canonical Field Consumer Convergence lands, new fields registered in Configuration → Fields appear in Focus Panel pickers automatically via `filterCanonicalDataProviders`. Focus Panel adds no parallel labels, categories, or ownership metadata.
 
 ### Disclosure authoring
 

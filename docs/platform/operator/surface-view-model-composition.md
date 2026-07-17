@@ -176,11 +176,11 @@ Three reinforcing guarantees make the seed the sole identity owner:
 3. **Legacy title unreachable** — in runtime Focus Panel mode the `Drawer` `title` prop is `null`
    while a subject is selected, so the legacy `drawerTitle` block can never paint a stale subject.
 
-## Future extension to Settings surfaces
+## Future extension to Configuration surfaces
 
-The same pattern extends to configuration/Settings surfaces: compose a `SettingsSurfaceViewModel`
+The same pattern extends to Configuration surfaces: compose a `SettingsSurfaceViewModel`
 whose `reveal.canCommit` is the settings hub's existing readiness, list the settings sections as the
-bundle, and patch live values after commit. Adopt it when a Settings surface shows staggered loading;
+bundle, and patch live values after commit. Adopt it when a Configuration surface shows staggered loading;
 do not pre-build it speculatively.
 
 ---
