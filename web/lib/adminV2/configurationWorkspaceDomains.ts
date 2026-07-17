@@ -222,7 +222,7 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
         description: "Reusable services and their organization defaults.",
         items: [
             {
-                href: "/settings/commercial/programs",
+                href: "/organization/programs",
                 label: "Programs",
                 description: "Service catalog, categories, eligibility, requirements, and defaults.",
             },

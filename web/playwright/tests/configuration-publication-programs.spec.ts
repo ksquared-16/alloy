@@ -222,9 +222,18 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     });
 
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto("/settings/commercial/programs", { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await page.goto("/organization/programs", { waitUntil: "domcontentloaded", timeout: 120_000 });
     await expect(page.getByTestId("programs-publication-runtime")).toBeVisible({ timeout: 60_000 });
+    await expect(page).toHaveURL(/\/organization\/programs/);
+    await expect(page.getByTestId("programs-publication-runtime")).toContainText("Organization");
+    await expect(page.getByTestId("programs-publication-runtime")).not.toContainText("Commercial");
+    await expect(page.getByTestId("programs-publication-runtime")).not.toContainText("Settings");
     await shot("01-programs-landing");
+
+    await page.goto("/settings/commercial/programs", { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await expect(page).toHaveURL(/\/organization\/programs/);
+    await expect(page.getByTestId("programs-publication-runtime")).toBeVisible({ timeout: 60_000 });
+    await shot("01b-legacy-redirect");
 
     await page.getByRole("button", { name: "New Program" }).click();
     await page.getByTestId("program-create-name").fill("Preschool");
@@ -283,5 +292,8 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
         "location-2",
     ]);
     expect(consoleErrors).toEqual([]);
-    expect(failedRequests).toEqual([]);
+    // Shell chrome and aborted RSC navigations are ambient; only Programs API failures count.
+    expect(
+        failedRequests.filter((url) => url.includes("/api/admin/configuration/programs")),
+    ).toEqual([]);
 });

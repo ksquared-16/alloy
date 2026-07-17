@@ -31,12 +31,19 @@ describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
         expect(normalizeToCanonicalAdminPath("/adminV2/settings/layouts")).toBe("/settings/layouts");
     });
 
-    it("configuration workspace domain links prefer /settings", () => {
+    it("configuration workspace domain links prefer /settings or Organization Programs", () => {
         const hrefs = CONFIGURATION_WORKSPACE_DOMAINS.flatMap((d) => d.items.map((i) => i.href));
-        expect(hrefs.every((h) => h.startsWith("/settings") || h.startsWith("/admin/forms") || h.startsWith("/admin/workflows"))).toBe(
-            true,
-        );
+        expect(
+            hrefs.every(
+                (h) =>
+                    h.startsWith("/settings")
+                    || h.startsWith("/organization/")
+                    || h.startsWith("/admin/forms")
+                    || h.startsWith("/admin/workflows"),
+            ),
+        ).toBe(true);
         expect(hrefs).toContain("/settings/processes");
         expect(hrefs).toContain("/settings/surfaces");
+        expect(hrefs).toContain("/organization/programs");
     });
 });

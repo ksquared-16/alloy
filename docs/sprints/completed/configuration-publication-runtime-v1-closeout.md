@@ -11,14 +11,21 @@ supersedes: []
 **Branch:** `agent/cursor/2-configuration-publication-distribution-v1`  
 **Worktree:** `wt2-configuration-publication-distribution-v1`  
 **Tip:** `e85ee94f5` (assignment doctrine correction)  
-**Verdict:** Ready for promotion authorization (local only; no push/PR/deploy performed)
+**Verdict:** Ready for promotion authorization (local only; no push/PR/deploy performed) after the Organization routing correction.
+
+Earlier certification that treated `/settings/commercial/programs` as acceptable
+canonical product IA is **rejected**. Programs must live at
+`/organization/programs`.
 
 ## Certification verdict
 
-**Ready for promotion** after Kelly authorizes push/PR. The sprint established a reusable Configuration Publication Runtime subsystem with Programs as the first assignment-mode reference consumer. Apply semantics for Programs are closed.
+**Ready for promotion** after Kelly authorizes push/PR, provided
+`/organization/programs` is the only Programs page owner and legacy Commercial
+entry points redirect. The publication/assignment architecture remains accepted
+and is not reopened.
 
-Operator surface URL remains the compatibility path `/settings/commercial/programs` (and `/adminV2/commercial/programs`). Operator language is Programs; a clean `/programs` route alias is deferred.
-
+Operator surface URL: `/organization/programs` (selection: `?programId=`).
+Compatibility: `/settings/commercial/programs` → redirect.
 ## 1. Generic substrate vs Programs adapters
 
 ### Platform-generic (`web/lib/configPublication/`)
@@ -114,7 +121,8 @@ Recorded at closeout:
 | Production typecheck | passed |
 | Test typecheck | passed |
 | Production build | passed |
-| Route verify `/settings/commercial/programs` | PASS |
+| Route verify `/organization/programs` | PASS (certification re-run) |
+| Legacy redirect `/settings/commercial/programs` | PASS → `/organization/programs` |
 | Authenticated browser journey | PASS first attempt (14.5s); earlier cold-load flake documented |
 | Migration replay + schema export | passed (local isolated DB; earlier in sprint) |
 | `docs:lint` | completed; report is pre-existing repo baseline (not introduced by this sprint) |
@@ -133,8 +141,9 @@ No parallel doctrine files were introduced as peer runtimes.
 
 ## 9. Intentionally deferred
 
-- Clean `/programs` (or `/settings/programs`) route alias away from `commercial`
-- Live DB-backed browser certification against deployed migration (API was intercepted for UI proof; migration not applied to shared remote)
+- `/organization/locations` convergence (today: `/settings/locations` frozen surface)
+- `/organization/processes` convergence (today: `/settings/processes`)
+- Live DB-backed browser certification against deployed migration
 - Publication for Data Model, Fields, Statuses, Surfaces, Actions, Operational Calculations, Access, Communications, Automation
 - Scheduled / future-dated activation
 - Approvals, branching, rollback engine
@@ -143,14 +152,28 @@ No parallel doctrine files were introduced as peer runtimes.
 - Compatibility storage deletion / full Programs identity migration off vocabulary fallbacks
 - Downstream scheduling, attendance, staffing, capacity, billing, funding runtimes
 - Broad Configuration-page redesign
+- Broad Locations/Processes redesign (routing convergence only when separately authorized)
+
+### Locations and Processes route reconciliation
+
+| Domain | Current operator URL | Status | Smallest safe convergence |
+|---|---|---|---|
+| Locations | `/settings/locations` (`?locationId=` selection) | Frozen Locations Configuration Runtime; rewrite to `adminV2/settings/locations` | Add `/organization/locations` rewrite + redirect from `/settings/locations` in a dedicated routing sprint; do not reopen Locations UI |
+| Processes | `/settings/processes` | Active Business Processes surface under Settings namespace | Add `/organization/processes` rewrite + redirect from `/settings/processes` once nav copy and breadcrumbs are audited; no process redesign |
+
+Redirects for Locations/Processes were **not** established in this sprint to avoid breaking frozen Locations bookmarks and Process IA without a dedicated pass. Doctrine now records the intended hierarchy so route ownership is not contradictory.
 
 ## 10. Known limitations
 
 1. Browser journey proves operator controls with intercepted publication API responses because remote migration deploy is out of scope.
-2. Compatibility URL still includes `commercial`.
-3. Worktree was 40 commits behind `origin/staging` at certification; rebase/sync before promotion.
-4. Organization landing still declares Programs publication mode statically; live Draft/Published evidence is authoritative on the Programs workspace, not yet projected as dynamic Organization card health.
+2. Worktree may be behind `origin/staging` at certification; rebase/sync before promotion.
+3. Organization landing still declares Programs publication mode statically; live Draft/Published evidence is authoritative on the Programs workspace, not yet projected as dynamic Organization card health.
+4. `/organization/locations` and `/organization/processes` are documented but not yet implemented as canonical URLs.
 
 ## Recommendation
 
-**Ready for promotion** after Kelly authorizes sync/rebase against current `origin/staging`, push, and PR. Do not deploy until the migration is applied in the target environment and a live (non-intercepted) assignment journey is re-certified.
+**Ready for promotion** after Kelly authorizes sync/rebase against current
+`origin/staging`, push, and PR — only if `/organization/programs` remains the
+canonical Programs route and legacy Commercial Programs URLs redirect. Do not
+deploy until the migration is applied in the target environment and a live
+(non-intercepted) assignment journey is re-certified.

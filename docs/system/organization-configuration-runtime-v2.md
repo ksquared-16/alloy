@@ -80,7 +80,10 @@ Forms, Documents, Branding, Billing, Scheduling, and AI configuration may become
 
 ## Programs ownership
 
-**Programs** is the operator language. The existing `/settings/commercial` route and Commercial Runtime names may remain compatibility details until a downstream migration is authorized.
+**Programs** is the operator language. The canonical Programs surface is
+`/organization/programs`. Legacy `/settings/commercial/programs` redirects to
+that route. The `/settings/commercial` Commercial hub may remain a compatibility
+detail until a broader Commercial migration is authorized.
 
 A Program is a reusable service:
 

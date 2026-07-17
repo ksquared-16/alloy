@@ -8,9 +8,11 @@
  *
  * **Admin / config:**
  * - `/organization` — Organization configuration landing
- * - `/settings/*` — settings sub-surfaces
+ * - `/organization/programs` — Organization Programs (canonical)
+ * - `/settings/*` — settings sub-surfaces (compatibility / remaining domains)
  * - `/admin/settings/*` — compatibility redirect → `/settings/*`
  * - `/settings`, `/settings/organization`, `/admin` — compatibility redirects → `/organization`
+ * - `/settings/commercial/programs` — compatibility redirect → `/organization/programs`
  *
  * **Legacy:**
  * - `/legacy-admin` — archived old admin
@@ -26,6 +28,12 @@ export const CANONICAL_SETTINGS_BASE = "/settings" as const;
 
 /** Canonical Organization configuration landing. */
 export const CANONICAL_ORGANIZATION_BASE = "/organization" as const;
+
+/**
+ * Canonical Organization Programs surface.
+ * Compatibility `/settings/commercial/programs` redirects here; do not treat Commercial as product IA.
+ */
+export const CANONICAL_ORGANIZATION_PROGRAMS_HREF = `${CANONICAL_ORGANIZATION_BASE}/programs` as const;
 
 /** Legacy admin implementation base (financials, old list pages, unmigrated system). */
 export const LEGACY_ADMIN_BASE = "/legacy-admin" as const;
@@ -70,11 +78,18 @@ export const CANONICAL_ADMIN_PATH_PREFIXES = [
 export function isCanonicalAdminPath(pathname: string): boolean {
     const p = pathname.trim();
     if (p === CANONICAL_ADMIN_BASE) return true;
-    if (p === CANONICAL_ORGANIZATION_BASE) return true;
+    if (p === CANONICAL_ORGANIZATION_BASE || p.startsWith(`${CANONICAL_ORGANIZATION_BASE}/`)) return true;
     if (p === CANONICAL_SETTINGS_BASE || p.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) return true;
     return CANONICAL_ADMIN_PATH_PREFIXES.some(
         (prefix) => p === prefix || p.startsWith(`${prefix}/`),
     );
+}
+
+/** Build Organization Programs href; optional programId preserves selection across refresh. */
+export function organizationProgramsHref(programId?: string | null): string {
+    const id = typeof programId === "string" ? programId.trim() : "";
+    if (!id) return CANONICAL_ORGANIZATION_PROGRAMS_HREF;
+    return `${CANONICAL_ORGANIZATION_PROGRAMS_HREF}?programId=${encodeURIComponent(id)}`;
 }
 
 /** Map old `/admin/...` bookmark to operator workspace when not canonical. */
@@ -139,6 +154,7 @@ export function isOperatorAdminPath(pathname: string): boolean {
         p === CANONICAL_ADMIN_BASE ||
         p.startsWith(`${CANONICAL_ADMIN_BASE}/`) ||
         p === CANONICAL_ORGANIZATION_BASE ||
+        p.startsWith(`${CANONICAL_ORGANIZATION_BASE}/`) ||
         p === CANONICAL_SETTINGS_BASE ||
         p.startsWith(`${CANONICAL_SETTINGS_BASE}/`) ||
         p === LEGACY_ADMIN_BASE ||
@@ -242,7 +258,7 @@ export function isCanonicalWorkspacePath(pathname: string): boolean {
 
 export function isCanonicalSettingsPath(pathname: string): boolean {
     const p = normalizeToCanonicalAdminPath(pathname.trim());
-    if (p === CANONICAL_ORGANIZATION_BASE) return true;
+    if (p === CANONICAL_ORGANIZATION_BASE || p.startsWith(`${CANONICAL_ORGANIZATION_BASE}/`)) return true;
     if (p === CANONICAL_SETTINGS_BASE || p.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) return true;
     if (p === CANONICAL_ADMIN_CONFIG_LANDING) return true;
     return matchesCanonicalPrefix(pathname, `${CANONICAL_ADMIN_BASE}/settings`);

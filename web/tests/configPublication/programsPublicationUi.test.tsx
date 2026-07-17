@@ -5,6 +5,13 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ProgramsPublicationWorkspace from "@/components/adminV2/settings/programs/ProgramsPublicationWorkspace";
 
+vi.mock("next/navigation", () => ({
+    useRouter: () => ({
+        replace: vi.fn(),
+        push: vi.fn(),
+    }),
+}));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const snapshot = {

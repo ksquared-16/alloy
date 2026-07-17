@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
     ConfigurationPrimaryButton,
     ConfigurationQueueItem,
@@ -11,6 +12,7 @@ import {
     ConfigConsequenceLine,
     ConfigObjectHeader,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import { organizationProgramsHref } from "@/lib/admin/canonicalAdminRoutes";
 import type { ConfigurationTargetPreview } from "@/lib/configPublication/types";
 import type {
     ProgramCatalogItem,
@@ -75,9 +77,14 @@ async function postAction(body: Record<string, unknown>): Promise<Record<string,
     return json;
 }
 
-export default function ProgramsPublicationWorkspace() {
+export default function ProgramsPublicationWorkspace(props: {
+    initialProgramId?: string | null;
+}) {
+    const router = useRouter();
     const [snapshot, setSnapshot] = useState<ProgramPublicationSnapshot | null>(null);
-    const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null);
+    const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
+        props.initialProgramId?.trim() || null,
+    );
     const [form, setForm] = useState<DraftForm | null>(null);
     const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
     const [preview, setPreview] = useState<ConfigurationTargetPreview[] | null>(null);
@@ -88,6 +95,14 @@ export default function ProgramsPublicationWorkspace() {
     const [createName, setCreateName] = useState("");
     const [createKey, setCreateKey] = useState("");
 
+    const selectProgram = useCallback(
+        (programId: string | null) => {
+            setSelectedProgramId(programId);
+            router.replace(organizationProgramsHref(programId), { scroll: false });
+        },
+        [router],
+    );
+
     const reload = useCallback(async () => {
         const response = await fetch(ENDPOINT, { credentials: "include" });
         const json = (await response.json().catch(() => ({}))) as ProgramPublicationSnapshot & {
@@ -97,15 +112,24 @@ export default function ProgramsPublicationWorkspace() {
         setSnapshot(json);
         setSelectedProgramId((current) => {
             if (current && json.programs.some((program) => program.id === current)) return current;
+            const preferred = props.initialProgramId?.trim() || null;
+            if (preferred && json.programs.some((program) => program.id === preferred)) {
+                return preferred;
+            }
             return json.programs[0]?.id ?? null;
         });
-    }, []);
+    }, [props.initialProgramId]);
 
     useEffect(() => {
         void reload()
             .catch((nextError) => setError(nextError instanceof Error ? nextError.message : "Programs could not load."))
             .finally(() => setLoading(false));
     }, [reload]);
+
+    useEffect(() => {
+        if (loading || !selectedProgramId) return;
+        router.replace(organizationProgramsHref(selectedProgramId), { scroll: false });
+    }, [loading, router, selectedProgramId]);
 
     const selectedProgram = useMemo(
         () => snapshot?.programs.find((program) => program.id === selectedProgramId) ?? null,
@@ -190,7 +214,7 @@ export default function ProgramsPublicationWorkspace() {
                                         label: createName,
                                         key: createKey,
                                     });
-                                    setSelectedProgramId(String(result.programId ?? ""));
+                                    selectProgram(String(result.programId ?? ""));
                                     setCreateName("");
                                     setCreateKey("");
                                     setCreateOpen(false);
@@ -220,7 +244,7 @@ export default function ProgramsPublicationWorkspace() {
                             active={program.id === selectedProgramId}
                             title={program.draft.label}
                             subtitle={publicationLabel(program)}
-                            onClick={() => setSelectedProgramId(program.id)}
+                            onClick={() => selectProgram(program.id)}
                             testId={`program-catalog-${program.id}`}
                         />
                     ))}

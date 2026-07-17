@@ -126,7 +126,14 @@ Domains keep their authoritative tables, validation, mutation paths, and runtime
 
 The frozen registry contains Locations, Programs, Access, Communications, Data Model, Business Processes, Surfaces, Automation, and Operational Intelligence. Automation and Operational Intelligence remain first-class because the ownership matrix already gives each a distinct owner.
 
-**Programs** is operator language for the reusable service catalog. The `/settings/commercial` route and Commercial Runtime names may remain internal compatibility details. Locations choose Programs offered and own Rooms/Delivery Resources and local schedules; resource/runtime systems own capacity. Organization Runtime V2 does not implement or migrate those downstream domains.
+**Programs** is operator language for the reusable service catalog. The
+canonical Programs route is `/organization/programs` (selection via
+`?programId=`). Legacy `/settings/commercial/programs` redirects there and must
+not remain product IA. `/settings/commercial` may remain a Commercial module
+compatibility hub until separately migrated. Locations choose Programs offered
+and own Rooms/Delivery Resources and local schedules; resource/runtime systems
+own capacity. Organization Runtime V2 does not implement or migrate those
+downstream domains.
 
 Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
 
@@ -206,7 +213,21 @@ These belong to the Configuration Runtime eventually but are only Commercial-spe
 
 ## Platform Configuration navigation
 
-**Configuration** is the operator-facing product language. `/organization` is the Configuration landing. Existing `/settings/*` URLs remain compatibility routes for domain surfaces; internal filenames and identifiers may retain `settings` where changing them would create migration risk.
+**Configuration** is the operator-facing product language. `/organization` is the
+Configuration landing for Organization-owned domains.
+
+Canonical Organization hierarchy (product IA):
+
+| Route | Status |
+|-------|--------|
+| `/organization` | Canonical landing |
+| `/organization/programs` | Canonical Programs (this sprint) |
+| `/organization/locations` | Planned convergence; today `/settings/locations` remains the frozen Locations surface with compatibility status |
+| `/organization/processes` | Planned convergence; today `/settings/processes` remains the Business Processes surface |
+
+Existing `/settings/*` URLs remain compatibility or domain routes until each domain
+is migrated beneath `/organization`. Compatibility redirects must not render a
+second canonical page.
 
 **Information architecture:**
 

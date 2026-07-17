@@ -307,7 +307,7 @@ export default function LocationsConfigurationPage({
 
     const addProgram = useCallback(() => {
         if (!selectedSite || !canMutate) return;
-        router.push("/settings/commercial/programs");
+        router.push("/organization/programs");
     }, [canMutate, router, selectedSite]);
 
     const firstRoomNeedingCapacityId = useMemo(() => {

@@ -1,7 +1,9 @@
-import ProgramsPublicationWorkspace from "@/components/adminV2/settings/programs/ProgramsPublicationWorkspace";
+import { redirect } from "next/navigation";
+import { organizationProgramsHref } from "@/lib/admin/canonicalAdminRoutes";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsCommercialProgramsPage() {
-    return <ProgramsPublicationWorkspace />;
+/** Compatibility stub — next.config redirects; this never remains a competing page. */
+export default function LegacySettingsCommercialProgramsPage() {
+    redirect(organizationProgramsHref());
 }

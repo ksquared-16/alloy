@@ -6,6 +6,8 @@
  * distribution behavior here; they keep their own authoritative storage.
  */
 
+import { CANONICAL_ORGANIZATION_PROGRAMS_HREF } from "@/lib/admin/canonicalAdminRoutes";
+
 export type ConfigurationAuthority = "platform" | "organization" | "location";
 export type ConfigurationInheritanceKind = "value" | "availability" | "none";
 export type ConfigurationPublicationMode = "immediate" | "explicit";
@@ -156,7 +158,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         internalRuntimeKey: "commercial",
         label: "Programs",
         description: "Reusable service catalog published by the organization for every business vertical.",
-        href: "/settings/commercial/programs",
+        href: CANONICAL_ORGANIZATION_PROGRAMS_HREF,
         icon: "programs",
         publisherLabel: "Organization",
         configurationOwner: "Programs",

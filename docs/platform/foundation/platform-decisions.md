@@ -51,6 +51,31 @@ Future Configuration domains use the Configuration Domain Card and publisher/con
 
 ---
 
+## 2026-07 — Organization Programs route is `/organization/programs`
+
+**Decision:**
+Programs is an Organization-owned Configuration domain. The canonical operator
+route is `/organization/programs` with optional `?programId=` selection.
+`/settings/commercial/programs` and related Commercial entry points are
+compatibility redirects only and must not render a competing page.
+
+**Why:**
+Product certification rejected Commercial/Settings hierarchy as Programs
+identity. Organization is the place; Programs, Locations, and Processes are its
+domains. Publication is behavior inside Programs, not the page’s parent identity.
+
+**Consequences:**
+Organization landing and domain cards link to `/organization/programs`.
+Locations and Processes remain on `/settings/locations` and `/settings/processes`
+until separately converged to `/organization/locations` and
+`/organization/processes`.
+
+**Canonical owners:** [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../../system/organization-configuration-runtime-v2.md`](../../system/organization-configuration-runtime-v2.md).
+
+**Status:** Active
+
+---
+
 ## 2026-07 — Program publication delivery is assignment, not Apply
 
 **Decision:**

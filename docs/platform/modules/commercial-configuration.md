@@ -46,7 +46,8 @@ Implemented via `lib/configRuntime/scope.ts` — `ConfigScope`, `ConfigOwner`, `
 
 ## Domain: Programs
 
-**Route:** `/admin/commercial/programs`
+**Route:** `/organization/programs` (canonical). Legacy
+`/settings/commercial/programs` and `/admin/commercial/programs` redirect here.
 
 **Storage:** Organization identity now uses `programs` → editable
 `program_drafts` → immutable `program_revisions`.
