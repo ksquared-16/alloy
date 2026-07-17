@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-14
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
@@ -20,6 +20,9 @@ Every configuration domain composes its experience from this fixed set of primit
 
 ### Configuration Workspace
 The root of a configuration experience for one object type. Owns the three-zone layout (object list · object detail · command rail), URL-addressable selection state, and responsive collapse. It is the container every other primitive lives inside. One per object type (Locations, Programs, Offerings…).
+
+### Workspace Canvas and Region
+The Canvas is the quiet Stone field behind the selected object's detail. A Region is a coherent white operational answer on that field — glance, readiness, attention, capability, or editor. Regions do not acquire object identity, selection, or nested card chrome unless they actually represent an Object.
 
 ### Configuration Sidebar (Object List)
 The persistent selector for objects of the current type. Responsibilities: search, filter, "Add", and an unmistakable **selected** state. Swaps to a child object's siblings when the operator drills into a nested object. It is a selector, never a page.
@@ -58,7 +61,7 @@ Ranked actions on the command rail, grouped **Fix now → Do next → Manage**. 
 Organization (global) vs the selected configuration object. Switches the operator between the org landing and the object workspace without inventing a third “fleet” noun.
 
 ### Apply To Dialog
-Multi-select targets + confirm. Domains supply targets and the mutation; the dialog is the shared interaction for pushing configuration across locations (or future domain peers).
+Multi-select targets + confirm for a domain with an authoritative copy/apply provider. Domains supply targets and the durable mutation. The primitive remains hidden when no provider exists; confirmation may never imply a copy occurred when only a proposal was produced.
 
 ### Configuration Health Banner
 A per-object or per-section rollup of substrate resolution status into a single calm statement ("All good" / "Needs setup"). A compact form of Attention for tight spaces (e.g. a nested object's rail). Never a "last checked" heartbeat. **Do not introduce a third status system named Health** — Attention remains the live health model; this banner is Attention in compact form.
@@ -119,6 +122,9 @@ The reusable nested-object pattern (Rooms inside Locations; future Programs, tem
 ### Consequence Line
 A live, plain-language line restating the substrate's computed result as a business outcome for the focused child object.
 
+### Authoritative Mutation Boundary
+The shared save contract for every editor and inline mutation. The server returns the changed object or layer; the client proves the response contains the submitted patch before leaving edit mode, then updates every dependent list, summary, Attention, and Readiness consumer. Hard refresh must reproduce the same state. HTTP `2xx` alone is never success.
+
 ---
 
 ## Composition rules
@@ -126,7 +132,7 @@ A live, plain-language line restating the substrate's computed result as a busin
 - A configuration experience is **assembled from these primitives only.** New visual needs extend the library, not the domain.
 - Primitives depend on the **object model and resolved view models**, never on raw database rows. Only server loaders touch the substrate.
 - Every primitive obeys the platform laws: the engine stays invisible, unknown is never zero, inheritance is quiet, editing is in-place, and the two status systems stay separate.
-- The **reference implementations** of every primitive are in the Locations prototype (`web/app/adminV2/settings/prototypes/operational-configuration`); a new domain adapts those, it does not reinvent them.
+- The **reference implementations** of these primitives are in the frozen Locations Runtime (`web/components/adminV2/settings/locations/` and `web/components/adminV2/settings/configurationRuntime/workspace/`); a new domain adapts those, it does not reinvent them.
 
 ## Related docs
 

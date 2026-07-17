@@ -17,7 +17,7 @@
 
 ### Program
 
-- **Create program — PASS.** The created category row appeared locally and after hard refresh. Temporary category deleted.
+- **Create program — PASS.** The focused creation editor persisted name, active state, age-range start/end/unit, and default room types in the POST response, local summary, and hard-refresh read model. Temporary category deleted.
 - **Name — PASS.** `label` returned, updated locally, and survived hard refresh.
 - **Active state — PASS.** Boolean false returned and survived hard refresh.
 - **Age-range start — PASS.** The zero string `"0"` returned in metadata and survived hard refresh.
@@ -48,12 +48,20 @@
 ### Tours
 
 - **Create availability window — PASS.** Day, start/end, timezone, duration, buffer, booking limit, and approval requirement returned, rendered locally, and survived hard refresh.
+- **Edit availability window — PASS.** Day, start/end, timezone, duration, buffer, booking limit, approval requirement, and active state were confirmed by PATCH, rehydrated locally, and survived hard refresh.
 - **Active state — PASS.** Toggle response and hard-refresh inactive state agreed.
 - **Delete window — PASS.** DELETE returned `{ ok: true }`; audit records were removed.
+- **Readiness consumer — PASS.** Creating an active window changed Tours to Complete without refresh; deleting the final window returned it to Needs setup.
 
 ### Placement
 
-- **Enabled, ordering mode, factor selection, factor order — CODE PASS / RUNTIME NOT APPLICABLE.** The local organization has no waitlist-enabled Business Process, so the workspace exposes no save control. The route deep-merges and validates `placement_priority_v1`; the UI now refuses success unless the authoritative response contains the submitted layer.
+- **Business Process selection — PASS.** The canonical lifecycle catalog resolves Enrollment rather than presenting implementation work-unit names as processes.
+- **Stage selection — PASS.** The selected governing stage resolves to Waitlist from lifecycle metadata.
+- **Enabled/status — PASS.** Boolean state returned in `placement_priority_v1`, updated the status presentation, and survived hard refresh.
+- **Ordering mode — PASS.** Preview/apply mode returned and survived hard refresh.
+- **Factor selection — PASS.** Removing Employee returned the expected enabled-key set and survived hard refresh.
+- **Factor order — PASS.** Reordering the sibling factors returned in the authoritative layer and survived hard refresh.
+- **Cleanup — PASS.** The original ranking layer was restored after certification.
 
 ### Access
 
@@ -90,7 +98,7 @@
 
 ## Evidence
 
-- Runtime acceptance: Location create/edit; Program create/edit; Room create/edit; Schedule create/edit; Tours create/toggle/delete; Access add/remove.
+- Runtime acceptance: Location create/edit; Program create/edit; Room create/edit; Schedule create/edit; Tours create/edit/toggle/delete; Placement process/stage/ranking; Access add/remove.
 - Test data cleanup: zero temporary Location, Program, Schedule, or Tour rows remain.
 - Focused tests: `43 passed`.
 - Production typecheck: passed.
@@ -98,6 +106,5 @@
 
 ## Intentionally deferred gaps
 
-- Placement runtime acceptance requires an eligible waitlist-enabled Business Process. No mutation control is exposed without one.
 - Closures/holidays remain read-only because no provider exists.
 - Cross-location Apply remains hidden until its authoritative provider is implemented and acceptance-tested.

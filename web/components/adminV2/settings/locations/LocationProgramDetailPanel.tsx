@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import type { LocationProgramOperationalSummary } from "@/lib/locations/locationWorkspaceModel";
 import {
@@ -79,6 +79,7 @@ export default function LocationProgramDetailPanel({
     ageUnitSelectOptions = [],
     locationHasSchedule = false,
     scheduleSummary,
+    createDetail,
 }: {
     program: LocationProgramCategoryRow | null;
     summary: LocationProgramOperationalSummary | null;
@@ -101,6 +102,7 @@ export default function LocationProgramDetailPanel({
     ageUnitSelectOptions?: readonly { value: string; label: string }[];
     locationHasSchedule?: boolean;
     scheduleSummary?: string;
+    createDetail?: ReactNode;
 }) {
     const [label, setLabel] = useState("");
     const [ageFrom, setAgeFrom] = useState("");
@@ -146,7 +148,8 @@ export default function LocationProgramDetailPanel({
     };
 
     const detail =
-        !program ?
+        createDetail ? createDetail
+        : !program ?
             programs.length === 0 ?
                 <ConfigurationEmptyState
                     testId="locations-program-workspace-empty"

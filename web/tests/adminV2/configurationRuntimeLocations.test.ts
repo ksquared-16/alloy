@@ -138,6 +138,7 @@ describe("Configuration Runtime — Locations", () => {
 
     it("uses summary-first programs and threshold staffing with distinct view/edit modes", () => {
         const programs = read("components/adminV2/settings/locations/LocationProgramDetailPanel.tsx");
+        const programCreate = read("components/adminV2/settings/locations/LocationProgramCreatePanel.tsx");
         const rooms = read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx");
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(programs).toContain("locations-program-summary-");
@@ -152,6 +153,13 @@ describe("Configuration Runtime — Locations", () => {
         expect(programs).toContain("ConfigEditorSection");
         expect(programs).toContain('title="Schedule"');
         expect(programs).toContain("onAddProgram");
+        expect(programs).toContain("createDetail");
+        expect(programCreate).toContain("locations-program-create-save");
+        expect(programCreate).toContain("default_room_types");
+        expect(programCreate).toContain("age_range_unit");
+        expect(page).toContain("setCreatingProgram(true)");
+        expect(page).toContain("LocationProgramCreatePanel");
+        expect(read("app/api/admin/location-program-categories/route.ts")).toContain("metadata,");
         expect(programs).not.toContain("Everything looks good");
         expect(rooms).toContain('title="Program participation"');
         expect(rooms).toContain('title="Capacity"');
@@ -220,7 +228,16 @@ describe("Configuration Runtime — Locations", () => {
         expect(roomCreate).toContain("student_teacher_ratio");
         expect(ownedConcerns).toContain("Waitlist ranking save was not confirmed");
         expect(ownedConcerns).toContain("Location access save was not confirmed");
+        expect(ownedConcerns).not.toContain("#00a283");
+        expect(ownedConcerns).not.toContain("#007d68");
         expect(tours).toContain("Tour availability creation was not confirmed");
+        expect(tours).toContain("Tour availability save");
+        expect(tours).toContain("locations-tour-edit-form");
+        expect(tours).toContain("Save tour window");
+        expect(tours).toContain("onMutationCommitted");
+        expect(read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx")).toContain(
+            "refreshOwnedConcernSetup",
+        );
     });
 
     it("does not repeat active tab titles as tab-body headers", () => {
@@ -257,9 +274,13 @@ describe("Configuration Runtime — Locations", () => {
         expect(panels).toContain("Tie-break");
         expect(panels).toContain("Ordering mode");
         expect(panels).toContain("selectableCatalog");
-        expect(panels).toContain("Saved on this Business Process, not this location");
+        expect(panels).toContain("Saved on {selectedProcessName}");
         expect(panels).toContain("Applies at every location");
         expect(panels).toContain("Governing Business Process");
+        expect(panels).toContain("locations-placement-process");
+        expect(panels).toContain("locations-placement-stage");
+        expect(panels).toContain("lifecycle_process_id");
+        expect(panels).toContain("lifecycle_stage_label");
         expect(panels).toContain("Ranking active");
         expect(panels).not.toContain("Placement inventory");
         expect(rankingEditor).toContain("Available factors");

@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import TourAvailabilitySettingsClient from "@/app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient";
+import {
+    ConfigurationInlineButton,
+    ConfigurationPrimaryButton,
+    ConfigurationSecondaryButton,
+} from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { PriorityRuleOrderEditor } from "@/components/adminV2/settings/PriorityRuleOrderEditor";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import {
@@ -62,13 +67,49 @@ function ConcernSurface({
     );
 }
 
-export function LocationToursPanel({ locationId, locationLabel }: { locationId: string; locationLabel: string }) {
+type PlacementWorkUnit = {
+    id: string;
+    key: string;
+    name: string;
+    department_id?: string | null;
+    metadata?: unknown;
+    queue_definition?: unknown;
+};
+
+function readPlacementLifecycleValue(metadata: unknown, key: string): string | null {
+    if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    const value = (metadata as Record<string, unknown>)[key];
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function placementProcessId(workUnit: PlacementWorkUnit): string {
+    return readPlacementLifecycleValue(workUnit.metadata, "lifecycle_process_id") ?? `legacy:${workUnit.id}`;
+}
+
+function placementStageLabel(workUnit: PlacementWorkUnit): string {
+    return readPlacementLifecycleValue(workUnit.metadata, "lifecycle_stage_label") ?? workUnit.name;
+}
+
+export function LocationToursPanel({
+    locationId,
+    locationLabel,
+    onMutationCommitted,
+}: {
+    locationId: string;
+    locationLabel: string;
+    onMutationCommitted?: () => void | Promise<void>;
+}) {
     return (
         <section className="process-config-setup-card p-3" data-testid="locations-tours-surface" aria-label="Tours">
             <p className="config-typo-sublabel mb-3 max-w-2xl">
                 Decide when families can visit and how each booking window works.
             </p>
-            <TourAvailabilitySettingsClient locationId={locationId} locationLabel={locationLabel} embedded />
+            <TourAvailabilitySettingsClient
+                locationId={locationId}
+                locationLabel={locationLabel}
+                embedded
+                onMutationCommitted={onMutationCommitted}
+            />
         </section>
     );
 }
@@ -83,9 +124,8 @@ export function LocationPlacementPanel({
     canMutate: boolean;
 }) {
     const activeRooms = rooms.filter((room) => room.is_active !== false);
-    const [workUnits, setWorkUnits] = useState<
-        { id: string; key: string; name: string; metadata?: unknown; queue_definition?: unknown }[]
-    >([]);
+    const [workUnits, setWorkUnits] = useState<PlacementWorkUnit[]>([]);
+    const [processNames, setProcessNames] = useState<Record<string, string>>({});
     const [selectedId, setSelectedId] = useState("");
     const [enabled, setEnabled] = useState(false);
     const [shadowMode, setShadowMode] = useState(false);
@@ -99,15 +139,34 @@ export function LocationPlacementPanel({
     const loadPolicy = useCallback(async () => {
         setError(null);
         try {
-            const response = await fetch("/api/admin/work-units", { cache: "no-store" });
-            const json = (await response.json().catch(() => ({}))) as {
-                items?: { id: string; key: string; name: string; metadata?: unknown; queue_definition?: unknown }[];
+            const [workUnitsResponse, catalogResponse] = await Promise.all([
+                fetch("/api/admin/work-units", { cache: "no-store" }),
+                fetch("/api/admin/lifecycle-catalog", { cache: "no-store" }),
+            ]);
+            const json = (await workUnitsResponse.json().catch(() => ({}))) as {
+                items?: PlacementWorkUnit[];
                 error?: string;
             };
-            if (!response.ok) throw new Error(json.error ?? "Waitlist ranking policy could not be loaded.");
+            if (!workUnitsResponse.ok) {
+                throw new Error(json.error ?? "Waitlist ranking policy could not be loaded.");
+            }
             const eligible = filterWaitlistRankingEligibleWorkUnits(json.items ?? []);
-            setWorkUnits(eligible);
-            setSelectedId((current) => pickDefaultWaitlistRankingWorkUnitId(eligible, current));
+            const canonical = eligible.filter((workUnit) =>
+                Boolean(readPlacementLifecycleValue(workUnit.metadata, "lifecycle_process_id")),
+            );
+            const selectable = canonical.length > 0 ? canonical : eligible;
+            const catalog = (await catalogResponse.json().catch(() => ({}))) as {
+                items?: { process_id?: string; lifecycle_name?: string }[];
+            };
+            setProcessNames(
+                Object.fromEntries(
+                    (catalogResponse.ok ? (catalog.items ?? []) : [])
+                        .filter((item) => item.process_id && item.lifecycle_name)
+                        .map((item) => [item.process_id as string, item.lifecycle_name as string]),
+                ),
+            );
+            setWorkUnits(selectable);
+            setSelectedId((current) => pickDefaultWaitlistRankingWorkUnitId(selectable, current));
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Waitlist ranking policy could not be loaded.");
         } finally {
@@ -122,6 +181,27 @@ export function LocationPlacementPanel({
     const selectedWorkUnit = useMemo(
         () => workUnits.find((workUnit) => workUnit.id === selectedId) ?? null,
         [selectedId, workUnits],
+    );
+    const processOptions = useMemo(() => {
+        const unique = new Map<string, string>();
+        for (const workUnit of workUnits) {
+            const processId = placementProcessId(workUnit);
+            unique.set(
+                processId,
+                processNames[processId] ??
+                    readPlacementLifecycleValue(workUnit.metadata, "lifecycle_process_name") ??
+                    workUnit.name,
+            );
+        }
+        return [...unique].map(([id, label]) => ({ id, label }));
+    }, [processNames, workUnits]);
+    const selectedProcessId = selectedWorkUnit ? placementProcessId(selectedWorkUnit) : "";
+    const selectedProcessName =
+        processOptions.find((process) => process.id === selectedProcessId)?.label ??
+        selectedWorkUnit?.name ??
+        "this Business Process";
+    const stageOptions = workUnits.filter(
+        (workUnit) => placementProcessId(workUnit) === selectedProcessId,
     );
 
     useEffect(() => {
@@ -207,7 +287,7 @@ export function LocationPlacementPanel({
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                         loading ? "border-alloy-forge/15 bg-alloy-stone/10 text-alloy-midnight/50"
                         : enabled ?
-                            "border-[#00a283]/25 bg-[#00a283]/10 text-[#007d68]"
+                            "border-alloy-bend-pine/25 bg-alloy-bend-pine/10 text-alloy-bend-pine"
                         :   "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
                     }`}
                     data-testid="locations-placement-status"
@@ -226,44 +306,66 @@ export function LocationPlacementPanel({
                 <p className="config-typo-sublabel">No waitlist-enabled Business Process is available for ranking.</p>
             : selectedWorkUnit ?
                 <fieldset disabled={!canMutate || saving} className="space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-3">
                         <div>
-                            <label className="config-typo-field-label" htmlFor="locations-placement-work-unit">
+                            <label className="config-typo-field-label" htmlFor="locations-placement-process">
                                 Governing Business Process
                             </label>
                             <select
-                                id="locations-placement-work-unit"
+                                id="locations-placement-process"
                                 className="config-runtime-select mt-1"
-                                value={selectedId}
-                                onChange={(event) => setSelectedId(event.target.value)}
-                                data-testid="locations-placement-work-unit"
+                                value={selectedProcessId}
+                                onChange={(event) => {
+                                    const firstStage = workUnits.find(
+                                        (workUnit) => placementProcessId(workUnit) === event.target.value,
+                                    );
+                                    if (firstStage) setSelectedId(firstStage.id);
+                                }}
+                                data-testid="locations-placement-process"
                             >
-                                {workUnits.map((workUnit) => (
-                                    <option key={workUnit.id} value={workUnit.id}>
-                                        {workUnit.name}
+                                {processOptions.map((process) => (
+                                    <option key={process.id} value={process.id}>
+                                        {process.label}
                                     </option>
                                 ))}
                             </select>
-                            <p className="config-typo-meta mt-1" data-testid="locations-placement-persistence-scope">
-                                Saved on this Business Process, not this location. Applies at every location using{" "}
-                                {selectedWorkUnit.name}.
-                            </p>
+                        </div>
+                        <div>
+                            <label className="config-typo-field-label" htmlFor="locations-placement-stage">
+                                Stage
+                            </label>
+                            <select
+                                id="locations-placement-stage"
+                                className="config-runtime-select mt-1"
+                                value={selectedId}
+                                onChange={(event) => setSelectedId(event.target.value)}
+                                data-testid="locations-placement-stage"
+                            >
+                                {stageOptions.map((workUnit) => (
+                                    <option key={workUnit.id} value={workUnit.id}>
+                                        {placementStageLabel(workUnit)}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div className="rounded-lg border border-alloy-forge/10 px-3 py-2">
                             <p className="config-typo-meta">Rooms at this location</p>
                             <p className="mt-1 text-sm font-medium text-alloy-midnight/80">
                                 {activeRooms.length} can participate in placement
                             </p>
-                            <button
-                                type="button"
-                                className="mt-2 text-xs font-semibold text-[#007d68]"
+                            <ConfigurationInlineButton
+                                className="mt-2"
                                 onClick={onReviewRooms}
                                 data-testid="locations-placement-review-rooms"
                             >
                                 Review rooms →
-                            </button>
+                            </ConfigurationInlineButton>
                         </div>
                     </div>
+                    <p className="config-typo-meta" data-testid="locations-placement-persistence-scope">
+                        Saved on {selectedProcessName} for the {placementStageLabel(selectedWorkUnit)} stage, not on
+                        this location. Applies at every location using this Business Process.
+                    </p>
 
                     <label className="flex items-center gap-2 text-sm font-medium text-alloy-midnight/80">
                         <input
@@ -341,17 +443,15 @@ export function LocationPlacementPanel({
                     </div>
 
                     {canMutate ?
-                        <button
-                            type="button"
-                            className="rounded-md bg-[#00a283] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                        <ConfigurationPrimaryButton
                             disabled={saving}
                             onClick={() => void savePolicy()}
                             data-testid="locations-placement-save"
                         >
                             {saving ? "Saving…" : "Save ranking"}
-                        </button>
+                        </ConfigurationPrimaryButton>
                     :   null}
-                    {saved ? <p className="text-xs text-[#007d68]">Ranking saved.</p> : null}
+                    {saved ? <p className="text-xs text-alloy-bend-pine">Ranking saved.</p> : null}
                 </fieldset>
             :   null}
         </div>
@@ -369,7 +469,13 @@ type MemberRow = {
     site_location_ids: string[];
 };
 
-export function LocationAccessPanel({ locationId }: { locationId: string }) {
+export function LocationAccessPanel({
+    locationId,
+    onMutationCommitted,
+}: {
+    locationId: string;
+    onMutationCommitted?: () => void | Promise<void>;
+}) {
     const [members, setMembers] = useState<MemberRow[]>([]);
     const [siteLocationIds, setSiteLocationIds] = useState<string[]>([]);
     const [editing, setEditing] = useState(false);
@@ -454,6 +560,7 @@ export function LocationAccessPanel({ locationId }: { locationId: string }) {
                 throw new Error("Location access save was not confirmed by the authoritative response.");
             }
             await loadMembers();
+            await onMutationCommitted?.();
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Location access could not be saved.");
         } finally {
@@ -505,14 +612,12 @@ export function LocationAccessPanel({ locationId }: { locationId: string }) {
                         </ul>
                     :   null}
                     {authorized ?
-                        <button
-                            type="button"
-                            className="text-xs font-medium text-[#007d68]"
+                        <ConfigurationInlineButton
                             onClick={() => setEditing((current) => !current)}
                             data-testid="locations-access-configure"
                         >
                             {editing ? "Close access editor" : "Manage location access"}
-                        </button>
+                        </ConfigurationInlineButton>
                     :   null}
                     {editing ?
                         <ul className="divide-y divide-alloy-forge/10 rounded-lg border border-alloy-forge/10">
@@ -533,9 +638,8 @@ export function LocationAccessPanel({ locationId }: { locationId: string }) {
                                                 {member.site_scope === "all" ? "All locations" : "Selected locations"}
                                             </p>
                                         </div>
-                                        <button
-                                            type="button"
-                                            className="rounded-md border border-alloy-forge/15 px-2.5 py-1.5 text-xs font-medium text-[#007d68] disabled:opacity-50"
+                                        <ConfigurationSecondaryButton
+                                            className="px-2.5 py-1.5"
                                             disabled={savingUserId === member.user_id}
                                             onClick={() => void updateLocationAccess(member, !hasAccess)}
                                         >
@@ -544,7 +648,7 @@ export function LocationAccessPanel({ locationId }: { locationId: string }) {
                                             : hasAccess ?
                                                 "Remove"
                                             :   "Add"}
-                                        </button>
+                                        </ConfigurationSecondaryButton>
                                     </li>
                                 );
                             })}

@@ -6,7 +6,7 @@ import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 
 loadEnv({ path: path.join(__dirname, "../../.env.local") });
 
-const screenshotDir = path.join(__dirname, "../../../docs/sprints/completed/locations-product-review-remediation");
+const screenshotDir = path.join(__dirname, "../../../docs/sprints/completed/locations-config-runtime/screenshots");
 
 async function ensureSidebarExpanded(page: import("@playwright/test").Page) {
     const expand = page.getByRole("button", { name: "Expand sidebar" });
@@ -26,7 +26,7 @@ test.describe("configuration-runtime-locations", () => {
         await ensureAdminPlaywrightSession(page);
 
         await page.goto("/settings/locations", {
-            waitUntil: "networkidle",
+            waitUntil: "domcontentloaded",
             timeout: 120_000,
         });
         await expect(page.getByTestId("locations-configuration-page")).toBeVisible({
@@ -101,10 +101,9 @@ test.describe("configuration-runtime-locations", () => {
             animations: "disabled",
         });
 
-        const firstItem = page.locator('[data-testid^="locations-room-"]').first();
-        if (await firstItem.isVisible().catch(() => false)) {
-            await firstItem.click();
-            await page.getByTestId("locations-room-toggle-edit").click();
+        const roomEdit = page.getByTestId("locations-room-toggle-edit");
+        if (await roomEdit.isVisible().catch(() => false)) {
+            await roomEdit.click();
             await expect(page.getByTestId("locations-room-capacity")).toBeVisible();
             await expect(page.getByTestId("locations-room-save")).toBeVisible();
             await page.waitForTimeout(400);
@@ -150,7 +149,9 @@ test.describe("configuration-runtime-locations", () => {
             if (tab === "placement") {
                 const scope = page.getByTestId("locations-placement-persistence-scope");
                 if (await scope.isVisible().catch(() => false)) {
-                    await expect(scope).toContainText("Saved on this work unit, not this location");
+                    await expect(scope).toContainText("not on this location");
+                    await expect(page.getByTestId("locations-placement-process")).toHaveValue(/.+/);
+                    await expect(page.getByTestId("locations-placement-stage")).toHaveValue(/.+/);
                     await expect(page.getByTestId("priority-active-factors")).toBeVisible();
                     await expect(page.getByText("Available factors", { exact: true })).toBeVisible();
                 }
@@ -173,7 +174,7 @@ test.describe("configuration-runtime-locations", () => {
         await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible();
         await expect(page.getByRole("tab", { name: "Access" })).toBeVisible();
         await expect(page.getByRole("tab", { name: "Communications" })).toHaveCount(0);
-        await expect(page.getByTestId("locations-configuration-context")).toContainText("Locations");
+        await expect(page.getByTestId("locations-selected-location")).toBeVisible();
         await expect(page.getByTestId("locations-configuration-page")).not.toContainText("Today's Tours");
         await expect(page.getByTestId("locations-configuration-page")).not.toContainText("Helpful Resources");
     });
@@ -190,25 +191,20 @@ test.describe("configuration-runtime-locations", () => {
         await expect(page.getByTestId("locations-configuration-page")).toBeVisible({
             timeout: 60_000,
         });
+        await expect(page.getByTestId("locations-fleet-landing")).toBeVisible({
+            timeout: 60_000,
+        });
 
         const addBtn = page.getByTestId("locations-fleet-add-location");
-        if (await addBtn.isVisible().catch(() => false)) {
-            await addBtn.click();
-            await expect(page.getByTestId("locations-site-create")).toBeVisible({
-                timeout: 30_000,
-            });
-            await page.screenshot({
-                path: path.join(screenshotDir, "11-inline-location-create.png"),
-                fullPage: true,
-                animations: "disabled",
-            });
-        } else {
-            const railAdd = page.getByTestId("locations-rail-add-location");
-            await expect(railAdd).toBeVisible();
-            await railAdd.click();
-            await expect(page.getByTestId("locations-site-create")).toBeVisible({
-                timeout: 30_000,
-            });
-        }
+        await expect(addBtn).toBeVisible({ timeout: 30_000 });
+        await addBtn.click();
+        await expect(page.getByTestId("locations-site-create")).toBeVisible({
+            timeout: 30_000,
+        });
+        await page.screenshot({
+            path: path.join(screenshotDir, "11-inline-location-create.png"),
+            fullPage: true,
+            animations: "disabled",
+        });
     });
 });

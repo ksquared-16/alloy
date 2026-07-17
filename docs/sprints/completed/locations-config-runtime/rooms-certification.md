@@ -1,12 +1,12 @@
 # Rooms certification
 
-**Status:** Implemented and acceptance-tested for Section Certification #5.
+**Status:** Certified and frozen for Configuration Runtime V1.
 
 ## Alloy translation
 
 - The room collection supports selection; the selected room owns the workspace.
 - Rows show room identity, Active/Inactive state, and one setup signal: capacity, missing program, or missing staffing.
-- Active room glyphs use the canonical neutral identity well with Bend Pine glyph; selected glyphs receive the stronger Bend Pine well; inactive glyphs remain neutral.
+- Active room identity uses Bend Pine and the canonical selected queue-row treatment; inactive rooms remain muted.
 - Add Room opens a focused creation editor in the detail region. It does not create an unnamed placeholder row.
 - View mode answers capacity, program participation, staffing thresholds, age range, inherited hours, active state, and setup attention.
 - Edit mode replaces the read summary and groups Identity, Program participation, Capacity, Staffing thresholds, Age range, Hours/operating behavior, and Active state.
@@ -28,3 +28,6 @@
 - `screenshots/rooms-view.png`
 - `screenshots/rooms-edit.png`
 - `screenshots/rooms-create-flow.png`
+- `screenshots/125-rooms-view-final.png`
+- `screenshots/126-rooms-edit-final.png`
+- `screenshots/127-rooms-create-final.png`

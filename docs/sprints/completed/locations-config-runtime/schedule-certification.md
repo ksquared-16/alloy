@@ -1,6 +1,6 @@
 # Schedule certification
 
-**Status:** Implemented and acceptance-tested for Section Certification #6.
+**Status:** Certified and frozen for Configuration Runtime V1.
 
 ## Alloy translation
 
@@ -27,3 +27,6 @@
 - `screenshots/schedule-create-pattern.png`
 - `screenshots/schedule-edit.png`
 - `screenshots/schedule-weekday-selected-state.png`
+- `screenshots/128-schedule-detail-final.png`
+- `screenshots/129-schedule-edit-final.png`
+- `screenshots/130-schedule-create-weekdays-final.png`

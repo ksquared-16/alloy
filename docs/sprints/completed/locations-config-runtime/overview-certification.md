@@ -1,10 +1,12 @@
 # Overview certification — section 3
 
-**Status:** Implemented — awaiting product certification.  
+**Status:** Certified and frozen for Configuration Runtime V1.
 **Frozen:** Header, Location Navigation.  
 **Sources:** Directional “At a glance” mock + current Overview screenshot + configuration visual language.
 
-**Screenshots:** `screenshots/overview-before.png`, `screenshots/overview-after.png`
+**Screenshots:** `screenshots/overview-before.png`, `screenshots/overview-after.png`, `screenshots/121-overview-final.png`
+
+**Final V1 resolution:** the top row is At a Glance (two-thirds) plus Operational Readiness (one-third). The bottom row is Needs Attention plus How this Location Runs at equal weight. At a Glance is the focal operating picture; Readiness visibly reconciles every dimension; issue actions remain attached to problem and impact; Tours, Placement, and Access remain one capability region. This final composition supersedes the intermediate region ordering discussed below.
 
 ---
 

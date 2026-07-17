@@ -184,12 +184,20 @@ export async function POST(request: NextRequest) {
     const sortOrder =
         body.sort_order != null && body.sort_order !== "" ? Number(body.sort_order) : null;
     const isActive = body.is_active !== false;
+    const metadata =
+        body.metadata === undefined ? {}
+        : body.metadata != null && typeof body.metadata === "object" && !Array.isArray(body.metadata) ?
+            body.metadata
+        :   null;
 
     if (!locationId) {
         return NextResponse.json({ error: "location_id is required" }, { status: 400 });
     }
     if (!label) {
         return NextResponse.json({ error: "label is required" }, { status: 400 });
+    }
+    if (metadata == null) {
+        return NextResponse.json({ error: "metadata must be an object" }, { status: 400 });
     }
     if (!PROGRAM_CATEGORY_KEY_RE.test(key)) {
         return NextResponse.json({ error: "Invalid program category key" }, { status: 400 });
@@ -239,6 +247,7 @@ export async function POST(request: NextRequest) {
             label,
             sort_order: resolvedSortOrder,
             is_active: isActive,
+            metadata,
             updated_at: new Date().toISOString(),
         })
         .select(

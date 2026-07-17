@@ -1,6 +1,6 @@
 # Programs certification — section 4
 
-**Status:** Implemented — awaiting product certification.  
+**Status:** Certified and frozen for Configuration Runtime V1.
 **Frozen:** Header, Location Navigation, Overview, and every non-Programs tab.
 
 ## Critique
@@ -43,3 +43,17 @@ View mode contains no editor fields. Edit mode contains no operating overview. C
 ## Scope
 
 No Header, Navigation, Overview, Rooms, Schedule, Tours, Placement, or Access changes belong to this certification.
+
+## Final V1 completion
+
+- Add Program now opens a focused creation workspace; it no longer writes a placeholder Program row before the operator supplies identity.
+- Creation persists name, active state, age-range start/end/unit, and default room types in one authoritative POST response.
+- The created Program appears in the local collection, becomes the selected object, and survives hard refresh through the same metadata read model used by View and Edit.
+- View and Edit remain distinct; creation and editing replace the read summary rather than stacking forms beneath it.
+
+Evidence:
+
+- `screenshots/122-programs-view-final.png`
+- `screenshots/123-programs-edit-final.png`
+- `screenshots/124-programs-create-final.png`
+- `screenshots/113-program-create-final.png` (persistence acceptance)

@@ -1,6 +1,6 @@
 # Location Navigation certification — section 2 (reopened)
 
-**Status:** Material visual re-implementation complete — awaiting product approval.  
+**Status:** Approved and frozen for Configuration Runtime V1.
 **Header:** Frozen.  
 **Comparison:** [`location-nav-visual-comparison.md`](./location-nav-visual-comparison.md)
 

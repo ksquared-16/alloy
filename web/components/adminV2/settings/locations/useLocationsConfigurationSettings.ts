@@ -41,6 +41,12 @@ export type LocationRoomCreateInput = {
     metadata: Record<string, unknown>;
 };
 
+export type LocationProgramCreateInput = {
+    label: string;
+    is_active: boolean;
+    metadata: Record<string, unknown>;
+};
+
 function isSite(row: LocationHierarchyRow): boolean {
     return String(row.location_type ?? "").trim() === "site";
 }
@@ -315,11 +321,12 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
     );
 
     const createProgramCategory = useCallback(
-        async (siteId: string, label: string): Promise<string> => {
+        async (siteId: string, input: LocationProgramCreateInput): Promise<string> => {
             const payload = {
                 location_id: siteId,
-                label: label.trim() || "New program",
-                is_active: true,
+                label: input.label.trim(),
+                is_active: input.is_active,
+                metadata: input.metadata,
             };
             const res = await fetch("/api/admin/location-program-categories", {
                 method: "POST",

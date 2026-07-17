@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
@@ -29,6 +29,7 @@ import {
     LocationPlacementPanel,
     LocationToursPanel,
 } from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
+import LocationProgramCreatePanel from "@/components/adminV2/settings/locations/LocationProgramCreatePanel";
 import { LocationIdentityFactsRow } from "@/components/adminV2/settings/locations/LocationIdentityFactsRow";
 import { LocationOverviewSurface } from "@/components/adminV2/settings/locations/LocationOverviewSurface";
 import { LocationsCommandRailActions } from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
@@ -62,11 +63,13 @@ export default function LocationsConfigurationPage({
     const { canMutate } = useAdminAuth();
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
+    const [creatingProgram, setCreatingProgram] = useState(false);
     const [creatingRoom, setCreatingRoom] = useState(false);
     const [creatingSchedule, setCreatingSchedule] = useState(false);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
         Record<string, Partial<Record<"tours" | "placement" | "access", boolean>>>
     >({});
+    const ownedConcernRequestSeq = useRef(0);
     const [activeTab, setActiveTab] = useState<LocationWorkspaceTab>(initialTab);
     const [search, setSearch] = useState("");
     const [showInactive, setShowInactive] = useState(false);
@@ -79,11 +82,6 @@ export default function LocationsConfigurationPage({
     );
     const [toursKeepAlive, setToursKeepAlive] = useState(initialTab === "tours");
     const [placementKeepAlive, setPlacementKeepAlive] = useState(initialTab === "placement");
-
-    useEffect(() => {
-        if (activeTab === "tours") setToursKeepAlive(true);
-        if (activeTab === "placement") setPlacementKeepAlive(true);
-    }, [activeTab]);
     const {
         selectedId,
         setSelectedId,
@@ -172,12 +170,9 @@ export default function LocationsConfigurationPage({
         [selectedPrograms, selectedRooms],
     );
 
-    const selectedSiteId = selectedSite?.id ?? null;
-    useEffect(() => {
-        if (!selectedSiteId) return;
-        let cancelled = false;
-        const locationId = selectedSiteId;
-        void Promise.all([
+    const refreshOwnedConcernSetup = useCallback(async (locationId: string) => {
+        const requestSeq = ++ownedConcernRequestSeq.current;
+        const [tours, access] = await Promise.all([
             fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
                 credentials: "include",
             })
@@ -208,20 +203,25 @@ export default function LocationsConfigurationPage({
                     );
                 })
                 .catch(() => null),
-        ]).then(([tours, access]) => {
-            if (cancelled) return;
-            setOwnedConcernSetupByLocation((current) => ({
-                ...current,
-                [locationId]: {
-                    tours: tours ?? undefined,
-                    access: access ?? undefined,
-                },
-            }));
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [selectedSiteId]);
+        ]);
+        if (requestSeq !== ownedConcernRequestSeq.current) return;
+        setOwnedConcernSetupByLocation((current) => ({
+            ...current,
+            [locationId]: {
+                tours: tours ?? undefined,
+                access: access ?? undefined,
+            },
+        }));
+    }, []);
+
+    const selectedSiteId = selectedSite?.id ?? null;
+    useEffect(() => {
+        if (!selectedSiteId) return;
+        const timeout = window.setTimeout(() => {
+            void refreshOwnedConcernSetup(selectedSiteId);
+        }, 0);
+        return () => window.clearTimeout(timeout);
+    }, [refreshOwnedConcernSetup, selectedSiteId]);
 
     const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
     const model =
@@ -253,8 +253,11 @@ export default function LocationsConfigurationPage({
         setSelectedId(locationId);
         setEditingSite(false);
         setCreatingSite(false);
+        setCreatingProgram(false);
         setCreatingRoom(false);
         setCreatingSchedule(false);
+        if (tab === "tours") setToursKeepAlive(true);
+        if (tab === "placement") setPlacementKeepAlive(true);
         setActiveTab(tab);
         router.replace(locationWorkspaceHref(locationId, tab));
     };
@@ -262,20 +265,27 @@ export default function LocationsConfigurationPage({
     const returnToFleet = () => {
         setSelectedId(null);
         setEditingSite(false);
+        setCreatingProgram(false);
         setCreatingRoom(false);
         setCreatingSchedule(false);
         setActiveTab("overview");
         router.replace(locationsFleetHref());
     };
 
-    const navigate = (tab: LocationWorkspaceTab, itemId?: string | null) => {
-        if (!selectedSite) return;
-        setActiveTab(tab);
-        setEditingSite(false);
-        setCreatingRoom(false);
-        setCreatingSchedule(false);
-        router.replace(locationWorkspaceHref(selectedSite.id, tab, itemId));
-    };
+    const navigate = useCallback(
+        (tab: LocationWorkspaceTab, itemId?: string | null) => {
+            if (!selectedSite) return;
+            setActiveTab(tab);
+            setEditingSite(false);
+            setCreatingProgram(false);
+            setCreatingRoom(false);
+            setCreatingSchedule(false);
+            if (tab === "tours") setToursKeepAlive(true);
+            if (tab === "placement") setPlacementKeepAlive(true);
+            router.replace(locationWorkspaceHref(selectedSite.id, tab, itemId));
+        },
+        [router, selectedSite],
+    );
 
     const showSetupDestination = (tab: LocationWorkspaceTab | "general") => {
         if (tab === "general") {
@@ -285,37 +295,33 @@ export default function LocationsConfigurationPage({
         navigate(tab);
     };
 
-    const beginAddLocation = () => {
+    const beginAddLocation = useCallback(() => {
         setCreatingSite(true);
         setEditingSite(false);
         setError(null);
-    };
+    }, [setError]);
 
-    const addRoom = () => {
+    const addRoom = useCallback(() => {
         if (!selectedSite || !canMutate) return;
         setActiveTab("rooms");
         setEditingSite(false);
+        setCreatingProgram(false);
         setCreatingSchedule(false);
         setCreatingRoom(true);
         setError(null);
         router.replace(locationWorkspaceHref(selectedSite.id, "rooms"));
-    };
+    }, [canMutate, router, selectedSite, setError]);
 
-    const addProgram = () => {
+    const addProgram = useCallback(() => {
         if (!selectedSite || !canMutate) return;
-        void (async () => {
-            try {
-                const newId = await createProgramCategory(
-                    selectedSite.id,
-                    `Program ${(selectedPrograms.length + 1).toString()}`,
-                );
-                setSelectedProgramId(newId);
-                navigate("programs", newId);
-            } catch (e) {
-                setError(e instanceof Error ? e.message : "Failed to add program");
-            }
-        })();
-    };
+        setActiveTab("programs");
+        setEditingSite(false);
+        setCreatingRoom(false);
+        setCreatingSchedule(false);
+        setCreatingProgram(true);
+        setError(null);
+        router.replace(locationWorkspaceHref(selectedSite.id, "programs"));
+    }, [canMutate, router, selectedSite, setError]);
 
     const firstRoomNeedingCapacityId = useMemo(() => {
         const match = selectedRooms.find((room) => !readLocationMetadataPresentation(room.metadata).capacity);
@@ -363,16 +369,19 @@ export default function LocationsConfigurationPage({
             }),
         [
             activeTab,
+            addProgram,
+            addRoom,
+            beginAddLocation,
             canMutate,
             effectiveProgramId,
             effectiveRoomId,
             firstRoomNeedingCapacityId,
             model,
+            navigate,
             selectedPrograms.length,
             selectedRooms.length,
             selectedSchedules.length,
             selectedSite,
-            siteRows.length,
         ],
     );
 
@@ -433,13 +442,29 @@ export default function LocationsConfigurationPage({
                     canMutate={canMutate}
                     onSave={patchProgramCategory}
                     programs={selectedPrograms}
-                    selectedProgramId={effectiveProgramId}
+                    selectedProgramId={creatingProgram ? null : effectiveProgramId}
                     onSelectProgram={(programId) => {
                         setSelectedProgramId(programId);
                         navigate("programs", programId);
                     }}
                     onAddProgram={canMutate ? addProgram : undefined}
                     ageUnitSelectOptions={ageUnitSelectOptions}
+                    createDetail={
+                        creatingProgram ?
+                            <LocationProgramCreatePanel
+                                siteLabel={model?.displayName ?? ""}
+                                ageUnitSelectOptions={ageUnitSelectOptions}
+                                scheduleSummary={scheduleSummary}
+                                onCancel={() => setCreatingProgram(false)}
+                                onCreate={async (input) => {
+                                    const newId = await createProgramCategory(selectedSite.id, input);
+                                    setCreatingProgram(false);
+                                    setSelectedProgramId(newId);
+                                    navigate("programs", newId);
+                                }}
+                            />
+                        :   undefined
+                    }
                 />
             );
         }
@@ -595,7 +620,13 @@ export default function LocationsConfigurationPage({
         if (activeTab === "placement") {
             return null;
         }
-        return <LocationAccessPanel key={selectedSite.id} locationId={selectedSite.id} />;
+        return (
+            <LocationAccessPanel
+                key={selectedSite.id}
+                locationId={selectedSite.id}
+                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
+            />
+        );
     })();
 
     return (
@@ -804,6 +835,7 @@ export default function LocationsConfigurationPage({
                                             <LocationToursPanel
                                                 locationId={selectedSite.id}
                                                 locationLabel={model?.displayName ?? ""}
+                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
                                             />
                                         </div>
                                     :   null}
