@@ -51,6 +51,7 @@ import {
     activeStagesForProcess,
     type LifecycleBuilderStageRecord,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { StageGrain } from "@/lib/lifecycle/stageGrainV1";
 import {
     resolveDefaultOperationalSubject,
     type DefaultOperationalSubjectStrategy,
@@ -63,8 +64,12 @@ export const PROVISIONING_ROW_PAGE_CAP = 100;
 
 export type ProvisioningTerminal = "operational" | "empty" | "error";
 
-/** Row Grain — Stage-owned (§0.5.1). NOT Record of Attention. */
-export type RowGrain = string;
+/**
+ * Row Grain — Stage-owned (§0.5.1). NOT Record of Attention.
+ * Bound to the Stage vocabulary itself, so a compatibility name (`case`, `candidate`) can never be
+ * assigned here by accident: those live on the attention axis, not the grain axis.
+ */
+export type RowGrain = StageGrain;
 
 export type ProvisioningRow = {
     /** Canonical identifier of the row's Record of Truth. */
@@ -237,7 +242,7 @@ export function resolveLensRowGrain(
         ? stages.filter((s) => stageKeys.includes(s.key))
         : stages; // no stage predicate → the lens spans every active stage
 
-    const grains = [...new Set(scoped.map((s) => s.grain).filter((g): g is string => !!g))];
+    const grains = [...new Set(scoped.map((s) => s.grain).filter((g): g is StageGrain => !!g))];
     if (grains.length === 1) return { ok: true, grain: grains[0] };
     if (grains.length === 0) return { ok: false, reason: "no stage in this lens declares a Row Grain" };
     return {

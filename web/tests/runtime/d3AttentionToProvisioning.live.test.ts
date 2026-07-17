@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { AttentionOwner, ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { ProvisioningRuntime, provisioningKey } from "@/lib/runtime/kernel/provisioning";
 import { workUnitEntryResource } from "@/lib/runtime/kernel/workUnitEntryResource";
+import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 
 const LIVE = process.env.D3_LIVE === "1";
 const ORG = process.env.DEV_QUEUE_ORG_ID || "00000000-0000-4000-8000-000000000001";
@@ -110,7 +111,10 @@ describe.skipIf(!LIVE)("D2+D3 live — Attention → Provisioning (co-located, p
         const stale: string[] = [];
         const k2 = new ProvisioningRuntime({
             entryResource: workUnitEntryResource({ supabase: supa(), currentUserId: PRINCIPAL }),
-            instrumentation: { onStaleDiscarded: (k) => stale.push(k), onDisposed: (_k, r) => stale.push(r) },
+            instrumentation: {
+                onStaleDiscarded: (k: string) => stale.push(k),
+                onDisposed: (_k: string, r: string) => stale.push(r),
+            },
         });
         const o = new AttentionOwner();
         o.subscribe((e) => void k2.onAttentionMoved(e));
@@ -127,17 +131,19 @@ describe.skipIf(!LIVE)("D2+D3 live — Attention → Provisioning (co-located, p
         // rows, no `tour` rows. Empty is the CORRECT terminal here, and it is a workable place. What
         // matters for supersession is that the answer describes the lens the operator moved to.
         expect(["operational", "empty"]).toContain(r2?.outcome);
-        expect(r2?.snapshot.activeWorkView?.id).toBe("tours");
+        const lensOf = (s: ProvisioningAnswer | undefined) =>
+            s && s.terminal !== "error" ? s.activeWorkView.id : null;
+        expect(lensOf(r2?.snapshot)).toBe("tours");
         // The superseded preparation must not win: it is either disposed, or it describes the lens
         // the operator LEFT — never allowed to stand in for the destination.
-        if (r1) expect(r1.snapshot.activeWorkView?.id).not.toBe("tours");
+        if (r1) expect(lensOf(r1.snapshot)).not.toBe("tours");
 
         // Subject movement preserves lens identity — and reuses the lens preparation.
         const subj = o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "any", source: "subject_selection" });
         expect(subj.lens).toBe("tours");
         const r3 = await k2.prepare(subj);
-        expect(r3?.snapshot.activeWorkView?.id).toBe("tours");
-        expect(r3?.snapshot.contextFrame?.workViewId).toBe("tours");
+        expect(lensOf(r3?.snapshot)).toBe("tours");
+        expect(r3 && r3.snapshot.terminal !== "error" ? r3.snapshot.contextFrame.workViewId : null).toBe("tours");
     }, 60_000);
 
     it("no hosted Supabase traffic — the runtime targets loopback only", () => {

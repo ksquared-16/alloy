@@ -115,7 +115,7 @@ describe("D3 — K2 Provisioning Runtime", () => {
 
     it("6-7. coarser intent supersedes finer preparation; the superseded result never lands", async () => {
         const disposed: string[] = [];
-        const k2 = runtimeWith(resolves("operational", 40), { onDisposed: (_k, r) => disposed.push(r) });
+        const k2 = runtimeWith(resolves("operational", 40), { onDisposed: (_k: string, r: string) => disposed.push(r) });
         const o = owner("new_leads");
         // A lens preparation in flight…
         const first = k2.onAttentionMoved({ type: "attention.moved", ref: refAt(o), supersedes: null, t0: 0 });
@@ -131,7 +131,7 @@ describe("D3 — K2 Provisioning Runtime", () => {
         // The entry resource ignores the abort signal entirely and resolves anyway.
         const unabortable: EntryResource = () => new Promise((r) => setTimeout(() => r(answer("operational")), 30));
         const stale: string[] = [];
-        const k2 = runtimeWith(unabortable, { onStaleDiscarded: (k) => stale.push(k) });
+        const k2 = runtimeWith(unabortable, { onStaleDiscarded: (k: string) => stale.push(k) });
         const o = owner("new_leads");
         const first = k2.onAttentionMoved({ type: "attention.moved", ref: refAt(o), supersedes: null, t0: 0 });
         const next = o.move({ scope: ATTENTION_SCOPE.LENS, lens: "tours", source: "work_view_selection" });
