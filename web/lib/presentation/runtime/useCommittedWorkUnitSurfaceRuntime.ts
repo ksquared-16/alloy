@@ -49,15 +49,16 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         [focus.current],
     );
 
-    // NOTE (certification): the committed Record of Attention is NOT yet bridged into the Focus
-    // Panel. D1 resolves it (U-P4) and K3 commits it, but the inline panel reads its subject from
-    // AdminDrawerContext, so it still shows "Select a record to begin" — U-O3 fails and the surface
-    // is not operational at first sight.
-    // A naive `useEffect(() => openDrawer(committedSubject))` bridge was tried and REVERTED: it
-    // storms (4418 duplicate requests of 4421) because opening the drawer re-renders this hook and
-    // re-fires the effect. The fix is not another effect — the Focus Panel must read its subject
-    // from committed Focus rather than from the drawer store, which is a subject-ownership change
-    // (the drawer is currently a SECOND subject owner). That is the last D4 defect.
+    // SUBJECT OWNERSHIP — settled, and worth recording because the wrong shape was tried twice.
+    // The Focus Panel once read its subject from AdminDrawerContext, making the drawer a SECOND
+    // owner of Record of Attention: D1 resolved the subject (U-P4) and K3 committed it, yet the
+    // panel showed "Select a record to begin" because it asked a different owner. Bridging them with
+    // `useEffect(() => openDrawer(committed))` produced 4418 duplicate requests of 4421 — opening the
+    // drawer re-rendered this hook and re-fired the effect. Two owners synchronising is a loop.
+    // The resolution was to DELETE the second owner, not reconcile it: `OperationalSubjectContext` is
+    // now fed straight from the committed snapshot by `ProvisionedWorkUnitSurface`, and
+    // `isOperationallyResolved` asks nothing of any fetch. Certification: operational at first sight,
+    // 0 hollow frames. Do not reintroduce a subject read from the drawer store.
 
     const selectWorkView = useCallback(
         (workViewId: string) => {
@@ -80,11 +81,10 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 subject: row.entityId,
                 source: "subject_selection",
             });
-            // The inline Focus Panel still reads its subject from AdminDrawerContext. Until that
-            // subject ownership moves to Focus (D5), this mirrors attention into the drawer store so
-            // there is one operator-visible subject rather than two disagreeing ones. The drawer is a
-            // FOLLOWER of attention here, never a second owner: it is written only in response to an
-            // accepted K1 movement.
+            // The drawer is a FOLLOWER, and only of Settlement. Committed Focus already told the
+            // panel WHO the subject is (above); this asks the drawer to load that record's Detail and
+            // History — the deferred, non-operational region. It is written only here, in response to
+            // an accepted K1 movement, never from an effect that could re-fire on render.
             drawer.openDrawer({ type: "opportunities", id: row.entityId, source: "queue_row" });
         },
         [kernel, drawer],
