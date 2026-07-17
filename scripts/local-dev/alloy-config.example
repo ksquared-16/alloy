@@ -13,6 +13,23 @@ ALLOY_BIN_DIR="$HOME/bin/alloy-dev"
 ALLOY_BASE_REMOTE="origin"
 ALLOY_BASE_BRANCH="staging"
 
+# Exact canonical-repo identity (opt-in).
+#
+# When set, alloy_verify_canonical_repo REFUSES an ALLOY_REPO whose remote does
+# not match this URL. scp-style and https forms of the same remote compare equal.
+# When unset, the toolkit falls back to a name heuristic and says so — it warns,
+# it does not verify.
+#
+# Left unset by default because the certification harness and test fixtures point
+# ALLOY_REPO at synthetic repositories with local remotes. Set it in your
+# installed config (~/.config/alloy-dev/config) to make identity enforced:
+#
+#   ALLOY_REPO_EXPECTED_REMOTE="git@github.com:ksquared-16/alloy.git"
+#
+# Note this checks WHICH REPOSITORY, not WHICH CLONE — two clones of Alloy share
+# one remote. Ambient root identity is answered by alloy-root, not by this.
+ALLOY_REPO_EXPECTED_REMOTE="${ALLOY_REPO_EXPECTED_REMOTE:-}"
+
 # Canonical staging app on the main checkout; agent slots use 3011–3016.
 ALLOY_CANONICAL_PORT="3000"
 ALLOY_FIRST_AGENT_PORT="3011"

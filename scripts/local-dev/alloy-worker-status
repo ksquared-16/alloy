@@ -14,12 +14,16 @@ usage() {
   cat <<'EOF'
 Usage:
   alloy-worker-status
-  alloy-worker-status --slots
+  alloy-worker-status --slots [--refresh]
   alloy-worker-status <initiative-key> [task-id]
 
 With no args (or --slots): one compact authoritative table for all six slots
 (sprint, provider, worktree, branch, git, ahead/behind, agent lifecycle,
 server, port, auth, health).
+
+The table names the canonical root and the base ref that ahead/behind is
+measured against, including how stale that ref is. Counts are relative to a
+cached base; --refresh fetches the base first so they are current.
 
 With an initiative key: existing Engineering Runtime worker assignment view.
 EOF
@@ -80,7 +84,21 @@ main() {
   alloy_ensure_sprint_ops_dirs
   ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
 
+  local refresh=0
+  local -a rest=()
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --refresh) refresh=1 ;;
+      *) rest+=("$arg") ;;
+    esac
+  done
+  set -- ${rest[@]+"${rest[@]}"}
+
   if [[ $# -eq 0 || "${1:-}" == "--slots" ]]; then
+    if [[ "$refresh" -eq 1 ]]; then
+      alloy_refresh_base_ref || alloy_warn "could not refresh $(alloy_base_ref) — counts remain relative to the cached ref"
+    fi
     alloy_worker_status_table
     exit 0
   fi

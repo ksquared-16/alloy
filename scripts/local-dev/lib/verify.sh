@@ -977,7 +977,11 @@ alloy_agent_ready_evaluate() {
   printf 'BROWSER=%s\n' "$bstate"
   printf 'VALIDATION_LOCK=%s\n' "$lock_msg"
   local issue
-  for issue in "${issues[@]}"; do
+  # bash 3.2 (the macOS system bash) treats "${arr[@]}" on an EMPTY array as an
+  # unbound variable under `set -u`, so this loop aborted precisely when issues
+  # was empty — that is, exactly when the slot was READY. ${arr[@]+...} is the
+  # 3.2-safe idiom.
+  for issue in ${issues[@]+"${issues[@]}"}; do
     printf 'ISSUE=%s\n' "$issue"
   done
 }

@@ -45,6 +45,11 @@ alloy_continuation_path() {
 alloy_rewrite_metadata_preserving_sprint() {
   local path_meta="$1"
   shift
+  # Clear optional fields before sourcing. Without this the "preserve" loop
+  # below can carry a value sourced from a DIFFERENT worktree's metadata into
+  # this file — writing another slot's sprint name to disk. The status-table
+  # leak was the visible symptom of this substrate; this is the writable one.
+  alloy_reset_optional_metadata
   # shellcheck disable=SC1090
   source "$path_meta"
   local -a pairs=("$@")
@@ -768,6 +773,12 @@ alloy_worker_status_table() {
     export ALLOY_SKIP_AUTH_LIVE_CHECK=1
   fi
 
+  # Name the base the A/B column is measured against, and how stale it is.
+  # An unqualified ahead/behind is the toolkit's own "HEALTHY" verdict.
+  printf 'root: %s\n' "${ALLOY_REPO:-(ALLOY_REPO unset)}"
+  printf 'base: %s\n' "$(alloy_base_ref_status)"
+  printf 'A/B is relative to the base above; alloy-worker-status --refresh fetches first.\n'
+  printf '\n'
   printf '%-4s %-22s %-7s %-28s %-36s %-7s %-9s %-10s %-8s %-5s %-8s %-8s\n' \
     "SLOT" "SPRINT" "PROV" "WORKTREE" "BRANCH" "GIT" "A/B" "AGENT" "SERVER" "PORT" "AUTH" "HEALTH"
   printf '%s\n' "$(printf '%.0s-' {1..160})"

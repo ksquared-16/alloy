@@ -275,5 +275,17 @@ else
 fi
 
 echo
+echo "== Truthful status suite (TM-6) =="
+set +e
+bash "$ROOT/tests/test-truthful-status.sh"
+truthful_rc=$?
+set -e
+if [[ "$truthful_rc" -eq 0 ]]; then
+  pass "truthful status suite"
+else
+  fail "truthful status suite"
+fi
+
+echo
 echo "Results: PASS=$PASS FAIL=$FAIL"
 [[ "$FAIL" -eq 0 ]]
