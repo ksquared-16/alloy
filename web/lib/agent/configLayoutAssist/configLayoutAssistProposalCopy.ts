@@ -5,5 +5,5 @@ export function configLayoutAssistProposalStatusCopy(proposal: ConfigurationProp
     if (proposal.apply_mode === "recommendation_only" || !mutating) {
         return "Recommendation only — no apply action is needed.";
     }
-    return "Pending review — no changes have been applied. Review and approve in Settings.";
+    return "Pending review — no changes have been applied. Review and approve in Configuration.";
 }

@@ -13,7 +13,7 @@ import {
 } from "@/lib/presentation/runtime/queueRowCardShell";
 import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 
-type FleetSummary = {
+type LocationCollectionSummary = {
     criticalCount: number;
     locality: string | null;
     isActive: boolean;
@@ -33,7 +33,7 @@ export function LocationsObjectSelector({
     canMutate,
     onAddLocation,
     onSelect,
-    fleetById,
+    locationSummaryById,
 }: {
     sites: LocationHierarchyRow[];
     selectedId: string | null;
@@ -44,7 +44,7 @@ export function LocationsObjectSelector({
     canMutate: boolean;
     onAddLocation: () => void;
     onSelect: (locationId: string) => void;
-    fleetById: Map<string, FleetSummary>;
+    locationSummaryById: Map<string, LocationCollectionSummary>;
 }) {
     const listRef = useRef<HTMLDivElement>(null);
 
@@ -148,7 +148,7 @@ export function LocationsObjectSelector({
                 data-testid="locations-nav-list"
             >
                 {sites.map((site) => {
-                    const summary = fleetById.get(site.id);
+                    const summary = locationSummaryById.get(site.id);
                     const placeLine =
                         formatLocationShortPlaceLine({
                             address1: site.address1,

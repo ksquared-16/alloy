@@ -1,19 +1,21 @@
 ---
 owner: runtime
 status: frozen
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
 # Configuration Ownership Doctrine
 
-**Status:** Frozen — Configuration Runtime V1 (June 2026).
+**Status:** Frozen — Configuration Runtime V1 + Organization Configuration Runtime V2.
 
 ## Frozen ownership model
 
 | Surface | Owns | Does **not** own |
 |---------|------|------------------|
-| **Locations** | Campuses, programs, rooms, and schedule templates | Process behavior, surface presentation |
+| **Organization** | Domain registry, publisher/consumer model, inheritance, publication, distribution, and cross-location governance contracts | Domain payloads, Location-owned objects, duplicate domain editors |
+| **Programs** | Reusable service catalog, categories, eligibility, licensing/resource requirements, commercial/funding/billing defaults, publication | Rooms/Delivery Resources, capacity, schedules, local operational truth |
+| **Locations** | Campuses, Programs offered, Rooms/Delivery Resources, and local schedule templates | Program identity, process behavior, surface presentation |
 | **Fields** | Canonical data definitions — types, labels, formats, validation | Drawer placement, stage requiredness, action behavior |
 | **Statuses** | Status vocabulary — label, color, sort, active/inactive | Which stage a status rolls up into |
 | **Action definitions** (internal catalog at `/settings/actions`) | Platform action metadata — key, description, parameters, default label | Operator configuration, placements, process enablement |
@@ -75,7 +77,7 @@ Configuration Runtime V1 is frozen. Future changes are limited to:
 - Small visual polish
 - Wiring Surfaces into the frozen shell
 
-No new IA changes without explicit doctrine update.
+Organization Runtime V2 is the explicit doctrine update that adds the Organization landing and Programs operator language. Further IA changes require another doctrine update.
 
 ---
 

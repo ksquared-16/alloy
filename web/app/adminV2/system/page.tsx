@@ -8,7 +8,7 @@ export default function AdminV2SystemPage() {
                 <p className="mt-1 text-xs text-alloy-midnight/60">Coming next: AdminV2 system navigation.</p>
             </header>
             <div className="rounded-xl border border-alloy-stone/15 bg-white/60 px-4 py-3 text-sm text-alloy-midnight/70">
-                Use AdminV2 Settings for configuration surfaces.
+                Use Configuration for configuration surfaces.
             </div>
         </div>
     );

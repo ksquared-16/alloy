@@ -20,6 +20,7 @@ export { ConfigGlanceMetrics } from "@/components/adminV2/settings/configuration
 export { ConfigEditorSection } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigEditorSection";
 export { ConfigScopeContextBar } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigScopeContextBar";
 export { ConfigApplyToDialog } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigApplyToDialog";
+export { ConfigDomainCard } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard";
 export {
     ConfigChildObjectMasterDetail,
     ConfigConsequenceLine,

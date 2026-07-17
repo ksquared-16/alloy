@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
-import { Home, Settings } from "lucide-react";
+import { Home } from "lucide-react";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import {
     CONFIGURATION_MODE_NAV_GROUPS,
@@ -11,8 +11,8 @@ import {
 import { configurationModeNavLucideIcon } from "@/lib/adminV2/configurationModeNavIcons";
 import { writeConfigurationModeLastSurface } from "@/lib/adminV2/configurationModeLastSurface";
 import {
+    CANONICAL_ADMIN_CONFIG_LANDING,
     CANONICAL_OPERATOR_BASE,
-    CANONICAL_SETTINGS_BASE,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
@@ -28,11 +28,9 @@ export default function SidebarConfigurationModeNav({ collapsed }: { collapsed: 
     const pathname = usePathname();
     const path = useMemo(() => normalizeToCanonicalAdminPath(pathname), [pathname]);
     const homeHref = workspaceHref(CANONICAL_OPERATOR_BASE);
-    const settingsHomeHref = CANONICAL_SETTINGS_BASE;
-    const onSettingsHome = path === CANONICAL_SETTINGS_BASE;
 
     useEffect(() => {
-        if (path !== "/settings") writeConfigurationModeLastSurface(path);
+        if (path !== CANONICAL_ADMIN_CONFIG_LANDING) writeConfigurationModeLastSurface(path);
     }, [path]);
 
     const homeLink = (
@@ -49,33 +47,6 @@ export default function SidebarConfigurationModeNav({ collapsed }: { collapsed: 
             :   <span className="inline-flex items-center gap-2">
                     <Home size={15} strokeWidth={1.75} className="shrink-0" />
                     <span className="truncate">Home</span>
-                </span>
-            }
-        </AdminV2NavLink>
-    );
-
-    const settingsHomeLink = (
-        <AdminV2NavLink
-            href={settingsHomeHref}
-            title="Settings"
-            aria-label="Settings"
-            active={onSettingsHome}
-            className={
-                collapsed
-                    ? `adminv2-sidebar-rail-link ${onSettingsHome ? "adminv2-sidebar-config-link--active" : ""}`
-                    : `${EXPANDED_CONFIG_LINK} ${
-                          onSettingsHome
-                              ? "adminv2-sidebar-config-link--active"
-                              : "text-white/75 hover:bg-white/[0.06] hover:text-white/90"
-                      }`
-            }
-            data-testid="config-mode-nav-settings-home"
-        >
-            {collapsed ?
-                <Settings size={18} strokeWidth={1.75} />
-            :   <span className="inline-flex items-center gap-2">
-                    <Settings size={15} strokeWidth={1.75} className="shrink-0" />
-                    <span className="truncate">Settings</span>
                 </span>
             }
         </AdminV2NavLink>
@@ -146,7 +117,6 @@ export default function SidebarConfigurationModeNav({ collapsed }: { collapsed: 
             <nav className="flex min-h-0 flex-1 flex-col gap-1 px-1.5 pt-1" aria-label="Configuration mode">
                 {homeLink}
                 {configGroupLinks}
-                <div className="mt-auto">{settingsHomeLink}</div>
             </nav>
         );
     }
@@ -159,7 +129,6 @@ export default function SidebarConfigurationModeNav({ collapsed }: { collapsed: 
         >
             <div className="mb-2 px-1">{homeLink}</div>
             <div className="min-h-0 flex-1">{configGroupLinks}</div>
-            <div className="mt-2 border-t border-white/10 px-1 pt-2">{settingsHomeLink}</div>
         </nav>
     );
 }

@@ -26,7 +26,7 @@ export default async function EffectiveLayoutInspectorPage({ searchParams }: Pag
             />
             <header className="space-y-1">
                 <Link href="/settings/surfaces" className="text-xs text-alloy-pine underline">
-                    ← Settings → Surfaces
+                    ← Configuration → Surfaces
                 </Link>
                 <h1 className="text-lg font-semibold text-alloy-midnight">Effective surface inspector</h1>
                 <p className="text-xs text-alloy-midnight/60">

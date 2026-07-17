@@ -93,7 +93,7 @@ export function validateActionPlacementPatch(body: unknown): ActionPlacementPatc
         const s = String(b.surface ?? "").trim();
         if (!isSurface(s)) throw new ActionPlacementValidationError("Invalid surface");
         if (!(OPERATOR_EDITABLE_ACTION_SURFACES as readonly string[]).includes(s)) {
-            throw new ActionPlacementValidationError("Surface cannot be changed to that value in Settings");
+            throw new ActionPlacementValidationError("Surface cannot be changed to that value in Configuration");
         }
         out.surface = s;
     }
@@ -144,7 +144,7 @@ export function validateActionPlacementCreate(body: unknown): ActionPlacementCre
 
     const surface = String(b.surface ?? "").trim();
     if (!isSurface(surface) || !(OPERATOR_EDITABLE_ACTION_SURFACES as readonly string[]).includes(surface)) {
-        throw new ActionPlacementValidationError("Invalid surface for Settings placement");
+        throw new ActionPlacementValidationError("Invalid surface for Configuration placement");
     }
 
     const slot = String(b.slot ?? "").trim();

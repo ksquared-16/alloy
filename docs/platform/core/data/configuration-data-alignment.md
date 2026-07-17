@@ -11,7 +11,7 @@ supersedes: []
 
 How Configuration surfaces relate to canonical data — metadata only, not operational truth.
 
-**Doctrine:** Settings → Fields models canonical ownership. Surface availability is separate. Projection onto a Child subject does not reassign Enrollment-owned fields to Child Profile.
+**Doctrine:** Configuration → Fields models canonical ownership. Surface availability is separate. Projection onto a Child subject does not reassign Enrollment-owned fields to Child Profile.
 
 ---
 
@@ -19,8 +19,8 @@ How Configuration surfaces relate to canonical data — metadata only, not opera
 
 | Surface | Reads canonical | Writes canonical | Writes metadata |
 |---------|-----------------|------------------|-----------------|
-| Settings → Fields | field_definitions | field_definitions rows | Yes |
-| Settings → Statuses | status_definitions | status_definitions rows | Yes |
+| Configuration → Fields | field_definitions | field_definitions rows | Yes |
+| Configuration → Statuses | status_definitions | status_definitions rows | Yes |
 | Business Processes | field_definitions, status_definitions, transition rules | BP JSON, stage bindings | Yes |
 | Layouts | field_definitions, layout catalog | layout JSON (refKeys) | Yes |
 | Forms | system field registry → canonical refs | form schemas | Yes |
@@ -56,7 +56,7 @@ Configuration **never** directly sets `status_key` on live records except throug
 
 ## Child grain in configuration
 
-| entity_type in field_definitions | Meaning | Settings Child hub section |
+| entity_type in field_definitions | Meaning | Configuration Child hub section |
 |----------------------------------|---------|----------------------------|
 | `customer_member` | Child **profile** config fields (gender, allergies, …) | Child Profile |
 | `inquiry_child` | **Enrollment** participation fields on OCM | Enrollment |

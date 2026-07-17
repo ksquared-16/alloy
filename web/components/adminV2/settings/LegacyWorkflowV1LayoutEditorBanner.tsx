@@ -37,7 +37,7 @@ export default function LegacyWorkflowV1LayoutEditorBanner({ showFieldPlacementN
                 </>
             }
             <Link href="/settings/surfaces" className="font-medium text-alloy-pine underline">
-                Settings → Surfaces
+                Configuration → Surfaces
             </Link>
             {!readOnly ? " (opportunity drawer visual editor). Until migration completes, edits in both places can conflict." : null}
             {showFieldPlacementNote ?

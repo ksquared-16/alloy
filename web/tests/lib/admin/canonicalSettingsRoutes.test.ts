@@ -9,8 +9,8 @@ import {
 import { CONFIGURATION_WORKSPACE_DOMAINS } from "@/lib/adminV2/configurationWorkspaceDomains";
 
 describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
-    it("uses /settings as configuration landing", () => {
-        expect(CANONICAL_ADMIN_CONFIG_LANDING).toBe("/settings");
+    it("uses /organization as the configuration landing while retaining /settings subpaths", () => {
+        expect(CANONICAL_ADMIN_CONFIG_LANDING).toBe("/organization");
         expect(CANONICAL_SETTINGS_BASE).toBe("/settings");
     });
 
@@ -18,12 +18,15 @@ describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
         expect(adminSettingsSubpathHref("processes")).toBe("/settings/processes");
         expect(adminSettingsSubpathHref("business-processes")).toBe("/settings/business-processes");
         expect(adminSettingsSubpathHref("layouts")).toBe("/settings/layouts");
-        expect(adminSettingsSubpathHref("")).toBe("/settings");
+        expect(adminSettingsSubpathHref("")).toBe("/organization");
+        expect(adminSettingsSubpathHref("organization")).toBe("/organization");
     });
 
     it("normalizes legacy /admin/settings paths to /settings", () => {
         expect(normalizeToCanonicalSettingsPath("/admin/settings/statuses")).toBe("/settings/statuses");
-        expect(normalizeToCanonicalSettingsPath("/admin")).toBe("/settings");
+        expect(normalizeToCanonicalSettingsPath("/admin")).toBe("/organization");
+        expect(normalizeToCanonicalSettingsPath("/settings")).toBe("/organization");
+        expect(normalizeToCanonicalSettingsPath("/settings/organization")).toBe("/organization");
         expect(normalizeToCanonicalAdminPath("/admin/settings/fields")).toBe("/settings/fields");
         expect(normalizeToCanonicalAdminPath("/adminV2/settings/layouts")).toBe("/settings/layouts");
     });

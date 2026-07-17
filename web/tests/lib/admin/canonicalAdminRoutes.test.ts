@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
     CANONICAL_ADMIN_CONFIG_LANDING,
-    CANONICAL_ADMIN_WORKSPACE,
     CANONICAL_OPERATOR_BASE,
     isCanonicalDrawerHostPath,
     isCanonicalWorkspacePath,
@@ -14,8 +13,10 @@ import {
 import { operatorWorkUnitHrefFromKey, parseOperatorWorkUnitPath, normalizeOperatorPathname } from "@/lib/admin/canonicalOperatorRoutes";
 
 describe("canonicalAdminRoutes", () => {
-    it("maps transitional adminV2 paths to canonical /settings", () => {
+    it("maps transitional roots to Organization and settings subpaths to /settings", () => {
         expect(normalizeTransitionalAdminPath("/adminV2")).toBe(CANONICAL_ADMIN_CONFIG_LANDING);
+        expect(normalizeTransitionalAdminPath("/adminV2/settings")).toBe("/organization");
+        expect(normalizeTransitionalAdminPath("/adminV2/settings/organization")).toBe("/organization");
         expect(normalizeTransitionalAdminPath("/adminV2/settings/lifecycle")).toBe(
             "/settings/lifecycle",
         );
@@ -41,7 +42,8 @@ describe("canonicalAdminRoutes", () => {
         expect(isCanonicalDrawerHostPath("/workspace/work-unit/new-leads")).toBe(true);
     });
 
-    it("suppresses marketing chrome for canonical /settings URLs", () => {
+    it("suppresses marketing chrome for Organization and canonical /settings URLs", () => {
+        expect(isPublicMarketingChromeSuppressedPath("/organization")).toBe(true);
         expect(isPublicMarketingChromeSuppressedPath("/settings")).toBe(true);
         expect(isPublicMarketingChromeSuppressedPath("/settings/business-processes")).toBe(true);
         expect(isPublicMarketingChromeSuppressedPath("/settings/layouts")).toBe(true);

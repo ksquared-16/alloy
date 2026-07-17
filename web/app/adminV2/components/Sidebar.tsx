@@ -5,16 +5,18 @@ import { usePathname } from "next/navigation";
 import {
     ChevronDown,
     ChevronRight,
+    Building2,
     Home,
     PanelLeftClose,
     PanelLeft,
-    Settings,
     Workflow,
 } from "lucide-react";
 import { neutral, palette, derived } from "@/styles/tokens/colors";
 import {
     CANONICAL_ADMIN_BASE,
+    CANONICAL_ADMIN_CONFIG_LANDING,
     CANONICAL_OPERATOR_BASE,
+    CANONICAL_ORGANIZATION_BASE,
     CANONICAL_SETTINGS_BASE,
     isCanonicalFormsPath,
     normalizeToCanonicalAdminPath,
@@ -48,7 +50,7 @@ import { readOperationalTasksNavCountsCache } from "@/lib/adminV2/operationalTas
 import { composeShellNavigationSurfaceViewModel } from "@/lib/adminV2/runtime/surface/shellNavigationSurfaceViewModel";
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
-const SETTINGS_HREF = CANONICAL_ADMIN_BASE;
+const ORGANIZATION_HREF = CANONICAL_ADMIN_CONFIG_LANDING;
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
 const EXPANDED_QUEUE_LINK = "adminv2-sidebar-queue-link";
@@ -75,6 +77,7 @@ function isAdminConfigPath(path: string): boolean {
     return (
         path === CANONICAL_SETTINGS_BASE
         || path.startsWith(`${CANONICAL_SETTINGS_BASE}/`)
+        || path === CANONICAL_ORGANIZATION_BASE
         || path === CANONICAL_ADMIN_BASE
         || path.startsWith(`${CANONICAL_ADMIN_BASE}/`)
     );
@@ -106,9 +109,6 @@ function SidebarNav({
 
     useEffect(() => {
         let cancelled = false;
-        if (!peekOperatorLifecycleLandingCards()) {
-            setLifecycleLoading(true);
-        }
         void loadOperatorLifecycleLandingCards()
             .then((cards) => {
                 if (cancelled) return;
@@ -232,20 +232,20 @@ function SidebarNav({
 
     const analyticsLink = <SidebarAnalyticsNavItem collapsed={collapsed} />;
 
-    const settingsLink = (
+    const organizationLink = (
         <AdminV2NavLink
-            href={SETTINGS_HREF}
-            title="Admin"
-            aria-label="Admin"
+            href={ORGANIZATION_HREF}
+            title="Organization"
+            aria-label="Organization"
             active={onSettings}
             className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
         >
             {collapsed ? (
-                <Settings size={20} strokeWidth={1.75} />
+                <Building2 size={20} strokeWidth={1.75} />
             ) : (
                 <span className="inline-flex items-center gap-2">
-                    <Settings size={16} strokeWidth={1.75} />
-                    Admin
+                    <Building2 size={16} strokeWidth={1.75} />
+                    Organization
                 </span>
             )}
         </AdminV2NavLink>
@@ -479,7 +479,7 @@ function SidebarNav({
                     </div>
                     {onSettings ? <SidebarConfigurationModeNav collapsed /> : <div className="min-h-0 flex-1" aria-hidden />}
                     <div className="adminv2-sidebar-footer flex shrink-0 flex-col items-stretch gap-1 border-t pt-1">
-                        {settingsLink}
+                        {organizationLink}
                     </div>
                 </nav>
             ) : (
@@ -499,7 +499,7 @@ function SidebarNav({
                         </div>
                     </div>
                     <div className="adminv2-sidebar-footer shrink-0 border-t pt-2">
-                        {settingsLink}
+                        {organizationLink}
                     </div>
                 </div>
             )}

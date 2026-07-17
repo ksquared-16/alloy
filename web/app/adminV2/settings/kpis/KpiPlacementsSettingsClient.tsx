@@ -616,7 +616,7 @@ export default function KpiPlacementsSettingsClient({ embedded = false }: { embe
                         prefetch={shouldDisableAdminV2LinkPrefetch(SETTINGS_ROOT) ? false : undefined}
                         className="font-medium text-alloy-pine hover:underline"
                     >
-                        ← Back to Settings
+                        ← Back to Configuration
                     </Link>
                     {" · "}
                     <Link

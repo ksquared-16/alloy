@@ -18,7 +18,7 @@ export const OPERATIONAL_EDIT_FUTURE_DATED_NOTE =
     "Future-dated changes are allowed. The new row becomes effective on the start date you choose.";
 
 export const OPERATIONAL_EDIT_NO_ACTIVE_PATTERNS_WARNING =
-    "No active schedule patterns exist for this site. Add patterns in Settings → Locations before assigning a schedule.";
+    "No active schedule patterns exist for this site. Add patterns in Configuration → Locations before assigning a schedule.";
 
 export type OperationalEnrollmentEditActionKey =
     | "change_placement"

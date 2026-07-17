@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { locationsCollectionUsesBoundedScroll } from "@/components/adminV2/settings/locations/LocationsLanding";
 
 const root = resolve(__dirname, "../..");
 
@@ -20,7 +21,7 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("ConfigurationContext");
         expect(page).toContain("ConfigurationShell");
         expect(page).toContain('title="Locations"');
-        expect(page).toContain("LocationsFleetLanding");
+        expect(page).toContain("LocationsLanding");
         expect(page).toContain("LocationsObjectSelector");
         expect(read("components/adminV2/settings/locations/LocationsObjectSelector.tsx")).toContain(
             'data-testid="locations-object-selector"',
@@ -79,24 +80,64 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("LocationSiteCreatePanel");
     });
 
-    it("opens the fleet landing when no locationId is in the URL", () => {
+    it("opens the Locations collection when no locationId is in the URL", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        const fleet = read("components/adminV2/settings/locations/LocationsFleetLanding.tsx");
+        const landing = read("components/adminV2/settings/locations/LocationsLanding.tsx");
         const hook = read("components/adminV2/settings/locations/useLocationsConfigurationSettings.ts");
         const model = read("lib/locations/locationWorkspaceModel.ts");
-        expect(page).toContain("buildLocationsFleetModel");
-        expect(page).toContain("locationsFleetHref");
+        const selector = read("components/adminV2/settings/locations/LocationsObjectSelector.tsx");
+        expect(page).toContain("buildLocationsCollectionModel");
+        expect(page).toContain("locationsLandingHref");
         expect(page).toContain("ConfigScopeContextBar");
-        expect(page).toContain("returnToFleet");
+        expect(page).toContain("returnToLocations");
         expect(page).not.toContain("← All locations");
         expect(page).not.toContain("Choose a location, understand what needs attention");
-        expect(fleet).toContain("locations-fleet-landing");
-        expect(fleet).toContain("locations-fleet-rollups");
-        expect(fleet).toContain("Operational readiness");
-        expect(hook).toContain("Fleet landing: never auto-open");
+        expect(landing).toContain("locations-landing");
+        expect(page).toContain("locations-collection-posture");
+        expect(landing).toContain("locations-operational-summary");
+        expect(landing).toContain("md:grid-cols-3");
+        expect(landing).toContain("min-h-[7.5rem]");
+        expect(landing).toContain("lg:grid-cols-[minmax(0,2fr)_minmax(18.75rem,1fr)]");
+        expect(landing).toContain("locations-main-grid");
+        expect(landing).toContain('title="Needs attention"');
+        expect(landing).toContain("attentionHighlights.slice(0, 5)");
+        expect(landing).toContain("No locations require attention.");
+        expect(landing).toContain("onOpenLocation(highlight.locationId, highlight.item.tab)");
+        expect(landing).toContain("locations-attention-toggle");
+        expect(landing).toContain("locations-list-card");
+        expect(landing).toContain("locations-row-");
+        expect(landing).toContain("min-h-[4.5rem]");
+        expect(landing).toContain("divide-y divide-alloy-forge/10");
+        expect(landing).not.toContain("max-w-[72rem]");
+        expect(page).not.toContain('className="max-w-[72rem]" data-testid="locations-content-column"');
+        expect(landing).toContain("max-h-[28rem]");
+        expect(landing).toContain("data-scroll-mode={");
+        expect(landing).not.toContain("highlight.item.consequence");
+        expect(landing).not.toContain("<ArrowUpRight");
+        expect(hook).toContain("Locations landing: never auto-open");
         expect(hook).not.toContain("listItems[0]!.id");
-        expect(model).toContain("buildLocationsFleetModel");
-        expect(model).toContain("locationsFleetHref");
+        expect(model).toContain("buildLocationsCollectionModel");
+        expect(model).toContain("locationsLandingHref");
+        expect([page, landing, hook, model, selector].join("\n")).not.toContain("right-hand summary rail");
+    });
+
+    it("bounds only collections with at least seven visible locations", () => {
+        const eightLocationFixture = Array.from({ length: 8 }, (_, index) => ({ id: `location-${index + 1}` }));
+        expect(locationsCollectionUsesBoundedScroll(6)).toBe(false);
+        expect(locationsCollectionUsesBoundedScroll(eightLocationFixture.length)).toBe(true);
+    });
+
+    it("freezes the Configuration Catalog and Collection Runtime templates", () => {
+        const doctrine = read("../docs/platform/operator/configuration-workspace-platform-doctrine.md");
+        expect(doctrine).toContain("Configuration Collection");
+        expect(doctrine).toContain("Configuration Object");
+        expect(doctrine).toContain("Configuration Detail Runtime");
+        expect(doctrine).toContain("Template A — Configuration Catalog");
+        expect(doctrine).toContain("Template B — Configuration Collection");
+        expect(doctrine).toContain("Cross-object triage");
+        expect(doctrine).toContain("Show the first five");
+        expect(doctrine).toContain("| Data Model | Collection Runtime |");
+        expect(doctrine).toContain("| Operational Calculations | Collection Runtime |");
     });
 
     it("uses the seven ready owned-concern tabs and owns Edit location on the object header", () => {
@@ -115,7 +156,7 @@ describe("Configuration Runtime — Locations", () => {
             expect(model).toContain(`label: "${label}"`);
         }
         expect(page).toContain('data-testid="locations-edit-location"');
-        expect(page).toContain('data-testid="locations-breadcrumb-fleet"');
+        expect(page).toContain('data-testid="locations-breadcrumb-collection"');
         expect(page).toContain("LocationIdentityFactsRow");
         expect(rail).not.toContain('label: "Edit location"');
         const tabCatalog = model.slice(model.indexOf("LOCATION_WORKSPACE_TABS"), model.indexOf("] as const;"));

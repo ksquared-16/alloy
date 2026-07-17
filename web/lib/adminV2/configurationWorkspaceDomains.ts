@@ -8,6 +8,7 @@
 
 import {
     adminSettingsSubpathHref,
+    CANONICAL_ORGANIZATION_BASE,
     CANONICAL_SETTINGS_BASE,
 } from "@/lib/admin/canonicalAdminRoutes";
 
@@ -65,8 +66,8 @@ export const CONFIGURATION_JOURNEY_STEPS = [
     {
         step: 1,
         label: "Organization",
-        summary: "Locations, access, and communications.",
-        href: settings("locations"),
+        summary: "Shared configuration, locations, access, and communications.",
+        href: settings("organization"),
     },
     {
         step: 2,
@@ -97,7 +98,7 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
             {
                 href: settings("locations"),
                 label: "Locations",
-                description: "Sites, rooms, programs, and schedules per location.",
+                description: "Sites, Programs offered, delivery resources, and local schedules.",
             },
             {
                 href: settings("users-roles"),
@@ -217,13 +218,13 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
     },
     {
         id: "commercial",
-        label: "Commercial",
-        description: "Programs, tuition, and business rates.",
+        label: "Programs",
+        description: "Reusable services and their organization defaults.",
         items: [
             {
                 href: "/settings/commercial",
-                label: "Programs & tuition",
-                description: "Programs, offerings, tuition rates, catalog, policies, and the simulator.",
+                label: "Programs",
+                description: "Service catalog, categories, eligibility, requirements, and defaults.",
             },
         ],
     },
@@ -255,6 +256,7 @@ export const CONFIGURATION_WORKSPACE_ADVANCED_ITEMS: readonly ConfigurationWorks
 
 export function configurationWorkspaceDomainForPath(pathname: string): ConfigurationWorkspaceDomainId | null {
     const normalized = pathname.replace(/\/$/, "") || CANONICAL_SETTINGS_BASE;
+    if (normalized === CANONICAL_ORGANIZATION_BASE) return "organization";
     const canonical =
         normalized === "/admin" || normalized === "/admin/settings"
             ? CANONICAL_SETTINGS_BASE

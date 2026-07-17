@@ -267,7 +267,7 @@ export function buildLayoutEditorActionCatalogGroups(options: {
             selectableInActionPicker: false,
             disabledReason:
                 row.unavailableMessage
-                ?? "Available when configured in Business Process or Settings → Actions.",
+                ?? "Available when configured in Business Process or Configuration → Actions.",
         })),
         ...layoutOnly,
     ].sort((a, b) => a.label.localeCompare(b.label));

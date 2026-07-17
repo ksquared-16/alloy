@@ -196,9 +196,9 @@ Result:                   available in every group whose acceptedNamespaces ∋ 
 - **Navigation reflects the Surface tree, including nested surfaces.** Editing a nested surface reads as editing a **Surface**, not a configuration record:
 
 ```
-Settings → Surfaces → Focus Panel → Children Component → Children Surface
-Settings → Surfaces → Queue Row → Family Queue Row / Child Queue Row
-Settings → Surfaces → Financial Configuration → Financial Configuration Surface
+Configuration → Surfaces → Focus Panel → Children Component → Children Surface
+Configuration → Surfaces → Queue Row → Family Queue Row / Child Queue Row
+Configuration → Surfaces → Financial Configuration → Financial Configuration Surface
 ```
 
 - The Surface Library is a **single registry** of surface definitions (not two hand-synced catalogs), from which both the library UI and the router read.

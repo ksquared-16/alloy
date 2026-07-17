@@ -34,6 +34,23 @@ Detailed behavior always lives in the **canonical owner** documents linked below
 
 ---
 
+## 2026-07 — Organization publishes; Locations consume
+
+**Decision:**
+Organization Configuration Runtime V2 is frozen. Organization publishes reusable configuration through nine first-class domains; Locations consume it through inheritance, assignment, or provider-gated Apply. Programs is the operator-facing reusable service catalog. Locations own Programs offered, Rooms/Delivery Resources, and local scheduling; resources and runtime own capacity.
+
+**Why:**
+Organization configuration needed one canonical ownership and distribution model above the frozen Locations experience. Treating Programs as Location-owned room containers conflated reusable service identity with operational delivery.
+
+**Consequences:**
+Future Configuration domains use the Configuration Domain Card and publisher/consumer contract. Commercial may remain an internal compatibility runtime/route name, but operator language is Programs. No downstream domain may infer health, expose Apply without authoritative delivery, or move resource/capacity/scheduling truth into Programs.
+
+**Canonical owners:** [`../../system/organization-configuration-runtime-v2.md`](../../system/organization-configuration-runtime-v2.md), [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../core/configuration-ownership-and-inheritance.md`](../core/configuration-ownership-and-inheritance.md).
+
+**Status:** Active
+
+---
+
 ## 2026-07 — Operational Expectations Authority represented by a governed catalog + assignments
 
 **Decision:**

@@ -179,7 +179,7 @@ export default function ProgramsConfigWorkspace() {
                     <p className="text-sm text-alloy-midnight/60">
                         Add a site location first in{" "}
                         <Link href="/admin/settings/locations" className="text-alloy-pine underline">
-                            Settings → Locations
+                            Configuration → Locations
                         </Link>{" "}
                         to configure programs.
                     </p>

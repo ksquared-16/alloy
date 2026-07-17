@@ -196,7 +196,7 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             .sort((a, b) => a.sortSite.localeCompare(b.sortSite) || a.title.localeCompare(b.title));
     }, [section, siteRows, programCategories, roomRows, schedulePatterns, siteLabelById]);
 
-    // URL is the source of truth for fleet vs object workspace.
+    // URL is the source of truth for the Locations landing versus an object workspace.
     useEffect(() => {
         if (loading) return;
         if (!initialLocationId) {
@@ -223,7 +223,7 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         }
     }, [initialLocationId, loading, siteRows, section]);
 
-    // Fleet landing: never auto-open the first location. Drop stale ids only.
+    // Locations landing: never auto-open the first location. Drop stale ids only.
     useEffect(() => {
         if (!selectedId || !listItems.length) return;
         if (initialLocationId && section === "locations") return;

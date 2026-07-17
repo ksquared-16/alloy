@@ -1,19 +1,30 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
 # Configuration Ownership & Inheritance — Core Platform Doctrine
 
-**Status:** Proposed core platform doctrine — pending ratification
+**Status:** Ratified core platform doctrine — Organization Configuration Runtime V2
 **Date:** 2026-06-30
 **Sits beside:** Business Process · Operational Truth · Entity Model · Record System · [Commercial Operating Model](commercial-operating-model.md)
 **Extends (does not replace):** `docs/system/configuration-ownership-doctrine.md` (surface-ownership matrix) and `docs/system/configuration-runtime-v1.md` (the frozen settings shell). This doctrine adds the **inheritance + override** dimension those lack, and the **four-owner** model.
-**Mandate:** Define how every configurable object in Alloy is *owned*, *inherited*, and *overridden* — one pattern for Financials, Communications, Branding, Scheduling, Workflows, Policies, Access, and every future module. Design only; no code.
+**Mandate:** Define how every configurable object in Alloy is *owned*, *inherited*, and *overridden* — one pattern for Financials, Communications, Branding, Scheduling, Workflows, Policies, Access, and every future module. Runtime contract: `../../system/organization-configuration-runtime-v2.md`.
 
 > **The discovery:** the Commercial Configuration mockup didn't expose a Financials problem. It exposed that Alloy has no canonical answer to **"who owns configuration, and how does it inherit?"** Pricing is just the first object to need it. Get this right and you've solved it for every configurable object.
+
+## Ratification and owner-model reconciliation
+
+The frozen surface-ownership matrix and this four-owner model are complementary:
+
+- the **surface matrix** names the one operator home allowed to author each concern;
+- the **four-owner model** separates business meaning, operational delivery, configuration authoring, and runtime consumption.
+
+“Configuration owner” is the bridge: it must equal the authoring home in the frozen surface matrix. The other three owners are responsibility lenses, not additional edit surfaces. Therefore the four-owner model does not permit duplicate authoring or weaken the one-system-of-record rule.
+
+Organization Runtime V2 implements the shared declaration, publisher/consumer card model, platform → organization → location value resolution, provider-gated distribution plan, and cross-location posture. Individual domains still own their payloads and must register authoritative read/apply behavior before the organization surface claims a resolved or applied state.
 
 ---
 
@@ -54,7 +65,7 @@ Every configurable object has four owners. They are usually **different**, and c
 |---|---|---|---|
 | **Commercial owner** | What gives it business meaning / what does it attach to commercially? | The **Program** (it's *that program's* tuition) | n/a (a program *is* the commercial unit) |
 | **Operational owner** | Where is it delivered / executed? | n/a (price isn't delivered) | The **Site / Room** (where children attend) |
-| **Configuration owner** | Where is it authored, and along what scope does it inherit? | **Commercial Config**, scope `org→site→program→room` | **Programs catalog** (today: Locations), scope `org→site` |
+| **Configuration owner** | Where is it authored, and along what scope does it inherit? | **Commercial Config**, scope `org→site→program→room` | **Organization Programs catalog**, with Location availability |
 | **Runtime owner** | What consumes it to produce behavior? | The **Consumption Resolver / billing** | **Enrollment, scheduling, attendance** |
 
 **Why four, not one:** the operator authors tuition in *Commercial Config* (configuration owner), but it belongs to a *Program* (commercial owner), is delivered at a *Room* (operational owner), and is consumed by the *resolver* (runtime owner). Each owner answers a different design question; a page must know which it is for every object it shows.
@@ -68,13 +79,15 @@ Every configurable object has four owners. They are usually **different**, and c
 This is the rule the mockup violated by implying Financial Configuration would recreate Programs. It must **consume** them.
 
 - **Commercial Configuration** *owns*: Tuition, Funding, Fees & Add-Ons, Financial Policies, Accounting mapping. *References*: Programs, Rooms, Locations.
-- **Locations / Operations** *owns*: Sites, Rooms, (today) Program categories, Schedule templates, Capacity rules. *References*: the tuition/programs summary (read-only).
+- **Locations / Operations** *owns*: Sites, Programs offered, Rooms/Delivery Resources, local Schedule templates, Capacity rules. *References*: Program identity and commercial defaults (read-only).
 - **Communications** *owns*: channels, templates, send rules. **Branding** *owns*: tokens/assets. **Automation** *owns*: Workflows, Actions. **Admin** *owns*: Users, Roles, Access.
 
 **Reference contract:** a referencing surface shows the object's identity + a *"managed in <home> ↗"* deep link, never an editor. A program's page shows its tuition (read-only, "managed in Commercial Config"); the tuition grid shows its program (read-only, "managed in Programs").
 
-### The one ownership shift this doctrine implies
-Programs are **site-scoped** today (`location_program_categories`, `UNIQUE(org_id, location_id, key)`). The ownership model wants **Program identity to be org-level** (one "Toddler" catalog entry) that is **offered at** sites (availability) and whose tuition is authored in Commercial Config (value). Target: a `programs` catalog at org scope + per-site availability; current per-site categories become the availability layer. *(Design note, not a migration here.)*
+### Programs ownership shift
+Organization Runtime V2 ratifies **Program identity as organization-owned** (one "Toddler", "Personal Training", "Physical Therapy", or "Oil Change" catalog entry) and **offered at** Locations through availability. Current `location_program_categories` rows remain a compatibility representation of per-Location availability until a separate Programs migration. This runtime change does not migrate storage.
+
+Programs do not own Rooms/Delivery Resources, capacity, or schedules. A Location chooses what it offers; its resources deliver those Programs; resource and operational runtimes own capacity and scheduling truth.
 
 ---
 
@@ -146,7 +159,7 @@ Every configurable value, everywhere in Alloy, shows:
 ### 5b. Beyond the locked/unlock example (improvements)
 The prompt's "🔒 locked → unlock → select locations → override" is the seed. Generalized and improved:
 - **Provenance everywhere** (not just on override) — inheriting values say where they came from.
-- **Compare-across-scopes view** — a matrix (rows = items, cols = sites) showing inherited vs overridden cells; the home for fleet operators.
+- **Compare-across-scopes view** — a matrix (rows = items, cols = sites) showing inherited vs overridden cells; the home for multi-location operators.
 - **Cascade-impact preview** — "Changing the org default affects 2 sites and 240 enrollments" before save.
 - **Override hygiene** — count overrides ("3 sites differ"), one-click *reset to inherited*, warn on override sprawl.
 - **Availability == the same control** — toggling "offered at North Campus" is the availability face of the same Inheritance Control.
@@ -200,7 +213,7 @@ V1 was a Program-first workspace with a Tuition grid. **V2 keeps that and adds t
 | **Effective dates** | "Apply from…" on every change; scheduled-change banners. |
 
 ### 7c. Shell
-Lives in the **frozen Configuration Runtime shell** (Settings index → Context Queue 260px → Object Queue 320px → Workspace). Commercial Config is a Context Queue entry; Programs are the Object Queue; the Tuition workspace is the flex pane. The Scope Context bar spans the workspace top.
+Lives in the **frozen Configuration Runtime shell** (Configuration landing → Context Queue 260px → Object Queue 320px → Workspace). Commercial Config is a Context Queue entry; Programs are the Object Queue; the Tuition workspace is the flex pane. The Scope Context bar spans the workspace top.
 
 ---
 
@@ -209,12 +222,12 @@ Lives in the **frozen Configuration Runtime shell** (Settings index → Context 
 ### Concept A — Organization-first (inheritance is the hero)
 - **Layout:** the **Compare-locations matrix** is the main surface (rows = config items / programs, cols = sites); cells show inherited vs overridden; edit org defaults, override per cell.
 - **Strengths:** makes ownership/override explicit and central; ideal for multi-site chains; the lock/applies-to pattern is native and front-and-center.
-- **Weaknesses:** overwhelming for single-site orgs; reads as "managing a fleet," not "configuring my business"; the tuition grid is nested inside a bigger matrix.
+- **Weaknesses:** overwhelming for single-site orgs; reads as managing a portfolio rather than configuring the business; the tuition grid is nested inside a bigger matrix.
 
 ### Concept B — Program-first (V1 + a scope lens)
 - **Layout:** the Program workspace (rail + Tuition hero) with a **Location lens** in the Scope Context bar; each value shows provenance + inline override.
 - **Strengths:** matches the operator mental model; inheritance is contextual, never overwhelming; single-site orgs barely notice scope.
-- **Weaknesses:** cross-location comparison needs a lens switch (no at-a-glance matrix); fleet managers want the grid view.
+- **Weaknesses:** cross-location comparison needs a lens switch (no at-a-glance matrix); multi-location operators may still want the grid view.
 
 ### Concept C — Commercial-first (a configuration hub)
 - **Layout:** a **Commercial Configuration hub** of tiles — Programs & Tuition · Funding · Fees · Policies · Accounting · Simulator — each opening its surface; a global scope lens persists across all.
@@ -242,7 +255,7 @@ The same three pieces — **system-of-record rule** (§3), **scope ladder + reso
 | Module | System of record | Inherits along | Kind | Override example |
 |---|---|---|---|---|
 | **Communications** | Communications | platform→org→site | value + availability | Org template; Downtown overrides the signature |
-| **Branding** | Brand/Settings | org→site | value | Org palette; one campus has its own logo |
+| **Branding** | Brand/Configuration | org→site | value | Org palette; one campus has its own logo |
 | **Scheduling (hours)** | Locations | org→site→room | value | Site hours; Room 2A opens earlier |
 | **Attendance rules** | Operations | org→site→program→room | value | Late-pickup threshold per program |
 | **Workflows / Actions** | Automation | platform→org→site | availability (+ params) | Enable a workflow at two sites only |
@@ -267,7 +280,7 @@ The same three pieces — **system-of-record rule** (§3), **scope ladder + reso
 | **Financial Policies** | Org/Program | — | Commercial Config · org→site→program→room | resolver, billing, collections |
 | **Charge Templates** | Program/Org | — | Commercial Config · org (→site) | charge resolution |
 | **Communications** | Org | Site | Communications · platform→org→site | comms engine |
-| **Branding** | Org | Site | Brand/Settings · org→site | every rendered surface |
+| **Branding** | Org | Site | Brand/Configuration · org→site | every rendered surface |
 | **Workflows / Actions** | Org | Site | Automation · platform→org→site | execution engine |
 | **Scheduling** | — | Site/Room | Locations · org→site→room | attendance, billing |
 | **Attendance** | — | Room | Operations · org→site→program→room | consumption pipeline |

@@ -53,7 +53,7 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 |---------|-------|---------|
 | **Communications modal** | `/workspace` → top nav **Inbox** | Primary operator hub when `comms_v2_command_center` is enabled |
 | **Drawer Communications** | Entity drawer tab | Record-specific conversations only |
-| **Settings → Communications** | `/settings/communications` | Provider bindings / channel setup (also embedded in modal Channels tab) |
+| **Configuration → Communications** | `/settings/communications` | Provider bindings / channel setup (also embedded in modal Channels tab) |
 | **`/adminV2/communications`** | Direct URL | Deprecated notice — not in nav |
 | **`/admin/communications`** | Legacy path | Deprecated / non-primary |
 
@@ -155,7 +155,7 @@ Full doctrine: `../../sprints/archive/2026-07/communications-preview-vm-doctrine
 
 **Presentation helpers:** `threadTopicPresentation.ts`, `timelinePresentation.ts`.
 
-**Out of scope (next sprint):** attachments, rich editor, Settings/provider onboarding, compliance UX, inbound email, Test Email/SMS, Announcements/Templates expansion. Command Center modal layout and send runtime unchanged.
+**Out of scope (next sprint):** attachments, rich editor, Configuration/provider onboarding, compliance UX, inbound email, Test Email/SMS, Announcements/Templates expansion. Command Center modal layout and send runtime unchanged.
 
 Sprint closeout: `../../sprints/archive/2026-07/communications-activity-sprint-closeout.md` (historical: `../../sprints/archive/2026-07/communications-activity-sprint-closeout.md`).
 

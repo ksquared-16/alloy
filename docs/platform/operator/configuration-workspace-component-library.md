@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
@@ -39,7 +39,7 @@ A calm, self-contained block for one concern: a plain headline, quiet supporting
 ### Command Rail
 The object-scoped rail holding Quick Actions and (where useful) the object's Attention/Setup. Restrained by doctrine — a short action list and one or two status cards, never a dashboard.
 
-**Settings ownership (proven by Locations):** Configuration content pages **do not** render a page-local Actions card. Contextual commands register into the **platform shell Actions rail** (above BOS) via `WorkspaceCommandRailRegistrar` / `LocationsCommandRailActions`. The page owns understanding and state; the shell owns commands; BOS remains a separate assist surface. Inline controls stay attached to the content object they affect.
+**Configuration ownership (proven by Locations):** Configuration content pages **do not** render a page-local Actions card. Contextual commands register into the **platform shell Actions rail** (above BOS) via `WorkspaceCommandRailRegistrar` / `LocationsCommandRailActions`. The page owns understanding and state; the shell owns commands; BOS remains a separate assist surface. Inline controls stay attached to the content object they affect.
 
 ---
 
@@ -58,7 +58,7 @@ The onboarding completeness surface: a percentage/progress indicator plus a conc
 Ranked actions on the command rail, grouped **Fix now → Do next → Manage**. Domains supply actions from Attention + high-frequency operations; the primitive only groups and presents. Replaces ad-hoc “Quick actions” button lists.
 
 ### Scope Context Bar
-Organization (global) vs the selected configuration object. Switches the operator between the org landing and the object workspace without inventing a third “fleet” noun.
+Organization (global) vs the selected configuration object. Switches the operator between the Organization landing and the object workspace without inventing another collection noun.
 
 ### Apply To Dialog
 Multi-select targets + confirm for a domain with an authoritative copy/apply provider. Domains supply targets and the durable mutation. The primitive remains hidden when no provider exists; confirmation may never imply a copy occurred when only a proposal was produced.
@@ -72,6 +72,9 @@ A per-object or per-section rollup of substrate resolution status into a single 
 
 ### Configuration Object List
 The set of object rows within the Sidebar (or a grid, for a no-selection tab). Each row carries object identity + status + a one-line derived signal ("Holds 11 · 2 open"), and marks incomplete objects ("Needs setup") honestly.
+
+### Configuration Domain Card
+The compact publisher-landing navigation object for one configuration domain. It carries domain identity, publication state, one concise description, at most three owned concerns, a small Used By summary, and one Open affordance. Cards are equal height for scanning and are not dashboard metrics. Publisher detail, operator home, inheritance, overrides, and health explanation belong inside the domain runtime through progressive disclosure. The canonical implementation is Organization Configuration Runtime V2.1.
 
 ### Configuration Status Badge
 The object's active/inactive (or domain-equivalent) state as a soft, dotted chip. Calm, small, meaningful — Bend-Pine for good/active, Stone for inactive, ember reserved for problem states.
@@ -132,7 +135,7 @@ The shared save contract for every editor and inline mutation. The server return
 - A configuration experience is **assembled from these primitives only.** New visual needs extend the library, not the domain.
 - Primitives depend on the **object model and resolved view models**, never on raw database rows. Only server loaders touch the substrate.
 - Every primitive obeys the platform laws: the engine stays invisible, unknown is never zero, inheritance is quiet, editing is in-place, and the two status systems stay separate.
-- The **reference implementations** of these primitives are in the frozen Locations Runtime (`web/components/adminV2/settings/locations/` and `web/components/adminV2/settings/configurationRuntime/workspace/`); a new domain adapts those, it does not reinvent them.
+- The reference implementations live in `web/components/adminV2/settings/organization/`, `web/components/adminV2/settings/locations/`, and `web/components/adminV2/settings/configurationRuntime/workspace/`. Organization presents the configuration domain catalog; Locations presents the Location collection and entry into each Location workspace.
 
 ## Related docs
 

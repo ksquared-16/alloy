@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
@@ -82,6 +82,7 @@ Cards communicate **state, not schema** (premise 3 of `alloy-visual-language.md`
 - **List card** — ranked or ordered rows with a per-row action (Attention, closures, activity, programs), divided by hairlines, not boxed individually.
 - **Editor card** — inline fields plus a live consequence sentence plus one save.
 - **Readiness region** — an explained percentage/progress bar plus the authoritative per-area states that reconcile it.
+- **Configuration Domain Card** — a compact publisher-landing navigation object with identity, publication state, concise ownership, Used By summary, and one Open affordance. A responsive object grid is allowed because each card is a configuration object, not a metric widget. Cards are equal height for rapid scanning; detailed inheritance, overrides, and health move inside the domain.
 
 Sections are **structured rows inside one card**, not a mosaic of separate cards. The doctrine is: prefer `border-b` rows within a section over a grid of boxes. A configuration workspace is a small number of calm sections, not a wall of tiles.
 
@@ -89,10 +90,12 @@ Sections are **structured rows inside one card**, not a mosaic of separate cards
 
 The object list (left rail) is a **persistent selector**, not a page. Rows carry the object's identity (name, sub-label, status) and a selected state that is unmistakable: the canonical queue-row Bend Pine wash, border, and inset rail. Active identity glyphs use Bend Pine without inventing pale decorative tiles; inactive identities are muted. Selection is the single most important state in the system — the operator must always know which object they are operating. On drilling into a nested object, the list swaps to the child's siblings; the selected state moves with the drill.
 
+On a top-level no-selection landing, presentation follows the collection's operator purpose. Organization uses equal-height Configuration Domain Cards for its domain catalog. Locations uses a quiet, divider-separated Location collection with search, inactive filtering, Add Location, and direct entry into each Location workspace. Supporting readiness and attention remain above the collection rather than becoming a second rail or a tile dashboard.
+
 ## Navigation (tabs & breadcrumb)
 
 - **Tabs** are the object's owned concerns. The active tab is Bend-Pine text over a Bend-Pine underline; idle tabs are muted with no underline. Tabs are quiet — they name concerns, not features.
-- **Breadcrumb** is the ownership path in business language (Settings › Prototypes › … or Locations › Downtown Campus › Toddler Room), with the current object bold and ancestors as links. It reads as *where this object sits*, never as a URL.
+- **Breadcrumb** is the ownership path in business language (Configuration › Prototypes › … or Locations › Downtown Campus › Toddler Room), with the current object bold and ancestors as links. It reads as *where this object sits*, never as a URL.
 
 ## Badges & status
 

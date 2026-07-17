@@ -41,6 +41,8 @@ const nextConfig: NextConfig = {
   typescript: {
     /** Production build typecheck — app + API routes only (excludes tests/scripts). */
     tsconfigPath: "./tsconfig.build.json",
+    /** Local cert loops may skip the redundant build-time pass only after standalone typechecks succeed. */
+    ignoreBuildErrors: process.env.SKIP_BUILD_TYPECHECK === "1",
   },
   turbopack: {
     root: webRoot,
@@ -48,16 +50,18 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       /** Phase H1: transitional public routes → canonical `/admin`. */
-      { source: "/adminV2", destination: "/settings", permanent: false },
+      { source: "/adminV2", destination: "/organization", permanent: false },
       { source: "/adminV2/:path*", destination: "/admin/:path*", permanent: false },
-      { source: "/admin/v2", destination: "/settings", permanent: false },
+      { source: "/admin/v2", destination: "/organization", permanent: false },
       { source: "/admin/v2/:path*", destination: "/admin/:path*", permanent: false },
-      { source: "/adminv2", destination: "/settings", permanent: false },
+      { source: "/adminv2", destination: "/organization", permanent: false },
       { source: "/adminv2/:path*", destination: "/admin/:path*", permanent: false },
-      /** Configuration Runtime Phase 2A — canonical Settings at `/settings`. */
-      { source: "/admin", destination: "/settings", permanent: false },
-      { source: "/admin/settings", destination: "/settings", permanent: false },
+      /** Organization is the canonical configuration landing; Settings remains the sub-surface namespace. */
+      { source: "/admin", destination: "/organization", permanent: false },
+      { source: "/admin/settings", destination: "/organization", permanent: false },
       { source: "/admin/settings/:path*", destination: "/settings/:path*", permanent: false },
+      { source: "/settings", destination: "/organization", permanent: false },
+      { source: "/settings/organization", destination: "/organization", permanent: false },
       /**
        * Surfaces rename — `/settings/layouts` is no longer product IA. Canonical
        * user-facing route is `/settings/surfaces`. Storage terms (entity_layouts,
@@ -100,7 +104,7 @@ const nextConfig: NextConfig = {
       { source: "/legacy-admin/system/field-sections", destination: "/settings/field-sections", permanent: false },
       { source: "/legacy-admin/system/layouts", destination: "/settings/surfaces", permanent: false },
       { source: "/legacy-admin/system/layouts/:path*", destination: "/settings/surfaces", permanent: false },
-      { source: "/legacy-admin/system", destination: "/settings", permanent: false },
+      { source: "/legacy-admin/system", destination: "/organization", permanent: false },
       { source: "/legacy-admin/system/access-control", destination: "/settings/users-roles", permanent: false },
       { source: "/legacy-admin/system/roles", destination: "/settings/users-roles", permanent: false },
       { source: "/legacy-admin/system/departments", destination: "/settings/departments", permanent: false },
@@ -109,7 +113,7 @@ const nextConfig: NextConfig = {
       { source: "/legacy-admin/system/customer-person-roles", destination: "/settings/relationships", permanent: false },
       { source: "/legacy-admin/system/person-relationship-types", destination: "/settings/relationships?tab=person-relationships", permanent: false },
       /** Broken legacy hub links under /admin/system → Platform Configuration. */
-      { source: "/admin/system", destination: "/settings", permanent: false },
+      { source: "/admin/system", destination: "/organization", permanent: false },
       { source: "/admin/system/person-fields", destination: "/settings/fields?entity=person", permanent: false },
       { source: "/admin/system/location-fields", destination: "/settings/fields?entity=location", permanent: false },
       { source: "/admin/system/customer-fields", destination: "/settings/fields?entity=customer", permanent: false },
@@ -152,7 +156,7 @@ const nextConfig: NextConfig = {
        */
       { source: "/settings/surfaces", destination: "/adminV2/settings/surfaces" },
       { source: "/settings/surfaces/:path*", destination: "/adminV2/settings/surfaces/:path*" },
-      { source: "/settings", destination: "/adminV2/settings" },
+      { source: "/organization", destination: "/adminV2/settings/organization" },
       { source: "/settings/:path*", destination: "/adminV2/settings/:path*" },
       /**
        * Phase G: canonical operator workspace at `/workspace` (browser URL; serves AdminV2 tree).

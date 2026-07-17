@@ -17,7 +17,7 @@ export const MUTATION_BOUNDARY_RECOMMENDATION_ONLY = RECOMMENDATION_ONLY_CONFIG_
 export const MUTATION_BOUNDARY_CONFIG_NOT_LIVE =
     "No configuration changes are live until you review, approve, and apply.";
 export const MUTATION_BOUNDARY_CONFIG_APPROVED_PENDING_APPLY =
-    "Approved in Settings. Apply when you are ready to make this change live.";
+    "Approved in Configuration. Apply when you are ready to make this change live.";
 export const MUTATION_BOUNDARY_WORKFLOW_DISABLED_DRAFT =
     "Creates a disabled workflow draft. Nothing runs until an admin enables it after apply.";
 export const MUTATION_BOUNDARY_TASK_ASSIST_SEND =

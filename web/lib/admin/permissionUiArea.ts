@@ -3,7 +3,7 @@
  */
 
 export const PERMISSION_UI_AREA_ORDER = [
-    "Settings/Admin",
+    "Configuration/Admin",
     "CRM",
     "Communications",
     "Billing/Financials",
@@ -15,7 +15,7 @@ export type PermissionUiArea = (typeof PERMISSION_UI_AREA_ORDER)[number];
 
 export function permissionUiArea(groupKey: string): PermissionUiArea {
     const g = (groupKey || "").toLowerCase();
-    if (g === "settings" || g.includes("admin")) return "Settings/Admin";
+    if (g === "settings" || g.includes("admin")) return "Configuration/Admin";
     if (g === "crm" || g.startsWith("customer") || g.includes("opportun") || g.includes("contact")) return "CRM";
     if (g.includes("comm")) return "Communications";
     if (g.includes("bill") || g.includes("financ") || g.includes("payment") || g.includes("ledger") || g.includes("invoice"))

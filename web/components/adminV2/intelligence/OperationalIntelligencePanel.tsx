@@ -171,7 +171,7 @@ export function OperationalIntelligencePanel() {
                 title="Operational metrics"
                 description={
                     model.metricsSource === "configured"
-                        ? "Configured in Settings → Analytics → Where it appears. Resolved live from OIP; each card drills into real work."
+                        ? "Configured in Configuration → Operational Calculations → Where it appears. Resolved live from OIP; each card drills into real work."
                         : "Default set (no placements configured). Resolved live from OIP; each card drills into real work."
                 }
             >

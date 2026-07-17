@@ -117,4 +117,4 @@ export function isLegacyOpportunityDrawerLayoutWriteBlockedServer(): boolean {
 export const LEGACY_OPPORTUNITY_LAYOUT_WRITE_BLOCKED_CODE = "legacy_layout_write_blocked" as const;
 
 export const LEGACY_OPPORTUNITY_LAYOUT_WRITE_BLOCKED_MESSAGE =
-    "Legacy opportunity drawer layout writes are disabled while visual layout configuration is active. Use Settings → Layout Gallery.";
+    "Legacy opportunity drawer layout writes are disabled while visual layout configuration is active. Use Configuration → Layout Gallery.";

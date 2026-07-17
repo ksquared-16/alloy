@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
@@ -9,20 +9,20 @@ supersedes: []
 
 **Status:** Canonical platform module doc.
 
-Settings control plane — config steers presentation within platform guardrails.
+Configuration control plane — configuration steers presentation within platform guardrails.
 
 ---
 
 ## Four-plane model (V1 shipped)
 
-| Plane | Settings route | Owns |
+| Plane | Configuration route | Owns |
 |-------|----------------|------|
 | Fields | `/settings/fields` | Field registry, types, visibility |
 | Field grouping | `/settings/field-sections` | Section labels |
 | Surfaces | `/settings/surfaces` | Surface composition (drawer, queue row, headers) |
 | Actions | `/settings/actions` | Org action placements |
 
-Plus: statuses, business processes, placement priority, org settings.
+Plus: statuses, business processes, placement priority, and organization configuration.
 
 ---
 
@@ -40,7 +40,7 @@ Plus: statuses, business processes, placement priority, org settings.
 | **`entity_layouts.doc`** | Canonical **visual surface layout** for drawer/queue composition (sections, fields, zones, `layoutEditorHidden`) | **Primary** — Layout Gallery + visual editor; opportunity drawer runtime adoption (Phase 4+) |
 | **`record_drawer_layouts.config_json`** | Legacy opportunity workflow v1 section order, show/hide, `field_placements_v1` | **Legacy** — still written by workflow v1 settings editors until per-org migration |
 
-Operators configuring opportunity drawer **composition** should use **Settings → Surfaces**. Legacy workflow v1 layout editors remain for field placement and section order until migrated; dual-write can produce conflicting visibility until cutover completes.
+Operators configuring opportunity drawer **composition** should use **Configuration → Surfaces**. Legacy workflow v1 layout editors remain for field placement and section order until migrated; dual-write can produce conflicting visibility until cutover completes.
 
 Kill switch for Phase 4 visual config at runtime: `LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG=0` (server) / `NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG=0` (client).
 
@@ -86,8 +86,9 @@ The Configuration Runtime is the platform-owned layer that sits beneath all conf
 | Scope (org vs location) | `lib/configRuntime/scope.ts` | Commercial, Layouts, Fields |
 | Ownership indicators | `components/configRuntime/OwnershipBadge.tsx` | Commercial |
 | Inheritance resolution | `resolveInherited()` in scope.ts | Commercial tuition rates |
-| Config workspace layout | `lib/adminV2/settingsPageLayout.ts` | All settings surfaces |
-| Configuration workspace domains | `lib/adminV2/configurationWorkspaceDomains.ts` | Settings index, nav |
+| Config workspace layout | `lib/adminV2/settingsPageLayout.ts` | All configuration surfaces |
+| Configuration workspace domains | `lib/adminV2/configurationWorkspaceDomains.ts` | Configuration landing and nav |
+| Configuration Domain Card | `components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard.tsx` | Organization and future publisher surfaces |
 
 **Extraction rule:** Only proven primitives move here. A primitive is proven when it appears in two or more independent configuration domains. Do not move Commercial-specific patterns here prematurely.
 
@@ -103,6 +104,32 @@ The Configuration Runtime is the platform-owned layer that sits beneath all conf
 
 Future domains inherit the Locations experience grammar and consume the relevant control-plane primitives proven by Commercial. These are complementary references, not competing implementations.
 
+### Organization Configuration Runtime V2
+
+The Organization Configuration Runtime is the organization-owned publishing layer above Locations. Its landing is `/organization`; its frozen implementation contract is `../../system/organization-configuration-runtime-v2.md`.
+
+It owns the reusable control contract, not domain payloads:
+
+- one system-of-record home and configuration owner per area;
+- Organization publishes reusable configuration and Locations consume it;
+- reusable Configuration Domain Cards summarize identity, publication, concise ownership, and consumers; domain runtimes disclose inheritance, overrides, and health detail;
+- platform → organization → location value resolution with explicit value presence;
+- availability/assignment kept distinct from value inheritance;
+- confirmed-save vs explicit-publish behavior;
+- distribution modes: inherit, assignment, apply, or none;
+- provider-gated, published-revision Apply plans with deterministic retry identity;
+- cross-location posture that preserves **Not assessed** when a domain has not supplied evidence.
+
+Domains keep their authoritative tables, validation, mutation paths, and runtime consumers. No generic JSON configuration store sits between Organization Runtime and those systems.
+
+**Apply is not inheritance.** Inherited values continue to resolve from their owner. Apply durably creates or updates Location-owned objects through a registered domain provider. The action remains hidden until that provider can return an audit id, the authoritative published revision, and a result for every selected Location.
+
+The frozen registry contains Locations, Programs, Access, Communications, Data Model, Business Processes, Surfaces, Automation, and Operational Intelligence. Automation and Operational Intelligence remain first-class because the ownership matrix already gives each a distinct owner.
+
+**Programs** is operator language for the reusable service catalog. The `/settings/commercial` route and Commercial Runtime names may remain internal compatibility details. Locations choose Programs offered and own Rooms/Delivery Resources and local schedules; resource/runtime systems own capacity. Organization Runtime V2 does not implement or migrate those downstream domains.
+
+Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
+
 ### Primitives NOT yet extracted (deferred)
 
 These belong to the Configuration Runtime eventually but are only Commercial-specific today:
@@ -111,22 +138,22 @@ These belong to the Configuration Runtime eventually but are only Commercial-spe
 - Bulk rate operations
 - Compare locations
 - Impact analysis
-- Change preview / publish flow
+- Domain-specific change preview / publish authoring
 
 ---
 
-## Platform Configuration UX — Settings Home
+## Platform Configuration navigation
 
-The Settings index (`/settings`) is a **compact configuration table of contents** — divider-separated sections with a left identity column and right list of ~52px clickable rows, not dashboard tiles.
+**Configuration** is the operator-facing product language. `/organization` is the Configuration landing. Existing `/settings/*` URLs remain compatibility routes for domain surfaces; internal filenames and identifiers may retain `settings` where changing them would create migration risk.
 
 **Information architecture:**
 
 | Chapter | Primary entries |
 |---------|-----------------|
-| Organization | Locations, Access, Communications |
+| Organization | Organization landing, Locations, Access, Communications |
 | Data Model | Entities, Fields, Statuses, Operational Calculations |
 | Operations | Processes, Surfaces, Automation |
-| Business | Commercial |
+| Business | Programs (`/settings/commercial` compatibility route) |
 
 **Presentation primitives:** `ConfigurationSection`, `ConfigurationSectionItem`, `config-platform-*` CSS in `configurationRuntime.css`. IA source: `lib/adminV2/configurationModeNav.ts`.
 

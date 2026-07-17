@@ -10,6 +10,7 @@ const settings = adminSettingsSubpathHref;
 export type ConfigurationPlatformSectionId = "organization" | "data_model" | "operations" | "business";
 
 export type ConfigurationModeNavIcon =
+    | "organization"
     | "processes"
     | "layouts"
     | "fields"
@@ -51,7 +52,7 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
             {
                 href: settings("locations"),
                 label: "Locations",
-                description: "Sites, rooms, programs, and schedules.",
+                description: "Sites, Programs offered, delivery resources, and local schedules.",
                 icon: "locations",
                 testId: "config-mode-nav-locations",
             },
@@ -141,10 +142,10 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
         items: [
             {
                 href: settings("commercial"),
-                label: "Commercial",
-                description: "Programs, tuition, pricing, catalog, and overrides.",
+                label: "Programs",
+                description: "Reusable service catalog, eligibility, requirements, and defaults.",
                 icon: "commercial",
-                testId: "config-mode-nav-commercial",
+                testId: "config-mode-nav-programs",
             },
         ],
     },

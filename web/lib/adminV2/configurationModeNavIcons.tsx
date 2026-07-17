@@ -3,6 +3,7 @@ import {
     BarChart3,
     Banknote,
     BookOpen,
+    Building2,
     Boxes,
     GitBranch,
     LayoutGrid,
@@ -17,6 +18,7 @@ import {
 import type { ConfigurationModeNavIcon } from "@/lib/adminV2/configurationModeNav";
 
 const ICONS: Record<ConfigurationModeNavIcon, LucideIcon> = {
+    organization: Building2,
     processes: Workflow,
     layouts: LayoutGrid,
     fields: TextCursorInput,

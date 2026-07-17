@@ -104,7 +104,7 @@ describe("AdminV2 shell navigation helpers", () => {
         const triggerOnly = profile.slice(0, profile.indexOf("{open ?"));
         expect(triggerOnly).not.toContain("text-alloy-midnight/60");
         expect(profile).toContain("Sign out");
-        expect(profile).toContain("Settings");
+        expect(profile).toContain("Organization");
         const topNav = read("app/adminV2/components/TopNavBar.tsx");
         expect(topNav).not.toContain("signOut");
         expect(topNav).toContain("h-[3.75rem]");
