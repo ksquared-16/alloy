@@ -61,6 +61,32 @@ export {
     listOperationalCalculationDefinitionsByConsumer,
 } from "@/lib/operationalCalculations/registry";
 
+// ---- Configuration event propagation (Phase 4) ----
+export {
+    OPERATIONAL_CALCULATION_CONFIG_CHANGED_EVENT,
+    OPERATIONAL_CALCULATION_CONFIG_EVENT_SCHEMA_VERSION,
+    affectedCalculationKeysFor,
+} from "@/lib/operationalCalculations/propagation/types";
+export type {
+    CalculationConfigRuleType,
+    CalculationConfigChangeKind,
+} from "@/lib/operationalCalculations/propagation/types";
+export {
+    buildCalculationConfigChangedEvent,
+    emitCalculationConfigChanged,
+} from "@/lib/operationalCalculations/propagation/configChangeEvents";
+export type { CalculationConfigChangeInput } from "@/lib/operationalCalculations/propagation/configChangeEvents";
+export {
+    calculationResultInvalidatedBy,
+    changeScopeContains,
+    effectiveWindowCoversAsOf,
+    selectInvalidated,
+} from "@/lib/operationalCalculations/propagation/invalidation";
+export type {
+    CalculationConfigChange,
+    CalculationResultCoordinate,
+} from "@/lib/operationalCalculations/propagation/invalidation";
+
 // ---- The first reference family ----
 export type {
     ResourceRequirementRequest,

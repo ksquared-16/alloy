@@ -45,12 +45,66 @@ import {
     type ConfigRuleScopeType,
 } from "@/lib/childcareOperational/config/configRuleTypes";
 import { validateLicensedOverrideNotWeaker } from "@/lib/childcareOperational/config/regulatoryCeiling";
+import { emitCalculationConfigChanged } from "@/lib/operationalCalculations/propagation/configChangeEvents";
+import type { CalculationConfigChangeKind } from "@/lib/operationalCalculations/propagation/types";
 
 const CAPACITY = "childcare_capacity_rules";
 const RATIO = "childcare_ratio_rules";
 const TIERS = "childcare_ratio_rule_tiers";
 const WINDOWS = "childcare_operating_windows";
 const SCHEDULE = "childcare_schedule_rules";
+
+/**
+ * Operational Calculation configuration event propagation (Phase 4, Stage 1).
+ *
+ * A committed change to a ratio or capacity rule — the config that parameterizes
+ * the registered Resource Requirements & Capacity calculations — emits a typed
+ * authoring event onto the canonical event layer so calculation results can be
+ * invalidated. Best-effort: emission never fails a committed write. Only ratio
+ * and capacity rules emit; operating windows and schedule rules (Scheduling
+ * family, out of scope until Phase 6) do not.
+ */
+function emitCapacityRuleChange(
+    row: ChildcareCapacityRuleRow,
+    changeKind: CalculationConfigChangeKind,
+): Promise<string | null> {
+    return emitCalculationConfigChanged({
+        orgId: row.org_id,
+        ruleType: "capacity",
+        changeKind,
+        ruleId: row.id,
+        scope: {
+            siteLocationId: row.site_location_id,
+            programCategoryId: row.program_category_id,
+            roomLocationId: row.room_location_id,
+            ageGroupKey: row.age_group_key,
+        },
+        effectiveStart: row.effective_start,
+        effectiveEnd: row.effective_end,
+        actorUserId: row.updated_by ?? row.created_by,
+    });
+}
+
+function emitRatioRuleChange(
+    row: ChildcareRatioRuleRow,
+    changeKind: CalculationConfigChangeKind,
+): Promise<string | null> {
+    return emitCalculationConfigChanged({
+        orgId: row.org_id,
+        ruleType: "ratio",
+        changeKind,
+        ruleId: row.id,
+        scope: {
+            siteLocationId: row.site_location_id,
+            programCategoryId: row.program_category_id,
+            roomLocationId: row.room_location_id,
+            ageGroupKey: row.age_group_key,
+        },
+        effectiveStart: row.effective_start,
+        effectiveEnd: row.effective_end,
+        actorUserId: row.updated_by ?? row.created_by,
+    });
+}
 
 type Code = OperationalEnrollmentServiceError["code"];
 
@@ -279,6 +333,8 @@ async function voidScheduledRow<T extends RowLike>(
         actor: string | null;
         sameLineage: (a: T, b: T) => boolean;
         beforeDelete?: (row: T) => Promise<void>;
+        /** Called after a successful void with the deleted row (propagation hook). */
+        onVoided?: (row: T) => Promise<unknown> | unknown;
     },
 ): Promise<VoidResult> {
     const row = await getRowById<T>(supabase, args.table, args.orgId, args.id);
@@ -311,6 +367,7 @@ async function voidScheduledRow<T extends RowLike>(
         .eq("org_id", args.orgId)
         .eq("id", args.id);
     if (deleteError) fail("db_error", deleteError.message);
+    if (args.onVoided) await args.onVoided(row);
     return { voided: true, id: args.id, reopenedPriorId };
 }
 
@@ -397,7 +454,7 @@ export async function createCapacityRule(
         capacity,
         effectiveStart,
     });
-    return insertRow<ChildcareCapacityRuleRow>(supabase, CAPACITY, {
+    const row = await insertRow<ChildcareCapacityRuleRow>(supabase, CAPACITY, {
         org_id: input.orgId,
         ...scope,
         age_group_key: trimOrNull(input.ageGroupKey),
@@ -410,6 +467,8 @@ export async function createCapacityRule(
         created_by: actor,
         updated_by: actor,
     });
+    await emitCapacityRuleChange(row, "create");
+    return row;
 }
 
 export type CapacityVersionInput = {
@@ -445,7 +504,7 @@ export async function createCapacityRuleVersion(supabase: SupabaseClient, input:
         },
         prior.id,
     );
-    return supersedeRow<ChildcareCapacityRuleRow>(supabase, {
+    const result = await supersedeRow<ChildcareCapacityRuleRow>(supabase, {
         table: CAPACITY,
         orgId: input.orgId,
         priorId: input.priorId,
@@ -461,19 +520,23 @@ export async function createCapacityRuleVersion(supabase: SupabaseClient, input:
             capacity: newCapacity,
         }),
     });
+    await emitCapacityRuleChange(result.row, "version");
+    return result;
 }
 
-export function retireCapacityRule(
+export async function retireCapacityRule(
     supabase: SupabaseClient,
     input: { orgId: string; id: string; effectiveEnd: string; actorUserId?: string | null },
 ) {
-    return retireRow<ChildcareCapacityRuleRow>(supabase, {
+    const row = await retireRow<ChildcareCapacityRuleRow>(supabase, {
         table: CAPACITY,
         orgId: input.orgId,
         id: input.id,
         effectiveEnd: input.effectiveEnd,
         actor: trimOrNull(input.actorUserId),
     });
+    await emitCapacityRuleChange(row, "retire");
+    return row;
 }
 
 export function voidScheduledCapacityRule(
@@ -490,6 +553,7 @@ export function voidScheduledCapacityRule(
             sameScope(a, b) &&
             (a.age_group_key ?? null) === (b.age_group_key ?? null) &&
             a.capacity_kind === b.capacity_kind,
+        onVoided: (row) => emitCapacityRuleChange(row, "void"),
     });
 }
 
@@ -576,6 +640,7 @@ export async function createRatioRule(
         updated_by: actor,
     });
     await insertTiers(supabase, input.orgId, rule.id, tiers);
+    await emitRatioRuleChange(rule, "create");
     return { rule, tierCount: tiers.length };
 }
 
@@ -626,20 +691,23 @@ export async function createRatioRuleVersion(
             await insertTiers(supabase, orgId, newId, tiers);
         },
     });
+    await emitRatioRuleChange(result.row, "version");
     return { ...result, tierCount };
 }
 
-export function retireRatioRule(
+export async function retireRatioRule(
     supabase: SupabaseClient,
     input: { orgId: string; id: string; effectiveEnd: string; actorUserId?: string | null },
 ) {
-    return retireRow<ChildcareRatioRuleRow>(supabase, {
+    const row = await retireRow<ChildcareRatioRuleRow>(supabase, {
         table: RATIO,
         orgId: input.orgId,
         id: input.id,
         effectiveEnd: input.effectiveEnd,
         actor: trimOrNull(input.actorUserId),
     });
+    await emitRatioRuleChange(row, "retire");
+    return row;
 }
 
 export function voidScheduledRatioRule(
@@ -657,6 +725,7 @@ export function voidScheduledRatioRule(
             sameScope(a, b) &&
             (a.age_group_key ?? null) === (b.age_group_key ?? null) &&
             (a.jurisdiction_key ?? null) === (b.jurisdiction_key ?? null),
+        onVoided: (row) => emitRatioRuleChange(row, "void"),
         beforeDelete: async (row) => {
             // Explicit tier cleanup (FK is ON DELETE CASCADE too; voiding stays self-contained).
             const { error } = await supabase.from(TIERS).delete().eq("org_id", orgId).eq("ratio_rule_id", row.id);
