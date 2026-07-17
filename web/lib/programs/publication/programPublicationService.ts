@@ -35,7 +35,7 @@ export type ProgramCatalogItem = {
 export type ProgramDistributionTargetResult = {
     id: string;
     locationId: string;
-    status: "pending" | "applied" | "unchanged" | "failed";
+    status: "pending" | "delivered" | "unchanged" | "failed";
     attemptCount: number;
     errorCode: string | null;
     errorMessage: string | null;
@@ -556,7 +556,7 @@ async function executeProgramRunTargets(input: {
     locationIds: readonly string[];
 }): Promise<Record<string, unknown>> {
     for (const locationId of input.locationIds) {
-        const { error } = await input.supabase.rpc("apply_program_publication_target_v1", {
+        const { error } = await input.supabase.rpc("assign_program_publication_target_v1", {
             p_org_id: input.orgId,
             p_run_id: input.runId,
             p_location_id: locationId,
@@ -595,7 +595,7 @@ async function executeProgramRunTargets(input: {
     return recordValue(data);
 }
 
-export async function applyProgramDistribution(input: {
+export async function assignProgramDistribution(input: {
     supabase: SupabaseClient;
     orgId: string;
     actorUserId: string;

@@ -76,7 +76,7 @@ afterEach(() => {
 });
 
 describe("Programs Publication workspace", () => {
-    it("shows draft, publish, impact-preview, Apply, and history controls", async () => {
+    it("shows draft, publish, impact-preview, assignment, and history controls", async () => {
         vi.stubGlobal(
             "fetch",
             vi.fn().mockResolvedValue({
@@ -98,7 +98,7 @@ describe("Programs Publication workspace", () => {
         expect(container.querySelector('[data-testid="program-validate-draft"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-publish"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-preview-delivery"]')).not.toBeNull();
-        expect(container.querySelector('[data-testid="program-apply-delivery"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-assign-delivery"]')).not.toBeNull();
         expect(container.textContent).toContain("Published and delivery history");
         expect(container.textContent).toContain("local offer state");
     });

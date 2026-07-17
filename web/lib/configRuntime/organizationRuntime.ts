@@ -174,8 +174,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             label: "Not assessed",
             detail: "Programs will report health from its authoritative catalog.",
         },
-        distributionMode: "apply",
-        applyProviderKey: "programs.v1",
+        distributionMode: "assignment",
         ownedConfiguration: [
             "Catalog & categories",
             "Eligibility & licensing",

@@ -388,7 +388,7 @@
 | `configuration_delivery_attempts` | `configuration_delivery_attempts_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
 | `configuration_delivery_attempts` | `configuration_delivery_attempts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
 | `configuration_delivery_attempts` | `configuration_delivery_attempts_run_id_fkey` | FOREIGN KEY | FOREIGN KEY (run_id) REFERENCES configuration_distribution_runs(id) ON DELETE RESTRICT |
-| `configuration_delivery_attempts` | `configuration_delivery_attempts_status_check` | CHECK | CHECK (status = ANY (ARRAY['applied'::text, 'unchanged'::text, 'failed'::text])) |
+| `configuration_delivery_attempts` | `configuration_delivery_attempts_status_check` | CHECK | CHECK (status = ANY (ARRAY['delivered'::text, 'unchanged'::text, 'failed'::text])) |
 | `configuration_delivery_attempts` | `configuration_delivery_attempts_target_id_fkey` | FOREIGN KEY | FOREIGN KEY (target_id) REFERENCES configuration_distribution_targets(id) ON DELETE RESTRICT |
 | `configuration_delivery_attempts` | `configuration_delivery_attempts_target_number_unique` | UNIQUE | UNIQUE (target_id, attempt_number) |
 | `configuration_distribution_runs` | `configuration_distribution_runs_created_by_fkey` | FOREIGN KEY | FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL |
@@ -405,7 +405,7 @@
 | `configuration_distribution_targets` | `configuration_distribution_targets_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
 | `configuration_distribution_targets` | `configuration_distribution_targets_run_id_fkey` | FOREIGN KEY | FOREIGN KEY (run_id) REFERENCES configuration_distribution_runs(id) ON DELETE CASCADE |
 | `configuration_distribution_targets` | `configuration_distribution_targets_run_location_unique` | UNIQUE | UNIQUE (run_id, location_id) |
-| `configuration_distribution_targets` | `configuration_distribution_targets_status_check` | CHECK | CHECK (status = ANY (ARRAY['pending'::text, 'applied'::text, 'unchanged'::text, 'failed'::text])) |
+| `configuration_distribution_targets` | `configuration_distribution_targets_status_check` | CHECK | CHECK (status = ANY (ARRAY['pending'::text, 'delivered'::text, 'unchanged'::text, 'failed'::text])) |
 | `configuration_publications` | `configuration_publications_audit_event_id_fkey` | FOREIGN KEY | FOREIGN KEY (audit_event_id) REFERENCES workflow_events(id) ON DELETE SET NULL |
 | `configuration_publications` | `configuration_publications_domain_nonempty` | CHECK | CHECK (char_length(btrim(domain_key)) > 0) |
 | `configuration_publications` | `configuration_publications_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |

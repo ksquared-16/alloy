@@ -132,8 +132,9 @@ Locations remains frozen. Organization Runtime reuses its object-workspace gramm
 
 ### Configuration Publication Runtime V1
 
-The Configuration Publication Runtime is the reusable control plane for domains
-that require explicit Organization publication and durable Location delivery.
+The Configuration Publication Runtime is a subsystem of the existing
+Configuration Runtime for domains that require explicit Organization
+publication and durable Location delivery.
 Programs is the first and only reference consumer in V1.
 
 The runtime owns:
@@ -153,7 +154,7 @@ Domains own:
 
 - editable draft payloads and validation;
 - immutable revision payloads;
-- the provider that previews and performs each authoritative consumer write;
+- the adapter that previews and performs each authoritative consumer write;
 - domain-specific eligibility, conflicts, required inputs, and operator language;
 - local override storage and validation;
 - downstream runtime consumption.
@@ -168,15 +169,21 @@ Programs proves the boundary through:
 - `programs`, `program_drafts`, and immutable `program_revisions`;
 - generic `configuration_publications`, distribution runs/targets, append-only
   attempts, and consumption pointers;
-- the `programs.v1` provider;
+- the `programs.v1` publication-assignment adapter;
 - server-side impact preview and effective-value resolution;
 - Location Program offerings linked to a consumed revision while preserving
   Location-owned availability, evidence, metadata, resource relationships, and
   stable compatibility ids.
 
+For Programs, publication delivery is **assignment**, not Apply. Assignment
+makes a published revision available to a selected Location and advances its
+consumption pointer. The Location independently owns whether it offers that
+Program. Programs does not register an Apply provider because delivery does not
+copy Organization configuration into Location-owned operational truth.
+
 Only Programs supports this runtime in V1. Other Configuration domains do not
 gain publication behavior by inference; adoption requires a domain-owned
-revision model and a registered durable provider.
+revision model and a registered durable adapter.
 
 ### Primitives NOT yet extracted (deferred)
 

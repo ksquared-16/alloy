@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS public.configuration_distribution_targets (
     run_id uuid NOT NULL REFERENCES public.configuration_distribution_runs(id) ON DELETE CASCADE,
     location_id uuid NOT NULL REFERENCES public.locations(id) ON DELETE RESTRICT,
     status text NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'applied', 'unchanged', 'failed')),
+        CHECK (status IN ('pending', 'delivered', 'unchanged', 'failed')),
     attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
     result jsonb NOT NULL DEFAULT '{}'::jsonb,
     error_code text,
@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS public.configuration_delivery_attempts (
     target_id uuid NOT NULL REFERENCES public.configuration_distribution_targets(id) ON DELETE RESTRICT,
     location_id uuid NOT NULL REFERENCES public.locations(id) ON DELETE RESTRICT,
     attempt_number integer NOT NULL CHECK (attempt_number > 0),
-    status text NOT NULL CHECK (status IN ('applied', 'unchanged', 'failed')),
+    status text NOT NULL CHECK (status IN ('delivered', 'unchanged', 'failed')),
     result jsonb NOT NULL DEFAULT '{}'::jsonb,
     error_code text,
     error_message text,
@@ -461,7 +461,7 @@ $function$;
 -- Programs delivery adapter. It advances the consumed revision while preserving
 -- Location-owned availability, operational metadata, overrides, and stable row
 -- ids used by downstream resources and records.
-CREATE OR REPLACE FUNCTION public.apply_program_publication_target_v1(
+CREATE OR REPLACE FUNCTION public.assign_program_publication_target_v1(
     p_org_id uuid,
     p_run_id uuid,
     p_location_id uuid,
@@ -500,7 +500,7 @@ BEGIN
     FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'distribution_target_not_found' USING ERRCODE = 'P0002'; END IF;
 
-    IF v_target.status IN ('applied', 'unchanged') THEN
+    IF v_target.status IN ('delivered', 'unchanged') THEN
         RETURN jsonb_build_object(
             'target_id', v_target.id,
             'location_id', p_location_id,
@@ -601,7 +601,7 @@ BEGIN
 
     v_disposition := CASE
         WHEN v_existing_revision_id = v_revision.id THEN 'unchanged'
-        ELSE 'applied'
+        ELSE 'delivered'
     END;
     v_attempt_number := v_target.attempt_count + 1;
 
@@ -619,7 +619,7 @@ BEGIN
         'configuration.program.delivered',
         'program',
         v_revision.program_id,
-        'apply_to_location',
+        'assign_to_location',
         jsonb_build_object(
             'domain_key', 'programs',
             'run_id', p_run_id,
@@ -719,7 +719,7 @@ BEGIN
     WHERE run_id = p_run_id AND org_id = p_org_id AND location_id = p_location_id
     FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'distribution_target_not_found' USING ERRCODE = 'P0002'; END IF;
-    IF v_target.status IN ('applied', 'unchanged') THEN
+    IF v_target.status IN ('delivered', 'unchanged') THEN
         RETURN jsonb_build_object('target_id', v_target.id, 'status', v_target.status, 'idempotent', true);
     END IF;
 
@@ -738,7 +738,7 @@ BEGIN
         'configuration.delivery.failed',
         'configuration_publication',
         v_run.publication_id,
-        'apply_to_location',
+        'assign_to_location',
         jsonb_build_object(
             'domain_key', v_run.domain_key,
             'run_id', p_run_id,
@@ -821,7 +821,7 @@ BEGIN
     SELECT
         count(*) FILTER (WHERE status = 'pending'),
         count(*) FILTER (WHERE status = 'failed'),
-        count(*) FILTER (WHERE status IN ('applied', 'unchanged'))
+        count(*) FILTER (WHERE status IN ('delivered', 'unchanged'))
     INTO v_pending, v_failed, v_succeeded
     FROM public.configuration_distribution_targets
     WHERE run_id = p_run_id AND org_id = p_org_id;
@@ -897,8 +897,8 @@ REVOKE ALL ON FUNCTION public.configuration_publication_immutable_guard() FROM P
 GRANT EXECUTE ON FUNCTION public.configuration_publication_immutable_guard() TO service_role;
 REVOKE ALL ON FUNCTION public.publish_program_revision_v1(uuid, uuid, uuid, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.publish_program_revision_v1(uuid, uuid, uuid, text) TO service_role;
-REVOKE ALL ON FUNCTION public.apply_program_publication_target_v1(uuid, uuid, uuid, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.apply_program_publication_target_v1(uuid, uuid, uuid, uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.assign_program_publication_target_v1(uuid, uuid, uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.assign_program_publication_target_v1(uuid, uuid, uuid, uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.record_configuration_delivery_failure_v1(uuid, uuid, uuid, uuid, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.record_configuration_delivery_failure_v1(uuid, uuid, uuid, uuid, text, text) TO service_role;
 REVOKE ALL ON FUNCTION public.finalize_configuration_distribution_run_v1(uuid, uuid) FROM PUBLIC;

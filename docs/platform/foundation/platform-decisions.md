@@ -51,6 +51,34 @@ Future Configuration domains use the Configuration Domain Card and publisher/con
 
 ---
 
+## 2026-07 — Program publication delivery is assignment, not Apply
+
+**Decision:**
+Configuration Publication Runtime V1 is a subsystem of Configuration Runtime.
+Publishing makes an immutable Organization Program revision authoritative.
+Distribution assigns that revision to selected Locations and advances their
+consumption pointers. Each Location independently owns whether it offers the
+Program.
+
+**Why:**
+Frozen ownership doctrine classifies a Program offered at a site as
+availability/assignment. Apply is reserved for copying published patterns into
+Location-owned truth. Program revision delivery preserves offer state,
+evidence, metadata, resources, schedules, and other operational facts, so
+calling it Apply would collapse two distinct contracts.
+
+**Consequences:**
+Programs registers `distributionMode: "assignment"` and does not register an
+Apply provider. Delivery statuses are `delivered`, `unchanged`, or `failed`.
+Future domains must declare independently whether publication delivery is
+inheritance, assignment, Apply, or none.
+
+**Canonical owners:** [`../modules/configuration-platform.md`](../modules/configuration-platform.md), [`../core/configuration-ownership-and-inheritance.md`](../core/configuration-ownership-and-inheritance.md), [`../../system/organization-configuration-runtime-v2.md`](../../system/organization-configuration-runtime-v2.md).
+
+**Status:** Active
+
+---
+
 ## 2026-07 — Operational Expectations Authority represented by a governed catalog + assignments
 
 **Decision:**

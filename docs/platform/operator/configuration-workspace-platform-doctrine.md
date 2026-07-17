@@ -172,7 +172,12 @@ The object is legible at rest — its state and health readable without clicking
 Changing an existing thing happens inline on the object, or in a focused editor for that one concern. Dialogs are for **creating** and **confirming destructive acts** only. There is no large CRUD form, no edit drawer over a data grid, as the primary experience.
 
 ### 6. Save is immediate and reversible
-Saving applies now and is undoable. When the substrate is effective-dated, that is carried by one quiet line ("Effective from Today"), never by exposing versioning. A future date yields a "Scheduled · Undo" affordance.
+For `live_on_save` domains, saving applies now and is undoable. In an
+explicit-publication domain, saving updates only the editable draft; consumers
+remain on the current published revision until the operator separately
+publishes. When the substrate is effective-dated, that is carried by one quiet
+line ("Effective from Today"), never by exposing versioning. A future date
+yields a "Scheduled · Undo" affordance.
 
 ### 7. Two status systems, never three
 An object answers exactly two questions, kept separate: **Attention** (is anything wrong right now?) and **Setup** (am I finished configuring?). Never a third "health" surface that competes with or contradicts them.

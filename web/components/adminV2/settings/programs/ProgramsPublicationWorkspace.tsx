@@ -412,7 +412,7 @@ export default function ProgramsPublicationWorkspace() {
                             </section>
 
                             <section className="rounded-xl border border-alloy-stone/20 bg-white p-5">
-                                <h2 className="config-typo-workspace-title">Apply to Locations</h2>
+                                <h2 className="config-typo-workspace-title">Assign to Locations</h2>
                                 {!selectedProgram.latestPublication ? (
                                     <p className="mt-2 text-sm text-alloy-midnight/55">
                                         Publish this Program before selecting Locations.
@@ -470,11 +470,11 @@ export default function ProgramsPublicationWorkspace() {
                                             </ConfigurationSecondaryButton>
                                             <ConfigurationPrimaryButton
                                                 disabled={!preview || preview.length === 0 || working != null}
-                                                data-testid="program-apply-delivery"
+                                                data-testid="program-assign-delivery"
                                                 onClick={() =>
-                                                    void run("apply", async () => {
+                                                    void run("assign", async () => {
                                                         await postAction({
-                                                            action: "apply",
+                                                            action: "assign",
                                                             publicationId: selectedProgram.latestPublication!.id,
                                                             targetIds: selectedLocationIds,
                                                         });
@@ -482,7 +482,7 @@ export default function ProgramsPublicationWorkspace() {
                                                     })
                                                 }
                                             >
-                                                {working === "apply" ? "Applying…" : "Confirm and apply"}
+                                                {working === "assign" ? "Assigning…" : "Confirm assignment"}
                                             </ConfigurationPrimaryButton>
                                         </div>
                                         {preview ? (
@@ -584,7 +584,7 @@ export default function ProgramsPublicationWorkspace() {
                                                         </div>
                                                         <p className="mt-1 text-xs text-alloy-midnight/45">
                                                             {deliveryRun.targets.filter((target) =>
-                                                                ["applied", "unchanged"].includes(target.status),
+                                                                ["delivered", "unchanged"].includes(target.status),
                                                             ).length}{" "}
                                                             succeeded ·{" "}
                                                             {deliveryRun.targets.filter((target) => target.status === "failed").length}{" "}

@@ -91,7 +91,7 @@ export type ConfigurationTargetPreview = {
     requiredInputs: string[];
 };
 
-export type ConfigurationDeliveryDisposition = "applied" | "unchanged" | "failed";
+export type ConfigurationDeliveryDisposition = "delivered" | "unchanged" | "failed";
 
 export type ConfigurationDeliveryOutcome = {
     locationId: string;

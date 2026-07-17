@@ -3,7 +3,7 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
-    applyProgramDistribution,
+    assignProgramDistribution,
     createProgramDraft,
     loadProgramPublicationSnapshot,
     previewProgramDistribution,
@@ -158,8 +158,8 @@ export async function POST(request: NextRequest) {
                 });
                 return NextResponse.json({ ok: true, preview });
             }
-            case "apply": {
-                const result = await applyProgramDistribution({
+            case "assign": {
+                const result = await assignProgramDistribution({
                     supabase,
                     orgId: context.orgId,
                     actorUserId: context.userId,

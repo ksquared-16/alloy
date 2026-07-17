@@ -12,7 +12,7 @@ test("Programs publication operator journey", async ({ page }) => {
     const now = "2026-07-17T20:00:00.000Z";
     let status: "draft" | "validated" = "draft";
     let published = false;
-    let applied = false;
+    let assigned = false;
     let label = "Preschool";
     let description: string | null = null;
 
@@ -72,7 +72,7 @@ test("Programs publication operator journey", async ({ page }) => {
     const snapshot = () => ({
         programs: actions.some((action) => action.action === "create_draft") ? [program()] : [],
         locations: [{ id: "location-1", label: "Downtown" }],
-        runs: applied
+        runs: assigned
             ? [{
                   id: "run-1",
                   publicationId: "publication-1",
@@ -83,7 +83,7 @@ test("Programs publication operator journey", async ({ page }) => {
                   targets: [{
                       id: "target-1",
                       locationId: "location-1",
-                      status: "applied",
+                      status: "delivered",
                       attemptCount: 1,
                       errorCode: null,
                       errorMessage: null,
@@ -114,7 +114,7 @@ test("Programs publication operator journey", async ({ page }) => {
         }
         if (body.action === "validate_draft") status = "validated";
         if (body.action === "publish") published = true;
-        if (body.action === "apply") applied = true;
+        if (body.action === "assign") assigned = true;
 
         const response =
             body.action === "create_draft" ? { programId: "program-1" }
@@ -161,7 +161,7 @@ test("Programs publication operator journey", async ({ page }) => {
     await expect(page.getByTestId("program-delivery-preview")).toContainText(
         "Location availability remains protected.",
     );
-    await page.getByTestId("program-apply-delivery").click();
+    await page.getByTestId("program-assign-delivery").click();
     await expect(page.getByText("1 succeeded · 0 failed")).toBeVisible();
 
     expect(actions.map((action) => action.action)).toEqual([
@@ -170,7 +170,7 @@ test("Programs publication operator journey", async ({ page }) => {
         "validate_draft",
         "publish",
         "preview",
-        "apply",
+        "assign",
     ]);
     expect((actions.at(-1)?.targetIds as string[]) ?? []).toEqual(["location-1"]);
     expect(consoleErrors).toEqual([]);

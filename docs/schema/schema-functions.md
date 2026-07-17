@@ -9,7 +9,7 @@
 | `public` | `agent_v0_commit_queue_definition_apply` | jsonb | true |
 | `public` | `agent_v1_commit_record_overview_layout_apply` | jsonb | true |
 | `public` | `agent_v2_commit_field_visibility_apply` | jsonb | true |
-| `public` | `apply_program_publication_target_v1` | jsonb | true |
+| `public` | `assign_program_publication_target_v1` | jsonb | true |
 | `public` | `audit_cleaning_quote_pricing_matrix_legacy_parity` | record | true |
 | `public` | `author_operational_expectation` | jsonb | true |
 | `public` | `bump_communication_thread_last_message_at` | trigger | false |

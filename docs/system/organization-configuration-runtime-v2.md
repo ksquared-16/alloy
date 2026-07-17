@@ -125,7 +125,7 @@ There is no generic configuration-payload table. Configuration steers; code and 
 
 ## Freeze
 
-V2 freezes the Organization Runtime model, nine-domain registry, Programs terminology, and publisher/consumer relationship. V2.2 freezes the compact landing presentation, final density, and progressive-disclosure boundary. Future domains inherit this model. Configuration Publication Runtime V1 implements the Programs provider without changing this landing contract; other domain providers remain separate work.
+V2 freezes the Organization Runtime model, nine-domain registry, Programs terminology, and publisher/consumer relationship. V2.2 freezes the compact landing presentation, final density, and progressive-disclosure boundary. Future domains inherit this model. Configuration Publication Runtime V1 extends this runtime with the Programs publication-assignment adapter without changing the landing contract. Program publication delivery is assignment, not Apply: it advances a Location consumption pointer while the Location continues to own whether the Program is offered. Other domain adapters remain separate work.
 
 Locations remains the experiential reference implementation and is not redesigned by V2.
 
@@ -133,7 +133,7 @@ Locations remains the experiential reference implementation and is not redesigne
 
 - Registry and distribution contracts: `web/lib/configRuntime/organizationRuntime.ts`
 - Publication and delivery substrate: `web/lib/configPublication/`
-- Programs provider: `web/lib/programs/publication/`
+- Programs publication-assignment adapter: `web/lib/programs/publication/`
 - Reusable card: `web/components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard.tsx`
 - Landing: `web/components/adminV2/settings/organization/OrganizationConfigurationPage.tsx`
 - Settings IA: `web/lib/adminV2/configurationModeNav.ts`

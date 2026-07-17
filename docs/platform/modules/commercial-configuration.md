@@ -60,11 +60,13 @@ of a Location Program offering and carries its consumed revision link.
 **Operator model:** "Which programs does this location offer?" Not "which settings does this location have."
 
 **Publication backend:** `/api/admin/configuration/programs` owns draft,
-validation, publication, impact preview, Apply, history, and retry.
+validation, publication, impact preview, Location assignment, history, and
+retry.
 `/api/admin/location-program-categories` remains the Location offering read and
 local-mutation path; direct creation of Program identity there is rejected.
-Apply creates or links the stable row without changing Location-owned offer
-state, evidence, metadata, resource relationships, or schedules.
+Assignment creates or links the stable row and advances its consumed revision
+without changing Location-owned offer state, evidence, metadata, resource
+relationships, or schedules.
 
 ---
 

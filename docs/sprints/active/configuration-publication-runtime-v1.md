@@ -89,8 +89,11 @@ Missing:
 - field-level override policy and server-side effective resolution;
 - Programs publication UI and Location source disclosure.
 
-The model does not contradict accepted architecture and does not require a new
-foundational runtime. Implementation is authorized to continue.
+The reusable publication model does not require a new foundational runtime.
+The audit did identify one semantic constraint: Programs offered at a Location
+is availability/assignment, not Apply. V1 is therefore authorized only as a
+subsystem of Configuration Runtime whose Programs adapter assigns a published
+revision without copying or changing Location-owned operational truth.
 
 ## Phase 1 implementation contract
 
@@ -165,15 +168,16 @@ Publication means:
    checksum, actor, and time;
 4. a publication audit event was emitted.
 
-Apply to Locations means:
+Assign to Locations means:
 
 1. select one published Program revision and explicit Location ids;
 2. resolve active, in-scope, site Locations server-side;
 3. preview each target against its current consumption, local offer state,
    permitted overrides, required local inputs, and protected local truth;
 4. create or reuse one deterministic delivery run;
-5. execute each target independently through the Programs provider;
-6. persist a result and append-only attempt for every target;
+5. execute each target independently through the Programs assignment adapter;
+6. persist a delivered, unchanged, or failed result and append-only attempt for
+   every target;
 7. update a successful Location consumption pointer and compatibility offering
    link without replacing Location-owned availability, evidence, resource
    relationships, schedules, or operational facts.
@@ -184,7 +188,8 @@ uses that run identity and executes failed targets only; successful targets are
 not duplicated.
 
 Partial failure is a first-class run result. A run is successful only when every
-selected target has an authoritative persisted `applied` or `unchanged` result.
+selected target has an authoritative persisted `delivered` or `unchanged`
+result.
 Each failure stores an operator-safe, recoverable reason. A later revision
 supersedes rather than rolls back an earlier publication; a rollback engine is
 out of scope.
@@ -206,7 +211,7 @@ render that result and do not perform the authoritative merge.
 
 - Reads require authenticated organization access and `settings.read` (or the
   existing owner/admin compatibility grant).
-- Draft, validate, publish, apply, retry, offering, and override mutations
+- Draft, validate, publish, assign, retry, offering, and override mutations
   require `settings.manage`.
 - Every query and write is scoped by `org_id`; Location targeting also respects
   allowed site scope.

@@ -45,7 +45,9 @@ describe("Configuration Publication Runtime migration", () => {
         expect(migration).toContain(
             "CONSTRAINT configuration_delivery_attempts_target_number_unique UNIQUE (target_id, attempt_number)",
         );
-        expect(migration).toContain("IF v_target.status IN ('applied', 'unchanged')");
+        expect(migration).toContain("IF v_target.status IN ('delivered', 'unchanged')");
+        expect(migration).toContain("assign_program_publication_target_v1");
+        expect(migration).not.toContain("apply_program_publication_target_v1");
         expect(migration).toContain("record_configuration_delivery_failure_v1");
         expect(migration).toContain("partial_failure");
     });
