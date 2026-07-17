@@ -473,6 +473,23 @@
     background: rgba(0, 162, 131, 0.05);
 }
 
+.process-config-nav-item:focus {
+    outline: none;
+}
+
+.process-config-nav-item:focus-visible {
+    outline: 2px solid var(--cr-pine);
+    outline-offset: 2px;
+}
+
+.process-config-nav-item--muted {
+    opacity: 0.72;
+}
+
+.process-config-nav-item--muted .config-typo-queue-item-title {
+    color: color-mix(in srgb, var(--cr-midnight) 70%, transparent);
+}
+
 .process-config-nav-item--active {
     border-left-color: var(--cr-pine);
     background: rgba(0, 162, 131, 0.08);
@@ -492,7 +509,8 @@
     flex: 1 1 auto;
     overflow-y: auto;
     padding: 1rem 1.15rem;
-    background: white;
+    /* Level 1 — River Stone workspace canvas (white regions sit above). */
+    background: var(--color-alloy-stone, #f4f6f9);
 }
 
 .process-config-work-view-list-card {
@@ -556,7 +574,7 @@
     min-width: 0;
     flex: 1;
     overflow-y: auto;
-    background: white;
+    background: var(--color-alloy-stone, #f4f6f9);
 }
 
 .config-mode-condition-row,
@@ -826,4 +844,272 @@
 
 .statuses-config-surface [data-status-settings-category] .text-\[\#59678b\] {
     color: color-mix(in srgb, var(--color-alloy-forge, #59678b) 72%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Locations collection rail — first-class object selector (not filter queue) */
+/* -------------------------------------------------------------------------- */
+
+.locations-collection-rail {
+    --locations-rail-pad-x: 0.875rem;
+}
+
+.locations-collection-rail__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem var(--locations-rail-pad-x) 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--cr-midnight) 8%, transparent);
+}
+
+.locations-collection-rail__title {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--cr-midnight);
+}
+
+.locations-collection-rail__count {
+    margin: 0.25rem 0 0;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--cr-midnight) 45%, transparent);
+}
+
+.locations-collection-rail__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.75rem var(--locations-rail-pad-x);
+}
+
+.locations-collection-rail__search-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.locations-collection-rail__search-icon {
+    position: absolute;
+    top: 50%;
+    left: 0.65rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    transform: translateY(-50%);
+    color: color-mix(in srgb, var(--cr-midnight) 40%, transparent);
+    pointer-events: none;
+}
+
+.locations-collection-rail__search {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    border-radius: 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--cr-midnight) 14%, transparent);
+    background: #fff;
+    padding: 0.45rem 0.65rem 0.45rem 1.85rem;
+    font-size: 0.8125rem;
+    color: var(--cr-midnight);
+}
+
+.locations-collection-rail__search::placeholder {
+    color: color-mix(in srgb, var(--cr-midnight) 40%, transparent);
+}
+
+.locations-collection-rail__search:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--cr-pine) 55%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-pine) 14%, transparent);
+}
+
+.locations-collection-rail__filter {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.125rem;
+    height: 2.125rem;
+    border-radius: 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--cr-midnight) 14%, transparent);
+    background: #fff;
+    color: color-mix(in srgb, var(--cr-midnight) 55%, transparent);
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.locations-collection-rail__filter:hover {
+    background: color-mix(in srgb, var(--cr-midnight) 3%, white);
+}
+
+.locations-collection-rail__filter--active {
+    border-color: color-mix(in srgb, var(--cr-pine) 40%, transparent);
+    background: color-mix(in srgb, var(--cr-pine) 10%, white);
+    color: #007d68;
+}
+
+.locations-collection-rail__filter:focus-visible {
+    outline: 2px solid var(--cr-pine);
+    outline-offset: 2px;
+}
+
+.locations-collection-rail__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: min(70vh, 42rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0.15rem var(--locations-rail-pad-x) 0.9rem;
+}
+
+.locations-collection-row {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.7rem 0.65rem;
+    text-align: left;
+}
+
+.locations-collection-row--inactive:not([aria-selected="true"]) {
+    opacity: 0.78;
+}
+
+.locations-collection-row__glyph {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.55rem;
+}
+
+.locations-collection-row__body {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.locations-collection-row__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1rem;
+    color: var(--cr-midnight);
+}
+
+.locations-collection-row__place {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    color: color-mix(in srgb, var(--cr-midnight) 60%, transparent);
+}
+
+.locations-collection-row__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.15rem;
+}
+
+.locations-collection-row__status {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    padding: 0.12rem 0.45rem;
+    font-size: 0.625rem;
+    font-weight: 650;
+    line-height: 1.2;
+}
+
+.locations-collection-row__status--active {
+    border-color: color-mix(in srgb, var(--cr-pine) 28%, transparent);
+    background: color-mix(in srgb, var(--cr-pine) 12%, white);
+    color: #007d68;
+}
+
+.locations-collection-row__status--inactive {
+    border-color: color-mix(in srgb, var(--cr-midnight) 12%, transparent);
+    background: color-mix(in srgb, var(--cr-midnight) 5%, white);
+    color: color-mix(in srgb, var(--cr-midnight) 55%, transparent);
+}
+
+.locations-collection-row__attention {
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: color-mix(in srgb, var(--color-alloy-ember, #c45c26) 92%, transparent);
+}
+
+.locations-collection-row__chevron {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.15rem;
+    color: color-mix(in srgb, var(--cr-pine) 70%, transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Canonical child-object workspace — supporting collection + owning detail   */
+/* -------------------------------------------------------------------------- */
+
+.config-child-workspace__list-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--cr-midnight) 8%, transparent);
+    padding: 0.9rem 0.9rem 0.75rem;
+}
+
+.config-child-workspace__list-title {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    color: var(--cr-midnight);
+}
+
+.config-child-workspace__list-summary {
+    margin: 0.2rem 0 0;
+    font-size: 0.6875rem;
+    color: color-mix(in srgb, var(--cr-midnight) 45%, transparent);
+}
+
+.config-child-workspace__list-body {
+    display: flex;
+    max-height: min(68vh, 40rem);
+    flex-direction: column;
+    gap: 0.3rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0.6rem;
+}
+
+.config-child-workspace__list .process-config-nav-item {
+    min-height: 3.6rem;
+    align-items: flex-start;
+    padding: 0.7rem 0.75rem;
+}
+
+.config-child-workspace__detail {
+    min-height: 18rem;
 }

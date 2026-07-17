@@ -4,8 +4,10 @@ import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgram
 import {
     buildLocationProgramOperationalSummaries,
     buildLocationWorkspaceModel,
+    buildLocationsFleetModel,
     formatStaffingThreshold,
     locationWorkspaceHref,
+    locationsFleetHref,
     normalizeUsLocationTimezone,
     parseStaffingThresholds,
     parseLocationWorkspaceTab,
@@ -84,13 +86,7 @@ describe("location workspace model", () => {
         expect(model.setupComplete).toBe(true);
         expect(model.criticalCount).toBe(0);
         expect(model.recommendedCount).toBe(0);
-        expect(model.attention).toEqual([
-            expect.objectContaining({
-                key: "all-good",
-                grade: "good",
-                label: "Everything looks good",
-            }),
-        ]);
+        expect(model.attention).toEqual([]);
     });
 
     it("keeps unknown capacity unknown and identifies partial setup", () => {
@@ -143,12 +139,72 @@ describe("location workspace model", () => {
         expect(model.attention.map((item) => item.key)).toEqual(["timezone", "rooms", "programs", "schedule"]);
     });
 
+    it("excludes unknown readiness areas from the setup denominator", () => {
+        const model = buildLocationWorkspaceModel({
+            site: site(),
+            rooms: [
+                room("a", {
+                    capacity: "12",
+                    category: "toddler",
+                    student_teacher_ratio: "1:5",
+                }),
+            ],
+            programs: [program("toddler")],
+            schedules: [{ id: "schedule-1", is_active: true }],
+            // tours/placement/access omitted → null/unknown
+        });
+
+        expect(model.setupPercent).toBe(100);
+        expect(model.setupComplete).toBe(true);
+        expect(model.setupItems.filter((item) => item.complete === null).map((item) => item.key)).toEqual([
+            "tours",
+            "placement",
+            "access",
+        ]);
+        expect(model.recommendedCount).toBe(0);
+    });
+
     it("keeps selected location, tab, and nested item URL-addressable", () => {
+        expect(locationsFleetHref()).toBe("/settings/locations");
         expect(locationWorkspaceHref("site-1", "rooms", "room-2")).toBe(
             "/settings/locations?locationId=site-1&tab=rooms&itemId=room-2",
         );
         expect(parseLocationWorkspaceTab("communications")).toBe("overview");
         expect(parseLocationWorkspaceTab("unknown")).toBe("overview");
+    });
+
+    it("builds an org fleet rollup without auto-selecting a location", () => {
+        const fleet = buildLocationsFleetModel({
+            sites: [
+                site(),
+                site({
+                    id: "site-2",
+                    label: "West Campus",
+                    city: "Beaverton",
+                    address1: null,
+                    metadata: {},
+                }),
+            ],
+            rooms: [
+                room("a", {
+                    capacity: "12",
+                    category: "toddler",
+                    student_teacher_ratio: "1:5",
+                }),
+            ],
+            programs: [program("toddler")],
+            schedules: [{ id: "schedule-1", site_location_id: "site-1", is_active: true }],
+        });
+
+        expect(fleet.locationCount).toBe(2);
+        expect(fleet.activeLocationCount).toBe(2);
+        expect(fleet.totalRooms).toBe(1);
+        expect(fleet.totalPrograms).toBe(1);
+        expect(fleet.totalConfiguredCapacity).toBe(12);
+        expect(fleet.locations[0]?.id).toBe("site-2");
+        expect(fleet.locations[0]?.criticalCount).toBeGreaterThan(0);
+        expect(fleet.attentionHighlights.length).toBeGreaterThan(0);
+        expect(fleet.locations.find((location) => location.id === "site-1")?.setupComplete).toBe(true);
     });
 
     it("limits location timezone choices to canonical United States IANA values", () => {

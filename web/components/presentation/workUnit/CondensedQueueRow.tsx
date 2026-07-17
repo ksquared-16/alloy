@@ -44,10 +44,8 @@ import {
     QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
 
-type RowContext = NonNullable<QueueRowModel["context"]>;
-
 const CARD_BUTTON_CLASS =
-    `${QUEUE_ROW_CARD_SHELL_CLASS} focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-juniper`;
+    `${QUEUE_ROW_CARD_SHELL_CLASS} focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-bend-pine`;
 
 const CARD_IDLE_CLASS = ` ${QUEUE_ROW_CARD_IDLE_BORDER_CLASS}`;
 

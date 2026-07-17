@@ -1,15 +1,17 @@
 ---
 owner: runtime
 status: frozen
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
 # Configuration Runtime V1
 
-**Status:** Frozen — June 2026
+**Status:** Frozen — July 2026
 
-Configuration Runtime V1 is **frozen**. All operator Configuration surfaces use a single shared shell and ownership model. The next sprint begins **Surfaces** (presentation authoring; route compatibility may remain `/settings/layouts`).
+Configuration Runtime V1 is **frozen**. All operator Configuration surfaces use a single shared shell and ownership model. **Locations is the reference implementation for Configuration Runtime V1.** The next implementation consumer is Organization Configuration Runtime and the Settings landing experience; it inherits this model rather than redesigning it.
+
+Locations is feature-frozen after this closeout. Further Locations work is limited to bug fixes, security fixes, and corrections required to preserve the frozen contracts.
 
 ## Frozen interaction model
 
@@ -75,14 +77,30 @@ A process-wide **All work in this process** Work View is stored with **empty `fi
 Allowed:
 
 - Bug fixes on V1 surfaces
-- Small visual polish
 - Wiring **Surfaces** into the frozen shell
+- New configuration domains inheriting the Locations reference grammar
 
 Not allowed without explicit doctrine update:
 
 - Configuration IA changes
 - New primary nav items duplicating ownership
 - Per-page shell width overrides
+- New Locations features or interaction patterns that bypass the reference workspace primitives
+
+## Locations reference freeze
+
+The frozen Locations surface includes:
+
+- organization landing and first-class Location selector;
+- object hero and owned-concern tabs;
+- two-row Overview composition (operational glance + explained readiness; attention + owned capabilities);
+- Program, Room, and Schedule master/detail with distinct create, view, and edit modes;
+- Tour Window create/edit, Placement Business Process + Stage ranking, and location Access editing;
+- shell-owned contextual actions, BOS assistance through the same boundaries, and inline actions attached to their affected object;
+- authoritative mutation confirmation plus local summary/readiness updates and hard-refresh persistence.
+
+Canonical experience doctrine: `../platform/operator/configuration-workspace-platform-doctrine.md`.
+Closeout evidence: `../sprints/completed/locations-config-runtime/`.
 
 ## Related docs
 

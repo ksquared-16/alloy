@@ -20,12 +20,57 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("ConfigurationContext");
         expect(page).toContain("ConfigurationShell");
         expect(page).toContain('title="Locations"');
-        expect(page).toContain("locations-object-selector");
+        expect(page).toContain("LocationsFleetLanding");
+        expect(page).toContain("LocationsObjectSelector");
+        expect(read("components/adminV2/settings/locations/LocationsObjectSelector.tsx")).toContain(
+            'data-testid="locations-object-selector"',
+        );
         expect(page).toContain("locations-selected-location");
-        expect(page).toContain("locations-setup-progress");
-        expect(page).toContain("locations-overview-health");
-        expect(page).toContain("locations-overview-capacity");
-        expect(page).toContain("locations-overview-operations");
+        expect(page).toContain("LocationsCommandRailActions");
+        expect(page).toContain("LocationOverviewSurface");
+        expect(page).toContain("operatingSnapshot");
+        expect(page).toContain("LocationIdentityFactsRow");
+        expect(page).toContain("xl:grid-cols-[20.5rem_minmax(0,1fr)]");
+        expect(page).toContain('data-testid="locations-hero"');
+        expect(page).toContain("titleIcon");
+        expect(page).not.toContain("← All locations");
+        expect(page).not.toContain("% ready");
+        const selector = read("components/adminV2/settings/locations/LocationsObjectSelector.tsx");
+        expect(selector).toContain('data-testid="locations-nav-add-location"');
+        expect(selector).toContain("locations-collection-rail");
+        expect(selector).toContain("locations-collection-row");
+        expect(selector).toContain('data-testid="locations-nav-filter-inactive"');
+        expect(selector).toContain("formatLocationShortPlaceLine");
+        expect(selector).not.toContain("ConfigurationQueueItem");
+        expect(read("lib/locations/locationSelectorSignal.ts")).toContain("needs attention");
+        expect(read("lib/locations/locationSelectorSignal.ts")).not.toContain("setupPercent");
+        expect(selector).toContain("QUEUE_ROW_CARD_SELECTED_BORDER_CLASS");
+        expect(selector).toContain("QUEUE_ROW_SELECTED_RAIL_CLASS");
+        const overview = read("components/adminV2/settings/locations/LocationOverviewSurface.tsx");
+        expect(overview).toContain(
+            "locations-overview-at-a-glance",
+        );
+        expect(overview).toContain(
+            "locations-overview-capacity-bar",
+        );
+        expect(overview).toContain('actionAlign="inline"');
+        expect(overview).toContain("xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]");
+        expect(overview).toContain('data-testid="locations-overview-action-row"');
+        expect(overview).toContain("lg:grid-cols-2");
+        expect(overview).toContain('className="h-full"');
+        expect(overview).not.toContain(
+            "locations-overview-operating-now",
+        );
+        expect(selector).not.toContain("bg-alloy-bend-pine/[0.14]");
+        expect(selector).not.toContain("bg-alloy-midnight/[0.04]");
+        expect(read("components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel.tsx")).toContain(
+            "consequence",
+        );
+        expect(read("lib/locations/buildLocationsRailActions.ts")).not.toContain("Coming soon");
+        expect(read("lib/locations/buildLocationsRailActions.ts")).not.toContain("Not available yet");
+        expect(page).toContain('variant="rail"');
+        expect(page).not.toContain("ConfigOperationalActions");
+        expect(page).not.toContain("Address not set up yet");
         expect(page).not.toContain("locations-section-queue");
         expect(page).not.toContain("SettingsPageHeader");
         expect(page).not.toContain("data-locations-editor-table");
@@ -34,9 +79,30 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("LocationSiteCreatePanel");
     });
 
-    it("uses the seven ready owned-concern tabs and keeps General behind Edit Location", () => {
+    it("opens the fleet landing when no locationId is in the URL", () => {
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        const fleet = read("components/adminV2/settings/locations/LocationsFleetLanding.tsx");
+        const hook = read("components/adminV2/settings/locations/useLocationsConfigurationSettings.ts");
+        const model = read("lib/locations/locationWorkspaceModel.ts");
+        expect(page).toContain("buildLocationsFleetModel");
+        expect(page).toContain("locationsFleetHref");
+        expect(page).toContain("ConfigScopeContextBar");
+        expect(page).toContain("returnToFleet");
+        expect(page).not.toContain("← All locations");
+        expect(page).not.toContain("Choose a location, understand what needs attention");
+        expect(fleet).toContain("locations-fleet-landing");
+        expect(fleet).toContain("locations-fleet-rollups");
+        expect(fleet).toContain("Operational readiness");
+        expect(hook).toContain("Fleet landing: never auto-open");
+        expect(hook).not.toContain("listItems[0]!.id");
+        expect(model).toContain("buildLocationsFleetModel");
+        expect(model).toContain("locationsFleetHref");
+    });
+
+    it("uses the seven ready owned-concern tabs and owns Edit location on the object header", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         const model = read("lib/locations/locationWorkspaceModel.ts");
+        const rail = read("lib/locations/buildLocationsRailActions.ts");
         for (const label of [
             "Overview",
             "Programs",
@@ -48,7 +114,10 @@ describe("Configuration Runtime — Locations", () => {
         ]) {
             expect(model).toContain(`label: "${label}"`);
         }
-        expect(page).toContain("Edit Location");
+        expect(page).toContain('data-testid="locations-edit-location"');
+        expect(page).toContain('data-testid="locations-breadcrumb-fleet"');
+        expect(page).toContain("LocationIdentityFactsRow");
+        expect(rail).not.toContain('label: "Edit location"');
         const tabCatalog = model.slice(model.indexOf("LOCATION_WORKSPACE_TABS"), model.indexOf("] as const;"));
         expect(tabCatalog).not.toContain('key: "general"');
         expect(tabCatalog).not.toContain("Communications");
@@ -67,22 +136,108 @@ describe("Configuration Runtime — Locations", () => {
         }
     });
 
-    it("uses summary-first programs and threshold staffing", () => {
+    it("uses summary-first programs and threshold staffing with distinct view/edit modes", () => {
         const programs = read("components/adminV2/settings/locations/LocationProgramDetailPanel.tsx");
+        const programCreate = read("components/adminV2/settings/locations/LocationProgramCreatePanel.tsx");
         const rooms = read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx");
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(programs).toContain("locations-program-summary-");
-        expect(programs).toContain("Rooms");
-        expect(programs).toContain("Status");
-        expect(programs).toContain("Capacity");
-        expect(programs).toContain("Age range");
         expect(programs).toContain("locations-program-edit-");
-        expect(rooms).toContain("Capacity & staffing");
+        expect(programs).toContain("ConfigChildObjectMasterDetail");
+        expect(programs).toContain("locations-program-age-unit");
+        expect(programs).toContain("locations-program-ops");
+        expect(programs).toContain("Operating picture");
+        expect(programs).not.toContain("Relationships");
+        expect(programs).not.toContain("Set here");
+        expect(programs).toContain("Edit program");
+        expect(programs).toContain("ConfigEditorSection");
+        expect(programs).toContain('title="Schedule"');
+        expect(programs).toContain("onAddProgram");
+        expect(programs).toContain("createDetail");
+        expect(programCreate).toContain("locations-program-create-save");
+        expect(programCreate).toContain("default_room_types");
+        expect(programCreate).toContain("age_range_unit");
+        expect(page).toContain("setCreatingProgram(true)");
+        expect(page).toContain("LocationProgramCreatePanel");
+        expect(read("app/api/admin/location-program-categories/route.ts")).toContain("metadata,");
+        expect(programs).not.toContain("Everything looks good");
+        expect(rooms).toContain('title="Program participation"');
+        expect(rooms).toContain('title="Capacity"');
         expect(rooms).toContain("Staffing thresholds");
         expect(rooms).toContain("Add staffing threshold");
         expect(rooms).toContain("formatStaffingThreshold");
+        expect(rooms).toContain("ConfigChildObjectMasterDetail");
+        expect(rooms).toContain("locations-room-consequence");
+        expect(rooms).toContain("locations-room-ops");
+        expect(rooms).toContain("locations-room-edit");
+        expect(rooms).toContain("Edit room");
+        expect(rooms).toContain("Hours / operating rules");
+        expect(rooms).toContain("ConfigEditorSection");
+        expect(rooms).not.toContain("Everything looks good");
         expect(rooms).not.toContain("Configure room");
-        expect(rooms).not.toContain("Set how many children this room holds and the staffing ratio together.");
-        expect(rooms.indexOf("Age range")).toBeLessThan(rooms.indexOf("locations-room-save"));
+        expect(page).toContain("createProgramCategory");
+        expect(page).toContain("onAddProgram");
+        expect(page).toContain("titleIcon");
+        expect(page).toContain('organizationLabel="Organization"');
+    });
+
+    it("reuses canonical queue-row and Bend Pine button primitives", () => {
+        const selector = read("components/adminV2/settings/locations/LocationsObjectSelector.tsx");
+        const mode = read("components/adminV2/settings/configurationRuntime/ConfigurationModeLayout.tsx");
+        const queueShell = read("lib/presentation/runtime/queueRowCardShell.ts");
+        const programs = read("components/adminV2/settings/locations/LocationProgramDetailPanel.tsx");
+
+        for (const source of [selector, mode]) {
+            expect(source).toContain("QUEUE_ROW_CARD_SELECTED_BORDER_CLASS");
+            expect(source).toContain("QUEUE_ROW_SELECTED_RAIL_CLASS");
+        }
+        expect(queueShell).toContain("!bg-alloy-bend-pine/[0.06]");
+        expect(queueShell).toContain("bg-alloy-bend-pine");
+        expect(mode).toContain("ConfigurationSecondaryButton");
+        expect(mode).not.toContain("config-primary-btn");
+        expect(programs).toContain("ConfigurationSecondaryButton");
+        expect(programs).not.toContain("#00a283");
+        expect(programs).not.toContain("#007d68");
+        expect(selector).toContain("ConfigurationPrimaryButton");
+        expect(selector).toContain("text-alloy-bend-pine");
+        expect(selector).toContain("text-alloy-midnight/30");
+    });
+
+    it("opens Schedule creation without immediately clearing create mode", () => {
+        const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
+        const start = page.indexOf("onCreateSchedule:");
+        const handler = page.slice(start, start + 180);
+        expect(handler).toContain("setCreatingSchedule(true)");
+        expect(handler).not.toContain('navigate("schedule")');
+    });
+
+    it("requires authoritative mutation responses and preserves Room ownership on create", () => {
+        const settings = read("components/adminV2/settings/locations/useLocationsConfigurationSettings.ts");
+        const locationsRoute = read("app/api/admin/locations/route.ts");
+        const roomCreate = read("components/adminV2/settings/locations/LocationRoomCreatePanel.tsx");
+        const ownedConcerns = read("components/adminV2/settings/locations/LocationOwnedConcernPanels.tsx");
+        const tours = read("app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx");
+
+        expect(settings).toContain("mutationResponseContainsPatch");
+        expect(settings).toContain("Program save was not confirmed by the authoritative response.");
+        expect(settings).toContain("Room creation was not confirmed by the authoritative response.");
+        expect(locationsRoute).toContain("parent_location_id is required for room units");
+        expect(locationsRoute).toContain("Parent location must be a site in this organization");
+        expect(locationsRoute).toContain("parent_location_id,");
+        expect(roomCreate).toContain("locations-room-create-save");
+        expect(roomCreate).toContain("student_teacher_ratio");
+        expect(ownedConcerns).toContain("Waitlist ranking save was not confirmed");
+        expect(ownedConcerns).toContain("Location access save was not confirmed");
+        expect(ownedConcerns).not.toContain("#00a283");
+        expect(ownedConcerns).not.toContain("#007d68");
+        expect(tours).toContain("Tour availability creation was not confirmed");
+        expect(tours).toContain("Tour availability save");
+        expect(tours).toContain("locations-tour-edit-form");
+        expect(tours).toContain("Save tour window");
+        expect(tours).toContain("onMutationCommitted");
+        expect(read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx")).toContain(
+            "refreshOwnedConcernSetup",
+        );
     });
 
     it("does not repeat active tab titles as tab-body headers", () => {
@@ -116,11 +271,18 @@ describe("Configuration Runtime — Locations", () => {
         expect(panels).toContain("Employee");
         expect(panels).toContain("Application / waitlist date");
         expect(rankingFactors).toContain("Desired start date");
-        expect(panels).toContain("Manual priority");
         expect(panels).toContain("Tie-break");
+        expect(panels).toContain("Ordering mode");
         expect(panels).toContain("selectableCatalog");
-        expect(panels).toContain("Saved on this work unit, not this location");
-        expect(panels).toContain("applies at every location");
+        expect(panels).toContain("Saved on {selectedProcessName}");
+        expect(panels).toContain("Applies at every location");
+        expect(panels).toContain("Governing Business Process");
+        expect(panels).toContain("locations-placement-process");
+        expect(panels).toContain("locations-placement-stage");
+        expect(panels).toContain("lifecycle_process_id");
+        expect(panels).toContain("lifecycle_stage_label");
+        expect(panels).toContain("Ranking active");
+        expect(panels).not.toContain("Placement inventory");
         expect(rankingEditor).toContain("Available factors");
         expect(rankingEditor).toContain("onDragStart");
         expect(rankingEditor).toContain("onDrop");
@@ -128,15 +290,41 @@ describe("Configuration Runtime — Locations", () => {
         expect(rankingEditor).toContain("Move down");
     });
 
-    it("supports multiple schedule patterns and contextual actions", () => {
+    it("supports multiple schedule patterns and shell-owned operational actions", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(page).toContain("+ Add Schedule Pattern");
-        expect(page).toContain("Closures / Holidays");
-        expect(page).toContain("+ Add Closure");
+        const rail = read("lib/locations/buildLocationsRailActions.ts");
+        const create = read("components/adminV2/settings/locations/LocationSchedulePatternCreatePanel.tsx");
+        const detail = read("components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel.tsx");
+        const service = read("lib/childcareOperational/schedulePatternService.ts");
+        const route = read("app/api/admin/schedule-patterns/route.ts");
+        expect(page).toContain("Closures and exceptions");
         expect(page).toContain("LocationSchedulePatternCreatePanel");
-        expect(page).toContain("Configure Capacity");
-        expect(page).toContain("Resolve Time Zone");
-        expect(page).toContain("Create Tour");
+        expect(page).toContain("ConfigChildObjectMasterDetail");
+        expect(page).toContain('data-testid="locations-schedule-add"');
+        expect(page).toContain("No closure provider available");
+        expect(page).toContain("LocationsCommandRailActions");
+        expect(page).toContain("buildLocationsRailActions");
+        expect(page).not.toContain('data-testid="locations-add-location"');
+        expect(page).toContain('data-testid="locations-edit-location"');
+        expect(create).toContain("locations-schedule-create-active");
+        expect(create).toContain("is_active: active");
+        expect(create).toContain("border-alloy-bend-pine bg-alloy-bend-pine text-white");
+        expect(detail).toContain("locations-schedule-edit");
+        expect(detail).toContain("locations-schedule-weekdays-view");
+        expect(detail).not.toContain("#00a283");
+        expect(detail).not.toContain("#007d68");
+        expect(service).toContain("is_active: input.isActive ?? true");
+        expect(route).toContain('typeof body.is_active === "boolean"');
+        expect(rail).toContain('id: "configure-capacity"');
+        expect(rail).toContain('id: "resolve-timezone"');
+        expect(rail).not.toContain('label: "Apply to other locations"');
+        expect(rail).toContain('group: "more"');
+        expect(read("components/adminV2/settings/locations/LocationsCommandRailActions.tsx")).toContain(
+            'actionsPlacementSurface="company"',
+        );
+        expect(read("components/adminV2/settings/locations/LocationsCommandRailActions.tsx")).toContain(
+            "More actions",
+        );
         expect(page).not.toContain("Publish Communications");
     });
 

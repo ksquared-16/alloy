@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-14
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
@@ -21,6 +21,9 @@ Every configuration domain composes its experience from this fixed set of primit
 ### Configuration Workspace
 The root of a configuration experience for one object type. Owns the three-zone layout (object list · object detail · command rail), URL-addressable selection state, and responsive collapse. It is the container every other primitive lives inside. One per object type (Locations, Programs, Offerings…).
 
+### Workspace Canvas and Region
+The Canvas is the quiet Stone field behind the selected object's detail. A Region is a coherent white operational answer on that field — glance, readiness, attention, capability, or editor. Regions do not acquire object identity, selection, or nested card chrome unless they actually represent an Object.
+
 ### Configuration Sidebar (Object List)
 The persistent selector for objects of the current type. Responsibilities: search, filter, "Add", and an unmistakable **selected** state. Swaps to a child object's siblings when the operator drills into a nested object. It is a selector, never a page.
 
@@ -36,6 +39,8 @@ A calm, self-contained block for one concern: a plain headline, quiet supporting
 ### Command Rail
 The object-scoped rail holding Quick Actions and (where useful) the object's Attention/Setup. Restrained by doctrine — a short action list and one or two status cards, never a dashboard.
 
+**Settings ownership (proven by Locations):** Configuration content pages **do not** render a page-local Actions card. Contextual commands register into the **platform shell Actions rail** (above BOS) via `WorkspaceCommandRailRegistrar` / `LocationsCommandRailActions`. The page owns understanding and state; the shell owns commands; BOS remains a separate assist surface. Inline controls stay attached to the content object they affect.
+
 ---
 
 ## Operational-summary primitives
@@ -47,10 +52,19 @@ The read-only "is this object healthy?" surface. Presents derived state (capacit
 The live, ranked list answering "is anything wrong or improvable right now?" Items are graded Fix / Improve / Good, each one-tap actionable and self-clearing. Empty state: "Everything looks good." No timestamp, no global health badge. This **is** the health model.
 
 ### Setup Progress
-The onboarding completeness surface: a percentage donut plus a per-owned-area checklist, each linking to finish. Prominent while incomplete; **collapses to a single line at 100%**. Distinct from Attention by responsibility and by placement (rail vs body).
+The onboarding completeness surface: a percentage/progress indicator plus a concise per-owned-area checklist, each linking to its configuration concern. Every row names its state as **Complete**, **Needs setup**, **Not assessed**, or **Not applicable** when the domain can prove it. The percentage visibly reconciles with assessed rows. Distinct from Attention by responsibility: Setup Progress explains readiness; it does not create a second task list. **Unknown areas (`complete === null`) are excluded from the denominator** — unknown is never incomplete.
+
+### Operational Action Model
+Ranked actions on the command rail, grouped **Fix now → Do next → Manage**. Domains supply actions from Attention + high-frequency operations; the primitive only groups and presents. Replaces ad-hoc “Quick actions” button lists.
+
+### Scope Context Bar
+Organization (global) vs the selected configuration object. Switches the operator between the org landing and the object workspace without inventing a third “fleet” noun.
+
+### Apply To Dialog
+Multi-select targets + confirm for a domain with an authoritative copy/apply provider. Domains supply targets and the durable mutation. The primitive remains hidden when no provider exists; confirmation may never imply a copy occurred when only a proposal was produced.
 
 ### Configuration Health Banner
-A per-object or per-section rollup of substrate resolution status into a single calm statement ("All good" / "Needs setup"). A compact form of Attention for tight spaces (e.g. a nested object's rail). Never a "last checked" heartbeat.
+A per-object or per-section rollup of substrate resolution status into a single calm statement ("All good" / "Needs setup"). A compact form of Attention for tight spaces (e.g. a nested object's rail). Never a "last checked" heartbeat. **Do not introduce a third status system named Health** — Attention remains the live health model; this banner is Attention in compact form.
 
 ---
 
@@ -102,12 +116,23 @@ The object's recent changes as a short list — actor · plain summary · relati
 
 ---
 
+### Child Object Master/Detail
+The reusable nested-object pattern (Rooms inside Locations; future Programs, templates, etc.). List selects; detail answers what is configured / needs attention / next action **before** exposing editors. Editing is intentional (Adjust), not the default posture.
+
+### Consequence Line
+A live, plain-language line restating the substrate's computed result as a business outcome for the focused child object.
+
+### Authoritative Mutation Boundary
+The shared save contract for every editor and inline mutation. The server returns the changed object or layer; the client proves the response contains the submitted patch before leaving edit mode, then updates every dependent list, summary, Attention, and Readiness consumer. Hard refresh must reproduce the same state. HTTP `2xx` alone is never success.
+
+---
+
 ## Composition rules
 
 - A configuration experience is **assembled from these primitives only.** New visual needs extend the library, not the domain.
 - Primitives depend on the **object model and resolved view models**, never on raw database rows. Only server loaders touch the substrate.
 - Every primitive obeys the platform laws: the engine stays invisible, unknown is never zero, inheritance is quiet, editing is in-place, and the two status systems stay separate.
-- The **reference implementations** of every primitive are in the Locations prototype (`web/app/adminV2/settings/prototypes/operational-configuration`); a new domain adapts those, it does not reinvent them.
+- The **reference implementations** of these primitives are in the frozen Locations Runtime (`web/components/adminV2/settings/locations/` and `web/components/adminV2/settings/configurationRuntime/workspace/`); a new domain adapts those, it does not reinvent them.
 
 ## Related docs
 

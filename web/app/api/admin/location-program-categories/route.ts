@@ -18,6 +18,33 @@ type CategoryRow = {
     updated_at: string | null;
 };
 
+export function buildProgramCategoryPatch(
+    raw: Record<string, unknown>,
+    updatedAt = new Date().toISOString(),
+): { ok: true; patch: Record<string, unknown> } | { ok: false; error: string } {
+    const patch: Record<string, unknown> = { updated_at: updatedAt };
+    if (typeof raw.label === "string") {
+        const label = raw.label.trim();
+        if (!label) return { ok: false, error: "Label cannot be empty" };
+        patch.label = label;
+    }
+    if (raw.sort_order !== undefined && raw.sort_order !== null) {
+        const sortOrder = Number(raw.sort_order);
+        if (!Number.isFinite(sortOrder)) return { ok: false, error: "sort_order must be a number" };
+        patch.sort_order = sortOrder;
+    }
+    if (typeof raw.is_active === "boolean") {
+        patch.is_active = raw.is_active;
+    }
+    if (raw.metadata !== undefined) {
+        if (raw.metadata == null || typeof raw.metadata !== "object" || Array.isArray(raw.metadata)) {
+            return { ok: false, error: "metadata must be an object" };
+        }
+        patch.metadata = raw.metadata;
+    }
+    return { ok: true, patch };
+}
+
 function mapCategoryRow(r: Record<string, unknown>): CategoryRow {
     return {
         id: String(r.id ?? ""),
@@ -77,7 +104,7 @@ export async function GET(request: NextRequest) {
     });
 }
 
-/** PATCH: batch update categories (label, sort_order, is_active). */
+/** PATCH: batch update categories, including the canonical program metadata fields. */
 export async function PATCH(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
@@ -106,20 +133,9 @@ export async function PATCH(request: NextRequest) {
         const id = String(raw.id ?? "").trim();
         if (!id) continue;
 
-        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-        if (typeof raw.label === "string") {
-            const label = raw.label.trim();
-            if (!label) {
-                return NextResponse.json({ error: "Label cannot be empty" }, { status: 400 });
-            }
-            patch.label = label;
-        }
-        if (raw.sort_order !== undefined && raw.sort_order !== null) {
-            patch.sort_order = Number(raw.sort_order);
-        }
-        if (typeof raw.is_active === "boolean") {
-            patch.is_active = raw.is_active;
-        }
+        const built = buildProgramCategoryPatch(raw);
+        if (!built.ok) return NextResponse.json({ error: built.error }, { status: 400 });
+        const { patch } = built;
 
         if (Object.keys(patch).length <= 1) continue;
 
@@ -168,12 +184,20 @@ export async function POST(request: NextRequest) {
     const sortOrder =
         body.sort_order != null && body.sort_order !== "" ? Number(body.sort_order) : null;
     const isActive = body.is_active !== false;
+    const metadata =
+        body.metadata === undefined ? {}
+        : body.metadata != null && typeof body.metadata === "object" && !Array.isArray(body.metadata) ?
+            body.metadata
+        :   null;
 
     if (!locationId) {
         return NextResponse.json({ error: "location_id is required" }, { status: 400 });
     }
     if (!label) {
         return NextResponse.json({ error: "label is required" }, { status: 400 });
+    }
+    if (metadata == null) {
+        return NextResponse.json({ error: "metadata must be an object" }, { status: 400 });
     }
     if (!PROGRAM_CATEGORY_KEY_RE.test(key)) {
         return NextResponse.json({ error: "Invalid program category key" }, { status: 400 });
@@ -223,6 +247,7 @@ export async function POST(request: NextRequest) {
             label,
             sort_order: resolvedSortOrder,
             is_active: isActive,
+            metadata,
             updated_at: new Date().toISOString(),
         })
         .select(

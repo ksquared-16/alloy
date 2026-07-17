@@ -2,21 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
-
-type RulePatch = Partial<{
-    location_id: string | null;
-    user_id: string | null;
-    day_of_week: number;
-    start_time: string;
-    end_time: string;
-    timezone: string;
-    slot_duration_minutes: number;
-    buffer_minutes: number;
-    max_bookings_per_slot: number;
-    approval_required: boolean;
-    is_active: boolean;
-    metadata: Record<string, unknown>;
-}>;
+import { buildTourAvailabilityRulePatch } from "@/lib/tours/admin/tourAvailabilityRuleMutation";
 
 /** PATCH /api/admin/tours/availability-rules/[ruleId] */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ ruleId: string }> }) {
@@ -29,12 +15,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const id = String(ruleId ?? "").trim();
     if (!id) return NextResponse.json({ error: "Missing ruleId" }, { status: 400 });
 
-    let body: RulePatch;
+    let body: unknown;
     try {
-        body = (await request.json()) as RulePatch;
+        body = await request.json();
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
+
+    const patchResult = buildTourAvailabilityRulePatch(body);
+    if (!patchResult.ok) return NextResponse.json({ error: patchResult.error }, { status: 400 });
 
     const supabase = createAdminClient();
     const { data: existing, error: e0 } = await supabase
@@ -45,20 +34,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .maybeSingle();
     if (e0 || !existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    if (body.location_id !== undefined && body.location_id != null && String(body.location_id).trim() !== "") {
-        const lid = String(body.location_id).trim();
+    if (
+        patchResult.patch.location_id !== undefined &&
+        patchResult.patch.location_id != null &&
+        patchResult.patch.location_id !== ""
+    ) {
+        const lid = patchResult.patch.location_id;
         const { data: loc } = await supabase.from("locations").select("id").eq("id", lid).eq("org_id", ctx.orgId).maybeSingle();
         if (!loc) return NextResponse.json({ error: "location_id not found for org" }, { status: 400 });
     }
 
-    const patch: Record<string, unknown> = {};
-    for (const k of Object.keys(body)) {
-        const v = body[k as keyof RulePatch];
-        if (v !== undefined) patch[k] = v;
-    }
-    if (Object.keys(patch).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
-
-    const { data, error } = await supabase.from("tour_availability_rules").update(patch).eq("org_id", ctx.orgId).eq("id", id).select("*").single();
+    const { data, error } = await supabase
+        .from("tour_availability_rules")
+        .update(patchResult.patch)
+        .eq("org_id", ctx.orgId)
+        .eq("id", id)
+        .select("*")
+        .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ rule: data });
 }

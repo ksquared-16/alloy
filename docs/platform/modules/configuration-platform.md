@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
@@ -91,15 +91,17 @@ The Configuration Runtime is the platform-owned layer that sits beneath all conf
 
 **Extraction rule:** Only proven primitives move here. A primitive is proven when it appears in two or more independent configuration domains. Do not move Commercial-specific patterns here prematurely.
 
-### Reference implementation: Commercial Configuration
+### Reference implementations
 
-Commercial Configuration (`docs/platform/modules/commercial-configuration.md`) is the first domain to consume the Configuration Runtime explicitly. It establishes:
+**Locations is the reference implementation for the Configuration Runtime V1 experience**: object selection, workspace canvas, hero, operational summary, explained readiness, attention, child-object master/detail, view/edit separation, shell/BOS/inline action ownership, and authoritative mutation behavior.
+
+**Commercial Configuration is the reference consumer for the configuration control-plane primitives** (`docs/platform/modules/commercial-configuration.md`). It establishes:
 
 - Scope model (org default vs location override)
 - Inheritance pattern (location override → org default)
 - `OwnershipBadge` on grid cells and section headers
 
-Future domains (Fields V2, Layouts V2, Scheduling, Billing) consume these same primitives.
+Future domains inherit the Locations experience grammar and consume the relevant control-plane primitives proven by Commercial. These are complementary references, not competing implementations.
 
 ### Primitives NOT yet extracted (deferred)
 

@@ -1,14 +1,14 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-15
+last_reviewed: 2026-07-16
 supersedes: [docs/system/configuration-workspace-doctrine.md, docs/system/configuration-workspace-v1-doctrine.md]
 ---
 
 # Configuration Workspace Platform Doctrine
 
-**Status:** Canonical. Reference implementation in progress — **Locations** (Phase B).
-**Companion evidence:** the Operational Configuration Experience prototype (`web/app/adminV2/settings/prototypes/operational-configuration`), its product spec (`docs/system/operational-configuration-experience-product-spec.md`), and its engineering blueprint (`docs/system/operational-configuration-platform-phase-b-blueprint.md`).
+**Status:** Canonical. **Locations Version 1 is the frozen reference implementation.**
+**Reference implementation:** `web/components/adminV2/settings/locations/` with closeout evidence in `docs/sprints/completed/locations-config-runtime/`.
 **Builds on:** `alloy-visual-language.md`, `canonical-interaction-model.md`, `operational-surface-design-system.md`, `focus-panel-architecture-vocabulary.md`. **Consumes (does not redefine):** `../modules/configuration-platform.md` (control plane), `../../system/configuration-ownership-doctrine.md` (ownership matrix), `../../system/configuration-mode-doctrine.md` (shell geometry).
 
 > **Operators do not edit records. Operators operate configuration objects.**
@@ -144,6 +144,30 @@ Nesting reuses the same anatomy: opening a child object (a Room inside a Locatio
 
 ---
 
+## Workspace composition and ownership
+
+- **Workspace canvas:** Stone is the quiet field; white regions carry coherent operational answers. A region groups an answer. An object carries identity, status, selection, URL state, and view/edit behavior. Do not turn every region into an object card.
+- **Left navigation:** owns collection identity, count, search, filter, Add, selection, and keyboard movement. It supports the selected object; it does not compete with the detail workspace.
+- **Hero:** owns the selected object's name, status, identifying facts, and object-level Edit action.
+- **Operational summary:** answers what the object is and how it currently operates. Readiness supports that understanding; Attention owns actionable problems.
+- **Shell Actions rail:** owns contextual cross-section and high-frequency commands. Content must not render a competing page-local Actions card.
+- **BOS:** assists through the same registered platform commands and mutation boundaries. BOS does not gain a parallel write path.
+- **Inline actions:** remain attached to the issue, row, field, or owned object they affect. Creation also remains discoverable beside its collection.
+
+## Mutation contract
+
+Every visible mutation must:
+
+1. submit through an authorized, organization-scoped server path;
+2. receive the authoritative changed row or layer;
+3. prove that response contains the submitted patch, including nested objects, arrays, `false`, `null`, and zero;
+4. update the local object, list, summaries, Attention, and Readiness consumers that depend on the change;
+5. survive hard refresh and reopen from the same canonical read model.
+
+HTTP success, a toast, optimistic copy, or a closed editor is not persistence proof. A mutation control stays hidden or disabled with an honest reason when no authoritative provider exists.
+
+---
+
 ## Navigation doctrine
 
 - **Objects are the navigation.** The IA is the ownership hierarchy made walkable: pick an object, see its owned concerns as tabs, drill into an owned child as its own workspace.
@@ -267,9 +291,21 @@ The following rules from the superseded and adjacent configuration doctrine rema
 
 ## Reference implementation
 
-**Locations is the reference implementation of the Configuration Workspace Platform** — the way Operational Runtime has its reference surfaces and the Focus Panel has its reference subjects. Every future configuration domain **references Locations**; it does not invent its own experience.
+**Locations is the reference implementation for Configuration Runtime V1** — the way Operational Runtime has its reference surfaces and the Focus Panel has its reference subjects. Every future configuration domain **references Locations**; it does not invent its own experience.
 
-Locations demonstrates the whole platform: an object list (locations), an object workspace (a location) with owned-concern tabs (Programs, Rooms, Schedule, Tours, Placement, Access), a nested object (Room) with its own workspace and the capacity+ratios focused editor, the two-status model (Attention + Setup Progress), quiet inheritance (a Room "uses location hours"), business-language translation of the capacity/ratio substrate, and honest unknowns (staffing "not set up yet"). Communications is intentionally absent until ownership is ready. The clickable evidence is the prototype at `web/app/adminV2/settings/prototypes/operational-configuration`.
+Locations demonstrates the whole platform: an **organization landing** (configuration health across locations — never auto-opening a single object), an object list, an object workspace with owned-concern tabs (Programs, Rooms, Schedule, Tours, Placement, Access), a nested child-object workspace (Room / Program) that answers what is configured / needs attention / next action before editing, the two-status model (**Needs attention** + **Operational readiness**) **in the page body**, contextual commands on the **platform Actions rail** (not a page-local Actions card), **Scope** (Organization vs Location), quiet inheritance language, business-language timezone/locality identity (never raw IANA ids), and honest unknowns (unknown readiness areas are never counted incomplete). **Apply To… stays hidden in a domain until an authoritative copy provider exists; a confirmation dialog may never imply that a deferred copy was applied.** Communications is intentionally absent until ownership is ready. Operator-facing language never says “fleet.”
+
+**Ownership model (binding):** Settings content owns configuration understanding. The shell owns contextual commands. BOS assists through the same platform boundaries. Inline controls remain local to their objects.
+
+**Reference child-object behavior:** Programs, Rooms, and Schedule use one master/detail grammar: the collection supports selection, the selected object owns the workspace, and create/edit are intentional modes that replace read summaries rather than stacking beneath them. Primary collection creation is available both in collection chrome and, where useful, the shell Actions rail. Operational Readiness visibly lists every authoritative dimension as **Complete**, **Needs setup**, or **Not assessed** (and **Not applicable** when a domain can prove that state); its percentage uses only assessed dimensions and must visibly reconcile with that list.
+
+**Reference Overview behavior:** the first row answers “What is this object?” with a two-thirds operational glance and a one-third readiness explanation. The second row answers “What needs me?” with equal-weight Attention and owned-capability regions. Attention keeps problem, impact, and action together. Capability state is explicit rather than inferred from decorative cards. Empty Attention disappears rather than manufacturing healthy filler.
+
+Future Organization-owned Program, Schedule, and Tour Pattern creation may apply authoritative patterns to Locations through a registered copy/apply provider. That evolution reuses this object workspace; it does not move Location-owned mutations into the Organization UI or introduce an optimistic “Apply” action before a durable provider exists.
+
+Organization Runtime inherits the workspace grammar, not Location-specific nouns or storage. Organization owns reusable pattern creation and target selection; Locations owns the applied child objects and their authoritative local read surfaces. Apply must be durable, auditable, response-confirmed, and idempotent enough to retry safely before it is exposed.
+
+Implementation primitives live under `web/components/adminV2/settings/configurationRuntime/workspace/` and `LocationsCommandRailActions` (shell registration). Commercial, Communications, Scheduling, Staffing, Billing, and future Settings modules should compose them rather than inventing parallel UX.
 
 The Placement tab presents the existing waitlist ranking policy without changing its owner. Ranking is currently persisted as `work_units.metadata.placement_priority_v1` on the selected eligible waitlist Work Unit and therefore applies anywhere that Work Unit runs; it is **not location-scoped**. The Locations workspace must disclose that scope while allowing selection and ordering only from the registered profile's supported operator factors. The fallback factor remains active and last, and the registered tie-break sequence remains runtime-owned.
 

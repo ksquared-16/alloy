@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
     ConfigurationContext,
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
-    ConfigurationQueue,
     ConfigurationQueueItem,
+    ConfigurationSecondaryButton,
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import {
+    ConfigChildObjectMasterDetail,
+    ConfigObjectHeader,
+    ConfigScopeContextBar,
+} from "@/components/adminV2/settings/configurationRuntime/workspace";
 import LocationProgramDetailPanel from "@/components/adminV2/settings/locations/LocationProgramDetailPanel";
+import LocationRoomCreatePanel from "@/components/adminV2/settings/locations/LocationRoomCreatePanel";
 import LocationRoomDetailPanel from "@/components/adminV2/settings/locations/LocationRoomDetailPanel";
 import LocationSchedulePatternCreatePanel from "@/components/adminV2/settings/locations/LocationSchedulePatternCreatePanel";
 import LocationScheduleTemplateDetailPanel from "@/components/adminV2/settings/locations/LocationScheduleTemplateDetailPanel";
@@ -22,42 +29,26 @@ import {
     LocationPlacementPanel,
     LocationToursPanel,
 } from "@/components/adminV2/settings/locations/LocationOwnedConcernPanels";
+import LocationProgramCreatePanel from "@/components/adminV2/settings/locations/LocationProgramCreatePanel";
+import { LocationIdentityFactsRow } from "@/components/adminV2/settings/locations/LocationIdentityFactsRow";
+import { LocationOverviewSurface } from "@/components/adminV2/settings/locations/LocationOverviewSurface";
+import { LocationsCommandRailActions } from "@/components/adminV2/settings/locations/LocationsCommandRailActions";
+import { LocationsObjectSelector } from "@/components/adminV2/settings/locations/LocationsObjectSelector";
 import { useLocationsConfigurationSettings } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
+import LocationsFleetLanding from "@/components/adminV2/settings/locations/LocationsFleetLanding";
+import { canonicalLocationSettingsHref } from "@/lib/admin/canonicalLocationSettingsRoutes";
+import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
+import { buildLocationsRailActions } from "@/lib/locations/buildLocationsRailActions";
 import {
     buildLocationWorkspaceModel,
     buildLocationProgramOperationalSummaries,
+    buildLocationsFleetModel,
     LOCATION_WORKSPACE_TABS,
+    locationsFleetHref,
     locationWorkspaceHref,
-    readLocationMetadataString,
     type LocationWorkspaceTab,
 } from "@/lib/locations/locationWorkspaceModel";
 import { formatWeekdaySelection } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-
-const LOCATIONS_SUBTITLE = "Choose a location, understand what needs attention, and manage everything it owns.";
-
-function WorkspaceCard({
-    title,
-    description,
-    children,
-    testId,
-}: {
-    title: string;
-    description?: string;
-    children: ReactNode;
-    testId?: string;
-}) {
-    return (
-        <section className="process-config-setup-card p-4" data-testid={testId}>
-            <div className="mb-3">
-                <h2 className="config-typo-workspace-title">{title}</h2>
-                {description ?
-                    <p className="config-typo-sublabel mt-1">{description}</p>
-                :   null}
-            </div>
-            {children}
-        </section>
-    );
-}
 
 export default function LocationsConfigurationPage({
     initialLocationId = null,
@@ -72,18 +63,25 @@ export default function LocationsConfigurationPage({
     const { canMutate } = useAdminAuth();
     const [creatingSite, setCreatingSite] = useState(false);
     const [editingSite, setEditingSite] = useState(false);
+    const [creatingProgram, setCreatingProgram] = useState(false);
+    const [creatingRoom, setCreatingRoom] = useState(false);
     const [creatingSchedule, setCreatingSchedule] = useState(false);
-    const [showSetupDetails, setShowSetupDetails] = useState(false);
     const [ownedConcernSetupByLocation, setOwnedConcernSetupByLocation] = useState<
         Record<string, Partial<Record<"tours" | "placement" | "access", boolean>>>
     >({});
+    const ownedConcernRequestSeq = useRef(0);
     const [activeTab, setActiveTab] = useState<LocationWorkspaceTab>(initialTab);
     const [search, setSearch] = useState("");
     const [showInactive, setShowInactive] = useState(false);
     const [selectedRoomId, setSelectedRoomId] = useState<string | null>(initialTab === "rooms" ? initialItemId : null);
+    const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
+        initialTab === "programs" ? initialItemId : null,
+    );
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(
         initialTab === "schedule" ? initialItemId : null,
     );
+    const [toursKeepAlive, setToursKeepAlive] = useState(initialTab === "tours");
+    const [placementKeepAlive, setPlacementKeepAlive] = useState(initialTab === "placement");
     const {
         selectedId,
         setSelectedId,
@@ -97,6 +95,8 @@ export default function LocationsConfigurationPage({
         siteLabelById,
         selectedSite,
         createSiteLocation,
+        createRoomUnit,
+        createProgramCategory,
         patchLocation,
         patchProgramCategory,
         roomCapacitySummaryForSite,
@@ -150,11 +150,16 @@ export default function LocationsConfigurationPage({
         selectedRoomId && selectedRooms.some((room) => room.id === selectedRoomId) ?
             selectedRoomId
         :   (selectedRooms[0]?.id ?? null);
+    const effectiveProgramId =
+        selectedProgramId && selectedPrograms.some((program) => program.id === selectedProgramId) ?
+            selectedProgramId
+        :   (selectedPrograms[0]?.id ?? null);
     const effectiveScheduleId =
         selectedScheduleId && selectedSchedules.some((schedule) => schedule.id === selectedScheduleId) ?
             selectedScheduleId
         :   (selectedSchedules[0]?.id ?? null);
     const selectedRoom = selectedRooms.find((room) => room.id === effectiveRoomId) ?? null;
+    const selectedProgram = selectedPrograms.find((program) => program.id === effectiveProgramId) ?? null;
     const selectedSchedule = selectedSchedules.find((schedule) => schedule.id === effectiveScheduleId) ?? null;
     const programSummaries = useMemo(
         () =>
@@ -165,11 +170,9 @@ export default function LocationsConfigurationPage({
         [selectedPrograms, selectedRooms],
     );
 
-    useEffect(() => {
-        if (!selectedSite) return;
-        let cancelled = false;
-        const locationId = selectedSite.id;
-        void Promise.all([
+    const refreshOwnedConcernSetup = useCallback(async (locationId: string) => {
+        const requestSeq = ++ownedConcernRequestSeq.current;
+        const [tours, access] = await Promise.all([
             fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
                 credentials: "include",
             })
@@ -200,20 +203,25 @@ export default function LocationsConfigurationPage({
                     );
                 })
                 .catch(() => null),
-        ]).then(([tours, access]) => {
-            if (cancelled) return;
-            setOwnedConcernSetupByLocation((current) => ({
-                ...current,
-                [locationId]: {
-                    tours: tours ?? undefined,
-                    access: access ?? undefined,
-                },
-            }));
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [selectedSite]);
+        ]);
+        if (requestSeq !== ownedConcernRequestSeq.current) return;
+        setOwnedConcernSetupByLocation((current) => ({
+            ...current,
+            [locationId]: {
+                tours: tours ?? undefined,
+                access: access ?? undefined,
+            },
+        }));
+    }, []);
+
+    const selectedSiteId = selectedSite?.id ?? null;
+    useEffect(() => {
+        if (!selectedSiteId) return;
+        const timeout = window.setTimeout(() => {
+            void refreshOwnedConcernSetup(selectedSiteId);
+        }, 0);
+        return () => window.clearTimeout(timeout);
+    }, [refreshOwnedConcernSetup, selectedSiteId]);
 
     const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
     const model =
@@ -230,13 +238,54 @@ export default function LocationsConfigurationPage({
             })
         :   null;
 
-    const navigate = (tab: LocationWorkspaceTab, itemId?: string | null) => {
-        if (!selectedSite) return;
-        setActiveTab(tab);
+    const fleet = useMemo(
+        () =>
+            buildLocationsFleetModel({
+                sites: siteRows,
+                rooms: roomRows,
+                programs: programCategories,
+                schedules: schedulePatterns,
+            }),
+        [programCategories, roomRows, schedulePatterns, siteRows],
+    );
+
+    const openLocation = (locationId: string, tab: LocationWorkspaceTab = "overview") => {
+        setSelectedId(locationId);
         setEditingSite(false);
+        setCreatingSite(false);
+        setCreatingProgram(false);
+        setCreatingRoom(false);
         setCreatingSchedule(false);
-        router.replace(locationWorkspaceHref(selectedSite.id, tab, itemId));
+        if (tab === "tours") setToursKeepAlive(true);
+        if (tab === "placement") setPlacementKeepAlive(true);
+        setActiveTab(tab);
+        router.replace(locationWorkspaceHref(locationId, tab));
     };
+
+    const returnToFleet = () => {
+        setSelectedId(null);
+        setEditingSite(false);
+        setCreatingProgram(false);
+        setCreatingRoom(false);
+        setCreatingSchedule(false);
+        setActiveTab("overview");
+        router.replace(locationsFleetHref());
+    };
+
+    const navigate = useCallback(
+        (tab: LocationWorkspaceTab, itemId?: string | null) => {
+            if (!selectedSite) return;
+            setActiveTab(tab);
+            setEditingSite(false);
+            setCreatingProgram(false);
+            setCreatingRoom(false);
+            setCreatingSchedule(false);
+            if (tab === "tours") setToursKeepAlive(true);
+            if (tab === "placement") setPlacementKeepAlive(true);
+            router.replace(locationWorkspaceHref(selectedSite.id, tab, itemId));
+        },
+        [router, selectedSite],
+    );
 
     const showSetupDestination = (tab: LocationWorkspaceTab | "general") => {
         if (tab === "general") {
@@ -246,216 +295,105 @@ export default function LocationsConfigurationPage({
         navigate(tab);
     };
 
-    const overview =
-        selectedSite && model ?
-            <div className="space-y-7" data-testid="locations-overview">
-                <section className="space-y-3" data-testid="locations-overview-health">
-                    <div>
-                        <p className="config-typo-meta uppercase tracking-[0.16em]">Health</p>
-                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">What needs you now</h2>
-                    </div>
-                    <div className="grid gap-4 lg:grid-cols-2">
-                        <WorkspaceCard
-                            title="Attention"
-                            description="Current issues and improvements, ranked by impact."
-                            testId="locations-attention"
-                        >
-                            <ul className="divide-y divide-alloy-forge/10">
-                                {model.attention.map((item) => (
-                                    <li key={item.key} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                                        <span
-                                            className={
-                                                item.grade === "fix" ? "text-amber-700"
-                                                : item.grade === "improve" ?
-                                                    "text-blue-700"
-                                                :   "text-[#007d68]"
-                                            }
-                                            aria-hidden="true"
-                                        >
-                                            {item.grade === "fix" ?
-                                                "⚠"
-                                            : item.grade === "improve" ?
-                                                "ⓘ"
-                                            :   "✓"}
-                                        </span>
-                                        <span className="min-w-0 flex-1 text-sm text-alloy-midnight/80">
-                                            {item.label}
-                                        </span>
-                                        {item.grade !== "good" ?
-                                            <button
-                                                type="button"
-                                                className="shrink-0 text-xs font-medium text-[#007d68]"
-                                                onClick={() => showSetupDestination(item.tab)}
-                                            >
-                                                Resolve
-                                            </button>
-                                        :   null}
-                                    </li>
-                                ))}
-                            </ul>
-                        </WorkspaceCard>
-                        <WorkspaceCard
-                            title="Setup progress"
-                            description="Operational readiness, not a mechanical checklist."
-                            testId="locations-setup-progress"
-                        >
-                            <div className="flex items-end gap-4">
-                                <p className="text-3xl font-medium tracking-tight text-alloy-midnight">
-                                    {model.setupPercent}%
-                                </p>
-                                <div className="pb-0.5 text-xs">
-                                    <p className="font-medium text-amber-700">{model.criticalCount} Critical</p>
-                                    <p className="mt-0.5 text-alloy-midnight/50">
-                                        {model.recommendedCount} Recommended
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-alloy-forge/10">
-                                <div
-                                    className="h-full rounded-full bg-[#00a283]"
-                                    style={{ width: `${model.setupPercent}%` }}
-                                />
-                            </div>
-                            {model.setupComplete ?
-                                <p className="config-typo-sublabel mt-3 text-[#007d68]">Setup complete ✓</p>
-                            :   <button
-                                    type="button"
-                                    className="mt-3 text-xs font-medium text-[#007d68]"
-                                    onClick={() => setShowSetupDetails((current) => !current)}
-                                    aria-expanded={showSetupDetails}
-                                >
-                                    {showSetupDetails ? "Hide setup details" : "Review setup"}
-                                </button>
-                            }
-                            {showSetupDetails ?
-                                <ul className="mt-3 divide-y divide-alloy-forge/10 border-t border-alloy-forge/10">
-                                    {model.setupItems.map((item) => (
-                                        <li key={item.key}>
-                                            <button
-                                                type="button"
-                                                className="flex w-full items-center justify-between py-2 text-xs"
-                                                onClick={() => showSetupDestination(item.tab)}
-                                            >
-                                                <span className="text-alloy-midnight/65">{item.label}</span>
-                                                <span
-                                                    className={
-                                                        item.complete ? "text-[#007d68]" : "text-alloy-midnight/40"
-                                                    }
-                                                >
-                                                    {item.complete ?
-                                                        "Ready"
-                                                    : item.complete == null ?
-                                                        "Review"
-                                                    :   "Finish"}
-                                                </span>
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            :   null}
-                        </WorkspaceCard>
-                    </div>
-                </section>
+    const beginAddLocation = useCallback(() => {
+        setCreatingSite(true);
+        setEditingSite(false);
+        setError(null);
+    }, [setError]);
 
-                <section className="space-y-3" data-testid="locations-overview-capacity">
-                    <div>
-                        <p className="config-typo-meta uppercase tracking-[0.16em]">Capacity</p>
-                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">What this location can serve</h2>
-                    </div>
-                    <WorkspaceCard
-                        title="Capacity summary"
-                        description="Room capacity is the operational source; inventory follows."
-                        testId="locations-at-a-glance"
-                    >
-                        <button
-                            type="button"
-                            className="w-full rounded-xl border border-alloy-forge/10 bg-[#00a283]/[0.035] p-4 text-left"
-                            onClick={() => navigate("rooms")}
-                        >
-                            <span className="config-typo-field-label">Configured capacity</span>
-                            <span className="mt-1 block text-2xl font-medium tracking-tight text-alloy-midnight">
-                                {model.configuredCapacity == null ?
-                                    "Not set up yet"
-                                :   `${model.configuredCapacity} children`}
-                            </span>
-                            <span className="config-typo-sublabel mt-1 block">
-                                {model.roomsNeedingCapacity > 0 ?
-                                    `${model.roomsNeedingCapacity} ${model.roomsNeedingCapacity === 1 ? "room needs" : "rooms need"} capacity setup.`
-                                :   "Review the rooms and staffing thresholds behind this total."}
-                            </span>
-                        </button>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            {[
-                                {
-                                    label: "Programs",
-                                    value: model.activeProgramCount,
-                                    tab: "programs" as const,
-                                },
-                                {
-                                    label: "Rooms",
-                                    value: model.activeRoomCount,
-                                    tab: "rooms" as const,
-                                },
-                            ].map((item) => (
-                                <button
-                                    key={item.label}
-                                    type="button"
-                                    className="rounded-lg border border-alloy-forge/10 p-3 text-left hover:bg-alloy-stone/10"
-                                    onClick={() => navigate(item.tab)}
-                                >
-                                    <span className="text-lg font-medium text-alloy-midnight">{item.value}</span>
-                                    <span className="config-typo-sublabel ml-2">{item.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </WorkspaceCard>
-                </section>
+    const addRoom = useCallback(() => {
+        if (!selectedSite || !canMutate) return;
+        setActiveTab("rooms");
+        setEditingSite(false);
+        setCreatingProgram(false);
+        setCreatingSchedule(false);
+        setCreatingRoom(true);
+        setError(null);
+        router.replace(locationWorkspaceHref(selectedSite.id, "rooms"));
+    }, [canMutate, router, selectedSite, setError]);
 
-                <section className="space-y-3" data-testid="locations-overview-operations">
-                    <div>
-                        <p className="config-typo-meta uppercase tracking-[0.16em]">Operations</p>
-                        <h2 className="mt-1 text-base font-medium text-alloy-midnight">How this location runs</h2>
-                    </div>
-                    <div className="process-config-setup-card divide-y divide-alloy-forge/10 px-4">
-                        {[
-                            {
-                                label: "Schedule",
-                                value:
-                                    selectedSchedules.length > 0 ?
-                                        formatWeekdaySelection(selectedSchedules[0]!.weekdays)
-                                    :   "Not set up yet",
-                                tab: "schedule" as const,
-                            },
-                            {
-                                label: "Tours",
-                                value: "Availability and booking rules",
-                                tab: "tours" as const,
-                            },
-                            {
-                                label: "Placement",
-                                value: `${model.activeRoomCount} active rooms`,
-                                tab: "placement" as const,
-                            },
-                            {
-                                label: "Access",
-                                value: "Team and location permissions",
-                                tab: "access" as const,
-                            },
-                        ].map((item) => (
-                            <button
-                                key={item.label}
-                                type="button"
-                                className="flex w-full items-center justify-between gap-4 py-3 text-left"
-                                onClick={() => navigate(item.tab)}
-                            >
-                                <span className="text-sm font-medium text-alloy-midnight/80">{item.label}</span>
-                                <span className="config-typo-sublabel text-right">{item.value} →</span>
-                            </button>
-                        ))}
-                    </div>
-                </section>
-            </div>
-        :   null;
+    const addProgram = useCallback(() => {
+        if (!selectedSite || !canMutate) return;
+        setActiveTab("programs");
+        setEditingSite(false);
+        setCreatingRoom(false);
+        setCreatingSchedule(false);
+        setCreatingProgram(true);
+        setError(null);
+        router.replace(locationWorkspaceHref(selectedSite.id, "programs"));
+    }, [canMutate, router, selectedSite, setError]);
+
+    const firstRoomNeedingCapacityId = useMemo(() => {
+        const match = selectedRooms.find((room) => !readLocationMetadataPresentation(room.metadata).capacity);
+        return match?.id ?? null;
+    }, [selectedRooms]);
+
+    const operatingSnapshot = useMemo(
+        () => ({
+            scheduleName: selectedSchedules[0]?.label?.trim() || null,
+            hoursLabel:
+                selectedSchedules.length > 0 ? formatWeekdaySelection(selectedSchedules[0]!.weekdays) : null,
+            programNames: selectedPrograms
+                .filter((program) => program.is_active !== false)
+                .map((program) => program.label.trim())
+                .filter(Boolean),
+            activeRoomCount: model?.activeRoomCount ?? 0,
+            configuredCapacity: model?.configuredCapacity ?? null,
+        }),
+        [model?.activeRoomCount, model?.configuredCapacity, selectedPrograms, selectedSchedules],
+    );
+
+    const railActions = useMemo(
+        () =>
+            buildLocationsRailActions({
+                activeTab,
+                canMutate,
+                model,
+                selectedSite: Boolean(selectedSite),
+                scheduleCount: selectedSchedules.length,
+                roomCount: selectedRooms.length,
+                programCount: selectedPrograms.length,
+                hasSelectedProgram: Boolean(effectiveProgramId),
+                hasSelectedRoom: Boolean(effectiveRoomId),
+                roomsNeedingCapacity: model?.roomsNeedingCapacity ?? 0,
+                firstRoomNeedingCapacityId,
+                onAddLocation: beginAddLocation,
+                onEditLocation: () => setEditingSite(true),
+                onAddRoom: addRoom,
+                onAddProgram: addProgram,
+                onNavigate: navigate,
+                onCreateSchedule: () => {
+                    if (!canMutate) return;
+                    setCreatingSchedule(true);
+                },
+            }),
+        [
+            activeTab,
+            addProgram,
+            addRoom,
+            beginAddLocation,
+            canMutate,
+            effectiveProgramId,
+            effectiveRoomId,
+            firstRoomNeedingCapacityId,
+            model,
+            navigate,
+            selectedPrograms.length,
+            selectedRooms.length,
+            selectedSchedules.length,
+            selectedSite,
+        ],
+    );
+
+    const fleetById = useMemo(() => {
+        const map = new Map(fleet.locations.map((location) => [location.id, location]));
+        return map;
+    }, [fleet.locations]);
+
+    const scheduleSummary =
+        selectedSchedules.length > 0 ?
+            formatWeekdaySelection(selectedSchedules[0]!.weekdays)
+        :   "Not set up yet";
 
     const tabBody = (() => {
         if (!selectedSite) return null;
@@ -478,90 +416,153 @@ export default function LocationsConfigurationPage({
                 </div>
             );
         }
-        if (activeTab === "overview") return overview;
+        if (activeTab === "overview" && model) {
+            return (
+                <div className="space-y-3">
+                    <LocationOverviewSurface
+                        model={model}
+                        scheduleSummary={scheduleSummary}
+                        operatingSnapshot={operatingSnapshot}
+                        onResolveAttention={showSetupDestination}
+                        onSelectReadinessArea={showSetupDestination}
+                        onOpenTab={navigate}
+                    />
+                </div>
+            );
+        }
         if (activeTab === "programs") {
             return (
-                <div className="space-y-2" data-testid="locations-programs">
-                    {selectedPrograms.length > 0 ?
-                        <div className="space-y-2">
-                            {selectedPrograms.map((program) => (
-                                <LocationProgramDetailPanel
-                                    key={program.id}
-                                    program={program}
-                                    summary={programSummaries.find((summary) => summary.id === program.id) ?? null}
-                                    siteLabel={model?.displayName ?? ""}
-                                    canMutate={canMutate}
-                                    onSave={patchProgramCategory}
-                                />
-                            ))}
-                        </div>
-                    :   <ConfigurationEmptyState
-                            title="No programs offered yet"
-                            description="Offer a program to connect rooms, age ranges, and capacity at this location."
-                        />
+                <LocationProgramDetailPanel
+                    program={selectedProgram}
+                    summary={programSummaries.find((summary) => summary.id === effectiveProgramId) ?? null}
+                    summaries={programSummaries}
+                    siteLabel={model?.displayName ?? ""}
+                    locationHasSchedule={selectedSchedules.length > 0}
+                    scheduleSummary={scheduleSummary}
+                    canMutate={canMutate}
+                    onSave={patchProgramCategory}
+                    programs={selectedPrograms}
+                    selectedProgramId={creatingProgram ? null : effectiveProgramId}
+                    onSelectProgram={(programId) => {
+                        setSelectedProgramId(programId);
+                        navigate("programs", programId);
+                    }}
+                    onAddProgram={canMutate ? addProgram : undefined}
+                    ageUnitSelectOptions={ageUnitSelectOptions}
+                    createDetail={
+                        creatingProgram ?
+                            <LocationProgramCreatePanel
+                                siteLabel={model?.displayName ?? ""}
+                                ageUnitSelectOptions={ageUnitSelectOptions}
+                                scheduleSummary={scheduleSummary}
+                                onCancel={() => setCreatingProgram(false)}
+                                onCreate={async (input) => {
+                                    const newId = await createProgramCategory(selectedSite.id, input);
+                                    setCreatingProgram(false);
+                                    setSelectedProgramId(newId);
+                                    navigate("programs", newId);
+                                }}
+                            />
+                        :   undefined
                     }
-                </div>
+                />
             );
         }
         if (activeTab === "rooms") {
             return (
-                <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]" data-testid="locations-rooms">
-                    <ConfigurationQueue title="Rooms" summary="Capacity and ratios live on each room">
-                        {selectedRooms.length > 0 ?
-                            selectedRooms.map((room) => (
-                                <ConfigurationQueueItem
-                                    key={room.id}
-                                    active={room.id === effectiveRoomId}
-                                    title={String(room.label ?? "").trim() || "Untitled room"}
-                                    subtitle={
-                                        readLocationMetadataString(room.metadata, "capacity") ?
-                                            `${readLocationMetadataString(room.metadata, "capacity")} children`
-                                        :   "Needs capacity setup"
-                                    }
-                                    onClick={() => {
-                                        setSelectedRoomId(room.id);
-                                        navigate("rooms", room.id);
-                                    }}
-                                    testId={`locations-room-${room.id}`}
-                                />
-                            ))
-                        :   <p className="config-typo-sublabel">No rooms yet. Add a room to begin capacity setup.</p>}
-                    </ConfigurationQueue>
-                    <LocationRoomDetailPanel
-                        room={selectedRoom}
-                        siteLabel={model?.displayName ?? ""}
-                        programOptions={programOptionsForSite(selectedSite.id)}
-                        ageUnitSelectOptions={ageUnitSelectOptions}
-                        canMutate={canMutate}
-                        onSave={patchLocation}
-                    />
-                </div>
+                <LocationRoomDetailPanel
+                    room={selectedRoom}
+                    siteLabel={model?.displayName ?? ""}
+                    programOptions={programOptionsForSite(selectedSite.id)}
+                    ageUnitSelectOptions={ageUnitSelectOptions}
+                    canMutate={canMutate}
+                    onSave={patchLocation}
+                    rooms={selectedRooms}
+                    selectedRoomId={creatingRoom ? null : effectiveRoomId}
+                    onSelectRoom={(roomId) => {
+                        setSelectedRoomId(roomId);
+                        navigate("rooms", roomId);
+                    }}
+                    onAddRoom={canMutate ? addRoom : undefined}
+                    locationHasSchedule={selectedSchedules.length > 0}
+                    scheduleSummary={scheduleSummary}
+                    createDetail={
+                        creatingRoom ?
+                            <LocationRoomCreatePanel
+                                siteLabel={model?.displayName ?? ""}
+                                programOptions={programOptionsForSite(selectedSite.id)}
+                                ageUnitSelectOptions={ageUnitSelectOptions}
+                                onCancel={() => setCreatingRoom(false)}
+                                onCreate={async (input) => {
+                                    const newId = await createRoomUnit(selectedSite.id, input);
+                                    setCreatingRoom(false);
+                                    setSelectedRoomId(newId);
+                                    navigate("rooms", newId);
+                                }}
+                            />
+                        :   undefined
+                    }
+                />
             );
         }
         if (activeTab === "schedule") {
             return (
                 <div className="space-y-3" data-testid="locations-schedule">
-                    <section className="process-config-setup-card p-4" data-testid="locations-schedule-patterns">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                                <h3 className="config-typo-workspace-title">Schedule Patterns</h3>
-                                <p className="config-typo-sublabel mt-1">
-                                    Reusable weekly attendance patterns offered by this location.
-                                </p>
-                            </div>
-                            {canMutate && !creatingSchedule ?
-                                <button
-                                    type="button"
-                                    className="rounded-md border border-[#00a283]/25 px-3 py-2 text-xs font-semibold text-[#007d68] hover:bg-[#00a283]/5"
+                    <ConfigChildObjectMasterDetail
+                        listTitle="Schedule patterns"
+                        listSummary={`${selectedSchedules.length} ${
+                            selectedSchedules.length === 1 ? "pattern" : "patterns"
+                        }`}
+                        testId="locations-schedule-patterns"
+                        listActions={
+                            canMutate ?
+                                <ConfigurationPrimaryButton
+                                    className="px-2 py-1 text-[11px]"
                                     onClick={() => setCreatingSchedule(true)}
                                     data-testid="locations-schedule-add"
                                 >
-                                    + Add Schedule Pattern
-                                </button>
-                            :   null}
-                        </div>
-                        <div className="mt-4">
-                            {creatingSchedule ?
+                                    + Add pattern
+                                </ConfigurationPrimaryButton>
+                            :   null
+                        }
+                        list={
+                            selectedSchedules.length > 0 ?
+                                selectedSchedules.map((schedule) => {
+                                    const selected = schedule.id === effectiveScheduleId && !creatingSchedule;
+                                    return (
+                                        <ConfigurationQueueItem
+                                            key={schedule.id}
+                                            variant="rail"
+                                            active={selected}
+                                            muted={!schedule.is_active}
+                                            title={schedule.label}
+                                            subtitle={`${schedule.is_active ? "Active" : "Inactive"} · ${formatWeekdaySelection(schedule.weekdays)}`}
+                                            leading={
+                                                <span
+                                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+                                                        !schedule.is_active ?
+                                                            "bg-alloy-midnight/[0.04] text-alloy-midnight/35"
+                                                        : selected ?
+                                                            "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine"
+                                                        :   "bg-alloy-midnight/[0.04] text-alloy-bend-pine"
+                                                    }`}
+                                                >
+                                                    <CalendarDays className="h-4 w-4" strokeWidth={2} />
+                                                </span>
+                                            }
+                                            onClick={() => {
+                                                setCreatingSchedule(false);
+                                                setSelectedScheduleId(schedule.id);
+                                                navigate("schedule", schedule.id);
+                                            }}
+                                            testId={`locations-schedule-${schedule.id}`}
+                                        />
+                                    );
+                                })
+                            :   <p className="config-typo-sublabel">No recurring patterns yet.</p>
+                        }
+                        detail={
+                            creatingSchedule ?
                                 <LocationSchedulePatternCreatePanel
                                     locationId={selectedSite.id}
                                     onCancel={() => setCreatingSchedule(false)}
@@ -572,111 +573,73 @@ export default function LocationsConfigurationPage({
                                         navigate("schedule", created.id);
                                     }}
                                 />
-                            :   <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
-                                    <ConfigurationQueue title="Schedule patterns">
-                                        {selectedSchedules.length > 0 ?
-                                            selectedSchedules.map((schedule) => (
-                                                <ConfigurationQueueItem
-                                                    key={schedule.id}
-                                                    active={schedule.id === effectiveScheduleId}
-                                                    title={schedule.label}
-                                                    subtitle={formatWeekdaySelection(schedule.weekdays)}
-                                                    onClick={() => {
-                                                        setSelectedScheduleId(schedule.id);
-                                                        navigate("schedule", schedule.id);
-                                                    }}
-                                                    testId={`locations-schedule-${schedule.id}`}
-                                                />
-                                            ))
-                                        :   <p className="config-typo-sublabel">Set weekly hours to get started.</p>}
-                                    </ConfigurationQueue>
-                                    <LocationScheduleTemplateDetailPanel
-                                        pattern={selectedSchedule}
-                                        siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
-                                        canMutate={canMutate}
-                                        onUpdated={(row) => {
-                                            setSchedulePatterns((prev) =>
-                                                prev.map((p) => (p.id === row.id ? row : p)),
-                                            );
-                                        }}
-                                        onError={setError}
-                                    />
-                                </div>
-                            }
-                        </div>
-                    </section>
+                            :   <LocationScheduleTemplateDetailPanel
+                                    pattern={selectedSchedule}
+                                    siteLabel={siteLabelById.get(selectedSite.id) ?? model?.displayName ?? ""}
+                                    canMutate={canMutate}
+                                    onUpdated={(row) => {
+                                        setSchedulePatterns((prev) =>
+                                            prev.map((pattern) => (pattern.id === row.id ? row : pattern)),
+                                        );
+                                    }}
+                                    onError={setError}
+                                />
+                        }
+                    />
 
                     <section className="process-config-setup-card p-4" data-testid="locations-schedule-closures">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex items-start justify-between gap-3">
                             <div>
-                                <h3 className="config-typo-workspace-title">Closures / Holidays</h3>
+                                <h3 className="config-typo-workspace-title">Closures and exceptions</h3>
                                 <p className="config-typo-sublabel mt-1">
-                                    Full-day closures and holiday exceptions belong to this location.
+                                    Date-specific changes stay distinct from recurring weekly patterns.
                                 </p>
                             </div>
-                            {canMutate ?
-                                <button
-                                    type="button"
-                                    className="rounded-md border border-alloy-forge/15 px-3 py-2 text-xs font-semibold text-alloy-midnight/45"
-                                    disabled
-                                    title="Date-specific closure authoring is not available in the current schedule substrate."
-                                    data-testid="locations-closure-add"
-                                >
-                                    + Add Closure
-                                </button>
-                            :   null}
+                            <ConfigurationSecondaryButton
+                                disabled
+                                title="Closure records are not available in the current schedule provider."
+                                data-testid="locations-schedule-add-closure"
+                            >
+                                Add closure
+                            </ConfigurationSecondaryButton>
                         </div>
-                        <p className="config-typo-sublabel mt-4">
-                            No date-specific closure records are available in the current schedule configuration.
-                        </p>
+                        <div className="mt-4 rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.035] px-3 py-3">
+                            <p className="text-sm font-medium text-alloy-midnight">No closure provider available</p>
+                            <p className="config-typo-sublabel mt-1">
+                                Add Closure is unavailable until date-specific exceptions have an authoritative
+                                persistence source.
+                            </p>
+                        </div>
                     </section>
                 </div>
             );
         }
         if (activeTab === "tours") {
-            return (
-                <LocationToursPanel
-                    key={selectedSite.id}
-                    locationId={selectedSite.id}
-                    locationLabel={model?.displayName ?? ""}
-                />
-            );
+            return null;
         }
         if (activeTab === "placement") {
-            return (
-                <LocationPlacementPanel
-                    key={selectedSite.id}
-                    rooms={selectedRooms}
-                    onReviewRooms={() => navigate("rooms")}
-                    canMutate={canMutate}
-                />
-            );
+            return null;
         }
-        return <LocationAccessPanel key={selectedSite.id} locationId={selectedSite.id} />;
+        return (
+            <LocationAccessPanel
+                key={selectedSite.id}
+                locationId={selectedSite.id}
+                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
+            />
+        );
     })();
 
     return (
         <div className="process-config-page min-h-0 flex-1" data-testid="locations-configuration-page">
-            <ConfigurationContext
-                title="Locations"
-                subtitle={LOCATIONS_SUBTITLE}
-                actions={
-                    canMutate && !creatingSite ?
-                        <ConfigurationPrimaryButton
-                            className="config-primary-btn--sm"
-                            data-testid="locations-add-location"
-                            onClick={() => {
-                                setCreatingSite(true);
-                                setEditingSite(false);
-                                setError(null);
-                            }}
-                        >
-                            Add Location
-                        </ConfigurationPrimaryButton>
-                    :   null
-                }
-                testId="locations-configuration-context"
-            />
+            <LocationsCommandRailActions actions={railActions} />
+
+            {!selectedSite && !initialLocationId ?
+                <ConfigurationContext
+                    title="Locations"
+                    titleIcon={<MapPin className="h-5 w-5" strokeWidth={2} />}
+                    testId="locations-configuration-context"
+                />
+            :   null}
 
             {error ?
                 <p
@@ -697,188 +660,204 @@ export default function LocationsConfigurationPage({
                 : creatingSite ?
                     <LocationSiteCreatePanel
                         canMutate={canMutate}
-                        onCancel={() => setCreatingSite(false)}
+                        onCancel={() => {
+                            setCreatingSite(false);
+                            if (!selectedSite) router.replace(locationsFleetHref());
+                        }}
                         onCreate={async (input) => {
                             const newId = await createSiteLocation(input);
                             setCreatingSite(false);
                             setSelectedId(newId);
                             setActiveTab("overview");
-                            router.replace(locationWorkspaceHref(newId));
+                            router.replace(canonicalLocationSettingsHref(newId));
                             return newId;
                         }}
                     />
-                : !selectedSite ?
-                    <ConfigurationEmptyState
-                        testId="locations-site-workspace-empty"
-                        title="No location selected"
-                        description="Choose a location or add one to begin."
-                    />
-                :   <div className="grid min-h-full gap-4 xl:grid-cols-[15rem_minmax(0,1fr)_14rem]">
-                        <aside className="hidden xl:block" aria-label="Location selector">
-                            <ConfigurationQueue
-                                title="Locations"
-                                summary={`${visibleSites.length} shown`}
-                                actions={
-                                    <label className="flex items-center gap-1.5 text-[11px] text-alloy-midnight/55">
-                                        <input
-                                            type="checkbox"
-                                            checked={showInactive}
-                                            onChange={(event) => setShowInactive(event.target.checked)}
-                                        />
-                                        Inactive
+                :   <div
+                        className={`grid items-start gap-4 pb-4 ${
+                            selectedSite ? "xl:grid-cols-[20.5rem_minmax(0,1fr)]" : ""
+                        }`}
+                    >
+                        {selectedSite ?
+                            <LocationsObjectSelector
+                                sites={visibleSites}
+                                selectedId={selectedId}
+                                showInactive={showInactive}
+                                onShowInactiveChange={setShowInactive}
+                                search={search}
+                                onSearchChange={setSearch}
+                                canMutate={canMutate}
+                                onAddLocation={beginAddLocation}
+                                fleetById={fleetById}
+                                onSelect={(locationId) => {
+                                    setSelectedId(locationId);
+                                    setEditingSite(false);
+                                    router.replace(locationWorkspaceHref(locationId, activeTab));
+                                }}
+                            />
+                        :   null}
+
+                        <main
+                            className="min-w-0 space-y-3"
+                            data-testid={selectedSite ? "locations-selected-location" : "locations-fleet-composition"}
+                        >
+                            {selectedSite ?
+                                <div className="xl:hidden">
+                                    <label className="config-typo-field-label" htmlFor="locations-mobile-selector">
+                                        Location
                                     </label>
-                                }
-                                testId="locations-object-selector"
-                            >
-                                <label className="sr-only" htmlFor="locations-search">
-                                    Search locations
-                                </label>
-                                <input
-                                    id="locations-search"
-                                    type="search"
-                                    value={search}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                    placeholder="Search locations"
-                                    className="config-runtime-input"
-                                />
-                                {visibleSites.map((site) => (
-                                    <ConfigurationQueueItem
-                                        key={site.id}
-                                        active={site.id === selectedId}
-                                        title={String(site.label ?? "").trim() || "Untitled location"}
-                                        subtitle={
-                                            site.is_active === false ?
-                                                "Inactive"
-                                            :   [site.city, site.state].filter(Boolean).join(", ") || "Active"
-                                        }
-                                        onClick={() => {
-                                            setSelectedId(site.id);
+                                    <select
+                                        id="locations-mobile-selector"
+                                        className="config-runtime-select mt-1"
+                                        value={selectedSite.id}
+                                        onChange={(event) => {
+                                            setSelectedId(event.target.value);
                                             setEditingSite(false);
-                                            router.replace(locationWorkspaceHref(site.id, activeTab));
+                                            router.replace(locationWorkspaceHref(event.target.value, activeTab));
                                         }}
-                                        testId={`locations-location-${site.id}`}
-                                    />
-                                ))}
-                            </ConfigurationQueue>
-                        </aside>
-
-                        <main className="min-w-0" data-testid="locations-selected-location">
-                            <div className="mb-4 xl:hidden">
-                                <label className="config-typo-field-label" htmlFor="locations-mobile-selector">
-                                    Location
-                                </label>
-                                <select
-                                    id="locations-mobile-selector"
-                                    className="config-runtime-select mt-1"
-                                    value={selectedSite.id}
-                                    onChange={(event) => {
-                                        setSelectedId(event.target.value);
-                                        setEditingSite(false);
-                                        router.replace(locationWorkspaceHref(event.target.value, activeTab));
-                                    }}
-                                >
-                                    {siteRows.map((site) => (
-                                        <option key={site.id} value={site.id}>
-                                            {String(site.label ?? "").trim() || "Untitled location"}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <header className="mb-4 border-b border-alloy-forge/10 pb-3">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <h1 className="text-2xl font-semibold tracking-tight text-alloy-midnight">
-                                                {model?.displayName}
-                                            </h1>
-                                            <span
-                                                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                                                    selectedSite.is_active === false ?
-                                                        "border-alloy-forge/15 bg-alloy-stone/15 text-alloy-midnight/55"
-                                                    :   "border-[#00a283]/25 bg-[#00a283]/10 text-[#007d68]"
-                                                }`}
-                                            >
-                                                {selectedSite.is_active === false ? "○ Inactive" : "● Active"}
-                                            </span>
-                                        </div>
-                                        <p className="config-typo-sublabel mt-1">
-                                            {model?.address ?? "Address not set up yet"}
-                                            {" · "}
-                                            {model?.phone ?? "Phone not set up yet"}
-                                            {" · "}
-                                            {model?.timezone ?? "Time zone not set up yet"}
-                                        </p>
-                                    </div>
-                                    {canMutate ?
-                                        <button
-                                            type="button"
-                                            className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
-                                            onClick={() => setEditingSite(true)}
-                                            data-testid="locations-edit-location"
-                                        >
-                                            Edit Location
-                                        </button>
-                                    :   null}
-                                </div>
-                            </header>
-
-                            <div
-                                className="mb-4 flex overflow-x-auto border-b border-alloy-forge/10"
-                                role="tablist"
-                                aria-label="Location settings"
-                            >
-                                {LOCATION_WORKSPACE_TABS.map((tab) => (
-                                    <button
-                                        key={tab.key}
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={activeTab === tab.key && !editingSite}
-                                        className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold ${
-                                            activeTab === tab.key && !editingSite ?
-                                                "border-[#00a283] text-[#007d68]"
-                                            :   "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
-                                        }`}
-                                        onClick={() => navigate(tab.key)}
-                                        data-testid={`locations-tab-${tab.key}`}
                                     >
-                                        {tab.label}
-                                    </button>
-                                ))}
-                            </div>
-                            {tabBody}
-                        </main>
-
-                        <aside className="space-y-4" aria-label="Location actions and setup">
-                            <WorkspaceCard title="Quick actions">
-                                <div className="space-y-1">
-                                    {[
-                                        [
-                                            model?.roomsNeedingCapacity || model?.configuredCapacity == null ?
-                                                "Configure Capacity"
-                                            :   "Review Capacity",
-                                            "rooms",
-                                        ],
-                                        [model?.timezone ? "Edit Location Details" : "Resolve Time Zone", "general"],
-                                        ["Create Tour", "tours"],
-                                    ].map(([label, tab]) => (
-                                        <button
-                                            key={`${tab}-${label}`}
-                                            type="button"
-                                            className="block w-full rounded-md px-2 py-2 text-left text-xs font-medium text-[#007d68] hover:bg-[#00a283]/5"
-                                            onClick={() =>
-                                                showSetupDestination(tab as LocationWorkspaceTab | "general")
-                                            }
-                                        >
-                                            {label} →
-                                        </button>
-                                    ))}
+                                        {siteRows.map((site) => (
+                                            <option key={site.id} value={site.id}>
+                                                {String(site.label ?? "").trim() || "Untitled location"}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
-                            </WorkspaceCard>
-                        </aside>
+                            :   null}
+
+                            {!selectedSite ?
+                                <ConfigScopeContextBar
+                                    mode="organization"
+                                    organizationLabel="Organization"
+                                    objectLabel="Location"
+                                    ownershipHint="All locations"
+                                    onModeChange={(mode) => {
+                                        if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
+                                    }}
+                                />
+                            :   null}
+
+                            {!selectedSite ?
+                                <LocationsFleetLanding
+                                    fleet={fleet}
+                                    showInactive={showInactive}
+                                    onShowInactiveChange={setShowInactive}
+                                    search={search}
+                                    onSearchChange={setSearch}
+                                    onOpenLocation={(locationId) => openLocation(locationId)}
+                                    onAddLocation={beginAddLocation}
+                                    canMutate={canMutate}
+                                />
+                            :   <>
+                                    <section
+                                        className="process-config-setup-card px-5 pb-0 pt-4"
+                                        data-testid="locations-hero"
+                                    >
+                                        <ConfigObjectHeader
+                                            size="hero"
+                                            name={model?.displayName ?? "Location"}
+                                            status={{
+                                                label: selectedSite.is_active === false ? "Inactive" : "Active",
+                                                tone: selectedSite.is_active === false ? "inactive" : "active",
+                                            }}
+                                            breadcrumb={
+                                                <nav
+                                                    className="flex flex-wrap items-center gap-1.5 text-[11px] text-alloy-midnight/45"
+                                                    aria-label="Location ownership"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="font-medium underline-offset-2 hover:text-alloy-midnight/70 hover:underline"
+                                                        onClick={returnToFleet}
+                                                        data-testid="locations-breadcrumb-fleet"
+                                                    >
+                                                        Locations
+                                                    </button>
+                                                    <span aria-hidden="true">›</span>
+                                                    <span className="font-semibold text-alloy-midnight/65">
+                                                        {model?.displayName ?? "Location"}
+                                                    </span>
+                                                </nav>
+                                            }
+                                            factsContent={
+                                                <LocationIdentityFactsRow
+                                                    city={selectedSite.city}
+                                                    state={selectedSite.state}
+                                                    timezoneIana={model?.timezone}
+                                                />
+                                            }
+                                            actions={
+                                                canMutate && !editingSite ?
+                                                    <button
+                                                        type="button"
+                                                        className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                                        onClick={() => setEditingSite(true)}
+                                                        data-testid="locations-edit-location"
+                                                    >
+                                                        Edit location
+                                                    </button>
+                                                :   undefined
+                                            }
+                                            testId="locations-object-header"
+                                        />
+
+                                        <div
+                                            className="mt-3.5 flex overflow-x-auto border-t border-alloy-stone/25"
+                                            role="tablist"
+                                            aria-label="Location settings"
+                                        >
+                                            {LOCATION_WORKSPACE_TABS.map((tab) => (
+                                                <button
+                                                    key={tab.key}
+                                                    type="button"
+                                                    role="tab"
+                                                    aria-selected={activeTab === tab.key && !editingSite}
+                                                    className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold ${
+                                                        activeTab === tab.key && !editingSite ?
+                                                            "border-[#00a283] text-[#007d68]"
+                                                        :   "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
+                                                    }`}
+                                                    onClick={() => navigate(tab.key)}
+                                                    data-testid={`locations-tab-${tab.key}`}
+                                                >
+                                                    {tab.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </section>
+
+                                    {tabBody}
+                                    {toursKeepAlive && !editingSite ?
+                                        <div
+                                            className={activeTab === "tours" ? undefined : "hidden"}
+                                            data-testid="locations-tours-keepalive"
+                                        >
+                                            <LocationToursPanel
+                                                locationId={selectedSite.id}
+                                                locationLabel={model?.displayName ?? ""}
+                                                onMutationCommitted={() => refreshOwnedConcernSetup(selectedSite.id)}
+                                            />
+                                        </div>
+                                    :   null}
+                                    {placementKeepAlive && !editingSite ?
+                                        <div
+                                            className={activeTab === "placement" ? undefined : "hidden"}
+                                            data-testid="locations-placement-keepalive"
+                                        >
+                                            <LocationPlacementPanel
+                                                rooms={selectedRooms}
+                                                onReviewRooms={() => navigate("rooms")}
+                                                canMutate={canMutate}
+                                            />
+                                        </div>
+                                    :   null}
+                                </>
+                            }
+                        </main>
                     </div>
                 }
             </ConfigurationShell>
+
         </div>
     );
 }

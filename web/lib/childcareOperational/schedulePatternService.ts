@@ -21,6 +21,7 @@ export type CreateSchedulePatternInput = {
     scheduleTypeKey: string;
     weekdays: number[];
     sortOrder?: number;
+    isActive?: boolean;
     metadata?: Record<string, unknown>;
 };
 
@@ -119,7 +120,7 @@ export async function createSchedulePattern(
         schedule_type_key: scheduleTypeKey,
         weekdays: input.weekdays,
         sort_order: input.sortOrder ?? 100,
-        is_active: true,
+        is_active: input.isActive ?? true,
         metadata: input.metadata ?? {},
     };
 

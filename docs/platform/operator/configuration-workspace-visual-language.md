@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-14
+last_reviewed: 2026-07-16
 supersedes: []
 ---
 
@@ -30,7 +30,7 @@ The feeling has three sources, and every visual decision serves one of them:
 
 Configuration uses the **Alloy Configuration-Platform** visual system (the `config-*` token family), not the marketing palette and not the legacy Alloy-Blue admin kit.
 
-- **Canvas:** white. Configuration is a calm workspace, not a dashboard.
+- **Workspace canvas:** a quiet Stone field. White is reserved for meaningful object-owned regions so hierarchy comes from composition rather than a wall of cards.
 - **The single accent is Bend Pine `#00A283`** — used for the active tab, the selected object, positive/available state, and the primary action. It is the *only* accent. (Note: `alloy-pine` is a slate token, not green; the green is `alloy-bend-pine`.)
 - **Ink:** `alloy-midnight` / `alloy-forge` for text, stepped by opacity (`/85`, `/55`, `/45`) to build hierarchy without new colors.
 - **Warning/attention:** `alloy-ember` for Fix-grade items and destructive intent, sparingly. Blue (`alloy-blue`) for informational/Improve and scheduled state.
@@ -47,6 +47,15 @@ White space is the primary tool of calm. Configuration surfaces are **less dense
 - Section rhythm is generous: cards separated by `space-y-4`, content within a card by `space-y-3`.
 - A card breathes: `p-4`, `rounded-xl`, a hairline border (`~rgba(89,103,139,0.14)` / `border-alloy-forge/10`), a whisper shadow.
 - A healthy object's Overview should have **visible empty space**. If a configuration screen feels full, it is doing too much.
+
+## Workspace canvas, regions, and objects
+
+The Stone workspace canvas is the field on which the selected configuration object is understood and operated. White regions sit on that field only when they carry a coherent operator answer: identity, operating picture, readiness, attention, an owned capability, or a focused editor.
+
+- A **Region** groups one answer or one operational concern. It may be white, but it is not automatically a card and does not imply independent navigation.
+- An **Object** has identity, status, selection, view/edit state, and usually a URL-addressable workspace. Do not make a region look like a selectable object.
+- Prefer one composed white region with hairline rows over nested white cards.
+- The selected object owns the detail workspace. Supporting lists and rails remain visually subordinate.
 
 ## Typography
 
@@ -72,13 +81,13 @@ Cards communicate **state, not schema** (premise 3 of `alloy-visual-language.md`
 - **Summary card** — a plain-language headline ("Holds 11 children"), the *why* as a business phrase, and quiet component detail beneath. One "Manage ▸" affordance.
 - **List card** — ranked or ordered rows with a per-row action (Attention, closures, activity, programs), divided by hairlines, not boxed individually.
 - **Editor card** — inline fields plus a live consequence sentence plus one save.
-- **Progress card** — a donut and a per-area checklist.
+- **Readiness region** — an explained percentage/progress bar plus the authoritative per-area states that reconcile it.
 
 Sections are **structured rows inside one card**, not a mosaic of separate cards. The doctrine is: prefer `border-b` rows within a section over a grid of boxes. A configuration workspace is a small number of calm sections, not a wall of tiles.
 
 ## Sidebar & object list behavior
 
-The object list (left rail) is a **persistent selector**, not a page. Rows carry the object's identity (name, sub-label, status) and a selected state that is unmistakable: a soft Bend-Pine wash plus a 3px inset left bar (`shadow-[inset_3px_0_0_#00a283]`). Selection is the single most important state in the system — the operator must always know which object they are operating. On drilling into a nested object, the list swaps to the child's siblings; the selected state moves with the drill.
+The object list (left rail) is a **persistent selector**, not a page. Rows carry the object's identity (name, sub-label, status) and a selected state that is unmistakable: the canonical queue-row Bend Pine wash, border, and inset rail. Active identity glyphs use Bend Pine without inventing pale decorative tiles; inactive identities are muted. Selection is the single most important state in the system — the operator must always know which object they are operating. On drilling into a nested object, the list swaps to the child's siblings; the selected state moves with the drill.
 
 ## Navigation (tabs & breadcrumb)
 
@@ -94,7 +103,7 @@ The object list (left rail) is a **persistent selector**, not a page. Rows carry
 ## Progress & attention (the two-status visuals)
 
 - **Attention** is a list card in the object body — the operational health signal. Fix items lead, each with a one-tap "View ▸." Empty state is a single calm "Everything looks good ✓" line. No timestamp, no global "Healthy" badge.
-- **Setup Progress** is a rail card — a Bend-Pine conic donut with a per-area checklist. Prominent while incomplete; **collapses to a single "Setup complete ✓" line at 100%**. The two are visually distinct (body list vs rail donut) so the operator never confuses "is it working?" with "am I done?".
+- **Operational Readiness** is a supporting body region beside the operational glance. It shows a progress bar, assessed/not-assessed reconciliation, and every authoritative dimension as Complete, Needs setup, Not assessed, or Not applicable. It never competes with Attention or hide its basis behind an unexplained percentage.
 
 ## Editing affordances
 
@@ -105,7 +114,7 @@ The object list (left rail) is a **persistent selector**, not a page. Rows carry
 
 ## Interaction rhythm
 
-- **Optimistic and immediate.** A save reflects at once; the consequence re-resolves; a toast confirms. The operator is never left watching a spinner where a number should be.
+- **Immediate, but authoritative.** A save may keep valid displayed data visible, but success is not declared and an editor is not closed until the authoritative mutation response contains the submitted patch. The local read model, summaries, and readiness then update from that confirmed row; a hard refresh must reproduce the same value.
 - **Motion preserves context** (premise 6): transitions are subtle (100–250ms ease), used to keep the operator oriented across tab and object switches — never decorative, and honoring `prefers-reduced-motion`.
 - **Calm under pressure:** even in error (a guardrail hit), the surface stays composed — an inline, kind message beside the field, not a red modal.
 

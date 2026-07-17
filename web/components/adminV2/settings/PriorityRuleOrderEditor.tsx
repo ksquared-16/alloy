@@ -207,7 +207,7 @@ export function PriorityRuleOrderEditor({
                                         </span>
                                         <button
                                             type="button"
-                                            className="shrink-0 text-xs font-medium text-[#007d68] disabled:opacity-40"
+                                            className="shrink-0 text-xs font-medium text-alloy-bend-pine disabled:opacity-40"
                                             disabled={disabled}
                                             onClick={() => setFactorActive(bucketKey, true)}
                                             aria-label={`Add ${label} to ranking`}

@@ -18,6 +18,7 @@ import {
 } from "@/lib/childcareOperational/fetchOperationalEnrollment";
 import { mergeLocationMetadataField } from "@/lib/adminV2/locationsHierarchyTablePresentation";
 import type { LocationSiteCreateInput } from "@/components/adminV2/settings/locations/LocationSiteCreatePanel";
+import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
 
 export type LocationConfigSection =
     | "locations"
@@ -33,6 +34,18 @@ export const LOCATION_CONFIG_SECTIONS: { key: LocationConfigSection; label: stri
     { key: "schedule_templates", label: "Schedule Templates" },
     { key: "operational_rules", label: "Operational Rules" },
 ];
+
+export type LocationRoomCreateInput = {
+    label: string;
+    is_active: boolean;
+    metadata: Record<string, unknown>;
+};
+
+export type LocationProgramCreateInput = {
+    label: string;
+    is_active: boolean;
+    metadata: Record<string, unknown>;
+};
 
 function isSite(row: LocationHierarchyRow): boolean {
     return String(row.location_type ?? "").trim() === "site";
@@ -183,6 +196,15 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             .sort((a, b) => a.sortSite.localeCompare(b.sortSite) || a.title.localeCompare(b.title));
     }, [section, siteRows, programCategories, roomRows, schedulePatterns, siteLabelById]);
 
+    // URL is the source of truth for fleet vs object workspace.
+    useEffect(() => {
+        if (loading) return;
+        if (!initialLocationId) {
+            setSelectedId(null);
+            setError(null);
+        }
+    }, [initialLocationId, loading]);
+
     useEffect(() => {
         if (loading || !initialLocationId) return;
         if (section !== "locations") {
@@ -195,20 +217,18 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             setError(null);
             return;
         }
-        if (!loading) {
+        if (siteRows.length > 0) {
             setError("Location not found or unavailable.");
             setSelectedId(null);
         }
     }, [initialLocationId, loading, siteRows, section]);
 
+    // Fleet landing: never auto-open the first location. Drop stale ids only.
     useEffect(() => {
-        if (!listItems.length) {
-            if (!initialLocationId) setSelectedId(null);
-            return;
-        }
+        if (!selectedId || !listItems.length) return;
         if (initialLocationId && section === "locations") return;
-        if (!selectedId || !listItems.some((item) => item.id === selectedId)) {
-            setSelectedId(listItems[0]!.id);
+        if (!listItems.some((item) => item.id === selectedId)) {
+            setSelectedId(null);
         }
     }, [listItems, selectedId, initialLocationId, section]);
 
@@ -239,32 +259,99 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         async (input: LocationSiteCreateInput): Promise<string> => {
             let metadata = mergeLocationMetadataField(null, "site_phone", input.phone.trim() || null);
             metadata = mergeLocationMetadataField(metadata, "timezone", input.timezone.trim() || null);
+            const payload = {
+                location_type: "site",
+                label: input.label.trim() || null,
+                address1: input.address1.trim() || null,
+                city: input.city.trim() || null,
+                state: input.state.trim() || null,
+                postal_code: input.postal_code.trim() || null,
+                is_active: input.is_active,
+                metadata,
+            };
             const res = await fetch("/api/admin/locations", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({
-                    location_type: "site",
-                    label: input.label.trim() || null,
-                    address1: input.address1.trim() || null,
-                    city: input.city.trim() || null,
-                    state: input.state.trim() || null,
-                    postal_code: input.postal_code.trim() || null,
-                    is_active: input.is_active,
-                    metadata,
-                }),
+                body: JSON.stringify(payload),
             });
-            const json = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
             if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
             const newId = String(json.id ?? "").trim();
-            if (!newId) throw new Error("Create failed: missing location id");
+            if (!newId || !mutationResponseContainsPatch(json as Record<string, unknown>, payload)) {
+                throw new Error("Location creation was not confirmed by the authoritative response.");
+            }
+            setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
             window.dispatchEvent(
                 new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
             );
-            await refreshLocations();
             return newId;
         },
-        [refreshLocations],
+        [],
+    );
+
+    const createRoomUnit = useCallback(
+        async (siteId: string, input: LocationRoomCreateInput): Promise<string> => {
+            const payload = {
+                location_type: "unit",
+                parent_location_id: siteId,
+                label: input.label.trim() || "New room",
+                is_active: input.is_active,
+                metadata: input.metadata,
+            };
+            const res = await fetch("/api/admin/locations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify(payload),
+            });
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
+            if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+            const newId = String(json.id ?? "").trim();
+            if (!newId || !mutationResponseContainsPatch(json as Record<string, unknown>, payload)) {
+                throw new Error("Room creation was not confirmed by the authoritative response.");
+            }
+            setRows((prev) => (prev.some((row) => row.id === newId) ? prev : [...prev, json]));
+            window.dispatchEvent(
+                new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }),
+            );
+            return newId;
+        },
+        [],
+    );
+
+    const createProgramCategory = useCallback(
+        async (siteId: string, input: LocationProgramCreateInput): Promise<string> => {
+            const payload = {
+                location_id: siteId,
+                label: input.label.trim(),
+                is_active: input.is_active,
+                metadata: input.metadata,
+            };
+            const res = await fetch("/api/admin/location-program-categories", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify(payload),
+            });
+            const json = (await res.json().catch(() => ({}))) as {
+                category?: LocationProgramCategoryRow;
+                error?: string;
+            };
+            if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+            const created = json.category;
+            const newId = String(created?.id ?? "").trim();
+            if (
+                !newId ||
+                !created ||
+                !mutationResponseContainsPatch(created as unknown as Record<string, unknown>, payload)
+            ) {
+                throw new Error("Program creation was not confirmed by the authoritative response.");
+            }
+            setProgramCategories((prev) => [...prev, created]);
+            return newId;
+        },
+        [],
     );
 
     const patchLocation = useCallback(
@@ -275,11 +362,18 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
                 credentials: "include",
                 body: JSON.stringify(body),
             });
-            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            const json = (await res.json().catch(() => ({}))) as LocationHierarchyRow & { error?: string };
             if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
-            await refreshLocations();
+            if (!json.id || !mutationResponseContainsPatch(json as Record<string, unknown>, body)) {
+                throw new Error("Location save was not confirmed by the authoritative response.");
+            }
+            // Apply the PATCH row into local state. Do not await a full hierarchy GET on the
+            // save critical path — that was blocking "Saving…" for the entire org reload.
+            setRows((prev) =>
+                prev.map((row) => (row.id === id ? { ...row, ...json, id: row.id } : row)),
+            );
         },
-        [refreshLocations],
+        [],
     );
 
     const patchProgramCategory = useCallback(
@@ -296,13 +390,19 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
             };
             if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
             const updated = json.categories?.[0];
-            if (updated) {
-                setProgramCategories((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
-            } else {
-                await refreshPrograms();
+            if (
+                !updated ||
+                updated.id !== categoryId ||
+                !mutationResponseContainsPatch(
+                    updated as unknown as Record<string, unknown>,
+                    patch as Record<string, unknown>,
+                )
+            ) {
+                throw new Error("Program save was not confirmed by the authoritative response.");
             }
+            setProgramCategories((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
         },
-        [refreshPrograms],
+        [],
     );
 
     const roomCapacitySummaryForSite = useCallback(
@@ -347,6 +447,8 @@ export function useLocationsConfigurationSettings(options?: { initialLocationId?
         selectedRoom,
         selectedSchedulePattern,
         createSiteLocation,
+        createRoomUnit,
+        createProgramCategory,
         patchLocation,
         patchProgramCategory,
         refresh,

@@ -3,11 +3,19 @@
 import { useState } from "react";
 import {
     createSchedulePattern,
-    formatWeekdaySelection,
     WEEKDAY_OPTIONS,
     type SchedulePatternRow,
 } from "@/lib/childcareOperational/fetchOperationalEnrollment";
-import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import {
+    ConfigurationPrimaryButton,
+    ConfigurationSecondaryButton,
+} from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { mutationResponseContainsPatch } from "@/lib/locations/mutationPersistenceContract";
+
+const WEEKDAY_CHIP_SELECTED =
+    "rounded-full border border-alloy-bend-pine bg-alloy-bend-pine text-white";
+const WEEKDAY_CHIP_IDLE =
+    "rounded-full border border-alloy-forge/20 bg-white text-alloy-midnight/55 hover:border-alloy-bend-pine/40 hover:text-alloy-bend-pine";
 
 function patternKey(label: string): string {
     const stem = label
@@ -30,6 +38,7 @@ export default function LocationSchedulePatternCreatePanel({
 }) {
     const [label, setLabel] = useState("");
     const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+    const [active, setActive] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -60,15 +69,14 @@ export default function LocationSchedulePatternCreatePanel({
             </label>
             <div className="space-y-2">
                 <span className="config-typo-field-label">Weekdays</span>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5" data-testid="locations-schedule-create-weekdays">
                     {WEEKDAY_OPTIONS.map((day) => (
                         <button
                             key={day.value}
                             type="button"
-                            className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
-                                weekdays.includes(day.value) ?
-                                    "border-[#00a283]/30 bg-[#00a283]/10 text-[#007d68]"
-                                :   "border-alloy-forge/15 text-alloy-midnight/55"
+                            aria-pressed={weekdays.includes(day.value)}
+                            className={`px-2.5 py-1 text-xs font-semibold ${
+                                weekdays.includes(day.value) ? WEEKDAY_CHIP_SELECTED : WEEKDAY_CHIP_IDLE
                             }`}
                             onClick={() => toggleWeekday(day.value)}
                         >
@@ -76,8 +84,17 @@ export default function LocationSchedulePatternCreatePanel({
                         </button>
                     ))}
                 </div>
-                <p className="config-typo-meta">{formatWeekdaySelection(weekdays)}</p>
             </div>
+            <label className="flex items-center gap-2">
+                <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={(event) => setActive(event.target.checked)}
+                    className="config-mode-control h-4 w-4 rounded border-alloy-stone/40"
+                    data-testid="locations-schedule-create-active"
+                />
+                <span className="config-typo-sublabel">Active pattern</span>
+            </label>
             {error ?
                 <p role="alert" className="text-sm text-red-800">
                     {error}
@@ -92,13 +109,25 @@ export default function LocationSchedulePatternCreatePanel({
                             setSaving(true);
                             setError(null);
                             try {
-                                const created = await createSchedulePattern({
+                                const input = {
                                     site_location_id: locationId,
                                     key: patternKey(label),
                                     label: label.trim(),
                                     schedule_type_key: "weekly",
                                     weekdays,
-                                });
+                                    is_active: active,
+                                };
+                                const created = await createSchedulePattern(input);
+                                if (
+                                    !mutationResponseContainsPatch(
+                                        created as unknown as Record<string, unknown>,
+                                        input,
+                                    )
+                                ) {
+                                    throw new Error(
+                                        "Schedule creation was not confirmed by the authoritative response.",
+                                    );
+                                }
                                 onCreated(created);
                             } catch (cause) {
                                 setError(
@@ -112,14 +141,12 @@ export default function LocationSchedulePatternCreatePanel({
                 >
                     {saving ? "Adding…" : "Add schedule pattern"}
                 </ConfigurationPrimaryButton>
-                <button
-                    type="button"
-                    className="rounded-md border border-alloy-forge/15 px-3 py-1.5 text-xs font-medium text-alloy-midnight/65"
+                <ConfigurationSecondaryButton
                     onClick={onCancel}
                     disabled={saving}
                 >
                     Cancel
-                </button>
+                </ConfigurationSecondaryButton>
             </div>
         </section>
     );
