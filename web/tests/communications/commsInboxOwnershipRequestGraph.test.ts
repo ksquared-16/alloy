@@ -23,7 +23,7 @@ describe("communications status-options ownership", () => {
 });
 
 describe("Work Unit first paint does not load communications", () => {
-    const runtime = read("lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts");
+    const runtime = read("lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime.ts");
     const surface = read("components/presentation/workUnit/WorkUnitSurface.tsx");
 
     it("the WU surface runtime never requests inbox threads or status-options", () => {

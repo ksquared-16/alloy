@@ -1,4 +1,5 @@
 "use client";
+import type { MouseEvent as ReactMouseEvent } from "react";
 
 /**
  * Presentation Runtime V2 — WS.PROCESS_SUMMARY_CARD.
@@ -43,6 +44,7 @@ import {
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { WorkViewList } from "./WorkViewList";
+import { useWorkUnitEntryGesture } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
 import { ProcessCardGlyph } from "./ProcessCardGlyph";
 import {
     WS_KPI_CARD_CHROME,
@@ -201,6 +203,11 @@ export function ProcessSummaryCard({
     const warm = () => {
         if (slug) void warmWorkUnitSlugRoute(slug, "workspace_tile");
     };
+
+    // ── THE OPERATOR GESTURE — K1, not the router. ONE shared adapter (see
+    // useWorkUnitEntryGesture): the Workspace has more than one entry point to the same Work Unit,
+    // and any entry point not wired to K1 navigates into a seed-only route and blanks the surface.
+    const onGesture = useWorkUnitEntryGesture(drillHref);
 
     const todaysWork = useMemo(
         () => applyTodaysWorkConfig(process.workViews, config),
@@ -369,16 +376,26 @@ export function ProcessSummaryCard({
                     ) : (
                         <Link
                             href={drillHref}
-                            // Heavy Work Unit route — never eagerly prefetch on viewport (a wall of
-                            // process cards would storm the router). Warming is intentional only:
-                            // the deduped `warm` fires on pointer/focus intent.
+                            // The href stays: it is the honest ADDRESS of the destination, so
+                            // copy-link, open-in-new-tab and modifier-click keep working through the
+                            // browser (a new document hydrates attention from the URL on cold load —
+                            // Art 2.4). But normal in-app activation is an ATTENTION MOVEMENT, not a
+                            // navigation: `onGesture` preventDefaults and enters K1 instead. The
+                            // router must never reveal the Work Unit, because reveal belongs to K3
+                            // and only a K2 terminal may cause it.
                             prefetch={false}
                             aria-label={`Open ${process.label}`}
                             data-process-cta
+                            onClick={onGesture}
                             onPointerEnter={warm}
                             onPointerDown={warm}
                             onFocus={warm}
-                            className={`inline-flex items-center gap-1 text-[13px] font-semibold no-underline transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${ctaClasses}`}
+                            // `motion-control` is the canonical acknowledgment treatment (the Work View pills already use
+                            // it). Without it the tile's only visual response was a hover transition, so the
+                            // operator's click was not visibly acknowledged until paint — certification measured
+                            // 58ms against a ≤50ms budget. K1 acknowledges in 0.014ms; this is what makes that
+                            // acknowledgment VISIBLE.
+                            className={`motion-control inline-flex items-center gap-1 text-[13px] font-semibold no-underline transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${ctaClasses}`}
                         >
                             {ctaLabel}
                             <span aria-hidden className="text-alloy-midnight/35">→</span>

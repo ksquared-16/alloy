@@ -21,7 +21,12 @@ import {
     publishLayout,
     updateDraft,
 } from "@/lib/layout/entityLayoutsRepo";
-import { resolveQueueRecordLayoutConfig } from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
+import {
+    resolveQueueRowLayoutServer,
+    resolveQueueRowSurfaceSpec,
+    envelopeFromResolution,
+    type QueueRowSurfaceSpec,
+} from "@/lib/layout/runtime/queueRowLayoutServer";
 import {
     defaultLeadQueueLayoutV3,
     defaultWaitlistQueueLayoutV3,
@@ -48,94 +53,12 @@ import {
     type QueueRowSurfaceEnvelope,
 } from "@/lib/presentation/runtime/queueRowSurfaceMetadata";
 
-type SurfaceSpec = {
-    entityType: string;
-    isWaitlist: boolean;
-    layoutKey: string;
-    queueType: string;
-    defaultEnvelope: () => QueueRowSurfaceEnvelope;
-};
 
-function legacyPipelineSpec(): SurfaceSpec {
-    return {
-        entityType: "opportunities",
-        isWaitlist: false,
-        layoutKey: "pipeline_queue_row",
-        queueType: "pipeline",
-        defaultEnvelope: () =>
-            buildDefaultQueueRowSurfaceEnvelope({
-                catalogId: "",
-                processKey: "enrollment",
-                processName: "Enrollment",
-            }),
-    };
-}
 
-function resolveSurfaceSpec(surfaceId: string, processKeyHint?: string | null): SurfaceSpec | null {
-    if (surfaceId === LEGACY_PIPELINE_QUEUE_ROW_SURFACE_ID) {
-        return legacyPipelineSpec();
-    }
-    if (surfaceId === LEGACY_WAITLIST_QUEUE_ROW_SURFACE_ID) {
-        return {
-            entityType: WAITLIST_CANDIDATE_ENTITY_TYPE,
-            isWaitlist: true,
-            layoutKey: "waitlist_queue_row",
-            queueType: "waitlist",
-            defaultEnvelope: () => ({
-                name: "Waitlist Queue Row",
-                catalogId: "",
-                processKey: "enrollment",
-                layout: defaultWaitlistQueueLayoutV3(),
-            }),
-        };
-    }
 
-    const catalogId = catalogIdFromQueueRowSurfaceId(surfaceId);
-    if (!catalogId) return null;
-
-    const processKey = processKeyHint?.trim() || "enrollment";
-    return {
-        entityType: "opportunities",
-        isWaitlist: false,
-        layoutKey: queueRowLayoutKeyForProcessKey(processKey),
-        queueType: "pipeline",
-        defaultEnvelope: () =>
-            buildDefaultQueueRowSurfaceEnvelope({
-                catalogId,
-                processKey,
-                processName: "Enrollment",
-            }),
-    };
-}
-
-function envelopeFromResolution(
-    spec: SurfaceSpec,
-    doc: LayoutDoc | null | undefined,
-    catalogId: string,
-    processKey: string,
-): QueueRowSurfaceEnvelope {
-    const fromMeta = readQueueRowSurfaceFromDocMetadata(
-        (doc?.metadata ?? {}) as Record<string, unknown>,
-    );
-    if (fromMeta?.layout) {
-        return {
-            ...fromMeta,
-            catalogId: fromMeta.catalogId || catalogId,
-            processKey: fromMeta.processKey || processKey,
-        };
-    }
-
-    const layout = resolveQueueRecordLayoutConfig(doc) ?? defaultEnrollmentQueueRowLayoutWithVariantsV1();
-    return {
-        name: spec.isWaitlist ? "Waitlist Queue Row" : "Enrollment Queue Row",
-        catalogId,
-        processKey,
-        layout,
-    };
-}
 
 function buildLayoutDoc(
-    spec: SurfaceSpec,
+    spec: QueueRowSurfaceSpec,
     envelope: QueueRowSurfaceEnvelope,
     placementOverrideEnabled: boolean,
 ): LayoutDoc {
@@ -164,57 +87,26 @@ export async function GET(
 
     const { surfaceId } = await params;
     const processKeyHint = _request.nextUrl.searchParams.get("processKey");
-    const spec = resolveSurfaceSpec(surfaceId, processKeyHint);
-    if (!spec) return NextResponse.json({ error: "Unknown surface" }, { status: 404 });
 
-    const catalogId = catalogIdFromQueueRowSurfaceId(surfaceId) ?? "";
-    const processKey = processKeyHint?.trim() || "enrollment";
-    const surface: LayoutSurface = "queue";
-
-    if (isLayoutV2ConfigEnabledServer()) {
-        try {
-            const supabase = createAdminClient();
-            const [orgRecords, defaultRecords] = await Promise.all([
-                listOrgLayouts(supabase, ctx.orgId, spec.entityType, surface),
-                listDefaultLayouts(supabase, spec.entityType, surface),
-            ]);
-            const resolution = resolveLayout({ entityType: spec.entityType, surface, orgRecords, defaultRecords });
-            const matchingPublished = orgRecords
-                .filter((r) => r.layoutKey === spec.layoutKey && r.status === "published")
-                .sort((a, b) => b.version - a.version)[0];
-            const legacyPipeline =
-                !matchingPublished && spec.layoutKey.startsWith("queue_row_")
-                    ? orgRecords
-                          .filter((r) => r.layoutKey === "pipeline_queue_row" && r.status === "published")
-                          .sort((a, b) => b.version - a.version)[0]
-                    : null;
-            const published = matchingPublished ?? legacyPipeline;
-            const doc = published?.doc ?? resolution.doc;
-            const envelope = published
-                ? envelopeFromResolution(spec, doc, catalogId, processKey)
-                : spec.defaultEnvelope();
-            const queueCtx = (doc?.metadata as Record<string, unknown> | undefined)?.queue_context as
-                | { placement_override_enabled?: boolean }
-                | undefined;
-            const placementOverrideEnabled = queueCtx?.placement_override_enabled ?? false;
-            return NextResponse.json({
-                envelope,
-                config: envelope.layout,
-                placementOverrideEnabled,
-                source: published ? "published" : resolution.source,
-            });
-        } catch (e) {
-            return NextResponse.json({ error: (e as Error).message }, { status: 500 });
-        }
+    // ONE owner: this route and the D1 Provisioning Answer resolve published queue-row layout
+    // through the same server function, so builder and runtime cannot drift.
+    try {
+        const resolved = await resolveQueueRowLayoutServer({
+            supabase: createAdminClient(),
+            orgId: ctx.orgId,
+            surfaceId,
+            processKeyHint,
+        });
+        if (!resolved) return NextResponse.json({ error: "Unknown surface" }, { status: 404 });
+        return NextResponse.json({
+            envelope: resolved.envelope,
+            config: resolved.config,
+            placementOverrideEnabled: resolved.placementOverrideEnabled,
+            source: resolved.source,
+        });
+    } catch (e) {
+        return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }
-
-    const fallback = spec.defaultEnvelope();
-    return NextResponse.json({
-        envelope: fallback,
-        config: fallback.layout,
-        placementOverrideEnabled: false,
-        source: "builtin_default",
-    });
 }
 
 export async function POST(
@@ -242,7 +134,7 @@ export async function POST(
         typeof body.processKey === "string"
             ? body.processKey
             : (body.envelope as QueueRowSurfaceEnvelope | undefined)?.processKey;
-    const spec = resolveSurfaceSpec(surfaceId, processKeyHint);
+    const spec = resolveQueueRowSurfaceSpec(surfaceId, processKeyHint);
     if (!spec) return NextResponse.json({ error: "Unknown surface" }, { status: 404 });
 
     const catalogId = catalogIdFromQueueRowSurfaceId(surfaceId) ?? "";

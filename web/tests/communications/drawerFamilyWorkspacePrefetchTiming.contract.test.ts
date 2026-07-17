@@ -36,11 +36,10 @@ describe("Focus Panel Activity communications first paint (Path C)", () => {
             join(process.cwd(), "app/adminV2/communications/FamilyCommunicationWorkspace.tsx"),
             "utf8"
         );
-        const queueRuntime = readFileSync(
-            join(process.cwd(), "lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts"),
-            "utf8"
-        );
-        expect(queueRuntime).toMatch(/markDrawerFamilyWorkspaceTiming\("queue_row_click"/);
+        // NOTE: the `queue_row_click` staging mark previously lived in the retired
+        // useWorkUnitSurfaceRuntime (now deleted). That runtime was already unmounted, so the mark was
+        // not firing in production — this assertion certified dead code and is removed. If the comms
+        // timing graph wants that entry mark, re-home it in useCommittedWorkUnitSurfaceRuntime.openRecord.
         expect(runtime).toMatch(/markDrawerFamilyWorkspaceTiming\("row_selected"/);
         expect(runtime).toMatch(/markDrawerFamilyWorkspaceTiming\("drawer_vm_ready"/);
         expect(runtime).toMatch(/markDrawerFamilyWorkspaceTiming\("activity_clicked"/);

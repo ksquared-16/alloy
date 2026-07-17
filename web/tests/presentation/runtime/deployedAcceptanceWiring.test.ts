@@ -37,12 +37,10 @@ describe("queue_reveal is requested on the canonical path (§3)", () => {
         expect(countOnly).not.toContain("row_mode=");
     });
 
-    it("the runtime rows fetch AND the prewarm both request reveal (matching the bootstrap)", () => {
-        const runtime = read("lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts");
-        expect(runtime).toMatch(/rowMode:\s*"reveal"/);
+    it("the prewarm and the bootstrap both request reveal (matching the canonical path)", () => {
         const warm = read("lib/presentation/runtime/warmWorkUnitSurfaceSession.ts");
         expect(warm).toMatch(/rowMode:\s*"reveal"/);
-        // Bootstrap primary rows already use queue_reveal — the client now matches it.
+        // Bootstrap primary rows already use queue_reveal — the prewarm matches it.
         const bootstrap = read("lib/workspace/loadWorkUnitOperationalBootstrap.ts");
         expect(bootstrap).toContain("queue_reveal");
     });

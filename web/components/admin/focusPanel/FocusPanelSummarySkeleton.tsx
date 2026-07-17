@@ -27,21 +27,29 @@ import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPane
 import { usePublishedFocusPanelSummaryDocState } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 
-/** Inert placeholder body — the card shell shape with a pulse, no content, aria-hidden. */
-function PlaceholderCard() {
+/**
+ * RESERVED SETTLEMENT GEOMETRY — not a skeleton.
+ *
+ * This card used to pulse three placeholder bars while the deferred record VM loaded. That is the
+ * operator watching the application assemble itself, and browser certification measured it: ~8 s of
+ * `visible_construction` on a Work Unit whose operational truth (subject, Situation, Decision,
+ * Action) was already committed and on screen. The Settlement contract is explicit — "use reserved
+ * geometry; never visibly construct the operational surface" — so the region reserves its space and
+ * stays quiet.
+ *
+ * It keeps the card shell and `minHeight` (that is what prevents reflow when Detail settles into it)
+ * and drops the animation and the fake bars: bars imply content that does not exist yet, which is
+ * both construction and a small lie about what is known.
+ */
+function ReservedSettlementRegion() {
     return (
         <div
             className="alloy-os-ucard"
             data-focus-panel-skeleton-card="true"
+            data-focus-panel-settlement-reserved="true"
             aria-hidden="true"
             style={{ minHeight: "7.5rem", padding: "0.875rem" }}
-        >
-            <div className="flex flex-col gap-2 animate-pulse" aria-hidden="true">
-                <div className="h-3.5 w-1/3 rounded bg-alloy-stone/12" />
-                <div className="h-3 w-2/3 rounded bg-alloy-stone/10" />
-                <div className="h-3 w-1/2 rounded bg-alloy-stone/10" />
-            </div>
-        </div>
+        />
     );
 }
 
@@ -74,8 +82,8 @@ export default function FocusPanelSummarySkeleton({ mode }: { mode: FocusPanelMo
                 data-focus-panel-skeleton-mode={mode}
                 className="flex flex-col gap-3"
             >
-                <PlaceholderCard />
-                {isSummary ? <PlaceholderCard /> : null}
+                <ReservedSettlementRegion />
+                {isSummary ? <ReservedSettlementRegion /> : null}
             </div>
         );
     }
@@ -91,7 +99,7 @@ export default function FocusPanelSummarySkeleton({ mode }: { mode: FocusPanelMo
                 publishedLayout={inputs.publishedLayout}
                 composeCards={inputs.composeCards}
                 compositionOverrides={inputs.compositionOverrides}
-                renderCell={() => <PlaceholderCard />}
+                renderCell={() => <ReservedSettlementRegion />}
             />
         </div>
     );

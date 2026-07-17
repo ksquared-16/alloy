@@ -19,7 +19,7 @@
  */
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { useOperationalSubject } from "./OperationalSubjectContext";
 import type { QueueRowModel } from "@/lib/presentation/runtime";
 import {
     PRESENTATION_RUNTIME_LABELS,
@@ -78,14 +78,12 @@ export function FocusPanelSurface({
     prefetchRecord: (row: QueueRowModel) => void;
     children: ReactNode;
 }) {
-    const drawerCtx = useAdminDrawerOptional();
-    const isOpen = drawerCtx != null && drawerCtx.drawer.type != null && drawerCtx.drawer.id != null;
-    // The inline record region renders ONLY for opportunity subjects — other drawer types
-    // (person/child contact cards, jobs, schedules) keep the global modal host.
-    const inlineRecordSelected =
-        drawerCtx != null &&
-        drawerCtx.drawer.type === "opportunities" &&
-        drawerCtx.drawer.id != null;
+    // ONE subject owner: committed Focus. The drawer used to answer this, which made it a second
+    // owner of Record of Attention — the panel showed "Select a record to begin" while the queue and
+    // the snapshot both knew the subject. That read is deleted, not reconciled.
+    const { subjectId } = useOperationalSubject();
+    const isOpen = subjectId != null;
+    const inlineRecordSelected = subjectId != null;
 
     const value = useMemo<FocusPanelOpenContextValue>(
         () => ({ openRecord, prefetchRecord }),

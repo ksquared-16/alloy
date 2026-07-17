@@ -11,11 +11,13 @@
  */
 
 import { WorkspaceSurface } from "@/components/presentation/workspace";
-import { WorkUnitSurface } from "@/components/presentation/workUnit";
 
 export type PresentationSurface = "workspace" | "work-unit";
 
 export function PresentationRuntime({ surface }: { surface: PresentationSurface }) {
-    if (surface === "work-unit") return <WorkUnitSurface />;
+    // The Work Unit surface is owned by the Surface Host and rendered from COMMITTED FOCUS
+    // (ProvisionedWorkUnitSurface). The route no longer mounts it: a route may be a direct-link
+    // entry, a reload boundary and a URL representation — never the owner of reveal.
+    if (surface === "work-unit") return null;
     return <WorkspaceSurface />;
 }

@@ -191,11 +191,16 @@ function HeaderKpiCard({
                     aria-label={kpi.pending ? `${kpi.label} loading` : undefined}
                 >
                     {kpi.pending ? (
-                        // Stable loading slot: hold a muted, value-height placeholder while metrics
-                        // resolve so the tile never shows a "—" that then flips to a number.
+                        // RESERVED SETTLEMENT GEOMETRY. KPI values are Settlement (U-S5): the slot is
+                        // laid out at first sight and the value settles into it, so the tile never
+                        // shows a "—" that then flips to a number.
+                        // It does NOT animate. A pulsing slot is the operator watching the app
+                        // assemble itself — certification measures it as `visible_construction`, and
+                        // the budget is 0 (absolute). Reserve the space; stay quiet.
                         <span
                             aria-hidden
-                            className={`inline-block animate-pulse rounded-md bg-alloy-midnight/10 align-middle ${compact ? "h-[18px] w-10" : "h-[26px] w-14"}`}
+                            data-settlement-reserved="kpi"
+                            className={`inline-block rounded-md bg-alloy-midnight/[0.06] align-middle ${compact ? "h-[18px] w-10" : "h-[26px] w-14"}`}
                         />
                     ) : (
                         kpi.formattedValue || WORKSPACE_HEADER_NO_DATA_VALUE

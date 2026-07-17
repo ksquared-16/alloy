@@ -72,11 +72,6 @@ describe("Operator runtime data-hygiene guards", () => {
         expect(src).toMatch(/from\("work_units"\)[\s\S]*?\.eq\("is_active", true\)/);
     });
 
-    it("the Work Unit header never renders a legacy process name (belt-and-suspenders)", () => {
-        const src = read("lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts");
-        expect(src).toMatch(/processLabel[\s\S]*?isLegacyArtifactProcessName/);
-    });
-
     // ── item 6: demo/record data must NOT load via auto-migrations ──
     it("flags top-level operator-record inserts as migration seeds", () => {
         expect(

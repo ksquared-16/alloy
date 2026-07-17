@@ -68,7 +68,11 @@ function WorkViewPill({
             <span>{view.label}</span>
             <span
                 aria-hidden={view.count == null}
-                className={`${MOTION_SETTLE.className} inline-flex min-w-[1.375rem] shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${
+                // Settlement fills this count AFTER commit (U-S6). Reserve a STABLE width that holds the
+                // settled value (up to 3 digits) so the badge never widens when the number lands — a
+                // widening badge shifts the pill and registers as settlement reflow. `tabular-nums` keeps
+                // every digit the same width; `min-w-[2rem]` is the reserved geometry, not "0"'s width.
+                className={`${MOTION_SETTLE.className} inline-flex min-w-[2rem] shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${
                     view.isActive ? "bg-white/20 text-white" : "bg-alloy-stone/15 text-alloy-midnight/70"
                 } ${view.count == null ? "invisible" : ""}`}
             >

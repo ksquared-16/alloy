@@ -7,6 +7,7 @@
  */
 
 import Link from "next/link";
+import { useWorkUnitEntryGesture } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
 import { parseOperatorWorkUnitEntryHref, warmWorkUnitSlugRoute } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import type { WorkViewLinkModel } from "@/lib/presentation/runtime";
 import type { ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
@@ -129,7 +130,10 @@ function RowCounts({ view, showCounts }: { view: WorkViewLinkModel; showCounts: 
 
     if (primaryCount == null && view.count == null) {
         return (
-            <span aria-hidden className="inline-block h-3.5 w-5 animate-pulse rounded bg-alloy-midnight/10" />
+            // RESERVED SETTLEMENT GEOMETRY — Work View counts are Settlement (U-S6). The badge
+            // reserves its width so the row never reflows when the count settles; it does not
+            // animate, because visible construction is budgeted at 0.
+            <span aria-hidden data-settlement-reserved="count" className="inline-block h-3.5 w-5 rounded bg-alloy-midnight/[0.06]" />
         );
     }
 
@@ -161,6 +165,45 @@ function RowCounts({ view, showCounts }: { view: WorkViewLinkModel; showCounts: 
                 </span>
             ) : null}
         </div>
+    );
+}
+
+
+/**
+ * One Today's-Work row. Exists so the K1 entry gesture has a component to live in — the row list is
+ * a .map(), and a hook cannot run there. This row is the SECOND Workspace entry point to a Work
+ * Unit; certification caught it navigating while the process CTA was wired, which blanked the
+ * surface because the route is seed-only.
+ */
+function WorkViewRowLink({
+    view,
+    hoverClass,
+    processAccent,
+    showCounts,
+}: {
+    view: WorkViewLinkModel;
+    hoverClass: string;
+    processAccent: ProcessCardAccent | null;
+    showCounts: boolean;
+}) {
+    const onGesture = useWorkUnitEntryGesture(view.href);
+    if (!view.href) return null;
+    return (
+                        <Link
+                            onClick={onGesture}
+                            href={view.href}
+                            // Heavy Work Unit route — never eagerly prefetch on viewport (a wall of
+                            // work-view rows across every process card would storm the router, and
+                            // re-render re-prefetch doubles it). Warm only on pointer/focus intent.
+                            prefetch={false}
+                            onPointerEnter={() => warmWorkViewRoute(view.href)}
+                            onPointerDown={() => warmWorkViewRoute(view.href)}
+                            onFocus={() => warmWorkViewRoute(view.href)}
+                            aria-label={rowAriaLabel(view)}
+                            className={`${ROW_BODY_CLASS} motion-control no-underline ${hoverClass} focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-midnight/25`}
+                        >
+                            <WorkViewRowBody view={view} showCounts={showCounts} accent={processAccent} />
+                        </Link>
     );
 }
 
@@ -227,20 +270,7 @@ export function WorkViewList({
             {workViews.map((view) => (
                 <li key={view.id} data-work-view-id={view.id}>
                     {view.href ? (
-                        <Link
-                            href={view.href}
-                            // Heavy Work Unit route — never eagerly prefetch on viewport (a wall of
-                            // work-view rows across every process card would storm the router, and
-                            // re-render re-prefetch doubles it). Warm only on pointer/focus intent.
-                            prefetch={false}
-                            onPointerEnter={() => warmWorkViewRoute(view.href)}
-                            onPointerDown={() => warmWorkViewRoute(view.href)}
-                            onFocus={() => warmWorkViewRoute(view.href)}
-                            aria-label={rowAriaLabel(view)}
-                            className={`${ROW_BODY_CLASS} motion-control no-underline ${hoverClass} focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-midnight/25`}
-                        >
-                            <WorkViewRowBody view={view} showCounts={showCounts} accent={processAccent} />
-                        </Link>
+                        <WorkViewRowLink view={view} hoverClass={hoverClass} processAccent={processAccent ?? null} showCounts={showCounts} />
                     ) : (
                         <div className={`${ROW_BODY_CLASS} text-alloy-midnight/50`}>
                             <WorkViewRowBody view={view} showCounts={showCounts} accent={processAccent} />

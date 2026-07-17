@@ -74,8 +74,6 @@ export {
 
 export { useWorkspaceSurfaceRuntime } from "./useWorkspaceSurfaceRuntime";
 
-export { useWorkUnitSurfaceRuntime, type WorkUnitSurfaceRuntime } from "./useWorkUnitSurfaceRuntime";
-
 export {
     applyTodaysWorkConfig,
     normalizeWorkspaceProcessSurfaceConfig,

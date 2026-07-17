@@ -52,6 +52,7 @@ import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/Opportunit
 import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActionModalsPortal";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useOperationalSubject, isOperationallyResolved } from "./OperationalSubjectContext";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
 import { focusPanelScrollScope } from "@/lib/presentation/runtime/workUnitOperatorContext";
@@ -80,7 +81,26 @@ export function InlineOpportunityFocusPanel() {
     const { canMutate: authCanMutate, role, roleKeys } = useAdminAuth();
     const { labels } = useEntityLabels();
     const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
-    const { drawer, drawerVmRender, closeDrawer } = useAdminDrawer();
+    // The drawer keeps PRESENTATION — render slots, close chrome, the queue-preview seed.
+    const { drawer: drawerPresentation, drawerVmRender, closeDrawer } = useAdminDrawer();
+    // …but Record of Attention comes from COMMITTED FOCUS. The drawer's `id`/`type` are shadowed
+    // here: it may carry presentation, it may not answer "who is the operator working on".
+    const operational = useOperationalSubject();
+    const { subjectId: operationalSubjectId } = operational;
+    // ── OPERATIONAL vs SETTLEMENT ──
+    // `resolved` below is the SETTLEMENT payload (the record VM fetch). It used to drive
+    // `data-inline-focus-panel-resolved`, which made the panel report itself unresolved after
+    // Operational Commit and gated the Work Unit terminal on a Detail/History request — the exact
+    // "Focus Panel catch-up" the contract forbids.
+    // OPERATIONAL resolution is a different question, and D1 already answered it: is there a
+    // committed subject, a current business state, and a truthful action? That is what the marker
+    // now reports. The Settlement fetch gets its own marker and gates nothing.
+    const operationallyResolved = isOperationallyResolved(operational);
+    const drawer = {
+        ...drawerPresentation,
+        id: operationalSubjectId,
+        type: operationalSubjectId ? ("opportunities" as const) : null,
+    };
     const {
         displayVm,
         error,
@@ -331,7 +351,12 @@ export function InlineOpportunityFocusPanel() {
                 data-inline-focus-panel="true"
                 data-inline-focus-panel-mode={focusPanelMode}
                 data-inline-focus-panel-subject={selectedSubjectId ?? undefined}
-                data-inline-focus-panel-resolved={resolved ? "true" : "false"}
+                // OPERATIONAL truth from the committed snapshot — NOT the Settlement fetch.
+                data-inline-focus-panel-resolved={operationallyResolved ? "true" : "false"}
+                data-focus-panel-operational={operationallyResolved ? "resolved" : "pending"}
+                // Detail/History settle after commit. This may never gate the operational panel.
+                data-focus-panel-settlement={resolved ? "resolved" : "pending"}
+                data-focus-panel-scope={operational.decision?.scopeState ?? undefined}
                 aria-label="Focus Panel"
                 // Borderless: the FocusPanelSurface boundary owns the outer panel border (single container).
                 // Fills the stretched boundary (flex-1) so an open record occupies the SAME shell height
