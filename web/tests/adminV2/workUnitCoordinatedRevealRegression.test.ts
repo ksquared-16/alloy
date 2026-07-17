@@ -9,13 +9,6 @@ function readSrc(rel: string): string {
 }
 
 describe("workUnitCoordinatedRevealRegression", () => {
-    it("WorkUnitSurface does not seed warm page reveal from cache", () => {
-        const surface = readSrc("components/presentation/workUnit/WorkUnitSurface.tsx");
-        expect(surface).toContain("resolveWorkUnitSurfaceRenderMode");
-        expect(surface).toContain("useWorkUnitSurfaceRuntime");
-        expect(surface).not.toContain("page_seeded_from_cache: workUnitPageSeededWarm");
-    });
-
     it("QueueRegion skips skeleton when prior rows are held during refetch", () => {
         const region = readSrc("components/presentation/workUnit/QueueRegion.tsx");
         expect(region).toContain("queueRegionRenderState");

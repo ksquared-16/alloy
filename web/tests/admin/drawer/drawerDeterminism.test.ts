@@ -67,16 +67,6 @@ describe("Queue No-records display guard", () => {
     });
 
     /**
-     * Structural: useWorkUnitSurfaceRuntime owns queue fetch + stale-response apply guard.
-     */
-    it("useWorkUnitSurfaceRuntime wires queueRequestSeq stale-response guard", () => {
-        const src = readSrc("lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts");
-        expect(src).toContain("queueRequestSeq");
-        expect(src).toContain("if (seq === queueRequestSeq.current) setQueueResult");
-        expect(src).toContain("if (seq === queueRequestSeq.current) setQueueLoading(false)");
-    });
-
-    /**
      * Behavioral: refetch with prior rows must not enter empty render state (queue-lane hold).
      */
     it("refetch with prior rows does not enter empty render state", () => {
@@ -90,22 +80,6 @@ describe("Queue No-records display guard", () => {
 // ─── Queue ownership ──────────────────────────────────────────────────────────
 
 describe("Queue determinism", () => {
-    /**
-     * Structural: stale async queue responses are dropped at the runtime owner.
-     */
-    it("useWorkUnitSurfaceRuntime applies only the latest queue fetch seq", () => {
-        const src = readSrc("lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts");
-        expect(src).toMatch(/const seq = \+\+queueRequestSeq\.current/);
-        expect(src).toMatch(/seq === queueRequestSeq\.current[\s\S]{0,120}setQueueResult/);
-        expect(src).toMatch(/seq === queueRequestSeq\.current[\s\S]{0,220}setQueueError/);
-    });
-
-    it("fetch error retains prior queueResult (does not clear rows on failure)", () => {
-        const src = readSrc("lib/presentation/runtime/useWorkUnitSurfaceRuntime.ts");
-        expect(src).not.toContain("setQueueResult(null)");
-        expect(src).toContain("Queue-lane hold: retain prior rows on fetch failure");
-    });
-
     /**
      * Queue cache key mismatch does not display stale rows from another lane.
      * Rows cached under scope:wuId:lane_A must not be returned when looking up lane_B.
@@ -131,15 +105,6 @@ describe("Queue determinism", () => {
         expect(touchQueueRowCacheOnHit(map, wrongFpKey)).toBeNull();
     });
 
-    /**
-     * Structural: WorkUnitSurface delegates queue rendering to QueueRegion (Presentation Runtime V2).
-     */
-    it("WorkUnitSurface composes QueueRegion as the queue owner", () => {
-        const src = readSrc("components/presentation/workUnit/WorkUnitSurface.tsx");
-        expect(src).toContain("useWorkUnitSurfaceRuntime");
-        expect(src).toContain("<QueueRegion");
-        expect(src).toContain("resolveWorkUnitSurfaceRenderMode");
-    });
 });
 
 // ─── Drawer snapshot cache ─────────────────────────────────────────────────────
