@@ -90,6 +90,8 @@ Sections are **structured rows inside one card**, not a mosaic of separate cards
 
 The object list (left rail) is a **persistent selector**, not a page. Rows carry the object's identity (name, sub-label, status) and a selected state that is unmistakable: the canonical queue-row Bend Pine wash, border, and inset rail. Active identity glyphs use Bend Pine without inventing pale decorative tiles; inactive identities are muted. Selection is the single most important state in the system — the operator must always know which object they are operating. On drilling into a nested object, the list swaps to the child's siblings; the selected state moves with the drill.
 
+On a top-level no-selection landing, peer objects may use an **equal-height tile grid** instead of long full-width rows. The tile carries only collection-level posture and one Open affordance; detailed configuration remains in the selected object workspace. Organization Domain Cards and Locations fleet tiles share this rhythm and surface treatment without sharing a forced content model.
+
 ## Navigation (tabs & breadcrumb)
 
 - **Tabs** are the object's owned concerns. The active tab is Bend-Pine text over a Bend-Pine underline; idle tabs are muted with no underline. Tabs are quiet — they name concerns, not features.

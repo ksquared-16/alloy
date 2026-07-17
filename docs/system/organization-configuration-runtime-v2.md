@@ -33,9 +33,9 @@ Runtime
 
 Organization owns reusable identity, defaults, requirements, and publication. A Location may consume, be assigned, or author an explicitly allowed override. Apply is reserved for durable creation or update of Location-owned objects through an authoritative domain provider.
 
-## Landing information architecture (V2.1 presentation)
+## Landing information architecture (V2.2 presentation)
 
-V2.1 refines presentation only. The runtime, ownership model, nine-domain registry, Programs model, and distribution contracts are unchanged.
+V2.1 established the compact presentation; V2.2 completes its density pass. The runtime, ownership model, nine-domain registry, Programs model, accepted card information, and distribution contracts are unchanged.
 
 The Organization landing has three compact regions, in order:
 
@@ -56,7 +56,7 @@ A Configuration Domain Card is a reusable landing navigation object. Every equal
 - a compact Used By summary;
 - one Open affordance.
 
-Publisher, operator home, detailed consumers, inheritance, overrides, health detail, and runtime prose belong inside the domain runtime. Cards are equal height and preserve the Configuration Runtime visual rules: calm white object regions on the Stone canvas, one Bend Pine accent, quiet metadata, and honest unknowns. Equal height supports scanning; it does not turn cards into dashboard metrics.
+Publisher, operator home, detailed consumers, inheritance, overrides, health detail, and runtime prose belong inside the domain runtime. Cards are equal height and preserve the Configuration Runtime visual rules: calm white object regions on the Stone canvas, one Bend Pine accent, quiet metadata, and honest unknowns. V2.2 reduces internal padding, gaps, bullet rhythm, footer height, and section spacing without shrinking typography or removing accepted information. Equal height supports scanning; it does not turn cards into dashboard metrics.
 
 Publication and health are separate. The registry may declare **Live after confirmed save** or **Publish required** as the publication contract; an actual Draft or Published state may appear only from authoritative domain evidence. Operational health remains Not assessed until its owner reports it. The landing never derives healthy, compliant, inherited, or complete from the existence of a route or configuration row.
 
@@ -121,7 +121,7 @@ There is no generic configuration-payload table. Configuration steers; code and 
 
 ## Freeze
 
-V2 freezes the Organization Runtime model, nine-domain registry, Programs terminology, and publisher/consumer relationship. V2.1 freezes the compact landing presentation and progressive-disclosure boundary. Future domains inherit this model. Downstream module implementation, schema migration, and authoritative health/apply providers are separate work.
+V2 freezes the Organization Runtime model, nine-domain registry, Programs terminology, and publisher/consumer relationship. V2.2 freezes the compact landing presentation, final density, and progressive-disclosure boundary. Future domains inherit this model. Downstream module implementation, schema migration, and authoritative health/apply providers are separate work.
 
 Locations remains the experiential reference implementation and is not redesigned by V2.
 

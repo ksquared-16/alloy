@@ -638,7 +638,44 @@ export default function LocationsConfigurationPage({
                     title="Locations"
                     titleIcon={<MapPin className="h-5 w-5" strokeWidth={2} />}
                     testId="locations-configuration-context"
-                />
+                >
+                    {!loading ?
+                        <div
+                            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-alloy-stone/25 pt-2"
+                            data-testid="locations-fleet-posture"
+                        >
+                            <ConfigScopeContextBar
+                                mode="organization"
+                                organizationLabel="Organization"
+                                objectLabel="Location"
+                                ownershipHint="All locations"
+                                onModeChange={(mode) => {
+                                    if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
+                                }}
+                            />
+                            <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-alloy-midnight/52">
+                                <li>
+                                    <strong className="font-semibold text-alloy-midnight">
+                                        {fleet.activeLocationCount}
+                                    </strong>{" "}
+                                    Active Locations
+                                </li>
+                                <li>
+                                    <strong className="font-semibold text-alloy-midnight">
+                                        {fleet.averageSetupPercent}%
+                                    </strong>{" "}
+                                    Average Readiness
+                                </li>
+                                <li>
+                                    <strong className="font-semibold text-alloy-midnight">
+                                        {fleet.locationsNeedingAttention}
+                                    </strong>{" "}
+                                    Need Attention
+                                </li>
+                            </ul>
+                        </div>
+                    :   null}
+                </ConfigurationContext>
             :   null}
 
             {error ?
@@ -723,18 +760,6 @@ export default function LocationsConfigurationPage({
                                         ))}
                                     </select>
                                 </div>
-                            :   null}
-
-                            {!selectedSite ?
-                                <ConfigScopeContextBar
-                                    mode="organization"
-                                    organizationLabel="Organization"
-                                    objectLabel="Location"
-                                    ownershipHint="All locations"
-                                    onModeChange={(mode) => {
-                                        if (mode === "object" && siteRows[0]) openLocation(siteRows[0].id);
-                                    }}
-                                />
                             :   null}
 
                             {!selectedSite ?

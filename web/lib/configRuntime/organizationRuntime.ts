@@ -146,7 +146,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Location readiness remains authoritative in Locations.",
         },
         distributionMode: "none",
-        ownedConfiguration: ["Sites", "Programs offered", "Rooms and delivery resources", "Local schedules"],
+        ownedConfiguration: ["Sites", "Programs offered", "Rooms & delivery resources", "Local schedules"],
     },
     {
         key: "programs",
@@ -173,8 +173,8 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         },
         distributionMode: "apply",
         ownedConfiguration: [
-            "Catalog and categories",
-            "Eligibility and licensing requirements",
+            "Catalog & categories",
+            "Eligibility & licensing",
             "Required resource types",
             "Commercial, funding, and billing defaults",
         ],
@@ -277,7 +277,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Process readiness remains owned by Business Processes.",
         },
         distributionMode: "assignment",
-        ownedConfiguration: ["Stages and Work Views", "Operating plans", "Outcomes and requirements"],
+        ownedConfiguration: ["Stages & Work Views", "Operating plans", "Outcomes & requirements"],
     },
     {
         key: "surfaces",
@@ -352,7 +352,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             detail: "Calculation health remains owned by Operational Intelligence.",
         },
         distributionMode: "inherit",
-        ownedConfiguration: ["Calculations and metrics", "Targets", "Indicator definitions"],
+        ownedConfiguration: ["Calculations & metrics", "Targets", "Indicator definitions"],
     },
 ] as const;
 

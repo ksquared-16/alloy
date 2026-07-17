@@ -102,12 +102,12 @@ export default function OrganizationConfigurationPage({
 
             <ConfigurationShell testId="organization-configuration-shell">
                 <main
-                    className="mx-auto min-w-0 max-w-[1480px] space-y-3 pb-4"
+                    className="mx-auto min-w-0 max-w-[1480px] space-y-2.5 pb-3"
                     data-testid="organization-configuration-workspace"
                 >
                     <section data-testid="organization-configuration-domains">
-                        <h2 className="config-typo-workspace-title mb-2">Configuration Domains</h2>
-                        <div className="grid auto-rows-fr items-stretch gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+                        <h2 className="config-typo-workspace-title mb-1.5">Configuration Domains</h2>
+                        <div className="grid auto-rows-fr items-stretch gap-2 md:grid-cols-2 xl:grid-cols-3">
                             {domains.map((domain) => {
                                 const Icon = DOMAIN_ICONS[domain.icon];
                                 return (
@@ -122,7 +122,7 @@ export default function OrganizationConfigurationPage({
                         </div>
                     </section>
 
-                    <div className="grid items-stretch gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(17rem,1fr)]">
+                    <div className="grid items-stretch gap-2.5 xl:grid-cols-[minmax(0,2fr)_minmax(17rem,1fr)]">
                         <ConfigWorkspaceCard
                             title="Consumers"
                             compact

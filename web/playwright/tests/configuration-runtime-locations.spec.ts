@@ -41,9 +41,9 @@ test.describe("configuration-runtime-locations", () => {
             animations: "disabled",
         });
 
-        const firstFleetRow = page.locator('[data-testid^="locations-fleet-row-"]').first();
-        await expect(firstFleetRow).toBeVisible({ timeout: 30_000 });
-        await firstFleetRow.click();
+        const firstFleetTile = page.locator('[data-testid^="locations-fleet-tile-"]').first();
+        await expect(firstFleetTile).toBeVisible({ timeout: 30_000 });
+        await firstFleetTile.click();
         await expect(page.getByTestId("locations-selected-location")).toBeVisible({
             timeout: 60_000,
         });
