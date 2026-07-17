@@ -287,5 +287,17 @@ else
 fi
 
 echo
+echo "== Canonical root suite (TM-2) =="
+set +e
+bash "$ROOT/tests/test-canonical-root.sh"
+root_rc=$?
+set -e
+if [[ "$root_rc" -eq 0 ]]; then
+  pass "canonical root suite"
+else
+  fail "canonical root suite"
+fi
+
+echo
 echo "Results: PASS=$PASS FAIL=$FAIL"
 [[ "$FAIL" -eq 0 ]]

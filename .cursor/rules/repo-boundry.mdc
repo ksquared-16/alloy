@@ -18,9 +18,11 @@ Canonical doc: `docs/platform/governance/agent-repo-boundaries.md`
 
 Managed sprints (slot/worktree bootstrap): `docs/platform/governance/managed-sprint-operations.md`
 
+`/Users/Kelly/Alloy-Claude` was **retired as an engineering root in July 2026**. It is no longer a specialist lane — it is not sanctioned for any repository work. Its history is preserved and lands by PR; nothing new is built on it.
+
 Default branch behavior:
 - Use `staging` for shared documentation/tooling/hotfix work.
 - Use feature branches / managed worktrees for larger runtime work.
-- Before work, confirm `pwd`, branch, `git status --short`, and latest `origin/staging`.
+- Before work, run `alloy-root` (or confirm `pwd`, branch, `git status --short`, and the behind-count vs `origin/staging` by hand). Sharing a remote with the canonical repo proves nothing — a clone can be the right repository and still sit a thousand commits behind the right base.
 
-Claude-owned specialist lanes live outside this repo unless intentionally merged from a reviewed branch. Claude sessions in **this** repo follow `CLAUDE.md` and the same managed-sprint doctrine.
+**Both providers work from this repository**, separated by managed worktree and slot rather than by clone or topic. Claude sessions follow `CLAUDE.md` and the same managed-sprint doctrine.

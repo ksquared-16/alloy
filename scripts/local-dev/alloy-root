@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# Answer, for the directory you are standing in: which root is this, and is it
+# sanctioned?
+#
+# Every other toolkit guard validates a path the toolkit itself minted --
+# alloy_validate_worktree_boundary is only ever called on metadata-supplied
+# paths, and alloy_verify_canonical_repo only inspects ALLOY_REPO. Nothing asked
+# about $PWD. That is the gap this command fills, and it is the gap that let an
+# agent work for an entire sprint in a clone 1481 commits behind staging that
+# did not contain scripts/local-dev at all.
+#
+# Honest limit: a misrooted agent that never runs the toolkit is not reachable by
+# the toolkit. This command is what the preflight and the first-response card
+# call so that "which root am I in" has one answer instead of four guesses.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-root [path] [--strict] [--quiet]
+
+Reports the root you are standing in and whether it is sanctioned for Alloy work.
+
+  (no args)   report for $PWD
+  <path>      report for a specific directory
+  --strict    exit non-zero when the root is not sanctioned (for preflight)
+  --quiet     print only the classification word
+
+Classifications:
+  canonical         the canonical repository (ALLOY_REPO)
+  managed-worktree  a worktree under ALLOY_WORKTREE_ROOT created by the toolkit
+  retired           a root that governance has retired (see agent-repo-boundaries.md)
+  unmanaged         a git repository that is neither of the above
+  outside           not inside a git repository
+
+Sanctioned for engineering work: canonical, managed-worktree.
+EOF
+}
+
+# Retired engineering roots. Governance decision, July 2026: one canonical root.
+# See docs/platform/governance/agent-repo-boundaries.md §1.
+ALLOY_RETIRED_ROOTS="${ALLOY_RETIRED_ROOTS:-$HOME/Alloy-Claude}"
+
+resolve_dir() {
+  local d="$1"
+  ( cd "$d" 2>/dev/null && pwd -P ) || printf '%s' "$d"
+}
+
+main() {
+  local target="" strict=0 quiet=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --strict) strict=1; shift ;;
+      --quiet) quiet=1; shift ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *) target="$1"; shift ;;
+    esac
+  done
+
+  alloy_load_config
+  ALLOY_LOCAL_DEV_ROOT="$SCRIPT_DIR"
+
+  local here
+  here="$(resolve_dir "${target:-$PWD}")"
+
+  # The git toplevel, not just the directory, so a subdirectory of a worktree
+  # classifies as that worktree.
+  local toplevel=""
+  toplevel="$(cd "$here" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -n "$toplevel" ]] && toplevel="$(resolve_dir "$toplevel")"
+
+  local canon wt_root
+  canon="$(resolve_dir "${ALLOY_REPO:-/nonexistent}")"
+  wt_root="$(resolve_dir "${ALLOY_WORKTREE_ROOT:-/nonexistent}")"
+
+  local class="outside" detail="" sanctioned=0
+  if [[ -z "$toplevel" ]]; then
+    class="outside"
+    detail="not inside a git repository"
+  elif [[ "$toplevel" == "$canon" ]]; then
+    class="canonical"
+    detail="the canonical repository"
+    sanctioned=1
+  elif [[ "$toplevel" == "$wt_root"/* ]]; then
+    class="managed-worktree"
+    detail="a managed worktree under ALLOY_WORKTREE_ROOT"
+    sanctioned=1
+  else
+    local retired
+    for retired in $ALLOY_RETIRED_ROOTS; do
+      retired="$(resolve_dir "$retired")"
+      if [[ "$toplevel" == "$retired" || "$toplevel" == "$retired"/* ]]; then
+        class="retired"
+        detail="a RETIRED engineering root — see docs/platform/governance/agent-repo-boundaries.md §1"
+        break
+      fi
+    done
+    if [[ "$class" != "retired" ]]; then
+      class="unmanaged"
+      detail="a git repository that is neither the canonical repo nor a managed worktree"
+    fi
+  fi
+
+  if [[ "$quiet" -eq 1 ]]; then
+    printf '%s\n' "$class"
+    [[ "$strict" -eq 1 && "$sanctioned" -ne 1 ]] && exit 1
+    exit 0
+  fi
+
+  printf 'Root:      %s\n' "$here"
+  printf 'Class:     %s — %s\n' "$class" "$detail"
+  printf 'Canonical: %s\n' "${ALLOY_REPO:-(ALLOY_REPO unset)}"
+
+  if [[ -n "$toplevel" ]]; then
+    local branch remote
+    branch="$(cd "$toplevel" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
+    remote="$(cd "$toplevel" && git remote get-url "${ALLOY_BASE_REMOTE:-origin}" 2>/dev/null || echo "(no remote)")"
+    printf 'Repo:      %s\n' "$toplevel"
+    printf 'Branch:    %s\n' "$branch"
+    printf 'Remote:    %s\n' "$remote"
+
+    # Currency. A clone can share origin with the canonical repo and still sit a
+    # thousand commits behind it -- being "the right repository" is not being
+    # "the right base". This is the number that identifies a stale root.
+    local base behind ahead
+    base="$(alloy_base_ref)"
+    behind="$(cd "$toplevel" && git rev-list --count "HEAD..${base}" 2>/dev/null || echo "?")"
+    ahead="$(cd "$toplevel" && git rev-list --count "${base}..HEAD" 2>/dev/null || echo "?")"
+    printf 'Base:      %s\n' "$(alloy_base_ref_status)"
+    printf 'Ahead/Behind: %s/%s\n' "$ahead" "$behind"
+    if [[ "$behind" != "?" && "$behind" != "0" ]]; then
+      printf 'Note:      this root is %s commit(s) behind %s\n' "$behind" "$base"
+    fi
+
+    # The toolkit's own provenance: which checkout is the running toolkit from?
+    printf 'Toolkit:   %s\n' "$SCRIPT_DIR"
+    if [[ -n "${ALLOY_REPO:-}" && "$SCRIPT_DIR" != "$canon/scripts/local-dev" ]]; then
+      printf 'Note:      the running toolkit does not live in the canonical repo\n'
+    fi
+    if [[ ! -d "$toplevel/scripts/local-dev" ]]; then
+      printf 'Note:      this root does not contain scripts/local-dev — it cannot be the toolkit source\n'
+    fi
+  fi
+
+  printf '\n'
+  if [[ "$sanctioned" -eq 1 ]]; then
+    printf 'SANCTIONED for Alloy engineering work.\n'
+  else
+    printf 'NOT SANCTIONED for Alloy engineering work.\n'
+    case "$class" in
+      retired)
+        printf 'This root was retired in July 2026. Start work from the canonical repository:\n'
+        printf '  alloy-sprint-start <name> --provider <cursor|claude>\n'
+        printf 'Existing history here is preserved; land it by PR, do not build on it.\n'
+        ;;
+      unmanaged|outside)
+        printf 'Start work through the toolkit so the sprint gets a managed worktree:\n'
+        printf '  alloy-sprint-start <name> --provider <cursor|claude>\n'
+        ;;
+    esac
+  fi
+
+  [[ "$strict" -eq 1 && "$sanctioned" -ne 1 ]] && exit 1
+  exit 0
+}
+
+main "$@"
