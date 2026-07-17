@@ -49,6 +49,16 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         [focus.current],
     );
 
+    // NOTE (certification): the committed Record of Attention is NOT yet bridged into the Focus
+    // Panel. D1 resolves it (U-P4) and K3 commits it, but the inline panel reads its subject from
+    // AdminDrawerContext, so it still shows "Select a record to begin" — U-O3 fails and the surface
+    // is not operational at first sight.
+    // A naive `useEffect(() => openDrawer(committedSubject))` bridge was tried and REVERTED: it
+    // storms (4418 duplicate requests of 4421) because opening the drawer re-renders this hook and
+    // re-fires the effect. The fix is not another effect — the Focus Panel must read its subject
+    // from committed Focus rather than from the drawer store, which is a subject-ownership change
+    // (the drawer is currently a SECOND subject owner). That is the last D4 defect.
+
     const selectWorkView = useCallback(
         (workViewId: string) => {
             // A LENS-scope movement. K2 prepares the new lens; K3 commits when it terminates.

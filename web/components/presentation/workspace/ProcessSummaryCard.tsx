@@ -44,9 +44,7 @@ import {
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { WorkViewList } from "./WorkViewList";
-import { useRuntimeKernelOptional } from "@/lib/runtime/kernel/RuntimeKernelContext";
-import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
-import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { useWorkUnitEntryGesture } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
 import { ProcessCardGlyph } from "./ProcessCardGlyph";
 import {
     WS_KPI_CARD_CHROME,
@@ -206,26 +204,10 @@ export function ProcessSummaryCard({
         if (slug) void warmWorkUnitSlugRoute(slug, "workspace_tile");
     };
 
-    // ── THE OPERATOR GESTURE — K1, not the router. ──
-    // Normal activation is an ATTENTION MOVEMENT: it is accepted and acknowledged synchronously,
-    // K2 begins preparing immediately, and the Workspace yields — all before any navigation could
-    // have committed. The router is never allowed to reveal the destination; reveal belongs to K3
-    // and only a K2 terminal may cause it.
-    // Modifier/middle clicks fall through to the browser deliberately: opening a new tab is a
-    // request for a NEW DOCUMENT, which hydrates its own attention from the URL on cold load
-    // (Art 2.4). Keyboard activation arrives here as a click, so pointer and keyboard share this
-    // one adapter.
-    const kernel = useRuntimeKernelOptional();
-    const { orgId, principalUserId } = useWorkspaceOrg();
-    const onGesture = (e: ReactMouseEvent<HTMLAnchorElement>) => {
-        if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-        // No attention yet (the Workspace has not hydrated) → let the browser navigate. A gesture is
-        // never a URL read, so it must not hydrate; the destination document will hydrate itself.
-        if (!kernel || !slug || !orgId || !kernel.attention.get()) return;
-        e.preventDefault();
-        const lens = new URL(drillHref, "http://x").searchParams.get("work_view_id");
-        kernel.attention.move({ scope: ATTENTION_SCOPE.SURFACE, target: slug, lens, source: "pointer" });
-    };
+    // ── THE OPERATOR GESTURE — K1, not the router. ONE shared adapter (see
+    // useWorkUnitEntryGesture): the Workspace has more than one entry point to the same Work Unit,
+    // and any entry point not wired to K1 navigates into a seed-only route and blanks the surface.
+    const onGesture = useWorkUnitEntryGesture(drillHref);
 
     const todaysWork = useMemo(
         () => applyTodaysWorkConfig(process.workViews, config),
