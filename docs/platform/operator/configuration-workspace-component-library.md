@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
@@ -22,7 +22,7 @@ Every configuration domain composes its experience from this fixed set of primit
 The root of a configuration experience for one object type. Owns the three-zone layout (object list · object detail · command rail), URL-addressable selection state, and responsive collapse. It is the container every other primitive lives inside. One per object type (Locations, Programs, Offerings…).
 
 ### Workspace Canvas and Region
-The Canvas is the quiet Stone field behind the selected object's detail. A Region is a coherent white operational answer on that field — glance, readiness, attention, capability, or editor. Regions do not acquire object identity, selection, or nested card chrome unless they actually represent an Object.
+The Canvas is the intentional white W5 field behind the selected object's detail. A Region organizes a coherent answer or working concern through spacing, alignment, headings, hairlines, and restrained containment. Regions do not acquire object identity, selection, or card chrome unless they actually represent an Object.
 
 ### Configuration Sidebar (Object List)
 The persistent selector for objects of the current type. Responsibilities: search, filter, "Add", and an unmistakable **selected** state. Swaps to a child object's siblings when the operator drills into a nested object. It is a selector, never a page.
@@ -34,7 +34,7 @@ Names the object being operated: object name (dominant), status badge, one row o
 The object's **owned concerns** as tabs, led by Overview. Route-addressable. Tabs name concerns in business language, never features or subsystems.
 
 ### Workspace Section
-A calm, self-contained block for one concern: a plain headline, quiet supporting detail, and one clear affordance. Sections are structured rows within a card, not a mosaic of boxes. Sections are where inline editing happens.
+A calm block for one concern: a plain headline, quiet supporting detail, and one clear affordance. Sections are structured rows within a Region or genuinely contained Object, not a mosaic of boxes. Sections are where inline editing happens.
 
 ### Command Rail
 The object-scoped rail holding Quick Actions and (where useful) the object's Attention/Setup. Restrained by doctrine — a short action list and one or two status cards, never a dashboard.

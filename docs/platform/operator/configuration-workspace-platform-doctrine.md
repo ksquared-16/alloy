@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: [docs/system/configuration-workspace-doctrine.md, docs/system/configuration-workspace-v1-doctrine.md]
 ---
 
@@ -146,7 +146,7 @@ Nesting reuses the same anatomy: opening a child object (a Room inside a Locatio
 
 ## Workspace composition and ownership
 
-- **Workspace canvas:** Stone is the quiet field; white regions carry coherent operational answers. A region groups an answer. An object carries identity, status, selection, URL state, and view/edit behavior. Do not turn every region into an object card.
+- **Workspace canvas:** White is the intentional W5 field. Regions create hierarchy through spacing, alignment, headings, hairlines, and restrained containment. A region groups an answer. An object carries identity, status, selection, URL state, and view/edit behavior. Do not turn every region into an object card or import the W4 River Stone field.
 - **Left navigation:** owns collection identity, count, search, filter, Add, selection, and keyboard movement. It supports the selected object; it does not compete with the detail workspace.
 - **Hero:** owns the selected object's name, status, identifying facts, and object-level Edit action.
 - **Operational summary:** answers what the object is and how it currently operates. Readiness supports that understanding; Attention owns actionable problems.
