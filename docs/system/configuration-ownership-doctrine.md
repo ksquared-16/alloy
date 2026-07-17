@@ -1,7 +1,7 @@
 ---
 owner: runtime
 status: frozen
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
@@ -13,6 +13,7 @@ supersedes: []
 
 | Surface | Owns | Does **not** own |
 |---------|------|------------------|
+| **Organization settings** | Shared ownership, inheritance, publication, distribution, and cross-location governance contracts | Domain payloads, Location-owned objects, duplicate domain editors |
 | **Locations** | Campuses, programs, rooms, and schedule templates | Process behavior, surface presentation |
 | **Fields** | Canonical data definitions — types, labels, formats, validation | Drawer placement, stage requiredness, action behavior |
 | **Statuses** | Status vocabulary — label, color, sort, active/inactive | Which stage a status rolls up into |

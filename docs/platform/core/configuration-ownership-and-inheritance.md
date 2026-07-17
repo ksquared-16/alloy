@@ -1,19 +1,30 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
 # Configuration Ownership & Inheritance — Core Platform Doctrine
 
-**Status:** Proposed core platform doctrine — pending ratification
+**Status:** Ratified core platform doctrine — Organization Configuration Runtime V1
 **Date:** 2026-06-30
 **Sits beside:** Business Process · Operational Truth · Entity Model · Record System · [Commercial Operating Model](commercial-operating-model.md)
 **Extends (does not replace):** `docs/system/configuration-ownership-doctrine.md` (surface-ownership matrix) and `docs/system/configuration-runtime-v1.md` (the frozen settings shell). This doctrine adds the **inheritance + override** dimension those lack, and the **four-owner** model.
-**Mandate:** Define how every configurable object in Alloy is *owned*, *inherited*, and *overridden* — one pattern for Financials, Communications, Branding, Scheduling, Workflows, Policies, Access, and every future module. Design only; no code.
+**Mandate:** Define how every configurable object in Alloy is *owned*, *inherited*, and *overridden* — one pattern for Financials, Communications, Branding, Scheduling, Workflows, Policies, Access, and every future module. Runtime contract: `../../system/organization-configuration-runtime-v1.md`.
 
 > **The discovery:** the Commercial Configuration mockup didn't expose a Financials problem. It exposed that Alloy has no canonical answer to **"who owns configuration, and how does it inherit?"** Pricing is just the first object to need it. Get this right and you've solved it for every configurable object.
+
+## Ratification and owner-model reconciliation
+
+The frozen surface-ownership matrix and this four-owner model are complementary:
+
+- the **surface matrix** names the one operator home allowed to author each concern;
+- the **four-owner model** separates business meaning, operational delivery, configuration authoring, and runtime consumption.
+
+“Configuration owner” is the bridge: it must equal the authoring home in the frozen surface matrix. The other three owners are responsibility lenses, not additional edit surfaces. Therefore the four-owner model does not permit duplicate authoring or weaken the one-system-of-record rule.
+
+Organization Runtime V1 implements the shared declaration, platform → organization → location value resolution, provider-gated distribution plan, and cross-location posture. Individual domains still own their payloads and must register authoritative read/apply behavior before the organization surface claims a resolved or applied state.
 
 ---
 
