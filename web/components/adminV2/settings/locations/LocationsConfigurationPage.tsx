@@ -634,7 +634,7 @@ export default function LocationsConfigurationPage({
             <LocationsCommandRailActions actions={railActions} />
 
             {!selectedSite && !initialLocationId ?
-                <div className="max-w-[72rem]" data-testid="locations-content-column">
+                <div className="w-full" data-testid="locations-content-column">
                     <ConfigurationContext
                         title="Locations"
                         titleIcon={<MapPin className="h-5 w-5" strokeWidth={2} />}
@@ -737,7 +737,7 @@ export default function LocationsConfigurationPage({
                         :   null}
 
                         <main
-                            className={`min-w-0 space-y-2.5 ${selectedSite ? "" : "max-w-[72rem]"}`}
+                            className="min-w-0 space-y-2.5"
                             data-testid={selectedSite ? "locations-selected-location" : "locations-composition"}
                         >
                             {selectedSite ?

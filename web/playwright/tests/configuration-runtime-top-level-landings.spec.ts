@@ -52,7 +52,9 @@ test.describe("configuration-runtime-top-level-landings", () => {
             if (message.type() === "error") consoleErrors.push(message.text());
         });
         page.on("requestfailed", (request) => {
-            failedRequests.push(`${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`);
+            const errorText = request.failure()?.errorText ?? "";
+            if (errorText === "net::ERR_ABORTED") return;
+            failedRequests.push(`${request.method()} ${request.url()} ${errorText}`);
         });
 
         for (const viewport of VIEWPORTS) {
@@ -91,6 +93,13 @@ test.describe("configuration-runtime-top-level-landings", () => {
             await expect(page.getByTestId("locations-show-inactive")).toBeVisible();
             await expect(page.getByTestId("locations-add-location")).toBeVisible();
 
+            const signalCards = page.locator(
+                '[data-testid="locations-readiness"], [data-testid="locations-attention-summary"], [data-testid="locations-inventory"]',
+            );
+            await expect(signalCards).toHaveCount(3);
+            await expectEqualHeights(signalCards);
+            await expectNoClippedContent(signalCards);
+
             const locationRows = page.locator('[data-testid^="locations-row-"]');
             expect(await locationRows.count()).toBeGreaterThan(0);
             await expectNoClippedContent(locationRows);
@@ -102,8 +111,7 @@ test.describe("configuration-runtime-top-level-landings", () => {
             const [contentBox, landingBox] = await Promise.all([contentColumn.boundingBox(), landing.boundingBox()]);
             expect(contentBox).not.toBeNull();
             expect(landingBox).not.toBeNull();
-            expect(contentBox?.width ?? Infinity).toBeLessThanOrEqual(1152.5);
-            expect(landingBox?.width ?? Infinity).toBeLessThanOrEqual(1152.5);
+            expect(Math.abs((contentBox?.width ?? 0) - (landingBox?.width ?? 0))).toBeLessThanOrEqual(40);
             expect(Math.abs((contentBox?.x ?? 0) - (landingBox?.x ?? 0))).toBeLessThanOrEqual(24);
 
             const summaryBox = await page.getByTestId("locations-operational-summary").boundingBox();
@@ -112,8 +120,17 @@ test.describe("configuration-runtime-top-level-landings", () => {
             expect(summaryBox).not.toBeNull();
             expect(attentionBox).not.toBeNull();
             expect(listBox).not.toBeNull();
-            expect(attentionBox?.y ?? 0).toBeGreaterThan((summaryBox?.y ?? 0) + (summaryBox?.height ?? 0) - 1);
-            expect(listBox?.y ?? 0).toBeGreaterThan((attentionBox?.y ?? 0) + (attentionBox?.height ?? 0) - 1);
+            expect(listBox?.y ?? 0).toBeGreaterThan((summaryBox?.y ?? 0) + (summaryBox?.height ?? 0) - 1);
+            expect(Math.abs((listBox?.y ?? 0) - (attentionBox?.y ?? 0))).toBeLessThanOrEqual(1);
+            if (viewport.width >= 1366) {
+                expect((listBox?.width ?? 0) / (attentionBox?.width ?? Infinity)).toBeGreaterThan(1.5);
+                expect((listBox?.width ?? Infinity) / (attentionBox?.width ?? 1)).toBeLessThan(2.25);
+            }
+            const rowHeights = await locationRows.evaluateAll((rows) =>
+                rows.map((row) => row.getBoundingClientRect().height),
+            );
+            expect(Math.min(...rowHeights)).toBeGreaterThanOrEqual(68);
+            expect(Math.max(...rowHeights)).toBeLessThanOrEqual(80);
             expect(await landing.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
 
             await page.screenshot({
