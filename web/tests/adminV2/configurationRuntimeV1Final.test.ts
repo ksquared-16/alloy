@@ -63,8 +63,9 @@ describe("Configuration Runtime V1 final", () => {
 
     it("Locations uses Configuration Mode with an object selector and owned-concern tabs", () => {
         const loc = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(loc).toContain("Choose a location, understand what needs attention");
-        expect(loc).toContain("locations-object-selector");
+        const selector = read("components/adminV2/settings/locations/LocationsObjectSelector.tsx");
+        expect(loc).toContain("LocationsObjectSelector");
+        expect(selector).toContain('data-testid="locations-object-selector"');
         expect(loc).toContain("LOCATION_WORKSPACE_TABS");
         expect(loc).not.toContain("locations-section-queue");
         expect(loc).not.toContain("LocationsHierarchySettingsClient");
