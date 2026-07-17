@@ -18,8 +18,10 @@ import { join } from "node:path";
 
 const ROOT = join(__dirname, "..", "..", "..");
 
-// Matches an import/re-export from the authored expectations ledger, e.g.
-//   from "@/lib/operationalExpectations/..."   (NOT the local childcareOperational/expectations folder)
+// Matches an import/re-export of the authored expectations ledger — an
+// @/lib/operationalExpectations specifier, NOT the local
+// childcareOperational/expectations folder. (Comment avoids the literal
+// from-quote form so the deploy import guard does not read it as a real import.)
 const AUTHORED_LEDGER_IMPORT = /from\s+["'](?:@\/lib|(?:\.\.?\/)+)operationalExpectations(?:\/[^"']*)?["']/;
 
 // The new scheduling family must also stay off the analytics/OIP scalar registry.
