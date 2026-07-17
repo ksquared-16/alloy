@@ -52,6 +52,7 @@ import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/Opportunit
 import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActionModalsPortal";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useOperationalSubject } from "./OperationalSubjectContext";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
 import { focusPanelScrollScope } from "@/lib/presentation/runtime/workUnitOperatorContext";
@@ -80,7 +81,16 @@ export function InlineOpportunityFocusPanel() {
     const { canMutate: authCanMutate, role, roleKeys } = useAdminAuth();
     const { labels } = useEntityLabels();
     const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
-    const { drawer, drawerVmRender, closeDrawer } = useAdminDrawer();
+    // The drawer keeps PRESENTATION — render slots, close chrome, the queue-preview seed.
+    const { drawer: drawerPresentation, drawerVmRender, closeDrawer } = useAdminDrawer();
+    // …but Record of Attention comes from COMMITTED FOCUS. The drawer's `id`/`type` are shadowed
+    // here: it may carry presentation, it may not answer "who is the operator working on".
+    const { subjectId: operationalSubjectId } = useOperationalSubject();
+    const drawer = {
+        ...drawerPresentation,
+        id: operationalSubjectId,
+        type: operationalSubjectId ? ("opportunities" as const) : null,
+    };
     const {
         displayVm,
         error,

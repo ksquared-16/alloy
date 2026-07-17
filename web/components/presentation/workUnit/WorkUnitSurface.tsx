@@ -31,6 +31,7 @@ import type {
 } from "@/lib/presentation/runtime/types";
 import { QueueRegion } from "./QueueRegion";
 import { FocusPanelSurface } from "./FocusPanelSurface";
+import { OperationalSubjectProvider } from "./OperationalSubjectContext";
 
 /**
  * The established Work Unit surface, rendered from ONE resolved model + intents. Pure
@@ -56,6 +57,9 @@ export function WorkUnitSurfaceBodyFromModel({
         model.workViews.find((view) => view.id === model.activeWorkViewId) ??
         null;
     return (
+        // ONE subject owner. The committed model carries Record of Attention; the Focus Panel reads
+        // it from here, never from the drawer store.
+        <OperationalSubjectProvider subjectId={model.selectedSubject.selectedRecordId}>
         <>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1">
                 <div className="shrink-0 space-y-1">
@@ -93,6 +97,7 @@ export function WorkUnitSurfaceBodyFromModel({
                 floating menu, so its outside-click dismissal can't unmount the modal. */}
             <CreateLeadEventHost />
         </>
+        </OperationalSubjectProvider>
     );
 }
 
