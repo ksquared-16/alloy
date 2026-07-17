@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
@@ -76,6 +76,9 @@ The set of object rows within the Sidebar (or a grid, for a no-selection tab). E
 ### Configuration Domain Card
 The compact publisher-landing navigation object for one configuration domain. It carries domain identity, publication state, one concise description, at most three owned concerns, a small Used By summary, and one Open affordance. Cards are equal height for scanning and are not dashboard metrics. Publisher detail, operator home, inheritance, overrides, and health explanation belong inside the domain runtime through progressive disclosure. The canonical implementation is Organization Configuration Runtime V2.1.
 
+### Fleet Landing and Location Tile
+The no-selection operating surface for choosing a Location. The fleet is the dominant collection: search, inactive filtering, Add Location, and an independently bounded scroll region stay attached to the tiles they control. Each equal-height tile carries only Location identity, active state, readiness, highest-priority attention, rooms, Programs offered, configured capacity, and one Open affordance. A compact supporting summary may reconcile existing fleet readiness, attention, health, and inventory; it may not become a dashboard or introduce new metrics. Detailed configuration remains inside the selected Location runtime.
+
 ### Configuration Status Badge
 The object's active/inactive (or domain-equivalent) state as a soft, dotted chip. Calm, small, meaningful — Bend-Pine for good/active, Stone for inactive, ember reserved for problem states.
 
@@ -135,7 +138,7 @@ The shared save contract for every editor and inline mutation. The server return
 - A configuration experience is **assembled from these primitives only.** New visual needs extend the library, not the domain.
 - Primitives depend on the **object model and resolved view models**, never on raw database rows. Only server loaders touch the substrate.
 - Every primitive obeys the platform laws: the engine stays invisible, unknown is never zero, inheritance is quiet, editing is in-place, and the two status systems stay separate.
-- The **reference implementations** of these primitives are in the frozen Locations Runtime (`web/components/adminV2/settings/locations/` and `web/components/adminV2/settings/configurationRuntime/workspace/`); a new domain adapts those, it does not reinvent them.
+- The canonical top-level archetypes are Organization's Catalog Runtime and Locations' Fleet Runtime. Their implementations live in `web/components/adminV2/settings/organization/`, `web/components/adminV2/settings/locations/`, and `web/components/adminV2/settings/configurationRuntime/workspace/`. A new domain adopts the archetype that matches its operator question; it does not copy their content model or invent a dashboard.
 
 ## Related docs
 

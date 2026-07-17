@@ -103,9 +103,15 @@ describe("Configuration Runtime — Locations", () => {
         expect(fleet).toContain("location.setupPercent");
         expect(fleet).toContain("location.topAttention");
         expect(fleet).toContain("Operational readiness");
-        expect(fleet).toContain("xl:grid-cols-[minmax(0,2fr)_minmax(17rem,1fr)]");
-        expect(fleet).toContain('title="Needs Attention"');
-        expect(fleet).toContain('title="Fleet Summary"');
+        expect(fleet).toContain("xl:grid-cols-[minmax(0,1fr)_18rem]");
+        expect(fleet).toContain("locations-fleet-scroll");
+        expect(fleet).toContain("max-h-[calc(100vh-13.5rem)]");
+        expect(fleet).toContain("overflow-y-auto");
+        expect(fleet).toContain("locations-fleet-supporting-summary");
+        expect(fleet).toContain('title="Summary"');
+        expect(fleet).toContain("Fleet Health");
+        expect(fleet).toContain("attentionHighlights.slice(0, 3)");
+        expect(fleet.indexOf("locations-fleet-search")).toBeLessThan(fleet.indexOf("locations-fleet-scroll"));
         expect(fleet).not.toContain("locations-fleet-row-");
         expect(fleet).not.toContain("locations-fleet-rollups");
         expect(hook).toContain("Fleet landing: never auto-open");

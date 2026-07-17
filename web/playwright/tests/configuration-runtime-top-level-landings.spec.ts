@@ -81,6 +81,22 @@ test.describe("configuration-runtime-top-level-landings", () => {
             await expect(page.getByTestId("locations-fleet-attention-list")).toBeVisible();
             await expect(page.getByTestId("locations-fleet-summary")).toBeVisible();
 
+            const fleetSurfaceBox = await page.getByTestId("locations-fleet-surface").boundingBox();
+            const fleetSummaryBox = await page.getByTestId("locations-fleet-supporting-summary").boundingBox();
+            expect(fleetSurfaceBox).not.toBeNull();
+            expect(fleetSummaryBox).not.toBeNull();
+            expect(fleetSummaryBox?.x ?? 0).toBeGreaterThan(
+                (fleetSurfaceBox?.x ?? 0) + (fleetSurfaceBox?.width ?? 0) - 1,
+            );
+
+            const fleetScroll = page.getByTestId("locations-fleet-scroll");
+            expect(
+                await fleetScroll.evaluate((element) => ({
+                    overflowY: getComputedStyle(element).overflowY,
+                    maxHeight: getComputedStyle(element).maxHeight,
+                })),
+            ).toMatchObject({ overflowY: "auto" });
+
             const locationsGrid = page.getByTestId("locations-fleet-grid");
             expect(
                 await locationsGrid.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),

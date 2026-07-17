@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-16
+last_reviewed: 2026-07-17
 supersedes: []
 ---
 
@@ -91,6 +91,8 @@ Sections are **structured rows inside one card**, not a mosaic of separate cards
 The object list (left rail) is a **persistent selector**, not a page. Rows carry the object's identity (name, sub-label, status) and a selected state that is unmistakable: the canonical queue-row Bend Pine wash, border, and inset rail. Active identity glyphs use Bend Pine without inventing pale decorative tiles; inactive identities are muted. Selection is the single most important state in the system — the operator must always know which object they are operating. On drilling into a nested object, the list swaps to the child's siblings; the selected state moves with the drill.
 
 On a top-level no-selection landing, peer objects may use an **equal-height tile grid** instead of long full-width rows. The tile carries only collection-level posture and one Open affordance; detailed configuration remains in the selected object workspace. Organization Domain Cards and Locations fleet tiles share this rhythm and surface treatment without sharing a forced content model.
+
+The two canonical top-level archetypes answer different questions. Organization is a **Catalog Runtime**: its dominant surface is the configuration-domain grid. Locations is a **Fleet Runtime**: its dominant surface is the searchable Location collection, with readiness and attention as compact supporting context. At desktop widths the fleet may use a narrow sticky summary rail and an independently bounded tile scroller so hundreds of Locations do not make the page infinitely tall. Search, filters, and Add stay visually attached to that scroller. Neither archetype uses dashboard proportions or duplicates selected-object detail.
 
 ## Navigation (tabs & breadcrumb)
 

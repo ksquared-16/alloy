@@ -66,7 +66,7 @@ function LocationFleetTile({
                             </dd>
                         </div>
                         <div className="px-2">
-                            <dt className="text-[9px] text-alloy-midnight/40">Programs</dt>
+                            <dt className="truncate text-[9px] text-alloy-midnight/40">Programs offered</dt>
                             <dd className="mt-0.5 text-[11px] font-semibold text-alloy-midnight">
                                 {location.activeProgramCount}
                             </dd>
@@ -141,8 +141,9 @@ export default function LocationsFleetLanding({
             .map((value) => String(value ?? "").toLowerCase())
             .some((value) => value.includes(query));
     });
-
-    const readinessLabel =
+    const attentionHighlights = fleet.attentionHighlights.slice(0, 3);
+    const remainingAttentionCount = Math.max(0, fleet.attentionHighlights.length - attentionHighlights.length);
+    const healthLabel =
         fleet.locationCount === 0 ? "No locations yet"
         : fleet.totalCritical > 0 ?
             `${fleet.totalCritical} ${fleet.totalCritical === 1 ? "item needs" : "items need"} attention`
@@ -151,13 +152,16 @@ export default function LocationsFleetLanding({
         :   "No current attention";
 
     return (
-        <div className="flex flex-col gap-2.5" data-testid="locations-fleet-landing">
-            <section data-testid="locations-fleet-objects">
+        <div
+            className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start"
+            data-testid="locations-fleet-landing"
+        >
+            <section className="min-w-0" data-testid="locations-fleet-surface">
                 <div className="mb-1.5 flex flex-wrap items-center gap-2.5">
                     <div className="mr-auto">
-                        <h2 className="config-typo-workspace-title">Locations</h2>
+                        <h2 className="config-typo-workspace-title">Fleet</h2>
                         <p className="text-[10px] text-alloy-midnight/42">
-                            {visible.length} of {fleet.locationCount} shown
+                            {visible.length} of {fleet.locationCount} locations
                         </p>
                     </div>
                     <label className="sr-only" htmlFor="locations-fleet-search">
@@ -192,149 +196,173 @@ export default function LocationsFleetLanding({
                     :   null}
                 </div>
 
-                {visible.length === 0 ?
-                    <div
-                        className="rounded-xl border border-alloy-forge/10 bg-white px-4 py-7 text-center"
-                        data-testid="locations-fleet-empty"
-                    >
-                        <p className="text-sm font-medium text-alloy-midnight">
-                            {fleet.locationCount === 0 ? "Add your first location" : "No locations match"}
-                        </p>
-                        <p className="config-typo-sublabel mt-1">
-                            {fleet.locationCount === 0 ?
-                                "Locations are the operational root for programs, rooms, schedules, and tours."
-                            :   "Try a different search or include inactive locations."}
-                        </p>
-                        {canMutate && fleet.locationCount === 0 ?
-                            <ConfigurationPrimaryButton className="mt-3" onClick={onAddLocation}>
-                                Add Location
-                            </ConfigurationPrimaryButton>
-                        :   null}
-                    </div>
-                :   <div
-                        className="grid auto-rows-fr items-stretch gap-2 md:grid-cols-2 xl:grid-cols-3"
-                        data-testid="locations-fleet-grid"
-                    >
-                        {visible.map((location) => (
-                            <LocationFleetTile
-                                key={location.id}
-                                location={location}
-                                onOpen={() => onOpenLocation(location.id)}
-                            />
-                        ))}
-                    </div>
-                }
+                <div
+                    className="max-h-[calc(100vh-13.5rem)] min-h-[12.5rem] overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]"
+                    data-testid="locations-fleet-scroll"
+                >
+                    {visible.length === 0 ?
+                        <div
+                            className="rounded-xl border border-alloy-forge/10 bg-white px-4 py-7 text-center"
+                            data-testid="locations-fleet-empty"
+                        >
+                            <p className="text-sm font-medium text-alloy-midnight">
+                                {fleet.locationCount === 0 ? "Add your first location" : "No locations match"}
+                            </p>
+                            <p className="config-typo-sublabel mt-1">
+                                {fleet.locationCount === 0 ?
+                                    "Locations are the operational root for programs, rooms, schedules, and tours."
+                                :   "Try a different search or include inactive locations."}
+                            </p>
+                            {canMutate && fleet.locationCount === 0 ?
+                                <ConfigurationPrimaryButton className="mt-3" onClick={onAddLocation}>
+                                    Add Location
+                                </ConfigurationPrimaryButton>
+                            :   null}
+                        </div>
+                    :   <div
+                            className="grid auto-rows-fr items-stretch gap-2 md:grid-cols-2 2xl:grid-cols-3"
+                            data-testid="locations-fleet-grid"
+                        >
+                            {visible.map((location) => (
+                                <LocationFleetTile
+                                    key={location.id}
+                                    location={location}
+                                    onOpen={() => onOpenLocation(location.id)}
+                                />
+                            ))}
+                        </div>
+                    }
+                </div>
             </section>
 
-            <div className="grid items-stretch gap-2.5 xl:grid-cols-[minmax(0,2fr)_minmax(17rem,1fr)]">
-                <ConfigWorkspaceCard
-                    title="Needs Attention"
-                    compact
-                    className="h-full"
-                    testId="locations-fleet-attention-list"
-                >
-                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-[10px]">
-                        <p className="font-semibold text-alloy-midnight/65">{readinessLabel}</p>
-                        <p className="text-alloy-midnight/42">
-                            {fleet.locationsNeedingAttention}{" "}
-                            {fleet.locationsNeedingAttention === 1 ? "location" : "locations"}
-                        </p>
-                    </div>
-                    {fleet.attentionHighlights.length > 0 ?
-                        <ul className="grid gap-1.5 sm:grid-cols-2">
-                            {fleet.attentionHighlights.map((highlight) => (
-                                <li key={`${highlight.locationId}-${highlight.item.key}`}>
-                                    <button
-                                        type="button"
-                                        className="h-full w-full rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.025] px-2.5 py-2 text-left transition-colors hover:bg-alloy-bend-pine/[0.04]"
-                                        onClick={() => onOpenLocation(highlight.locationId)}
-                                        data-testid={`locations-fleet-attention-${highlight.locationId}`}
-                                    >
-                                        <div className="flex items-start gap-2">
-                                            <span
-                                                className={`mt-px ${
-                                                    highlight.item.grade === "fix" ? "text-amber-700" : "text-blue-700"
-                                                }`}
-                                                aria-hidden="true"
-                                            >
-                                                {highlight.item.grade === "fix" ? "⚠" : "ⓘ"}
-                                            </span>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate text-[11px] font-semibold text-alloy-midnight">
-                                                    {highlight.item.label}
-                                                </p>
-                                                {highlight.item.consequence ?
-                                                    <p className="mt-0.5 line-clamp-1 text-[10px] text-alloy-midnight/52">
-                                                        {highlight.item.consequence}
-                                                    </p>
-                                                :   null}
-                                                <div className="mt-1 flex items-center justify-between gap-2 text-[10px]">
-                                                    <span className="truncate text-alloy-midnight/42">
-                                                        {highlight.locationName}
-                                                    </span>
-                                                    <span className="shrink-0 font-semibold text-alloy-bend-pine">
-                                                        {highlight.item.nextLabel ?? "Open"} →
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    :   <p className="rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.025] px-2.5 py-2 text-[11px] text-alloy-midnight/50">
-                            No current fleet attention.
-                        </p>
-                    }
-                </ConfigWorkspaceCard>
-
-                <ConfigWorkspaceCard
-                    title="Fleet Summary"
-                    compact
-                    className="h-full"
-                    testId="locations-fleet-summary"
-                >
-                    <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[10px]">
-                        <div>
-                            <dt className="text-alloy-midnight/42">Locations</dt>
-                            <dd className="mt-0.5 font-semibold text-alloy-midnight">
-                                {fleet.activeLocationCount}
-                                {fleet.inactiveLocationCount > 0 ?
-                                    <span className="ml-1 font-normal text-alloy-midnight/42">
-                                        +{fleet.inactiveLocationCount} inactive
-                                    </span>
-                                :   null}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-alloy-midnight/42">Rooms</dt>
-                            <dd className="mt-0.5 font-semibold text-alloy-midnight">{fleet.totalRooms}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-alloy-midnight/42">Programs offered</dt>
-                            <dd className="mt-0.5 font-semibold text-alloy-midnight">{fleet.totalPrograms}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-alloy-midnight/42">Known capacity</dt>
-                            <dd className="mt-0.5 font-semibold text-alloy-midnight">
-                                {formatCapacity(fleet.totalConfiguredCapacity)}
-                            </dd>
-                        </div>
-                    </dl>
-                    <div className="mt-2 border-t border-alloy-stone/20 pt-2">
+            <aside className="min-w-0 xl:sticky xl:top-3" data-testid="locations-fleet-supporting-summary">
+                <ConfigWorkspaceCard title="Summary" compact testId="locations-fleet-summary">
+                    <section data-testid="locations-fleet-readiness">
                         <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-alloy-midnight/42">Average readiness</span>
-                            <span className="font-semibold text-alloy-midnight">{fleet.averageSetupPercent}%</span>
+                            <p className="font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                Operational Readiness
+                            </p>
+                            <p className="font-semibold text-alloy-midnight">{fleet.averageSetupPercent}%</p>
                         </div>
-                        <div className="mt-1 h-1 overflow-hidden rounded-full bg-alloy-stone/25">
+                        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-alloy-stone/25">
                             <div
                                 className="h-full rounded-full bg-alloy-bend-pine"
                                 style={{ width: `${Math.min(100, Math.max(0, fleet.averageSetupPercent))}%` }}
                             />
                         </div>
-                    </div>
+                        <p className="mt-1 text-[10px] text-alloy-midnight/45">
+                            {fleet.locationsSetupComplete} of {fleet.locationCount} fully configured
+                        </p>
+                    </section>
+
+                    <section
+                        className="mt-2.5 border-t border-alloy-stone/20 pt-2"
+                        data-testid="locations-fleet-health"
+                    >
+                        <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                            Fleet Health
+                        </p>
+                        <p className="mt-1 text-[11px] font-semibold leading-4 text-alloy-midnight">
+                            {healthLabel}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-alloy-midnight/45">
+                            {fleet.locationsNeedingAttention}{" "}
+                            {fleet.locationsNeedingAttention === 1 ? "location needs" : "locations need"} follow-up
+                        </p>
+                    </section>
+
+                    <section
+                        className="mt-2.5 border-t border-alloy-stone/20 pt-2"
+                        data-testid="locations-fleet-attention-list"
+                    >
+                        <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                            Needs Attention
+                        </p>
+                        {attentionHighlights.length > 0 ?
+                            <ul className="mt-1 space-y-1">
+                                {attentionHighlights.map((highlight) => (
+                                    <li key={`${highlight.locationId}-${highlight.item.key}`}>
+                                        <button
+                                            type="button"
+                                            className="w-full rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.025] px-2 py-1.5 text-left transition-colors hover:bg-alloy-bend-pine/[0.04]"
+                                            onClick={() => onOpenLocation(highlight.locationId)}
+                                            data-testid={`locations-fleet-attention-${highlight.locationId}`}
+                                        >
+                                            <div className="flex items-start gap-1.5">
+                                                <span
+                                                    className={`mt-px ${
+                                                        highlight.item.grade === "fix" ?
+                                                            "text-amber-700"
+                                                        :   "text-blue-700"
+                                                    }`}
+                                                    aria-hidden="true"
+                                                >
+                                                    {highlight.item.grade === "fix" ? "⚠" : "ⓘ"}
+                                                </span>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-[10px] font-semibold text-alloy-midnight">
+                                                        {highlight.item.label}
+                                                    </p>
+                                                    <div className="mt-0.5 flex items-center justify-between gap-1 text-[9px]">
+                                                        <span className="truncate text-alloy-midnight/42">
+                                                            {highlight.locationName}
+                                                        </span>
+                                                        <span className="shrink-0 font-semibold text-alloy-bend-pine">
+                                                            Open →
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        :   <p className="mt-1 text-[10px] text-alloy-midnight/45">No current fleet attention.</p>
+                        }
+                        {remainingAttentionCount > 0 ?
+                            <p className="mt-1 text-[9px] text-alloy-midnight/42">
+                                +{remainingAttentionCount} more shown on fleet cards
+                            </p>
+                        :   null}
+                    </section>
+
+                    <section
+                        className="mt-2.5 border-t border-alloy-stone/20 pt-2"
+                        data-testid="locations-fleet-inventory"
+                    >
+                        <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                            Inventory
+                        </p>
+                        <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10px]">
+                            <div>
+                                <dt className="text-alloy-midnight/42">Locations</dt>
+                                <dd className="font-semibold text-alloy-midnight">
+                                    {fleet.activeLocationCount}
+                                    {fleet.inactiveLocationCount > 0 ?
+                                        <span className="ml-1 font-normal text-alloy-midnight/42">
+                                            +{fleet.inactiveLocationCount}
+                                        </span>
+                                    :   null}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-alloy-midnight/42">Rooms</dt>
+                                <dd className="font-semibold text-alloy-midnight">{fleet.totalRooms}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-alloy-midnight/42">Programs</dt>
+                                <dd className="font-semibold text-alloy-midnight">{fleet.totalPrograms}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-alloy-midnight/42">Capacity</dt>
+                                <dd className="font-semibold text-alloy-midnight">
+                                    {formatCapacity(fleet.totalConfiguredCapacity)}
+                                </dd>
+                            </div>
+                        </dl>
+                    </section>
                 </ConfigWorkspaceCard>
-            </div>
+            </aside>
         </div>
     );
 }
