@@ -10,6 +10,18 @@ const VIEWPORTS = [
     { name: "laptop", width: 1366, height: 768 },
     { name: "wide", width: 1728, height: 1000 },
 ] as const;
+const CONFIGURATION_DIRECT_LINKS = [
+    "/settings/commercial",
+    "/settings/users-roles",
+    "/settings/communications",
+    "/settings/entities",
+    "/settings/processes",
+    "/settings/surfaces",
+    "/admin/workflows",
+    "/settings/calculations",
+    "/settings/fields",
+    "/settings/statuses",
+] as const;
 const managedStorageState = process.env.PLAYWRIGHT_STORAGE_STATE?.trim();
 
 test.use(managedStorageState ? { storageState: managedStorageState } : {});
@@ -155,6 +167,15 @@ test.describe("configuration-runtime-top-level-landings", () => {
                     timeout: 60_000,
                 });
             }
+        }
+
+        for (const path of CONFIGURATION_DIRECT_LINKS) {
+            const response = await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
+            expect(response?.status() ?? 500).toBeLessThan(400);
+            await expect(page).toHaveURL(new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\?.*)?$`), {
+                timeout: 120_000,
+            });
+            await expect(page.locator("main").first()).toBeVisible({ timeout: 60_000 });
         }
 
         expect(consoleErrors).toEqual([]);
