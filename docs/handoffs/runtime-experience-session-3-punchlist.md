@@ -41,10 +41,12 @@ owner) or is a visible glitch surfaced while getting there.
 | A5 blank screen → centered Alloy loader | ✅ landed | `68b8b8845` |
 | A2 Home/back-nav (retained Workspace) | ✅ verified round-trip | `ee42e5b8f` |
 | A4 pill lag → Phase H sibling adjacency | ✅ verified (~79ms) | `ee7915b5a` |
-| A3 two Focus-Panel skeletons | ⏳ open (needs default-subject drawer-VM prep) | — |
+| A3 blank canvas before skeletons → "Thinking…" owner | ✅ landed | `1f6f4eef7` |
+| A3 double-skeleton phase collapsed to one | ✅ landed | `b37caedd1` |
+| A3 **zero** skeleton (cards at commit) | ⏳ server — needs default-subject drawer VM in the provisioning answer | — |
 | Settlement deferral (~14-req stall) | ⏳ open | — |
 | Phase B store into commit path (full generalization) | ⏳ open (Phase H done via K2 directly) | — |
-| Metric drift (Phase J) | ⏳ open (Workspace showed 7 Pipeline Children — cross-check work-unit) | — |
+| Metric drift (Phase J) | ⏳ open — Workspace "7 Pipeline Children" vs work-unit "6" come from two paths (`workspaceHeaderCards`/`workspaceProcessSignal` vs `useWorkUnitSettlement`/`workUnitHeaderSurfaceConfig`); needs a data-consistency trace of both | — |
 
 A1/A5 show only on a genuinely slow load (warm dev resolves before the fallback streams) — confirm
 on a hard refresh. A2/A4 are verified in-browser.
