@@ -111,12 +111,43 @@ export function AlloyOperationalBootShell({
     variant = "workspace",
     showRibbon = true,
     showContentReserve = true,
+    chrome = "full",
 }: {
     variant?: AdminV2RouteLoadingVariant;
     showRibbon?: boolean;
     showContentReserve?: boolean;
+    /**
+     * `full` — paints its own sidebar rail + top nav (use ONLY where no AdminV2Shell is mounted,
+     * e.g. a Suspense fallback that replaces the whole inner shell).
+     * `content` — paints ONLY the content-area loader. Use for any fallback that fills the shell's
+     * `{children}` slot (route `loading.tsx`, nested layout boot states): AdminV2Shell already owns
+     * the sidebar, top nav, ambient root, and command rail, so painting them again duplicated the
+     * midnight-blue chrome inside the content area (Kelly A1). Content mode also centers a LARGER
+     * Alloy loading visual instead of a small top-left inline loader + skeleton (Kelly A5).
+     */
+    chrome?: "full" | "content";
 }) {
     const copy = ADMIN_V2_ROUTE_LOADING_VOCABULARY[variant];
+
+    // CONTENT MODE — no chrome, just a centered Alloy loader filling the shell's content slot.
+    if (chrome === "content") {
+        return (
+            <div
+                className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden bg-white"
+                data-alloy-operational-boot-shell="true"
+                data-alloy-operational-boot-variant={variant}
+                data-alloy-operational-boot-chrome="content"
+                aria-busy="true"
+            >
+                <BosExecutionLoader
+                    variant="fullscreen"
+                    title={copy.title}
+                    subtitle={copy.description}
+                    data-testid="alloy-operational-boot-loader"
+                />
+            </div>
+        );
+    }
 
     return (
         <div

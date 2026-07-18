@@ -66,7 +66,9 @@ export default async function AdminV2WorkspaceLayout({
 
     const orgId = auth.orgId;
     if (!orgId) {
-        return <AlloyOperationalBootShell variant="workspace" />;
+        // Rendered inside AdminV2Shell (the parent adminV2 layout) → content mode only, no duplicate
+        // sidebar/top-nav chrome (Kelly A1).
+        return <AlloyOperationalBootShell variant="workspace" chrome="content" />;
     }
 
     const [orgName, viewerTimezone, operationalTimezoneIana, access, initialEntityLabels, lifecycleCards] =
