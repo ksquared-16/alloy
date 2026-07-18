@@ -86,8 +86,8 @@ alloy_act_ensure_dirs() {
 alloy_act_reservation_ttl() {
   local ttl="${ALLOY_ACT_RESERVATION_TTL:-$ALLOY_ACT_RESERVATION_TTL_DEFAULT}"
   [[ "$ttl" =~ ^[0-9]+$ ]] || ttl="$ALLOY_ACT_RESERVATION_TTL_DEFAULT"
-  (( ttl < ALLOY_ACT_RESERVATION_TTL_MIN )) && ttl="$ALLOY_ACT_RESERVATION_TTL_MIN"
-  (( ttl > ALLOY_ACT_RESERVATION_TTL_MAX )) && ttl="$ALLOY_ACT_RESERVATION_TTL_MAX"
+  if (( ttl < ALLOY_ACT_RESERVATION_TTL_MIN )); then ttl="$ALLOY_ACT_RESERVATION_TTL_MIN"; fi
+  if (( ttl > ALLOY_ACT_RESERVATION_TTL_MAX )); then ttl="$ALLOY_ACT_RESERVATION_TTL_MAX"; fi
   printf '%s' "$ttl"
 }
 
@@ -295,7 +295,7 @@ alloy_act_lock_acquire() {
   fi
   # Held — reclaim only if the recorded owner PID is provably dead (liveness evidence).
   pid="$(alloy_act_lock_owner_pid "$d" || true)"
-  if [[ -z "$pid" ]] || ! alloy_pid_alive "$pid"; then
+  if [[ -z "$pid" ]] || ! alloy_rc_pid_alive "$pid"; then
     rm -rf "$d"
     if mkdir "$d" 2>/dev/null; then
       alloy_write_kv_file "$d/owner.env" \
@@ -337,7 +337,7 @@ alloy_act_reservation_is_live() {
   [[ "$state" == "held" ]] || return 1
   claim_pid="$(alloy_act_resv_get "$rid" ALLOY_RESV_CLAIM_PID 2>/dev/null || true)"
   # A live claim keeps the reservation live regardless of the timestamp.
-  [[ -n "$claim_pid" ]] && alloy_pid_alive "$claim_pid" && return 0
+  [[ -n "$claim_pid" ]] && alloy_rc_pid_alive "$claim_pid" && return 0
   exp_iso="$(alloy_act_resv_get "$rid" ALLOY_RESV_EXPIRES_AT 2>/dev/null || true)"
   now_e="$(alloy_act_epoch_now)"; exp_e="$(alloy_act_iso_to_epoch "$exp_iso" 2>/dev/null || true)"
   [[ -n "$now_e" && -n "$exp_e" ]] || return 0   # can't compute expiry ⇒ treat as live (fail-closed)
@@ -363,7 +363,7 @@ alloy_act_effective_remaining() {
   max="$ALLOY_RT_MAX_ACTIVE"; [[ "$max" =~ ^[0-9]+$ ]] || max=0
   held="$(alloy_act_held_capacity_units)"
   rem=$(( max - active - held ))
-  (( rem < 0 )) && rem=0
+  if (( rem < 0 )); then rem=0; fi
   printf '%s' "$rem"
 }
 
@@ -543,6 +543,7 @@ alloy_act_exec_update() {
   local v_lease="${over[ALLOY_EXEC_CLAIM_LEASE_UNTIL]-$(g ALLOY_EXEC_CLAIM_LEASE_UNTIL)}"
   local v_attempts="${over[ALLOY_EXEC_ATTEMPT_COUNT]-$(g ALLOY_EXEC_ATTEMPT_COUNT)}"
   local v_ended="${over[ALLOY_EXEC_ENDED_AT]-$(g ALLOY_EXEC_ENDED_AT)}"
+  local v_resv="${over[ALLOY_EXEC_RESERVATION_ID]-$(g ALLOY_EXEC_RESERVATION_ID)}"
   alloy_write_kv_file "$path" \
     "ALLOY_EXEC_SCHEMA_VERSION=$(g ALLOY_EXEC_SCHEMA_VERSION)" \
     "ALLOY_EXEC_ID=\"$(g ALLOY_EXEC_ID)\"" \
@@ -551,7 +552,7 @@ alloy_act_exec_update() {
     "ALLOY_EXEC_ISOLATION_CLASS=\"$(g ALLOY_EXEC_ISOLATION_CLASS)\"" \
     "ALLOY_EXEC_OPERATION=\"$(g ALLOY_EXEC_OPERATION)\"" \
     "ALLOY_EXEC_TARGET_NAMESPACE=\"$(g ALLOY_EXEC_TARGET_NAMESPACE)\"" \
-    "ALLOY_EXEC_RESERVATION_ID=\"$(g ALLOY_EXEC_RESERVATION_ID)\"" \
+    "ALLOY_EXEC_RESERVATION_ID=\"${v_resv}\"" \
     "ALLOY_EXEC_ADAPTER=\"$(g ALLOY_EXEC_ADAPTER)\"" \
     "ALLOY_EXEC_INITIATED_BY=\"$(g ALLOY_EXEC_INITIATED_BY)\"" \
     "ALLOY_EXEC_ADMISSION_DECISION_AT_DISPATCH=\"$(g ALLOY_EXEC_ADMISSION_DECISION_AT_DISPATCH)\"" \
@@ -582,7 +583,7 @@ alloy_act_exec_terminal() {
 alloy_act_exec_claim_live() {
   local exec_id="$1" pid
   pid="$(alloy_act_exec_get "$exec_id" ALLOY_EXEC_CLAIM_PID 2>/dev/null || true)"
-  [[ -n "$pid" ]] && alloy_pid_alive "$pid"
+  [[ -n "$pid" ]] && alloy_rc_pid_alive "$pid"
 }
 
 # ===========================================================================

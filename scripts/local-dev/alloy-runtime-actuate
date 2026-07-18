@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# alloy-runtime-actuate — realize an ALREADY-ADMITTED Runtime Intent (R3 ACTUATE).
+#
+# The single mutating entrypoint of Runtime Actuation V1, deliberately OUTSIDE
+# alloy-ro (which stays strictly read-only). Given a sprint's recorded intent, it
+# RE-INVOKES the authoritative R2 evaluator live, reserves capacity (only for a
+# dedicated provision), claims it for one bounded attempt, dispatches an allowlisted
+# adapter operation, and verifies the result through authoritative R1 observation.
+#
+# It NEVER decides policy (R2 owns it), NEVER sequences missions or orchestration
+# retries (Director owns that), NEVER accepts a shell fragment / command / Docker
+# argument / env var from any input, and NEVER treats a zero provider exit code as
+# success. A zero exit code is not success — R1 verification is.
+#
+# IDENTITY SAFETY (given the prior slot-targeting incident): fails closed unless ALL
+# expected identities match. It NEVER targets by slot number alone.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/manifest.sh
+source "${SCRIPT_DIR}/lib/manifest.sh"
+# shellcheck source=lib/actuation-exec.sh
+source "${SCRIPT_DIR}/lib/actuation-exec.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-runtime-actuate <worktree-name> --operation <op> --mission <mission-key>
+                            [--adapter supabase|fixture]
+                            [--expect-branch <branch>] [--expect-path <path>]
+                            [--reservation-ttl <seconds>] [--initiated-by <who>] [--json]
+
+Realizes an already-admitted runtime intent. Re-evaluates R2 admission LIVE, reserves
+capacity (dedicated provision only), claims one attempt, dispatches an allowlisted
+adapter operation, and verifies via R1. Declares nothing and decides no policy.
+
+Operations:
+  provision   realize a dedicated runtime for an admitted-dedicated intent
+  attach      record a worktree→runtime relationship for admitted-shared-existing
+  detach      remove a (shared) worktree→runtime relationship
+  retire      tear down an ownership-proven dedicated runtime this lineage created
+  reconcile   resolve incomplete/ambiguous attempts via R1; bookkeeping only
+
+Identity safety (fail closed — all must match):
+  <worktree-name>          a worktree NAME (a bare slot number is refused)
+  --mission <mission-key>  must equal the mission key derived from the manifest
+  --expect-branch <branch> if given, must match the worktree's branch
+  --expect-path <path>     if given, must match the worktree's recorded path
+
+  --adapter <name>         data-plane adapter (default: supabase; fixture only under a
+                           fixture/cert runtime root)
+  --reservation-ttl <n>    override the code-owned reservation TTL (bounded 30..3600)
+  --initiated-by <who>     provenance label (default: $USER; Director passes its id)
+
+Inspect results read-only with:
+  alloy-ro runtime-executions [<execution-id>]
+  alloy-ro runtime-reservations
+  alloy-ro runtime-actuation-capacity
+EOF
+}
+
+main() {
+  [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+
+  local wt="" op="" mission="" adapter="supabase" expect_branch="" expect_path="" \
+        ttl="" initiated_by="" json=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --operation) [[ $# -ge 2 ]] || alloy_die "--operation requires a value"; op="$2"; shift 2 ;;
+      --mission) [[ $# -ge 2 ]] || alloy_die "--mission requires a value"; mission="$2"; shift 2 ;;
+      --adapter) [[ $# -ge 2 ]] || alloy_die "--adapter requires a value"; adapter="$2"; shift 2 ;;
+      --expect-branch) [[ $# -ge 2 ]] || alloy_die "--expect-branch requires a value"; expect_branch="$2"; shift 2 ;;
+      --expect-path) [[ $# -ge 2 ]] || alloy_die "--expect-path requires a value"; expect_path="$2"; shift 2 ;;
+      --reservation-ttl) [[ $# -ge 2 ]] || alloy_die "--reservation-ttl requires a value"; ttl="$2"; shift 2 ;;
+      --initiated-by) [[ $# -ge 2 ]] || alloy_die "--initiated-by requires a value"; initiated_by="$2"; shift 2 ;;
+      --json) json=1; shift ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *) [[ -z "$wt" ]] || alloy_die "unexpected argument: $1"; wt="$1"; shift ;;
+    esac
+  done
+  [[ -n "$wt" ]] || { usage; exit 2; }
+
+  # Identity safety: refuse slot-only targeting outright.
+  if [[ "$wt" =~ ^[0-9]+$ ]]; then
+    alloy_die "refusing slot-only target '$wt': pass the worktree NAME (a slot number is not sufficient authority)"
+  fi
+  [[ -n "$op" ]] || alloy_die "--operation <op> is required"
+  [[ -n "$mission" ]] || alloy_die "--mission <mission-key> is required (expected mission identity must be stated)"
+
+  # Validate the adapter enum and TTL up front (never from a record).
+  case "$adapter" in supabase|fixture) ;; *) alloy_die "invalid --adapter '$adapter' (supabase|fixture)" ;; esac
+  if [[ -n "$ttl" ]]; then
+    [[ "$ttl" =~ ^[0-9]+$ ]] || alloy_die "--reservation-ttl must be an integer"
+    export ALLOY_ACT_RESERVATION_TTL="$ttl"
+  fi
+
+  alloy_load_config
+  alloy_act_init
+
+  # Operation must be one of the canonical set.
+  alloy_act_is_valid_operation "$op" || alloy_die "invalid --operation '$op' (one of: ${ALLOY_ACT_OPERATIONS})"
+
+  # 1) Worktree metadata must exist and its name must match (asserted by the loader).
+  alloy_load_metadata "$wt"
+
+  # 2) Manifest identity must match the worktree.
+  alloy_ad_manifest_exists "$wt" || alloy_die "no sprint manifest for '$wt' — cannot actuate without a declared posture"
+  local m_wt m_slot
+  m_wt="$(alloy_ad_manifest_get "$wt" worktree_name 2>/dev/null || true)"
+  [[ "$m_wt" == "$wt" ]] || alloy_die "manifest identity mismatch: manifest worktree_name='${m_wt}' != '${wt}'"
+  m_slot="$(alloy_ad_manifest_get "$wt" slot 2>/dev/null || true)"
+  [[ -z "$m_slot" || "$m_slot" == "$ALLOY_WORKTREE_SLOT" ]] || \
+    alloy_die "manifest/metadata slot mismatch: manifest slot='${m_slot}' metadata slot='${ALLOY_WORKTREE_SLOT}'"
+
+  # 3) Mission key must match the value derived from the manifest.
+  local derived_mission; derived_mission="$(alloy_ad_mission_key "$wt")"
+  [[ "$mission" == "$derived_mission" ]] || \
+    alloy_die "mission key mismatch: --mission='${mission}' but manifest-derived mission='${derived_mission}'"
+
+  # 4) Branch identity (metadata + live), fail closed on drift.
+  local live_branch="" meta_branch="$ALLOY_WORKTREE_BRANCH"
+  if [[ -n "$ALLOY_WORKTREE_PATH" && -d "$ALLOY_WORKTREE_PATH" ]] && alloy_rc_is_git_worktree "$ALLOY_WORKTREE_PATH"; then
+    live_branch="$(alloy_rc_git_branch "$ALLOY_WORKTREE_PATH" 2>/dev/null || true)"
+    [[ -z "$live_branch" || "$live_branch" == "$meta_branch" ]] || \
+      alloy_die "branch drift: live branch '${live_branch}' != metadata branch '${meta_branch}' — refusing to actuate"
+  fi
+  if [[ -n "$expect_branch" ]]; then
+    [[ "$expect_branch" == "$meta_branch" ]] || alloy_die "branch mismatch: --expect-branch='${expect_branch}' != '${meta_branch}'"
+    [[ -z "$live_branch" || "$expect_branch" == "$live_branch" ]] || alloy_die "branch mismatch: --expect-branch='${expect_branch}' != live '${live_branch}'"
+  fi
+
+  # 5) Path identity.
+  if [[ -n "$expect_path" ]]; then
+    [[ "$expect_path" == "$ALLOY_WORKTREE_PATH" ]] || alloy_die "path mismatch: --expect-path='${expect_path}' != '${ALLOY_WORKTREE_PATH}'"
+  fi
+
+  [[ -n "$initiated_by" ]] || initiated_by="${USER:-unknown}"
+  alloy_rc_is_safe_value "$initiated_by" || alloy_die "--initiated-by contains unsafe characters"
+
+  # Execute one bounded attempt. Result is authoritative in the execution record.
+  alloy_act_execute "$wt" "$op" "$adapter" "$initiated_by"
+
+  if [[ "$json" -eq 1 ]]; then
+    if [[ "$op" == "reconcile" ]]; then
+      printf '{"operation":"reconcile","worktree":"%s","state":"reconciled","result":"ok"}\n' "$(alloy_rc_json_escape "$wt")"
+    else
+      alloy_act_emit_execution_json "$_EXEC_ID"; printf '\n'
+    fi
+  else
+    printf 'runtime actuation: %s %s\n' "$op" "$wt"
+    printf '  execution:  %s\n' "${_EXEC_ID:-（n/a）}"
+    printf '  state:      %s\n' "${_EXEC_STATE:-（n/a）}"
+    printf '  result:     %s (retryable=%s)\n' "${_EXEC_RESULT:-（n/a）}" "${_EXEC_RETRYABLE:-（n/a）}"
+    printf '  desired:    %s\n' "${_EXEC_DESIRED:-（n/a）}"
+    printf '  note: a zero provider exit code is NOT success — this state is R1-verified.\n'
+  fi
+
+  # Exit code reflects the terminal outcome for Director consumption.
+  case "${_EXEC_STATE:-}" in
+    succeeded|reconciled) exit 0 ;;
+    *) exit 1 ;;
+  esac
+}
+
+main "$@"
