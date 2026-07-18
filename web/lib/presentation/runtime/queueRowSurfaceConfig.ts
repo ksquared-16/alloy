@@ -96,6 +96,10 @@ export const QUEUE_ROW_PERSON_CONTACT_FIELD_KEYS = [
     "person.primary_contact_name",
     "person.phone",
     "person.email",
+    // Legacy authored aliases — older published surfaces used the `primary_` prefixed names. Accepted so an
+    // authored contact field never silently disappears; they resolve to the same primary_contact values.
+    "person.primary_phone",
+    "person.primary_email",
 ] as const;
 
 export function isQueueRowPersonContactFieldKey(fieldKey: string): boolean {

@@ -67,8 +67,10 @@ export function resolveQueueRowFieldValueFromContext(
         case "person.primary_contact_name":
             return context.primary_contact?.display_name?.trim() || null;
         case "person.phone":
+        case "person.primary_phone": // legacy authored alias
             return context.primary_contact?.phone?.trim() || null;
         case "person.email":
+        case "person.primary_email": // legacy authored alias
             return context.primary_contact?.email?.trim() || null;
         case "opportunity.attention_reason":
             return context.attention_summary?.needs_attention
@@ -152,7 +154,7 @@ export function resolveCompactSlotDisplay(
                 }
                 const raw = resolveQueueRowFieldValueFromContext(key, context);
                 if (!raw?.trim()) return null;
-                if (key === "person.phone") {
+                if (key === "person.phone" || key === "person.primary_phone") {
                     return formatQueueRowPhoneDisplay(raw);
                 }
                 return formatQueueRowNameDisplay(raw, config.nameDisplayByFieldKey?.[key], key);

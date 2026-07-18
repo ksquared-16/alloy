@@ -381,7 +381,15 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
         caseId,
     });
 
-    const primaryContactName = trimOrNull(row._primary_contact_line);
+    // FIDELITY: `display_name` is the NAME ONLY — the value the authored `person.primary_contact_name`
+    // field renders. It must NOT be the `_primary_contact_line` composite (name · email · phone), or the
+    // renderer would emit phone/email the operator never authored. The composite remains available to the
+    // DEFAULT (unauthored) contact line via phone/email fields. Fall back to the line's first token for
+    // legacy rows enriched before `_primary_contact_name` existed.
+    const primaryContactName =
+        trimOrNull(row._primary_contact_name)
+        ?? trimOrNull(row._primary_contact_line)?.split(" · ")[0]?.trim()
+        ?? null;
     const primaryContact =
         primaryContactName != null
             ? {

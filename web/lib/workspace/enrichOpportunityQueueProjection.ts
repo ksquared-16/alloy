@@ -16,7 +16,11 @@ export type OpportunityRowCrmSource = {
 export type OpportunityCrmProjection = {
     _primary_email?: string | null;
     _primary_phone?: string | null;
-    /** Single line for row chrome: name · email · phone (sparse parts omitted). */
+    /** Primary contact NAME only — the value the `person.primary_contact_name` field renders. Separate
+     *  from `_primary_contact_line` so an authored name field never picks up the email/phone composite. */
+    _primary_contact_name?: string | null;
+    /** Single line for row chrome: name · email · phone (sparse parts omitted). The DEFAULT contact line;
+     *  never the value of the authored `person.primary_contact_name` field. */
     _primary_contact_line?: string | null;
     _room_label?: string | null;
     _tour_timing?: string | null;
@@ -130,8 +134,11 @@ export async function enrichOpportunityRowsWithCrmProjection(
             e._primary_email = person.email?.trim() || null;
             e._primary_phone = person.phone?.trim() || null;
             const nm = [person.first_name, person.last_name].filter(Boolean).join(" ").trim();
+            // Name only — this is what the authored `person.primary_contact_name` field renders.
+            e._primary_contact_name = nm || null;
             const phoneDisp = e._primary_phone ? formatPhoneUS(e._primary_phone) : null;
             const filtered = [nm || null, e._primary_email, phoneDisp].filter(Boolean) as string[];
+            // Composite line for the DEFAULT (unauthored) contact slot only.
             e._primary_contact_line = filtered.length ? filtered.join(" · ") : null;
         }
 
