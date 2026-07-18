@@ -100,7 +100,12 @@ export default function IdentityFieldValue({ cell, className, inlineEdit, onEdit
                 className,
             )}
             data-identity-field={cell.fieldRef}
+            // Editability provenance (P4) — "why is this editable?" is browser-observable: `policy` is the
+            // PUBLISHED config decision (editable | read-only), `editable` is the final state after the auth
+            // (canMutate) and save-binding gates. policy=editable + editable=false ⇒ blocked by a runtime/auth
+            // gate, not config. Config owns the base decision; the runtime only gates on permission/persistence.
             data-identity-policy={cell.policy}
+            data-identity-editable={cell.editable ? "true" : "false"}
         >
             {showLabel ? (
                 <span className={clsx("identity-field-value__label", eyebrow && "identity-field-value__label--eyebrow")}>

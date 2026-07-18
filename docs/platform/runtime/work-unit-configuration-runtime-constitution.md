@@ -174,16 +174,43 @@ scope**, not a duplicate; the provider serves one shared resolution per scope, n
 > configured cards; docs, performance (no regression), and browser evidence are recorded. Request ownership
 > is single-owner with independent applicability scopes preserved.
 
-### Actions  — configuration-driven today
-Config owner: `action_placements` + `action_definitions` (Settings → Surfaces). Resolver:
-`resolveActionsForContext({surface:"record_header"})`. Runtime: `applyRegistryResolvedActionClient`
-(executes registry-resolved actions only; never defines the menu).
+### Actions  — **CONFIGURATION-DRIVEN & AUDITED (P4)**
+| Aspect | Owner |
+|---|---|
+| Configuration owner | `action_placements` + `action_definitions` (Settings → Surfaces) |
+| Resolver | `resolveActionsForContext({surface:"record_header" \| "record_section"})` — reads placements+definitions from the DB; no hard-coded menus |
+| Renderer | header/Manage menu ← `displayVm.actions.header_menu` (built from the resolved config bundle); Current Work card actions ← `record_header` slots + published work-template `action_ref`s |
+| Runtime (execution) | `applyRegistryResolvedActionClient` — **executes registry-resolved actions only, never defines the menu** |
 
-### Editing  — pending **P4** (partial today)
-Config owner: published `LayoutDoc` `editable` flags + field policy (layout-runtime path). Data/Mutation
-owner: `PATCH /api/admin/opportunities/{id}` + the headless `drawerOperatingSaveCoordinator`
-(atomic Save-All, in-place patch-event refresh). P4 delta: drive inline Focus Panel card editability
-from configuration (retire hard-coded `editable:` flags), wire/retire `fieldEditabilityInDrawer`.
+P4 audit: the header/Manage/Current-Work action surfaces are **fully config-driven** from `action_placements`.
+Two card-local exceptions hard-code buttons through injected `mutation` seams rather than `action_placements`:
+`TourCard` (Schedule/Reschedule/Cancel/Confirm) and `CommunicationsCard` (cancel-scheduled-send). These are
+**domain mutation affordances** tied to a specific card's transaction seam (not a generic action menu) —
+classified reusable-component chrome with a documented *forward* path to `action_placements` if generalized.
+`demoFocusPanelSummaryViewModel`'s literal `header_menu` is a fixture, not the runtime path.
+
+### Editing  — **CONFIGURATION-DRIVEN & AUDITED (P4)**
+| Aspect | Owner |
+|---|---|
+| Editability **policy** (which fields editable) | **published `NestedSurfaceConfig`** via `resolveIdentityFieldPolicy` → `editable \| read-only \| hidden` (config; authored in `FocusPanelCardInspector`) |
+| Permission gate | `canMutate` / `statusCanMutate` — **auth/role** (`hasPortalAdminMutateAccess` / server `status_can_mutate`). Correctly a permission decision, **not** a presentation-config decision. |
+| Persistence capability | per-ref save binding (`identityFieldMutationBinding`) — a **runtime capability**: a field with no mutation path cannot be saved regardless of config. |
+| Card lifecycle capability | `focusPanelCardLifecycle` capability manifest (`supportsInlineEdit`, `editableEvidenceGroups`, …) — a **reusable component-implementation contract** declaring which modes each card component implements; the tenant *policy* of what is editable is the config layer above. Not a hard-coded tenant policy. |
+| Data / Mutation owner | `PATCH /api/admin/opportunities/{id}` + headless `drawerOperatingSaveCoordinator` (atomic Save-All, ordered parallel section save, rollback, in-place patch-event refresh) — **runtime-owned mutation mechanics**. |
+| Validation **rules** | config-driven field required/read-only policy (`fieldRequirementPolicy`), **server-enforced** at PATCH (`enforceDrawerFieldPoliciesOnPatch`). |
+| Observability | fields emit `data-identity-policy` (config decision) + `data-identity-editable` (final state after auth+save gates) — "why is this editable?" is **browser-provable**. |
+
+Deleted legacy owner (P4-A): the `fieldEditabilityInDrawer` chrome builders
+(`buildDrawerFieldPolicyChromeFromEntityData` and helpers) — zero production callers; the inline Focus Panel
+owns editability through the published field policy, not drawer chrome. The mature `interaction_policy` /
+LayoutDoc-`editable` engines remain, but they are the **drawer/modal/layout-runtime** surfaces' owners, not
+the inline Focus Panel's — the inline panel's single editability policy owner is `resolveIdentityFieldPolicy`
+over published `NestedSurfaceConfig`.
+
+*Known presentation gap (documented, not yet closed):* required/validation **presentation** in the Focus
+Panel is thin — the rules are published config and server-enforced, but the operator sees a generic post-save
+error rather than a pre-save required marker driven by config. Config-driven validation *presentation* is the
+one remaining Editing enhancement; it does not affect ownership (rules are already config-owned + enforced).
 
 ---
 
@@ -213,6 +240,43 @@ from configuration (retire hard-coded `editable:` flags), wire/retire `fieldEdit
 6. Constitutional audit entry (current owner, deleted owner, files, repo-search proof, docs, perf, evidence).
 
 ---
+
+## 5. Final Constitutional Audit — Work Unit Configuration Runtime
+
+Every visible Work Unit region is a configured Surface region with exactly one owner per responsibility;
+mutation is Runtime-owned; legacy ownership is deleted.
+
+| Region | Configuration owner | Resolver | Renderer | Runtime owner | Mutation owner | Deleted legacy owner |
+|---|---|---|---|---|---|---|
+| **Header** | Settings→Surfaces `work_unit_header` | `resolveSurfaceVariant` (server, no HTTP) | `WorkUnitHeader`→`WorkspaceHeader` | D1 `resolveOperationalPresentation` | n/a (read-only) | `metric_placements` WU-header path (`workUnitHeaderCards`, `useWorkUnitHeaderSurfaceConfig`, `WorkUnitHeaderSurfaceBuilder`, `WorkUnitHeaderCalculations`) |
+| **Queue** | Settings→Surfaces `queue`/`queue_row_*` | `resolveSurfaceVariant` + `resolveQueueRowVariant` | `CondensedQueueRow` | D1 provisioning answer | n/a (read-only) | ad-hoc `filter+sort` selector; queue-row→`openDrawer` follower |
+| **Focus Panel** | Settings→Surfaces `focus_panel_summary` | `resolveSurfaceVariant` (via `resolvePublishedFocusPanelSummaryRecord`) | `OpportunityFocusPanelModeGrid` | `useRecordWorkRuntime` (Focus subject) | `drawerOperatingSaveCoordinator`→PATCH | ad-hoc `highestVersion` pick; context-free org-global fetch |
+| **Editing** | published `NestedSurfaceConfig` (`resolveIdentityFieldPolicy`) | field policy + auth gate + save binding | Identity/Household/Children card fields | `useEditableCardRuntime` | `drawerOperatingSaveCoordinator`→PATCH; field-policy enforced server-side | `fieldEditabilityInDrawer` chrome builders (dead) |
+| **Actions** | `action_placements`+`action_definitions` | `resolveActionsForContext` | `displayVm.actions.header_menu` / Current Work | `applyRegistryResolvedActionClient` (execute-only) | action registry `/api/admin/actions/execute` | n/a (already config-driven) |
+
+**Deleted files / symbols:** `workUnitHeaderCards.ts`, `useWorkUnitHeaderSurfaceConfig.ts`,
+`WorkUnitHeaderCalculations.tsx`, `WorkUnitHeaderSurfaceBuilder`, `workUnitHeaderSurfaceDefinition`,
+`WORK_UNIT_HEADER_TEMPLATE` (P1); queue-row `openDrawer` follower + ad-hoc queue selector (P2);
+Focus Panel `highestVersion` runtime pick + org-global fetch (P3); `fieldEditabilityInDrawer`
+builders + test (P4). The drawer (`AdminDrawerContext`, host, followers) is not an authority for any region.
+
+**Tests:** `resolveSurfaceVariant.test.ts` (11), `headerVariantApplicability.test.ts` (6),
+`queueRowVariantApplicability.test.ts` (7), `focusPanelVariantApplicability.test.ts` (8),
+`oipWarmCacheDedup.test.ts` (6) — all green; project `tsc` 0 errors.
+
+**Performance (warm, slot 3, production-like p50):** ack 13 ms, legible 14 ms, commit ~4.6–4.8 s;
+critical-path provisioning **1 request / 0 duplicates**; 0 continuity breaks. No regression across P1→P4
+(each phase measured pre/post; deltas within noise). Region resolution is server-side pure or post-commit
+Settlement — off the commit critical path.
+
+**Browser evidence:** `p2-queue-cert.spec.ts`, `p2v-final-cert.spec.ts` (queue: `data-queue-row-source="published"`,
+`data-queue-surface-id`, `data-queue-row-variant`), `p3-focuspanel-cert.spec.ts` (Focus Panel resolves,
+`workViewId`+`stageKey` threaded, 0 drawer/modal hosts render the record), identity fields emit
+`data-identity-policy` + `data-identity-editable`.
+
+**Single-owner proof:** each region has exactly one applicability resolver (`resolveSurfaceVariant`, or its
+per-row/record wrappers), one renderer, one runtime/data owner, one mutation owner. Repository search confirms
+no second resolver/renderer/owner survives per region (see each region's audit block above).
 
 ## Related
 - `resolveSurfaceVariant` — `web/lib/layout/resolveSurfaceVariant.ts` (the sole applicability resolver).
