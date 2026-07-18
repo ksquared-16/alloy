@@ -94,6 +94,25 @@ Measured cold `provisioning-answer` (new-leads, dev): networkMs ~2.9–4.2s, ser
   Warm-on-hover + the "Thinking…" loader already hide it in normal use; a cold/direct load pays it.
   (Kelly: keep going on the presentation list for now; revisit server caching later.)
 
+## Session 3b — architecture completion pass (Kelly: "do 2 & 3 and 4, finish this off")
+
+- **#4a config-read cache** ✅ landed (`deaff4bb0`). Tenant-keyed TTL cache over the 4 provisioning
+  config reads. Measured warm server 1974ms→~1004ms (~49%); wall-clock 5.0s→2.4s. Real win.
+- **#2 Workspace Operational Preparation** ✅ landed (`5252e39d1`). Prewarms each process's entry
+  provisioning answer on idle after the Workspace settles → first work-unit entry is warm.
+- **#4b default-subject VM in the provisioning answer (zero-skeleton)** ⛔ **NOT done — doctrinal
+  conflict.** It would bundle the ~14-request settlement into the commit round-trip, making the commit
+  heavier to remove a skeleton — the opposite of the settlement doctrine ("reserve geometry, settle
+  after, never gate commit on settlement"). The #6 adjacent-VM prewarm already gives warm subjects a
+  near-zero skeleton the doctrinal way.
+- **#3 wire Phase B store into the commit path** ⚠️ **DECISION PENDING.** The store's user benefit
+  (instant prepared commits) is already delivered via K2 (Phase H), the VM loader (#6), and the
+  prefetch cache (#2). Wiring the `DestinationId` store means replacing K2's commit cache — a large,
+  high-risk rewrite of the critical path — for architectural unification + revision-based invalidation
+  (marginal vs the current 15s TTL for navigation prep). Recommend: **do not** rush it; formalize as a
+  dedicated, flag-tested effort if/when the unification is worth the risk. Store remains built + tested
+  (Phase B, 14 unit tests) and flag-gated OFF.
+
 ## A. Live felt problems — Kelly, Session 3 browser (:3013, Firefly tenant)
 
 1. **Refresh duplicate shell.** On a refresh, a blue left rail + header render **duplicated inside
