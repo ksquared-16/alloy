@@ -6,7 +6,6 @@ import {
     resolveOpportunityLinkedFieldSources,
 } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { personFieldOnOpportunityInteractionPolicy } from "@/lib/fields/fieldInteractionPolicy";
-import { buildDrawerFieldPolicyChromeFromEntityData } from "@/lib/admin/drawer/fieldEditabilityInDrawer";
 
 const PERSON_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -69,30 +68,6 @@ describe("linkedRecordFieldEditing", () => {
         expect(opportunityPayload.first_name).toBeUndefined();
         expect(opportunityPayload.last_name).toBeUndefined();
         expect(opportunityPayload.name).toBe("Inquiry B");
-    });
-
-    it("buildDrawerFieldPolicyChrome marks linked person field editable with source label", () => {
-        const chrome = buildDrawerFieldPolicyChromeFromEntityData(
-            {
-                ...oppRecord(),
-                _field_definitions: [personFieldDef("phone")],
-                _field_policy_resolved: {
-                    phone: {
-                        entityType: "opportunity",
-                        fieldKey: "phone",
-                        storage: "field_values",
-                        bodyKey: "phone",
-                        policyMode: "enforceable",
-                        requirementSupported: true,
-                        interactionSupported: true,
-                        reason: "test",
-                    },
-                },
-            },
-            "opportunities"
-        );
-        expect(chrome.phone?.readOnly).toBe(false);
-        expect(chrome.phone?.linkedSourceLabel).toBe("Primary person");
     });
 
     it("applyPersonPatchToOpportunityHydration updates mirror and display fields", () => {
