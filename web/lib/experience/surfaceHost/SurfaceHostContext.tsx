@@ -37,6 +37,7 @@ import { attentionFromUrl, ATTENTION_SCOPE, WORKSPACE_ATTENTION_TARGET } from "@
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { subscribeWorkspaceReturn } from "@/lib/experience/surfaceHost/workspaceReturnIntent";
 import { ProvisionedWorkUnitSurface } from "@/components/presentation/workUnit/ProvisionedWorkUnitSurface";
+import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
 /** The bare Workspace address — the Workspace is not a work-unit target, so it has no slug URL. */
 const WORKSPACE_URL = "/workspace";
@@ -191,6 +192,16 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     const outgoingYielding = !showWorkUnit && movingToWorkUnit && focus.phase !== "stable";
     const slot = showWorkUnit ? "held" : outgoingYielding ? "outgoing" : "current";
 
+    // ── NEVER-BLANK: single "Thinking…" owner during a cold Work Unit preparation (Kelly A3). ──
+    // On a DIRECT work-unit load (or any entry where no Workspace is retained to recede), the route
+    // renders the seed-only slug host (null) and no surface is committed yet — so the operator stared
+    // at a blank canvas for the full ~3.8 s provisioning round-trip and it felt hung. When the ROUTE is
+    // a work unit but nothing is committed yet (and we're not on our way back to the Workspace), show
+    // the centered Alloy loader as the single owner instead of blank. On a gesture entry FROM the
+    // Workspace the route stays `/workspace`, so the retained Workspace recedes and this never fires.
+    const routeIsWorkUnit = surfaceHostShouldRenderWorkUnit(surfaceRefFromPath(pathname));
+    const showWorkUnitLoader = routeIsWorkUnit && !showWorkUnit && !desiredIsWorkspace;
+
     return (
         <SurfaceHostContext.Provider value={value}>
             <div
@@ -199,7 +210,11 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
                 // but display:none so the incoming surface owns the whole region. `outgoing` = receding,
                 // non-interactive. `current` = the live, interactive Workspace.
                 className={`flex min-h-0 flex-1 flex-col ${
-                    showWorkUnit ? "hidden" : outgoingYielding ? "motion-recede pointer-events-none" : ""
+                    showWorkUnit || showWorkUnitLoader
+                        ? "hidden"
+                        : outgoingYielding
+                          ? "motion-recede pointer-events-none"
+                          : ""
                 }`.trim()}
                 // Report the rendered recede back to Focus so the yield→hold handshake is driven by the
                 // choreography, not by tests. In the `yielding` phase this advances K3 and fires the
@@ -213,7 +228,11 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
             >
                 {children}
             </div>
-            {showWorkUnit ? <ProvisionedWorkUnitSurface /> : null}
+            {showWorkUnit ? (
+                <ProvisionedWorkUnitSurface />
+            ) : showWorkUnitLoader ? (
+                <AlloyOperationalBootShell variant="work_unit" chrome="content" />
+            ) : null}
         </SurfaceHostContext.Provider>
     );
 }
