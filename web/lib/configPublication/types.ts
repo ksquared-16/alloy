@@ -49,6 +49,52 @@ export type ConfigurationPublicationRecord = {
     publishedAt: string;
 };
 
+/** Durable consumer pointer to the published revision currently in use. */
+export type ConfigurationConsumptionRecord = {
+    id: string;
+    orgId: string;
+    domainKey: string;
+    subjectId: string;
+    locationId: string;
+    publicationId: string;
+    revisionId: string;
+    consumedAt: string;
+    deliveredByRunId: string;
+};
+
+/** Append-only attempt evidence. Retry adds another attempt under the same run. */
+export type ConfigurationDeliveryAttemptRecord = {
+    id: string;
+    runId: string;
+    targetId: string;
+    locationId: string;
+    attemptNumber: number;
+    status: "delivered" | "unchanged" | "failed";
+    errorCode: string | null;
+    errorMessage: string | null;
+    attemptedAt: string;
+};
+
+export type ConfigurationDistributionTargetRecord = {
+    id: string;
+    locationId: string;
+    status: "pending" | "delivered" | "unchanged" | "failed";
+    attemptCount: number;
+    errorCode: string | null;
+    errorMessage: string | null;
+    result: Record<string, unknown>;
+};
+
+export type ConfigurationDistributionRunRecord = {
+    id: string;
+    publicationId: string;
+    status: "planned" | "running" | "completed" | "partial_failure" | "failed";
+    idempotencyKey: string;
+    createdAt: string;
+    completedAt: string | null;
+    targets: ConfigurationDistributionTargetRecord[];
+};
+
 export type ConfigurationDeliveryTarget = {
     locationId: string;
     locationLabel: string;

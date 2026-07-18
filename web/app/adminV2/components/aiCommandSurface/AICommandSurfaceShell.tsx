@@ -1,6 +1,7 @@
 "use client";
 
 import { ADMIN_AI_ACTIVITY_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import { usePathname } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -649,6 +650,7 @@ export default function AICommandSurfaceShell({
 }: {
   presentation?: AICommandSurfacePresentation;
 }) {
+  const pathname = usePathname();
   const shellRootRef = useRef<HTMLElement | null>(null);
   const adminDrawer = useAdminDrawerOptional();
 
@@ -2180,8 +2182,13 @@ export default function AICommandSurfaceShell({
         hasWorkUnitScope: Boolean(globalAssistant?.workspaceScope?.work_unit_id?.trim()),
         hasOpportunityContext: globalAssistant?.currentContext?.entity_type === "opportunities",
         opportunitySingular,
+        isConfigurationContext:
+          pathname === "/organization"
+          || pathname.startsWith("/organization/")
+          || pathname === "/settings"
+          || pathname.startsWith("/settings/"),
       }),
-    [globalAssistant?.workspaceScope?.work_unit_id, globalAssistant?.currentContext, opportunitySingular]
+    [globalAssistant?.workspaceScope?.work_unit_id, globalAssistant?.currentContext, opportunitySingular, pathname]
   );
 
   const bosRailAttention = useMemo(

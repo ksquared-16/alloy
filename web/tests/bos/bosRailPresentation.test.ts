@@ -28,4 +28,19 @@ describe("bosRailPresentation", () => {
         });
         expect(suggestions[0]?.title).toBe("Summarize this lead");
     });
+
+    it("uses Configuration-native starters on Configuration routes", () => {
+        const suggestions = resolveCommandSurfaceRailStarterSuggestions({
+            hasWorkUnitScope: false,
+            hasOpportunityContext: false,
+            opportunitySingular: "Inquiry",
+            isConfigurationContext: true,
+        });
+        expect(suggestions.map((suggestion) => suggestion.title)).toEqual([
+            "Explain this configuration",
+            "Review configuration attention",
+            "Review unpublished changes",
+        ]);
+        expect(suggestions.map((suggestion) => suggestion.title).join(" ")).not.toContain("queue");
+    });
 });

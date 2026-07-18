@@ -85,11 +85,20 @@ export function isCanonicalAdminPath(pathname: string): boolean {
     );
 }
 
-/** Build Organization Programs href; optional programId preserves selection across refresh. */
-export function organizationProgramsHref(programId?: string | null): string {
+/** Build Organization Programs href; optional selection/detail state survives refresh. */
+export function organizationProgramsHref(
+    programId?: string | null,
+    section?: string | null,
+): string {
     const id = typeof programId === "string" ? programId.trim() : "";
-    if (!id) return CANONICAL_ORGANIZATION_PROGRAMS_HREF;
-    return `${CANONICAL_ORGANIZATION_PROGRAMS_HREF}?programId=${encodeURIComponent(id)}`;
+    const detailSection = typeof section === "string" ? section.trim() : "";
+    const params = new URLSearchParams();
+    if (id) params.set("programId", id);
+    if (id && detailSection && detailSection !== "overview") {
+        params.set("section", detailSection);
+    }
+    const query = params.toString();
+    return query ? `${CANONICAL_ORGANIZATION_PROGRAMS_HREF}?${query}` : CANONICAL_ORGANIZATION_PROGRAMS_HREF;
 }
 
 /** Map old `/admin/...` bookmark to operator workspace when not canonical. */

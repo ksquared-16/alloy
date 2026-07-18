@@ -57,6 +57,16 @@ const snapshot = {
                     defaultCommercialPosture: {},
                 },
             ],
+            publications: [
+                {
+                    id: "publication-1",
+                    orgId: "org-1",
+                    domainKey: "programs",
+                    subjectId: "program-1",
+                    revision: { id: "revision-1", number: 1, checksum: "checksum" },
+                    publishedAt: "2026-07-17T00:00:00.000Z",
+                },
+            ],
             latestPublication: {
                 id: "publication-1",
                 orgId: "org-1",
@@ -69,6 +79,8 @@ const snapshot = {
     ],
     locations: [{ id: "location-1", label: "Downtown" }],
     runs: [],
+    attempts: [],
+    assignments: [],
 };
 
 let container: HTMLDivElement | null = null;
@@ -83,7 +95,7 @@ afterEach(() => {
 });
 
 describe("Programs Publication workspace", () => {
-    it("shows draft, publish, impact-preview, assignment, and history controls", async () => {
+    it("defaults to Overview and exposes reusable publication concerns intentionally", async () => {
         vi.stubGlobal(
             "fetch",
             vi.fn().mockResolvedValue({
@@ -101,12 +113,32 @@ describe("Programs Publication workspace", () => {
         });
 
         expect(container.querySelector('[data-testid="programs-publication-runtime"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-overview"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
+
+        await act(async () => {
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-draft"]') as HTMLButtonElement).click();
+        });
         expect(container.querySelector('[data-testid="program-save-draft"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-validate-draft"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-publish"]')).not.toBeNull();
+
+        await act(async () => {
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-assignment"]') as HTMLButtonElement).click();
+        });
         expect(container.querySelector('[data-testid="program-preview-delivery"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-assign-delivery"]')).not.toBeNull();
-        expect(container.textContent).toContain("Published and delivery history");
+
+        await act(async () => {
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-distribution"]') as HTMLButtonElement).click();
+        });
+        expect(container.querySelector('[data-testid="program-distribution-runtime"]')).not.toBeNull();
+
+        await act(async () => {
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-history"]') as HTMLButtonElement).click();
+        });
+        expect(container.querySelector('[data-testid="program-history-runtime"]')).not.toBeNull();
+        expect(container.textContent).toContain("Configuration history");
         expect(container.textContent).toContain("local offer state");
     });
 });

@@ -22,6 +22,19 @@ export { ConfigScopeContextBar } from "@/components/adminV2/settings/configurati
 export { ConfigApplyToDialog } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigApplyToDialog";
 export { ConfigDomainCard } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard";
 export {
+    ConfigCollectionRail,
+    type ConfigCollectionFilterKey,
+    type ConfigCollectionItem,
+} from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigCollectionRail";
+export {
+    ConfigDetailRuntime,
+    type ConfigDetailTab,
+} from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigDetailRuntime";
+export { ConfigPublicationOverview } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigPublicationOverview";
+export { ConfigAssignmentRuntime } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigAssignmentRuntime";
+export { ConfigDistributionRuntime } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigDistributionRuntime";
+export { ConfigHistoryTimeline } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigHistoryTimeline";
+export {
     ConfigChildObjectMasterDetail,
     ConfigConsequenceLine,
 } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigChildObjectMasterDetail";

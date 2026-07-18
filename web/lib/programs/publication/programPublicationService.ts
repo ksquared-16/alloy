@@ -3,7 +3,11 @@ import {
     buildConfigurationDeliveryPlan,
     normalizeConfigurationTargets,
 } from "@/lib/configPublication/deliveryPlan";
+import { loadConfigurationPublicationEvidence } from "@/lib/configPublication/evidenceService";
 import type {
+    ConfigurationDeliveryAttemptRecord,
+    ConfigurationDistributionRunRecord,
+    ConfigurationDistributionTargetRecord,
     ConfigurationPublicationRecord,
     ConfigurationTargetPreview,
 } from "@/lib/configPublication/types";
@@ -29,33 +33,32 @@ export type ProgramCatalogItem = {
     lifecycleStatus: "active" | "retired";
     draft: ProgramDraft;
     revisions: ProgramRevision[];
+    publications: ConfigurationPublicationRecord[];
     latestPublication: ConfigurationPublicationRecord | null;
 };
 
-export type ProgramDistributionTargetResult = {
-    id: string;
-    locationId: string;
-    status: "pending" | "delivered" | "unchanged" | "failed";
-    attemptCount: number;
-    errorCode: string | null;
-    errorMessage: string | null;
-    result: Record<string, unknown>;
-};
+export type ProgramDistributionTargetResult = ConfigurationDistributionTargetRecord;
 
-export type ProgramDistributionRun = {
+export type ProgramDistributionRun = ConfigurationDistributionRunRecord;
+
+export type ProgramAssignment = {
     id: string;
+    programId: string;
+    locationId: string;
+    locationLabel: string;
     publicationId: string;
-    status: "planned" | "running" | "completed" | "partial_failure" | "failed";
-    idempotencyKey: string;
-    createdAt: string;
-    completedAt: string | null;
-    targets: ProgramDistributionTargetResult[];
+    revisionId: string;
+    revisionNumber: number | null;
+    consumedAt: string;
+    deliveredByRunId: string;
 };
 
 export type ProgramPublicationSnapshot = {
     programs: ProgramCatalogItem[];
     locations: Array<{ id: string; label: string }>;
     runs: ProgramDistributionRun[];
+    attempts: ConfigurationDeliveryAttemptRecord[];
+    assignments: ProgramAssignment[];
 };
 
 function stringValue(value: unknown): string {
@@ -135,7 +138,7 @@ function assertNoError(error: { message: string } | null, operation: string): vo
 }
 
 async function loadProgramRows(supabase: SupabaseClient, orgId: string) {
-    const [programsResult, draftsResult, revisionsResult, publicationsResult] = await Promise.all([
+    const [programsResult, draftsResult, revisionsResult] = await Promise.all([
         supabase
             .from("programs")
             .select("id, org_id, program_key, lifecycle_status, created_at")
@@ -150,22 +153,14 @@ async function loadProgramRows(supabase: SupabaseClient, orgId: string) {
             .select("*")
             .eq("org_id", orgId)
             .order("revision_number", { ascending: false }),
-        supabase
-            .from("configuration_publications")
-            .select("*")
-            .eq("org_id", orgId)
-            .eq("domain_key", "programs")
-            .order("revision_number", { ascending: false }),
     ]);
     assertNoError(programsResult.error, "Load Programs");
     assertNoError(draftsResult.error, "Load Program drafts");
     assertNoError(revisionsResult.error, "Load Program revisions");
-    assertNoError(publicationsResult.error, "Load Program publications");
     return {
         programs: (programsResult.data ?? []) as DbRow[],
         drafts: (draftsResult.data ?? []) as DbRow[],
         revisions: (revisionsResult.data ?? []) as DbRow[],
-        publications: (publicationsResult.data ?? []) as DbRow[],
     };
 }
 
@@ -173,7 +168,7 @@ export async function loadProgramPublicationSnapshot(
     supabase: SupabaseClient,
     orgId: string,
 ): Promise<ProgramPublicationSnapshot> {
-    const [programRows, locationsResult, runsResult, targetsResult] = await Promise.all([
+    const [programRows, locationsResult, evidence] = await Promise.all([
         loadProgramRows(supabase, orgId),
         supabase
             .from("locations")
@@ -182,22 +177,17 @@ export async function loadProgramPublicationSnapshot(
             .eq("location_type", "site")
             .eq("is_active", true)
             .order("label"),
-        supabase
-            .from("configuration_distribution_runs")
-            .select("*")
-            .eq("org_id", orgId)
-            .eq("domain_key", "programs")
-            .order("created_at", { ascending: false })
-            .limit(50),
-        supabase
-            .from("configuration_distribution_targets")
-            .select("*")
-            .eq("org_id", orgId)
-            .order("updated_at", { ascending: false }),
+        loadConfigurationPublicationEvidence({
+            supabase,
+            orgId,
+            domainKey: "programs",
+        }),
     ]);
     assertNoError(locationsResult.error, "Load Locations");
-    assertNoError(runsResult.error, "Load distribution history");
-    assertNoError(targetsResult.error, "Load delivery results");
+    const locations = ((locationsResult.data ?? []) as DbRow[]).map((row) => ({
+        id: stringValue(row.id),
+        label: nullableString(row.label) ?? "Untitled Location",
+    }));
 
     const programs = programRows.programs.flatMap((program): ProgramCatalogItem[] => {
         const programId = stringValue(program.id);
@@ -206,8 +196,8 @@ export async function loadProgramPublicationSnapshot(
         const revisions = programRows.revisions
             .filter((row) => row.program_id === programId)
             .map(mapRevision);
-        const latestPublicationRow = programRows.publications.find(
-            (row) => row.subject_id === programId,
+        const publications = evidence.publications.filter(
+            (publication) => publication.subjectId === programId,
         );
         return [{
             id: programId,
@@ -215,38 +205,35 @@ export async function loadProgramPublicationSnapshot(
             lifecycleStatus: program.lifecycle_status === "retired" ? "retired" : "active",
             draft: mapDraft(program, draftRow),
             revisions,
-            latestPublication: latestPublicationRow ? mapPublication(latestPublicationRow) : null,
+            publications,
+            latestPublication: publications[0] ?? null,
         }];
     });
 
-    const targetRows = (targetsResult.data ?? []) as DbRow[];
-    const runs = ((runsResult.data ?? []) as DbRow[]).map((run): ProgramDistributionRun => ({
-        id: stringValue(run.id),
-        publicationId: stringValue(run.publication_id),
-        status: run.status as ProgramDistributionRun["status"],
-        idempotencyKey: stringValue(run.idempotency_key),
-        createdAt: stringValue(run.created_at),
-        completedAt: nullableString(run.completed_at),
-        targets: targetRows
-            .filter((target) => target.run_id === run.id)
-            .map((target): ProgramDistributionTargetResult => ({
-                id: stringValue(target.id),
-                locationId: stringValue(target.location_id),
-                status: target.status as ProgramDistributionTargetResult["status"],
-                attemptCount: Number(target.attempt_count ?? 0),
-                errorCode: nullableString(target.error_code),
-                errorMessage: nullableString(target.error_message),
-                result: recordValue(target.result),
-            })),
+    const revisionNumberById = new Map(
+        programs.flatMap((program) =>
+            program.revisions.map((revision) => [revision.id, revision.revisionNumber] as const),
+        ),
+    );
+    const locationLabelById = new Map(locations.map((location) => [location.id, location.label]));
+    const assignments: ProgramAssignment[] = evidence.consumptions.map((consumption) => ({
+        id: consumption.id,
+        programId: consumption.subjectId,
+        locationId: consumption.locationId,
+        locationLabel: locationLabelById.get(consumption.locationId) ?? "Location",
+        publicationId: consumption.publicationId,
+        revisionId: consumption.revisionId,
+        revisionNumber: revisionNumberById.get(consumption.revisionId) ?? null,
+        consumedAt: consumption.consumedAt,
+        deliveredByRunId: consumption.deliveredByRunId,
     }));
 
     return {
         programs,
-        locations: ((locationsResult.data ?? []) as DbRow[]).map((row) => ({
-            id: stringValue(row.id),
-            label: nullableString(row.label) ?? "Untitled Location",
-        })),
-        runs,
+        locations,
+        runs: evidence.runs,
+        attempts: evidence.attempts,
+        assignments,
     };
 }
 
