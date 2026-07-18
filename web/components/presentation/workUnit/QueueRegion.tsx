@@ -11,7 +11,7 @@
  * title/count header — only a compact Search/Filters utility bar, then rows.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { QueueRowModel, WorkUnitSurfaceModel } from "@/lib/presentation/runtime";
 import {
@@ -115,6 +115,29 @@ export function QueueRegion({
     const { openRecord, prefetchRecord } = useFocusPanelOpen();
     const renderState = queueRegionRenderState(queue);
     const workView = title?.trim() || null;
+
+    // ── IMMEDIATE SELECTION ACKNOWLEDGMENT (Kelly Blocker 1) ──────────────────────────────────────
+    // The row's selected rail + acknowledge pulse are driven by `selectedRecordId`, which is the
+    // COMMITTED subject — so on a click they only lit up once Focus committed (a felt ~seconds of "did
+    // it register?"). Track the clicked row optimistically and mark it selected the instant the pointer
+    // acts, before commit. It is NOT a second subject owner: it only paints the row rail early; the
+    // committed truth takes over the moment it lands, and a mismatch self-heals (a superseding click
+    // moves the optimistic id; the committed id always wins for everything else).
+    const [optimisticSelectedId, setOptimisticSelectedId] = useState<string | null>(null);
+    useEffect(() => {
+        // The committed selection has caught up (or moved elsewhere) — drop the optimistic overlay.
+        if (optimisticSelectedId && selectedRecordId != null && selectedRecordId === optimisticSelectedId) {
+            setOptimisticSelectedId(null);
+        }
+    }, [selectedRecordId, optimisticSelectedId]);
+    const openRecordAck = useCallback(
+        (row: QueueRowModel) => {
+            setOptimisticSelectedId(row.entityId);
+            openRecord(row);
+        },
+        [openRecord],
+    );
+    const effectiveSelectedId = optimisticSelectedId ?? selectedRecordId;
     // Retained queue scroll — per (org, work unit, work view) so Work View A→B→A restores each place.
     const { orgId } = useWorkspaceOrg();
     const queueScrollRef = useRetainedScroll(queueScrollScope(orgId, workUnitId, workViewId));
@@ -280,10 +303,10 @@ export function QueueRegion({
                                     row={row}
                                     rowConfig={row.rowConfig ?? queue.rowConfig}
                                     focus={row.focus}
-                                    onOpen={openRecord}
+                                    onOpen={openRecordAck}
                                     onPrefetch={prefetchRecord}
                                     isFirst={index === 0}
-                                    isSelected={rowIsSelected(row, selectedRecordId)}
+                                    isSelected={rowIsSelected(row, effectiveSelectedId)}
                                 />
                             </li>
                         ))}
