@@ -27,6 +27,8 @@ source "${SCRIPT_DIR}/lib/ro-config.sh"
 source "${SCRIPT_DIR}/lib/ro.sh"
 # shellcheck source=lib/runtime-core.sh
 source "${SCRIPT_DIR}/lib/runtime-core.sh"
+# shellcheck source=lib/admission-core.sh
+source "${SCRIPT_DIR}/lib/admission-core.sh"
 
 ALLOY_RO_CAPABILITIES_FILE="${SCRIPT_DIR}/lib/ro-capabilities.json"
 
@@ -63,6 +65,10 @@ Verbs (all read-only; safe under `Bash(alloy-ro *)`):
   runtime-capacity         Configured vs observed runtimes + aggregate memory/cpu.
   runtime-discover         Live Docker discovery of Supabase runtimes (registry ignored).
   runtime-containers <id|ns>  Redacted container list (no command/env/secrets).
+  runtime-policy           Canonical posture→isolation + admission policy (static).
+  runtime-admission <tgt>  Live admission decision for a worktree (ephemeral; declares, never provisions).
+  runtime-intent <tgt>     Inspect a recorded runtime intent for a worktree (or report none).
+  runtime-explain <tgt>    Posture resolution + admission + observed runtime state, separated.
   help                     This help.
   version                  Print surface version.
 
@@ -707,6 +713,283 @@ verb_runtime_containers() {
 }
 
 # ---------------------------------------------------------------------------
+# Runtime Intent & Admission Contract V1 (R2 — DECLARE, never actuate)
+#
+# These verbs report a deterministic control-plane DECISION. They never imply an
+# admitted runtime exists, and never provision, attach, or actuate anything.
+# ---------------------------------------------------------------------------
+# Resolve a slot|name|worktree target to a worktree name (read-only inspection may
+# accept a slot; the MUTATING writer alloy-runtime-intent may not). "" if none.
+_ad_resolve_worktree() {
+  local t="$1" n
+  n="$(alloy_ro_resolve_target "$t" 2>/dev/null || true)"
+  [[ -n "$n" ]] && { printf '%s' "$n"; return 0; }
+  [[ -f "$(alloy_ad_manifest_path "$t")" ]] && { printf '%s' "$t"; return 0; }
+  return 1
+}
+
+# Read posture + coordination, evaluate. Sets _AD_* and _AD_MISSION/_AD_DOCKER.
+_ad_load_and_eval() {
+  local wt="$1"
+  alloy_ad_read_posture "$wt"
+  local coord; coord="$(alloy_ad_intent_coordination "$wt")"
+  _AD_COORD="$coord"
+  alloy_ad_evaluate "$_AD_MUTATION" "$_AD_TENANT" "$coord"
+  _AD_MISSION="$(alloy_ad_mission_key "$wt")"
+  alloy_rt_docker_available && _AD_DOCKER=true || _AD_DOCKER=false
+}
+
+verb_runtime_admission() {
+  [[ $# -eq 1 ]] || _ro_die_usage "runtime-admission requires exactly one target (slot|name|worktree)"
+  alloy_ro_config_init; alloy_ad_init
+  local wt; wt="$(_ad_resolve_worktree "$1" 2>/dev/null || true)"
+  [[ -n "$wt" ]] || { printf 'alloy-ro: no worktree/manifest for target: %s\n' "$1" >&2; exit "$EX_NOTFOUND"; }
+  _ad_load_and_eval "$wt"
+  if [[ "$JSON" -eq 1 ]]; then
+    alloy_ad_emit_admission_json "$_AD_MISSION" "$wt" "$_AD_MUTATION" "$_AD_TENANT" \
+      "$_AD_POSTURE_SOURCE" "$_AD_COORD" "$_AD_DOCKER"
+    printf '\n'
+  else
+    printf 'Runtime admission (DECLARE only — admission is not provisioning; an admitted runtime may not yet exist)\n'
+    printf '  mission:            %s\n' "$_AD_MISSION"
+    printf '  worktree:           %s\n' "$wt"
+    printf '  posture:            mutation=%s tenant_class=%s  (%s)\n' "$_AD_MUTATION" "$_AD_TENANT" "$_AD_POSTURE_SOURCE"
+    printf '  isolation class:    %s\n' "$_AD_ISOLATION"
+    printf '  coordination:       %s\n' "$_AD_COORD"
+    printf '  runtime required:   %s\n' "$_AD_RUNTIME_REQUIRED"
+    printf '  capacity required:  %s  (active %s / max %s, remaining %s%s)\n' \
+      "$_AD_CAPACITY_REQUIRED" "$_AD_CURRENT_ACTIVE" "$_AD_MAX" "$_AD_REMAINING" \
+      "$([[ "$_AD_OVER_BUDGET" == true ]] && echo ', OVER BUDGET' || echo '')"
+    printf '  decision:           %s\n' "$_AD_DECISION"
+    printf '  reason:             %s — %s\n' "$_AD_REASON_CODE" "$_AD_HUMAN_REASON"
+    [[ -n "${_AD_SHARED_CANDIDATE:-}" ]] && printf '  shared candidate:   %s (observed; attachment is a later phase)\n' "$_AD_SHARED_CANDIDATE"
+    printf '  next actions:       %s\n' "$_AD_NEXT_ACTIONS"
+    printf '  (declarative only — R2 does not execute these and does not touch Docker or Supabase)\n'
+  fi
+  return "$EX_OK"
+}
+
+verb_runtime_intent() {
+  [[ $# -eq 1 ]] || _ro_die_usage "runtime-intent requires exactly one target (slot|name|worktree)"
+  alloy_ro_config_init; alloy_ad_init
+  local wt; wt="$(_ad_resolve_worktree "$1" 2>/dev/null || true)"
+  [[ -n "$wt" ]] || { printf 'alloy-ro: no worktree/manifest for target: %s\n' "$1" >&2; exit "$EX_NOTFOUND"; }
+  local path; path="$(alloy_ad_intent_path "$wt")"
+
+  if ! alloy_ad_intent_exists "$wt"; then
+    if [[ "$JSON" -eq 1 ]]; then
+      printf '{'; alloy_ro_json_kv worktree "$wt"; printf ','
+      alloy_ro_json_kv_raw recorded false; printf ','
+      alloy_ro_json_kv intent_path "$path"; printf ','
+      alloy_ro_json_kv note "no runtime intent has been declared for this worktree (declare with alloy-runtime-intent)"
+      printf '}\n'
+    else
+      printf 'No runtime intent recorded for %s.\n' "$wt"
+      printf '  expected at: %s\n' "$path"
+      printf '  declare with: alloy-runtime-intent %s --mission <key> ...\n' "$wt"
+    fi
+    return "$EX_OK"
+  fi
+
+  # Recorded intent fields (parsed, never sourced).
+  local g; g() { alloy_ad_intent_get "$wt" "$1" 2>/dev/null || printf ''; }
+  local r_mut r_ten r_iso cur_iso stale=false
+  r_mut="$(g ALLOY_INTENT_POSTURE_MUTATION)"; r_ten="$(g ALLOY_INTENT_POSTURE_TENANT)"
+  r_iso="$(g ALLOY_INTENT_ISOLATION_CLASS)"
+  # Staleness: does the CURRENT manifest posture still resolve to the recorded class?
+  alloy_ad_read_posture "$wt"
+  cur_iso="$(alloy_ad_resolve_isolation "$_AD_MUTATION" "$_AD_TENANT")"
+  if [[ "$_AD_MUTATION" != "$r_mut" || "$_AD_TENANT" != "$r_ten" || "$cur_iso" != "$r_iso" ]]; then stale=true; fi
+
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv_raw schema_version "$(g ALLOY_INTENT_SCHEMA_VERSION)"; printf ','
+    alloy_ro_json_kv_raw recorded true; printf ','
+    alloy_ro_json_kv worktree "$wt"; printf ','
+    alloy_ro_json_kv mission_key "$(g ALLOY_INTENT_MISSION_KEY)"; printf ','
+    alloy_ro_json_kv branch "$(g ALLOY_INTENT_BRANCH)"; printf ','
+    printf '"posture":{'; alloy_ro_json_kv mutation "$r_mut"; printf ','; alloy_ro_json_kv tenant_class "$r_ten"; printf '},'
+    alloy_ro_json_kv isolation_class "$r_iso"; printf ','
+    alloy_ro_json_kv coordination "$(g ALLOY_INTENT_COORDINATION)"; printf ','
+    alloy_ro_json_kv coordination_reason "$(g ALLOY_INTENT_COORDINATION_REASON)"; printf ','
+    alloy_ro_json_kv decision_at_declaration "$(g ALLOY_INTENT_DECISION_AT_DECL)"; printf ','
+    alloy_ro_json_kv reason_at_declaration "$(g ALLOY_INTENT_REASON_AT_DECL)"; printf ','
+    alloy_ro_json_kv declared_at "$(g ALLOY_INTENT_DECLARED_AT)"; printf ','
+    alloy_ro_json_kv declared_by "$(g ALLOY_INTENT_DECLARED_BY)"; printf ','
+    alloy_ro_json_kv_raw supersedes_count "$(g ALLOY_INTENT_SUPERSEDES_COUNT)"; printf ','
+    alloy_ro_json_kv_raw stale "$stale"; printf ','
+    printf '"current_posture":{'; alloy_ro_json_kv mutation "$_AD_MUTATION"; printf ','; alloy_ro_json_kv tenant_class "$_AD_TENANT"; printf '},'
+    alloy_ro_json_kv current_isolation_class "$cur_iso"; printf ','
+    alloy_ro_json_kv intent_path "$path"; printf ','
+    alloy_ro_json_kv note "a recorded intent is a declaration, NOT a provisioned runtime; re-evaluate live with runtime-admission"
+    printf '}\n'
+  else
+    printf 'Runtime intent for %s (a declaration — NOT a provisioned runtime)\n' "$wt"
+    printf '  mission:        %s\n' "$(g ALLOY_INTENT_MISSION_KEY)"
+    printf '  branch:         %s\n' "$(g ALLOY_INTENT_BRANCH)"
+    printf '  posture:        mutation=%s tenant_class=%s\n' "$r_mut" "$r_ten"
+    printf '  isolation:      %s\n' "$r_iso"
+    printf '  coordination:   %s%s\n' "$(g ALLOY_INTENT_COORDINATION)" \
+      "$([[ -n "$(g ALLOY_INTENT_COORDINATION_REASON)" ]] && printf ' (%s)' "$(g ALLOY_INTENT_COORDINATION_REASON)")"
+    printf '  at declaration: %s — %s\n' "$(g ALLOY_INTENT_DECISION_AT_DECL)" "$(g ALLOY_INTENT_REASON_AT_DECL)"
+    printf '  declared:       %s by %s\n' "$(g ALLOY_INTENT_DECLARED_AT)" "$(g ALLOY_INTENT_DECLARED_BY)"
+    printf '  superseded:     %s prior record(s)\n' "$(g ALLOY_INTENT_SUPERSEDES_COUNT)"
+    printf '  stale:          %s (current posture -> %s)\n' "$stale" "$cur_iso"
+    printf '  record:         %s\n' "$path"
+    printf '  (re-evaluate live with: alloy-ro runtime-admission %s)\n' "$wt"
+  fi
+  return "$EX_OK"
+}
+
+verb_runtime_explain() {
+  [[ $# -eq 1 ]] || _ro_die_usage "runtime-explain requires exactly one target (slot|name|worktree)"
+  alloy_ro_config_init; alloy_ad_init
+  local wt; wt="$(_ad_resolve_worktree "$1" 2>/dev/null || true)"
+  [[ -n "$wt" ]] || { printf 'alloy-ro: no worktree/manifest for target: %s\n' "$1" >&2; exit "$EX_NOTFOUND"; }
+  _ad_load_and_eval "$wt"
+  local resolved; [[ "$_AD_ISOLATION" == "invalid" ]] && resolved=false || resolved=true
+  local rec; alloy_ad_intent_exists "$wt" && rec=true || rec=false
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{'
+    alloy_ro_json_kv_raw schema_version "$ALLOY_AD_SCHEMA_VERSION"; printf ','
+    alloy_ro_json_kv worktree "$wt"; printf ','
+    alloy_ro_json_kv mission_key "$_AD_MISSION"; printf ','
+    # (1) posture resolution — how the manifest maps to an isolation class.
+    printf '"posture_resolution":{'
+    alloy_ro_json_kv mutation "$_AD_MUTATION"; printf ','
+    alloy_ro_json_kv tenant_class "$_AD_TENANT"; printf ','
+    alloy_ro_json_kv posture_source "$_AD_POSTURE_SOURCE"; printf ','
+    alloy_ro_json_kv isolation_class "$_AD_ISOLATION"; printf ','
+    alloy_ro_json_kv_raw resolved "$resolved"
+    printf '},'
+    # (2) admission decision — declarative, reserves nothing.
+    printf '"admission":{'
+    alloy_ro_json_kv decision "$_AD_DECISION"; printf ','
+    alloy_ro_json_kv reason_code "$_AD_REASON_CODE"; printf ','
+    alloy_ro_json_kv human_reason "$_AD_HUMAN_REASON"; printf ','
+    alloy_ro_json_kv_raw capacity_required "$_AD_CAPACITY_REQUIRED"; printf ','
+    printf '"allowed_next_actions":'; alloy_ad_emit_next_actions_json
+    printf '},'
+    # (3) actual observed runtime state — NOT implied by admission.
+    printf '"actual_runtime_state":{'
+    alloy_ro_json_kv_raw docker_available "$_AD_DOCKER"; printf ','
+    alloy_ro_json_kv_raw current_active_runtimes "$_AD_CURRENT_ACTIVE"; printf ','
+    alloy_ro_json_kv_raw configured_max_runtimes "$_AD_MAX"; printf ','
+    alloy_ro_json_kv_raw remaining_capacity "$_AD_REMAINING"; printf ','
+    alloy_ro_json_kv_raw over_budget "$_AD_OVER_BUDGET"; printf ','
+    alloy_ro_json_kv note "observed capacity only; admission does NOT provision, and an admitted runtime may not exist"
+    printf '},'
+    alloy_ro_json_kv_raw recorded_intent "$rec"; printf ','
+    alloy_ro_json_kv disclaimer "Admission is not provisioning. R2 declares intent and admission only; it does not control Docker or Supabase."
+    printf '}\n'
+  else
+    printf '== Runtime explanation for %s ==\n\n' "$wt"
+    printf '(1) Posture resolution\n'
+    printf '    mutation=%s tenant_class=%s  (%s)\n' "$_AD_MUTATION" "$_AD_TENANT" "$_AD_POSTURE_SOURCE"
+    printf '    -> isolation class: %s  (resolved=%s)\n\n' "$_AD_ISOLATION" "$resolved"
+    printf '(2) Admission decision (declarative — reserves nothing)\n'
+    printf '    decision: %s\n' "$_AD_DECISION"
+    printf '    reason:   %s — %s\n' "$_AD_REASON_CODE" "$_AD_HUMAN_REASON"
+    printf '    capacity required: %s   next actions: %s\n\n' "$_AD_CAPACITY_REQUIRED" "$_AD_NEXT_ACTIONS"
+    printf '(3) Actual observed runtime state (NOT implied by admission)\n'
+    printf '    docker: %s   active: %s / max %s   remaining: %s%s\n' \
+      "$_AD_DOCKER" "$_AD_CURRENT_ACTIVE" "$_AD_MAX" "$_AD_REMAINING" \
+      "$([[ "$_AD_OVER_BUDGET" == true ]] && echo '   OVER BUDGET' || echo '')"
+    printf '    recorded intent: %s\n\n' "$rec"
+    printf 'Admission is not provisioning. R2 declares intent and admission only; it does not control Docker or Supabase.\n'
+  fi
+  return "$EX_OK"
+}
+
+verb_runtime_policy() {
+  [[ $# -eq 0 ]] || _ro_die_usage "runtime-policy takes no arguments"
+  alloy_ad_init
+  if [[ "$JSON" -eq 1 ]]; then
+    cat <<JSON
+{
+  "schema_version": ${ALLOY_AD_SCHEMA_VERSION},
+  "contract": "runtime-intent-admission",
+  "phase": "R2 — DECLARE (observe -> declare -> actuate)",
+  "configured_max_runtimes": ${ALLOY_RT_MAX_ACTIVE},
+  "posture_vocabulary": {
+    "mutation": ["read-only", "shared-read-only", "isolated-mutable"],
+    "tenant_class": ["none", "shared", "disposable", "production-like"]
+  },
+  "isolation_classes": ["none", "shared-readonly", "shared-mutable", "dedicated-disposable", "dedicated-certified"],
+  "isolation_mapping": [
+    { "mutation": "read-only", "tenant_class": "none", "isolation_class": "none" },
+    { "mutation": "read-only", "tenant_class": "shared", "isolation_class": "shared-readonly" },
+    { "mutation": "shared-read-only", "tenant_class": "shared", "isolation_class": "shared-readonly" },
+    { "mutation": "isolated-mutable", "tenant_class": "disposable", "isolation_class": "dedicated-disposable" },
+    { "mutation": "isolated-mutable", "tenant_class": "production-like", "isolation_class": "dedicated-certified" },
+    { "mutation": "shared-read-only", "tenant_class": "production-like", "isolation_class": "dedicated-certified" },
+    { "mutation": "isolated-mutable", "tenant_class": "shared", "isolation_class": "shared-mutable", "discouraged": true, "coordination_required": true }
+  ],
+  "unsupported_combination_policy": "fail-closed to refused-invalid-posture; never guessed, coerced, or downgraded",
+  "decisions": [
+    "admitted-none", "admitted-shared-existing", "admitted-shared-new", "admitted-dedicated",
+    "refused-invalid-posture", "refused-capacity", "refused-no-compatible-shared-runtime",
+    "refused-certification-requires-dedicated", "refused-coordination-required"
+  ],
+  "reason_codes": [
+    "posture-requires-no-runtime", "compatible-shared-runtime-available",
+    "new-shared-runtime-within-capacity", "dedicated-runtime-within-capacity",
+    "capacity-exhausted", "coordination-required", "no-compatible-shared-runtime",
+    "certification-forbids-shared", "invalid-posture-combination",
+    "posture-undeclared", "posture-malformed"
+  ],
+  "capacity_semantics": {
+    "none": 0,
+    "attach_existing_compatible_shared": 0,
+    "create_new_shared": 1,
+    "create_dedicated": 1,
+    "fail_closed": true,
+    "over_budget_authorizes_no_allocation": true,
+    "admission_reserves_capacity": false
+  },
+  "shared_compatibility_rules": {
+    "requires_registered_record": true,
+    "requires_matching_declared_class": true,
+    "requires_explicitly_known_owner": true,
+    "unknown_owner_or_class_is_not_capacity": true,
+    "must_be_observably_active": true
+  },
+  "certification_rules": {
+    "shared_cannot_satisfy_dedicated_certified": true,
+    "no_fallback_from_dedicated_to_shared": true
+  },
+  "coordination_rules": {
+    "shared_mutable_requires_explicit_coordination": true,
+    "v1_will_not_create_new_shared_mutable_runtime": true
+  },
+  "boundary": "R2 declares intent and admission decisions only. Admission is NOT provisioning; an admitted runtime may not yet exist. R2 does not start/stop/attach/detach/lease/reclaim runtimes and does not touch Docker or Supabase."
+}
+JSON
+  else
+    printf 'Runtime Intent & Admission Contract V1 — policy (R2: DECLARE, never actuate)\n\n'
+    printf 'Configured max active runtimes: %s\n\n' "$ALLOY_RT_MAX_ACTIVE"
+    printf 'Posture -> isolation class (any other combination fails closed):\n'
+    printf '  read-only        + none            -> none\n'
+    printf '  read-only        + shared          -> shared-readonly\n'
+    printf '  shared-read-only + shared          -> shared-readonly\n'
+    printf '  isolated-mutable + disposable      -> dedicated-disposable\n'
+    printf '  isolated-mutable + production-like -> dedicated-certified\n'
+    printf '  shared-read-only + production-like -> dedicated-certified\n'
+    printf '  isolated-mutable + shared          -> shared-mutable  (discouraged; coordination required)\n\n'
+    printf 'Capacity: none=0, attach-existing-shared=0, new-shared=1, dedicated=1.\n'
+    printf 'Fail-closed: an over-budget state authorizes no additional allocation. Admission reserves nothing.\n'
+    printf 'Certification: a shared runtime cannot satisfy dedicated-certified; no fallback from dedicated to shared.\n'
+    printf 'Coordination: shared-mutable is never admitted without an explicit coordination declaration.\n\n'
+    printf 'Decisions: admitted-none | admitted-shared-existing | admitted-shared-new | admitted-dedicated |\n'
+    printf '           refused-invalid-posture | refused-capacity | refused-no-compatible-shared-runtime |\n'
+    printf '           refused-certification-requires-dedicated | refused-coordination-required\n\n'
+    printf 'Boundary: admission is NOT provisioning. An admitted runtime may not yet exist. R2 does not\n'
+    printf 'control Docker or Supabase. Full machine-readable policy: alloy-ro runtime-policy --json\n'
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
 # argument parsing & dispatch (fail closed)
 # ---------------------------------------------------------------------------
 main() {
@@ -743,6 +1026,10 @@ main() {
     runtime-capacity)   verb_runtime_capacity "${rest[@]}" ;;
     runtime-discover)   verb_runtime_discover "${rest[@]}" ;;
     runtime-containers) verb_runtime_containers "${rest[@]}" ;;
+    runtime-policy)     verb_runtime_policy "${rest[@]}" ;;
+    runtime-admission)  verb_runtime_admission "${rest[@]}" ;;
+    runtime-intent)     verb_runtime_intent "${rest[@]}" ;;
+    runtime-explain)    verb_runtime_explain "${rest[@]}" ;;
     help)            usage ;;
     version)         printf 'alloy-ro %s\n' "$ALLOY_RO_VERSION" ;;
     *)               _ro_die_usage "unknown verb: $verb" ;;
