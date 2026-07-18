@@ -149,7 +149,9 @@ Overview; draft editing is intentional; active revision and working-draft state
 are distinct; durable consumption pointers project current assignment and
 revision drift; distribution failures project into Configuration Attention;
 and History spans publication, assignment, retry, and failure evidence across
-revisions. The Collection Runtime owns search, lifecycle filtering, Add,
+revisions. Recovered targets retain their original failed attempt in History;
+current distribution status never rewrites historical evidence. The Collection
+Runtime owns search, lifecycle filtering, Add,
 publication posture, assignment posture, readiness, and attention signals.
 Publication evidence honors the reader's allowed Location scope. Capability
 posture is explicit: read-only operators inherit the runtime without mutation

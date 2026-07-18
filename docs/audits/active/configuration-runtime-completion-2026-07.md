@@ -11,7 +11,8 @@ supersedes: []
 **Completion date:** 2026-07-17  
 **Validation surface:** Programs, Configuration Publication Runtime Consumer #1  
 **Scope:** reusable publishable Configuration Runtime; no Operational Calculations or additional domain expansion  
-**Final certification:** **CONFIGURATION RUNTIME COMPLETE**
+**Final certification:** **APPROVED AS THE CONFIGURATION PLATFORM REFERENCE IMPLEMENTATION**
+**Independent re-certification:** [`programs-configuration-reference-recertification-2026-07.md`](programs-configuration-reference-recertification-2026-07.md)
 
 ## Executive result
 
@@ -47,7 +48,7 @@ change, Apply behavior, or Operational Calculations work was introduced.
 | Active revision vs draft unclear | Generic publication posture distinguishes active revision, working draft, unpublished changes, and clean published state | Platform Runtime |
 | Assignment posture transient | `ConfigAssignmentRuntime` reads durable consumption pointers with Location, consumed revision, drift, and health | Platform Runtime |
 | Failures absent from Attention | Runtime model projects failed targets, revision drift, unpublished changes, and missing setup into Attention | Platform Runtime |
-| History incomplete | Generic evidence loader and timeline span publications, runs, attempts, assignments, retries, and failures across revisions | Platform Runtime |
+| History incomplete | Generic evidence loader, history derivation, and timeline span publications, runs, attempts, assignments, retries, and failures across revisions | Platform Runtime |
 | Collection grammar incomplete | Shared rail owns search, lifecycle filters, Add, publication, assignment, readiness, health, and responsive selection | Platform Runtime |
 | Generic CRUD / queue shell DNA | Shared Configuration command rail plus Configuration-native BOS starters replace queue/follow-up language | Platform Runtime |
 | Responsive uncertified | Authenticated 1440×1000, 1024×768, and 768×900 evidence captured | Certification |
@@ -63,7 +64,7 @@ change, Apply behavior, or Operational Calculations work was introduced.
 | Attention | generic runtime model + `ConfigAttentionPanel` | Program setup areas | Supply authoritative setup areas |
 | Assignment | `ConfigAssignmentRuntime` | Program target selection and impact copy | Supply target labels and assignment action |
 | Distribution | `ConfigDistributionRuntime` | Programs retry API action | Register durable adapter/retry |
-| History | `ConfigHistoryTimeline` + generic evidence loader | Program-friendly event wording | Map domain revision identity |
+| History | `buildConfigurationHistory` + `ConfigHistoryTimeline` + generic evidence loader | Revision and target labels | Map domain revision identity |
 | Command rail | `ConfigurationCommandRailActions` | Program action destinations | Supply contextual actions |
 | BOS context | Configuration route resolver | None | Inherited from `/organization/*` or `/settings/*` |
 | Responsive behavior | shared Collection/Detail geometry | None | Inherited |
@@ -138,13 +139,15 @@ Evidence lives in:
 |---|---|
 | `00-organization-landing.png` | Settled Organization catalog and Programs boundary |
 | `01-programs-landing.png` | Complete Collection Runtime, Add, search/filter, Configuration BOS |
+| `01b-legacy-redirect.png` | Legacy route resolves to canonical Organization ownership |
 | `02-program-detail-draft.png` | Intentional edit concern and active-revision separation |
 | `03-published-revision.png` | Read-first Overview, clean published state, readiness and Attention |
 | `04-location-assignment-selection.png` | Durable current-assignment region separate from pending selection |
 | `05-impact-preview.png` | Assignment impact and protected Location ownership |
+| `06-attention-overview.png` | Failed assignment projected into collection, object identity, Overview, and Attention |
 | `06-partial-failure.png` | Distribution failure posture, target reason, safe retry |
 | `07-retry-success.png` | Successful deterministic retry without duplicate successful target |
-| `08-history-audit.png` | Publication, assignment, and retry timeline |
+| `08-history-audit.png` | Publication, assignment, original failure, and retry retained together |
 | `09-responsive-laptop.png` | 1024×768 responsive collapse and Configuration-native shell |
 | `10-responsive-narrow.png` | 768×900 object selector, tabs, Overview, and no page overflow |
 
@@ -163,9 +166,10 @@ Observed:
 
 - Production TypeScript graph: passed.
 - Test/Playwright TypeScript graph: passed.
-- Focused Configuration Runtime tests: 18/18 passed.
-- Publication, routing, authorization, migration, workspace, and BOS focused
-  suite: 44/45 passed. The sole failure is a pre-existing stale source-string
+- Focused Configuration Runtime tests passed, including recovered-failure
+  History retention.
+- Publication, routing, authorization, migration, and workspace regression
+  suite: 41/42 passed. The sole failure is a pre-existing stale source-string
   assertion in `configurationRuntimeLocations.test.ts` expecting
   `setCreatingProgram(true)`; it is unrelated to this change.
 - Authenticated Programs Chromium certification: passed.
@@ -194,7 +198,7 @@ that grammar.
 
 ## Final certification
 
-**CONFIGURATION RUNTIME COMPLETE**
+**APPROVED AS THE CONFIGURATION PLATFORM REFERENCE IMPLEMENTATION**
 
 Programs now qualifies as the reference implementation for future publishable
 Configuration domains. Consumer #2 may inherit this runtime without significant

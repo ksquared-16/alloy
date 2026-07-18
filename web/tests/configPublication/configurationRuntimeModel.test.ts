@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    buildConfigurationHistory,
     deriveConfigurationRuntimeModel,
     sortConfigurationHistory,
 } from "@/lib/configPublication/runtimeModel";
@@ -112,5 +113,63 @@ describe("Configuration Runtime model", () => {
                 },
             ]).map((entry) => entry.id),
         ).toEqual(["newer", "older"]);
+    });
+
+    it("retains an initial failure after a successful retry", () => {
+        const history = buildConfigurationHistory({
+            publications: [publication],
+            runs: [{
+                id: "run-1",
+                publicationId: publication.id,
+                status: "completed",
+                idempotencyKey: "run-1",
+                createdAt: "2026-07-17T12:01:00.000Z",
+                completedAt: "2026-07-17T12:03:00.000Z",
+                targets: [{
+                    id: "target-1",
+                    locationId: "location-1",
+                    status: "delivered",
+                    attemptCount: 2,
+                    errorCode: null,
+                    errorMessage: null,
+                    result: {},
+                }],
+            }],
+            attempts: [
+                {
+                    id: "attempt-1",
+                    runId: "run-1",
+                    targetId: "target-1",
+                    locationId: "location-1",
+                    attemptNumber: 1,
+                    status: "failed",
+                    errorCode: "delivery_failed",
+                    errorMessage: "Not eligible",
+                    attemptedAt: "2026-07-17T12:02:00.000Z",
+                },
+                {
+                    id: "attempt-2",
+                    runId: "run-1",
+                    targetId: "target-1",
+                    locationId: "location-1",
+                    attemptNumber: 2,
+                    status: "delivered",
+                    errorCode: null,
+                    errorMessage: null,
+                    attemptedAt: "2026-07-17T12:03:00.000Z",
+                },
+            ],
+            revisionLabelByPublicationId: new Map([[publication.id, "Revision 2"]]),
+            locationLabelById: new Map([["location-1", "Downtown"]]),
+        });
+
+        expect(history.map((entry) => entry.title)).toEqual(
+            expect.arrayContaining([
+                "Revision 2 published",
+                "Revision 2 assigned",
+                "Assignment attempt failed",
+                "Assignment retry completed",
+            ]),
+        );
     });
 });

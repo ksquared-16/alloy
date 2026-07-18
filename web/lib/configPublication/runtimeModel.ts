@@ -1,4 +1,8 @@
-import type { ConfigurationPublicationRecord } from "@/lib/configPublication/types";
+import type {
+    ConfigurationDeliveryAttemptRecord,
+    ConfigurationDistributionRunRecord,
+    ConfigurationPublicationRecord,
+} from "@/lib/configPublication/types";
 
 export type ConfigurationDetailSection =
     | "overview"
@@ -234,6 +238,66 @@ export type ConfigurationHistoryEntry = {
     tone: "default" | "good" | "attention";
     actionLabel?: string;
 };
+
+export function buildConfigurationHistory(input: {
+    publications: readonly ConfigurationPublicationRecord[];
+    runs: readonly ConfigurationDistributionRunRecord[];
+    attempts: readonly ConfigurationDeliveryAttemptRecord[];
+    revisionLabelByPublicationId: ReadonlyMap<string, string>;
+    locationLabelById: ReadonlyMap<string, string>;
+}): ConfigurationHistoryEntry[] {
+    const entries: ConfigurationHistoryEntry[] = input.publications.map((publication) => ({
+        id: `publication:${publication.id}`,
+        occurredAt: publication.publishedAt,
+        kind: "publication",
+        title: `${input.revisionLabelByPublicationId.get(publication.id) ?? "Revision"} published`,
+        detail: "This immutable revision became available for Location assignment.",
+        tone: "good",
+    }));
+    const runById = new Map(input.runs.map((run) => [run.id, run]));
+    for (const run of input.runs) {
+        const failed = run.targets.filter((target) => target.status === "failed");
+        const succeeded = run.targets.filter(
+            (target) => target.status === "delivered" || target.status === "unchanged",
+        );
+        entries.push({
+            id: `run:${run.id}`,
+            occurredAt: run.completedAt ?? run.createdAt,
+            kind: failed.length > 0 ? "failure" : "assignment",
+            title:
+                failed.length > 0
+                    ? "Location assignment needs attention"
+                    : `${input.revisionLabelByPublicationId.get(run.publicationId) ?? "Revision"} assigned`,
+            detail:
+                `${succeeded.length} succeeded · ${failed.length} failed`
+                + (
+                    failed.length > 0
+                        ? ` · ${failed.map((target) => input.locationLabelById.get(target.locationId) ?? "Location").join(", ")}`
+                        : ""
+                ),
+            tone: failed.length > 0 ? "attention" : "good",
+            actionLabel: failed.length > 0 ? "Retry failed assignments" : undefined,
+        });
+    }
+    for (const attempt of input.attempts) {
+        const run = runById.get(attempt.runId);
+        if (!run || (attempt.attemptNumber <= 1 && attempt.status !== "failed")) continue;
+        const isRetry = attempt.attemptNumber > 1;
+        entries.push({
+            id: `attempt:${attempt.id}`,
+            occurredAt: attempt.attemptedAt,
+            kind: attempt.status === "failed" ? "failure" : "retry",
+            title:
+                attempt.status === "failed"
+                    ? isRetry ? "Assignment retry failed" : "Assignment attempt failed"
+                    : "Assignment retry completed",
+            detail:
+                `${input.locationLabelById.get(attempt.locationId) ?? "Location"} · ${input.revisionLabelByPublicationId.get(run.publicationId) ?? "Revision"} · attempt ${attempt.attemptNumber}`,
+            tone: attempt.status === "failed" ? "attention" : "good",
+        });
+    }
+    return sortConfigurationHistory(entries);
+}
 
 export function sortConfigurationHistory(
     entries: readonly ConfigurationHistoryEntry[],

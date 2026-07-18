@@ -5,6 +5,7 @@ last_reviewed: 2026-07-17
 concept: programs-runtime-product-certification
 superseded_by:
   - configuration-runtime-completion-2026-07.md
+  - programs-configuration-reference-recertification-2026-07.md
 ---
 
 # Programs Runtime Product Certification
@@ -17,7 +18,9 @@ superseded_by:
 
 **Closeout:** The findings below remain the accepted pre-completion record.
 They were resolved and re-certified in
-[`configuration-runtime-completion-2026-07.md`](configuration-runtime-completion-2026-07.md).
+[`configuration-runtime-completion-2026-07.md`](configuration-runtime-completion-2026-07.md)
+and independently re-evaluated in
+[`programs-configuration-reference-recertification-2026-07.md`](programs-configuration-reference-recertification-2026-07.md).
 
 ## Executive finding
 

@@ -124,7 +124,7 @@ A centered modal for exactly two jobs: **create** an object, or **confirm** a de
 ## Contextual primitives
 
 ### Configuration Timeline (Change History)
-An on-demand, plain-language history of what changed and when ("Capacity was 12, changed to 14 on May 20 by Sarah J."). For publishable domains it includes immutable revisions, assignments, retries, and failures across all revisions. Never exposes `effective_start`, `supersedes`, checksums, provider keys, or raw version ids.
+An on-demand, plain-language history of what changed and when ("Capacity was 12, changed to 14 on May 20 by Sarah J."). For publishable domains it includes immutable revisions, assignments, retries, and failures across all revisions. A successful retry updates current distribution posture but never removes the original failed attempt from History. Never exposes `effective_start`, `supersedes`, checksums, provider keys, or raw version ids.
 
 ### Configuration Activity Feed
 The object's recent changes as a short list — actor · plain summary · relative time · deep-link. A read surface, not an audit console.

@@ -167,8 +167,32 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
                   ],
               }],
         attempts:
-            phase === "retried"
-                ? [{
+            phase === "none"
+                ? []
+                : [
+                      {
+                          id: "attempt-1-success",
+                          runId: "run-1",
+                          targetId: "target-1",
+                          locationId: "location-1",
+                          attemptNumber: 1,
+                          status: "delivered",
+                          errorCode: null,
+                          errorMessage: null,
+                          attemptedAt: now,
+                      },
+                      {
+                          id: "attempt-1-failure",
+                          runId: "run-1",
+                          targetId: "target-2",
+                          locationId: "location-2",
+                          attemptNumber: 1,
+                          status: "failed",
+                          errorCode: "program_delivery_failed",
+                          errorMessage: "This Location is no longer eligible.",
+                          attemptedAt: now,
+                      },
+                      ...(phase === "retried" ? [{
                       id: "attempt-2",
                       runId: "run-1",
                       targetId: "target-2",
@@ -178,8 +202,8 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
                       errorCode: null,
                       errorMessage: null,
                       attemptedAt: now,
-                  }]
-                : [],
+                  }] : []),
+                  ],
         assignments:
             phase === "none"
                 ? []
@@ -331,6 +355,8 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
 
     await page.getByTestId("program-assign-delivery").click();
     await expect(page.getByTestId("program-overview")).toBeVisible();
+    await expect(page.getByTestId("program-overview")).toContainText(/failed assignment/i);
+    await shot("06-attention-overview");
     await page.getByTestId("program-detail-runtime-tab-distribution").click();
     await expect(page.getByText("partial failure")).toBeVisible();
     await expect(page.getByText("1 succeeded · 1 failed")).toBeVisible();
@@ -343,6 +369,8 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     await shot("07-retry-success");
     await page.getByTestId("program-detail-runtime-tab-history").click();
     await expect(page.getByTestId("program-history-runtime")).toBeVisible();
+    await expect(page.getByTestId("program-history-runtime")).toContainText("Assignment attempt failed");
+    await expect(page.getByTestId("program-history-runtime")).toContainText("Assignment retry completed");
     await shot("08-history-audit");
 
     await page.getByTestId("program-detail-runtime-tab-overview").click();
