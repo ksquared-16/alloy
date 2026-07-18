@@ -403,6 +403,8 @@ export async function composeWorkUnitProvisioningAnswer(
         queueRowLayoutConfig: rowLayout?.config ?? null,
         businessProcessKey: process.key,
         workViewId: activeView.id,
+        queueRowSurfaceId,
+        queueRowResolvedSource: rowLayout?.source ?? null,
     });
     timings.presentation_ms = now() - tPres;
 

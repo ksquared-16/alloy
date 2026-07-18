@@ -216,6 +216,21 @@ export type WorkUnitSurfaceModel = {
          * (all slots visible, no overrides) when the surface is unpublished / fetch failed.
          */
         rowConfig: CompactRowSlots;
+        /**
+         * Config-consumption provenance (P2-V) — surfaced to the DOM so the rendered queue's source is
+         * verifiable in the browser: which published surface drove the slots, its resolver source, and
+         * the compact variant. Never a render gate — evidence only.
+         */
+        provenance?: {
+            /** `published` = a published Queue Row Surface drove the slots; `canonical_fallback` = the default. */
+            source: "published" | "canonical_fallback";
+            /** The resolved queue-row surface id (`queue-row-{dept}-{proc}` or a legacy id). */
+            surfaceId: string | null;
+            /** Richer resolver source (`published` | resolver source | `builtin_default`). */
+            resolvedSource: string | null;
+            /** The compact row anatomy variant. */
+            variant: string;
+        };
     };
     activeWorkViewId: string | null;
     /**

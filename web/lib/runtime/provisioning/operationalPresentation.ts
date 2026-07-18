@@ -162,6 +162,12 @@ export type OperationalPresentationProvenance = {
     focusPanelLayoutId: string | null;
     headerSource: "published" | "builtin_default";
     queueRowSource: "published" | "canonical_fallback";
+    /** The queue-row surface id the runtime resolved (`queue-row-{dept}-{proc}` or a legacy id). */
+    queueRowSurfaceId: string | null;
+    /** The richer resolver source string (`published` | resolver source | `builtin_default`). */
+    queueRowResolvedSource: string | null;
+    /** The compact row anatomy variant the queue renders in (mirrors queue.rowVariant). */
+    queueRowVariant: string;
 };
 
 export type OperationalPresentation = {
@@ -201,6 +207,9 @@ export async function resolveOperationalPresentation(args: {
     /** Applicability axes for the shared surface-variant resolver (P1: Header). */
     businessProcessKey?: string | null;
     workViewId?: string | null;
+    /** Resolved queue-row surface id + resolver source — provenance, surfaced to the DOM (P2-V). */
+    queueRowSurfaceId?: string | null;
+    queueRowResolvedSource?: string | null;
 }): Promise<OperationalPresentation> {
     const { supabase, orgId, fallbackTitle } = args;
 
@@ -273,6 +282,9 @@ export async function resolveOperationalPresentation(args: {
             focusPanelLayoutId: args.focusPanelLayoutId,
             headerSource,
             queueRowSource: args.queueRowLayoutConfig ? "published" : "canonical_fallback",
+            queueRowSurfaceId: args.queueRowSurfaceId ?? null,
+            queueRowResolvedSource: args.queueRowResolvedSource ?? null,
+            queueRowVariant: queue.rowVariant,
         },
     };
 }

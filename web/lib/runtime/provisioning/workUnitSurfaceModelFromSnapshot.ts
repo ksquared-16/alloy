@@ -195,6 +195,14 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
             // distinguishes `empty` from `error` on exactly this, so the two can never be confused.
             error: null,
             rowConfig: p.queue.rowSlots,
+            // P2-V: carry config-consumption provenance to the model so the DOM can prove WHICH surface
+            // drove the rendered slots (was dropped here before — the observability gap).
+            provenance: {
+                source: p.provenance.queueRowSource,
+                surfaceId: p.provenance.queueRowSurfaceId,
+                resolvedSource: p.provenance.queueRowResolvedSource,
+                variant: p.provenance.queueRowVariant,
+            },
         },
         activeWorkViewId: snapshot.activeWorkView.id,
         selectedRecordId,

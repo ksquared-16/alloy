@@ -191,6 +191,11 @@ export function QueueRegion({
             data-work-view-name={workView ?? undefined}
             data-work-unit-id={workUnitId ?? undefined}
             data-queue-total={queue.totalCount ?? undefined}
+            // P2-V config-consumption provenance — proves in the browser WHICH surface drove the rows.
+            data-queue-row-source={queue.provenance?.source ?? undefined}
+            data-queue-surface-id={queue.provenance?.surfaceId ?? undefined}
+            data-queue-row-resolved-source={queue.provenance?.resolvedSource ?? undefined}
+            data-queue-row-variant={queue.provenance?.variant ?? undefined}
         >
             {showFilterControls ? (
                 <div
