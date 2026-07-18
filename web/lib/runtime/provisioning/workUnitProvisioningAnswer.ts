@@ -326,6 +326,19 @@ export async function composeWorkUnitProvisioningAnswer(
     if (!wuRow) return fail("work_unit_not_found", `no work unit "${req.workUnitSlug}" in this tenant`);
     const workUnit = { id: String(wuRow.id), key: String(wuRow.key), name: String(wuRow.name) };
 
+    // ── COLD-PATH PARALLELISM: the operational records depend ONLY on work_unit.id (available now), not on
+    //    configuration, queue-layout, or presentation. Kick the fetch off here so it overlaps that whole
+    //    independent branch; it is awaited at the projection join below. This is still ONE atomic Preparation
+    //    answer — an internal read reordering, never a second round-trip. Supabase returns errors in-band
+    //    (no rejection), so an early return that never awaits this promise cannot leak an unhandled rejection.
+    const recordsPromise = (async () =>
+        req.supabase
+            .from("opportunities")
+            .select("id, org_id, work_unit_id, status_key, stage_key, updated_at, name, title, metadata, primary_person_id, location_id, customer_id")
+            .eq("org_id", req.orgId)
+            .eq("work_unit_id", workUnit.id)
+            .limit(500))();
+
     // ── Configuration: Business Process, stages, lenses. ONE fetch. ──
     const tCfg = now();
     // The department config AND its work units in ONE parallel round trip. The units are Settlement-only
@@ -384,44 +397,48 @@ export async function composeWorkUnitProvisioningAnswer(
     // ── U-P7: resolve the operational presentation composition server-side, into THIS answer. ──
     // An identifier would be the round-trip U-P7 exists to remove; resolving here means the first
     // visible frame is already in final layout and nothing re-lays out after commit.
+    // COLD-PATH PARALLELISM: the presentation composition (header + queue-row surface) is INDEPENDENT of
+    // records / projection / enrichment — those never read `presentation`; the two branches join only at
+    // answer assembly. Kick presentation off here so it runs CONCURRENTLY with the record projection +
+    // enrichment branch below, and await it at the join. Still ONE atomic answer — internal read reordering.
     const tPres = now();
     const queueRowSurfaceId = queueRowSurfaceIdForDepartment(String(wuRow.department_id), deptRow?.metadata);
-    const rowLayout = await resolveQueueRowLayoutServer({
-        supabase: req.supabase,
-        orgId: req.orgId,
-        surfaceId: queueRowSurfaceId,
-        processKeyHint: process.key,
-        workViewId: activeView.id,
-    });
-    const presentation = await resolveOperationalPresentation({
-        supabase: req.supabase,
-        orgId: req.orgId,
-        fallbackTitle: workUnit.name,
-        queueLayoutId: activeView.queue_layout_id?.trim() || null,
-        focusPanelLayoutId: activeView.focus_panel_layout_id?.trim() || null,
-        queueDefinition: wuRow.queue_definition,
-        queueRowLayoutConfig: rowLayout?.config ?? null,
-        businessProcessKey: process.key,
-        workViewId: activeView.id,
-        queueRowSurfaceId,
-        queueRowResolvedSource: rowLayout?.source ?? null,
-    });
-    timings.presentation_ms = now() - tPres;
+    const presentationPromise = (async () => {
+        const rowLayout = await resolveQueueRowLayoutServer({
+            supabase: req.supabase,
+            orgId: req.orgId,
+            surfaceId: queueRowSurfaceId,
+            processKeyHint: process.key,
+            workViewId: activeView.id,
+        });
+        return resolveOperationalPresentation({
+            supabase: req.supabase,
+            orgId: req.orgId,
+            fallbackTitle: workUnit.name,
+            queueLayoutId: activeView.queue_layout_id?.trim() || null,
+            focusPanelLayoutId: activeView.focus_panel_layout_id?.trim() || null,
+            queueDefinition: wuRow.queue_definition,
+            queueRowLayoutConfig: rowLayout?.config ?? null,
+            businessProcessKey: process.key,
+            workViewId: activeView.id,
+            queueRowSurfaceId,
+            queueRowResolvedSource: rowLayout?.source ?? null,
+        });
+    })();
+    // Early-return safety (grain/records/subject fails never await it): keep the promise handled. The real
+    // await at the assembly join re-sees any rejection so a genuine failure still surfaces 1:1.
+    void presentationPromise.catch(() => {});
 
     // ── §6: Row Grain explicit, Stage-owned. Grain-ambiguous config is refused honestly. ──
     const grain = resolveLensRowGrain(activeView, stages);
     if (!grain.ok) return fail("grain_ambiguous", `Work View "${activeView.label}": ${grain.reason}`, workUnit);
 
     // ── Stage Membership: base rows, Work Unit scoped, bounded. Persisted stage_key IS membership. ──
+    // Awaited here at the projection join — the fetch was kicked off at gesture-entry (above) so it ran
+    // CONCURRENTLY with configuration + queue-layout + presentation. `records_ms` now measures the residual
+    // wait (near-zero when it has already resolved), which is exactly the overlap we bought.
     const tRec = now();
-    const { data: baseRows, error: rowErr } = await req.supabase
-        .from("opportunities")
-        // Widened for U-O2: primary_person_id/location_id/metadata feed the shared CRM enrichment;
-        // title/name feed the context builder's honest fallbacks.
-        .select("id, org_id, work_unit_id, status_key, stage_key, updated_at, name, title, metadata, primary_person_id, location_id, customer_id")
-        .eq("org_id", req.orgId)
-        .eq("work_unit_id", workUnit.id)
-        .limit(500);
+    const { data: baseRows, error: rowErr } = await recordsPromise;
     timings.records_ms = now() - tRec;
     if (rowErr) return fail("records_unavailable", `records unavailable: ${rowErr.message}`, workUnit);
 
@@ -459,6 +476,11 @@ export async function composeWorkUnitProvisioningAnswer(
         title: strOrNull((r as Record<string, unknown>).name),
         context: queueRowContextOf(r as Record<string, unknown>),
     }));
+
+    // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
+    // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
+    const presentation = await presentationPromise;
+    timings.presentation_ms = now() - tPres;
 
     // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. ──
     if (rows.length === 0) {
