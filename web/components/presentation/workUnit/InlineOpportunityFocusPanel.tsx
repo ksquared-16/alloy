@@ -51,7 +51,7 @@ import OpportunityFocusPanelModeBody from "@/components/admin/focusPanel/Opportu
 import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/OpportunityDrawerBodySaveBar";
 import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActionModalsPortal";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useRecordWorkRuntime } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { useOperationalSubject, isOperationallyResolved } from "./OperationalSubjectContext";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
@@ -74,19 +74,18 @@ import { useFocusPanelModePrewarm } from "@/lib/adminV2/runtime/focusPanel/useFo
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusLabel";
 import { useOpportunityDrawerVmHeaderActions } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions";
-import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
 import { useOpportunityDrawerVmRegistryModals } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals";
 
 export function InlineOpportunityFocusPanel() {
     const { canMutate: authCanMutate, role, roleKeys } = useAdminAuth();
     const { labels } = useEntityLabels();
     const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
-    // The drawer keeps PRESENTATION — render slots, close chrome, the queue-preview seed.
-    const { drawer: drawerPresentation, drawerVmRender, closeDrawer } = useAdminDrawer();
-    // …but Record of Attention comes from COMMITTED FOCUS. The drawer's `id`/`type` are shadowed
-    // here: it may carry presentation, it may not answer "who is the operator working on".
+    // Record of Attention comes from COMMITTED FOCUS — the sole subject owner. No drawer read.
     const operational = useOperationalSubject();
     const { subjectId: operationalSubjectId } = operational;
+    // The close affordance is hidden in the inline panel (the panel host stays mounted); a no-op keeps
+    // the shared header contract without a drawer close semantic.
+    const closeDrawer = useCallback(() => {}, []);
     // ── OPERATIONAL vs SETTLEMENT ──
     // `resolved` below is the SETTLEMENT payload (the record VM fetch). It used to drive
     // `data-inline-focus-panel-resolved`, which made the panel report itself unresolved after
@@ -96,18 +95,22 @@ export function InlineOpportunityFocusPanel() {
     // committed subject, a current business state, and a truthful action? That is what the marker
     // now reports. The Settlement fetch gets its own marker and gates nothing.
     const operationallyResolved = isOperationallyResolved(operational);
+    // Local subject view — id/type from committed Focus; the queue-preview seed is no longer sourced
+    // from drawer state (the resolved header replaces the seed once the VM lands).
     const drawer = {
-        ...drawerPresentation,
         id: operationalSubjectId,
         type: operationalSubjectId ? ("opportunities" as const) : null,
+        opportunityQueuePreviewSeed: null as
+            | null
+            | { title?: string | null; statusLabel?: string | null },
     };
     const {
         displayVm,
         error,
         holdPriorPayload,
         patchDisplayRecord,
-        reloadOpportunityDisplayVm,
-    } = useOpportunityDrawerVmPayload();
+        reloadDisplayVm,
+    } = useRecordWorkRuntime(operationalSubjectId);
 
     const bodyScrollRef = useRef<HTMLDivElement | null>(null);
     const { mode: focusPanelMode, setMode: setFocusPanelModeState, selectFromDrawerTab } =
@@ -217,11 +220,9 @@ export function InlineOpportunityFocusPanel() {
     const committedVisible = useMemo(
         () =>
             displayVm != null &&
-            drawerVmRender.type === "opportunities" &&
-            String(displayVm.entity.id) === String(drawerVmRender.id) &&
             drawer.type === "opportunities" &&
             String(drawer.id) === String(displayVm.entity.id),
-        [displayVm, drawerVmRender.type, drawerVmRender.id, drawer.type, drawer.id],
+        [displayVm, drawer.type, drawer.id],
     );
 
     // ── Permissions / labels ─────────────────────────────────────────────────────────────
@@ -290,7 +291,7 @@ export function InlineOpportunityFocusPanel() {
         actionHost: registryActionHost,
         workspaceWorkUnitId: displayVm?.workspace.work_unit_id ?? null,
         workspaceDepartmentId: displayVm?.workspace.department_id ?? null,
-        reloadOpportunityDisplayVm,
+        reloadOpportunityDisplayVm: reloadDisplayVm,
     });
 
     const { onActionSelect, actionLoadingKey } = useOpportunityDrawerVmHeaderActions({
@@ -302,8 +303,8 @@ export function InlineOpportunityFocusPanel() {
     });
 
     const onRetry = useCallback(() => {
-        void reloadOpportunityDisplayVm();
-    }, [reloadOpportunityDisplayVm]);
+        void reloadDisplayVm();
+    }, [reloadDisplayVm]);
 
     // Nothing selected → no panel (FocusPanelSurface also gates; belt and braces).
     if (drawer.type !== "opportunities" || drawer.id == null) return null;

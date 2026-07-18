@@ -29,7 +29,6 @@ import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/Runtim
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { WorkUnitSurfaceModel, WorkUnitSurfaceIntents, QueueRowModel } from "./types";
 
 /** The surface has nothing to render until K3 commits. There is no third state. */
@@ -41,7 +40,6 @@ export type CommittedWorkUnitSurfaceRuntime = {
 export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRuntime {
     const kernel = useRuntimeKernel();
     const focus = useCommittedFocus();
-    const drawer = useAdminDrawer();
 
     // The OPERATIONAL world, as a value — built PURELY from the committed snapshot, consulting no
     // fetch. This is the first visible frame: reserved geometry, no Settlement. Null before the first
@@ -89,18 +87,17 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     const openRecord = useCallback(
         (row: QueueRowModel) => {
             // A SUBJECT-scope movement — cannot express a lens/target change (compile-enforced).
+            // This is the WHOLE gesture: committed Focus becomes the sole subject owner, and the
+            // inline Record Work Runtime resolves that subject into the VM. No drawer state is written
+            // (the legacy queue-row → openDrawer follower was deleted: it was a second subject owner
+            // that only fired on click, so the default subject never loaded until a click).
             kernel.attention.move({
                 scope: ATTENTION_SCOPE.SUBJECT,
                 subject: row.entityId,
                 source: "subject_selection",
             });
-            // The drawer is a FOLLOWER, and only of Settlement. Committed Focus already told the
-            // panel WHO the subject is (above); this asks the drawer to load that record's Detail and
-            // History — the deferred, non-operational region. It is written only here, in response to
-            // an accepted K1 movement, never from an effect that could re-fire on render.
-            drawer.openDrawer({ type: "opportunities", id: row.entityId, source: "queue_row" });
         },
-        [kernel, drawer],
+        [kernel],
     );
 
     /**
