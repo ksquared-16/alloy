@@ -585,18 +585,23 @@ function resolveAutoCanvasSlot(item: Exclude<QueueRowLibraryItem, { kind: "unava
 // ── QueueRowRuntimeCanvas ───────────────────────────────────────────────────────
 
 /**
- * Edit-mode canvas: renders the REAL runtime `CondensedQueueRow` presenter (never a
- * mock strip) from the operator's in-progress config, with a selection/reorder/remove
- * overlay layered ON TOP. The presenter stays pure — it receives the same
- * `CompactRowSlots` the /work-unit runtime feeds it (via `mapQueueRowSurfaceToCompactConfig`),
- * so what the operator edits here is exactly what the runtime renders.
+ * Edit canvas + faithful live preview.
+ *
+ * When empty, the canvas renders the real `CondensedQueueRow` directly. Once fields are placed, the top
+ * card becomes an AUTHORING SCHEMATIC — an empty row with a selection/reorder/remove chip overlay laid on
+ * top (the chips are the affordance for editing each field). Because a schematic is NOT what renders, a
+ * **Live preview** is shown directly beneath it: the same pure `CondensedQueueRow` fed the SAME mapped
+ * slots + sample row the /work-unit runtime uses —
  *
  *   live zones → buildConfigFromState → QueueRecordLayoutConfigV3
  *              → mapQueueRowSurfaceToCompactConfig → CompactRowSlots
- *              → <CondensedQueueRow rowConfig={slots} />   (shared runtime component)
+ *              + previewRowModelFromConfig → sample QueueRowModel
+ *              → <CondensedQueueRow rowConfig={slots} row={sample} />   (shared runtime component)
  *
+ * so the operator always sees EXACTLY how the authored config renders (context values not labels, the
+ * person-contact re-route applied, non-effective fields absent) — no drift between builder and runtime.
  * The overlay's clickable regions map canvas slots → builder zones (see regionForZoneState), so
- * select / remove / reorder operate on the actual row sections the operator sees.
+ * select / remove / reorder operate on the actual row sections the operator authors.
  */
 function QueueRowRuntimeCanvas({
     placedFields,
@@ -698,6 +703,24 @@ function QueueRowRuntimeCanvas({
                     )}
                 </div>
             </div>
+            {hasComposerFields ? (
+                <div className="border-t border-alloy-stone/10 px-4 py-3" data-canvas-live-preview>
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                        Live preview — exactly how this row renders in the queue
+                    </p>
+                    <div className="flex justify-center">
+                        <div
+                            className={`${QUEUE_ROW_CARD_SHELL_CLASS} ${QUEUE_ROW_CARD_IDLE_BORDER_CLASS}`}
+                            style={{ width: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX, maxWidth: ALLOY_OS_QUEUE_COMPRESSED_WIDTH_PX }}
+                        >
+                            {/* The REAL runtime presenter, fed the SAME mapped slots + sample row the /work-unit
+                                queue receives — so the authored config's true render (contact re-route applied,
+                                non-effective fields absent, context values not labels) is visible, not a schematic. */}
+                            <CondensedQueueRow row={previewRow} rowConfig={compactConfig.slots} onOpen={() => {}} isFirst />
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

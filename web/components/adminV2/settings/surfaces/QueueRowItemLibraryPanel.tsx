@@ -8,6 +8,7 @@ import {
     prioritizeLibraryForRowFocus,
     type QueueRowLibraryItem,
 } from "@/lib/adminV2/settings/surfaces/queueRowBuilderLibrary";
+import { isCompactRowEffectiveFieldKey } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import type { QueueRowSubjectFocusUi } from "@/lib/adminV2/settings/surfaces/queueRowSubjectFocus";
 import { SURFACE_FIELD_ROW_FOCUS_HELP } from "@/lib/adminV2/settings/surfaces/surfaceFieldComposer";
 
@@ -94,6 +95,11 @@ export default function QueueRowItemLibraryPanel({
                                             );
                                         }
                                         const key = item.kind === "field" ? item.fieldKey : item.widgetKey;
+                                        // One vocabulary with the inline picker: a field renders in the compact
+                                        // row ONLY if its key maps to a slot; widgets never render in the row.
+                                        // Flag non-effective picks so the operator never publishes a silent no-op.
+                                        const compactEffective =
+                                            item.kind === "field" ? isCompactRowEffectiveFieldKey(item.fieldKey) : false;
                                         return (
                                             <li key={`${item.kind}-${key}`}>
                                                 <button
@@ -102,9 +108,22 @@ export default function QueueRowItemLibraryPanel({
                                                     className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-alloy-pine/[0.06]"
                                                     data-library-field={item.kind === "field" ? item.fieldKey : undefined}
                                                     data-library-widget={item.kind === "widget" ? item.widgetKey : undefined}
+                                                    data-compact-effective={compactEffective ? "true" : "false"}
                                                 >
                                                     <span className="text-[11px] text-alloy-pine">+</span>
-                                                    <span className="flex-1 text-[12px] text-alloy-midnight/80">{item.label}</span>
+                                                    <span className={`flex-1 text-[12px] ${compactEffective ? "text-alloy-midnight/80" : "text-alloy-midnight/45"}`}>
+                                                        {item.label}
+                                                    </span>
+                                                    {!compactEffective ? (
+                                                        <span
+                                                            className="shrink-0 rounded-full bg-alloy-stone/15 px-1.5 py-px text-[8.5px] font-semibold uppercase tracking-wide text-alloy-midnight/45"
+                                                            title={item.kind === "widget"
+                                                                ? "Widgets do not render in the compact queue row."
+                                                                : "This field does not render in the compact queue row."}
+                                                        >
+                                                            Not in row
+                                                        </span>
+                                                    ) : null}
                                                 </button>
                                             </li>
                                         );
