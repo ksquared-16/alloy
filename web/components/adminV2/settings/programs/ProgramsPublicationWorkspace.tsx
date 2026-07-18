@@ -14,7 +14,6 @@ import {
 import {
     ConfigAssignmentRuntime,
     ConfigCollectionRail,
-    ConfigConsequenceLine,
     ConfigDetailRuntime,
     ConfigDistributionRuntime,
     ConfigHistoryTimeline,
@@ -58,8 +57,6 @@ import {
     ProgramPoliciesSection,
     ProgramPricingSection,
     ProgramRelationshipsSection,
-    ProgramRequirementsSection,
-    ProgramResourcesSection,
 } from "@/components/adminV2/settings/programs/ProgramDomainSections";
 import { ProgramOverviewSurface } from "@/components/adminV2/settings/programs/ProgramOverviewSurface";
 
@@ -172,74 +169,6 @@ async function postAction(body: Record<string, unknown>): Promise<Record<string,
 
 function programSectionForRuntime(section: ConfigurationDetailSection): ProgramConfigurationSection {
     return normalizeProgramConfigurationSection(section);
-}
-
-const PROGRAM_CONCERN_GROUPS: Array<{
-    label: string;
-    keys: ProgramConfigurationSection[];
-}> = [
-    { label: "Program", keys: ["overview", "definition"] },
-    { label: "Service model", keys: ["offerings", "pricing"] },
-    { label: "Delivery", keys: ["availability", "requirements", "resources"] },
-    { label: "Governance", keys: ["policies", "relationships"] },
-    { label: "Lifecycle", keys: ["publication", "assignment", "history"] },
-];
-
-function ProgramConcernNavigation({
-    tabs,
-    activeSection,
-    onSectionChange,
-}: {
-    tabs: ConfigDetailTab<ProgramConfigurationSection>[];
-    activeSection: ProgramConfigurationSection;
-    onSectionChange: (section: ProgramConfigurationSection) => void;
-}) {
-    const tabByKey = new Map(tabs.map((tab) => [tab.key, tab]));
-    return (
-        <div
-            className="mt-3.5 grid gap-x-4 gap-y-3 border-t border-alloy-stone/25 pt-3 sm:grid-cols-2 2xl:grid-cols-3"
-            role="tablist"
-            aria-label="Program concerns"
-            data-testid="program-detail-runtime-tabs"
-        >
-            {PROGRAM_CONCERN_GROUPS.map((group) => (
-                <div key={group.label} role="presentation">
-                    <p className="px-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/35">
-                        {group.label}
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-1" role="presentation">
-                        {group.keys.map((key) => {
-                            const tab = tabByKey.get(key);
-                            if (!tab) return null;
-                            const selected = activeSection === key;
-                            return (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={selected}
-                                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold ${
-                                        selected
-                                            ? "bg-alloy-bend-pine/[0.1] text-alloy-bend-pine"
-                                            : "text-alloy-midnight/55 hover:bg-alloy-stone/[0.08] hover:text-alloy-midnight/75"
-                                    }`}
-                                    onClick={() => onSectionChange(key)}
-                                    data-testid={`program-detail-runtime-tab-${key}`}
-                                >
-                                    {tab.label}
-                                    {tab.attentionCount && tab.attentionCount > 0 ?
-                                        <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-alloy-ember/10 px-1 text-[9px] text-alloy-ember">
-                                            {tab.attentionCount}
-                                        </span>
-                                    :   null}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
 }
 
 export default function ProgramsPublicationWorkspace(props: {
@@ -435,16 +364,9 @@ export default function ProgramsPublicationWorkspace(props: {
         viewModel
             ? [
                   { key: "overview", label: "Overview" },
-                  {
-                      key: "definition",
-                      label: "Definition",
-                      attentionCount: viewModel.runtime.attention.filter((item) => item.section === "draft").length,
-                  },
                   { key: "offerings", label: "Offerings" },
                   { key: "pricing", label: "Pricing" },
                   { key: "availability", label: "Availability" },
-                  { key: "requirements", label: "Requirements" },
-                  { key: "resources", label: "Resources" },
                   { key: "policies", label: "Policies" },
                   { key: "relationships", label: "Relationships" },
                   {
@@ -486,7 +408,7 @@ export default function ProgramsPublicationWorkspace(props: {
 
             <ConfigurationContext
                 title="Programs"
-                subtitle="Create reusable Organization service definitions, publish revisions, and assign them to Locations."
+                subtitle="Manage reusable Organization service definitions and how they connect to Locations."
                 testId="programs-configuration-context"
                 actions={
                     canManage ?
@@ -528,7 +450,7 @@ export default function ProgramsPublicationWorkspace(props: {
                     }`}
                 >
                     <ConfigCollectionRail
-                        title="Program collection"
+                        title="Programs"
                         description="Reusable services the Organization can publish and make available to Locations."
                         objectLabel="Program"
                         items={collectionItems}
@@ -536,6 +458,7 @@ export default function ProgramsPublicationWorkspace(props: {
                         canAdd={canManage}
                         onAdd={() => setCreateOpen(true)}
                         onSelect={selectProgram}
+                        addLabel="Add Program"
                         testId="programs-collection"
                     />
 
@@ -610,26 +533,14 @@ export default function ProgramsPublicationWorkspace(props: {
                                                     onClick={() => setActiveSection("definition")}
                                                     data-testid="program-edit-draft"
                                                 >
-                                                    Edit working draft
+                                                    Edit Program
                                                 </ConfigurationSecondaryButton>
                                             :   undefined
                                         }
                                         testId="program-object-header"
                                     />
                                 }
-                                consequence={
-                                    <ConfigConsequenceLine>
-                                        This Program defines a reusable service across the Organization. Locations retain authority for local offer state, evidence, resources, capacity, and schedules.
-                                    </ConfigConsequenceLine>
-                                }
                                 tabs={tabs}
-                                navigation={
-                                    <ProgramConcernNavigation
-                                        tabs={tabs}
-                                        activeSection={activeSection}
-                                        onSectionChange={setActiveSection}
-                                    />
-                                }
                                 activeSection={activeSection}
                                 onSectionChange={setActiveSection}
                                 testId="program-detail-runtime"
@@ -825,13 +736,6 @@ export default function ProgramsPublicationWorkspace(props: {
                                             :   null}
                                         </ConfigWorkspaceCard>
                                     </div>
-                                : activeSection === "requirements" ?
-                                    <ProgramRequirementsSection
-                                        program={selectedProgram}
-                                        onEdit={() => setActiveSection("definition")}
-                                    />
-                                : activeSection === "resources" ?
-                                    <ProgramResourcesSection program={selectedProgram} snapshot={snapshot} />
                                 : activeSection === "availability" ?
                                     <ProgramAvailabilitySection program={selectedProgram} snapshot={snapshot} />
                                 : activeSection === "offerings" ?

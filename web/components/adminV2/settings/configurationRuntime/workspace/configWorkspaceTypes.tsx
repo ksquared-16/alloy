@@ -42,7 +42,7 @@ export type ConfigGlanceMetric = {
     value: string;
     hint?: string;
     /** Optional semantic glyph for summary objects (capacity, rooms, …). */
-    icon?: "capacity" | "rooms" | "programs" | "schedule";
+    icon?: "capacity" | "rooms" | "programs" | "schedule" | "pricing" | "availability" | "policies";
     tone?: ConfigGlanceMetricTone;
     onSelect?: () => void;
 };

@@ -5,6 +5,7 @@ import {
     ConfigAttentionPanel,
     ConfigGlanceMetrics,
     ConfigOperationalReadiness,
+    ConfigOverviewRuntime,
     ConfigWorkspaceCard,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type { LocationWorkspaceModel, LocationWorkspaceTab } from "@/lib/locations/locationWorkspaceModel";
@@ -118,8 +119,9 @@ export function LocationOverviewSurface({
         :   scheduleSummary;
 
     return (
-        <div className="flex flex-col gap-4 pb-2" data-testid="locations-overview">
-            <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <ConfigOverviewRuntime
+            testId="locations-overview"
+            glance={
                 <ConfigWorkspaceCard
                     compact
                     className="flex h-full flex-col"
@@ -229,7 +231,8 @@ export function LocationOverviewSurface({
                         </div>
                     </div>
                 </ConfigWorkspaceCard>
-
+            }
+            readiness={
                 <ConfigWorkspaceCard
                     title="Operational readiness"
                     description="What is configured across this location."
@@ -249,13 +252,9 @@ export function LocationOverviewSurface({
                         testId="locations-overview-readiness-detail"
                     />
                 </ConfigWorkspaceCard>
-            </div>
-
-            <div
-                className={`grid items-stretch gap-4 ${hasAttention ? "lg:grid-cols-2" : ""}`}
-                data-testid="locations-overview-action-row"
-            >
-                {hasAttention ?
+            }
+            attention={
+                hasAttention ?
                     <ConfigWorkspaceCard compact className="h-full" testId="locations-overview-health">
                         <ConfigAttentionPanel
                             items={attentionItems}
@@ -269,8 +268,9 @@ export function LocationOverviewSurface({
                             }}
                         />
                     </ConfigWorkspaceCard>
-                :   null}
-
+                :   undefined
+            }
+            capabilities={
                 <ConfigWorkspaceCard
                     title="How this location runs"
                     description="Operational capabilities owned by this location."
@@ -311,7 +311,7 @@ export function LocationOverviewSurface({
                         ))}
                     </ul>
                 </ConfigWorkspaceCard>
-            </div>
-        </div>
+            }
+        />
     );
 }

@@ -377,6 +377,20 @@ The following rules from the superseded and adjacent configuration doctrine rema
 
 **Locations is the reference implementation for Configuration Runtime V1** — the way Operational Runtime has its reference surfaces and the Focus Panel has its reference subjects. Every future configuration domain **references Locations**; it does not invent its own experience.
 
+### Reference-inheritance law
+
+**Locations is not merely a feature. It is the canonical Configuration Runtime
+reference implementation.** Every Organization Configuration Collection inherits
+its composition unless Product records a compelling domain exception. The
+Collection rail, object header, horizontal concern tabs, two-row Overview
+composition, Attention/Setup distinction, command ownership, and responsive
+behavior are Runtime—not domain design.
+
+Programs is the first publishable proof of this law. It consumes the same Detail,
+Header, Tab, and Overview Runtime as Locations; only its domain concerns and
+publishable lifecycle evidence differ. Publication adds concerns to the inherited
+workspace. It never becomes the workspace identity.
+
 Locations demonstrates the whole platform: an **organization landing** (configuration health across locations — never auto-opening a single object), an object list, an object workspace with owned-concern tabs (Programs offered, Rooms/Delivery Resources, Schedule, Tours, Placement, Access), a nested child-object workspace (Room / Program offering) that answers what is configured / needs attention / next action before editing, the two-status model (**Needs attention** + **Operational readiness**) **in the page body**, contextual commands on the **platform Actions rail** (not a page-local Actions card), **Scope** (Organization vs Location), quiet inheritance language, business-language timezone/locality identity (never raw IANA ids), and honest unknowns (unknown readiness areas are never counted incomplete). **Apply To… stays hidden in a domain until an authoritative copy provider exists; a confirmation dialog may never imply that a deferred copy was applied.** Communications is intentionally absent until ownership is ready.
 
 **Top-level landing distinction:** Organization presents the configuration domain catalog. Locations presents operational summary, Needs Attention, and a quiet Location collection with search, inactive filtering, Add Location, and direct entry into each Location workspace. The two pages share Configuration Runtime visual language without forcing the same object presentation. Detailed explanation remains inside the selected domain or Location runtime; no readiness, attention, mutation, or ownership logic moves into landing presentation.

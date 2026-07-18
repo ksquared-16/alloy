@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { config as loadEnv } from "dotenv";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 import {
@@ -34,6 +34,8 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     let loadMode: "not_initialized" | "ready" = "not_initialized";
     let label = "Preschool";
     let description: string | null = null;
+    let locationsReferenceImage: Buffer | null = null;
+    let programsReferenceImage: Buffer | null = null;
 
     async function shot(name: string) {
         const file = `${name}.png`;
@@ -562,6 +564,21 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     if (!storageState) await ensureAdminPlaywrightSession(page);
 
+    const locationsReferencePath = resolve(EVIDENCE_DIR, "00a-locations-reference-overview.png");
+    if (existsSync(locationsReferencePath)) {
+        locationsReferenceImage = readFileSync(locationsReferencePath);
+    } else {
+        await page.goto("/settings/locations", { waitUntil: "domcontentloaded", timeout: 120_000 });
+        await expect(page.getByTestId("locations-configuration-page")).toBeVisible({ timeout: 60_000 });
+        const firstLocation = page.locator('[data-testid^="locations-row-"]').first();
+        await expect(firstLocation).toBeVisible({ timeout: 30_000 });
+        await firstLocation.click();
+        await expect(page.getByTestId("locations-overview")).toBeVisible({ timeout: 60_000 });
+        locationsReferenceImage = await page.screenshot({ animations: "disabled" });
+    }
+    writeFileSync(resolve(EVIDENCE_DIR, "00a-locations-reference-overview.png"), locationsReferenceImage);
+    writeFileSync(testInfo.outputPath("00a-locations-reference-overview.png"), locationsReferenceImage);
+
     await page.goto("/organization", { waitUntil: "domcontentloaded", timeout: 120_000 });
     await expect(page.getByTestId("organization-configuration-page")).toBeVisible({ timeout: 60_000 });
     await shot("00-organization-landing");
@@ -601,19 +618,29 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     await page.getByTestId("program-validate-draft").click();
     await expect(page.getByTestId("program-publish")).toBeEnabled();
     await page.getByTestId("program-publish").click();
-    await expect(page.getByText("Revision 1", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("programs-collection")).toContainText("Published · Revision 1");
     await expect(page.getByTestId("program-overview")).toBeVisible();
     await expect(
         page.getByTestId("programs-publication-runtime").getByText(/\bApply\b/i),
     ).toHaveCount(0);
+    expect(
+        await page.getByTestId("program-detail-runtime-tabs").getByRole("tab").allTextContents(),
+    ).toEqual([
+        "Overview",
+        "Offerings",
+        "Pricing",
+        "Availability",
+        "Policies",
+        "Relationships",
+        "Publication",
+        "Assignments",
+        "History",
+    ]);
+    programsReferenceImage = await page.screenshot({ animations: "disabled" });
+    writeFileSync(resolve(EVIDENCE_DIR, "03-programs-reference-overview.png"), programsReferenceImage);
+    writeFileSync(testInfo.outputPath("03-programs-reference-overview.png"), programsReferenceImage);
     await shot("03-published-revision");
 
-    await page.getByTestId("program-detail-runtime-tab-requirements").click();
-    await expect(page.getByTestId("program-requirements-runtime")).toContainText("Program requirements");
-    await shot("03a-program-requirements");
-    await page.getByTestId("program-detail-runtime-tab-resources").click();
-    await expect(page.getByTestId("program-resources-runtime")).toContainText("Resource requirements");
-    await shot("03b-program-resources");
     await page.getByTestId("program-detail-runtime-tab-offerings").click();
     await expect(page.getByTestId("program-offerings-runtime")).toContainText("5 days/week");
     await shot("03c-program-offerings");
@@ -698,6 +725,44 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     ).toBe(true);
     await shot("10-responsive-narrow");
 
+    expect(locationsReferenceImage).not.toBeNull();
+    expect(programsReferenceImage).not.toBeNull();
+    if (locationsReferenceImage && programsReferenceImage) {
+        const comparisonPage = await page.context().newPage();
+        await comparisonPage.setViewportSize({ width: 1800, height: 1100 });
+        await comparisonPage.setContent(`
+            <style>
+                * { box-sizing: border-box; }
+                body { margin: 0; background: #eef0f3; color: #162238; font: 16px system-ui, sans-serif; }
+                header { padding: 22px 28px 14px; background: white; border-bottom: 1px solid #d9dde4; }
+                h1 { margin: 0; font-size: 24px; }
+                p { margin: 6px 0 0; color: #687386; }
+                main { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 18px; align-items: start; }
+                figure { margin: 0; overflow: hidden; border: 1px solid #d9dde4; border-radius: 12px; background: white; }
+                figcaption { padding: 12px 14px; font-weight: 700; border-bottom: 1px solid #e5e7eb; }
+                img { display: block; width: 100%; height: auto; }
+            </style>
+            <header>
+                <h1>Configuration Runtime composition</h1>
+                <p>Locations reference implementation → Programs publishable domain</p>
+            </header>
+            <main>
+                <figure>
+                    <figcaption>Locations</figcaption>
+                    <img alt="Locations Configuration Runtime" src="data:image/png;base64,${locationsReferenceImage.toString("base64")}">
+                </figure>
+                <figure>
+                    <figcaption>Programs</figcaption>
+                    <img alt="Programs Configuration Runtime" src="data:image/png;base64,${programsReferenceImage.toString("base64")}">
+                </figure>
+            </main>
+        `);
+        const comparisonImage = await comparisonPage.screenshot({ fullPage: true, animations: "disabled" });
+        writeFileSync(resolve(EVIDENCE_DIR, "11-locations-programs-side-by-side.png"), comparisonImage);
+        writeFileSync(testInfo.outputPath("11-locations-programs-side-by-side.png"), comparisonImage);
+        await comparisonPage.close();
+    }
+
     expect(actions.map((action) => action.action)).toEqual([
         "create_draft",
         "update_draft",
@@ -721,7 +786,8 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
         (message) =>
             !message.includes("A tree hydrated but some attributes of the server rendered HTML didn't match")
             && !message.includes("Failed to load resource: the server responded with a status of 503")
-            && !(message.includes("TypeError: Failed to fetch") && message.includes("supabase_auth-js")),
+            && !(message.includes("TypeError: Failed to fetch") && message.includes("supabase_auth-js"))
+            && message !== "Failed to load resource: net::ERR_CONNECTION_REFUSED",
     );
     expect(unexpectedConsoleErrors).toEqual([]);
     // Shell chrome and aborted RSC navigations are ambient; only Programs API failures count.

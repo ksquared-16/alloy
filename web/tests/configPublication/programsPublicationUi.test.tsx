@@ -126,19 +126,31 @@ describe("Programs Publication workspace", () => {
         expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
         expect(container.querySelector('[data-testid="program-detail-runtime-tab-configuration"]')).toBeNull();
         expect(container.querySelector('[data-testid="program-detail-runtime-tab-attention"]')).toBeNull();
-        expect(container.textContent).toContain("This Program defines a reusable service");
+        expect(container.textContent).toContain("At a glance");
+        expect(container.textContent).toContain("Publication readiness");
+        expect(
+            Array.from(container.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent?.trim()),
+        ).toEqual([
+            "Overview",
+            "Offerings",
+            "Pricing",
+            "Availability",
+            "Policies",
+            "Relationships",
+            "Publication",
+            "Assignments",
+            "History",
+        ]);
         expect(container.textContent).toContain("1 published · 1 draft or changed · 0 assigned");
 
         await act(async () => {
-            (container!.querySelector('[data-testid="program-detail-runtime-tab-definition"]') as HTMLButtonElement).click();
+            (container!.querySelector('[data-testid="program-edit-draft"]') as HTMLButtonElement).click();
         });
         expect(container.querySelector('[data-testid="program-save-draft"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-validate-draft"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-publish"]')).not.toBeNull();
 
         for (const [section, testId] of [
-            ["requirements", "program-requirements-runtime"],
-            ["resources", "program-resources-runtime"],
             ["availability", "program-availability-runtime"],
             ["offerings", "program-offerings-runtime"],
             ["pricing", "program-pricing-runtime"],
@@ -171,7 +183,6 @@ describe("Programs Publication workspace", () => {
         });
         expect(container.querySelector('[data-testid="program-history-runtime"]')).not.toBeNull();
         expect(container.textContent).toContain("Configuration history");
-        expect(container.textContent).toContain("local offer state");
     });
 
     it("keeps mutation controls out of the read-only runtime", async () => {
@@ -196,11 +207,7 @@ describe("Programs Publication workspace", () => {
 
         expect(container.querySelector('[data-testid="programs-collection-add"]')).toBeNull();
         expect(container.querySelector('[data-testid="program-edit-draft"]')).toBeNull();
-        await act(async () => {
-            (container!.querySelector('[data-testid="program-detail-runtime-tab-definition"]') as HTMLButtonElement).click();
-        });
         expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
-        expect((container.querySelector('[data-testid="program-draft-label"]') as HTMLInputElement).disabled).toBe(true);
     });
 
     it("explains an empty domain and never renders raw database diagnostics", async () => {

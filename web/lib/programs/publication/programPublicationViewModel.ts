@@ -89,13 +89,13 @@ export function buildProgramPublicationViewModel(
                 key: "requirements",
                 label: "Program requirements",
                 complete: hasRequirementDefinition,
-                section: "requirements",
+                section: "definition",
             },
             {
                 key: "resources",
                 label: "Resource requirement",
                 complete: Boolean(program.draft.requiredResourceType?.trim()),
-                section: "resources",
+                section: "definition",
             },
             {
                 key: "offerings",

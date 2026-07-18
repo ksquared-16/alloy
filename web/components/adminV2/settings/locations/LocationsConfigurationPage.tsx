@@ -14,6 +14,7 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     ConfigChildObjectMasterDetail,
+    ConfigDetailRuntime,
     ConfigObjectHeader,
     ConfigScopeContextBar,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
@@ -748,11 +749,8 @@ export default function LocationsConfigurationPage({
                                     onAddLocation={beginAddLocation}
                                     canMutate={canMutate}
                                 />
-                            :   <>
-                                    <section
-                                        className="process-config-setup-card px-5 pb-0 pt-4"
-                                        data-testid="locations-hero"
-                                    >
+                            :   <ConfigDetailRuntime<LocationWorkspaceTab>
+                                    header={
                                         <ConfigObjectHeader
                                             size="hero"
                                             name={model?.displayName ?? "Location"}
@@ -800,32 +798,15 @@ export default function LocationsConfigurationPage({
                                             }
                                             testId="locations-object-header"
                                         />
-
-                                        <div
-                                            className="mt-3.5 flex overflow-x-auto border-t border-alloy-stone/25"
-                                            role="tablist"
-                                            aria-label="Location configuration"
-                                        >
-                                            {LOCATION_WORKSPACE_TABS.map((tab) => (
-                                                <button
-                                                    key={tab.key}
-                                                    type="button"
-                                                    role="tab"
-                                                    aria-selected={activeTab === tab.key && !editingSite}
-                                                    className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold ${
-                                                        activeTab === tab.key && !editingSite ?
-                                                            "border-[#00a283] text-[#007d68]"
-                                                        :   "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
-                                                    }`}
-                                                    onClick={() => navigate(tab.key)}
-                                                    data-testid={`locations-tab-${tab.key}`}
-                                                >
-                                                    {tab.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </section>
-
+                                    }
+                                    tabs={LOCATION_WORKSPACE_TABS}
+                                    activeSection={activeTab}
+                                    onSectionChange={navigate}
+                                    testId="locations-detail-runtime"
+                                    headerTestId="locations-hero"
+                                    tabAriaLabel="Location configuration"
+                                    tabTestIdPrefix="locations-tab"
+                                >
                                     {tabBody}
                                     {toursKeepAlive && !editingSite ?
                                         <div
@@ -851,7 +832,7 @@ export default function LocationsConfigurationPage({
                                             />
                                         </div>
                                     :   null}
-                                </>
+                                </ConfigDetailRuntime>
                             }
                         </main>
                     </div>

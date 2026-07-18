@@ -1,11 +1,18 @@
 ---
 owner: product
-status: completed
-last_reviewed: 2026-07-17
+status: superseded
+last_reviewed: 2026-07-18
 supersedes: []
+superseded_by: docs/audits/active/programs-runtime-composition-alignment-2026-07.md
 ---
 
 # Programs Runtime — Information Architecture Realization
+
+> Historical intermediate realization. The grouped concern map and twelve
+> visible concerns below were superseded when Product established Locations as
+> the binding Configuration Runtime composition. Current Programs composition
+> is certified in
+> `programs-runtime-composition-alignment-2026-07.md`.
 
 ## Result
 

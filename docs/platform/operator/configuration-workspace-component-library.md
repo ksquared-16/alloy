@@ -40,7 +40,7 @@ The operator-safe presentation of unavailable Configuration. It distinguishes un
 Names the object being operated: object name (dominant), status badge, one row of identifying facts, and the object's primary action + overflow. The answer to "what am I configuring?" Every object workspace has exactly one.
 
 ### Workspace Tab Bar
-The object's **owned concerns** as tabs, led by Overview. Route-addressable. Tabs name concerns in business language, never features or subsystems. A rich domain whose concerns cannot scan in one horizontal row may supply a grouped concern map in the same Detail Runtime. Every concern remains directly visible and keyboard-addressable; grouping may not become nested feature navigation or a generic "Configuration" concern.
+The object's **owned concerns** as one horizontal tab row, led by Overview. Route-addressable. Tabs name concerns in business language, never features or subsystems. Programs reuses the exact Tab Runtime established by Locations; a domain may change tab nouns, not invent a parallel concern map.
 
 ### Publishable Configuration Detail Runtime
 The read-first object runtime for domains using immutable publication. It always opens on **Overview**, then registers the business concerns supplied by the domain adapter. Publication, Assignments, History, and Attention retain shared Runtime grammar; richer domains may add Definition, Requirements, Resources, Availability, child objects such as Offerings, related-authority projections such as Pricing, and directly named governance concerns such as Policies and Relationships. Active Revision and Working Draft are separate evidence; Impact belongs to assignment preparation. Distribution is reusable evidence nested under Publication or Assignments rather than the object's product identity. Domains provide payload-specific summaries and editors but do not rebuild revision posture, Attention, or history.
@@ -58,6 +58,9 @@ The object-scoped rail holding Quick Actions and (where useful) the object's Att
 ---
 
 ## Operational-summary primitives
+
+### Configuration Overview Runtime
+The canonical two-row object summary established by Locations. Row one is a two-thirds **At a glance** region beside a one-third explained readiness region. Row two is Attention beside the object's owned or connected capability posture; when Attention is empty, it disappears and the capability region remains calm. Programs uses the same composition with Program metrics, publication readiness, and lifecycle capabilities. Domains provide evidence and labels; they do not rearrange the Overview grammar.
 
 ### Operational Summary (Glance)
 The read-only "is this object healthy?" surface. Presents derived state (capacity, availability, counts) with **utilization first, inventory second**, each number a link to where it is configured. Shows honest unknowns, never fabricated zeros.

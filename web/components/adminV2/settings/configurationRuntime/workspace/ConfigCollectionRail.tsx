@@ -52,6 +52,7 @@ export function ConfigCollectionRail({
     canAdd,
     onAdd,
     onSelect,
+    addLabel = "Add",
     testId = "config-collection-rail",
 }: {
     title: string;
@@ -62,6 +63,7 @@ export function ConfigCollectionRail({
     canAdd: boolean;
     onAdd: () => void;
     onSelect: (id: string) => void;
+    addLabel?: string;
     testId?: string;
 }) {
     const [search, setSearch] = useState("");
@@ -114,7 +116,7 @@ export function ConfigCollectionRail({
                                 data-testid={`${testId}-add`}
                             >
                                 <Plus className="h-3.5 w-3.5" aria-hidden />
-                                Add
+                                {addLabel}
                             </ConfigurationPrimaryButton>
                         :   null}
                     </div>

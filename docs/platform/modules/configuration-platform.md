@@ -172,13 +172,15 @@ editor, validation/publish mutations, setup evidence, target labels, and
 assignment impact language. They do not rebuild Collection, Detail, Attention,
 Assignment, Distribution, History, or shell command ownership.
 
-A rich Configuration domain may register additional business concerns inside the
-same Detail Runtime. Programs demonstrates the domain-first hierarchy Overview,
-Definition, Offerings, Pricing, Availability, Requirements, Resources, Policies,
-Relationships, Publication, Assignments, and History. The Programs adapter groups
-those visible concerns by operator purpose when a single horizontal tab row would
-be too dense; it does not create another runtime or hide concerns behind a generic
-Configuration page. Attention and readiness are composed into Overview.
+A rich Configuration domain registers its business concerns inside the same
+Detail Runtime established by Locations. Programs is the first publishable
+Configuration domain and inherits the Locations composition directly: Collection
+rail, object header, horizontal concern tabs, and the two-row Overview Runtime.
+Its visible tabs are Overview, Offerings, Pricing, Availability, Policies,
+Relationships, Publication, Assignments, and History. Program definition,
+requirements, and resource requirements are summarized in Overview and edited
+through the object-level Edit Program mode; they do not create a second navigation
+system. Attention is composed into Overview.
 
 Domain adapters project related authority without moving it: Location-owned offer
 state, evidence, resources, capacity, and schedules are read-only in Organization

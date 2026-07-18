@@ -29,10 +29,11 @@ describe("Configuration Runtime — Locations", () => {
         expect(page).toContain("locations-selected-location");
         expect(page).toContain("LocationsCommandRailActions");
         expect(page).toContain("LocationOverviewSurface");
+        expect(page).toContain("ConfigDetailRuntime");
         expect(page).toContain("operatingSnapshot");
         expect(page).toContain("LocationIdentityFactsRow");
         expect(page).toContain("xl:grid-cols-[20.5rem_minmax(0,1fr)]");
-        expect(page).toContain('data-testid="locations-hero"');
+        expect(page).toContain('headerTestId="locations-hero"');
         expect(page).toContain("titleIcon");
         expect(page).not.toContain("← All locations");
         expect(page).not.toContain("% ready");
@@ -55,9 +56,13 @@ describe("Configuration Runtime — Locations", () => {
             "locations-overview-capacity-bar",
         );
         expect(overview).toContain('actionAlign="inline"');
-        expect(overview).toContain("xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]");
-        expect(overview).toContain('data-testid="locations-overview-action-row"');
-        expect(overview).toContain("lg:grid-cols-2");
+        expect(overview).toContain("ConfigOverviewRuntime");
+        const overviewRuntime = read(
+            "components/adminV2/settings/configurationRuntime/workspace/ConfigOverviewRuntime.tsx",
+        );
+        expect(overviewRuntime).toContain("xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]");
+        expect(overviewRuntime).toContain('data-testid={`${testId}-action-row`}');
+        expect(overviewRuntime).toContain("lg:grid-cols-2");
         expect(overview).toContain('className="h-full"');
         expect(overview).not.toContain(
             "locations-overview-operating-now",
@@ -179,7 +184,6 @@ describe("Configuration Runtime — Locations", () => {
 
     it("uses summary-first programs and threshold staffing with distinct view/edit modes", () => {
         const programs = read("components/adminV2/settings/locations/LocationProgramDetailPanel.tsx");
-        const programCreate = read("components/adminV2/settings/locations/LocationProgramCreatePanel.tsx");
         const rooms = read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx");
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(programs).toContain("locations-program-summary-");
@@ -195,11 +199,9 @@ describe("Configuration Runtime — Locations", () => {
         expect(programs).toContain('title="Schedule"');
         expect(programs).toContain("onAddProgram");
         expect(programs).toContain("createDetail");
-        expect(programCreate).toContain("locations-program-create-save");
-        expect(programCreate).toContain("default_room_types");
-        expect(programCreate).toContain("age_range_unit");
-        expect(page).toContain("setCreatingProgram(true)");
-        expect(page).toContain("LocationProgramCreatePanel");
+        expect(page).toContain('router.push("/organization/programs")');
+        expect(page).not.toContain("setCreatingProgram(true)");
+        expect(page).not.toContain("LocationProgramCreatePanel");
         expect(read("app/api/admin/location-program-categories/route.ts")).toContain("metadata,");
         expect(programs).not.toContain("Everything looks good");
         expect(rooms).toContain('title="Program participation"');
@@ -216,7 +218,6 @@ describe("Configuration Runtime — Locations", () => {
         expect(rooms).toContain("ConfigEditorSection");
         expect(rooms).not.toContain("Everything looks good");
         expect(rooms).not.toContain("Configure room");
-        expect(page).toContain("createProgramCategory");
         expect(page).toContain("onAddProgram");
         expect(page).toContain("titleIcon");
         expect(page).toContain('organizationLabel="Organization"');

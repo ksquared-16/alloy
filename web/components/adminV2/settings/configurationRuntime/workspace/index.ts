@@ -13,6 +13,11 @@ export {
     ConfigWorkspaceCard,
 } from "@/components/adminV2/settings/configurationRuntime/workspace/configWorkspaceTypes";
 export { ConfigObjectHeader } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigObjectHeader";
+export { ConfigOverviewRuntime } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigOverviewRuntime";
+export {
+    ConfigWorkspaceTabBar,
+    type ConfigWorkspaceTab,
+} from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigWorkspaceTabBar";
 export { ConfigAttentionPanel } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigAttentionPanel";
 export { ConfigOperationalReadiness } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigOperationalReadiness";
 export { ConfigOperationalActions } from "@/components/adminV2/settings/configurationRuntime/workspace/ConfigOperationalActions";
