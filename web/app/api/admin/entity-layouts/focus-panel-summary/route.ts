@@ -21,6 +21,7 @@ import {
     FOCUS_PANEL_SUMMARY_LAYOUT_KEY,
     FOCUS_PANEL_SUMMARY_SURFACE,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelLayoutDocModel";
+import { resolvePublishedFocusPanelSummaryRecord } from "@/lib/adminV2/runtime/focusPanel/resolveFocusPanelSummaryVariant";
 
 function highestVersion(records: EntityLayoutRecord[]): EntityLayoutRecord | null {
     return records.reduce<EntityLayoutRecord | null>(
@@ -34,7 +35,7 @@ function summarize(record: EntityLayoutRecord | null) {
     return { id: record.id, version: record.version, doc: record.doc };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     if (!isLayoutRuntimeReadPathEnabled()) {
         return NextResponse.json({ published: null, draft: null });
     }
@@ -56,7 +57,18 @@ export async function GET() {
             FOCUS_PANEL_SUMMARY_SURFACE,
         );
         const summaryRows = rows.filter((r) => r.layoutKey === FOCUS_PANEL_SUMMARY_LAYOUT_KEY);
-        const published = highestVersion(summaryRows.filter((r) => r.status === "published"));
+        // P3-A: the PUBLISHED variant is selected by `resolveSurfaceVariant` — the ONE applicability
+        // resolver — not an ad-hoc highest-version pick. Behavior-neutral for today's org-global docs
+        // (all wildcards → highest version wins); honors Business-Process / Work-View scope when the
+        // client passes it and scoped variants are published. Draft stays the editor's continue-editing
+        // doc (highest-version), never a runtime variant.
+        const { searchParams } = new URL(request.url);
+        const published = resolvePublishedFocusPanelSummaryRecord(summaryRows, {
+            businessProcessKey: searchParams.get("businessProcessKey"),
+            workViewId: searchParams.get("workViewId"),
+            stageKey: searchParams.get("stageKey"),
+            statusKey: searchParams.get("statusKey"),
+        });
         const draft = highestVersion(summaryRows.filter((r) => r.status === "draft"));
         return NextResponse.json({ published: summarize(published), draft: summarize(draft) });
     } catch (e) {
