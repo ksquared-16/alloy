@@ -30,6 +30,12 @@ The persistent selector for objects of the current type. Responsibilities: searc
 ### Publishable Configuration Collection
 The complete catalog runtime for publishable objects. It composes the Configuration Sidebar with publication posture, durable assignment posture, Attention, Setup/Readiness, lifecycle filtering, and responsive object selection. Domains supply object nouns and authoritative evidence; the runtime owns the grammar. A transient workflow result is never collection posture.
 
+### Configuration Domain Empty State
+The first-use explanation for an empty Configuration Collection. It teaches what the domain is, why the Organization owns it, common examples, how setup flows, and the recommended next action. It is not a generic "no data" placeholder. The Runtime owns the composition; each domain supplies its operator nouns, examples, ownership consequence, and setup steps.
+
+### Configuration Runtime Notice
+The operator-safe presentation of unavailable Configuration. It distinguishes uninitialized domains, pending platform updates, denied access, temporary service unavailability, and failed actions. The operator sees consequence and next step, never table names, SQL, PostgREST codes, schema-cache language, or provider internals. Engineering receives the raw diagnostic in server logs under a short reference shown to the operator.
+
 ### Configuration Object Header
 Names the object being operated: object name (dominant), status badge, one row of identifying facts, and the object's primary action + overflow. The answer to "what am I configuring?" Every object workspace has exactly one.
 
@@ -38,6 +44,8 @@ The object's **owned concerns** as tabs, led by Overview. Route-addressable. Tab
 
 ### Publishable Configuration Detail Runtime
 The read-first object runtime for domains using immutable publication. It always opens on **Overview**, then conditionally exposes Working Draft, Assignments, Distribution, and History. Active Revision and Working Draft are separate evidence; Impact belongs to assignment preparation. Domains provide payload-specific summaries and editors but do not rebuild section navigation, revision posture, Attention, or history.
+
+The Overview begins with domain orientation: purpose and ownership. It then presents active revision, working draft, assignment posture, the authoritative domain summary, Attention, and readiness before any editor.
 
 ### Workspace Section
 A calm, self-contained block for one concern: a plain headline, quiet supporting detail, and one clear affordance. Sections are structured rows within a card, not a mosaic of boxes. Sections are where inline editing happens.

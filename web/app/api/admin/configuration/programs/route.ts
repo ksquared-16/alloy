@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { classifyConfigurationRuntimeIssue } from "@/lib/configPublication/runtimeIssue";
 import {
     assignProgramDistribution,
     createProgramDraft,
@@ -70,11 +71,29 @@ function operatorError(error: unknown): string {
     return message.replace(/^[A-Za-z ]+:\s*/, "");
 }
 
+function configurationIssueResponse(
+    error: unknown,
+    options: { fallbackMessage?: string; fallbackStatus?: number } = {},
+) {
+    const classified = classifyConfigurationRuntimeIssue(error, {
+        domainLabel: "Programs",
+        fallbackMessage: options.fallbackMessage,
+        fallbackStatus: options.fallbackStatus,
+    });
+    console.error("[configuration-runtime]", {
+        domain: "programs",
+        code: classified.issue.code,
+        reference: classified.issue.reference,
+        technical: classified.technical,
+    });
+    return NextResponse.json({ error: classified.issue }, { status: classified.status });
+}
+
 export async function GET() {
     const context = await getAdminAccessContextCached();
     if (!context.ok) return adminContextFailureResponse(context);
     if (!canReadProgramPublication(context)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return configurationIssueResponse(new Error("Forbidden"), { fallbackStatus: 403 });
     }
 
     try {
@@ -88,7 +107,7 @@ export async function GET() {
         );
         return NextResponse.json(snapshot);
     } catch (error) {
-        return NextResponse.json({ error: operatorError(error) }, { status: 500 });
+        return configurationIssueResponse(error, { fallbackStatus: 500 });
     }
 }
 
@@ -96,14 +115,17 @@ export async function POST(request: NextRequest) {
     const context = await getAdminAccessContextCached();
     if (!context.ok) return adminContextFailureResponse(context);
     if (!canManageProgramPublication(context)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return configurationIssueResponse(new Error("Forbidden"), { fallbackStatus: 403 });
     }
 
     let body: ActionBody;
     try {
         body = (await request.json()) as ActionBody;
     } catch {
-        return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+        return configurationIssueResponse(new Error("Invalid Programs request body"), {
+            fallbackMessage: "The Programs request could not be read.",
+            fallbackStatus: 400,
+        });
     }
 
     const supabase = createAdminClient();
@@ -184,9 +206,15 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ ok: true, result });
             }
             default:
-                return NextResponse.json({ error: "Unknown Programs action." }, { status: 400 });
+                return configurationIssueResponse(new Error("Unknown Programs action"), {
+                    fallbackMessage: "That Programs action is not available.",
+                    fallbackStatus: 400,
+                });
         }
     } catch (error) {
-        return NextResponse.json({ error: operatorError(error) }, { status: 400 });
+        return configurationIssueResponse(error, {
+            fallbackMessage: operatorError(error),
+            fallbackStatus: 400,
+        });
     }
 }

@@ -16,7 +16,9 @@ export type ConfigCollectionItem = {
     id: string;
     label: string;
     publicationLabel: string;
+    hasPublishedRevision?: boolean;
     assignmentLabel?: string;
+    isAssigned?: boolean;
     setupLabel?: string;
     hasAttention: boolean;
     publicationState: "draft_only" | "published" | "changes_ready";
@@ -33,6 +35,7 @@ function itemMatchesFilter(item: ConfigCollectionItem, filter: ConfigCollectionF
 /** Complete Collection Runtime selector for publishable Configuration objects. */
 export function ConfigCollectionRail({
     title,
+    description,
     objectLabel,
     items,
     selectedId,
@@ -42,6 +45,7 @@ export function ConfigCollectionRail({
     testId = "config-collection-rail",
 }: {
     title: string;
+    description?: string;
     objectLabel: string;
     items: ConfigCollectionItem[];
     selectedId: string | null;
@@ -65,6 +69,12 @@ export function ConfigCollectionRail({
                 ),
         );
     }, [filter, items, search]);
+    const publishedCount = items.filter(
+        (item) => item.hasPublishedRevision ?? item.publicationState === "published",
+    ).length;
+    const draftCount = items.filter((item) => item.publicationState !== "published").length;
+    const assignedCount = items.filter((item) => item.isAssigned).length;
+    const attentionCount = items.filter((item) => item.hasAttention).length;
 
     return (
         <>
@@ -77,6 +87,11 @@ export function ConfigCollectionRail({
                     <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                             <h2 className="text-sm font-semibold text-alloy-midnight">{title}</h2>
+                            {description ?
+                                <p className="mt-0.5 max-w-xs text-[11px] leading-4 text-alloy-midnight/50">
+                                    {description}
+                                </p>
+                            :   null}
                             <p className="mt-0.5 text-[11px] text-alloy-midnight/45">
                                 {visibleItems.length} of {items.length} shown
                             </p>
@@ -92,6 +107,15 @@ export function ConfigCollectionRail({
                             </ConfigurationPrimaryButton>
                         :   null}
                     </div>
+                    {items.length > 0 ?
+                        <p
+                            className="mt-2 text-[10px] leading-4 text-alloy-midnight/45"
+                            data-testid={`${testId}-summary`}
+                        >
+                            {publishedCount} published · {draftCount} draft or changed · {assignedCount} assigned
+                            {attentionCount > 0 ? ` · ${attentionCount} need attention` : ""}
+                        </p>
+                    :   null}
                     <div className="mt-3 grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
                         <label className="relative">
                             <span className="sr-only">Search {title.toLocaleLowerCase()}</span>
@@ -176,7 +200,7 @@ export function ConfigCollectionRail({
                             </button>
                         );
                     })}
-                    {visibleItems.length === 0 ?
+                    {items.length > 0 && visibleItems.length === 0 ?
                         <p className="px-2 py-6 text-center text-xs text-alloy-midnight/45">
                             No {objectLabel.toLocaleLowerCase()} match this view.
                         </p>

@@ -13,6 +13,7 @@ supersedes: []
 **Scope:** reusable publishable Configuration Runtime; no Operational Calculations or additional domain expansion  
 **Final certification:** **APPROVED AS THE CONFIGURATION PLATFORM REFERENCE IMPLEMENTATION**
 **Independent re-certification:** [`programs-configuration-reference-recertification-2026-07.md`](programs-configuration-reference-recertification-2026-07.md)
+**Operator-comprehension completion:** [`configuration-experience-comprehension-completion-2026-07.md`](configuration-experience-comprehension-completion-2026-07.md)
 
 ## Executive result
 
@@ -138,6 +139,8 @@ Evidence lives in:
 | Evidence | Proves |
 |---|---|
 | `00-organization-landing.png` | Settled Organization catalog and Programs boundary |
+| `01a-programs-not-initialized.png` | Operator-safe unavailable-domain guidance without backend language |
+| `01c-live-programs-load.png` | Live missing-table condition rendered as Configuration setup guidance |
 | `01-programs-landing.png` | Complete Collection Runtime, Add, search/filter, Configuration BOS |
 | `01b-legacy-redirect.png` | Legacy route resolves to canonical Organization ownership |
 | `02-program-detail-draft.png` | Intentional edit concern and active-revision separation |
@@ -169,7 +172,7 @@ Observed:
 - Focused Configuration Runtime tests passed, including recovered-failure
   History retention.
 - Publication, routing, authorization, migration, and workspace regression
-  suite: 41/42 passed. The sole failure is a pre-existing stale source-string
+  suite: 47/48 passed. The sole failure is a pre-existing stale source-string
   assertion in `configurationRuntimeLocations.test.ts` expecting
   `setCreatingProgram(true)`; it is unrelated to this change.
 - Authenticated Programs Chromium certification: passed.

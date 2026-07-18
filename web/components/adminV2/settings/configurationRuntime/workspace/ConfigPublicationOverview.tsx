@@ -67,12 +67,17 @@ function PostureCell({
 export function ConfigPublicationOverview({
     model,
     activePublishedAt,
+    orientation,
     domainSummary,
     onOpenSection,
     testId = "config-publication-overview",
 }: {
     model: ConfigurationRuntimeModel;
     activePublishedAt: string | null;
+    orientation?: {
+        purpose: string;
+        ownership: string;
+    };
     domainSummary?: ReactNode;
     onOpenSection: (section: ConfigurationDetailSection) => void;
     testId?: string;
@@ -94,6 +99,12 @@ export function ConfigPublicationOverview({
                 compact
                 testId={`${testId}-glance`}
             >
+                {orientation ?
+                    <div className="mb-4 border-b border-alloy-stone/20 pb-4" data-testid={`${testId}-orientation`}>
+                        <p className="text-sm font-semibold text-alloy-midnight">{orientation.purpose}</p>
+                        <p className="mt-1 text-xs leading-5 text-alloy-midnight/55">{orientation.ownership}</p>
+                    </div>
+                :   null}
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     <PostureCell
                         label="Active revision"

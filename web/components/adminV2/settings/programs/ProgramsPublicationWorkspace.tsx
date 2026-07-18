@@ -30,6 +30,12 @@ import {
 import { organizationProgramsHref } from "@/lib/admin/canonicalAdminRoutes";
 import type { ConfigurationTargetPreview } from "@/lib/configPublication/types";
 import type { ConfigurationDetailSection } from "@/lib/configPublication/runtimeModel";
+import {
+    classifyConfigurationRuntimeIssue,
+    ConfigurationRuntimeIssueError,
+    readConfigurationRuntimeIssue,
+    type ConfigurationRuntimeIssue,
+} from "@/lib/configPublication/runtimeIssue";
 import type {
     ProgramDraft,
     ProgramPayload,
@@ -144,7 +150,10 @@ async function postAction(body: Record<string, unknown>): Promise<Record<string,
         body: JSON.stringify(body),
     });
     const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!response.ok) throw new Error(String(json.error ?? `Request failed (${response.status})`));
+    if (!response.ok) {
+        const issue = readConfigurationRuntimeIssue(json.error, "Programs");
+        throw new ConfigurationRuntimeIssueError(issue);
+    }
     return json;
 }
 
@@ -166,6 +175,7 @@ export default function ProgramsPublicationWorkspace(props: {
     const [loading, setLoading] = useState(true);
     const [working, setWorking] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [loadIssue, setLoadIssue] = useState<ConfigurationRuntimeIssue | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [createName, setCreateName] = useState("");
     const [createKey, setCreateKey] = useState("");
@@ -177,10 +187,15 @@ export default function ProgramsPublicationWorkspace(props: {
 
     const reload = useCallback(async () => {
         const response = await fetch(ENDPOINT, { credentials: "include" });
-        const json = (await response.json().catch(() => ({}))) as ProgramPublicationSnapshot & {
-            error?: string;
-        };
-        if (!response.ok) throw new Error(json.error ?? `Failed (${response.status})`);
+        const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!response.ok) {
+            setLoadIssue(readConfigurationRuntimeIssue(payload.error, "Programs"));
+            setSnapshot(null);
+            setSelectedProgramId(null);
+            return;
+        }
+        const json = payload as ProgramPublicationSnapshot;
+        setLoadIssue(null);
         setSnapshot(json);
         setSelectedProgramId((current) => {
             if (current && json.programs.some((program) => program.id === current)) return current;
@@ -192,9 +207,10 @@ export default function ProgramsPublicationWorkspace(props: {
 
     useEffect(() => {
         void reload()
-            .catch((nextError) =>
-                setError(nextError instanceof Error ? nextError.message : "Programs could not load."),
-            )
+            .catch((nextError) => {
+                setLoadIssue(readConfigurationRuntimeIssue(nextError, "Programs"));
+                setSnapshot(null);
+            })
             .finally(() => setLoading(false));
     }, [reload]);
 
@@ -243,7 +259,16 @@ export default function ProgramsPublicationWorkspace(props: {
                 if (options?.reload !== false) await reload();
                 options?.afterSuccess?.();
             } catch (nextError) {
-                setError(nextError instanceof Error ? nextError.message : "The action could not be completed.");
+                const message =
+                    nextError instanceof Error ? nextError.message : "The action could not be completed.";
+                const issue =
+                    nextError instanceof ConfigurationRuntimeIssueError
+                        ? nextError.issue
+                        : classifyConfigurationRuntimeIssue(nextError, {
+                              domainLabel: "Programs",
+                              fallbackMessage: message,
+                          }).issue;
+                setError(`${issue.message} ${issue.nextStep}`);
             } finally {
                 setWorking(null);
             }
@@ -369,7 +394,7 @@ export default function ProgramsPublicationWorkspace(props: {
 
             <ConfigurationContext
                 title="Programs"
-                subtitle="Publish reusable Organization configuration and assign it to Locations."
+                subtitle="Create reusable Organization service definitions, publish revisions, and assign them to Locations."
                 testId="programs-configuration-context"
                 actions={
                     canManage ?
@@ -412,6 +437,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 >
                     <ConfigCollectionRail
                         title="Program collection"
+                        description="Reusable services the Organization can publish and make available to Locations."
                         objectLabel="Program"
                         items={collectionItems}
                         selectedId={selectedProgramId}
@@ -424,14 +450,31 @@ export default function ProgramsPublicationWorkspace(props: {
                     <main className="min-w-0" data-testid="programs-workspace">
                         {!selectedProgram || !form || !snapshot || !viewModel || !visibleDefinition ?
                             <ConfigurationEmptyState
-                                title={canManage ? "Create your first Program" : "No Programs available"}
-                                description={
-                                    canManage
-                                        ? "Start with an Organization-owned working draft, then publish and assign it to Locations."
-                                        : "No Organization Programs are available to review."
+                                title={
+                                    loadIssue ? "Programs are not ready in this environment"
+                                    : canManage ? "Create your first Program"
+                                    : "No Programs have been created"
                                 }
+                                description="Programs are reusable service definitions owned by the Organization, such as Preschool, After-school care, or Summer camp."
+                                purpose="Define a service once, publish an immutable revision, then assign that revision to the Locations that may offer it. Each Location still owns its local availability, resources, evidence, and schedule."
+                                examples={["Preschool", "After-school care", "Summer camp"]}
+                                setupSteps={[
+                                    {
+                                        label: "Create a working draft",
+                                        description: "Describe the reusable service and its Organization-owned requirements.",
+                                    },
+                                    {
+                                        label: "Publish a revision",
+                                        description: "Make an immutable version available for Location assignment.",
+                                    },
+                                    {
+                                        label: "Assign to Locations",
+                                        description: "Choose which Locations may consume the published revision.",
+                                    },
+                                ]}
+                                issue={loadIssue}
                                 actions={
-                                    canManage ?
+                                    canManage && !loadIssue ?
                                         <ConfigurationPrimaryButton onClick={() => setCreateOpen(true)}>
                                             Add Program
                                         </ConfigurationPrimaryButton>
@@ -499,6 +542,10 @@ export default function ProgramsPublicationWorkspace(props: {
                                     <ConfigPublicationOverview
                                         model={viewModel.runtime}
                                         activePublishedAt={selectedProgram.latestPublication?.publishedAt ?? null}
+                                        orientation={{
+                                            purpose: "This Program defines a reusable service the Organization can make available across Locations.",
+                                            ownership: "The Organization owns the published definition. Each assigned Location decides whether to offer it and owns local delivery details.",
+                                        }}
                                         onOpenSection={setActiveSection}
                                         domainSummary={
                                             <ProgramDefinitionSummary

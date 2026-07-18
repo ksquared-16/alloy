@@ -24,11 +24,13 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
 
     const consoleErrors: string[] = [];
     const failedRequests: string[] = [];
+    const programResponseStatuses: number[] = [];
     const actions: Array<Record<string, unknown>> = [];
     const now = "2026-07-17T20:00:00.000Z";
     let status: "draft" | "validated" = "draft";
     let published = false;
     let phase: "none" | "partial" | "retried" = "none";
+    let loadMode: "not_initialized" | "ready" = "not_initialized";
     let label = "Preschool";
     let description: string | null = null;
 
@@ -239,10 +241,31 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
         if (message.type() === "error") consoleErrors.push(message.text());
     });
     page.on("requestfailed", (request) => failedRequests.push(request.url()));
+    page.on("response", (response) => {
+        if (response.url().includes("/api/admin/configuration/programs")) {
+            programResponseStatuses.push(response.status());
+        }
+    });
 
     await page.route("**/api/admin/configuration/programs", async (route) => {
         const request = route.request();
         if (request.method() === "GET") {
+            if (loadMode === "not_initialized") {
+                await route.fulfill({
+                    status: 503,
+                    contentType: "application/json",
+                    body: JSON.stringify({
+                        error: {
+                            code: "not_initialized",
+                            title: "Programs setup is not complete",
+                            message: "This Configuration area has not been initialized in this environment.",
+                            nextStep: "An administrator needs to complete platform setup before this configuration can be used.",
+                            reference: "cfg-browser",
+                        },
+                    }),
+                });
+                return;
+            }
             await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(snapshot()) });
             return;
         }
@@ -307,6 +330,13 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     await shot("00-organization-landing");
 
     await page.goto("/organization/programs", { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await expect(page.getByTestId("programs-publication-runtime")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("programs-empty-state-issue")).toContainText("Programs setup is not complete");
+    await expect(page.getByTestId("programs-publication-runtime")).not.toContainText(/schema cache|public\.programs/i);
+    await shot("01a-programs-not-initialized");
+
+    loadMode = "ready";
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 120_000 });
     await expect(page.getByTestId("programs-publication-runtime")).toBeVisible({ timeout: 60_000 });
     await expect(page).toHaveURL(/\/organization\/programs/);
     await expect(page.getByTestId("programs-publication-runtime")).toContainText("Organization");
@@ -402,6 +432,7 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     const unexpectedConsoleErrors = consoleErrors.filter(
         (message) =>
             !message.includes("A tree hydrated but some attributes of the server rendered HTML didn't match")
+            && !message.includes("Failed to load resource: the server responded with a status of 503")
             && !(message.includes("TypeError: Failed to fetch") && message.includes("supabase_auth-js")),
     );
     expect(unexpectedConsoleErrors).toEqual([]);
@@ -409,4 +440,26 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     expect(
         failedRequests.filter((url) => url.includes("/api/admin/configuration/programs")),
     ).toEqual([]);
+    expect(programResponseStatuses).toContain(503);
+    expect(programResponseStatuses.filter((statusCode) => statusCode >= 400 && statusCode !== 503)).toEqual([]);
+});
+
+test("Live Programs load presents operator-safe availability", async ({ page }, testInfo) => {
+    test.setTimeout(120_000);
+    mkdirSync(EVIDENCE_DIR, { recursive: true });
+    if (!storageState) await ensureAdminPlaywrightSession(page);
+
+    await page.goto("/organization/programs", { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await expect(page.getByTestId("programs-publication-runtime")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("programs-publication-runtime")).not.toContainText(
+        /schema cache|public\.programs|PGRST|commercial_programs|commercial_offerings/i,
+    );
+    const issue = page.getByTestId("programs-empty-state-issue");
+    if (await issue.isVisible()) {
+        await expect(issue).toContainText(/setup is not complete|needs a platform update|temporarily unavailable/i);
+    }
+
+    const image = await page.screenshot({ fullPage: true, animations: "disabled" });
+    writeFileSync(resolve(EVIDENCE_DIR, "01c-live-programs-load.png"), image);
+    writeFileSync(testInfo.outputPath("01c-live-programs-load.png"), image);
 });

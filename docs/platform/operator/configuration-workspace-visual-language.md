@@ -97,6 +97,12 @@ readiness, and Attention evidence. They may reuse the platform selected-row
 geometry, but product language remains **Collection / object / assignment** —
 never queue, lane, work item, or record.
 
+An empty Configuration Collection is an orientation surface, not blank canvas
+copy. It uses one calm explanatory region: domain definition and purpose first,
+then examples and a short setup sequence, then one recommended action. An
+unavailable domain keeps the same orientation and adds an operator-safe Runtime
+Notice above it; raw engineering language never replaces the product explanation.
+
 ## Navigation (tabs & breadcrumb)
 
 - **Tabs** are the object's owned concerns. The active tab is Bend-Pine text over a Bend-Pine underline; idle tabs are muted with no underline. Tabs are quiet — they name concerns, not features.

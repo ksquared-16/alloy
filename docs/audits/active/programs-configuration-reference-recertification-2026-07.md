@@ -14,6 +14,10 @@ supersedes:
 **Frozen architecture:** accepted without reopening  
 **Verdict:** **APPROVED AS THE CONFIGURATION PLATFORM REFERENCE IMPLEMENTATION**
 
+**Operator-comprehension closeout:** Empty, unavailable, Collection, and
+Overview comprehension were independently completed in
+[`configuration-experience-comprehension-completion-2026-07.md`](configuration-experience-comprehension-completion-2026-07.md).
+
 ## Certification basis
 
 This is a fresh Product evaluation of the realized experience. It does not infer
@@ -157,7 +161,7 @@ No parallel platform was introduced.
 - Production TypeScript graph: passed.
 - Test and Playwright TypeScript graph: passed.
 - Focused Configuration history and Programs UI tests: passed.
-- Configuration regression suite: 41/42 passed; the single failure is the
+- Configuration regression suite: 47/48 passed; the single failure is the
   pre-existing stale Locations source-string assertion named below.
 - No Programs API request failed during the browser journey.
 - No unexpected Programs or Configuration console error occurred.

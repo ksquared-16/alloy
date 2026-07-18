@@ -157,6 +157,16 @@ Publication evidence honors the reader's allowed Location scope. Capability
 posture is explicit: read-only operators inherit the runtime without mutation
 controls, and publication must reject a draft equivalent to the active revision.
 
+Configuration comprehension is Runtime-owned. Empty Collections teach domain
+purpose, examples, ownership, setup flow, and next action instead of rendering a
+"no data" placeholder. Collections summarize published, draft/changed, assigned,
+and Attention posture. Overview orients the operator to domain purpose and
+ownership before presenting revision, draft, assignment, summary, Attention, and
+readiness. Configuration errors are classified as uninitialized, platform update
+required, access denied, temporarily unavailable, or action failed; raw database,
+PostgREST, schema-cache, and provider diagnostics remain server-side under an
+operator-visible engineering reference.
+
 Future publishable domains supply only their domain adapter: payload summary and
 editor, validation/publish mutations, setup evidence, target labels, and
 assignment impact language. They do not rebuild Collection, Detail, Attention,

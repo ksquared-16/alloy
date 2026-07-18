@@ -116,6 +116,8 @@ describe("Programs Publication workspace", () => {
         expect(container.querySelector('[data-testid="programs-publication-runtime"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-overview"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
+        expect(container.textContent).toContain("This Program defines a reusable service");
+        expect(container.textContent).toContain("1 published · 1 draft or changed · 0 assigned");
 
         await act(async () => {
             (container!.querySelector('[data-testid="program-detail-runtime-tab-draft"]') as HTMLButtonElement).click();
@@ -170,5 +172,34 @@ describe("Programs Publication workspace", () => {
         });
         expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
         expect((container.querySelector('[data-testid="program-draft-label"]') as HTMLInputElement).disabled).toBe(true);
+    });
+
+    it("explains an empty domain and never renders raw database diagnostics", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: false,
+                status: 503,
+                json: async () => ({
+                    error: "Could not find the table 'public.programs' in the schema cache",
+                }),
+            }),
+        );
+        container = document.createElement("div");
+        document.body.appendChild(container);
+        root = createRoot(container);
+        await act(async () => {
+            root!.render(<ProgramsPublicationWorkspace />);
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(container.textContent).toContain("Programs are not ready in this environment");
+        expect(container.textContent).toContain("Programs are reusable service definitions");
+        expect(container.textContent).toContain("Common examples");
+        expect(container.textContent).toContain("How it works");
+        expect(container.textContent).toContain("Programs setup is not complete");
+        expect(container.textContent).not.toMatch(/public\.programs|schema cache/i);
+        expect(container.querySelector('[data-testid="programs-empty-state-issue"]')).not.toBeNull();
     });
 });
