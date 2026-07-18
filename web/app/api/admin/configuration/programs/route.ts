@@ -81,6 +81,10 @@ export async function GET() {
         const snapshot = await loadProgramPublicationSnapshot(
             createAdminClient(),
             context.orgId,
+            {
+                allowedSiteLocationIds: context.allowedSiteLocationIds,
+                canManage: canManageProgramPublication(context),
+            },
         );
         return NextResponse.json(snapshot);
     } catch (error) {

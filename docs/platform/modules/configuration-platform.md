@@ -151,6 +151,9 @@ revision drift; distribution failures project into Configuration Attention;
 and History spans publication, assignment, retry, and failure evidence across
 revisions. The Collection Runtime owns search, lifecycle filtering, Add,
 publication posture, assignment posture, readiness, and attention signals.
+Publication evidence honors the reader's allowed Location scope. Capability
+posture is explicit: read-only operators inherit the runtime without mutation
+controls, and publication must reject a draft equivalent to the active revision.
 
 Future publishable domains supply only their domain adapter: payload summary and
 editor, validation/publish mutations, setup evidence, target labels, and

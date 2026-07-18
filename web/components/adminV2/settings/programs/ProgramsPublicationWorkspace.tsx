@@ -222,6 +222,7 @@ export default function ProgramsPublicationWorkspace(props: {
             })) ?? [],
         [snapshot],
     );
+    const canManage = snapshot?.capabilities.canManage ?? false;
 
     useEffect(() => {
         setForm(selectedProgram ? formFor(selectedProgram) : null);
@@ -252,13 +253,13 @@ export default function ProgramsPublicationWorkspace(props: {
 
     const railActions = useMemo<ConfigurationRailAction[]>(() => {
         if (!selectedProgram || !viewModel) {
-            return [{
+            return canManage ? [{
                 id: "add-configuration-object",
                 label: "Add Program",
                 reason: "Create an Organization-owned working draft.",
                 group: "manage",
                 onClick: () => setCreateOpen(true),
-            }];
+            }] : [];
         }
         const actions: ConfigurationRailAction[] = viewModel.runtime.attention
             .filter((item) => item.grade === "fix")
@@ -269,7 +270,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 group: "fix" as const,
                 onClick: () => setActiveSection(item.section),
             }));
-        if (viewModel.runtime.publication.canPublish) {
+        if (canManage && viewModel.runtime.publication.canPublish) {
             actions.push({
                 id: "publish-configuration-draft",
                 label: "Publish working draft",
@@ -277,7 +278,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 group: "next",
                 onClick: () => setActiveSection("draft"),
             });
-        } else if (viewModel.runtime.publication.hasUnpublishedChanges) {
+        } else if (canManage && viewModel.runtime.publication.hasUnpublishedChanges) {
             actions.push({
                 id: "review-configuration-draft",
                 label: "Review working draft",
@@ -286,28 +287,27 @@ export default function ProgramsPublicationWorkspace(props: {
                 onClick: () => setActiveSection("draft"),
             });
         }
-        actions.push(
-            {
+        if (canManage) {
+            actions.push({
                 id: "edit-configuration-draft",
                 label: "Edit working draft",
                 group: "manage",
                 onClick: () => setActiveSection("draft"),
-            },
-            {
+            }, {
                 id: "manage-configuration-assignment",
                 label: "Manage assignments",
                 group: "manage",
                 onClick: () => setActiveSection("assignment"),
-            },
-            {
-                id: "review-configuration-history",
-                label: "Review history",
-                group: "more",
-                onClick: () => setActiveSection("history"),
-            },
-        );
+            });
+        }
+        actions.push({
+            id: "review-configuration-history",
+            label: "Review history",
+            group: "more",
+            onClick: () => setActiveSection("history"),
+        });
         return actions;
-    }, [selectedProgram, viewModel]);
+    }, [canManage, selectedProgram, viewModel]);
 
     if (loading) {
         return <p className="p-6 text-sm text-alloy-midnight/55">Loading Programs…</p>;
@@ -372,14 +372,16 @@ export default function ProgramsPublicationWorkspace(props: {
                 subtitle="Publish reusable Organization configuration and assign it to Locations."
                 testId="programs-configuration-context"
                 actions={
-                    <ConfigurationPrimaryButton
+                    canManage ?
+                        <ConfigurationPrimaryButton
                         className="xl:hidden"
                         onClick={() => setCreateOpen(true)}
                         data-testid="programs-mobile-add"
                     >
                         <Plus className="mr-1 h-3.5 w-3.5" aria-hidden />
                         Add Program
-                    </ConfigurationPrimaryButton>
+                        </ConfigurationPrimaryButton>
+                    :   undefined
                 }
             >
                 <div className="flex flex-wrap items-center gap-1.5 border-t border-alloy-stone/25 pt-2 text-[11px] text-alloy-midnight/45">
@@ -413,7 +415,7 @@ export default function ProgramsPublicationWorkspace(props: {
                         objectLabel="Program"
                         items={collectionItems}
                         selectedId={selectedProgramId}
-                        canAdd
+                        canAdd={canManage}
                         onAdd={() => setCreateOpen(true)}
                         onSelect={selectProgram}
                         testId="programs-collection"
@@ -422,12 +424,18 @@ export default function ProgramsPublicationWorkspace(props: {
                     <main className="min-w-0" data-testid="programs-workspace">
                         {!selectedProgram || !form || !snapshot || !viewModel || !visibleDefinition ?
                             <ConfigurationEmptyState
-                                title="Create your first Program"
-                                description="Start with an Organization-owned working draft, then publish and assign it to Locations."
+                                title={canManage ? "Create your first Program" : "No Programs available"}
+                                description={
+                                    canManage
+                                        ? "Start with an Organization-owned working draft, then publish and assign it to Locations."
+                                        : "No Organization Programs are available to review."
+                                }
                                 actions={
-                                    <ConfigurationPrimaryButton onClick={() => setCreateOpen(true)}>
-                                        Add Program
-                                    </ConfigurationPrimaryButton>
+                                    canManage ?
+                                        <ConfigurationPrimaryButton onClick={() => setCreateOpen(true)}>
+                                            Add Program
+                                        </ConfigurationPrimaryButton>
+                                    :   undefined
                                 }
                                 testId="programs-empty-state"
                             />
@@ -465,7 +473,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                             viewModel.runtime.assignment.label,
                                         ]}
                                         actions={
-                                            activeSection !== "draft" ?
+                                            canManage && activeSection !== "draft" ?
                                                 <ConfigurationSecondaryButton
                                                     onClick={() => setActiveSection("draft")}
                                                     data-testid="program-edit-draft"
@@ -556,6 +564,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                                         onChange={(event) => setForm({ ...form, label: event.target.value })}
                                                         className="config-runtime-input mt-1"
                                                         data-testid="program-draft-label"
+                                                        disabled={!canManage}
                                                     />
                                                 </label>
                                                 <label>
@@ -564,6 +573,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                                         value={form.category}
                                                         onChange={(event) => setForm({ ...form, category: event.target.value })}
                                                         className="config-runtime-input mt-1"
+                                                        disabled={!canManage}
                                                     />
                                                 </label>
                                                 <label className="sm:col-span-2">
@@ -572,6 +582,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                                         value={form.description}
                                                         onChange={(event) => setForm({ ...form, description: event.target.value })}
                                                         className="config-runtime-input mt-1 min-h-20"
+                                                        disabled={!canManage}
                                                     />
                                                 </label>
                                                 <label>
@@ -582,6 +593,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                                         value={form.minimumAge}
                                                         onChange={(event) => setForm({ ...form, minimumAge: event.target.value })}
                                                         className="config-runtime-input mt-1"
+                                                        disabled={!canManage}
                                                     />
                                                 </label>
                                                 <label>
@@ -592,6 +604,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                                         value={form.maximumAge}
                                                         onChange={(event) => setForm({ ...form, maximumAge: event.target.value })}
                                                         className="config-runtime-input mt-1"
+                                                        disabled={!canManage}
                                                     />
                                                 </label>
                                                 <label>
@@ -600,6 +613,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                                         value={form.requiredResourceType}
                                                         onChange={(event) => setForm({ ...form, requiredResourceType: event.target.value })}
                                                         className="config-runtime-input mt-1"
+                                                        disabled={!canManage}
                                                     />
                                                 </label>
                                                 <label>
@@ -609,6 +623,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                                         onChange={(event) => setForm({ ...form, qualificationRequirements: event.target.value })}
                                                         placeholder="One requirement per line"
                                                         className="config-runtime-input mt-1 min-h-20"
+                                                        disabled={!canManage}
                                                     />
                                                 </label>
                                             </div>
@@ -617,7 +632,8 @@ export default function ProgramsPublicationWorkspace(props: {
                                                     {selectedProgram.draft.validationErrors.map((item) => <li key={item}>{item}</li>)}
                                                 </ul>
                                             :   null}
-                                            <div className="mt-4 flex flex-wrap gap-2">
+                                            {canManage ?
+                                                <div className="mt-4 flex flex-wrap gap-2">
                                                 <ConfigurationPrimaryButton
                                                     disabled={working != null}
                                                     data-testid="program-save-draft"
@@ -677,7 +693,8 @@ export default function ProgramsPublicationWorkspace(props: {
                                                 >
                                                     {working === "publish" ? "Publishing…" : "Publish immutable revision"}
                                                 </ConfigurationSecondaryButton>
-                                            </div>
+                                                </div>
+                                            :   null}
                                         </ConfigWorkspaceCard>
                                     </div>
                                 : activeSection === "assignment" ?
@@ -688,7 +705,8 @@ export default function ProgramsPublicationWorkspace(props: {
                                         activeRevisionLabel={viewModel.runtime.publication.activeRevisionLabel}
                                         testId="program-assignment-runtime"
                                         workflow={
-                                            !selectedProgram.latestPublication ?
+                                            !canManage ? undefined
+                                            : !selectedProgram.latestPublication ?
                                                 <p className="py-4 text-sm text-alloy-midnight/50">
                                                     Publish this Program before assigning it to Locations.
                                                 </p>
@@ -794,22 +812,29 @@ export default function ProgramsPublicationWorkspace(props: {
                                         revisionLabelByPublicationId={revisionLabelByPublicationId}
                                         locationLabelById={locationLabelById}
                                         retryingRunId={working?.startsWith("retry:") ? working.slice("retry:".length) : null}
-                                        onRetry={(runId) =>
-                                            void run(`retry:${runId}`, () =>
-                                                postAction({ action: "retry", runId }),
-                                            )
+                                        onRetry={
+                                            canManage ?
+                                                (runId) =>
+                                                    void run(`retry:${runId}`, () =>
+                                                        postAction({ action: "retry", runId }),
+                                                    )
+                                            :   undefined
                                         }
                                         testId="program-distribution-runtime"
                                     />
                                 :   <ConfigHistoryTimeline
                                         entries={viewModel.history}
-                                        onAction={(entry) => {
-                                            if (!entry.id.startsWith("run:")) return;
-                                            const runId = entry.id.slice("run:".length);
-                                            void run(`retry:${runId}`, () =>
-                                                postAction({ action: "retry", runId }),
-                                            );
-                                        }}
+                                        onAction={
+                                            canManage ?
+                                                (entry) => {
+                                                    if (!entry.id.startsWith("run:")) return;
+                                                    const runId = entry.id.slice("run:".length);
+                                                    void run(`retry:${runId}`, () =>
+                                                        postAction({ action: "retry", runId }),
+                                                    );
+                                                }
+                                            :   undefined
+                                        }
                                         testId="program-history-runtime"
                                     />
                                 }
@@ -819,7 +844,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 </div>
             </ConfigurationShell>
 
-            {createOpen ?
+            {createOpen && canManage ?
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-alloy-midnight/25 p-4"
                     role="dialog"

@@ -15,6 +15,7 @@ vi.mock("next/navigation", () => ({
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const snapshot = {
+    capabilities: { canManage: true },
     programs: [
         {
             id: "program-1",
@@ -140,5 +141,34 @@ describe("Programs Publication workspace", () => {
         expect(container.querySelector('[data-testid="program-history-runtime"]')).not.toBeNull();
         expect(container.textContent).toContain("Configuration history");
         expect(container.textContent).toContain("local offer state");
+    });
+
+    it("keeps mutation controls out of the read-only runtime", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    ...snapshot,
+                    capabilities: { canManage: false },
+                }),
+            }),
+        );
+        container = document.createElement("div");
+        document.body.appendChild(container);
+        root = createRoot(container);
+        await act(async () => {
+            root!.render(<ProgramsPublicationWorkspace />);
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(container.querySelector('[data-testid="programs-collection-add"]')).toBeNull();
+        expect(container.querySelector('[data-testid="program-edit-draft"]')).toBeNull();
+        await act(async () => {
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-draft"]') as HTMLButtonElement).click();
+        });
+        expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
+        expect((container.querySelector('[data-testid="program-draft-label"]') as HTMLInputElement).disabled).toBe(true);
     });
 });

@@ -54,6 +54,7 @@ export type ProgramAssignment = {
 };
 
 export type ProgramPublicationSnapshot = {
+    capabilities: { canManage: boolean };
     programs: ProgramCatalogItem[];
     locations: Array<{ id: string; label: string }>;
     runs: ProgramDistributionRun[];
@@ -167,20 +168,31 @@ async function loadProgramRows(supabase: SupabaseClient, orgId: string) {
 export async function loadProgramPublicationSnapshot(
     supabase: SupabaseClient,
     orgId: string,
+    options: {
+        allowedSiteLocationIds: string[] | null;
+        canManage: boolean;
+    },
 ): Promise<ProgramPublicationSnapshot> {
+    let locationsQuery = supabase
+        .from("locations")
+        .select("id, label")
+        .eq("org_id", orgId)
+        .eq("location_type", "site")
+        .eq("is_active", true)
+        .order("label");
+    if (options.allowedSiteLocationIds != null && options.allowedSiteLocationIds.length > 0) {
+        locationsQuery = locationsQuery.in("id", options.allowedSiteLocationIds);
+    }
     const [programRows, locationsResult, evidence] = await Promise.all([
         loadProgramRows(supabase, orgId),
-        supabase
-            .from("locations")
-            .select("id, label")
-            .eq("org_id", orgId)
-            .eq("location_type", "site")
-            .eq("is_active", true)
-            .order("label"),
+        options.allowedSiteLocationIds?.length === 0
+            ? Promise.resolve({ data: [], error: null })
+            : locationsQuery,
         loadConfigurationPublicationEvidence({
             supabase,
             orgId,
             domainKey: "programs",
+            allowedLocationIds: options.allowedSiteLocationIds,
         }),
     ]);
     assertNoError(locationsResult.error, "Load Locations");
@@ -229,6 +241,7 @@ export async function loadProgramPublicationSnapshot(
     }));
 
     return {
+        capabilities: { canManage: options.canManage },
         programs,
         locations,
         runs: evidence.runs,
@@ -392,11 +405,25 @@ export async function publishProgramDraft(input: {
     const { payload } = await loadDraftPayload(input.supabase, input.orgId, input.programId);
     const errors = validateProgramPayload(payload);
     if (errors.length) throw new Error(errors.join(" "));
+    const payloadChecksum = programPayloadChecksum(payload);
+    const { data: latestPublication, error: publicationError } = await input.supabase
+        .from("configuration_publications")
+        .select("payload_checksum")
+        .eq("org_id", input.orgId)
+        .eq("domain_key", "programs")
+        .eq("subject_id", input.programId)
+        .order("revision_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    assertNoError(publicationError, "Load active Program publication");
+    if (stringValue((latestPublication as DbRow | null)?.payload_checksum) === payloadChecksum) {
+        throw new Error("The working draft matches the active revision.");
+    }
     const { data, error } = await input.supabase.rpc("publish_program_revision_v1", {
         p_org_id: input.orgId,
         p_program_id: input.programId,
         p_actor_user_id: input.actorUserId,
-        p_payload_checksum: programPayloadChecksum(payload),
+        p_payload_checksum: payloadChecksum,
     });
     assertNoError(error, "Publish Program");
     return recordValue(data);

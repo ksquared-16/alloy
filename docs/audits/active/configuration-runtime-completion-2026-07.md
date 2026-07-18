@@ -105,7 +105,12 @@ must expose:
   - all publications, not latest only;
   - current durable assignments from `configuration_consumptions`;
   - append-only attempts;
-  - all distribution runs in the retained evidence window.
+  - complete cross-revision distribution history.
+- Read evidence is filtered by the operator's allowed site Locations before it
+  reaches the Programs runtime. `settings.read` receives the same read-first
+  experience without Add, edit, publish, assignment, or retry controls.
+- Publication rejects a working draft whose checksum matches the active revision,
+  preventing equivalent immutable revisions.
 - `programPublicationViewModel.ts` maps Program evidence into generic runtime
   contracts and plain-language history.
 - Program-specific UI is limited to:

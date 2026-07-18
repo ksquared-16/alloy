@@ -54,8 +54,21 @@ export async function loadConfigurationPublicationEvidence(input: {
     supabase: SupabaseClient;
     orgId: string;
     domainKey: string;
-    runLimit?: number;
+    allowedLocationIds?: string[] | null;
 }): Promise<ConfigurationPublicationEvidenceSnapshot> {
+    const allowedLocationIds =
+        input.allowedLocationIds == null
+            ? null
+            : [...new Set(input.allowedLocationIds.map((id) => id.trim()).filter(Boolean))];
+    let consumptionsQuery = input.supabase
+        .from("configuration_consumptions")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("domain_key", input.domainKey)
+        .order("updated_at", { ascending: false });
+    if (allowedLocationIds != null && allowedLocationIds.length > 0) {
+        consumptionsQuery = consumptionsQuery.in("location_id", allowedLocationIds);
+    }
     const [publicationsResult, runsResult, consumptionsResult] = await Promise.all([
         input.supabase
             .from("configuration_publications")
@@ -68,14 +81,10 @@ export async function loadConfigurationPublicationEvidence(input: {
             .select("*")
             .eq("org_id", input.orgId)
             .eq("domain_key", input.domainKey)
-            .order("created_at", { ascending: false })
-            .limit(input.runLimit ?? 100),
-        input.supabase
-            .from("configuration_consumptions")
-            .select("*")
-            .eq("org_id", input.orgId)
-            .eq("domain_key", input.domainKey)
-            .order("updated_at", { ascending: false }),
+            .order("created_at", { ascending: false }),
+        allowedLocationIds?.length === 0
+            ? Promise.resolve({ data: [], error: null })
+            : consumptionsQuery,
     ]);
     assertNoError(publicationsResult.error, "Load publications");
     assertNoError(runsResult.error, "Load distribution history");
@@ -83,22 +92,25 @@ export async function loadConfigurationPublicationEvidence(input: {
 
     const runRows = (runsResult.data ?? []) as DbRow[];
     const runIds = runRows.map((row) => stringValue(row.id)).filter(Boolean);
+    let targetsQuery = input.supabase
+        .from("configuration_distribution_targets")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .in("run_id", runIds)
+        .order("updated_at", { ascending: false });
+    let attemptsQuery = input.supabase
+        .from("configuration_delivery_attempts")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .in("run_id", runIds)
+        .order("attempted_at", { ascending: false });
+    if (allowedLocationIds != null && allowedLocationIds.length > 0) {
+        targetsQuery = targetsQuery.in("location_id", allowedLocationIds);
+        attemptsQuery = attemptsQuery.in("location_id", allowedLocationIds);
+    }
     const [targetsResult, attemptsResult] =
-        runIds.length > 0 ?
-            await Promise.all([
-                input.supabase
-                    .from("configuration_distribution_targets")
-                    .select("*")
-                    .eq("org_id", input.orgId)
-                    .in("run_id", runIds)
-                    .order("updated_at", { ascending: false }),
-                input.supabase
-                    .from("configuration_delivery_attempts")
-                    .select("*")
-                    .eq("org_id", input.orgId)
-                    .in("run_id", runIds)
-                    .order("attempted_at", { ascending: false }),
-            ])
+        runIds.length > 0 && allowedLocationIds?.length !== 0 ?
+            await Promise.all([targetsQuery, attemptsQuery])
         :   [{ data: [], error: null }, { data: [], error: null }];
     assertNoError(targetsResult.error, "Load distribution targets");
     assertNoError(attemptsResult.error, "Load delivery attempts");
@@ -122,15 +134,30 @@ export async function loadConfigurationPublicationEvidence(input: {
 
     return {
         publications: ((publicationsResult.data ?? []) as DbRow[]).map(mapPublication),
-        runs: runRows.map((row) => ({
-            id: stringValue(row.id),
-            publicationId: stringValue(row.publication_id),
-            status: row.status as ConfigurationDistributionRunRecord["status"],
-            idempotencyKey: stringValue(row.idempotency_key),
-            createdAt: stringValue(row.created_at),
-            completedAt: nullableString(row.completed_at),
-            targets: targetsByRun.get(stringValue(row.id)) ?? [],
-        })),
+        runs: runRows.flatMap((row): ConfigurationDistributionRunRecord[] => {
+            const id = stringValue(row.id);
+            const targets = targetsByRun.get(id) ?? [];
+            if (allowedLocationIds != null && targets.length === 0) return [];
+            const scopedStatus =
+                allowedLocationIds == null
+                    ? (row.status as ConfigurationDistributionRunRecord["status"])
+                    : targets.every((target) => target.status === "failed")
+                      ? "failed"
+                      : targets.some((target) => target.status === "failed")
+                        ? "partial_failure"
+                        : targets.some((target) => target.status === "pending")
+                          ? "running"
+                          : "completed";
+            return [{
+                id,
+                publicationId: stringValue(row.publication_id),
+                status: scopedStatus,
+                idempotencyKey: stringValue(row.idempotency_key),
+                createdAt: stringValue(row.created_at),
+                completedAt: nullableString(row.completed_at),
+                targets,
+            }];
+        }),
         attempts: ((attemptsResult.data ?? []) as DbRow[]).map((row) => ({
             id: stringValue(row.id),
             runId: stringValue(row.run_id),

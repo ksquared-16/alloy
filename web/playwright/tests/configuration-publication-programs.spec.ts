@@ -102,6 +102,7 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     };
 
     const snapshot = () => ({
+        capabilities: { canManage: true },
         programs: actions.some((action) => action.action === "create_draft") ? [program()] : [],
         locations: [
             { id: "location-1", label: "Downtown" },
