@@ -175,6 +175,7 @@ The Focus Panel is the **canonical operator surface**; the drawer is reveal/open
 
 ## Related
 
+- [`../runtime/work-unit-configuration-runtime-constitution.md`](../runtime/work-unit-configuration-runtime-constitution.md) — **constitutional reference**: one owner per Work Unit region (Header/Queue/Focus Panel/Actions/Editing), `resolveSurfaceVariant` as the sole applicability resolver, and the legacy-ownership-elimination doctrine. The Work Unit **Header** is cut over to this model (single owner `resolveSurfaceVariant` over published `entity_layouts(work_unit_header)`); the legacy `metric_placements`/`workUnitHeaderCards`/`WorkUnitCommandSurface` Header path is deleted.
 - [`focus-panel-runtime-cutover-report.md`](./focus-panel-runtime-cutover-report.md) — **cutover ledger** (drawer dependency classification + staged removal D0→G)
 - [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md) — **sunset matrix + freeze rule + editing gap** (convergence lock)
 - [`focus-panel-edit-information-doctrine.md`](./focus-panel-edit-information-doctrine.md)
