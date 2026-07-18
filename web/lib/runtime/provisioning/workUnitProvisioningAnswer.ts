@@ -391,6 +391,7 @@ export async function composeWorkUnitProvisioningAnswer(
         orgId: req.orgId,
         surfaceId: queueRowSurfaceId,
         processKeyHint: process.key,
+        workViewId: activeView.id,
     });
     const presentation = await resolveOperationalPresentation({
         supabase: req.supabase,

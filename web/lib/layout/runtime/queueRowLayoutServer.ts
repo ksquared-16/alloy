@@ -25,13 +25,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { listDefaultLayouts, listOrgLayouts } from "@/lib/layout/entityLayoutsRepo";
+import { resolveSurfaceVariant, type SurfaceVariantCandidate } from "@/lib/layout/resolveSurfaceVariant";
 import { resolveQueueRecordLayoutConfig } from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
 import {
     defaultWaitlistQueueLayoutV3,
     type QueueRecordLayoutConfigV3,
 } from "@/lib/layout/queueRecordLayoutV3";
 import { defaultEnrollmentQueueRowLayoutWithVariantsV1 } from "@/lib/layout/queueRecordLayoutDefaults";
-import type { LayoutDoc, LayoutSurface } from "@/lib/layout/layoutV2";
+import type { LayoutDoc, LayoutSurface, EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import { WAITLIST_CANDIDATE_ENTITY_TYPE } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
 import { resolveLayout } from "@/lib/layout/layoutResolver";
 import {
@@ -132,11 +133,39 @@ export type QueueRowLayoutResolution = {
  * Resolve the published queue-row layout for an org+surface, server-side.
  * Returns `null` only when the surface id itself is unknown — never for a missing publication.
  */
+/**
+ * Map a published queue-row `entity_layouts` row to a surface-variant candidate. Business-Process /
+ * Work-View / stage / status scoping is read from the layout's `metadata` when authored; org-global
+ * rows declare all-null constraints (wildcards) so the resolver returns the highest published version.
+ */
+function queueRecordToVariantCandidate(
+    r: EntityLayoutRecord,
+    entityType: string,
+    surface: LayoutSurface,
+): SurfaceVariantCandidate {
+    const m = r.metadata ?? {};
+    const constraint = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : null);
+    return {
+        layoutId: r.id,
+        layoutKey: r.layoutKey,
+        entityType,
+        surface,
+        status: r.status,
+        version: r.version,
+        businessProcessKey: constraint("businessProcessKey"),
+        workViewId: constraint("workViewId"),
+        stageKey: constraint("stageKey"),
+        statusKey: constraint("statusKey"),
+    };
+}
+
 export async function resolveQueueRowLayoutServer(args: {
     supabase: SupabaseClient;
     orgId: string;
     surfaceId: string;
     processKeyHint?: string | null;
+    /** Active Work View — the applicability axis for the shared surface-variant resolver (P2). */
+    workViewId?: string | null;
 }): Promise<QueueRowLayoutResolution | null> {
     const spec = resolveQueueRowSurfaceSpec(args.surfaceId, args.processKeyHint);
     if (!spec) return null;
@@ -151,16 +180,23 @@ export async function resolveQueueRowLayoutServer(args: {
             listDefaultLayouts(args.supabase, spec.entityType, surface),
         ]);
         const resolution = resolveLayout({ entityType: spec.entityType, surface, orgRecords, defaultRecords });
-        const matchingPublished = orgRecords
-            .filter((r) => r.layoutKey === spec.layoutKey && r.status === "published")
-            .sort((a, b) => b.version - a.version)[0];
-        const legacyPipeline =
-            !matchingPublished && spec.layoutKey.startsWith("queue_row_")
-                ? orgRecords
-                      .filter((r) => r.layoutKey === "pipeline_queue_row" && r.status === "published")
-                      .sort((a, b) => b.version - a.version)[0]
-                : null;
-        const published = matchingPublished ?? legacyPipeline;
+        // One owner: `resolveSurfaceVariant` selects the published queue-row variant (published-only,
+        // deterministic, Work-View/Business-Process aware). The exact surface `layoutKey` outranks the
+        // legacy `pipeline_queue_row` fallback — so candidates are the exact-key rows when any is
+        // published, else the legacy pipeline rows for `queue_row_*` surfaces; the resolver then picks
+        // the most applicable published version within that set. The former filter+sort is deleted.
+        const exactRecords = orgRecords.filter((r) => r.layoutKey === spec.layoutKey);
+        const candidateRecords =
+            exactRecords.some((r) => r.status === "published")
+                ? exactRecords
+                : spec.layoutKey.startsWith("queue_row_")
+                  ? orgRecords.filter((r) => r.layoutKey === "pipeline_queue_row")
+                  : [];
+        const variant = resolveSurfaceVariant(
+            { businessProcessKey: processKey, workViewId: args.workViewId ?? null, entityType: spec.entityType, surface },
+            candidateRecords.map((r) => queueRecordToVariantCandidate(r, spec.entityType, surface)),
+        );
+        const published = variant ? candidateRecords.find((r) => r.id === variant.candidate.layoutId) ?? null : null;
         const doc = published?.doc ?? resolution.doc;
         const envelope = published ? envelopeFromResolution(spec, doc, catalogId, processKey) : spec.defaultEnvelope();
         const queueCtx = (doc?.metadata as Record<string, unknown> | undefined)?.queue_context as
