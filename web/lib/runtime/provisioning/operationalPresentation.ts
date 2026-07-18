@@ -52,7 +52,7 @@ import {
     mapQueueRowSurfaceToCompactConfig,
     type CompactRowSlots,
 } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
-import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
+import type { QueueRecordLayoutConfigV3, QueueRowVariant, QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutV3";
 
 /** Where the work-unit header surface config is published. Mirrors the canonical route's constants. */
 const WORKSPACE_SURFACE = "workspace" as const;
@@ -129,6 +129,14 @@ export type OperationalQueueComposition = {
     fallbackSlots: (keyof CompactRowSlots)[];
     /** True when a published queue-row surface drove the slots (vs the canonical fallback). */
     published: boolean;
+    /**
+     * Published context-specific row variants (Business Process / Work View / stage / status / grain /
+     * row type). Empty → every row renders the default `rowSlots`. The snapshot resolves the first
+     * matching variant per row (`resolveQueueRowVariant`) and maps it with `rowVariantFixedControls`.
+     */
+    rowVariants: QueueRowVariant[];
+    /** Base fixed controls for mapping a matched variant's columns; null when no config is published. */
+    rowVariantFixedControls: QueueRecordFixedControls | null;
 };
 
 /**
@@ -252,6 +260,8 @@ export async function resolveOperationalPresentation(args: {
         rowSlots: compact.slots,
         fallbackSlots: compact.fallbackSlots,
         published: args.queueRowLayoutConfig != null,
+        rowVariants: args.queueRowLayoutConfig?.variants ?? [],
+        rowVariantFixedControls: args.queueRowLayoutConfig?.fixedControls ?? null,
     };
 
     return {

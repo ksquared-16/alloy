@@ -30,10 +30,47 @@ import type {
     WorkViewLinkModel,
 } from "@/lib/presentation/runtime/types";
 import { queueRowModelFromQueueItem } from "@/lib/presentation/runtime/types";
+import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
+import { mapQueueRowSurfaceToCompactConfig, type CompactRowSlots } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
+import type { QueueRowVariant, QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutV3";
 import type { WorkspaceHeaderKpiVm, WorkspaceHeaderPresentationModel } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import type { ProcessCardIcon, ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import type { ProvisioningAnswer } from "./workUnitProvisioningAnswer";
 import type { OperationalPresentation } from "./operationalPresentation";
+
+/**
+ * P2-B — resolve the applicable published row variant for one row's context. Returns the variant's
+ * compact slots when a variant matches (Work View / stage / status / grain / process / row type), or
+ * undefined so the caller keeps the queue-level default. Pure; never throws.
+ */
+function resolveRowVariantSlots(
+    context: unknown,
+    variants: readonly QueueRowVariant[],
+    fixedControls: QueueRecordFixedControls | null,
+    workViewId: string | null,
+    processKey: string | null,
+): CompactRowSlots | undefined {
+    if (variants.length === 0 || !fixedControls) return undefined;
+    const ctx = (context ?? {}) as Record<string, unknown>;
+    const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
+    const matched = resolveQueueRowVariant(variants, {
+        stageKey: str("stage_key") ?? str("row_stage"),
+        statusKey: str("status_key") ?? str("status"),
+        grain: str("grain") ?? str("row_grain"),
+        workViewId,
+        workViewKey: str("work_view_key"),
+        processKey: str("process_key") ?? processKey,
+        rowType: str("row_type"),
+    });
+    if (!matched) return undefined;
+    return mapQueueRowSurfaceToCompactConfig({
+        variant: "operational-row",
+        version: 3,
+        columns: matched.columns,
+        fixedControls: matched.fixedControls ?? fixedControls,
+        variants: undefined,
+    }).slots;
+}
 
 /**
  * U-P7 header composition → the presentation model, with KPI VALUES RESERVED.
@@ -116,10 +153,29 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
         href: null,
     }));
 
+    const queueRowVariants = p.queue.rowVariants;
     const rows: QueueRowModel[] =
         snapshot.terminal === "operational"
             ? snapshot.rows
-                  .map((r) => queueRowModelFromQueueItem({ id: r.id, _queue_row_context: r.context }, "opportunity"))
+                  .map((r) => {
+                      const model = queueRowModelFromQueueItem({ id: r.id, _queue_row_context: r.context }, "opportunity");
+                      // P2-B: per-row variant. The published queue-row surface may define context-specific
+                      // variants; each row resolves the first matching one and renders the SAME
+                      // CondensedQueueRow with that variant's columns. No match (or no authored variants)
+                      // keeps the queue-level default (`queue.rowConfig`) — so this is behavior-neutral
+                      // until variants are authored, and Runtime-owned selected-row styling is unaffected.
+                      if (model && queueRowVariants.length > 0) {
+                          const slots = resolveRowVariantSlots(
+                              r.context,
+                              queueRowVariants,
+                              p.queue.rowVariantFixedControls,
+                              snapshot.activeWorkView.id,
+                              snapshot.businessProcess.key,
+                          );
+                          if (slots) model.rowConfig = slots;
+                      }
+                      return model;
+                  })
                   .filter((r): r is QueueRowModel => r != null)
             : [];
 
