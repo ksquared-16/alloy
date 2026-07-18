@@ -87,19 +87,23 @@ export function useWorkUnitSettlement(snapshot: ProvisioningAnswer | null): Work
     const siteId = siteFilter?.selectedSiteId ?? null;
 
     // ── KPI VALUES (U-S5). Keys = the committed header slots' source identifiers. ──
-    const kpiKeys = useMemo<OipMetricKey[]>(() => {
-        if (!operational) return [];
+    // Deduped + sorted so the key SET (not slot order) is canonical, and given a value-stable
+    // identity: on each cold-commit re-render the committed snapshot changes reference, but as long
+    // as the resolved KPI keys are the same the array reference is reused — so the settlement effect
+    // does not churn and the metrics request is issued once per key set (not once per commit cycle).
+    const kpiKeySig = useMemo(() => {
+        if (!operational) return "";
         const seen = new Set<string>();
-        const out: OipMetricKey[] = [];
         for (const slot of operational.presentation.header.kpiSlots) {
             const k = slot.sourceKey?.trim();
-            if (k && isKnownOipMetricKey(k) && !seen.has(k)) {
-                seen.add(k);
-                out.push(k as OipMetricKey);
-            }
+            if (k && isKnownOipMetricKey(k)) seen.add(k);
         }
-        return out;
+        return [...seen].sort().join("|");
     }, [operational]);
+    const kpiKeys = useMemo<OipMetricKey[]>(
+        () => (kpiKeySig ? (kpiKeySig.split("|") as OipMetricKey[]) : []),
+        [kpiKeySig],
+    );
     const { resolved: kpiValues, settled: kpiSettled } = useOperationalAnswers({ siteId, workUnitId, keys: kpiKeys });
 
     // ── WORK VIEW COUNTS + QUEUE TOTAL (U-S6). Targets come STRAIGHT from D1's resolved locators. ──
