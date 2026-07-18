@@ -68,6 +68,61 @@ function formatLoadError(result: Extract<LoadOpportunityDrawerViaViewModelResult
     return opportunityDrawerViewModelHardCutoverFailureMessage(result);
 }
 
+/**
+ * Resolve a VM's deferred stage-work slice (the Current Work card's content). Reuses the warm /
+ * in-flight / prefetch resource exactly as the deferred effect did — extracted so the subject load
+ * can merge it BEFORE the first paint, giving a single complete reveal instead of a VM-then-stage-work
+ * resize (Kelly: cards must appear all at once, fully sized). Returns null on error (caller marks it).
+ */
+async function resolveStageWorkSliceForVm(
+    vm: OpportunityDrawerViewModel,
+): Promise<OpportunityStageWorkSlice | null> {
+    const params = {
+        opportunityId: vm.entity.id,
+        departmentId: vm.workspace.department_id ?? null,
+        stageKey: vm.workspace.lifecycle_rail?.current_stage_key ?? null,
+        stageLabel: vm.workspace.stage_context?.stage_label ?? null,
+    };
+    // No resolvable stage-work key → the empty slice (a legitimate "no current work" state, not error).
+    if (!opportunityStageWorkCacheKey(params)) {
+        return { stage_work_runtime: null, published_stage_inputs: null, work_intent_runtime: null };
+    }
+    const warm = getOpportunityStageWorkWarm(params);
+    if (warm) return warm;
+    try {
+        return await (getOpportunityStageWorkInflight(params) ?? prefetchOpportunityStageWork(params));
+    } catch {
+        return null;
+    }
+}
+
+/** Merge stage-work into a VM before apply so the applied VM is COMPLETE (never `pending`). */
+async function completeVmWithStageWork(
+    vm: OpportunityDrawerViewModel,
+): Promise<OpportunityDrawerViewModel> {
+    if (vm.workspace.stage_work?.status !== "pending") return vm;
+    const slice = await resolveStageWorkSliceForVm(vm);
+    return slice ? applyStageWorkSliceToVm(vm, slice) : markStageWorkErrorOnVm(vm);
+}
+
+/**
+ * Prewarm a subject's COMPLETE record work (VM + stage-work) into the shared caches, so a later
+ * `useRecordWorkRuntime(subjectId)` resolves and reveals atomically without a fetch. Used by adjacent
+ * subject preparation (#6): since the reveal now waits for stage-work, warming the VM alone would
+ * still leave a stage-work fetch on click — warm both. Fire-and-forget; failures are ignored.
+ */
+export async function prewarmRecordWork(subjectId: string): Promise<void> {
+    const id = subjectId.trim();
+    if (!id) return;
+    try {
+        const result = await loadOpportunityDrawerViaViewModel(id, null);
+        if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
+        await completeVmWithStageWork(result.preload.viewModel); // warms the stage-work resource too
+    } catch {
+        /* non-fatal prewarm */
+    }
+}
+
 export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntimeState {
     const [displayVm, setDisplayVm] = useState<OpportunityDrawerViewModel | null>(null);
     const [coldLoading, setColdLoading] = useState(false);
@@ -126,7 +181,7 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         setError(null);
         logDrawerVmRuntime("cold_fetch_start", { opportunity_id: validSubject, runtime: "opportunity", hold_prior: Boolean(displayVm) });
 
-        void loadOpportunityDrawerViaViewModel(validSubject, null).then((result) => {
+        void loadOpportunityDrawerViaViewModel(validSubject, null).then(async (result) => {
             if (gen !== fetchGenRef.current) return; // superseded by a newer subject — never lands
             if (!result.ok) {
                 setColdLoading(false);
@@ -139,7 +194,13 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
                 setError("vm_preload_missing");
                 return;
             }
-            applyVm(result.preload.viewModel, "cold_fetch");
+            // ATOMIC COMPLETE REVEAL (Kelly): resolve the deferred stage-work BEFORE applying, so the
+            // panel's FIRST and only paint is complete — all cards, final size, no "Loading current
+            // work…" → resize. The prior subject stays held throughout (never cleared), so a row → row
+            // swap reveals the new subject atomically instead of flashing a half-built card.
+            const completeVm = await completeVmWithStageWork(result.preload.viewModel);
+            if (gen !== fetchGenRef.current) return; // superseded during the stage-work resolve
+            applyVm(completeVm, "cold_fetch");
         });
     }, [validSubject, displayVm, applyVm]);
 
@@ -158,7 +219,8 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         if (!validSubject) return;
         const result = await loadOpportunityDrawerViaViewModel(validSubject, null);
         if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
-        applyVm(result.preload.viewModel, "reload");
+        // Same atomic contract as the initial load — reload reveals a complete VM, not a resize.
+        applyVm(await completeVmWithStageWork(result.preload.viewModel), "reload");
     }, [validSubject, applyVm]);
 
     // ── Targeted refresh: record-patch + queue-updated events (same contracts as the drawer path). ──

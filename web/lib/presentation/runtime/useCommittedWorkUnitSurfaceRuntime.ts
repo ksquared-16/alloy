@@ -26,7 +26,7 @@
  */
 import { useCallback, useEffect, useMemo } from "react";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
-import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
@@ -122,7 +122,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // collapsing the pending-skeleton window on the destination. Fire-and-forget; the loader dedups.
     const prefetchRecord = useCallback((row: QueueRowModel) => {
         if (row.entityType !== "opportunity" || row.entityId == null) return;
-        void loadOpportunityDrawerViaViewModel(String(row.entityId), null).catch(() => {});
+        void prewarmRecordWork(String(row.entityId));
     }, []);
 
     // ── PHASE H — SIBLING WORK-VIEW ADJACENCY ──────────────────────────────────────────────────
@@ -191,7 +191,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         if (!adjacentSubjectIds || typeof window === "undefined") return;
         const ids = adjacentSubjectIds.split(",");
         const run = () => {
-            for (const id of ids) void loadOpportunityDrawerViaViewModel(id, null).catch(() => {});
+            for (const id of ids) void prewarmRecordWork(id);
         };
         const w = window as Window & {
             requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;

@@ -45,7 +45,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
-import FocusPanelSummarySkeleton from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
+import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
 import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
 import OpportunityFocusPanelModeBody from "@/components/admin/focusPanel/OpportunityFocusPanelModeBody";
 import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/OpportunityDrawerBodySaveBar";
@@ -490,14 +490,22 @@ export function InlineOpportunityFocusPanel() {
                             onModeChange={setFocusPanelMode}
                         />
                     :
-                        // Pending final-layout load: the published-grid skeleton (same strategy +
-                        // cell positions as resolved) — never a centered spinner, and never a null
-                        // gap. The old `subjectPending ? skeleton : null` rendered an EMPTY bordered
-                        // box in the brief frame where the reveal reads resolved (id caught up) but the
-                        // atomic `committedVisible` has not — that empty box read as a SECOND skeleton
-                        // phase (Kelly A3). A subject is always selected here (the component returns
-                        // null above when it is not), so the skeleton is always the correct pending fill.
-                        <FocusPanelSummarySkeleton mode={focusPanelMode} />}
+                        // COLD pending fill (no prior to hold): a single quiet "Thinking…" owner, NOT a
+                        // card-grid skeleton. Kelly: no skeleton, and the cards must appear all at once
+                        // fully sized. The record runtime now applies a COMPLETE VM (stage-work resolved
+                        // before apply), so the very next state after this is the finished grid — there is
+                        // no partial card and no resize. On a row → row switch the prior grid is held
+                        // above (never this loader), so this shows only on true cold entry.
+                        <div
+                            className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 py-10 text-center"
+                            data-focus-panel-thinking="true"
+                            role="status"
+                            aria-live="polite"
+                            aria-busy="true"
+                        >
+                            <AlloyIdentityLoader markSize="md" showMessage={false} />
+                            <p className="text-sm font-medium text-alloy-midnight/60">Thinking…</p>
+                        </div>}
                     </div>
                 </div>
                 {resolved ?
