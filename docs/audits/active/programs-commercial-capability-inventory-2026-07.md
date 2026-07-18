@@ -73,6 +73,46 @@ domain without moving authoritative mutations to the wrong owner.
 | Funding/payer responsibility | Processing | Related configuration | Preserve handoff; no Programs authoring |
 | Enrollment, rooms, waitlists consumption | Downstream systems | Overview relationships | Preserve explanatory relationship |
 
+## Strict implementation audit
+
+The preservation pass inspected the active implementations rather than relying
+on labels or prior certification:
+
+- `CommercialConfigWorkspace.tsx`
+- `ProgramsConfigWorkspace.tsx`
+- `TuitionGridWorkspace.tsx`
+- `CommercialPoliciesPanel.tsx`
+- `CommercialSimulatorPanel.tsx`
+- the offering, variant, tuition, policy, product, category, revenue-category,
+  and Financial account API routes used by those surfaces.
+
+The active Commercial runtime provides the following concrete workflows:
+
+| Capability group | Active operator workflows | Translation requirement |
+|---|---|---|
+| Program selection | populated Program selector, site counts, add Program | Collection Runtime |
+| Offerings | add, rename, status, remove/archive, active posture | Offerings |
+| Variants | presets, custom quantity, bulk add, rename, status, remove/archive with rate protection | Offerings |
+| Availability | per-Location offered state | Availability projection; mutation stays in Locations |
+| Tuition | Organization defaults, Location scope, inherited-value display, explicit override, clear override, not-offered, effective dates | Pricing |
+| Tuition comparison | compare Organization defaults with one Location | Pricing |
+| Tuition copy | copy Organization defaults to one Location | Pricing, explicitly labeled copy |
+| Billing cadence | registry-provided cadence columns and ad hoc rate basis | Pricing |
+| Commercial catalog | fee, add-on, deposit CRUD; behavior-specific fields; Program/Location scope; dates | Configuration |
+| Catalog taxonomy | Commercial category creation and assignment | Configuration |
+| Revenue relationship | revenue-category assignment and missing-mapping warning | Configuration |
+| Policies | registry-driven discount, waiver, proration, and review-rule CRUD; Program/offering/variant scope; dates; enable/disable | Configuration |
+| Simulator | Program/offering/variant/cadence/payer/as-of preview, warnings, line detail, schedule | Configuration |
+| Accounting | revenue-category and GL-account administration | Preserve in Financial/Commercial authority; show Program relationship only |
+| Funding | explanatory Processing handoff; no completed authoring workflow | Preserve handoff; no Programs mutation |
+
+This stricter audit identified gaps in the first realization pass: single-variant
+creation was not parity with bulk variant authoring; the compact rate form did
+not preserve inheritance comparison, override clearing, copy, or dynamic
+cadences; policies were read-only; Program-scoped catalog products and simulator
+were only linked; and no Configuration concern assembled those supporting
+capabilities. Those gaps are in scope for the domain translation closeout.
+
 ## Existing canonical capability
 
 Already present on `/organization/programs`:
@@ -105,13 +145,22 @@ The canonical page now exposes:
 - linked Organization and Location tuition configuration by offering variant;
 - linked Program, offering, and variant policies;
 - default policy references and default commercial posture;
+- complete bulk variant creation, rename, lifecycle, and protected removal
+  workflows inherited from Commercial;
+- Organization and Location tuition inheritance, override clearing, not-offered,
+  effective dates, Location comparison, and explicit Organization-to-Location
+  copy;
+- a Configuration concern containing Program-scoped fee/add-on/deposit catalog
+  CRUD, Commercial category assignment, revenue relationship status,
+  registry-driven policy CRUD, and read-only pricing simulation;
 - Publication as one concern, with Distribution evidence nested beneath it;
 - a route-addressable healthy or actionable Attention concern.
 
-Related products, accounting classification, and Commercial simulation remain
-available through their authoritative Commercial experience and are not copied
-into Program payloads. This is deliberate authority preservation, not capability
-removal.
+Accounting account administration and funding responsibility remain available
+through their authoritative Financial/Commercial and Processing experiences.
+Programs shows the relationships and missing-accounting-mapping posture without
+copying that authority into the Program payload. This is deliberate authority
+preservation, not capability removal.
 
 ## Intentionally removed legacy behavior
 
@@ -148,6 +197,11 @@ Existing incomplete or explicitly deferred behavior remains deferred:
 - per-Location schedule offerings beyond Location-hours derivation;
 - arbitrary eligibility/policy builders beyond existing authoritative payloads;
 - simulator side effects—the simulator remains preview-only.
+
+The following are not deferred: Program-scoped Commercial products, policies,
+pricing simulation, full tuition inheritance controls, bulk variants, and
+supporting relationships. They are translated into the canonical Program Detail
+Runtime.
 
 ## Terminology translation
 

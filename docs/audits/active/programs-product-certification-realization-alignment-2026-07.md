@@ -25,17 +25,19 @@ Organization Configuration object whose read-first detail contains:
 5. Availability
 6. Offerings
 7. Pricing
-8. Publication
-9. Assignments
-10. History
-11. Attention
+8. Configuration
+9. Publication
+10. Assignments
+11. History
+12. Attention
 
 Publication remains fully functional, but Distribution is composed inside that
 concern. Programs-owned offering and variant authoring now lives in the same
-Configuration Detail Runtime. Related tuition and policy posture is visible in
-context; tuition may be authored through its existing Commercial API without
-changing authority. Location availability, evidence, resources, capacity, and
-schedules remain Location-owned projections with deep links.
+Configuration Detail Runtime. Full tuition inheritance controls, Program-scoped
+catalog products, registry-driven policy authoring, and pricing simulation are
+available in context through existing Commercial APIs and execution paths.
+Location availability, evidence, resources, capacity, and schedules remain
+Location-owned projections with deep links.
 
 ## Translation matrix
 
@@ -45,11 +47,16 @@ schedules remain Location-owned projections with deep links.
 | Audience, eligibility, qualifications | Requirements | Preserved and made visible |
 | Required resource type | Resources | Preserved |
 | Local rooms, evidence, capacity, schedules | Resources / Availability | Preserved as Location-owned projection |
-| Attendance offerings | Offerings | Preserved; create, edit posture, order, dates, remove/archive |
-| Quantity variants | Offerings | Preserved; create and inspect |
-| Organization and Location tuition | Pricing | Preserved; inspect and author by variant, scope, and cadence |
-| Program/offering/variant policies | Pricing / Related policies | Preserved as authoritative linked capability |
+| Attendance offerings | Offerings | Preserved and translated; create, edit posture, order, dates, remove/archive |
+| Quantity variants | Offerings | Preserved and improved; presets, custom quantities, bulk create, edit lifecycle, protected remove/archive |
+| Organization and Location tuition | Pricing | Preserved and translated; inheritance, override, clear, not-offered, dates, comparison, and explicit copy |
+| Program/offering/variant policies | Configuration / Policies | Preserved and translated; registry-driven create, edit, enable/disable, remove |
 | Default policy references and commercial posture | Pricing / Related policies | Preserved and made visible |
+| Program-scoped fees, add-ons, and deposits | Configuration / Catalog | Preserved and translated with behavior, category, scope, dates, and revenue relationship |
+| Commercial category authoring | Configuration / Catalog | Preserved and translated |
+| Pricing execution simulator | Configuration / Pricing preview | Preserved and translated as read-only execution |
+| Revenue category / GL relationship | Configuration / Relationships | Preserved and improved with missing-mapping posture; account administration remains authoritative elsewhere |
+| Funding responsibility | Configuration / Relationships | Preserved handoff; authoring deferred to Processing |
 | Draft save and validation | Definition | Preserved |
 | Immutable revisions | Publication | Preserved |
 | Distribution, failure, retry | Publication | Preserved and subordinated to Program identity |
@@ -57,7 +64,7 @@ schedules remain Location-owned projections with deep links.
 | Local offered state and authorization evidence | Availability | Preserved without moving mutation ownership |
 | Publication/assignment/retry chronology | History | Preserved |
 | Readiness and issue remediation | Overview / Attention / Collection | Expanded across rich concerns |
-| Products, categories, GL mapping, simulator | Authoritative Commercial/Financial surfaces | Preserved by relationship; not copied into Program payload |
+| Local Program identity rows and local identity editing | Locations compatibility only | Removed from canonical Program identity with Product justification |
 
 ## Runtime enhancement inventory
 
@@ -66,10 +73,15 @@ schedules remain Location-owned projections with deep links.
 - Configuration setup and Attention can point to rich domain concerns.
 - Programs composes Publication and Distribution as one product concern.
 - Collection readiness now assesses Definition, Requirements, Resources,
-  Offerings, Pricing, Publication, Assignment, and Availability when evidence is
-  known.
+  Offerings, Pricing, Configuration, Publication, Assignment, and Availability
+  when evidence is known.
+- Collection rows expose lifecycle, offering/rate/catalog density, publication,
+  assignment, readiness, and Attention; filters include lifecycle posture.
 - The Programs adapter loads scoped local availability plus Programs-owned
-  offerings/variants and related Commercial rates/policies.
+  offerings/variants and related Commercial rates, policies, and Program-scoped
+  products.
+- Existing Commercial editors are focused to the selected Program and composed
+  into Pricing and Configuration rather than copied into a fork.
 - Related reads retain Organization and allowed-Location scope.
 - Managed Playwright storage state is supported without copying privileged
   credentials into the worktree.
@@ -100,6 +112,10 @@ Authenticated Chromium evidence is in
 | `03b-program-resources.png` | Organization requirement and Location ownership |
 | `03c-program-offerings.png` | Offering and variant capability in Configuration Runtime |
 | `03d-program-pricing.png` | Variant pricing and related policy context |
+| `03e-program-configuration-catalog.png` | Program-scoped fee/add-on/deposit catalog |
+| `03f-program-configuration-policies.png` | Registry-driven Program policy authoring |
+| `03g-program-configuration-preview.png` | Read-only Commercial execution preview |
+| `03h-program-configuration-relationships.png` | Accounting, operational, and funding handoffs |
 | `04-location-assignment-selection.png` | Assignment target selection |
 | `05-impact-preview.png` | Local-truth-preserving impact preview |
 | `06a-program-availability.png` | Assigned versus locally offered posture |
@@ -146,7 +162,7 @@ capability exists to translate:
 - Production TypeScript graph: passed.
 - Test/Playwright TypeScript graph: passed.
 - Focused Programs, authorization, Runtime model, routing, and issue tests:
-  27/27 passed, including 3 Programs UI realization tests.
+  59/59 passed, including Programs UI and Commercial offering/variant contracts.
 - Authenticated Chromium Programs certification: 2/2 passed.
 - Focused lint: passed.
 
@@ -158,3 +174,5 @@ Programs now feels like a complete Organization Configuration domain that
 naturally inherits the Configuration Runtime. Publication is one capability,
 not its identity. The implementation preserves legacy richness while making
 ownership boundaries more legible and reusable for future domains.
+
+**Programs Runtime successfully translated into the Configuration Runtime.**

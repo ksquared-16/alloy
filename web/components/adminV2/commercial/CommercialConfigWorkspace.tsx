@@ -401,7 +401,7 @@ function OfferingRateGrid({ offering, variants, cadences, rateMap, orgOnlyMap, l
 
 // ─── VariantBulkBuilder ─────────────────────────────────────────────────────────
 
-function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdateVariant, onDeleteVariant }: {
+export function VariantBulkBuilder({ offering, variants, rates, onAddVariants, onUpdateVariant, onDeleteVariant }: {
     offering: ProgramOffering;
     variants: ProgramOfferingVariant[];
     rates: TuitionRateRow[];
@@ -1442,7 +1442,7 @@ function AccountingReferencePanel({ products, loading }: {
 // drives which behavior fields appear. Category is chosen from configurable
 // commercial_categories. No legacy tables, no internal keys exposed.
 
-function CommercialCatalogPanel({
+export function CommercialCatalogPanel({
     products,
     categories,
     revenueCategories,
@@ -1453,6 +1453,8 @@ function CommercialCatalogPanel({
     onProductUpdated,
     onProductDeleted,
     onCategoryCreated,
+    focusProgramKey,
+    canManage = true,
 }: {
     products: CommercialProduct[];
     categories: CommercialCategory[];
@@ -1464,6 +1466,8 @@ function CommercialCatalogPanel({
     onProductUpdated: (p: CommercialProduct) => void;
     onProductDeleted: (id: string) => void;
     onCategoryCreated: (c: CommercialCategory) => void;
+    focusProgramKey?: string;
+    canManage?: boolean;
 }) {
     // ── Shared form state ─────────────────────────────────────────────────────────
     const [name, setName] = useState("");
@@ -1472,7 +1476,7 @@ function CommercialCatalogPanel({
     const [categoryId, setCategoryId] = useState("");
     const [revCatId, setRevCatId] = useState("");
     const [locId, setLocId] = useState("");
-    const [progKey, setProgKey] = useState("");
+    const [progKey, setProgKey] = useState(focusProgramKey ?? "");
     const [effStart, setEffStart] = useState("");
     const [effEnd, setEffEnd] = useState("");
     // Fee-specific
@@ -1502,7 +1506,7 @@ function CommercialCatalogPanel({
 
     function reset() {
         setName(""); setCommercialType(""); setAmount(""); setCategoryId(""); setRevCatId("");
-        setLocId(""); setProgKey(""); setEffStart(""); setEffEnd("");
+        setLocId(""); setProgKey(focusProgramKey ?? ""); setEffStart(""); setEffEnd("");
         setFeeFreq(""); setFeeRequired(true);
         setAddonFreq("monthly"); setAddonIsPkg(false);
         setPkgCount(""); setPkgUnit("uses"); setPkgExpiry("");
@@ -1570,7 +1574,7 @@ function CommercialCatalogPanel({
             cadence_key,
             revenue_category_id: revCatId || null,
             location_id: locId || null,
-            program_key: progKey || null,
+            program_key: (focusProgramKey ?? progKey) || null,
             effective_start: effStart || null,
             effective_end: effEnd || null,
             behavior,
@@ -1733,7 +1737,28 @@ function CommercialCatalogPanel({
 
                     {/* ── Where it applies ── */}
                     <FormStep label="Where it applies" />
-                    <ScopeFields locationId={locId} setLocationId={setLocId} programKey={progKey} setProgramKey={setProgKey} locations={locations} programs={programs} />
+                    {focusProgramKey ?
+                        <div className="grid grid-cols-2 gap-3">
+                            <CSelect
+                                label="Location"
+                                value={locId}
+                                onChange={setLocId}
+                                options={[
+                                    { key: "", label: "All Locations" },
+                                    ...locations.map((location) => ({ key: location.id, label: location.name })),
+                                ]}
+                            />
+                            <div>
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/55">
+                                    Program
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-alloy-midnight">
+                                    {programs.find((program) => program.key === focusProgramKey)?.label ?? "Selected Program"}
+                                </p>
+                            </div>
+                        </div>
+                    :   <ScopeFields locationId={locId} setLocationId={setLocId} programKey={progKey} setProgramKey={setProgKey} locations={locations} programs={programs} />
+                    }
                     <div className="grid grid-cols-2 gap-3">
                         <CField label="Activates on (optional)" value={effStart} onChange={setEffStart} type="date" />
                         <CField label="Expires on (optional)" value={effEnd} onChange={setEffEnd} type="date" />
@@ -1787,7 +1812,7 @@ function CommercialCatalogPanel({
                             Everything beyond tuition — {products.length} item{products.length !== 1 ? "s" : ""} configured.
                         </p>
                     </div>
-                    {!isFormOpen && (
+                    {!isFormOpen && canManage && (
                         <button
                             type="button"
                             onClick={startAdd}
@@ -1801,13 +1826,17 @@ function CommercialCatalogPanel({
                 {adding && formPanel}
 
                 {sorted.length === 0 && !adding ? (
-                    <EmptySlate label="Nothing configured yet. Add your first fee, add-on, or deposit." onAdd={startAdd} />
+                    canManage ?
+                        <EmptySlate label="Nothing configured yet. Add your first fee, add-on, or deposit." onAdd={startAdd} />
+                    :   <p className="py-8 text-center text-sm text-alloy-midnight/45">
+                            No Program-scoped catalog items.
+                        </p>
                 ) : sorted.length > 0 ? (
                     <div className="space-y-2">
                         {sorted.map(p => (
                             <div key={p.id}>
                                 {editingId === p.id ? formPanel : (
-                                    <CommercialCard onClick={() => startEdit(p)}>
+                                    <CommercialCard onClick={canManage ? () => startEdit(p) : undefined}>
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0 flex-1 space-y-0.5">
                                                 <div className="flex items-center gap-2 flex-wrap">
@@ -1855,12 +1884,14 @@ function CommercialCatalogPanel({
                                                     </p>
                                                 )}
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={e => { e.stopPropagation(); void deleteProduct(p); }}
-                                                className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/35 hover:text-red-400 transition-all flex-shrink-0 px-1"
-                                                title="Remove from catalog"
-                                            >✕</button>
+                                            {canManage ?
+                                                <button
+                                                    type="button"
+                                                    onClick={e => { e.stopPropagation(); void deleteProduct(p); }}
+                                                    className="opacity-0 group-hover:opacity-100 text-[11px] text-alloy-midnight/35 hover:text-red-400 transition-all flex-shrink-0 px-1"
+                                                    title="Remove from catalog"
+                                                >✕</button>
+                                            :   null}
                                         </div>
                                     </CommercialCard>
                                 )}

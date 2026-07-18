@@ -6,6 +6,7 @@ export type ProgramConfigurationSection =
     | "availability"
     | "offerings"
     | "pricing"
+    | "configuration"
     | "publication"
     | "assignment"
     | "history"
@@ -19,6 +20,7 @@ export const PROGRAM_CONFIGURATION_SECTIONS = new Set<ProgramConfigurationSectio
     "availability",
     "offerings",
     "pricing",
+    "configuration",
     "publication",
     "assignment",
     "history",

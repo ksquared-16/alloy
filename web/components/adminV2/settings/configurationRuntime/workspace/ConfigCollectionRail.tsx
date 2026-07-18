@@ -10,7 +10,13 @@ import {
     QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
 
-export type ConfigCollectionFilterKey = "all" | "attention" | "draft" | "published";
+export type ConfigCollectionFilterKey =
+    | "all"
+    | "attention"
+    | "draft"
+    | "published"
+    | "active"
+    | "retired";
 
 export type ConfigCollectionItem = {
     id: string;
@@ -20,8 +26,10 @@ export type ConfigCollectionItem = {
     assignmentLabel?: string;
     isAssigned?: boolean;
     setupLabel?: string;
+    supportingLabel?: string;
     hasAttention: boolean;
     publicationState: "draft_only" | "published" | "changes_ready";
+    lifecycleStatus?: string;
     leading?: ReactNode;
 };
 
@@ -29,6 +37,8 @@ function itemMatchesFilter(item: ConfigCollectionItem, filter: ConfigCollectionF
     if (filter === "attention") return item.hasAttention;
     if (filter === "draft") return item.publicationState !== "published";
     if (filter === "published") return item.publicationState === "published";
+    if (filter === "active") return !item.lifecycleStatus || item.lifecycleStatus === "active";
+    if (filter === "retired") return item.lifecycleStatus === "retired";
     return true;
 }
 
@@ -66,6 +76,7 @@ export function ConfigCollectionRail({
                     || item.label.toLocaleLowerCase().includes(query)
                     || item.publicationLabel.toLocaleLowerCase().includes(query)
                     || item.assignmentLabel?.toLocaleLowerCase().includes(query)
+                    || item.supportingLabel?.toLocaleLowerCase().includes(query)
                 ),
         );
     }, [filter, items, search]);
@@ -144,6 +155,8 @@ export function ConfigCollectionRail({
                                 <option value="attention">Attention</option>
                                 <option value="draft">Draft</option>
                                 <option value="published">Published</option>
+                                <option value="active">Active</option>
+                                <option value="retired">Retired</option>
                             </select>
                         </label>
                     </div>
@@ -174,16 +187,24 @@ export function ConfigCollectionRail({
                                         </span>
                                     :   null}
                                     <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-[13px] font-semibold text-alloy-midnight">
-                                            {item.label}
+                                        <span className="flex items-center gap-2">
+                                            <span className="block min-w-0 flex-1 truncate text-[13px] font-semibold text-alloy-midnight">
+                                                {item.label}
+                                            </span>
+                                            {item.lifecycleStatus && item.lifecycleStatus !== "active" ?
+                                                <span className="shrink-0 rounded-full border border-alloy-stone/30 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                                    {item.lifecycleStatus}
+                                                </span>
+                                            :   null}
                                         </span>
                                         <span className="mt-0.5 block text-[11px] leading-4 text-alloy-midnight/55">
                                             {item.publicationLabel}
                                         </span>
-                                        {item.assignmentLabel || item.setupLabel ?
+                                        {item.assignmentLabel || item.setupLabel || item.supportingLabel ?
                                             <span className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-alloy-midnight/45">
                                                 {item.assignmentLabel ? <span>{item.assignmentLabel}</span> : null}
                                                 {item.setupLabel ? <span>{item.setupLabel}</span> : null}
+                                                {item.supportingLabel ? <span>{item.supportingLabel}</span> : null}
                                             </span>
                                         :   null}
                                     </span>
@@ -221,7 +242,7 @@ export function ConfigCollectionRail({
                     >
                         {items.map((item) => (
                             <option key={item.id} value={item.id}>
-                                {item.label} · {item.publicationLabel}
+                                {item.label} · {item.lifecycleStatus ?? "active"} · {item.publicationLabel}
                             </option>
                         ))}
                     </select>

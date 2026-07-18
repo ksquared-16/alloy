@@ -13,6 +13,7 @@ export type ConfigurationDetailSection =
     | "availability"
     | "offerings"
     | "pricing"
+    | "configuration"
     | "publication"
     | "assignment"
     | "distribution"

@@ -57,6 +57,7 @@ import {
 } from "@/lib/programs/programConfigurationSections";
 import {
     ProgramAvailabilitySection,
+    ProgramConfigurationSection as ProgramConfigurationRuntimeSection,
     ProgramOfferingsSection,
     ProgramPricingSection,
     ProgramRequirementsSection,
@@ -377,6 +378,7 @@ export default function ProgramsPublicationWorkspace(props: {
                   { key: "availability", label: "Availability" },
                   { key: "offerings", label: "Offerings" },
                   { key: "pricing", label: "Pricing" },
+                  { key: "configuration", label: "Configuration" },
                   {
                       key: "publication",
                       label: "Publication",
@@ -795,6 +797,12 @@ export default function ProgramsPublicationWorkspace(props: {
                                         canManage={canManage}
                                         onReload={reload}
                                         onError={setError}
+                                    />
+                                : activeSection === "configuration" ?
+                                    <ProgramConfigurationRuntimeSection
+                                        program={selectedProgram}
+                                        snapshot={snapshot}
+                                        canManage={canManage}
                                     />
                                 : activeSection === "publication" ?
                                     <div className="space-y-4" data-testid="program-publication-runtime">

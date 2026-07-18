@@ -315,6 +315,31 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
                 active: true,
             },
         ],
+        products: [
+            {
+                id: "product-1",
+                org_id: "org-1",
+                location_id: null,
+                program_key: "preschool",
+                name: "Registration fee",
+                description: null,
+                commercial_type: "fee",
+                category_id: null,
+                amount_cents: 12500,
+                cadence_key: null,
+                revenue_category: "Program revenue",
+                revenue_category_id: null,
+                effective_start: null,
+                effective_end: null,
+                behavior: { required: true },
+                is_active: true,
+                metadata: {},
+                source_table: null,
+                source_id: null,
+                created_at: now,
+                updated_at: now,
+            },
+        ],
     });
 
     page.on("console", (message) => {
@@ -401,6 +426,134 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
             : {};
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
     });
+    await page.route("**/api/admin/programs/offerings", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ offerings: snapshot().offerings }),
+        });
+    });
+    await page.route("**/api/admin/programs/offerings?*", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ offerings: snapshot().offerings }),
+        });
+    });
+    await page.route("**/api/admin/programs/offerings/offering-1/variants", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                variants: snapshot().variants.map((variant) => ({
+                    ...variant,
+                    label: "5 days/week",
+                })),
+            }),
+        });
+    });
+    await page.route("**/api/admin/commercial/billing-cadences", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                cadences: [
+                    { item_key: "monthly", label: "Monthly" },
+                    { item_key: "weekly", label: "Weekly" },
+                ],
+            }),
+        });
+    });
+    await page.route("**/api/admin/commercial/tuition-rates*", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ rates: snapshot().tuitionRates }),
+        });
+    });
+    await page.route("**/api/admin/commercial/products", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ products: snapshot().products }),
+        });
+    });
+    await page.route("**/api/admin/commercial/categories?*", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ categories: [] }),
+        });
+    });
+    await page.route("**/api/admin/commercial/revenue-categories", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ revenue_categories: [] }),
+        });
+    });
+    await page.route("**/api/admin/commercial/policies?*", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                policies: [
+                    {
+                        id: "policy-1",
+                        org_id: "org-1",
+                        scope_type: "program",
+                        location_id: null,
+                        program_key: "preschool",
+                        offering_id: null,
+                        variant_id: null,
+                        policy_type: "discount",
+                        label: "Sibling discount",
+                        description: null,
+                        value: { percent: 10 },
+                        effective_start: "2000-01-01",
+                        effective_end: null,
+                        is_active: true,
+                        created_at: now,
+                        updated_at: now,
+                    },
+                ],
+            }),
+        });
+    });
+    await page.route("**/api/admin/commercial/execution/preview", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                warnings: [],
+                resolution: {
+                    status: "resolved",
+                    lines: [
+                        {
+                            lineKey: "tuition-1",
+                            kind: "tuition",
+                            status: "resolved",
+                            cadence: { cadenceKey: "monthly", label: "Monthly" },
+                            gross: { amountCents: 145000, currency: "USD" },
+                            net: { amountCents: 130500, currency: "USD" },
+                            adjustments: [{ kind: "discount", label: "Sibling discount", amountCents: -14500 }],
+                            accounting: { recognition: "deferred", glAccountId: null },
+                        },
+                    ],
+                },
+                schedule: {
+                    occurrences: [
+                        {
+                            occurrenceKey: "occurrence-1",
+                            dueOn: "2026-08-01",
+                            kind: "tuition",
+                            amount: { amountCents: 130500, currency: "USD" },
+                        },
+                    ],
+                },
+            }),
+        });
+    });
 
     await page.setViewportSize({ width: 1440, height: 1000 });
     if (!storageState) await ensureAdminPlaywrightSession(page);
@@ -463,7 +616,24 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     await page.getByTestId("program-detail-runtime-tab-pricing").click();
     await expect(page.getByTestId("program-pricing-runtime")).toContainText("$1,450");
     await expect(page.getByTestId("program-pricing-runtime")).toContainText("Sibling discount");
+    await expect(page.getByTestId("program-pricing-matrix")).toContainText("Organization defaults inherit");
     await shot("03d-program-pricing");
+    await page.getByTestId("program-detail-runtime-tab-configuration").click();
+    await expect(page.getByTestId("program-configuration-runtime")).toContainText("Registration fee");
+    await shot("03e-program-configuration-catalog");
+    await page.getByTestId("program-configuration-policies").click();
+    await expect(page.getByTestId("program-policy-configuration")).toContainText("Sibling discount");
+    await shot("03f-program-configuration-policies");
+    await page.getByTestId("program-configuration-preview").click();
+    await page.getByTestId("commercial-simulator-offering").selectOption("offering-1");
+    await page.getByTestId("commercial-simulator-variant").selectOption("variant-1");
+    await page.getByRole("button", { name: "Preview pricing" }).click();
+    await expect(page.getByTestId("program-pricing-preview")).toContainText("$1,305.00");
+    await expect(page.getByTestId("program-pricing-preview")).toContainText("Sibling discount");
+    await shot("03g-program-configuration-preview");
+    await page.getByTestId("program-configuration-relationships").click();
+    await expect(page.getByTestId("program-configuration-relationships-panel")).toContainText("Funding responsibility");
+    await shot("03h-program-configuration-relationships");
 
     await page.getByTestId("program-detail-runtime-tab-assignment").click();
     await expect(page.getByTestId("program-assignment-runtime")).toBeVisible();

@@ -87,6 +87,7 @@ const snapshot = {
     variants: [],
     tuitionRates: [],
     policies: [],
+    products: [],
 };
 
 let container: HTMLDivElement | null = null;
@@ -137,6 +138,7 @@ describe("Programs Publication workspace", () => {
             ["availability", "program-availability-runtime"],
             ["offerings", "program-offerings-runtime"],
             ["pricing", "program-pricing-runtime"],
+            ["configuration", "program-configuration-runtime"],
             ["attention", "program-attention-runtime"],
         ] as const) {
             await act(async () => {

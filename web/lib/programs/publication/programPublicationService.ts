@@ -12,6 +12,7 @@ import type {
     ConfigurationTargetPreview,
 } from "@/lib/configPublication/types";
 import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
+import type { CommercialProduct } from "@/lib/commercial/commercialProducts";
 import type { ProgramOffering } from "@/lib/programs/programOfferings";
 import type { ProgramOfferingVariant } from "@/lib/programs/programOfferingVariants";
 import {
@@ -93,6 +94,7 @@ export type ProgramPublicationSnapshot = {
     variants: ProgramOfferingVariant[];
     tuitionRates: TuitionRateRow[];
     policies: ProgramPolicyRelation[];
+    products: CommercialProduct[];
 };
 
 function stringValue(value: unknown): string {
@@ -260,6 +262,15 @@ export async function loadProgramPublicationSnapshot(
         canManage: boolean;
     },
 ): Promise<ProgramPublicationSnapshot> {
+    const allowedLocationIds =
+        options.allowedSiteLocationIds == null
+            ? null
+            : new Set(options.allowedSiteLocationIds);
+    const isAllowedLocationRow = (row: DbRow) => {
+        if (allowedLocationIds == null) return true;
+        const locationId = nullableString(row.location_id);
+        return locationId == null || allowedLocationIds.has(locationId);
+    };
     let locationsQuery = supabase
         .from("locations")
         .select("id, label")
@@ -277,7 +288,7 @@ export async function loadProgramPublicationSnapshot(
     if (options.allowedSiteLocationIds != null && options.allowedSiteLocationIds.length > 0) {
         availabilityQuery = availabilityQuery.in("location_id", options.allowedSiteLocationIds);
     }
-    const [programRows, locationsResult, evidence, availabilityResult, offeringsResult, policiesResult] = await Promise.all([
+    const [programRows, locationsResult, evidence, availabilityResult, offeringsResult, policiesResult, productsResult] = await Promise.all([
         loadProgramRows(supabase, orgId),
         options.allowedSiteLocationIds?.length === 0
             ? Promise.resolve({ data: [], error: null })
@@ -298,15 +309,22 @@ export async function loadProgramPublicationSnapshot(
             .order("sort_order"),
         supabase
             .from("commercial_policies")
-            .select("id, scope_type, program_key, offering_id, variant_id, policy_type, label, description, is_active")
+            .select("id, scope_type, location_id, program_key, offering_id, variant_id, policy_type, label, description, is_active")
             .eq("org_id", orgId)
             .in("scope_type", ["program", "offering", "variant"])
             .order("created_at", { ascending: false }),
+        supabase
+            .from("commercial_products")
+            .select("*")
+            .eq("org_id", orgId)
+            .not("program_key", "is", null)
+            .order("name"),
     ]);
     assertNoError(locationsResult.error, "Load Locations");
     assertNoError(availabilityResult.error, "Load Program availability");
     assertNoError(offeringsResult.error, "Load Program offerings");
     assertNoError(policiesResult.error, "Load Program policies");
+    assertNoError(productsResult.error, "Load Program products");
     const locations = ((locationsResult.data ?? []) as DbRow[]).map((row) => ({
         id: stringValue(row.id),
         label: nullableString(row.label) ?? "Untitled Location",
@@ -396,8 +414,10 @@ export async function loadProgramPublicationSnapshot(
         })),
         offerings,
         variants,
-        tuitionRates: ((ratesResult.data ?? []) as DbRow[]).map(mapTuitionRate),
-        policies: ((policiesResult.data ?? []) as DbRow[]).map((row) => ({
+        tuitionRates: ((ratesResult.data ?? []) as DbRow[])
+            .filter(isAllowedLocationRow)
+            .map(mapTuitionRate),
+        policies: ((policiesResult.data ?? []) as DbRow[]).filter(isAllowedLocationRow).map((row) => ({
             id: stringValue(row.id),
             scopeType: stringValue(row.scope_type),
             programKey: nullableString(row.program_key),
@@ -408,6 +428,8 @@ export async function loadProgramPublicationSnapshot(
             description: nullableString(row.description),
             active: row.is_active !== false,
         })),
+        products: ((productsResult.data ?? []) as DbRow[])
+            .filter(isAllowedLocationRow) as CommercialProduct[],
     };
 }
 

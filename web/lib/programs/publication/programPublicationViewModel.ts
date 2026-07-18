@@ -56,6 +56,13 @@ export function buildProgramPublicationViewModel(
     const offeringIds = new Set(offerings.map((offering) => offering.id));
     const variants = snapshot.variants.filter((variant) => offeringIds.has(variant.offering_id));
     const variantIds = new Set(variants.map((variant) => variant.id));
+    const relatedPolicies = snapshot.policies.filter(
+        (policy) =>
+            policy.programKey === program.key
+            || (policy.offeringId != null && offeringIds.has(policy.offeringId))
+            || (policy.variantId != null && variantIds.has(policy.variantId)),
+    );
+    const relatedProducts = snapshot.products.filter((product) => product.program_key === program.key);
     const hasRequirementDefinition =
         Object.keys(program.draft.audience).length > 0
         || Object.keys(program.draft.eligibility).length > 0
@@ -104,6 +111,15 @@ export function buildProgramPublicationViewModel(
                         ? null
                         : snapshot.tuitionRates.some((rate) => variantIds.has(rate.variant_id)),
                 section: "pricing",
+            },
+            {
+                key: "configuration",
+                label: "Supporting configuration",
+                complete:
+                    relatedPolicies.length === 0 && relatedProducts.length === 0
+                        ? null
+                        : true,
+                section: "configuration",
             },
             {
                 key: "publication",
@@ -156,6 +172,13 @@ export function buildProgramCollectionItem(
     snapshot: ProgramPublicationSnapshot,
 ): ConfigCollectionItem {
     const viewModel = buildProgramPublicationViewModel(program, snapshot);
+    const offerings = snapshot.offerings.filter((offering) => offering.program_key === program.key);
+    const offeringIds = new Set(offerings.map((offering) => offering.id));
+    const variantIds = new Set(
+        snapshot.variants
+            .filter((variant) => offeringIds.has(variant.offering_id))
+            .map((variant) => variant.id),
+    );
     return {
         id: program.id,
         label: program.draft.label,
@@ -164,7 +187,12 @@ export function buildProgramCollectionItem(
         assignmentLabel: viewModel.runtime.assignment.label,
         isAssigned: viewModel.runtime.assignment.assignedCount > 0,
         setupLabel: `${viewModel.runtime.readiness.percent}% ready`,
+        supportingLabel:
+            `${offerings.length} ${offerings.length === 1 ? "offering" : "offerings"} · `
+            + `${snapshot.tuitionRates.filter((rate) => variantIds.has(rate.variant_id)).length} rates · `
+            + `${snapshot.products.filter((product) => product.program_key === program.key).length} catalog`,
         hasAttention: viewModel.runtime.attention.some((item) => item.grade === "fix"),
         publicationState: viewModel.runtime.publication.state,
+        lifecycleStatus: program.lifecycleStatus,
     };
 }

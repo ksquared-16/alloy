@@ -174,13 +174,16 @@ Assignment, Distribution, History, or shell command ownership.
 
 A rich Configuration domain may register additional business concerns inside the
 same Detail Runtime. Programs demonstrates Definition, Requirements, Resources,
-Availability, Offerings, Pricing, Publication, Assignments, History, and
-Attention. Domain adapters project related authority without moving it:
+Availability, Offerings, Pricing, Configuration, Publication, Assignments,
+History, and Attention. Domain adapters project related authority without moving it:
 Location-owned offer state, evidence, resources, capacity, and schedules are
 read-only in Organization Programs and deep-link to Locations; Commercial-owned
-rates and policies are summarized in Programs and remain authored through
-Commercial mutation paths. Distribution evidence is composed within Publication
-rather than presented as the identity of the Program.
+rates, Program-scoped catalog products, policies, and pricing simulation are
+composed into Pricing and Configuration while continuing to use Commercial
+mutation and execution paths. Accounting account administration and payer
+responsibility remain explicit Financial/Commercial and Processing handoffs.
+Distribution evidence is composed within Publication rather than presented as
+the identity of the Program.
 
 Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
 

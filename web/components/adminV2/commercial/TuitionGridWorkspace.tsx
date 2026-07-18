@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ConfigScopeSelector, type ScopedLocation } from "@/components/configRuntime/ConfigScopeSelector";
 import { ConfigReadinessCard } from "@/components/configRuntime/ConfigReadinessCard";
 import OwnershipBadge from "@/components/configRuntime/OwnershipBadge";
@@ -38,6 +38,7 @@ type CellProps = {
         payload: { rate_cents?: number; not_offered?: boolean },
     ) => Promise<void>;
     onClear: (rateId: string) => Promise<void>;
+    canManage: boolean;
 };
 
 function TuitionCell({
@@ -48,6 +49,7 @@ function TuitionCell({
     locationId,
     onSave,
     onClear,
+    canManage,
 }: CellProps) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState("");
@@ -62,7 +64,7 @@ function TuitionCell({
     const inheritedRate = isInherited ? orgDefaultRow?.rate_cents : null;
 
     function startEdit() {
-        if (isNotOffered) return;
+        if (!canManage || isNotOffered) return;
         setDraft(displayRate != null ? String(displayRate / 100) : "");
         setEditing(true);
         setTimeout(() => inputRef.current?.select(), 0);
@@ -115,7 +117,7 @@ function TuitionCell({
             className={[
                 "px-3 py-2 text-right text-sm group relative select-none",
                 isNotOffered ? "text-gray-300" : isInherited ? "text-gray-400 italic" : "text-gray-800",
-                saving ? "opacity-50" : "cursor-pointer hover:bg-gray-50",
+                saving || !canManage ? "opacity-70" : "cursor-pointer hover:bg-gray-50",
             ].join(" ")}
             onClick={isNotOffered ? undefined : startEdit}
             title={isInherited ? "Inherited from org default — click to override" : undefined}
@@ -138,7 +140,7 @@ function TuitionCell({
                         <span className="w-1.5 h-1.5 rounded-full bg-pine-500 flex-shrink-0" />
                     )}
                     <span>{formatRateCents(displayRate)}</span>
-                    {isLocOverride && rateRow?.id && (
+                    {canManage && isLocOverride && rateRow?.id && (
                         <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); void clearOverride(); }}
@@ -155,7 +157,7 @@ function TuitionCell({
                 <span className="text-gray-200">—</span>
             )}
 
-            {!isNotOffered && (
+            {canManage && !isNotOffered && (
                 <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void toggleNotOffered(); }}
@@ -217,7 +219,21 @@ function CompareCell({ orgRow, locRow, locationLabel }: CompareCellProps) {
 
 type WorkspaceMode = "edit" | "compare";
 
-export function TuitionGridWorkspace() {
+export function TuitionGridWorkspace({
+    programKey,
+    embedded = false,
+    canManage = true,
+    scopedRates,
+    scopedLocations,
+    onReload,
+}: {
+    programKey?: string;
+    embedded?: boolean;
+    canManage?: boolean;
+    scopedRates?: TuitionRateRow[];
+    scopedLocations?: ScopedLocation[];
+    onReload?: () => Promise<void>;
+} = {}) {
     const [locations, setLocations] = useState<ScopedLocation[]>([]);
     const [scope, setScope] = useState<ConfigScope | null>(null);
 
@@ -244,7 +260,11 @@ export function TuitionGridWorkspace() {
             try {
                 const [locRes, offeringRes, cadenceRes] = await Promise.all([
                     fetch("/api/admin/locations"),
-                    fetch("/api/admin/programs/offerings?active_only=true"),
+                    fetch(
+                        `/api/admin/programs/offerings?active_only=true${
+                            programKey ? `&program_key=${encodeURIComponent(programKey)}` : ""
+                        }`,
+                    ),
                     fetch("/api/admin/commercial/billing-cadences"),
                 ]);
 
@@ -253,7 +273,7 @@ export function TuitionGridWorkspace() {
                 const oid: string = String(rawLocs[0]?.org_id ?? "org");
                 setScope({ kind: "org", orgId: oid });
 
-                const locs: ScopedLocation[] = rawLocs.map((l) => ({
+                const locs: ScopedLocation[] = scopedLocations ?? rawLocs.map((l) => ({
                     id: String(l.id ?? ""),
                     name: String(l.name ?? ""),
                 }));
@@ -288,15 +308,25 @@ export function TuitionGridWorkspace() {
             }
         }
         void boot();
-    }, []);
+    }, [programKey, scopedLocations]);
 
     // ── Rates ──────────────────────────────────────────────────────────────────
 
     const loadRates = useCallback(async () => {
         if (!scope) return;
+        const locationId = scope.kind === "location" ? scope.locationId : null;
+        if (scopedRates) {
+            setAllRates(scopedRates);
+            setRates(
+                scopedRates.filter(
+                    (rate) => rate.location_id === null || rate.location_id === locationId,
+                ),
+            );
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
-            const locationId = scope.kind === "location" ? scope.locationId : null;
             const params = new URLSearchParams();
             if (locationId) params.set("location_id", locationId);
             const res = await fetch(`/api/admin/commercial/tuition-rates?${params}`);
@@ -309,7 +339,7 @@ export function TuitionGridWorkspace() {
         } finally {
             setLoading(false);
         }
-    }, [scope]);
+    }, [scope, scopedRates]);
 
     useEffect(() => { void loadRates(); }, [loadRates]);
 
@@ -356,7 +386,8 @@ export function TuitionGridWorkspace() {
                 const j = await res.json();
                 setError((j as { error?: string }).error ?? "Save failed");
             } else {
-                await loadRates();
+                if (onReload) await onReload();
+                else await loadRates();
             }
         } finally {
             setSaving(false);
@@ -367,7 +398,8 @@ export function TuitionGridWorkspace() {
         setSaving(true);
         try {
             await fetch(`/api/admin/commercial/tuition-rates/${rateId}`, { method: "DELETE" });
-            await loadRates();
+            if (onReload) await onReload();
+            else await loadRates();
         } finally {
             setSaving(false);
         }
@@ -396,7 +428,8 @@ export function TuitionGridWorkspace() {
                     }),
                 ),
             );
-            await loadRates();
+            if (onReload) await onReload();
+            else await loadRates();
         } finally {
             setBulkCopying(false);
         }
@@ -427,13 +460,15 @@ export function TuitionGridWorkspace() {
     }));
 
     return (
-        <div className="space-y-5">
+        <div className="space-y-5" data-testid={embedded ? "program-pricing-matrix" : "tuition-grid-workspace"}>
             {/* Header */}
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-xl font-semibold text-gray-900">Tuition Grid</h1>
+                    <h1 className={`${embedded ? "text-base" : "text-xl"} font-semibold text-gray-900`}>
+                        {embedded ? "Pricing matrix" : "Tuition Grid"}
+                    </h1>
                     <p className="text-sm text-gray-500 mt-0.5">
-                        Variant × billing cadence rates. Org defaults inherit to all sites.
+                        Variant × billing cadence rates. Organization defaults inherit to all Locations.
                     </p>
                 </div>
                 <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm flex-shrink-0">
@@ -462,6 +497,9 @@ export function TuitionGridWorkspace() {
                     </button>
                 </div>
             )}
+            {saving ?
+                <p className="text-xs font-medium text-alloy-bend-pine">Saving pricing…</p>
+            :   null}
 
             {variants.length > 0 && (
                 <ConfigReadinessCard readiness={readiness} scopeLabel="Org Default" />
@@ -482,6 +520,7 @@ export function TuitionGridWorkspace() {
                             <span className="text-pine-700">
                                 Viewing <strong>{scopeLabel}</strong> — green dot = local override, italic = inherited.
                             </span>
+                            {canManage ?
                             <button
                                 type="button"
                                 onClick={() => void bulkCopyOrgToLocation()}
@@ -490,6 +529,7 @@ export function TuitionGridWorkspace() {
                             >
                                 {bulkCopying ? "Copying…" : "Copy org defaults → this location"}
                             </button>
+                            : null}
                         </div>
                     )}
 
@@ -518,7 +558,7 @@ export function TuitionGridWorkspace() {
                                 </thead>
                                 <tbody>
                                     {offeringRows.map(({ offering, variants: offeringVariants }) => (
-                                        <>
+                                        <Fragment key={offering.id}>
                                             {/* Offering group header row */}
                                             <tr key={`offering-${offering.id}`} className="border-t border-gray-100 bg-gray-50/60">
                                                 <td
@@ -553,12 +593,13 @@ export function TuitionGridWorkspace() {
                                                                 locationId={locationId}
                                                                 onSave={saveCell}
                                                                 onClear={clearCell}
+                                                                canManage={canManage}
                                                             />
                                                         );
                                                     })}
                                                 </tr>
                                             ))}
-                                        </>
+                                        </Fragment>
                                     ))}
                                 </tbody>
                             </table>
@@ -624,7 +665,7 @@ export function TuitionGridWorkspace() {
                                 </thead>
                                 <tbody>
                                     {offeringRows.map(({ offering, variants: offeringVariants }) => (
-                                        <>
+                                        <Fragment key={offering.id}>
                                             <tr key={`offering-${offering.id}`} className="border-t border-gray-100 bg-gray-50/60">
                                                 <td
                                                     colSpan={cadences.length + 1}
@@ -658,7 +699,7 @@ export function TuitionGridWorkspace() {
                                                     })}
                                                 </tr>
                                             ))}
-                                        </>
+                                        </Fragment>
                                     ))}
                                 </tbody>
                             </table>
