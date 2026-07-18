@@ -66,6 +66,7 @@ import {
 import { applyCanonicalWorkViewSort } from "./canonicalWorkViewSort";
 import {
     resolveOperationalPresentation,
+    listWorkUnitHeaderLayoutRecords,
     type OperationalPresentation,
 } from "./operationalPresentation";
 import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
@@ -404,13 +405,18 @@ export async function composeWorkUnitProvisioningAnswer(
     const tPres = now();
     const queueRowSurfaceId = queueRowSurfaceIdForDepartment(String(wuRow.department_id), deptRow?.metadata);
     const presentationPromise = (async () => {
-        const rowLayout = await resolveQueueRowLayoutServer({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            surfaceId: queueRowSurfaceId,
-            processKeyHint: process.key,
-            workViewId: activeView.id,
-        });
+        // The queue-row layout and the header layout are INDEPENDENT DB reads — fetch them concurrently,
+        // then compose (compose is in-memory). Collapses the two sequential ~700ms + ~335ms reads into one.
+        const [rowLayout, headerLayoutRecords] = await Promise.all([
+            resolveQueueRowLayoutServer({
+                supabase: req.supabase,
+                orgId: req.orgId,
+                surfaceId: queueRowSurfaceId,
+                processKeyHint: process.key,
+                workViewId: activeView.id,
+            }),
+            listWorkUnitHeaderLayoutRecords(req.supabase, req.orgId).catch(() => null),
+        ]);
         return resolveOperationalPresentation({
             supabase: req.supabase,
             orgId: req.orgId,
@@ -423,6 +429,7 @@ export async function composeWorkUnitProvisioningAnswer(
             workViewId: activeView.id,
             queueRowSurfaceId,
             queueRowResolvedSource: rowLayout?.source ?? null,
+            headerLayoutRecords,
         });
     })();
     // Early-return safety (grain/records/subject fails never await it): keep the promise handled. The real

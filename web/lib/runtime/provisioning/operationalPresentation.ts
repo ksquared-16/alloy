@@ -58,6 +58,15 @@ import type { QueueRecordLayoutConfigV3, QueueRowVariant, QueueRecordFixedContro
 const WORKSPACE_SURFACE = "workspace" as const;
 const WORKSPACE_ENTITY_TYPE = "workspace";
 
+/** Fetch the org's Work-Unit-header layout records. Exposed so the caller can run this DB read CONCURRENTLY
+ *  with the queue-row layout fetch and pass the result in via `headerLayoutRecords` (cold-path parallelism). */
+export function listWorkUnitHeaderLayoutRecords(
+    supabase: Parameters<typeof listOrgLayouts>[0],
+    orgId: string,
+): Promise<EntityLayoutRecord[]> {
+    return listOrgLayouts(supabase, orgId, WORKSPACE_ENTITY_TYPE, WORKSPACE_SURFACE);
+}
+
 /**
  * Map a published header `entity_layouts` row to a surface-variant candidate. Business-Process /
  * Work-View / stage / status scoping is read from the layout's `metadata` when authored; an
@@ -210,6 +219,9 @@ export async function resolveOperationalPresentation(args: {
     /** Resolved queue-row surface id + resolver source — provenance, surfaced to the DOM (P2-V). */
     queueRowSurfaceId?: string | null;
     queueRowResolvedSource?: string | null;
+    /** Pre-fetched header layout records (cold-path parallelism) — when provided, the header DB read is
+     *  skipped so it can run CONCURRENTLY with the queue-row layout fetch in the caller. */
+    headerLayoutRecords?: EntityLayoutRecord[] | null;
 }): Promise<OperationalPresentation> {
     const { supabase, orgId, fallbackTitle } = args;
 
@@ -217,7 +229,7 @@ export async function resolveOperationalPresentation(args: {
     let headerConfig: WorkUnitHeaderSurfaceConfig = DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG;
     let headerSource: "published" | "builtin_default" = "builtin_default";
     try {
-        const records = await listOrgLayouts(supabase, orgId, WORKSPACE_ENTITY_TYPE, WORKSPACE_SURFACE);
+        const records = args.headerLayoutRecords ?? await listWorkUnitHeaderLayoutRecords(supabase, orgId);
         const headerRecords = records.filter((r) => r.layoutKey === WORK_UNIT_HEADER_LAYOUT_KEY);
         // One owner: `resolveSurfaceVariant` (published-only, deterministic, Work-View/Business-Process
         // aware). For an org-global header every candidate is a wildcard, so it returns the highest
