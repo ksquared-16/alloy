@@ -7,9 +7,12 @@ supersedes: []
 
 # The Alloy Anticipatory Operational Runtime
 
-**Status:** Proposed architecture. **Design and planning only — not implemented.** This document expands
-the Workspace Operational Preparation Runtime from *destination preparation* into a complete anticipatory
-operational runtime.
+**Status:** Proposed architecture; implementation in progress (see *Implementation log*, §16). This document
+expands the Workspace Operational Preparation Runtime from *destination preparation* into a complete
+anticipatory operational runtime.
+
+**Implemented so far:** Phase A — the Operational Graph (client materializer + pure compiler + destination
+identity + revision model), flag-gated (`NEXT_PUBLIC_OPERATIONAL_GRAPH`), enumerate-only.
 
 ## 0. Thesis — the system knows the book
 
@@ -631,7 +634,31 @@ static composition pointers) — so a new operational surface is *authored + pub
 
 ---
 
-## 16. Phased implementation plan (design — do not implement yet)
+## 16. Phased implementation plan
+
+### Implementation log
+
+- **Phase A — Operational Graph · LANDED (enumerate-only, flag-gated).**
+  - New owner: pure compiler + client materializer of the reachable-destination graph, compiled from
+    authorized config — no second navigation registry.
+  - Modules: `web/lib/runtime/graph/destinationId.ts` (§1.3 identity + store key), `operationalGraph.ts`
+    (node/edge model, revision version-vector §1.4, adjacency accessors §1.2),
+    `compileOperationalGraph.ts` (pure `graph = f(config, authz)`, content-addressed revision token),
+    `materializeOperationalGraph.ts` (client nav tree + published Work Views → graph),
+    `operationalGraphFlag.ts` (`NEXT_PUBLIC_OPERATIONAL_GRAPH`, default OFF — rollback boundary).
+  - Invariant honored: finite & complete enumeration (one node-level destination per reachable
+    (Work Unit, Work View)); authorization-scoped (unauthorized units are absent by construction);
+    deterministic & content-addressed (identical input → identical `revisionToken`).
+  - Tests: `web/tests/runtime/graph/operationalGraph.test.ts` (19 cases — enumeration, identity
+    round-trip, revision dominance, adjacency, dedupe/order, materializer). Green.
+  - Not yet: server-side graph compile + Presentation Manifest emission at login; commit ownership
+    (the graph enumerates & schedules; it does not yet own commit — that arrives with Phases B/D).
+  - Browser evidence: deferred — Phase A wires no surface (flag OFF). Certified when a surface consumes
+    the graph (Phases D/E).
+
+### Plan
+
+
 
 Each phase: **new owner · legacy owner deleted · runtime invariant · browser evidence · performance
 measurement · rollback boundary · exact stop condition.**
