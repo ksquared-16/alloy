@@ -155,7 +155,7 @@ export default function CommunicationsOverviewLanding({
                     </p>
                     <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                         {overviewKpis.map((kpi) => (
-                            <SurfaceHeaderKpiCard key={kpi.slot} kpi={kpi} interactive={false} variant="work-unit" density="compact" />
+                            <SurfaceHeaderKpiCard key={kpi.slot} kpi={kpi} variant="work-unit" density="compact" />
                         ))}
                     </div>
                 </section>

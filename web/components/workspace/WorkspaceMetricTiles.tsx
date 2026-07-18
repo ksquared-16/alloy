@@ -98,7 +98,6 @@ export default function WorkspaceMetricTiles({
                 >
                     <SurfaceHeaderKpiCard
                         kpi={toKpiVm(item, index, loading)}
-                        interactive={false}
                         variant="work-unit"
                         density="compact"
                     />

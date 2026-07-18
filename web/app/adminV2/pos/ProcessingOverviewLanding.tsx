@@ -199,7 +199,6 @@ export default function ProcessingOverviewLanding({
                             <SurfaceHeaderKpiCard
                                 key={kpi.slot}
                                 kpi={kpi}
-                                interactive={false}
                                 variant="work-unit"
                                 density="compact"
                             />

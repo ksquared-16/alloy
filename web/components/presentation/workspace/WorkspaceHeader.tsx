@@ -7,8 +7,6 @@
  */
 
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { parseOperatorWorkUnitEntryHref, warmWorkUnitSlugRoute, prefetchWorkUnitProvisioningFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -147,13 +145,10 @@ function gemClass(kpi: WorkspaceHeaderKpiVm): string {
 
 function HeaderKpiCard({
     kpi,
-    interactive,
     variant,
     density = "standard",
 }: {
     kpi: WorkspaceHeaderKpiVm;
-    /** False in the builder (parent owns clicks). */
-    interactive: boolean;
     variant: SurfaceHeaderVariant;
     density?: "standard" | "compact";
 }) {
@@ -224,26 +219,10 @@ function HeaderKpiCard({
         </div>
     );
 
-    if (interactive && kpi.drillHref) {
-        const warmDrill = () => {
-            const slug = kpi.drillHref ? parseOperatorWorkUnitEntryHref(kpi.drillHref).workUnitSlug : null;
-            if (slug) void warmWorkUnitSlugRoute(slug, "workspace_header_kpi");
-            if (kpi.drillHref) prefetchWorkUnitProvisioningFromHref(kpi.drillHref);
-        };
-        return (
-            <Link
-                href={kpi.drillHref}
-                // Heavy Work Unit route — no eager viewport prefetch; warm on pointer/focus intent.
-                prefetch={false}
-                onPointerEnter={warmDrill}
-                onPointerDown={warmDrill}
-                onFocus={warmDrill}
-                className="block h-full no-underline transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine/50"
-            >
-                {body}
-            </Link>
-        );
-    }
+    // Metric tiles are READOUTS, never navigation. The operator navigates through Work Views (the
+    // pill strip / work-view rows), not the KPI tiles — a tile that drilled to a work unit (e.g.
+    // "Needs attention") invited broken routes and competed with the Work Views. `drillHref` stays
+    // on the VM for calculation provenance, but the tile no longer renders as a link.
     return body;
 }
 
@@ -341,7 +320,7 @@ export function WorkspaceHeader({
                             className="block h-full min-w-0"
                         >
                             <div role="listitem" className="h-full min-w-0">
-                                <HeaderKpiCard kpi={kpi} interactive={!builder} variant={variant} />
+                                <HeaderKpiCard kpi={kpi} variant={variant} />
                             </div>
                         </BuilderHit>
                     ))}
