@@ -656,6 +656,23 @@ static composition pointers) — so a new operational surface is *authored + pub
   - Browser evidence: deferred — Phase A wires no surface (flag OFF). Certified when a surface consumes
     the graph (Phases D/E).
 
+- **Phase B — Prepared Operational Destination store · LANDED (flag-gated, not yet wired to K2).**
+  - New owner: the canonical `DestinationId`-keyed store — the generalization of the 144 ms
+    `workUnitProvisioningPrefetch` from a URL→promise cache into a revision-invalidated,
+    priority-scheduled store of `PreparedOperationalDestination`s (one store, one resource identity).
+  - Modules: `web/lib/runtime/store/preparedOperationalDestination.ts` (the §2.2 data contract +
+    immutable transitions; `PreparedWorkUnitSnapshot` retired per §2.1),
+    `preparedDestinationStore.ts` (dedup / latest-wins / graph+config invalidation / data-staleness /
+    bounded LRU-priority budget, injectable clock), `preparedDestinationStoreFlag.ts`
+    (`NEXT_PUBLIC_PREPARED_DESTINATION_STORE`, default OFF — the shipped prefetch stays the live path).
+  - Invariants honored: one preparation per id; latest-wins (a superseded prep never overwrites);
+    §11 matrix (graph/config change → invalid/not-committable; data change → stale/still-committable);
+    in-flight preparations are never evicted (budget overshoots instead).
+  - Tests: `web/tests/runtime/store/preparedDestinationStore.test.ts` (14 cases). Green.
+  - Not yet: wiring K2 (`workUnitEntryResourceClient`) to read the store first + deleting the raw
+    prefetch map — that swap lands under the flag once warm-commit ~150 ms is re-certified (§16 row B
+    rollback boundary: keep prefetch as-is behind the flag until proven).
+
 ### Plan
 
 
