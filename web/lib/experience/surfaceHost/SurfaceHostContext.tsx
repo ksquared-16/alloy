@@ -35,7 +35,11 @@ import { surfaceHostShouldRenderWorkUnit } from "@/lib/experience/surfaceHost/su
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { attentionFromUrl, ATTENTION_SCOPE, WORKSPACE_ATTENTION_TARGET } from "@/lib/runtime/kernel/attention";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { subscribeWorkspaceReturn } from "@/lib/experience/surfaceHost/workspaceReturnIntent";
 import { ProvisionedWorkUnitSurface } from "@/components/presentation/workUnit/ProvisionedWorkUnitSurface";
+
+/** The bare Workspace address — the Workspace is not a work-unit target, so it has no slug URL. */
+const WORKSPACE_URL = "/workspace";
 
 export type SurfaceHostValue = {
     state: SurfaceHostState;
@@ -105,15 +109,50 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
         return () => window.removeEventListener("popstate", onPopState);
     }, [kernel, orgId, principalUserId]);
 
+    // ── WORKSPACE RETURN — the Home control (in the shell, above the kernel providers) forwards the
+    //    operator's "back to Workspace" gesture here. It is an attention movement like any other: the
+    //    committed Work Unit becomes `outgoing` and the retained Workspace (mounted, hidden) takes over
+    //    instantly (Kelly A2). The Workspace has no K2 preparation contract, so this move never
+    //    commits — `desiredIsWorkspace` below is what makes the retained Workspace visible again.
+    useEffect(() => {
+        return subscribeWorkspaceReturn(() => {
+            if (!orgId) return;
+            const current = kernel.attention.get();
+            if (!current) {
+                kernel.attention.hydrate({
+                    tenant: orgId,
+                    principal: principalUserId ?? "",
+                    target: WORKSPACE_ATTENTION_TARGET,
+                    lens: null,
+                    source: "direct_url",
+                });
+                return;
+            }
+            if (current.target === WORKSPACE_ATTENTION_TARGET) return;
+            kernel.attention.move({
+                scope: ATTENTION_SCOPE.SURFACE,
+                target: WORKSPACE_ATTENTION_TARGET,
+                lens: null,
+                source: "pointer",
+            });
+        });
+    }, [kernel, orgId, principalUserId]);
+
+    // The operator has expressed intent to be on the Workspace. Because the Workspace is not a K3
+    // surface, this intent — not a commit — decides its visibility and its address.
+    const desiredIsWorkspace = focus.desired?.target === WORKSPACE_ATTENTION_TARGET;
+
     // ── URL PROJECTION — written FROM committed Focus, after the commit. Never before, never as a
     //    cause. `replaceState` keeps the address honest without manufacturing history entries the
-    //    operator did not create; K3 owns the address, the router does not.
+    //    operator did not create; K3 owns the address, the router does not. The one exception is the
+    //    Workspace: it has no committed surface to project from, so when the operator is on it the
+    //    address is its bare path rather than the stale (retained) Work Unit's slug URL.
     useEffect(() => {
-        const url = focus.projectedUrl;
+        const url = desiredIsWorkspace ? WORKSPACE_URL : focus.projectedUrl;
         if (!url || typeof window === "undefined") return;
         if (window.location.pathname + window.location.search === url) return;
         window.history.replaceState(window.history.state, "", url);
-    }, [focus.projectedUrl]);
+    }, [focus.projectedUrl, desiredIsWorkspace]);
 
     // The Host's own state model is retained for its anatomy/diagnostics. It is a PROJECTION of the
     // pathname for compatibility consumers only — it no longer decides what is visible.
@@ -131,8 +170,15 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     // The Workspace is an attention target, but it is NOT a Work Unit. Only a committed Work Unit
     // focus may render the Work Unit surface — otherwise the Workspace provisions itself as a Work
     // Unit and honestly reports that no such work unit exists.
+    // The committed surface may STILL be a Work Unit here (Focus never un-commits, and the Workspace
+    // has no terminal to supersede it). So the operator's intent to return to the Workspace
+    // (`desiredIsWorkspace`) is what recedes it — otherwise a stale committed Work Unit would keep the
+    // retained Workspace hidden forever, and Home would appear to "never load" (Kelly A2).
     const committed = focus.current;
-    const showWorkUnit = committed != null && committed.ref.target !== WORKSPACE_ATTENTION_TARGET;
+    const showWorkUnit =
+        committed != null &&
+        committed.ref.target !== WORKSPACE_ATTENTION_TARGET &&
+        !desiredIsWorkspace;
 
     // ── THE OUTGOING YIELD (C-36) — the Workspace visibly recedes the instant the operator commits to
     //    leaving it, and is HELD (mounted, out of the way) once the Work Unit reveals. The kernel models

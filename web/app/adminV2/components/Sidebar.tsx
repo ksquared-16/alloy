@@ -30,6 +30,7 @@ import {
 import { warmOperatorWorkUnitNavEntry } from "@/lib/admin/warmOperatorWorkUnitNavEntry";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
+import { requestWorkspaceReturn } from "@/lib/experience/surfaceHost/workspaceReturnIntent";
 import {
     SidebarAnalyticsNavItem,
     SidebarInboxNavItem,
@@ -212,6 +213,15 @@ function SidebarNav({
             aria-label="Workspace"
             active={!modalOpen && (path === WORKSPACE || path === `${WORKSPACE}/`)}
             className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
+            // Returning to the Workspace is an ATTENTION movement, not just a route change: the
+            // committed work-unit Focus must yield or the Surface Host keeps the Work Unit on screen
+            // (Kelly A2). The Sidebar sits above the kernel providers, so it forwards the intent to
+            // the Surface Host (which owns the kernel) rather than moving attention itself. The href
+            // stays for copy-link / open-in-new-tab; modifier clicks fall through to the browser.
+            onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                requestWorkspaceReturn();
+            }}
         >
             {collapsed ? (
                 <Home size={20} strokeWidth={1.75} />
