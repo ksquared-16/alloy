@@ -97,15 +97,14 @@ export function InlineOpportunityFocusPanel() {
     // committed subject, a current business state, and a truthful action? That is what the marker
     // now reports. The Settlement fetch gets its own marker and gates nothing.
     const operationallyResolved = isOperationallyResolved(operational);
-    // Local subject view — id/type from committed Focus; the queue-preview seed is no longer sourced
-    // from drawer state (the resolved header replaces the seed once the VM lands).
+    // Local subject view — id/type from committed Focus. The queue-preview seed is the INSTANT-IDENTITY
+    // seed carried on the committed Operational Subject (derived from the same committed queue row the
+    // subject was selected from — never the drawer store). It gives the pending header the family name +
+    // status on cold open; the resolved header replaces it once the VM lands.
     const drawer = {
         id: operationalSubjectId,
         type: operationalSubjectId ? ("opportunities" as const) : null,
-        // Seed is not sourced from drawer state here (the resolved header replaces it once the VM
-        // lands). Typed as the full seed shape so the seed-consuming helpers type-check; always null
-        // today. See docs/platform/runtime — restoring an instant-identity seed is the follow-up.
-        opportunityQueuePreviewSeed: null as OpportunityDrawerQueuePreviewSeed | null,
+        opportunityQueuePreviewSeed: operational.identitySeed as OpportunityDrawerQueuePreviewSeed | null,
     };
     const {
         displayVm,

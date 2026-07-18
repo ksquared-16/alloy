@@ -11,17 +11,36 @@
  * already operational. `WorkUnitSurfaceBody` is the SAME canonical presentation tree the old runtime
  * used — the difference is where its model comes from, not what renders it.
  */
+import { useMemo } from "react";
 import { WorkUnitSurfaceBodyFromModel } from "@/components/presentation/workUnit/WorkUnitSurface";
 import { useCommittedWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime";
 import { runtimeLabelProps, PRESENTATION_RUNTIME_LABELS } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { useCommittedFocus } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { OperationalSubjectProvider } from "@/components/presentation/workUnit/OperationalSubjectContext";
+import { focusPanelSeedForSubject } from "@/lib/presentation/runtime/focusPanelSeedFromQueueRow";
 
 export function ProvisionedWorkUnitSurface() {
     const { model, intents } = useCommittedWorkUnitSurfaceRuntime();
     const focus = useCommittedFocus();
     const committed = focus.current;
+
+    // INSTANT-IDENTITY SEED — the committed subject's row identity, from the SAME committed queue
+    // the row was rendered from. Keyed by `recordOfAttention.id`, so it re-derives on a subject
+    // commit and never drifts from what the operator clicked. Feeds the Focus Panel pending header
+    // so a cold open shows the family name immediately instead of the generic entity noun. Computed
+    // before the commit gate below so hook order is stable; a null subject seeds nothing.
+    const committedOp =
+        committed?.snapshot.terminal === "operational" ? committed.snapshot : null;
+    const identitySeed = useMemo(
+        () =>
+            focusPanelSeedForSubject(
+                committedOp ? committedOp.recordOfAttention.id : null,
+                model?.queue.rows,
+                model?.queue.rowConfig,
+            ),
+        [committedOp, model?.queue.rows, model?.queue.rowConfig],
+    );
 
     // Cannot happen: the Host mounts this only when Focus has committed. Rendering nothing is the
     // honest response to an impossible state — never a skeleton, which would BE visible construction.
@@ -66,6 +85,7 @@ export function ProvisionedWorkUnitSurface() {
                     "named but unresolved". */}
                 <OperationalSubjectProvider
                     subjectId={op ? op.recordOfAttention.id : null}
+                    identitySeed={identitySeed}
                     situation={
                         op
                             ? {

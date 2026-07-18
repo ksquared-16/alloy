@@ -1,0 +1,77 @@
+---
+owner: platform
+status: active
+last_reviewed: 2026-07-18
+supersedes: []
+related:
+  - docs/handoffs/runtime-experience-session-2-handoff.md
+---
+
+# Runtime Experience — Session 3 Punch List
+
+Branch `agent/claude/3-runtime-drawer-deletion` · managed Slot 3 · port **3013**. Keep commits
+local; no push/PR without Kelly's promotion authorization.
+
+## North star (unchanged)
+
+Smooth, fast clicks with **near-zero lag**, achieved by **DELETING duplicative/dead code and
+killing load waterfalls** — not flashy hacks that trade one glitch for another.
+
+## The broader goal of this sprint: PREP LOADING
+
+The core mechanism is **commit instantly from a PREPARED destination**, so a click/pill has no
+waterfall to wait on:
+
+- Wire the **Phase B Prepared Operational Destination store** (`web/lib/runtime/store/*`) into the
+  **commit path**.
+- **Phase H adjacency:** prepare the adjacent queue rows + sibling Work Views so the next
+  click/pill commits from already-prepared state.
+- This removes the hold-prior "stuck on old subject" frame and is what makes clicks feel instant.
+
+Everything below is in service of that goal (instant identity, deferred settlement, single loading
+owner) or is a visible glitch surfaced while getting there.
+
+## A. Live felt problems — Kelly, Session 3 browser (:3013, Firefly tenant)
+
+1. **Refresh duplicate shell.** On a refresh, a blue left rail + header render **duplicated inside
+   the content area** (the shell is drawn twice). Session 2 landed a refresh duplicate-shell fix
+   (`82ad2ba11`, gated `useSearchParams`); this is still visible or a second instance. Re-diagnose.
+2. **Back-nav to Workspace hangs.** Clicking Home (Workspace) from a work-unit page **never loads /
+   never leaves the current page**. Must be instantaneous. (Was "slow/buggy" in S2; now "never
+   loads.") → retained Workspace runtime (Phase C).
+3. **Two Focus Panel skeletons.** On load the Focus Panel shows **two different skeletons**. Target:
+   **no skeleton** — the subject Focus Panel cards should simply appear like everything else.
+4. **Work-view pill lag.** Clicking a Work View pill on `/work-unit` **takes forever**. Must be
+   instant — commit queue + Focus Panel from prepared sibling-view state (Phase H adjacency).
+5. **No blank white screen on load.** Any page load must show the **Alloy loading visual**, made
+   **larger and center-aligned**, as the single owner — never a blank white canvas. (= blank-nav
+   single "Thinking…" owner, Phase K/L.)
+6. **Metric tiles are not navigation.** The metric tiles (**Needs attention, Overdue work, Pipeline
+   Children**) must **not be links**. `needs-attention` should not be a clickable link. Navigation
+   is the **Work Views** only (workspace + work-unit pill strip). `All Leads` is grain-ambiguous and
+   errors — **defer**, don't use it as a test case.
+7. **Focus Panel header double-loading.** The loading header shows **two variants** — one with the
+   primary contact's **phone + email**, one without. The loading/seed header must **NOT** include
+   primary contact info; identity = family name + status only. (Fixed in the S3 seed builder by
+   dropping the contact subtitle.)
+
+## B. Carried from Session 2 handoff (§2 felt problems)
+
+- **Instant-identity seed** (S2 problem #2) — pending header shows the family name, not "Lead".
+  **DONE this session** (`focusPanelSeedFromQueueRow` → `OperationalSubjectContext.identitySeed` →
+  pending header), refined per A7 (no phone/email).
+- **Settlement deferral** (S2 #3) — a row-click fires the commit-critical answer **and** ~14
+  Settlement requests together. Commit-critical commits first; activity/comms/history/messages load
+  after into reserved space.
+- **Hold-prior stuck frame** (S2 #1) — solved by prep loading (goal above).
+- **Metric drift** (S2 #8) — Workspace "7 Pipeline Children" vs work-unit "6"; "Actions (1)" vs
+  "(0)". Operational Metrics Runtime + targeted invalidation (Phase J).
+
+## Working discipline
+
+- **Verify fixes directly** — unit-test the pure logic, observe the settled result, read the code
+  path. Do **not** fight the dev server (fetch delays / DOM polling) to catch sub-frame states;
+  react-query caches resolved VMs so the delay never fires and dev is too fast.
+- Each item: land → authenticated browser cert on :3013 → measure → commit, before the next.
+- Baseline: 10 pre-existing tsc errors (all in test files). Clear stray `tsc`/`tsserver` before
+  typechecking (do not just raise the heap).

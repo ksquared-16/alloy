@@ -17,12 +17,22 @@
  * the operator is working on. That answer comes from the committed snapshot and nowhere else.
  */
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 
 export type OperationalSubject = {
     /** Record of Attention — the committed subject, from the frozen snapshot. Null = none committed. */
     subjectId: string | null;
     /** Record of Truth entity type for the committed subject. */
     entityType: "opportunity" | null;
+    /**
+     * INSTANT-IDENTITY SEED — the committed subject's family name + status, from the SAME committed
+     * queue row it was selected from (never the drawer store). Lets the Focus Panel pending header
+     * show the real identity on cold open instead of the generic entity noun ("Lead"), while the
+     * record VM resolves. Null when the subject is not a matchable queue row (nothing to seed) or
+     * nothing is committed. This is a display hint threaded through the single subject owner — it is
+     * not a second owner and never gates or resolves anything.
+     */
+    identitySeed: OpportunityDrawerQueuePreviewSeed | null;
     /**
      * The FIRST-SIGHT operational truth, straight from the committed D1 snapshot.
      *
@@ -50,19 +60,21 @@ export type OperationalSubject = {
 };
 
 const EMPTY: OperationalSubject = {
-    subjectId: null, entityType: null, situation: null, decision: null, action: null,
+    subjectId: null, entityType: null, identitySeed: null, situation: null, decision: null, action: null,
 };
 const Ctx = createContext<OperationalSubject>(EMPTY);
 
 /** Fed from the committed model — never from the drawer, never resolved locally. */
 export function OperationalSubjectProvider({
     subjectId,
+    identitySeed,
     situation,
     decision,
     action,
     children,
 }: {
     subjectId: string | null;
+    identitySeed?: OpportunityDrawerQueuePreviewSeed | null;
     situation?: OperationalSubject["situation"];
     decision?: OperationalSubject["decision"];
     action?: OperationalSubject["action"];
@@ -72,11 +84,12 @@ export function OperationalSubjectProvider({
         () => ({
             subjectId,
             entityType: subjectId ? "opportunity" : null,
+            identitySeed: identitySeed ?? null,
             situation: situation ?? null,
             decision: decision ?? null,
             action: action ?? null,
         }),
-        [subjectId, situation, decision, action],
+        [subjectId, identitySeed, situation, decision, action],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
