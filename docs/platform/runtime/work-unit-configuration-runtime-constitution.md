@@ -55,16 +55,26 @@ Deleted legacy owner: the `metric_placements` Work Unit Header path (`workUnitHe
 metric_placements path is authoring-only (its builder is unmounted, its runtime strip retired) and is
 explicitly **not** a Work Unit Header authority.
 
-### Queue  — pending **P2**
+### Queue  — resolver + variants cut over (P2-A/B); certification in progress
 | Aspect | Owner |
 |---|---|
 | Configuration owner | Settings → Surfaces → `QueueRowSurfaceEditor` → published `entity_layouts(surface="queue")` |
-| Resolver | `resolveQueueRowLayoutServer` → **to be repointed to `resolveSurfaceVariant` (P2)** |
-| Renderer | `CondensedQueueRow` (slots from published config) |
+| Variant selection | **`resolveSurfaceVariant`** (queue-level, P2-A) + **`resolveQueueRowVariant`** (per-row, P2-B) — published-only, deterministic, Work-View aware. The former ad-hoc `filter+sort` is deleted. |
+| Renderer | `CondensedQueueRow` (slots from the resolved variant, else queue-level default) |
 | Runtime owner | D1 provisioning answer (rows at first sight, no reflow) |
 | Data owner | provisioning page rows |
-| Fallback | canonical generic slots (`queueRowSource: "canonical_fallback"`) |
-| P2 delta | wire per-row variants; Work View as an applicability axis; delete the ad-hoc `listOrgLayouts` path |
+| Selected-row presentation | **Runtime-owned** (committed Focus) — layered onto the configured row; never overrides configured visibility/labels/columns |
+| Fallback | queue-level default → canonical generic slots (`queueRowSource: "canonical_fallback"`) |
+
+**Queue fallback ledger (P2-C — audit complete, no dead fallbacks):**
+- `pipeline_queue_row` / `LEGACY_PIPELINE_QUEUE_ROW_SURFACE_ID` — **live & required**: the default queue-row surface for departments without a per-department lifecycle process (`queueRowSurfaceIdForDepartment` returns it). Owned by the same published `entity_layouts` + `resolveSurfaceVariant` path (no second resolver). *Sunset:* every department resolves a per-department surface id.
+- `waitlist_queue_row` — live & required (waitlist default), same model.
+- exact-key→pipeline fallback in `resolveQueueRowLayoutServer` — compatibility-only (orgs mid-migration). *Sunset:* all `queue_row_*` surfaces published.
+- `mapQueueRowSurfaceToCompactConfig(null)` · builtin default envelopes — canonical (not legacy), the "never unavailable" guarantee.
+
+**Queue request ownership (P2-E):**
+- `work-unit-queue-summaries` — **deterministically 1** via `dedupeAdminFetch` (verified 1/1/1/1). One owner.
+- `queue-view-totals` — one canonical fetcher `fetchQueueViewTotalsBatched` (scope-keyed in-flight dedup + 4s cache). The residual second request is a **distinct-scope consumer** (workspace surface vs work-unit settlement), not a duplicate of identical data; collapsing it would change Workspace behavior (out of P2 scope). One owner, two legitimate scopes.
 
 ### Focus Panel  — pending **P3** (subject ownership already cut over)
 | Aspect | Owner |
