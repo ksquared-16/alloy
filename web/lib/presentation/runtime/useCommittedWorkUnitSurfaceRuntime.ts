@@ -26,6 +26,7 @@
  */
 import { useCallback, useEffect, useMemo } from "react";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
+import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
@@ -114,9 +115,15 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         [kernel],
     );
 
-    // A subject movement reuses the lens preparation (the K2 key carries lens, not subject), so
-    // there is nothing to warm — the answer is already in hand. Kept to satisfy the contract.
-    const prefetchRecord = useCallback((_row: QueueRowModel) => {}, []);
+    // ADJACENT SUBJECT PREPARATION (#6). The K2 provisioning answer is per-lens, so a subject move
+    // reuses it — but the Focus Panel's CARDS come from the per-subject drawer view-model, which is
+    // NOT in the K2 answer. Warm that exact VM (the one `useRecordWorkRuntime` loads) on hover/focus
+    // intent so the row → row click resolves from `cache_hit`/`inflight_join` instead of a cold fetch,
+    // collapsing the pending-skeleton window on the destination. Fire-and-forget; the loader dedups.
+    const prefetchRecord = useCallback((row: QueueRowModel) => {
+        if (row.entityType !== "opportunity" || row.entityId == null) return;
+        void loadOpportunityDrawerViaViewModel(String(row.entityId), null).catch(() => {});
+    }, []);
 
     // ── PHASE H — SIBLING WORK-VIEW ADJACENCY ──────────────────────────────────────────────────
     // A pill switch pays the full ~2.8 s provisioning round-trip because hover rarely precedes the
@@ -153,6 +160,50 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         const timer = window.setTimeout(run, 250);
         return () => window.clearTimeout(timer);
     }, [siblingViewIds, prefetchWorkView]);
+
+    // ── #6 ADJACENT SUBJECT PREPARATION — warm the selected subject's NEIGHBOURS on commit. ──────
+    // Row → row is the operator's most frequent move; the destination's cards otherwise cold-fetch on
+    // click (the pending-skeleton window). Once committed, warm the drawer VM of the rows immediately
+    // above/below the selected subject on idle, so the next click (or arrow-key nav) resolves from
+    // cache. Bounded to a ±2 window, deduped/TTL'd by the VM loader, idle-scheduled (never competes
+    // with the commit-critical VM). Keyed on the stable neighbour-id string so settlement re-renders
+    // (new `model` ref, same rows) don't cancel-and-drop the scheduled warm.
+    const selectedSubjectId = model?.selectedRecordId ?? model?.selectedSubject?.selectedRecordId ?? null;
+    const adjacentSubjectIds = useMemo(() => {
+        const rows = model?.queue.rows;
+        if (!rows?.length || !selectedSubjectId) return "";
+        const idx = rows.findIndex(
+            (r) => r.entityId === selectedSubjectId || r.context?.drawer_open.entity_id === selectedSubjectId,
+        );
+        if (idx < 0) return "";
+        const neighbours: string[] = [];
+        for (let d = 1; d <= 2; d++) {
+            for (const j of [idx - d, idx + d]) {
+                const r = rows[j];
+                if (r && r.entityType === "opportunity" && r.entityId && r.entityId !== selectedSubjectId) {
+                    neighbours.push(String(r.entityId));
+                }
+            }
+        }
+        return [...new Set(neighbours)].join(",");
+    }, [model?.queue.rows, selectedSubjectId]);
+    useEffect(() => {
+        if (!adjacentSubjectIds || typeof window === "undefined") return;
+        const ids = adjacentSubjectIds.split(",");
+        const run = () => {
+            for (const id of ids) void loadOpportunityDrawerViaViewModel(id, null).catch(() => {});
+        };
+        const w = window as Window & {
+            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+        if (w.requestIdleCallback) {
+            const handle = w.requestIdleCallback(run, { timeout: 2500 });
+            return () => w.cancelIdleCallback?.(handle);
+        }
+        const timer = window.setTimeout(run, 400);
+        return () => window.clearTimeout(timer);
+    }, [adjacentSubjectIds]);
 
     const intents = useMemo<WorkUnitSurfaceIntents>(
         () => ({ selectWorkView, prefetchWorkView, openRecord, prefetchRecord }),
