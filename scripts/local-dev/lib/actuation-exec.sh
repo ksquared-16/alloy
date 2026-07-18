@@ -236,8 +236,10 @@ alloy_act_reconcile_execution() {
     return 0
   fi
 
-  # Non-terminal + no live claim ⇒ interrupted. Resolve from R1 (conclusive evidence only).
-  if ! alloy_act_exec_is_terminal "$st"; then
+  # Reconcilable states: any non-terminal (interrupted) execution, OR a terminal
+  # `timed_out` (an ambiguous provider result the spec requires be resolved via R1).
+  # All other terminals are settled and left untouched.
+  if ! alloy_act_exec_is_terminal "$st" || [[ "$st" == "timed_out" ]]; then
     case "$op" in
       provision)
         if alloy_act_verify_active_healthy "$ns"; then

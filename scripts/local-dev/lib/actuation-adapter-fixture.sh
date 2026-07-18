@@ -39,7 +39,7 @@ _alloy_fx_remove_stack() {
   local ns="$1" f="${ALLOY_RT_PS_FIXTURE:-}"
   [[ -n "$f" && -f "$f" ]] || return 0
   local tmp; tmp="$(mktemp "${f}.XXXXXX")"
-  awk -F'\x1f' -v ns="$ns" '($7 != ns)' "$f" >"$tmp" 2>/dev/null || cp "$f" "$tmp"
+  awk -F"$_ALLOY_FX_SEP" -v ns="$ns" '($7 != ns)' "$f" >"$tmp" 2>/dev/null || cp "$f" "$tmp"
   mv "$tmp" "$f"
 }
 
