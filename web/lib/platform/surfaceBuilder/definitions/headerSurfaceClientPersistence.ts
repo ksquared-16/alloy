@@ -1,12 +1,12 @@
 /**
- * Client persistence adapter for header surfaces (workspace_header / work_unit_header).
- * Talks to the real header doc endpoint, which maps the SurfaceDoc to live
- * metric_placements (rendered by the runtime header strip). No fake save.
+ * Client persistence adapter for the Workspace Header surface. Talks to the header doc endpoint,
+ * which maps the SurfaceDoc to metric_placements. (The Work Unit Header no longer uses this path —
+ * it is owned by the published `entity_layouts` `work_unit_header` layout via `resolveSurfaceVariant`.)
  */
 
 import type { SurfaceDoc, SurfacePersistenceAdapter } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 
-export function createHeaderSurfacePersistence(surface: "workspace_header" | "work_unit_header"): SurfacePersistenceAdapter {
+export function createHeaderSurfacePersistence(surface: "workspace_header"): SurfacePersistenceAdapter {
     const endpoint = `/api/admin/analytics/surfaces/${surface}/doc`;
     return {
         load: async (): Promise<SurfaceDoc> => {

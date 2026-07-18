@@ -52,14 +52,6 @@ export {
 } from "./workspaceHeaderCards";
 
 export {
-    fallbackWorkUnitHeaderCards,
-    seedWorkUnitHeaderCards,
-    workUnitHeaderCardsFromDoc,
-    workUnitHeaderCalculationKeys,
-    type WorkUnitHeaderCalculationCardVm,
-} from "./workUnitHeaderCards";
-
-export {
     useOperationalAnswers,
     type OperationalAnswersResult,
     type OperationalAnswersScope,
@@ -109,5 +101,3 @@ export {
     type WorkUnitHeaderPresentationModel,
     type WorkUnitHeaderSurfaceConfig,
 } from "./workUnitHeaderSurfaceConfig";
-
-export { useWorkUnitHeaderSurfaceConfigState } from "./useWorkUnitHeaderSurfaceConfig";

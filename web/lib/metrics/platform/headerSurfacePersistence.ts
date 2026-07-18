@@ -16,21 +16,21 @@ import type { MetricSurface, MetricVisualizationType } from "@/lib/metrics/platf
 import type { SurfaceDoc } from "@/lib/platform/surfaceBuilder/surfaceDefinition";
 import { IMPLICIT_SECTION_ID } from "@/lib/platform/surfaceBuilder/surfaceBuilderModel";
 
-export const HEADER_SURFACES = ["workspace_header", "work_unit_header"] as const;
+// The Work Unit Header is no longer served by metric_placements: its single live owner is the
+// published `entity_layouts` `work_unit_header` layout, resolved through `resolveSurfaceVariant`.
+// Only the (authoring-only) Workspace Header remains on this metric_placements path.
+export const HEADER_SURFACES = ["workspace_header"] as const;
 export type HeaderSurface = (typeof HEADER_SURFACES)[number];
 
 /**
- * The zone the RUNTIME reads for each header (must match the MetricPlacementRenderer calls):
- * - Workspace header → `primary_metrics` (retired: the Workspace Header metric strip was
- *   replaced by the Workspace Process Surface; these rows are no longer read at runtime)
- * - Work unit header → `header_metrics` (WorkUnitCommandSurface)
- * Writing to the runtime's zone is what makes /workspace + /work-unit reflect Publish.
+ * The zone this metric_placements path writes for the Workspace Header. The Workspace Header metric
+ * strip is itself retired at runtime (replaced by the Workspace Process Surface), so this path is
+ * authoring-only — see the deferred workspace-header ledger.
  */
 export const HEADER_ZONE_BY_SURFACE = {
     workspace_header: "primary_metrics",
-    work_unit_header: "header_metrics",
 } as const;
-const KEY_PREFIX: Record<HeaderSurface, string> = { workspace_header: "wsh", work_unit_header: "wuh" };
+const KEY_PREFIX: Record<HeaderSurface, string> = { workspace_header: "wsh" };
 
 export function isHeaderSurface(s: string): s is HeaderSurface {
     return (HEADER_SURFACES as readonly string[]).includes(s);

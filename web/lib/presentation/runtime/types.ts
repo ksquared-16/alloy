@@ -23,7 +23,6 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import type { QueueItemsResult } from "@/lib/queues/types";
 import type { OipMetricKey } from "@/lib/metrics/types";
 import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
-import type { WorkUnitHeaderCalculationCardVm } from "./workUnitHeaderCards";
 import type { CompactRowSlots } from "./queueRowSurfaceConfig";
 import type { WorkUnitSelectedSubject } from "./workUnitPillSwitching";
 import type { FocusedSubjectContext } from "./resolveQueueRowSubjectFocus";

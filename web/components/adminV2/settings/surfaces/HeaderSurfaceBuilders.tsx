@@ -12,10 +12,7 @@ import { useMemo } from "react";
 
 import { SurfaceBuilder } from "@/components/platform/surfaceBuilder/SurfaceBuilder";
 import { createHeaderSurfacePersistence } from "@/lib/platform/surfaceBuilder/definitions/headerSurfaceClientPersistence";
-import {
-    workspaceHeaderSurfaceDefinition,
-    workUnitHeaderSurfaceDefinition,
-} from "@/lib/platform/surfaceBuilder/definitions/headerSurfaceDefinitions";
+import { workspaceHeaderSurfaceDefinition } from "@/lib/platform/surfaceBuilder/definitions/headerSurfaceDefinitions";
 
 function HeaderShell({ children }: { children: React.ReactNode }) {
     return (
@@ -28,14 +25,6 @@ function HeaderShell({ children }: { children: React.ReactNode }) {
 export function WorkspaceHeaderSurfaceBuilder() {
     const definition = useMemo(
         () => workspaceHeaderSurfaceDefinition(createHeaderSurfacePersistence("workspace_header")),
-        [],
-    );
-    return <HeaderShell><SurfaceBuilder definition={definition} /></HeaderShell>;
-}
-
-export function WorkUnitHeaderSurfaceBuilder() {
-    const definition = useMemo(
-        () => workUnitHeaderSurfaceDefinition(createHeaderSurfacePersistence("work_unit_header")),
         [],
     );
     return <HeaderShell><SurfaceBuilder definition={definition} /></HeaderShell>;
