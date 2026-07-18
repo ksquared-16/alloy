@@ -43,9 +43,12 @@ owner) or is a visible glitch surfaced while getting there.
 | A4 pill lag → Phase H sibling adjacency | ✅ verified (~79ms) | `ee7915b5a` |
 | A3 blank canvas before skeletons → "Thinking…" owner | ✅ landed | `1f6f4eef7` |
 | A3 double-skeleton phase collapsed to one | ✅ landed | `b37caedd1` |
+| #6 adjacent subject preparation (warm neighbour drawer VMs) | ✅ landed | `ff2c9394c` |
+| Work View pill switches IN PLACE (header + pills fixed) | ✅ landed | `35fdf8f95` |
+| Metric drift 7→6 | ✅ resolved — orphaned `process_instance` deleted in Supabase (org 6 = work-unit 6) | data |
 | A3 **zero** skeleton (cards at commit) | ⏳ server — needs default-subject drawer VM in the provisioning answer | — |
-| Settlement deferral (~14-req stall) | ⏳ open | — |
-| Phase B store into commit path (full generalization) | ⏳ open (Phase H done via K2 directly) | — |
+| Settlement deferral (~14-req stall) | ✅ **already deferred** — `useFocusPanelModePrewarm` warms secondary modes on idle AFTER the active "Work" mode; the card VM (`useRecordWorkRuntime`) fires on commit ahead of them; `unread-count`/`operational-tasks` are sidebar nav badges (`coreSurfacePreloadRegistry`), not Focus Panel settlement. The dev timeline "all at 9.2s" is dev-server request serialization; a prod build resolves the VM before the idle prewarm. Marginal residue: `fallbackMs:600` can fire the secondary during a slow dev card-load. | — |
+| Phase B store into commit path (full generalization) | ⏳ large architectural formalization — Phase H / adjacency already deliver the user-facing benefit via K2 | — |
 | Metric drift (Phase J) | ⚠️ **ROOT-CAUSED — not a staleness bug.** See below. Product decision. | — |
 
 ### Metric "drift" 7 vs 6 — root cause (not staleness)
