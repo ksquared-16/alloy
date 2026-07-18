@@ -69,6 +69,7 @@ import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportun
 import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
 import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
+import { FocusPanelSummaryDocProvider } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { useFocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelMode";
 import { useFocusPanelModePrewarm } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelModePrewarm";
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
@@ -356,7 +357,16 @@ export function InlineOpportunityFocusPanel() {
     const activityBodyFillClass = "flex min-h-0 flex-1 flex-col overflow-hidden";
 
     return (
-        <>
+        <FocusPanelSummaryDocProvider
+            enabled
+            // Committed applicability context (P3-B): the Work View the operator entered from and the
+            // committed stage — the axes `resolveSurfaceVariant` selects the published composition by.
+            // Business Process stays a wildcard (org-global docs need no BP match). Null when nothing is
+            // committed → unscoped fetch (behavior-neutral). One resolution, shared by grid + skeleton +
+            // nested cards, so a Work-View change re-resolves the whole panel coherently.
+            workViewId={operational.decision?.workViewId ?? null}
+            stageKey={operational.situation?.stageKey ?? null}
+        >
             <section
                 data-inline-focus-panel="true"
                 data-inline-focus-panel-mode={focusPanelMode}
@@ -494,6 +504,6 @@ export function InlineOpportunityFocusPanel() {
             {registryModals ?
                 <VmDrawerActionModalsPortal>{registryModals}</VmDrawerActionModalsPortal>
                 : null}
-        </>
+        </FocusPanelSummaryDocProvider>
     );
 }
