@@ -60,6 +60,7 @@ import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useOpportunityDrawerActionPreflight } from "@/lib/admin/actions/useOpportunityDrawerActionPreflight";
 import { useOpportunityDrawerRegistryActionFeedback } from "@/lib/admin/actions/useOpportunityDrawerRegistryActionFeedback";
 import { resolvePortalRecordManageAccess } from "@/lib/admin/adminPortalRolePick";
+import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import { resolveFocusPanelSubjectReveal } from "@/lib/admin/drawer/focusPanelSubjectReveal";
 import {
     buildFocusPanelContextChipsFromQueuePreviewSeed,
@@ -101,9 +102,10 @@ export function InlineOpportunityFocusPanel() {
     const drawer = {
         id: operationalSubjectId,
         type: operationalSubjectId ? ("opportunities" as const) : null,
-        opportunityQueuePreviewSeed: null as
-            | null
-            | { title?: string | null; statusLabel?: string | null },
+        // Seed is not sourced from drawer state here (the resolved header replaces it once the VM
+        // lands). Typed as the full seed shape so the seed-consuming helpers type-check; always null
+        // today. See docs/platform/runtime — restoring an instant-identity seed is the follow-up.
+        opportunityQueuePreviewSeed: null as OpportunityDrawerQueuePreviewSeed | null,
     };
     const {
         displayVm,
