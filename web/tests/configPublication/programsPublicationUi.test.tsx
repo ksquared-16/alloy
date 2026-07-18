@@ -82,6 +82,11 @@ const snapshot = {
     runs: [],
     attempts: [],
     assignments: [],
+    availability: [],
+    offerings: [],
+    variants: [],
+    tuitionRates: [],
+    policies: [],
 };
 
 let container: HTMLDivElement | null = null;
@@ -120,11 +125,29 @@ describe("Programs Publication workspace", () => {
         expect(container.textContent).toContain("1 published · 1 draft or changed · 0 assigned");
 
         await act(async () => {
-            (container!.querySelector('[data-testid="program-detail-runtime-tab-draft"]') as HTMLButtonElement).click();
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-definition"]') as HTMLButtonElement).click();
         });
         expect(container.querySelector('[data-testid="program-save-draft"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-validate-draft"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-publish"]')).not.toBeNull();
+
+        for (const [section, testId] of [
+            ["requirements", "program-requirements-runtime"],
+            ["resources", "program-resources-runtime"],
+            ["availability", "program-availability-runtime"],
+            ["offerings", "program-offerings-runtime"],
+            ["pricing", "program-pricing-runtime"],
+            ["attention", "program-attention-runtime"],
+        ] as const) {
+            await act(async () => {
+                (
+                    container!.querySelector(
+                        `[data-testid="program-detail-runtime-tab-${section}"]`,
+                    ) as HTMLButtonElement
+                ).click();
+            });
+            expect(container.querySelector(`[data-testid="${testId}"]`)).not.toBeNull();
+        }
 
         await act(async () => {
             (container!.querySelector('[data-testid="program-detail-runtime-tab-assignment"]') as HTMLButtonElement).click();
@@ -133,7 +156,7 @@ describe("Programs Publication workspace", () => {
         expect(container.querySelector('[data-testid="program-assign-delivery"]')).not.toBeNull();
 
         await act(async () => {
-            (container!.querySelector('[data-testid="program-detail-runtime-tab-distribution"]') as HTMLButtonElement).click();
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-publication"]') as HTMLButtonElement).click();
         });
         expect(container.querySelector('[data-testid="program-distribution-runtime"]')).not.toBeNull();
 
@@ -168,7 +191,7 @@ describe("Programs Publication workspace", () => {
         expect(container.querySelector('[data-testid="programs-collection-add"]')).toBeNull();
         expect(container.querySelector('[data-testid="program-edit-draft"]')).toBeNull();
         await act(async () => {
-            (container!.querySelector('[data-testid="program-detail-runtime-tab-draft"]') as HTMLButtonElement).click();
+            (container!.querySelector('[data-testid="program-detail-runtime-tab-definition"]') as HTMLButtonElement).click();
         });
         expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
         expect((container.querySelector('[data-testid="program-draft-label"]') as HTMLInputElement).disabled).toBe(true);

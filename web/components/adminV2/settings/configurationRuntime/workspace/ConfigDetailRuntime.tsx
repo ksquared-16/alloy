@@ -3,8 +3,8 @@
 import type { ReactNode } from "react";
 import type { ConfigurationDetailSection } from "@/lib/configPublication/runtimeModel";
 
-export type ConfigDetailTab = {
-    key: ConfigurationDetailSection;
+export type ConfigDetailTab<Section extends string = ConfigurationDetailSection> = {
+    key: Section;
     label: string;
     attentionCount?: number;
 };
@@ -13,7 +13,7 @@ export type ConfigDetailTab = {
  * Publishable Configuration Detail Runtime.
  * Owns read-first section navigation; domains supply payload-specific content.
  */
-export function ConfigDetailRuntime({
+export function ConfigDetailRuntime<Section extends string = ConfigurationDetailSection>({
     header,
     consequence,
     tabs,
@@ -24,9 +24,9 @@ export function ConfigDetailRuntime({
 }: {
     header: ReactNode;
     consequence?: ReactNode;
-    tabs: ConfigDetailTab[];
-    activeSection: ConfigurationDetailSection;
-    onSectionChange: (section: ConfigurationDetailSection) => void;
+    tabs: ConfigDetailTab<Section>[];
+    activeSection: Section;
+    onSectionChange: (section: Section) => void;
     children: ReactNode;
     testId?: string;
 }) {

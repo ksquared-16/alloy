@@ -151,7 +151,7 @@ revision drift; distribution failures project into Configuration Attention;
 and History spans publication, assignment, retry, and failure evidence across
 revisions. Recovered targets retain their original failed attempt in History;
 current distribution status never rewrites historical evidence. The Collection
-Runtime owns search, lifecycle filtering, Add,
+Runtime owns search, publication/Attention filtering, Add,
 publication posture, assignment posture, readiness, and attention signals.
 Publication evidence honors the reader's allowed Location scope. Capability
 posture is explicit: read-only operators inherit the runtime without mutation
@@ -171,6 +171,16 @@ Future publishable domains supply only their domain adapter: payload summary and
 editor, validation/publish mutations, setup evidence, target labels, and
 assignment impact language. They do not rebuild Collection, Detail, Attention,
 Assignment, Distribution, History, or shell command ownership.
+
+A rich Configuration domain may register additional business concerns inside the
+same Detail Runtime. Programs demonstrates Definition, Requirements, Resources,
+Availability, Offerings, Pricing, Publication, Assignments, History, and
+Attention. Domain adapters project related authority without moving it:
+Location-owned offer state, evidence, resources, capacity, and schedules are
+read-only in Organization Programs and deep-link to Locations; Commercial-owned
+rates and policies are summarized in Programs and remain authored through
+Commercial mutation paths. Distribution evidence is composed within Publication
+rather than presented as the identity of the Program.
 
 Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
 

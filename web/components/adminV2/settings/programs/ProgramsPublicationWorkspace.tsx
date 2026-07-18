@@ -13,12 +13,14 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     ConfigAssignmentRuntime,
+    ConfigAttentionPanel,
     ConfigCollectionRail,
     ConfigConsequenceLine,
     ConfigDetailRuntime,
     ConfigDistributionRuntime,
     ConfigHistoryTimeline,
     ConfigObjectHeader,
+    ConfigOperationalReadiness,
     ConfigPublicationOverview,
     ConfigWorkspaceCard,
     type ConfigDetailTab,
@@ -49,6 +51,17 @@ import {
     buildProgramCollectionItem,
     buildProgramPublicationViewModel,
 } from "@/lib/programs/publication/programPublicationViewModel";
+import {
+    normalizeProgramConfigurationSection,
+    type ProgramConfigurationSection,
+} from "@/lib/programs/programConfigurationSections";
+import {
+    ProgramAvailabilitySection,
+    ProgramOfferingsSection,
+    ProgramPricingSection,
+    ProgramRequirementsSection,
+    ProgramResourcesSection,
+} from "@/components/adminV2/settings/programs/ProgramDomainSections";
 
 const ENDPOINT = "/api/admin/configuration/programs";
 
@@ -157,16 +170,20 @@ async function postAction(body: Record<string, unknown>): Promise<Record<string,
     return json;
 }
 
+function programSectionForRuntime(section: ConfigurationDetailSection): ProgramConfigurationSection {
+    return normalizeProgramConfigurationSection(section);
+}
+
 export default function ProgramsPublicationWorkspace(props: {
     initialProgramId?: string | null;
-    initialSection?: ConfigurationDetailSection;
+    initialSection?: ProgramConfigurationSection;
 }) {
     const router = useRouter();
     const [snapshot, setSnapshot] = useState<ProgramPublicationSnapshot | null>(null);
     const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
         props.initialProgramId?.trim() || null,
     );
-    const [activeSection, setActiveSection] = useState<ConfigurationDetailSection>(
+    const [activeSection, setActiveSection] = useState<ProgramConfigurationSection>(
         props.initialSection ?? "overview",
     );
     const [form, setForm] = useState<DraftForm | null>(null);
@@ -293,7 +310,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 label: item.nextLabel,
                 reason: item.consequence,
                 group: "fix" as const,
-                onClick: () => setActiveSection(item.section),
+                onClick: () => setActiveSection(programSectionForRuntime(item.section)),
             }));
         if (canManage && viewModel.runtime.publication.canPublish) {
             actions.push({
@@ -301,7 +318,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 label: "Publish working draft",
                 reason: `${viewModel.runtime.publication.activeRevisionLabel} remains active until publication.`,
                 group: "next",
-                onClick: () => setActiveSection("draft"),
+                onClick: () => setActiveSection("definition"),
             });
         } else if (canManage && viewModel.runtime.publication.hasUnpublishedChanges) {
             actions.push({
@@ -309,7 +326,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 label: "Review working draft",
                 reason: "Validate the draft before publishing.",
                 group: "next",
-                onClick: () => setActiveSection("draft"),
+                onClick: () => setActiveSection("definition"),
             });
         }
         if (canManage) {
@@ -317,7 +334,7 @@ export default function ProgramsPublicationWorkspace(props: {
                 id: "edit-configuration-draft",
                 label: "Edit working draft",
                 group: "manage",
-                onClick: () => setActiveSection("draft"),
+                onClick: () => setActiveSection("definition"),
             }, {
                 id: "manage-configuration-assignment",
                 label: "Manage assignments",
@@ -346,26 +363,36 @@ export default function ProgramsPublicationWorkspace(props: {
             : null;
     const visibleDefinition: ProgramDraft | ProgramRevision | null =
         activeRevision ?? selectedProgram?.draft ?? null;
-    const tabs: ConfigDetailTab[] =
+    const tabs: ConfigDetailTab<ProgramConfigurationSection>[] =
         viewModel
             ? [
                   { key: "overview", label: "Overview" },
                   {
-                      key: "draft",
-                      label: "Working draft",
+                      key: "definition",
+                      label: "Definition",
                       attentionCount: viewModel.runtime.attention.filter((item) => item.section === "draft").length,
+                  },
+                  { key: "requirements", label: "Requirements" },
+                  { key: "resources", label: "Resources" },
+                  { key: "availability", label: "Availability" },
+                  { key: "offerings", label: "Offerings" },
+                  { key: "pricing", label: "Pricing" },
+                  {
+                      key: "publication",
+                      label: "Publication",
+                      attentionCount: viewModel.runtime.attention.filter((item) => item.section === "distribution").length,
                   },
                   {
                       key: "assignment",
                       label: "Assignments",
                       attentionCount: viewModel.runtime.attention.filter((item) => item.section === "assignment").length,
                   },
-                  {
-                      key: "distribution",
-                      label: "Distribution",
-                      attentionCount: viewModel.runtime.attention.filter((item) => item.section === "distribution").length,
-                  },
                   { key: "history", label: "History" },
+                  {
+                      key: "attention",
+                      label: "Attention",
+                      attentionCount: viewModel.runtime.attention.filter((item) => item.grade !== "good").length,
+                  },
               ]
             : [];
     const revisionLabelByPublicationId = new Map(
@@ -516,9 +543,9 @@ export default function ProgramsPublicationWorkspace(props: {
                                             viewModel.runtime.assignment.label,
                                         ]}
                                         actions={
-                                            canManage && activeSection !== "draft" ?
+                                            canManage && activeSection !== "definition" ?
                                                 <ConfigurationSecondaryButton
-                                                    onClick={() => setActiveSection("draft")}
+                                                    onClick={() => setActiveSection("definition")}
                                                     data-testid="program-edit-draft"
                                                 >
                                                     Edit working draft
@@ -546,7 +573,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                             purpose: "This Program defines a reusable service the Organization can make available across Locations.",
                                             ownership: "The Organization owns the published definition. Each assigned Location decides whether to offer it and owns local delivery details.",
                                         }}
-                                        onOpenSection={setActiveSection}
+                                        onOpenSection={(section) => setActiveSection(programSectionForRuntime(section))}
                                         domainSummary={
                                             <ProgramDefinitionSummary
                                                 definition={visibleDefinition}
@@ -560,7 +587,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                         }
                                         testId="program-overview"
                                     />
-                                : activeSection === "draft" ?
+                                : activeSection === "definition" ?
                                     <div className="space-y-4 pb-2" data-testid="program-draft-runtime">
                                         <ConfigWorkspaceCard
                                             title="Active revision"
@@ -744,6 +771,79 @@ export default function ProgramsPublicationWorkspace(props: {
                                             :   null}
                                         </ConfigWorkspaceCard>
                                     </div>
+                                : activeSection === "requirements" ?
+                                    <ProgramRequirementsSection
+                                        program={selectedProgram}
+                                        onEdit={() => setActiveSection("definition")}
+                                    />
+                                : activeSection === "resources" ?
+                                    <ProgramResourcesSection program={selectedProgram} snapshot={snapshot} />
+                                : activeSection === "availability" ?
+                                    <ProgramAvailabilitySection program={selectedProgram} snapshot={snapshot} />
+                                : activeSection === "offerings" ?
+                                    <ProgramOfferingsSection
+                                        program={selectedProgram}
+                                        snapshot={snapshot}
+                                        canManage={canManage}
+                                        onReload={reload}
+                                        onError={setError}
+                                    />
+                                : activeSection === "pricing" ?
+                                    <ProgramPricingSection
+                                        program={selectedProgram}
+                                        snapshot={snapshot}
+                                        canManage={canManage}
+                                        onReload={reload}
+                                        onError={setError}
+                                    />
+                                : activeSection === "publication" ?
+                                    <div className="space-y-4" data-testid="program-publication-runtime">
+                                        <ConfigWorkspaceCard
+                                            title="Publication"
+                                            description="Validate a working draft, publish an immutable revision, and review delivery evidence."
+                                        >
+                                            <div className="grid gap-3 sm:grid-cols-3">
+                                                <div className="config-runtime-object-cell">
+                                                    <p className="config-typo-field-label">Active revision</p>
+                                                    <p className="mt-1 text-sm font-semibold text-alloy-midnight">
+                                                        {viewModel.runtime.publication.activeRevisionLabel}
+                                                    </p>
+                                                </div>
+                                                <div className="config-runtime-object-cell">
+                                                    <p className="config-typo-field-label">Working draft</p>
+                                                    <p className="mt-1 text-sm font-semibold text-alloy-midnight">
+                                                        {viewModel.runtime.publication.draftLabel}
+                                                    </p>
+                                                </div>
+                                                <div className="config-runtime-object-cell">
+                                                    <p className="config-typo-field-label">Published revisions</p>
+                                                    <p className="mt-1 text-sm font-semibold text-alloy-midnight">
+                                                        {selectedProgram.revisions.length}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="mt-4 flex flex-wrap gap-2">
+                                                <ConfigurationSecondaryButton onClick={() => setActiveSection("definition")}>
+                                                    Review working draft
+                                                </ConfigurationSecondaryButton>
+                                            </div>
+                                        </ConfigWorkspaceCard>
+                                        <ConfigDistributionRuntime
+                                            runs={viewModel.runs}
+                                            revisionLabelByPublicationId={revisionLabelByPublicationId}
+                                            locationLabelById={locationLabelById}
+                                            retryingRunId={working?.startsWith("retry:") ? working.slice("retry:".length) : null}
+                                            onRetry={
+                                                canManage ?
+                                                    (runId) =>
+                                                        void run(`retry:${runId}`, () =>
+                                                            postAction({ action: "retry", runId }),
+                                                        )
+                                                :   undefined
+                                            }
+                                            testId="program-distribution-runtime"
+                                        />
+                                    </div>
                                 : activeSection === "assignment" ?
                                     <ConfigAssignmentRuntime
                                         posture={viewModel.runtime.assignment}
@@ -853,23 +953,8 @@ export default function ProgramsPublicationWorkspace(props: {
                                                 </>
                                         }
                                     />
-                                : activeSection === "distribution" ?
-                                    <ConfigDistributionRuntime
-                                        runs={viewModel.runs}
-                                        revisionLabelByPublicationId={revisionLabelByPublicationId}
-                                        locationLabelById={locationLabelById}
-                                        retryingRunId={working?.startsWith("retry:") ? working.slice("retry:".length) : null}
-                                        onRetry={
-                                            canManage ?
-                                                (runId) =>
-                                                    void run(`retry:${runId}`, () =>
-                                                        postAction({ action: "retry", runId }),
-                                                    )
-                                            :   undefined
-                                        }
-                                        testId="program-distribution-runtime"
-                                    />
-                                :   <ConfigHistoryTimeline
+                                : activeSection === "history" ?
+                                    <ConfigHistoryTimeline
                                         entries={viewModel.history}
                                         onAction={
                                             canManage ?
@@ -884,6 +969,37 @@ export default function ProgramsPublicationWorkspace(props: {
                                         }
                                         testId="program-history-runtime"
                                     />
+                                :   <div className="space-y-4" data-testid="program-attention-runtime">
+                                        {viewModel.runtime.attention.some((item) => item.grade !== "good") ?
+                                            <ConfigAttentionPanel
+                                                items={viewModel.runtime.attention}
+                                                onResolve={(item) => {
+                                                    const runtimeItem = viewModel.runtime.attention.find(
+                                                        (candidate) => candidate.key === item.key,
+                                                    );
+                                                    setActiveSection(
+                                                        runtimeItem
+                                                            ? programSectionForRuntime(runtimeItem.section)
+                                                            : "overview",
+                                                    );
+                                                }}
+                                                testId="program-attention-list"
+                                            />
+                                        :   <ConfigWorkspaceCard
+                                                title="Configuration attention"
+                                                description="No unresolved publication, assignment, or setup issues."
+                                            >
+                                                <p className="text-sm font-semibold text-alloy-bend-pine">
+                                                    Everything looks good.
+                                                </p>
+                                            </ConfigWorkspaceCard>
+                                        }
+                                        <ConfigOperationalReadiness
+                                            percent={viewModel.runtime.readiness.percent}
+                                            areas={viewModel.runtime.readiness.areas}
+                                            testId="program-attention-readiness"
+                                        />
+                                    </div>
                                 }
                             </ConfigDetailRuntime>
                         }
@@ -949,7 +1065,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                             setCreateKey("");
                                             setCreateOpen(false);
                                         },
-                                        { afterSuccess: () => setActiveSection("draft") },
+                                        { afterSuccess: () => setActiveSection("definition") },
                                     )
                                 }
                             >

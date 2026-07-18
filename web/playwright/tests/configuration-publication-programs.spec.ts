@@ -235,6 +235,86 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
                             }]
                           : []),
                   ],
+        availability:
+            phase === "none" ? []
+            : [
+                  {
+                      id: "availability-1",
+                      programId: "program-1",
+                      programKey: "preschool",
+                      locationId: "location-1",
+                      locationLabel: "Downtown",
+                      offered: true,
+                      consumedRevisionId: "revision-1",
+                      localDescriptionOverride: "Downtown preschool",
+                      localAuthorizationEvidence: "License on file",
+                      metadata: {},
+                  },
+              ],
+        offerings: [
+            {
+                id: "offering-1",
+                org_id: "org-1",
+                program_key: "preschool",
+                label: "Full Time",
+                attendance_type: "full_time",
+                status: "active",
+                effective_start: null,
+                effective_end: null,
+                sort_order: 10,
+                is_active: true,
+                metadata: {},
+                created_at: now,
+                updated_at: now,
+            },
+        ],
+        variants: [
+            {
+                id: "variant-1",
+                org_id: "org-1",
+                offering_id: "offering-1",
+                label: null,
+                quantity_type: "days",
+                quantity_value: 5,
+                sort_order: 10,
+                is_active: true,
+                status: "active",
+                metadata: {},
+                created_at: now,
+                updated_at: now,
+            },
+        ],
+        tuitionRates: [
+            {
+                id: "rate-1",
+                org_id: "org-1",
+                location_id: null,
+                variant_id: "variant-1",
+                cadence_key: "monthly",
+                payer_type: "private_pay",
+                rate_cents: 145000,
+                is_active: true,
+                not_offered: false,
+                effective_start: null,
+                effective_end: null,
+                metadata: {},
+                created_at: now,
+                updated_at: now,
+            },
+        ],
+        policies: [
+            {
+                id: "policy-1",
+                scopeType: "program",
+                programKey: "preschool",
+                offeringId: null,
+                variantId: null,
+                policyType: "sibling_discount",
+                label: "Sibling discount",
+                description: "Organization policy",
+                active: true,
+            },
+        ],
     });
 
     page.on("console", (message) => {
@@ -371,6 +451,20 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     ).toHaveCount(0);
     await shot("03-published-revision");
 
+    await page.getByTestId("program-detail-runtime-tab-requirements").click();
+    await expect(page.getByTestId("program-requirements-runtime")).toContainText("Program requirements");
+    await shot("03a-program-requirements");
+    await page.getByTestId("program-detail-runtime-tab-resources").click();
+    await expect(page.getByTestId("program-resources-runtime")).toContainText("Resource requirements");
+    await shot("03b-program-resources");
+    await page.getByTestId("program-detail-runtime-tab-offerings").click();
+    await expect(page.getByTestId("program-offerings-runtime")).toContainText("5 days/week");
+    await shot("03c-program-offerings");
+    await page.getByTestId("program-detail-runtime-tab-pricing").click();
+    await expect(page.getByTestId("program-pricing-runtime")).toContainText("$1,450");
+    await expect(page.getByTestId("program-pricing-runtime")).toContainText("Sibling discount");
+    await shot("03d-program-pricing");
+
     await page.getByTestId("program-detail-runtime-tab-assignment").click();
     await expect(page.getByTestId("program-assignment-runtime")).toBeVisible();
     await page.getByLabel("Downtown").check();
@@ -387,7 +481,14 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     await expect(page.getByTestId("program-overview")).toBeVisible();
     await expect(page.getByTestId("program-overview")).toContainText(/failed assignment/i);
     await shot("06-attention-overview");
-    await page.getByTestId("program-detail-runtime-tab-distribution").click();
+    await page.getByTestId("program-detail-runtime-tab-availability").click();
+    await expect(page.getByTestId("program-availability-runtime")).toContainText("Offered locally");
+    await expect(page.getByTestId("program-availability-runtime")).toContainText("Local evidence present");
+    await shot("06a-program-availability");
+    await page.getByTestId("program-detail-runtime-tab-attention").click();
+    await expect(page.getByTestId("program-attention-runtime")).toContainText(/failed assignment/i);
+    await shot("06b-program-attention");
+    await page.getByTestId("program-detail-runtime-tab-publication").click();
     await expect(page.getByText("partial failure")).toBeVisible();
     await expect(page.getByText("1 succeeded · 1 failed")).toBeVisible();
     await expect(page.getByText("North Campus: This Location is no longer eligible.")).toBeVisible();

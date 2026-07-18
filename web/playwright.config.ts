@@ -13,6 +13,7 @@ export default defineConfig({
     reporter: [["line"]],
     use: {
         baseURL: process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "") || "http://127.0.0.1:3000",
+        storageState: process.env.PLAYWRIGHT_STORAGE_STATE?.trim() || undefined,
         trace: "on-first-retry",
     },
     projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

@@ -7,9 +7,17 @@ import type {
 export type ConfigurationDetailSection =
     | "overview"
     | "draft"
+    | "definition"
+    | "requirements"
+    | "resources"
+    | "availability"
+    | "offerings"
+    | "pricing"
+    | "publication"
     | "assignment"
     | "distribution"
-    | "history";
+    | "history"
+    | "attention";
 
 export type ConfigurationRuntimeAttentionGrade = "fix" | "improve" | "good";
 

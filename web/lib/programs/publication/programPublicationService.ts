@@ -11,6 +11,9 @@ import type {
     ConfigurationPublicationRecord,
     ConfigurationTargetPreview,
 } from "@/lib/configPublication/types";
+import type { TuitionRateRow } from "@/lib/commercial/tuitionRates";
+import type { ProgramOffering } from "@/lib/programs/programOfferings";
+import type { ProgramOfferingVariant } from "@/lib/programs/programOfferingVariants";
 import {
     PROGRAM_PUBLICATION_PROVIDER_KEY,
     PROGRAM_PUBLICATION_PROVIDER_VERSION,
@@ -53,6 +56,31 @@ export type ProgramAssignment = {
     deliveredByRunId: string;
 };
 
+export type ProgramAvailability = {
+    id: string;
+    programId: string | null;
+    programKey: string;
+    locationId: string;
+    locationLabel: string;
+    offered: boolean;
+    consumedRevisionId: string | null;
+    localDescriptionOverride: string | null;
+    localAuthorizationEvidence: string | null;
+    metadata: Record<string, unknown>;
+};
+
+export type ProgramPolicyRelation = {
+    id: string;
+    scopeType: string;
+    programKey: string | null;
+    offeringId: string | null;
+    variantId: string | null;
+    policyType: string;
+    label: string | null;
+    description: string | null;
+    active: boolean;
+};
+
 export type ProgramPublicationSnapshot = {
     capabilities: { canManage: boolean };
     programs: ProgramCatalogItem[];
@@ -60,6 +88,11 @@ export type ProgramPublicationSnapshot = {
     runs: ProgramDistributionRun[];
     attempts: ConfigurationDeliveryAttemptRecord[];
     assignments: ProgramAssignment[];
+    availability: ProgramAvailability[];
+    offerings: ProgramOffering[];
+    variants: ProgramOfferingVariant[];
+    tuitionRates: TuitionRateRow[];
+    policies: ProgramPolicyRelation[];
 };
 
 function stringValue(value: unknown): string {
@@ -134,6 +167,60 @@ function mapPublication(row: DbRow): ConfigurationPublicationRecord {
     };
 }
 
+function mapOffering(row: DbRow): ProgramOffering {
+    return {
+        id: stringValue(row.id),
+        org_id: stringValue(row.org_id),
+        program_key: stringValue(row.program_key),
+        label: stringValue(row.label),
+        attendance_type: row.attendance_type as ProgramOffering["attendance_type"],
+        status: row.status as ProgramOffering["status"],
+        effective_start: nullableString(row.effective_start),
+        effective_end: nullableString(row.effective_end),
+        sort_order: Number(row.sort_order ?? 100),
+        is_active: row.is_active !== false,
+        metadata: recordValue(row.metadata),
+        created_at: stringValue(row.created_at),
+        updated_at: nullableString(row.updated_at),
+    };
+}
+
+function mapVariant(row: DbRow): ProgramOfferingVariant {
+    return {
+        id: stringValue(row.id),
+        org_id: stringValue(row.org_id),
+        offering_id: stringValue(row.offering_id),
+        label: nullableString(row.label),
+        quantity_type: (row.quantity_type as ProgramOfferingVariant["quantity_type"]) ?? null,
+        quantity_value: row.quantity_value == null ? null : Number(row.quantity_value),
+        sort_order: Number(row.sort_order ?? 100),
+        is_active: row.is_active !== false,
+        status: row.status as ProgramOfferingVariant["status"],
+        metadata: recordValue(row.metadata),
+        created_at: stringValue(row.created_at),
+        updated_at: nullableString(row.updated_at),
+    };
+}
+
+function mapTuitionRate(row: DbRow): TuitionRateRow {
+    return {
+        id: stringValue(row.id),
+        org_id: stringValue(row.org_id),
+        location_id: nullableString(row.location_id),
+        variant_id: stringValue(row.variant_id),
+        cadence_key: stringValue(row.cadence_key),
+        payer_type: stringValue(row.payer_type) || "private_pay",
+        rate_cents: Number(row.rate_cents ?? 0),
+        is_active: row.is_active !== false,
+        not_offered: row.not_offered === true,
+        effective_start: nullableString(row.effective_start),
+        effective_end: nullableString(row.effective_end),
+        metadata: recordValue(row.metadata),
+        created_at: stringValue(row.created_at),
+        updated_at: nullableString(row.updated_at),
+    };
+}
+
 function assertNoError(error: { message: string } | null, operation: string): void {
     if (error) throw new Error(`${operation}: ${error.message}`);
 }
@@ -183,7 +270,14 @@ export async function loadProgramPublicationSnapshot(
     if (options.allowedSiteLocationIds != null && options.allowedSiteLocationIds.length > 0) {
         locationsQuery = locationsQuery.in("id", options.allowedSiteLocationIds);
     }
-    const [programRows, locationsResult, evidence] = await Promise.all([
+    let availabilityQuery = supabase
+        .from("location_program_categories")
+        .select("id, program_id, key, location_id, is_active, program_revision_id, local_description_override, local_authorization_evidence, metadata")
+        .eq("org_id", orgId);
+    if (options.allowedSiteLocationIds != null && options.allowedSiteLocationIds.length > 0) {
+        availabilityQuery = availabilityQuery.in("location_id", options.allowedSiteLocationIds);
+    }
+    const [programRows, locationsResult, evidence, availabilityResult, offeringsResult, policiesResult] = await Promise.all([
         loadProgramRows(supabase, orgId),
         options.allowedSiteLocationIds?.length === 0
             ? Promise.resolve({ data: [], error: null })
@@ -194,8 +288,25 @@ export async function loadProgramPublicationSnapshot(
             domainKey: "programs",
             allowedLocationIds: options.allowedSiteLocationIds,
         }),
+        options.allowedSiteLocationIds?.length === 0
+            ? Promise.resolve({ data: [], error: null })
+            : availabilityQuery,
+        supabase
+            .from("program_offerings")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("sort_order"),
+        supabase
+            .from("commercial_policies")
+            .select("id, scope_type, program_key, offering_id, variant_id, policy_type, label, description, is_active")
+            .eq("org_id", orgId)
+            .in("scope_type", ["program", "offering", "variant"])
+            .order("created_at", { ascending: false }),
     ]);
     assertNoError(locationsResult.error, "Load Locations");
+    assertNoError(availabilityResult.error, "Load Program availability");
+    assertNoError(offeringsResult.error, "Load Program offerings");
+    assertNoError(policiesResult.error, "Load Program policies");
     const locations = ((locationsResult.data ?? []) as DbRow[]).map((row) => ({
         id: stringValue(row.id),
         label: nullableString(row.label) ?? "Untitled Location",
@@ -239,6 +350,30 @@ export async function loadProgramPublicationSnapshot(
         consumedAt: consumption.consumedAt,
         deliveredByRunId: consumption.deliveredByRunId,
     }));
+    const offerings = ((offeringsResult.data ?? []) as DbRow[]).map(mapOffering);
+    const offeringIds = offerings.map((offering) => offering.id);
+    const variantsResult =
+        offeringIds.length > 0
+            ? await supabase
+                  .from("program_offering_variants")
+                  .select("*")
+                  .eq("org_id", orgId)
+                  .in("offering_id", offeringIds)
+                  .order("sort_order")
+            : { data: [], error: null };
+    assertNoError(variantsResult.error, "Load Program offering variants");
+    const variants = ((variantsResult.data ?? []) as DbRow[]).map(mapVariant);
+    const variantIds = variants.map((variant) => variant.id);
+    const ratesResult =
+        variantIds.length > 0
+            ? await supabase
+                  .from("commercial_tuition_rates")
+                  .select("*")
+                  .eq("org_id", orgId)
+                  .in("variant_id", variantIds)
+                  .order("cadence_key")
+            : { data: [], error: null };
+    assertNoError(ratesResult.error, "Load Program pricing");
 
     return {
         capabilities: { canManage: options.canManage },
@@ -247,6 +382,32 @@ export async function loadProgramPublicationSnapshot(
         runs: evidence.runs,
         attempts: evidence.attempts,
         assignments,
+        availability: ((availabilityResult.data ?? []) as DbRow[]).map((row) => ({
+            id: stringValue(row.id),
+            programId: nullableString(row.program_id),
+            programKey: stringValue(row.key),
+            locationId: stringValue(row.location_id),
+            locationLabel: locationLabelById.get(stringValue(row.location_id)) ?? "Location",
+            offered: row.is_active !== false,
+            consumedRevisionId: nullableString(row.program_revision_id),
+            localDescriptionOverride: nullableString(row.local_description_override),
+            localAuthorizationEvidence: nullableString(row.local_authorization_evidence),
+            metadata: recordValue(row.metadata),
+        })),
+        offerings,
+        variants,
+        tuitionRates: ((ratesResult.data ?? []) as DbRow[]).map(mapTuitionRate),
+        policies: ((policiesResult.data ?? []) as DbRow[]).map((row) => ({
+            id: stringValue(row.id),
+            scopeType: stringValue(row.scope_type),
+            programKey: nullableString(row.program_key),
+            offeringId: nullableString(row.offering_id),
+            variantId: nullableString(row.variant_id),
+            policyType: stringValue(row.policy_type),
+            label: nullableString(row.label),
+            description: nullableString(row.description),
+            active: row.is_active !== false,
+        })),
     };
 }
 

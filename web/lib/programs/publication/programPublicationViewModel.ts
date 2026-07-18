@@ -52,6 +52,17 @@ export function buildProgramPublicationViewModel(
     const draftHasUnpublishedChanges =
         program.latestPublication == null
         || programPayloadChecksum(program.draft) !== program.latestPublication.revision.checksum;
+    const offerings = snapshot.offerings.filter((offering) => offering.program_key === program.key);
+    const offeringIds = new Set(offerings.map((offering) => offering.id));
+    const variants = snapshot.variants.filter((variant) => offeringIds.has(variant.offering_id));
+    const variantIds = new Set(variants.map((variant) => variant.id));
+    const hasRequirementDefinition =
+        Object.keys(program.draft.audience).length > 0
+        || Object.keys(program.draft.eligibility).length > 0
+        || program.draft.qualificationRequirements.length > 0;
+    const availability = snapshot.availability.filter(
+        (item) => item.programId === program.id || item.programKey === program.key,
+    );
     const runtime = deriveConfigurationRuntimeModel({
         objectLabel: "Program",
         draftStatus: program.draft.status,
@@ -65,19 +76,52 @@ export function buildProgramPublicationViewModel(
                 key: "identity",
                 label: "Program identity",
                 complete: Boolean(program.key.trim() && program.draft.label.trim()),
-                section: "draft",
+                section: "definition",
+            },
+            {
+                key: "requirements",
+                label: "Program requirements",
+                complete: hasRequirementDefinition,
+                section: "requirements",
+            },
+            {
+                key: "resources",
+                label: "Resource requirement",
+                complete: Boolean(program.draft.requiredResourceType?.trim()),
+                section: "resources",
+            },
+            {
+                key: "offerings",
+                label: "Offering structure",
+                complete: offerings.length > 0 && variants.length > 0,
+                section: "offerings",
+            },
+            {
+                key: "pricing",
+                label: "Related pricing",
+                complete:
+                    variants.length === 0
+                        ? null
+                        : snapshot.tuitionRates.some((rate) => variantIds.has(rate.variant_id)),
+                section: "pricing",
             },
             {
                 key: "publication",
                 label: "Published revision",
                 complete: program.latestPublication != null,
-                section: "draft",
+                section: "publication",
             },
             {
                 key: "assignment",
                 label: "Location assignment",
                 complete: assignments.length > 0,
                 section: "assignment",
+            },
+            {
+                key: "availability",
+                label: "Location availability",
+                complete: assignments.length === 0 ? null : availability.length > 0,
+                section: "availability",
             },
         ],
     });
