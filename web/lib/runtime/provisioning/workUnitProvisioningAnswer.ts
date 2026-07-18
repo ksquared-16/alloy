@@ -78,6 +78,7 @@ import {
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { queueRowSurfaceIdForDepartment } from "@/lib/presentation/runtime/workUnitSurfaceConfigFetch";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
+import { cachedConfigRead } from "./configReadCache";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
 export const PROVISIONING_ROW_PAGE_CAP = 100;
@@ -316,14 +317,25 @@ export async function composeWorkUnitProvisioningAnswer(
     // `workUnitRouteSlugToKey` is the canonical mapping — a raw slug lookup matches nothing and
     // turns every Work Unit into a terminal error.
     const workUnitKey = workUnitRouteSlugToKey(req.workUnitSlug.trim());
-    const { data: wuRow, error: wuErr } = await req.supabase
-        .from("work_units")
-        .select("id, key, name, org_id, department_id, queue_definition")
-        .eq("org_id", req.orgId)
-        .eq("key", workUnitKey || req.workUnitSlug)
-        .maybeSingle();
+    // Work-unit identity is CONFIG (rows change only on admin edit). Cache the successful row
+    // tenant-keyed; a transport error throws so the cache evicts (never caches a failure) and the
+    // `.then` maps it back to the same honest `fail(...)` the raw read produced.
+    const wuLookup = await cachedConfigRead(`wu:${req.orgId}:${workUnitKey || req.workUnitSlug}`, async () => {
+        const { data, error } = await req.supabase
+            .from("work_units")
+            .select("id, key, name, org_id, department_id, queue_definition")
+            .eq("org_id", req.orgId)
+            .eq("key", workUnitKey || req.workUnitSlug)
+            .maybeSingle();
+        if (error) throw new Error(error.message);
+        return data;
+    }).then(
+        (row) => ({ row, error: null as string | null }),
+        (e: unknown) => ({ row: null, error: e instanceof Error ? e.message : String(e) }),
+    );
     timings.work_unit_ms = now() - tWu;
-    if (wuErr) return fail("records_unavailable", `work unit lookup failed: ${wuErr.message}`);
+    if (wuLookup.error) return fail("records_unavailable", `work unit lookup failed: ${wuLookup.error}`);
+    const wuRow = wuLookup.row;
     if (!wuRow) return fail("work_unit_not_found", `no work unit "${req.workUnitSlug}" in this tenant`);
     const workUnit = { id: String(wuRow.id), key: String(wuRow.key), name: String(wuRow.name) };
 
@@ -345,18 +357,36 @@ export async function composeWorkUnitProvisioningAnswer(
     // The department config AND its work units in ONE parallel round trip. The units are Settlement-only
     // (they resolve canonical count locations, D5); fetching them alongside the config adds no latency,
     // and a failure here degrades Settlement to `unavailable` without ever failing the operational answer.
-    const [deptResult, deptWorkUnitsResult] = await Promise.all([
-        req.supabase.from("departments").select("id, metadata").eq("id", wuRow.department_id).maybeSingle(),
-        req.supabase
-            .from("work_units")
-            .select("id, key, name, department_id, is_active, sort_order, queue_definition")
-            .eq("org_id", req.orgId)
-            .eq("department_id", wuRow.department_id),
-    ]);
-    const { data: deptRow, error: deptErr } = deptResult;
-    if (deptErr) return fail("records_unavailable", `configuration lookup failed: ${deptErr.message}`, workUnit);
-    // Settlement-only: never gates commit. A fetch error here just yields no units → `unavailable`.
-    const deptWorkUnits = (deptWorkUnitsResult.error ? [] : deptWorkUnitsResult.data ?? []) as WorkViewCanonicalLocationWorkUnitRow[];
+    // Department config + its work units are CONFIG — cache tenant+department-keyed. The `departments`
+    // error still fails the answer (throw → cache evicts → `.then` maps to the same `fail`); the
+    // Settlement-only work-unit list degrades to `[]` on its own error exactly as before, and that
+    // (empty, non-throwing) result is cacheable.
+    const deptConfig = await cachedConfigRead(`dept:${req.orgId}:${String(wuRow.department_id)}`, async () => {
+        const [deptResult, deptWorkUnitsResult] = await Promise.all([
+            req.supabase.from("departments").select("id, metadata").eq("id", wuRow.department_id).maybeSingle(),
+            req.supabase
+                .from("work_units")
+                .select("id, key, name, department_id, is_active, sort_order, queue_definition")
+                .eq("org_id", req.orgId)
+                .eq("department_id", wuRow.department_id),
+        ]);
+        if (deptResult.error) throw new Error(deptResult.error.message);
+        return {
+            deptRow: deptResult.data,
+            deptWorkUnits: (deptWorkUnitsResult.error ? [] : deptWorkUnitsResult.data ?? []) as WorkViewCanonicalLocationWorkUnitRow[],
+        };
+    }).then(
+        (v) => ({ ...v, error: null as string | null }),
+        (e: unknown) => ({
+            deptRow: null as { id: unknown; metadata: unknown } | null,
+            deptWorkUnits: [] as WorkViewCanonicalLocationWorkUnitRow[],
+            error: e instanceof Error ? e.message : String(e),
+        }),
+    );
+    if (deptConfig.error) return fail("records_unavailable", `configuration lookup failed: ${deptConfig.error}`, workUnit);
+    const deptRow = deptConfig.deptRow;
+    // Settlement-only: never gates commit. A fetch error above just yields no units → `unavailable`.
+    const deptWorkUnits = deptConfig.deptWorkUnits;
 
     const builder = lifecycleBuilderFromDepartmentMetadata(deptRow?.metadata);
     const process = activeLifecycleProcess(builder);
@@ -407,15 +437,23 @@ export async function composeWorkUnitProvisioningAnswer(
     const presentationPromise = (async () => {
         // The queue-row layout and the header layout are INDEPENDENT DB reads — fetch them concurrently,
         // then compose (compose is in-memory). Collapses the two sequential ~700ms + ~335ms reads into one.
+        // Both are PUBLISHED CONFIG (queue-row surface layout + org header layout), re-read on every
+        // answer though they change only on an admin publish. Cache them tenant-keyed with a short TTL
+        // so a navigation burst / warm re-visit collapses to one read each. This is the presentation
+        // branch's dominant cost (~700ms + ~335ms). Live records are NEVER cached.
         const [rowLayout, headerLayoutRecords] = await Promise.all([
-            resolveQueueRowLayoutServer({
-                supabase: req.supabase,
-                orgId: req.orgId,
-                surfaceId: queueRowSurfaceId,
-                processKeyHint: process.key,
-                workViewId: activeView.id,
-            }),
-            listWorkUnitHeaderLayoutRecords(req.supabase, req.orgId).catch(() => null),
+            cachedConfigRead(`qrl:${req.orgId}:${queueRowSurfaceId}:${process.key}:${activeView.id}`, () =>
+                resolveQueueRowLayoutServer({
+                    supabase: req.supabase,
+                    orgId: req.orgId,
+                    surfaceId: queueRowSurfaceId,
+                    processKeyHint: process.key,
+                    workViewId: activeView.id,
+                }),
+            ),
+            cachedConfigRead(`hdr:${req.orgId}`, () =>
+                listWorkUnitHeaderLayoutRecords(req.supabase, req.orgId),
+            ).catch(() => null),
         ]);
         return resolveOperationalPresentation({
             supabase: req.supabase,
