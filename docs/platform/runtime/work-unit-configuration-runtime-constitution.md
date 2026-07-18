@@ -100,10 +100,32 @@ responsibility and changing Workspace behavior. That is out of scope and is not 
 - **Browser evidence (P2-H)** — `playwright/tests/p2-queue-cert.spec.ts`: WU.QUEUE + rows render via the Presentation Runtime; selected-row Runtime-owned (`data-queue-row-active`, 1 active); Work View change re-resolves (`new_leads → new_work_view_2`); **0 drawer hosts inside WU.SURFACE**; Settings → Surfaces Queue Rows section is the config owner. 5 screenshots captured.
 - **Not live-captured, certified by unit suite instead** — authored per-row variant override and the empty-queue terminal (this tenant authors no queue variants and every view has rows; per the constraint, no uncontrolled tenant config was mutated to manufacture them). Covered by `queueRowVariantApplicability.test.ts` (7) + the authoritative-empty model path.
 
-> **VERDICT — WORK UNIT QUEUE CONFIGURATION RUNTIME · CUT OVER · CERTIFIED · DOCUMENTED · LEGACY QUEUE OWNERSHIP DELETED.**
+**P2-V — config-consumption verification (Product concern resolved):**
+A Product review asked whether the rendered queue rows actually come from the published Queue Row Surface.
+Ground truth from the D1 answer: `provenance.queueRowSource="published"`, `queuePublished=true`,
+`fallbackSlots=[]`, with operator-authored slot labels (`subject`→"Household name", `status`→"Stage") that
+the hard-coded fallback never produces — **config is authoritative**. The apparent "mismatch" was an
+**observability gap**: `workUnitSurfaceModelFromSnapshot` dropped the provenance, so the resolved
+surface/source/variant were invisible in the DOM. Fixed by threading provenance to the model and emitting
+`data-queue-row-source` / `data-queue-surface-id` / `data-queue-row-resolved-source` / `data-queue-row-variant`
+on `QueueRegion`. The New Leads queue now renders `data-queue-row-source="published"`,
+`data-queue-surface-id="queue-row-{dept}-{proc}"`, `data-queue-row-variant="crm_compact"` — **the queue proves
+its own source in the browser** (`p2v-final-cert.spec.ts`).
+- **Compact anatomy is by design.** The published surface's rich builder canvas is mapped onto the fixed
+  compact 6-slot `CondensedQueueRow` (`mapQueueRowSurfaceToCompactConfig`) — config drives slot visibility,
+  labels, and field→slot assignment (via `builderSlot` canvas region); the 4-line card structure is a
+  reusable component implementation. Only field keys in `COMPACT_ROW_EFFECTIVE_FIELD_KEYS` are runtime-effective.
+- **Faithful even to config redundancy.** The New Leads contact line renders the phone twice
+  (`… 9652 · … 9652`) because the published surface's contact slot carries a redundant field — proof-positive
+  the render mirrors config. Fix belongs to the operator in the builder (de-dupe the field); no tenant config
+  was mutated here.
+
+> **VERDICT — WORK UNIT QUEUE CONFIGURATION RUNTIME · CUT OVER · CERTIFIED · DOCUMENTED · LEGACY QUEUE OWNERSHIP DELETED · CONFIG CONSUMPTION BROWSER-PROVABLE.**
 > One owner per responsibility (applicability, per-row variant, rendering, runtime/data); the ad-hoc
 > selector and the drawer follower are deleted; docs, performance (no regression), and browser evidence
 > are recorded. Request ownership is single-owner with duplicates deduped and independent scopes preserved.
+> The rendered queue is driven by the published Queue Row Surface and now declares its resolved
+> surface/source/variant in the DOM.
 
 ### Focus Panel  — **CUT OVER & CERTIFIED (P3)**
 | Aspect | Owner |
