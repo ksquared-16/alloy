@@ -188,6 +188,22 @@
       "args": "<slot|name|worktree>",
       "reads": true, "writes": false, "network": false, "process_control": false,
       "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-reservations": {
+      "summary": "R3 capacity reservation records (control-plane claims). Read-only; the mutating executor alloy-runtime-actuate is OUTSIDE alloy-ro and never reachable here.",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-executions": {
+      "summary": "R3 execution lifecycle records (state, typed result, retryable, desired-state-reached). Read-only; contains no secrets or provider output.",
+      "args": "[execution-id]",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-actuation-capacity": {
+      "summary": "Reservation-aware capacity overlay: configured max, observed active, held reservation units, effective remaining. R2 owns the max/active formula; R3 only subtracts live held reservations. Read-only.",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
     }
   },
   "excluded_from_surface": {

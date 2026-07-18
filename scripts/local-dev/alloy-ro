@@ -29,6 +29,8 @@ source "${SCRIPT_DIR}/lib/ro.sh"
 source "${SCRIPT_DIR}/lib/runtime-core.sh"
 # shellcheck source=lib/admission-core.sh
 source "${SCRIPT_DIR}/lib/admission-core.sh"
+# shellcheck source=lib/actuation-core.sh
+source "${SCRIPT_DIR}/lib/actuation-core.sh"
 
 ALLOY_RO_CAPABILITIES_FILE="${SCRIPT_DIR}/lib/ro-capabilities.json"
 
@@ -69,6 +71,9 @@ Verbs (all read-only; safe under `Bash(alloy-ro *)`):
   runtime-admission <tgt>  Live admission decision for a worktree (ephemeral; declares, never provisions).
   runtime-intent <tgt>     Inspect a recorded runtime intent for a worktree (or report none).
   runtime-explain <tgt>    Posture resolution + admission + observed runtime state, separated.
+  runtime-reservations     R3 capacity reservations (control-plane claims; read-only).
+  runtime-executions [id]  R3 execution lifecycle records (read-only).
+  runtime-actuation-capacity  Reservation-aware capacity overlay (read-only).
   help                     This help.
   version                  Print surface version.
 
@@ -990,6 +995,103 @@ JSON
 }
 
 # ---------------------------------------------------------------------------
+# Runtime Actuation V1 (R3 — read-only inspection of R3-owned records)
+#
+# These verbs report R3 reservation/execution/attachment records and the
+# reservation-aware capacity overlay. They NEVER actuate, reserve, claim, or
+# mutate anything — the mutating executor is alloy-runtime-actuate (OUTSIDE alloy-ro).
+# ---------------------------------------------------------------------------
+verb_runtime_reservations() {
+  [[ $# -eq 0 ]] || _ro_die_usage "runtime-reservations takes no arguments"
+  alloy_act_init
+  local rid first=1
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{"reservations":['
+    while IFS= read -r rid; do
+      [[ -n "$rid" ]] || continue
+      [[ "$first" -eq 1 ]] || printf ','; first=0
+      alloy_act_emit_reservation_json "$rid"
+    done < <(alloy_act_reservation_ids)
+    printf ']}\n'
+  else
+    printf 'Runtime reservations (capacity claims; R3 control plane)\n'
+    printf '  %-16s %-10s %-5s %-24s %s\n' STATE UNITS LIVE NAMESPACE ID
+    local any=0
+    while IFS= read -r rid; do
+      [[ -n "$rid" ]] || continue; any=1
+      local live=no; alloy_act_reservation_is_live "$rid" 2>/dev/null && live=yes
+      printf '  %-16s %-10s %-5s %-24.24s %s\n' \
+        "$(alloy_act_resv_get "$rid" ALLOY_RESV_STATE)" \
+        "$(alloy_act_resv_get "$rid" ALLOY_RESV_CAPACITY_UNITS)" "$live" \
+        "$(alloy_act_resv_get "$rid" ALLOY_RESV_TARGET_NAMESPACE)" "$rid"
+    done < <(alloy_act_reservation_ids)
+    [[ "$any" -eq 0 ]] && printf '  (none)\n'
+  fi
+  return "$EX_OK"
+}
+
+verb_runtime_executions() {
+  [[ $# -le 1 ]] || _ro_die_usage "runtime-executions takes an optional execution-id"
+  alloy_act_init
+  if [[ $# -eq 1 ]]; then
+    alloy_act_exec_exists "$1" || { printf 'alloy-ro: no execution: %s\n' "$1" >&2; exit "$EX_NOTFOUND"; }
+    if [[ "$JSON" -eq 1 ]]; then alloy_act_emit_execution_json "$1"; printf '\n'
+    else
+      local e="$1"
+      printf 'Runtime execution %s\n' "$e"
+      printf '  operation:   %s\n' "$(alloy_act_exec_get "$e" ALLOY_EXEC_OPERATION)"
+      printf '  worktree:    %s\n' "$(alloy_act_exec_get "$e" ALLOY_EXEC_WORKTREE)"
+      printf '  namespace:   %s\n' "$(alloy_act_exec_get "$e" ALLOY_EXEC_TARGET_NAMESPACE)"
+      printf '  state:       %s\n' "$(alloy_act_exec_get "$e" ALLOY_EXEC_STATE)"
+      printf '  result:      %s (retryable=%s)\n' "$(alloy_act_exec_get "$e" ALLOY_EXEC_RESULT_CODE)" "$(alloy_act_exec_get "$e" ALLOY_EXEC_RETRYABLE)"
+      printf '  desired met: %s\n' "$(alloy_act_exec_get "$e" ALLOY_EXEC_DESIRED_STATE_REACHED)"
+      printf '  adapter:     %s\n' "$(alloy_act_exec_get "$e" ALLOY_EXEC_ADAPTER)"
+      printf '  attempts:    %s\n' "$(alloy_act_exec_get "$e" ALLOY_EXEC_ATTEMPT_COUNT)"
+    fi
+    return "$EX_OK"
+  fi
+  local eid first=1
+  if [[ "$JSON" -eq 1 ]]; then
+    printf '{"executions":['
+    while IFS= read -r eid; do
+      [[ -n "$eid" ]] || continue
+      [[ "$first" -eq 1 ]] || printf ','; first=0
+      alloy_act_emit_execution_json "$eid"
+    done < <(alloy_act_execution_ids)
+    printf ']}\n'
+  else
+    printf 'Runtime executions (R3 execution lifecycle records)\n'
+    printf '  %-12s %-11s %-24s %-22s %s\n' OPERATION STATE NAMESPACE RESULT ID
+    local any=0
+    while IFS= read -r eid; do
+      [[ -n "$eid" ]] || continue; any=1
+      printf '  %-12s %-11s %-24.24s %-22.22s %s\n' \
+        "$(alloy_act_exec_get "$eid" ALLOY_EXEC_OPERATION)" \
+        "$(alloy_act_exec_get "$eid" ALLOY_EXEC_STATE)" \
+        "$(alloy_act_exec_get "$eid" ALLOY_EXEC_TARGET_NAMESPACE)" \
+        "$(alloy_act_exec_get "$eid" ALLOY_EXEC_RESULT_CODE)" "$eid"
+    done < <(alloy_act_execution_ids)
+    [[ "$any" -eq 0 ]] && printf '  (none)\n'
+  fi
+  return "$EX_OK"
+}
+
+verb_runtime_actuation_capacity() {
+  [[ $# -eq 0 ]] || _ro_die_usage "runtime-actuation-capacity takes no arguments"
+  alloy_act_init
+  if [[ "$JSON" -eq 1 ]]; then alloy_act_emit_capacity_json; printf '\n'
+  else
+    printf 'Runtime actuation capacity (reservation-aware overlay)\n'
+    printf '  configured max:        %s\n' "$ALLOY_RT_MAX_ACTIVE"
+    printf '  observed active:       %s\n' "$(alloy_rt_active_runtime_count)"
+    printf '  held reservation units:%s\n' "$(alloy_act_held_capacity_units)"
+    printf '  effective remaining:   %s\n' "$(alloy_act_effective_remaining)"
+    printf '  (R2 owns max/active; R3 subtracts live held reservations. Reads only.)\n'
+  fi
+  return "$EX_OK"
+}
+
+# ---------------------------------------------------------------------------
 # argument parsing & dispatch (fail closed)
 # ---------------------------------------------------------------------------
 main() {
@@ -1030,6 +1132,9 @@ main() {
     runtime-admission)  verb_runtime_admission "${rest[@]}" ;;
     runtime-intent)     verb_runtime_intent "${rest[@]}" ;;
     runtime-explain)    verb_runtime_explain "${rest[@]}" ;;
+    runtime-reservations)        verb_runtime_reservations "${rest[@]}" ;;
+    runtime-executions)          verb_runtime_executions "${rest[@]}" ;;
+    runtime-actuation-capacity)  verb_runtime_actuation_capacity "${rest[@]}" ;;
     help)            usage ;;
     version)         printf 'alloy-ro %s\n' "$ALLOY_RO_VERSION" ;;
     *)               _ro_die_usage "unknown verb: $verb" ;;
