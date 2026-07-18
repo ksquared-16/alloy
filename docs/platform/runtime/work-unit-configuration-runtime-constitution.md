@@ -73,8 +73,22 @@ explicitly **not** a Work Unit Header authority.
 - `mapQueueRowSurfaceToCompactConfig(null)` · builtin default envelopes — canonical (not legacy), the "never unavailable" guarantee.
 
 **Queue request ownership (P2-E):**
-- `work-unit-queue-summaries` — **deterministically 1** via `dedupeAdminFetch` (verified 1/1/1/1). One owner.
-- `queue-view-totals` — one canonical fetcher `fetchQueueViewTotalsBatched` (scope-keyed in-flight dedup + 4s cache). The residual second request is a **distinct-scope consumer** (workspace surface vs work-unit settlement), not a duplicate of identical data; collapsing it would change Workspace behavior (out of P2 scope). One owner, two legitimate scopes.
+
+The acceptance criterion is **one owner**, not one HTTP request. A request is a **duplicate** — and must
+deduplicate — only when it carries the **same responsibility and the same target set** as another. Two
+requests that carry **different target sets representing different responsibilities are independent
+scopes**, not duplicates, and must NOT be artificially collapsed (collapsing them would delete a
+legitimate responsibility). The ledger therefore classifies each request as *duplicate* (→ dedupe to 1)
+or *independent scope* (→ one owner, N legitimate requests).
+
+| Request | Owner | Classification | Requests |
+|---|---|---|---|
+| `work-unit-queue-summaries` | `dedupeAdminFetch` | **duplicate** (identical responsibility+targets) → deduped | deterministically **1** (verified 1/1/1/1) |
+| `queue-view-totals` | `fetchQueueViewTotalsBatched` (scope-keyed in-flight dedup + 4 s cache) | **independent scope** — Workspace totals (all views) vs Work-Unit totals (this unit): different target sets, different responsibilities | **1 per scope** (deduped *within* each scope) |
+
+`queue-view-totals` is a single owner serving two legitimate scopes. Forcing it to one HTTP request would
+stop the Workspace surface fetching its own totals when a Work Unit is active — deleting a distinct
+responsibility and changing Workspace behavior. That is out of scope and is not a dedup defect.
 
 ### Focus Panel  — pending **P3** (subject ownership already cut over)
 | Aspect | Owner |
@@ -125,7 +139,10 @@ from configuration (retire hard-coded `editable:` flags), wire/retire `fieldEdit
 2. Former owner deleted (files/symbols), stale tests/comments/docs removed.
 3. Published-only, deterministic fallback, BP/Work-View applicability, order-independence, no-stale.
 4. Browser evidence: Settings → Surfaces variant · Work Unit rendering it · applicability · fallback.
-5. Production-like performance comparison vs baseline — no material regression; request/duplicate/payload accounted.
+5. Production-like performance comparison vs baseline — no material regression. Every request accounted
+   for and classified **duplicate** (must dedupe to 1) vs **independent scope** (one owner, N legitimate
+   requests with different target sets). The bar is **one owner per responsibility**, not one HTTP request;
+   distinct responsibilities are never artificially collapsed.
 6. Constitutional audit entry (current owner, deleted owner, files, repo-search proof, docs, perf, evidence).
 
 ---
