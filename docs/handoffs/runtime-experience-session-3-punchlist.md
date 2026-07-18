@@ -55,13 +55,23 @@ label "Lead count", `rolling_30d` window). Resolved live via `/api/admin/metrics
 - **workspace scope** (no `work_unit_id`) → **7** (process-wide 30d lead count)
 - **work-unit scope** (`work_unit_id=587de5bc…`) → **6** (this lens's 30d lead count)
 
-Both are FRESH and CORRECT for their scope — the same key, two scopes, the **same label**. So the
-7-vs-6 is not a staleness/invalidation defect; it is (a) two surfaces intentionally showing
-different scopes under an identical label, and (b) a **mislabel** — a lead-count metric titled
-"Pipeline Children". **Resolution is a product decision** (align scope, or relabel to disambiguate
-scope, or fix the label). The separate `#8` items "mutation invalidation / targeted refresh" are a
-real but distinct concern (metrics don't auto-refresh after a mutation) — implementable once the
-scope/label direction is set.
+**Kelly: 6 is authoritative** (an opportunity + a child were deleted manually in Supabase). Root
+cause refined: `enrollment.lead_count` is a **deprecated alias → active-lead *participant* count**
+(`resolveEnrollmentLeadCountCompat` → `countActiveLeadParticipants` over the Enrollment projection
+of **`process_instances`**, not opportunities). Org scope (no `work_unit_id`) counts every active
+lead participant in the org → **7**; the work-unit scope → **6**. Because the count is over
+`process_instances`, the manual Supabase deletion of the opportunity + child most likely left an
+**orphaned `process_instance`** that is still "active" (not enrolled/withdrawn/not_enrolling), so the
+org rollup keeps counting it while the work-unit lens (matched by context/department) does not.
+
+**Not a live-query bug — stale orphaned data.** Two ways to make the org rollup agree with 6:
+1. **Data cleanup (Kelly's domain):** delete/withdraw the orphaned `process_instance` whose
+   opportunity/child was removed (same Supabase path as the earlier deletions).
+2. **Defensive projection filter (code):** exclude `process_instances` whose opportunity/subject no
+   longer resolves — a broader change to operator-facing metric logic; do only with Kelly's sign-off.
+
+The separate `#8` items "mutation invalidation / targeted refresh" (metrics don't auto-refresh after
+an in-app mutation) remain a real, distinct, implementable concern.
 
 A1/A5 show only on a genuinely slow load (warm dev resolves before the fallback streams) — confirm
 on a hard refresh. A2/A4 are verified in-browser.
