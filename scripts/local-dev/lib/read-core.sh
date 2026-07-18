@@ -38,6 +38,8 @@ ALLOY_RC_DEFAULT_WEB_DIR="web"
 ALLOY_RC_DEFAULT_FIRST_AGENT_PORT="3011"
 ALLOY_RC_DEFAULT_CANONICAL_PORT="3000"
 ALLOY_RC_DEFAULT_MAX_AGENTS="6"
+# Runtime Resource Orchestration V1 — observational capacity ceiling (default 2).
+ALLOY_RC_DEFAULT_MAX_ACTIVE_RUNTIMES="2"
 
 alloy_rc_default_runtime_root() {
   printf '%s/.local/state/alloy-dev' "$HOME"
@@ -57,7 +59,7 @@ ALLOY_WORKER_LIFECYCLE ALLOY_PROVIDER_SESSION_ID ALLOY_PAUSE_RECORDED_AT ALLOY_F
 # Canonical read-only inspection verb set — the ONE source the capability
 # manifest and the alloy-ro dispatcher are both validated against.
 # ===========================================================================
-ALLOY_RC_RO_VERBS="root runtime-paths worker-status agent-status dev-status agent-evidence capabilities"
+ALLOY_RC_RO_VERBS="root runtime-paths worker-status agent-status dev-status agent-evidence capabilities runtime-list runtime-status runtime-capacity runtime-discover runtime-containers"
 ALLOY_RC_CAPABILITY_KEYS="reads writes network process_control git_mutation deletion arbitrary_execution credential_access"
 
 # ===========================================================================

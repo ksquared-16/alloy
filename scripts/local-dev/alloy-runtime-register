@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# alloy-runtime-register — explicitly record a DISCOVERED runtime into the registry.
+#
+# This is the ONLY mutating command in Runtime Registry & Inspection V1, and it is
+# deliberately OUTSIDE alloy-ro (which stays strictly read-only). It writes a
+# single registry record from a live, read-only discovery snapshot. It:
+#   - never starts/stops/removes/mutates any container (discovery is read-only);
+#   - never claims ownership — owner/class default to "unknown" unless you pass
+#     them explicitly, and inferred association is recorded as evidence only;
+#   - never silently rewrites an existing record (refuses without --force);
+#   - writes exactly one file: <runtime-root>/runtimes/<sanitized-namespace>.env.
+#
+# It does NOT provision, attach, lease, reclaim, or share runtimes. Those are
+# later phases and are out of scope.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/runtime-core.sh
+source "${SCRIPT_DIR}/lib/runtime-core.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-runtime-register <project-namespace> [--owner <mission-key>]
+                              [--class <class>] [--force]
+
+Records a currently-discovered runtime into the registry. Read-only toward Docker;
+writes one registry file. Owner and class are NOT inferred — they default to
+"unknown" unless given explicitly.
+
+  --owner <mission-key>   persisted owner identity (default: unknown)
+  --class <class>         unknown | shared-readonly | shared-mutable |
+                          dedicated-disposable | dedicated-certified (default: unknown)
+  --force                 overwrite an existing registry record
+
+Inspect first with:  alloy-ro runtime-discover   /   alloy-ro runtime-list
+This command does not provision, start, stop, attach, or reclaim runtimes.
+EOF
+}
+
+main() {
+  [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 0; }
+  local ns="" owner="unknown" class="unknown" force=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --owner) [[ $# -ge 2 ]] || alloy_die "--owner requires a value"; owner="$2"; shift 2 ;;
+      --class) [[ $# -ge 2 ]] || alloy_die "--class requires a value"; class="$2"; shift 2 ;;
+      --force) force=1; shift ;;
+      --*) alloy_die "unknown option: $1" ;;
+      *) [[ -z "$ns" ]] || alloy_die "unexpected argument: $1"; ns="$1"; shift ;;
+    esac
+  done
+  [[ -n "$ns" ]] || { usage; exit 2; }
+
+  # Validate owner/class are safe literals (parsed back by the Shared Read Core).
+  [[ "$owner" == "unknown" || "$owner" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || alloy_die "invalid --owner '$owner'"
+  case "$class" in
+    unknown|shared-readonly|shared-mutable|dedicated-disposable|dedicated-certified) ;;
+    *) alloy_die "invalid --class '$class'" ;;
+  esac
+
+  alloy_load_config
+  alloy_rt_init
+
+  # The namespace must be a currently-discovered runtime (we register reality).
+  local found=0 d
+  while IFS= read -r d; do [[ "$d" == "$ns" ]] && found=1; done < <(alloy_rt_discovered_namespaces)
+  [[ "$found" -eq 1 ]] || alloy_die "namespace '$ns' is not a currently-discovered runtime (see: alloy-ro runtime-discover)"
+
+  # Snapshot the read-only discovery for this namespace.
+  local observed ports health total assoc prov now runtime_id sanitized path
+  observed="$(alloy_rt_ns_field "$ns" observed_services)"
+  ports="$(alloy_rt_ns_field "$ns" ports)"
+  health="$(alloy_rt_ns_field "$ns" health)"
+  total="$(alloy_rt_ns_field "$ns" total_count)"
+  assoc=""; prov="none"
+  local wt wprov
+  while IFS=$'\x1f' read -r wt wprov; do
+    [[ -n "$wt" ]] || continue
+    assoc="${assoc}${assoc:+ }${wt}"; prov="name-inference"
+  done < <(alloy_rt_infer_worktrees "$ns")
+
+  now="$(alloy_iso_now)"
+  runtime_id="rt:${owner}:${class}"
+  sanitized="$(printf '%s' "$ns" | tr -c 'a-zA-Z0-9_.-' '_')"
+  path="${ALLOY_RT_REGISTRY_DIR}/${sanitized}.env"
+
+  mkdir -p "$ALLOY_RT_REGISTRY_DIR"
+  if [[ -f "$path" && "$force" -ne 1 ]]; then
+    alloy_die "registry record already exists: $path (use --force to overwrite)"
+  fi
+
+  # Owner provenance is explicit-only; association provenance is inference-only.
+  alloy_write_kv_file "$path" \
+    "ALLOY_RT_SCHEMA_VERSION=${ALLOY_RT_SCHEMA_VERSION}" \
+    "ALLOY_RT_RUNTIME_ID=${runtime_id}" \
+    "ALLOY_RT_OWNER_MISSION_KEY=${owner}" \
+    "ALLOY_RT_RUNTIME_CLASS=${class}" \
+    "ALLOY_RT_PROVIDER=supabase" \
+    "ALLOY_RT_PROJECT_NAMESPACE=${ns}" \
+    "ALLOY_RT_SOURCE=registered" \
+    "ALLOY_RT_DISCOVERED_AT=${now}" \
+    "ALLOY_RT_REGISTERED_AT=${now}" \
+    "ALLOY_RT_LAST_SEEN_AT=${now}" \
+    "ALLOY_RT_STATUS=registered" \
+    "ALLOY_RT_EXPECTED_SERVICES=${ALLOY_RT_EXPECTED_SERVICES}" \
+    "ALLOY_RT_OBSERVED_SERVICES=${observed}" \
+    "ALLOY_RT_ASSOCIATED_WORKTREES=${assoc}" \
+    "ALLOY_RT_ASSOCIATED_PORTS=${ports}" \
+    "ALLOY_RT_HEALTH=${health}" \
+    "ALLOY_RT_CAPACITY_CONTAINERS=${total}" \
+    "ALLOY_RT_OWNER_PROVENANCE=$([[ "$owner" == unknown ]] && echo undeclared || echo explicit-arg)" \
+    "ALLOY_RT_ASSOCIATION_PROVENANCE=${prov}"
+
+  alloy_info "registered runtime: ${runtime_id}"
+  alloy_info "  namespace: ${ns}"
+  alloy_info "  owner:     ${owner}  class: ${class}"
+  alloy_info "  record:    ${path}"
+  [[ "$owner" == "unknown" || "$class" == "unknown" ]] && \
+    alloy_info "  note: owner/class recorded as declared; not inferred. Amend with --force when known."
+}
+
+main "$@"

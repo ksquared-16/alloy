@@ -162,7 +162,8 @@ for k in sens:
 if cap["surface_capabilities"].get("reads") is not True:
     errs.append("surface reads is not true")
 # per verb
-impl = {"root","runtime-paths","worker-status","agent-status","dev-status","agent-evidence","capabilities"}
+impl = {"root","runtime-paths","worker-status","agent-status","dev-status","agent-evidence","capabilities",
+        "runtime-list","runtime-status","runtime-capacity","runtime-discover","runtime-containers"}
 declared = set(cap["verbs"].keys())
 if impl != declared:
     errs.append(f"verb set mismatch: impl-only={impl-declared} declared-only={declared-impl}")

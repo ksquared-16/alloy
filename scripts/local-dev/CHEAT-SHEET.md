@@ -23,6 +23,16 @@ alloy-ro agent-evidence 3
 alloy-ro runtime-paths
 alloy-ro capabilities --json
 
+# Runtime Registry & Inspection V1 — observe only (Supabase/Docker runtimes)
+# See RUNTIME-REGISTRY-INSPECTION.md
+alloy-ro runtime-list
+alloy-ro runtime-discover
+alloy-ro runtime-capacity
+alloy-ro runtime-status <id|namespace>
+alloy-ro runtime-containers <id|namespace>   # redacted: no command/env/secrets
+# explicit registration (mutating; outside alloy-ro; never infers ownership):
+alloy-runtime-register <namespace> --owner <mission-key> --class dedicated-disposable
+
 # Phase 2 managed agent lifecycle
 alloy-agent-create my-initiative              # first free slot + default AI for that slot
 alloy-agent-create my-initiative claude

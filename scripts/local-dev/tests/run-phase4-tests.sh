@@ -176,7 +176,9 @@ for f in \
   "$ROOT"/alloy-ro \
   "$ROOT"/lib/ro.sh \
   "$ROOT"/lib/ro-config.sh \
-  "$ROOT"/lib/read-core.sh
+  "$ROOT"/lib/read-core.sh \
+  "$ROOT"/lib/runtime-core.sh \
+  "$ROOT"/alloy-runtime-register
 do
   if [[ "$f" == *.mjs ]]; then node --check "$f"; else bash -n "$f"; fi
   pass "syntax $(basename "$f")"
@@ -359,6 +361,9 @@ assert_ok "engineering certify harness" bash "$ROOT/tests/test-engineering-certi
 
 echo "== Shared Read Core (parity / drift guards) =="
 assert_ok "read-core parity tests" bash "$ROOT/tests/test-read-core-parity.sh"
+
+echo "== Runtime Registry & Inspection V1 =="
+assert_ok "runtime inspection tests" bash "$ROOT/tests/test-runtime-inspection.sh"
 
 echo "== Autonomous Inspection Surface (alloy-ro) =="
 assert_ok "alloy-ro constitution tests" bash "$ROOT/tests/test-alloy-ro.sh"

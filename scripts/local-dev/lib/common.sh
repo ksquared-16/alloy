@@ -116,6 +116,9 @@ alloy_load_config() {
   # Default constants come from the Shared Read Core (one source of truth), so
   # the inspection and mutation runtimes can never disagree on a default.
   ALLOY_MAX_AGENTS="${ALLOY_MAX_AGENTS:-$ALLOY_RC_DEFAULT_MAX_AGENTS}"
+  # Runtime Resource Orchestration V1 — observational only (Runtime Registry &
+  # Inspection V1 does not enforce or act on this; it is reported by alloy-ro).
+  ALLOY_MAX_ACTIVE_RUNTIMES="${ALLOY_MAX_ACTIVE_RUNTIMES:-$ALLOY_RC_DEFAULT_MAX_ACTIVE_RUNTIMES}"
   ALLOY_CANONICAL_PORT="${ALLOY_CANONICAL_PORT:-$ALLOY_RC_DEFAULT_CANONICAL_PORT}"
   ALLOY_FIRST_AGENT_PORT="${ALLOY_FIRST_AGENT_PORT:-$ALLOY_RC_DEFAULT_FIRST_AGENT_PORT}"
   ALLOY_BASE_REMOTE="${ALLOY_BASE_REMOTE:-$ALLOY_RC_DEFAULT_BASE_REMOTE}"
