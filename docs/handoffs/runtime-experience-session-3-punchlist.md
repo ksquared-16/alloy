@@ -31,6 +31,24 @@ waterfall to wait on:
 Everything below is in service of that goal (instant identity, deferred settlement, single loading
 owner) or is a visible glitch surfaced while getting there.
 
+## Status (Session 3 — landed, all commits local)
+
+| Item | State | Commit |
+|---|---|---|
+| Instant-identity seed (+ A7 name-only header) | ✅ landed | `a3a30f204` |
+| A6 metric tiles not links | ✅ verified | `bbfaeb70c` |
+| A1 refresh duplicate shell | ✅ landed | `68b8b8845` |
+| A5 blank screen → centered Alloy loader | ✅ landed | `68b8b8845` |
+| A2 Home/back-nav (retained Workspace) | ✅ verified round-trip | `ee42e5b8f` |
+| A4 pill lag → Phase H sibling adjacency | ✅ verified (~79ms) | `ee7915b5a` |
+| A3 two Focus-Panel skeletons | ⏳ open (needs default-subject drawer-VM prep) | — |
+| Settlement deferral (~14-req stall) | ⏳ open | — |
+| Phase B store into commit path (full generalization) | ⏳ open (Phase H done via K2 directly) | — |
+| Metric drift (Phase J) | ⏳ open (Workspace showed 7 Pipeline Children — cross-check work-unit) | — |
+
+A1/A5 show only on a genuinely slow load (warm dev resolves before the fallback streams) — confirm
+on a hard refresh. A2/A4 are verified in-browser.
+
 ## A. Live felt problems — Kelly, Session 3 browser (:3013, Firefly tenant)
 
 1. **Refresh duplicate shell.** On a refresh, a blue left rail + header render **duplicated inside
