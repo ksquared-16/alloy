@@ -325,6 +325,15 @@ export function InlineOpportunityFocusPanel() {
             { displayVm, record }
             : null;
 
+    // ATOMIC SUBJECT COHERENCE. The visible subject — header AND body — is ALWAYS the currently
+    // resolved VM. During a swap the operational snapshot commits the destination fast, but its
+    // record VM lands later; if the header followed the fast commit while the body held the prior
+    // grid, the panel would show the destination identity over the prior subject's cards — a
+    // mixed-subject frame. Binding the header to `resolved ?? heldPrior` holds the COMPLETE prior
+    // subject (identity + cards) until the destination VM is coherent, then swaps atomically. The
+    // seed header appears only on true cold entry (no prior VM to hold).
+    const visible = resolved ?? heldPrior;
+
     const seedTitle = drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
     const seedContextChips = useMemo(
         () => buildFocusPanelContextChipsFromQueuePreviewSeed(drawer.opportunityQueuePreviewSeed),
@@ -371,17 +380,17 @@ export function InlineOpportunityFocusPanel() {
                     // header (taller: status control + actions) does not jump vertically.
                     style={{ minHeight: "5.25rem" }}
                 >
-                    {resolved ?
+                    {visible ?
                         <OpportunityFocusPanelHeader
                             title={drawerTitle}
-                            opportunityId={drawer.id}
-                            record={resolved.record}
-                            displayVm={resolved.displayVm}
+                            opportunityId={visible.displayVm.entity.id}
+                            record={visible.record}
+                            displayVm={visible.displayVm}
                             queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
                             opportunitySingular={opportunitySingular}
                             statusLabel={statusLabel}
                             currentStatusKey={currentStatusKey}
-                            statusControl={resolved.displayVm.header.status}
+                            statusControl={visible.displayVm.header.status}
                             statusCanMutate={statusCanMutate}
                             manageCanMutate={manageCanMutate}
                             activeMode={focusPanelMode}
@@ -393,7 +402,7 @@ export function InlineOpportunityFocusPanel() {
                             actionPreflightBlocked={actionPreflightBlocked}
                             onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                             registryActionFeedback={registryActionFeedback}
-                            primaryHeaderAction={resolved.displayVm.actions.header_menu[0] ?? null}
+                            primaryHeaderAction={visible.displayVm.actions.header_menu[0] ?? null}
                             onPrimaryHeaderAction={onActionSelect}
                             primaryActionLoading={Boolean(actionLoadingKey)}
                         />
