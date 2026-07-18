@@ -179,8 +179,14 @@ for f in \
   "$ROOT"/lib/read-core.sh \
   "$ROOT"/lib/runtime-core.sh \
   "$ROOT"/lib/admission-core.sh \
+  "$ROOT"/lib/actuation-core.sh \
+  "$ROOT"/lib/actuation-adapter.sh \
+  "$ROOT"/lib/actuation-adapter-fixture.sh \
+  "$ROOT"/lib/actuation-adapter-supabase.sh \
+  "$ROOT"/lib/actuation-exec.sh \
   "$ROOT"/alloy-runtime-register \
-  "$ROOT"/alloy-runtime-intent
+  "$ROOT"/alloy-runtime-intent \
+  "$ROOT"/alloy-runtime-actuate
 do
   if [[ "$f" == *.mjs ]]; then node --check "$f"; else bash -n "$f"; fi
   pass "syntax $(basename "$f")"
@@ -372,6 +378,9 @@ assert_ok "alloy-ro constitution tests" bash "$ROOT/tests/test-alloy-ro.sh"
 
 echo "== Runtime Intent & Admission Contract V1 (R2) =="
 assert_ok "runtime admission tests" bash "$ROOT/tests/test-runtime-admission.sh"
+
+echo "== Runtime Actuation V1 (R3) =="
+assert_ok "runtime actuator tests" bash "$ROOT/tests/test-runtime-actuator.sh"
 
 echo "== Runtime isolation =="
 assert_ok "runtime isolation focused tests" bash "$ROOT/tests/test-runtime-isolation.sh"

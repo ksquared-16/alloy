@@ -42,6 +42,15 @@ alloy-ro runtime-explain   <slot|name>         # posture resolution vs admission
 # record an immutable intent (mutating; outside alloy-ro; identity-checked; no slot-only targeting):
 alloy-runtime-intent <worktree> --mission <key> [--coordinate --coordination-reason "..."] [--supersede]
 
+# Runtime Actuation V1 (R3) — ACTUATE (realizes an admitted intent; a zero provider exit is NOT success)
+# See RUNTIME-ACTUATION.md
+alloy-ro runtime-reservations                  # capacity reservations (control-plane claims; read-only)
+alloy-ro runtime-executions [<execution-id>]   # execution lifecycle records (read-only)
+alloy-ro runtime-actuation-capacity            # reservation-aware capacity overlay (read-only)
+# realize an admitted intent (mutating; outside alloy-ro; identity-checked; no slot-only targeting):
+alloy-runtime-actuate <worktree> --operation <provision|attach|detach|retire|reconcile> --mission <key> \
+                      [--adapter supabase|fixture] [--reservation-ttl <s>]
+
 # Phase 2 managed agent lifecycle
 alloy-agent-create my-initiative              # first free slot + default AI for that slot
 alloy-agent-create my-initiative claude

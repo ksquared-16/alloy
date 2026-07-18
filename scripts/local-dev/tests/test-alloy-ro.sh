@@ -165,7 +165,8 @@ if cap["surface_capabilities"].get("reads") is not True:
 # per verb
 impl = {"root","runtime-paths","worker-status","agent-status","dev-status","agent-evidence","capabilities",
         "runtime-list","runtime-status","runtime-capacity","runtime-discover","runtime-containers",
-        "runtime-policy","runtime-admission","runtime-intent","runtime-explain"}
+        "runtime-policy","runtime-admission","runtime-intent","runtime-explain",
+        "runtime-reservations","runtime-executions","runtime-actuation-capacity"}
 declared = set(cap["verbs"].keys())
 if impl != declared:
     errs.append(f"verb set mismatch: impl-only={impl-declared} declared-only={declared-impl}")
