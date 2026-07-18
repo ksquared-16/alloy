@@ -24,7 +24,7 @@
  * `AttentionIntent` cannot express a coarser field, a subject movement structurally cannot change the
  * lens, the Work Unit, or the Context Frame.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
@@ -117,6 +117,42 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // A subject movement reuses the lens preparation (the K2 key carries lens, not subject), so
     // there is nothing to warm — the answer is already in hand. Kept to satisfy the contract.
     const prefetchRecord = useCallback((_row: QueueRowModel) => {}, []);
+
+    // ── PHASE H — SIBLING WORK-VIEW ADJACENCY ──────────────────────────────────────────────────
+    // A pill switch pays the full ~2.8 s provisioning round-trip because hover rarely precedes the
+    // click by that long. So once THIS work unit has committed, prepare its sibling Work Views on
+    // idle — the same K2 preparation the pill click will REUSE (dedup by (target,lens) key). The
+    // click then commits from prepared state instead of starting a cold fetch. Bounded to the view
+    // set, deduped + TTL'd by K2, and idle-scheduled so it never competes with the commit-critical
+    // path.
+    //
+    // The effect keys on the STABLE comma-joined sibling-id string, NOT on the `model` reference:
+    // Settlement overlays KPI counts and hands back a new `model` object every time, and depending on
+    // that reference made the cleanup cancel the scheduled idle callback before it could fire (and the
+    // re-run then no-op'd). The sibling-id set does not change on settlement, so keying on it fires the
+    // preparation exactly once per committed view set and survives count updates.
+    const siblingViewIds =
+        model?.workViews
+            ?.filter((v) => !v.isActive && v.id !== model.activeWorkViewId)
+            .map((v) => v.id)
+            .join(",") ?? "";
+    useEffect(() => {
+        if (!siblingViewIds || typeof window === "undefined") return;
+        const ids = siblingViewIds.split(",");
+        const run = () => {
+            for (const id of ids) prefetchWorkView(id);
+        };
+        const w = window as Window & {
+            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+        if (w.requestIdleCallback) {
+            const handle = w.requestIdleCallback(run, { timeout: 2000 });
+            return () => w.cancelIdleCallback?.(handle);
+        }
+        const timer = window.setTimeout(run, 250);
+        return () => window.clearTimeout(timer);
+    }, [siblingViewIds, prefetchWorkView]);
 
     const intents = useMemo<WorkUnitSurfaceIntents>(
         () => ({ selectWorkView, prefetchWorkView, openRecord, prefetchRecord }),
