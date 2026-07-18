@@ -144,8 +144,15 @@ main() {
   if [[ "$json" -eq 1 ]]; then
     if [[ "$op" == "reconcile" ]]; then
       printf '{"operation":"reconcile","worktree":"%s","state":"reconciled","result":"ok"}\n' "$(alloy_rc_json_escape "$wt")"
-    else
+    elif [[ -n "${_EXEC_ID:-}" ]] && alloy_act_exec_exists "$_EXEC_ID"; then
       alloy_act_emit_execution_json "$_EXEC_ID"; printf '\n'
+    else
+      # No persisted head (e.g. a concurrent 'already-in-progress' loser that mutated
+      # nothing). Surface the in-memory result without writing a record.
+      printf '{"execution_id":"%s","state":"%s","result_code":"%s","retryable":"%s","desired_state_reached":"%s"}\n' \
+        "$(alloy_rc_json_escape "${_EXEC_ID:-}")" "$(alloy_rc_json_escape "${_EXEC_STATE:-}")" \
+        "$(alloy_rc_json_escape "${_EXEC_RESULT:-}")" "$(alloy_rc_json_escape "${_EXEC_RETRYABLE:-}")" \
+        "$(alloy_rc_json_escape "${_EXEC_DESIRED:-}")"
     fi
   else
     printf 'runtime actuation: %s %s\n' "$op" "$wt"

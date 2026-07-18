@@ -120,6 +120,18 @@ alloy_act_epoch_to_iso() {
     || date -u -d "@$e" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || printf ''
 }
 
+# Claim-lease backstop (C-2): a claim's PID liveness alone cannot distinguish a
+# reused PID, so a claim is honoured only while its lease has not elapsed. Returns
+# true when the lease is empty (no bound — legacy/unclaimed) OR now < lease. If the
+# clock cannot be read, fail closed toward "still active" (never falsely free a slot).
+alloy_act_lease_active() {
+  local lease_iso="$1" now_e lease_e
+  [[ -n "$lease_iso" ]] || return 0
+  now_e="$(alloy_act_epoch_now)"; lease_e="$(alloy_act_iso_to_epoch "$lease_iso" 2>/dev/null || true)"
+  [[ -n "$now_e" && -n "$lease_e" ]] || return 0
+  (( now_e < lease_e ))
+}
+
 # ---------------------------------------------------------------------------
 # hashing & sanitisation (deterministic; no timestamp, no randomness)
 # ---------------------------------------------------------------------------
@@ -293,18 +305,35 @@ alloy_act_lock_acquire() {
       "ALLOY_ACT_LOCK_STARTED=\"$(alloy_act_iso_now)\""
     printf '%s' "$d"; return 0
   fi
-  # Held — reclaim only if the recorded owner PID is provably dead (liveness evidence).
-  pid="$(alloy_act_lock_owner_pid "$d" || true)"
-  if [[ -z "$pid" ]] || ! alloy_rc_pid_alive "$pid"; then
-    rm -rf "$d"
-    if mkdir "$d" 2>/dev/null; then
-      alloy_write_kv_file "$d/owner.env" \
-        "ALLOY_ACT_LOCK_KEY=\"${key}\"" \
-        "ALLOY_ACT_LOCK_HOLDER=\"${holder}\"" \
-        "ALLOY_ACT_LOCK_PID=\"$$\"" \
-        "ALLOY_ACT_LOCK_STARTED=\"$(alloy_act_iso_now)\""
-      printf '%s' "$d"; return 0
-    fi
+  # Held. If owner.env is not yet present, the winner may be mid-initialisation (it
+  # atomically mkdir'd the dir but has not yet written owner.env). Give it a brief
+  # grace window to appear BEFORE concluding the lock is stale — otherwise a concurrent
+  # acquirer could reclaim a lock whose owner is still initialising (a TOCTOU that would
+  # let two executions both "hold" the same resource). A live owner writes owner.env in
+  # microseconds (mktemp+rename), so this rarely engages.
+  local _g
+  pid="$(alloy_act_lock_owner_pid "$d" 2>/dev/null || true)"
+  if [[ -z "$pid" ]]; then
+    for _g in 1 2 3 4 5 6 7 8 9 10; do
+      sleep 0.05 2>/dev/null || sleep 1
+      pid="$(alloy_act_lock_owner_pid "$d" 2>/dev/null || true)"
+      [[ -n "$pid" ]] && break
+    done
+  fi
+  # Genuinely held by a live owner → busy.
+  if [[ -n "$pid" ]] && alloy_rc_pid_alive "$pid"; then
+    return 1
+  fi
+  # PID provably dead, or owner.env never appeared after the grace window (crashed
+  # mid-init) → reclaim. mkdir atomicity still lets only one reclaimer win.
+  rm -rf "$d"
+  if mkdir "$d" 2>/dev/null; then
+    alloy_write_kv_file "$d/owner.env" \
+      "ALLOY_ACT_LOCK_KEY=\"${key}\"" \
+      "ALLOY_ACT_LOCK_HOLDER=\"${holder}\"" \
+      "ALLOY_ACT_LOCK_PID=\"$$\"" \
+      "ALLOY_ACT_LOCK_STARTED=\"$(alloy_act_iso_now)\""
+    printf '%s' "$d"; return 0
   fi
   return 1
 }
@@ -332,12 +361,14 @@ alloy_act_lock_release() {
 # free capacity ONLY for genuinely abandoned reservations (Decision 4).
 # ---------------------------------------------------------------------------
 alloy_act_reservation_is_live() {
-  local rid="$1" state exp_iso claim_pid now_e exp_e
+  local rid="$1" state exp_iso claim_pid claim_lease now_e exp_e
   state="$(alloy_act_resv_get "$rid" ALLOY_RESV_STATE 2>/dev/null || true)"
   [[ "$state" == "held" ]] || return 1
   claim_pid="$(alloy_act_resv_get "$rid" ALLOY_RESV_CLAIM_PID 2>/dev/null || true)"
-  # A live claim keeps the reservation live regardless of the timestamp.
-  [[ -n "$claim_pid" ]] && alloy_rc_pid_alive "$claim_pid" && return 0
+  claim_lease="$(alloy_act_resv_get "$rid" ALLOY_RESV_CLAIM_LEASE 2>/dev/null || true)"
+  # A live claim keeps the reservation live regardless of the reservation timestamp —
+  # but ONLY while its lease holds (C-2 backstop: bounds a reused-PID capacity leak).
+  [[ -n "$claim_pid" ]] && alloy_rc_pid_alive "$claim_pid" && alloy_act_lease_active "$claim_lease" && return 0
   exp_iso="$(alloy_act_resv_get "$rid" ALLOY_RESV_EXPIRES_AT 2>/dev/null || true)"
   now_e="$(alloy_act_epoch_now)"; exp_e="$(alloy_act_iso_to_epoch "$exp_iso" 2>/dev/null || true)"
   [[ -n "$now_e" && -n "$exp_e" ]] || return 0   # can't compute expiry ⇒ treat as live (fail-closed)
@@ -401,6 +432,7 @@ alloy_act_write_reservation() {
     "ALLOY_RESV_ADMISSION_FINGERPRINT=\"${adm_fp}\"" \
     "ALLOY_RESV_EXECUTION_ID=\"${exec_id}\"" \
     "ALLOY_RESV_CLAIM_PID=\"\"" \
+    "ALLOY_RESV_CLAIM_LEASE=\"\"" \
     "ALLOY_RESV_UPDATED_AT=\"${created_at}\""
 }
 
@@ -423,13 +455,15 @@ alloy_act_resv_set_state() {
     "ALLOY_RESV_ADMISSION_FINGERPRINT=\"$(g ALLOY_RESV_ADMISSION_FINGERPRINT)\"" \
     "ALLOY_RESV_EXECUTION_ID=\"$(g ALLOY_RESV_EXECUTION_ID)\"" \
     "ALLOY_RESV_CLAIM_PID=\"$(g ALLOY_RESV_CLAIM_PID)\"" \
+    "ALLOY_RESV_CLAIM_LEASE=\"$(g ALLOY_RESV_CLAIM_LEASE)\"" \
     "ALLOY_RESV_STATE_NOTE=\"${note}\"" \
     "ALLOY_RESV_UPDATED_AT=\"$(alloy_act_iso_now)\""
 }
 
-# Record a live claim PID onto the reservation (keeps it live past its timestamp).
+# Record a live claim PID + lease onto the reservation (keeps it live past its
+# timestamp while the claim PID is alive AND the lease holds — C-2 backstop).
 alloy_act_resv_set_claim_pid() {
-  local rid="$1" pid="$2"
+  local rid="$1" pid="$2" lease="${3:-}"
   local path; path="$(alloy_act_reservation_path "$rid")"; [[ -f "$path" ]] || return 1
   local g; g() { alloy_rc_meta_get "$path" "$1" 2>/dev/null || printf ''; }
   alloy_write_kv_file "$path" \
@@ -446,6 +480,7 @@ alloy_act_resv_set_claim_pid() {
     "ALLOY_RESV_ADMISSION_FINGERPRINT=\"$(g ALLOY_RESV_ADMISSION_FINGERPRINT)\"" \
     "ALLOY_RESV_EXECUTION_ID=\"$(g ALLOY_RESV_EXECUTION_ID)\"" \
     "ALLOY_RESV_CLAIM_PID=\"${pid}\"" \
+    "ALLOY_RESV_CLAIM_LEASE=\"${lease}\"" \
     "ALLOY_RESV_UPDATED_AT=\"$(alloy_act_iso_now)\""
 }
 
@@ -581,9 +616,11 @@ alloy_act_exec_terminal() {
 
 # Is an execution's claim currently live? (PID primary; lease is a secondary bound.)
 alloy_act_exec_claim_live() {
-  local exec_id="$1" pid
+  local exec_id="$1" pid lease
   pid="$(alloy_act_exec_get "$exec_id" ALLOY_EXEC_CLAIM_PID 2>/dev/null || true)"
-  [[ -n "$pid" ]] && alloy_rc_pid_alive "$pid"
+  lease="$(alloy_act_exec_get "$exec_id" ALLOY_EXEC_CLAIM_LEASE_UNTIL 2>/dev/null || true)"
+  # C-2: PID liveness AND the claim lease (bounds a reused-PID false-live claim).
+  [[ -n "$pid" ]] && alloy_rc_pid_alive "$pid" && alloy_act_lease_active "$lease"
 }
 
 # ===========================================================================
@@ -731,10 +768,12 @@ alloy_act_reserve() {
 # the execution id. Keeps the reservation live past its timestamp while PID alive.
 alloy_act_claim_reservation() {
   local rid="$1" exec_id="$2"
-  alloy_act_resv_set_claim_pid "$rid" "$$"
   local lease_e lease_iso now_e
   now_e="$(alloy_act_epoch_now)"
   if [[ -n "$now_e" ]]; then lease_e=$(( now_e + ALLOY_ACT_CLAIM_LEASE_DEFAULT )); lease_iso="$(alloy_act_epoch_to_iso "$lease_e")"; else lease_iso=""; fi
+  # Same lease on both the reservation and the execution head so both liveness
+  # checks (capacity + idempotency) enforce the identical bound (C-2).
+  alloy_act_resv_set_claim_pid "$rid" "$$" "$lease_iso"
   alloy_act_exec_update "$exec_id" \
     ALLOY_EXEC_CLAIM_PID "$$" \
     ALLOY_EXEC_CLAIM_LEASE_UNTIL "$lease_iso"

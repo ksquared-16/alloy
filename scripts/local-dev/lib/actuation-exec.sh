@@ -343,6 +343,8 @@ alloy_act_execute() {
   fi
 
   # STEPS 1-4: load intent, validate freshness, live R2 evaluate, authorise operation.
+  # (authorize is READ-ONLY — pure reads/evaluation — so it is safe to run concurrently
+  # before the per-resource lock is taken.)
   alloy_act_authorize "$wt" "$op"
   local mission iso ns adm_fp
   mission="$(alloy_ad_intent_get "$wt" ALLOY_INTENT_MISSION_KEY 2>/dev/null || true)"
@@ -350,7 +352,28 @@ alloy_act_execute() {
   iso="$_ACT_ISO"; ns="$_ACT_TARGET_NS"; adm_fp="$_ACT_ADM_FP"
   local exec_id; exec_id="$(alloy_act_execution_id "$mission" "$wt" "$iso" "$op" "$ns" "$adm_fp")"
 
-  # IDEMPOTENCY over an existing execution head.
+  # C-0: serialize the ENTIRE per-resource critical section (idempotency read →
+  # reserve → claim → dispatch) under ONE durable per-resource lock, acquired BEFORE
+  # any shared reservation/execution state is read-modified. A concurrent delivery for
+  # the same resource that cannot take the lock returns 'already-in-progress' and
+  # mutates NOTHING (no reservation, no execution bookkeeping, no capacity effect).
+  # Only an authorised operation has a resource (ns); an unauthorised/no-resource path
+  # merely records an idempotent terminal and needs no lock.
+  local rlock=""
+  if [[ -n "$ns" ]]; then
+    rlock="resource-${ns}"
+    if ! alloy_act_lock_acquire "$rlock" "exec:${exec_id}" >/dev/null; then
+      _EXEC_ID="$exec_id"
+      if alloy_act_exec_exists "$exec_id"; then _alloy_act_emit_from_record "$exec_id"
+      else _EXEC_STATE="in-progress"; _EXEC_DESIRED="unknown"; fi
+      _EXEC_RESULT="already-in-progress"; _EXEC_RETRYABLE="false"
+      return 0
+    fi
+    # shellcheck disable=SC2064
+    trap "alloy_act_lock_release '$rlock'" RETURN
+  fi
+
+  # IDEMPOTENCY over an existing execution head (now serialized per resource).
   if alloy_act_exec_exists "$exec_id"; then
     local st; st="$(alloy_act_exec_get "$exec_id" ALLOY_EXEC_STATE)"
     if [[ "$st" == "succeeded" ]]; then _alloy_act_emit_from_record "$exec_id"; _EXEC_RESULT="reuse-terminal"; return 0; fi
@@ -363,9 +386,15 @@ alloy_act_execute() {
       st="$(alloy_act_exec_get "$exec_id" ALLOY_EXEC_STATE)"
       if alloy_act_exec_is_terminal "$st"; then _alloy_act_emit_from_record "$exec_id"; return 0; fi
     else
-      # terminal non-success: retryable → allow a fresh attempt; else reuse the result.
+      # C-1: a retryable/ambiguous terminal (e.g. timed_out) is RECONCILED via R1 first
+      # on redelivery; R3 NEVER silently re-dispatches a provider mutation. A genuine
+      # retry is Director's explicit decision, not an automatic effect of redelivery.
       local rc; rc="$(alloy_act_exec_get "$exec_id" ALLOY_EXEC_RETRYABLE)"
-      if [[ "$rc" != "true" ]]; then _alloy_act_emit_from_record "$exec_id"; _EXEC_RESULT="reuse-terminal"; return 0; fi
+      if [[ "$rc" == "true" ]]; then
+        alloy_act_reconcile_execution "$exec_id"
+        _alloy_act_emit_from_record "$exec_id"; _EXEC_RESULT="reconciled-terminal"; return 0
+      fi
+      _alloy_act_emit_from_record "$exec_id"; _EXEC_RESULT="reuse-terminal"; return 0
     fi
   fi
 
@@ -392,17 +421,7 @@ alloy_act_execute() {
     alloy_act_exec_update "$exec_id" ALLOY_EXEC_RESERVATION_ID "$resv_id"
   fi
 
-  # STEP 6: per-resource lock (serialize mutating execution per resource) + claim.
-  local rlock="resource-${ns}" lockd
-  if ! lockd="$(alloy_act_lock_acquire "$rlock" "exec:${exec_id}")"; then
-    alloy_act_exec_terminal "$exec_id" conflicted resource-conflict true unknown
-    [[ -n "$resv_id" ]] && alloy_act_resv_set_state "$resv_id" released "resource-locked"
-    alloy_act_log_event "$exec_id" "-" claim resource-locked "$ns"
-    _alloy_act_emit_from_record "$exec_id"; return 0
-  fi
-  # shellcheck disable=SC2064
-  trap "alloy_act_lock_release '$rlock'" RETURN
-
+  # STEP 6: claim for one attempt (the per-resource lock from C-0 is already held).
   local attempt_id prior_attempts
   attempt_id="$(alloy_act_next_attempt_id "$exec_id")"
   prior_attempts="$(alloy_act_exec_get "$exec_id" ALLOY_EXEC_ATTEMPT_COUNT)"; [[ "$prior_attempts" =~ ^[0-9]+$ ]] || prior_attempts=0
@@ -416,7 +435,7 @@ alloy_act_execute() {
       alloy_act_exec_terminal "$exec_id" failed provider-unavailable true false
       [[ -n "$resv_id" ]] && alloy_act_resv_set_state "$resv_id" released "adapter-refused"
       alloy_act_log_event "$exec_id" "$attempt_id" dispatch adapter-refused "$adapter"
-      alloy_act_lock_release "$rlock"; trap - RETURN; _alloy_act_emit_from_record "$exec_id"; return 0
+      _alloy_act_emit_from_record "$exec_id"; return 0
     fi
   fi
   alloy_act_exec_update "$exec_id" ALLOY_EXEC_STATE executing
@@ -427,7 +446,7 @@ alloy_act_execute() {
     retire)    _alloy_act_do_retire    "$exec_id" "$attempt_id" "$mission" "$wt" "$iso" "$ns" "$resv_id" "$adapter" ;;
   esac
 
-  alloy_act_lock_release "$rlock"; trap - RETURN
+  # The per-resource lock (if held) is released by the RETURN trap set above.
   _alloy_act_emit_from_record "$exec_id"
   return 0
 }

@@ -254,5 +254,43 @@ PATH="$SBX/bin:$PATH" act nm1 provision >/dev/null 2>&1
 if grep -qE 'docker (start|stop|rm|run|create|prune)|^supabase ' "$CALLLOG" 2>/dev/null; then
   bad "fixture path invoked docker/supabase mutation"; else ok "fixture path invoked no docker/supabase mutation"; fi
 
+# --- C-0: concurrent same-identity delivery → one winner, non-mutating loser -------
+# (a) Deterministic loser: hold the per-resource lock with a LIVE pid (simulating an
+#     in-flight contender), then deliver the same intent → must return already-in-progress
+#     and mutate NOTHING (no reservation, no execution head, no runtime).
+reset_ps; rm -rf "$RT/reservations" "$RT/executions" "$RT/attachments" "$RT/locks"; mkwt_dedicated cc1 1; record_intent cc1
+NSCC="$(bash -c 'source "'"$ROOT"'/lib/common.sh"; source "'"$ROOT"'/lib/actuation-core.sh"; alloy_act_mint_namespace cc1-init cc1 dedicated-disposable' 2>/dev/null)"
+LOCKDIR="$(bash -c 'source "'"$ROOT"'/lib/common.sh"; source "'"$ROOT"'/lib/actuation-core.sh"; alloy_load_config >/dev/null 2>&1; alloy_act_init; alloy_act_lock_dir_for "resource-'"$NSCC"'"' 2>/dev/null)"
+sleep 30 & HOLD=$!
+mkdir -p "$LOCKDIR"
+printf 'ALLOY_ACT_LOCK_KEY="resource-%s"\nALLOY_ACT_LOCK_PID="%s"\nALLOY_ACT_LOCK_STARTED="2026-07-17T00:00:00Z"\n' "$NSCC" "$HOLD" >"$LOCKDIR/owner.env"
+rb="$(ls "$RT/reservations" 2>/dev/null | wc -l | tr -d ' ')"; eb="$(ls "$RT/executions" 2>/dev/null | wc -l | tr -d ' ')"; pb="$(wc -l <"$PSF" | tr -d ' ')"
+o="$(act cc1 provision)"
+[[ "$(printf '%s' "$o" | jget result_code)" == "already-in-progress" ]] && ok "concurrent loser returns already-in-progress" || bad "loser result ($o)"
+ra="$(ls "$RT/reservations" 2>/dev/null | wc -l | tr -d ' ')"; ea="$(ls "$RT/executions" 2>/dev/null | wc -l | tr -d ' ')"; pa="$(wc -l <"$PSF" | tr -d ' ')"
+[[ "$rb" == "$ra" && "$eb" == "$ea" && "$pb" == "$pa" ]] && ok "concurrent loser mutated NOTHING (reservation/execution/runtime unchanged)" || bad "loser mutated state (resv $rb→$ra exec $eb→$ea ps $pb→$pa)"
+kill "$HOLD" 2>/dev/null; wait "$HOLD" 2>/dev/null; rm -rf "$LOCKDIR"
+o="$(act cc1 provision)"
+[[ "$(printf '%s' "$o" | jget state)" == "succeeded" ]] && ok "after lock release, the winner provisions cleanly" || bad "post-release provision ($o)"
+
+# (b) Genuine parallel launch: two same-intent deliveries at once → exactly ONE runtime,
+#     exactly ONE reservation, no second provider execution, coherent audit.
+reset_ps; rm -rf "$RT/reservations" "$RT/executions" "$RT/attachments" "$RT/locks"; mkwt_dedicated cc2 2; record_intent cc2
+( act cc2 provision >"$SBX/cc2a" 2>/dev/null ) &
+( act cc2 provision >"$SBX/cc2b" 2>/dev/null ) &
+wait
+NSCC2="$(bash -c 'source "'"$ROOT"'/lib/common.sh"; source "'"$ROOT"'/lib/actuation-core.sh"; alloy_act_mint_namespace cc2-init cc2 dedicated-disposable' 2>/dev/null)"
+rows="$(grep -c "$NSCC2" "$PSF")"
+[[ "$rows" == "4" ]] && ok "parallel same-intent → exactly ONE runtime (no double provision)" || bad "parallel produced $rows rows (expected 4)"
+rescount="$(ls "$RT/reservations"/*.env 2>/dev/null | wc -l | tr -d ' ')"
+[[ "$rescount" == "1" ]] && ok "parallel → exactly ONE reservation (no capacity/reservation corruption)" || bad "reservations=$rescount"
+execcount="$(ls "$RT/executions"/*.env 2>/dev/null | wc -l | tr -d ' ')"
+[[ "$execcount" == "1" ]] && ok "parallel → exactly ONE execution head (no bookkeeping corruption)" || bad "executions=$execcount"
+succ=0; for f in "$SBX/cc2a" "$SBX/cc2b"; do [[ "$(jget state <"$f" 2>/dev/null)" == "succeeded" ]] && succ=$((succ+1)); done
+[[ "$succ" -ge 1 ]] && ok "parallel: at least one delivery reports success; one runtime total" || bad "parallel succ=$succ"
+EID2="$(ls "$RT/executions"/*.env 2>/dev/null | head -1 | xargs -I{} basename {} .env)"
+[[ "$(exec_field "$EID2" state)" == "succeeded" && "$(exec_field "$EID2" desired_state_reached)" == "true" ]] \
+  && ok "parallel: surviving execution head is coherent (succeeded, verified)" || bad "audit head incoherent"
+
 printf '\n==== runtime actuator tests: %d passed, %d failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
