@@ -26,6 +26,7 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     const failedRequests: string[] = [];
     const programResponseStatuses: number[] = [];
     const actions: Array<Record<string, unknown>> = [];
+    const rateWrites: Array<Record<string, unknown>> = [];
     const now = "2026-07-17T20:00:00.000Z";
     let status: "draft" | "validated" = "draft";
     let published = false;
@@ -295,8 +296,8 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
                 rate_cents: 145000,
                 is_active: true,
                 not_offered: false,
-                effective_start: null,
-                effective_end: null,
+                effective_start: "2026-08-01",
+                effective_end: "2027-07-31",
                 metadata: {},
                 created_at: now,
                 updated_at: now,
@@ -465,6 +466,9 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
         });
     });
     await page.route("**/api/admin/commercial/tuition-rates*", async (route) => {
+        if (route.request().method() === "POST") {
+            rateWrites.push(route.request().postDataJSON() as Record<string, unknown>);
+        }
         await route.fulfill({
             status: 200,
             contentType: "application/json",
@@ -615,25 +619,32 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     await shot("03c-program-offerings");
     await page.getByTestId("program-detail-runtime-tab-pricing").click();
     await expect(page.getByTestId("program-pricing-runtime")).toContainText("$1,450");
-    await expect(page.getByTestId("program-pricing-runtime")).toContainText("Sibling discount");
     await expect(page.getByTestId("program-pricing-matrix")).toContainText("Organization defaults inherit");
-    await shot("03d-program-pricing");
-    await page.getByTestId("program-detail-runtime-tab-configuration").click();
-    await expect(page.getByTestId("program-configuration-runtime")).toContainText("Registration fee");
-    await shot("03e-program-configuration-catalog");
-    await page.getByTestId("program-configuration-policies").click();
+    await expect(page.getByTestId("program-pricing-matrix")).toContainText("2026-08-01");
+    await page.getByText("$1,450", { exact: true }).click();
+    await expect(page.getByTestId("tuition-rate-effective-start")).toHaveValue("2026-08-01");
+    await expect(page.getByTestId("tuition-rate-effective-end")).toHaveValue("2027-07-31");
+    await shot("03d-program-pricing-rates");
+    await page.getByTestId("tuition-rate-effective-end").fill("2027-08-31");
+    await page.getByRole("button", { name: "Save rate" }).click();
+    await expect.poll(() => rateWrites.length).toBe(1);
+    await page.getByTestId("program-pricing-view-catalog").click();
+    await expect(page.getByTestId("program-pricing-runtime")).toContainText("Registration fee");
+    await shot("03e-program-pricing-catalog");
+    await page.getByTestId("program-detail-runtime-tab-policies").click();
     await expect(page.getByTestId("program-policy-configuration")).toContainText("Sibling discount");
-    await shot("03f-program-configuration-policies");
-    await page.getByTestId("program-configuration-preview").click();
+    await shot("03f-program-policies");
+    await page.getByTestId("program-detail-runtime-tab-pricing").click();
+    await page.getByTestId("program-pricing-view-preview").click();
     await page.getByTestId("commercial-simulator-offering").selectOption("offering-1");
     await page.getByTestId("commercial-simulator-variant").selectOption("variant-1");
     await page.getByRole("button", { name: "Preview pricing" }).click();
     await expect(page.getByTestId("program-pricing-preview")).toContainText("$1,305.00");
     await expect(page.getByTestId("program-pricing-preview")).toContainText("Sibling discount");
-    await shot("03g-program-configuration-preview");
-    await page.getByTestId("program-configuration-relationships").click();
-    await expect(page.getByTestId("program-configuration-relationships-panel")).toContainText("Funding responsibility");
-    await shot("03h-program-configuration-relationships");
+    await shot("03g-program-pricing-preview");
+    await page.getByTestId("program-detail-runtime-tab-relationships").click();
+    await expect(page.getByTestId("program-relationships-runtime")).toContainText("Funding responsibility");
+    await shot("03h-program-relationships");
 
     await page.getByTestId("program-detail-runtime-tab-assignment").click();
     await expect(page.getByTestId("program-assignment-runtime")).toBeVisible();
@@ -655,9 +666,9 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
     await expect(page.getByTestId("program-availability-runtime")).toContainText("Offered locally");
     await expect(page.getByTestId("program-availability-runtime")).toContainText("Local evidence present");
     await shot("06a-program-availability");
-    await page.getByTestId("program-detail-runtime-tab-attention").click();
-    await expect(page.getByTestId("program-attention-runtime")).toContainText(/failed assignment/i);
-    await shot("06b-program-attention");
+    await page.getByTestId("program-detail-runtime-tab-overview").click();
+    await expect(page.getByTestId("program-overview-attention")).toContainText(/failed assignment/i);
+    await shot("06b-program-overview-attention");
     await page.getByTestId("program-detail-runtime-tab-publication").click();
     await expect(page.getByText("partial failure")).toBeVisible();
     await expect(page.getByText("1 succeeded · 1 failed")).toBeVisible();
@@ -696,6 +707,12 @@ test("Programs publication operator journey", async ({ page }, testInfo) => {
         "assign",
         "retry",
     ]);
+    expect(rateWrites).toContainEqual(expect.objectContaining({
+        variant_id: "variant-1",
+        cadence_key: "monthly",
+        effective_start: "2026-08-01",
+        effective_end: "2027-08-31",
+    }));
     expect((actions.find((action) => action.action === "assign")?.targetIds as string[]) ?? []).toEqual([
         "location-1",
         "location-2",

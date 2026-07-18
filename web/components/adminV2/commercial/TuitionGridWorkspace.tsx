@@ -35,7 +35,12 @@ type CellProps = {
     onSave: (
         variantId: string,
         cadenceKey: string,
-        payload: { rate_cents?: number; not_offered?: boolean },
+        payload: {
+            rate_cents?: number;
+            not_offered?: boolean;
+            effective_start?: string | null;
+            effective_end?: string | null;
+        },
     ) => Promise<void>;
     onClear: (rateId: string) => Promise<void>;
     canManage: boolean;
@@ -53,6 +58,9 @@ function TuitionCell({
 }: CellProps) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState("");
+    const [effectiveStart, setEffectiveStart] = useState("");
+    const [effectiveEnd, setEffectiveEnd] = useState("");
+    const [dateError, setDateError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -66,15 +74,29 @@ function TuitionCell({
     function startEdit() {
         if (!canManage || isNotOffered) return;
         setDraft(displayRate != null ? String(displayRate / 100) : "");
+        setEffectiveStart(rateRow?.effective_start ?? "");
+        setEffectiveEnd(rateRow?.effective_end ?? "");
+        setDateError(null);
         setEditing(true);
         setTimeout(() => inputRef.current?.select(), 0);
     }
 
     async function commitEdit() {
         const cents = parseDollarsToCents(draft);
-        if (cents === null) { setEditing(false); return; }
+        if (cents === null) {
+            setDateError("Enter a valid non-negative rate.");
+            return;
+        }
+        if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+            setDateError("Effective end must be on or after effective start.");
+            return;
+        }
         setSaving(true);
-        await onSave(variantId, cadenceKey, { rate_cents: cents });
+        await onSave(variantId, cadenceKey, {
+            rate_cents: cents,
+            effective_start: effectiveStart || null,
+            effective_end: effectiveEnd || null,
+        });
         setSaving(false);
         setEditing(false);
     }
@@ -94,20 +116,71 @@ function TuitionCell({
 
     if (editing) {
         return (
-            <td className="px-3 py-1">
-                <input
-                    ref={inputRef}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onBlur={commitEdit}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter") void commitEdit();
-                        if (e.key === "Escape") setEditing(false);
-                    }}
-                    className="w-full border border-pine-400 rounded px-2 py-0.5 text-sm text-right focus:outline-none"
-                    placeholder="0.00"
-                    autoFocus
-                />
+            <td className="min-w-56 px-3 py-2" data-testid={`tuition-rate-editor-${variantId}-${cadenceKey}`}>
+                <div className="space-y-2">
+                    <label className="block">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Rate</span>
+                        <input
+                            ref={inputRef}
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") void commitEdit();
+                                if (e.key === "Escape") setEditing(false);
+                            }}
+                            className="mt-0.5 w-full rounded border border-pine-400 px-2 py-1 text-right text-sm focus:outline-none"
+                            placeholder="0.00"
+                            autoFocus
+                        />
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <label>
+                            <span className="text-[10px] font-semibold text-gray-500">Effective from</span>
+                            <input
+                                type="date"
+                                value={effectiveStart}
+                                onChange={(event) => {
+                                    setEffectiveStart(event.target.value);
+                                    setDateError(null);
+                                }}
+                                className="mt-0.5 w-full rounded border border-gray-200 px-1.5 py-1 text-[11px]"
+                                data-testid="tuition-rate-effective-start"
+                            />
+                        </label>
+                        <label>
+                            <span className="text-[10px] font-semibold text-gray-500">Effective until</span>
+                            <input
+                                type="date"
+                                value={effectiveEnd}
+                                min={effectiveStart || undefined}
+                                onChange={(event) => {
+                                    setEffectiveEnd(event.target.value);
+                                    setDateError(null);
+                                }}
+                                className="mt-0.5 w-full rounded border border-gray-200 px-1.5 py-1 text-[11px]"
+                                data-testid="tuition-rate-effective-end"
+                            />
+                        </label>
+                    </div>
+                    {dateError ? <p className="text-[10px] text-red-600">{dateError}</p> : null}
+                    <div className="flex justify-end gap-2">
+                        <button
+                            type="button"
+                            className="text-[11px] font-medium text-gray-500"
+                            onClick={() => setEditing(false)}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            className="rounded bg-pine-600 px-2 py-1 text-[11px] font-semibold text-white"
+                            onClick={() => void commitEdit()}
+                            disabled={saving}
+                        >
+                            {saving ? "Saving…" : "Save rate"}
+                        </button>
+                    </div>
+                </div>
             </td>
         );
     }
@@ -156,6 +229,12 @@ function TuitionCell({
             ) : (
                 <span className="text-gray-200">—</span>
             )}
+            {rateRow?.effective_start || rateRow?.effective_end ?
+                <span className="mt-0.5 block text-[10px] not-italic text-gray-400">
+                    {rateRow.effective_start ? `From ${rateRow.effective_start}` : "Current"}
+                    {rateRow.effective_end ? ` through ${rateRow.effective_end}` : ""}
+                </span>
+            :   null}
 
             {canManage && !isNotOffered && (
                 <button
@@ -366,7 +445,12 @@ export function TuitionGridWorkspace({
     async function saveCell(
         variantId: string,
         cadenceKey: string,
-        payload: { rate_cents?: number; not_offered?: boolean },
+        payload: {
+            rate_cents?: number;
+            not_offered?: boolean;
+            effective_start?: string | null;
+            effective_end?: string | null;
+        },
     ) {
         setSaving(true);
         try {
@@ -424,6 +508,8 @@ export function TuitionGridWorkspace({
                             location_id: locationId,
                             rate_cents: r.rate_cents,
                             not_offered: r.not_offered,
+                            effective_start: r.effective_start,
+                            effective_end: r.effective_end,
                         }),
                     }),
                 ),

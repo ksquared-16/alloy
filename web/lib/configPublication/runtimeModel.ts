@@ -14,6 +14,8 @@ export type ConfigurationDetailSection =
     | "offerings"
     | "pricing"
     | "configuration"
+    | "policies"
+    | "relationships"
     | "publication"
     | "assignment"
     | "distribution"

@@ -173,17 +173,36 @@ assignment impact language. They do not rebuild Collection, Detail, Attention,
 Assignment, Distribution, History, or shell command ownership.
 
 A rich Configuration domain may register additional business concerns inside the
-same Detail Runtime. Programs demonstrates Definition, Requirements, Resources,
-Availability, Offerings, Pricing, Configuration, Publication, Assignments,
-History, and Attention. Domain adapters project related authority without moving it:
-Location-owned offer state, evidence, resources, capacity, and schedules are
-read-only in Organization Programs and deep-link to Locations; Commercial-owned
-rates, Program-scoped catalog products, policies, and pricing simulation are
-composed into Pricing and Configuration while continuing to use Commercial
-mutation and execution paths. Accounting account administration and payer
-responsibility remain explicit Financial/Commercial and Processing handoffs.
-Distribution evidence is composed within Publication rather than presented as
-the identity of the Program.
+same Detail Runtime. Programs demonstrates the domain-first hierarchy Overview,
+Definition, Offerings, Pricing, Availability, Requirements, Resources, Policies,
+Relationships, Publication, Assignments, and History. The Programs adapter groups
+those visible concerns by operator purpose when a single horizontal tab row would
+be too dense; it does not create another runtime or hide concerns behind a generic
+Configuration page. Attention and readiness are composed into Overview.
+
+Domain adapters project related authority without moving it: Location-owned offer
+state, evidence, resources, capacity, and schedules are read-only in Organization
+Programs and deep-link to Locations; Commercial-owned rates, Program-scoped fees
+and add-ons, policies, and pricing simulation use the existing Commercial mutation
+and execution paths. Accounting account administration and payer responsibility
+remain explicit Financial/Commercial and Processing handoffs. Distribution
+evidence is composed within Publication rather than presented as the identity of
+the Program.
+
+### Pricing Runtime composition
+
+Programs consumes one canonical Commercial pricing workspace rather than owning a
+second rate editor. Pricing exposes three directly visible subconcerns: tuition
+rates, Program-scoped fees and add-ons, and read-only pricing preview. Tuition rate
+amount, scope, inheritance, not-offered state, comparison, and effective start/end
+dates are edited in `TuitionGridWorkspace`; other Program surfaces summarize and
+deep-link to that workspace.
+
+Effective dating is a Pricing Runtime concern. The shared Commercial rate editor
+persists the existing `effective_start` and `effective_end` contract, so Programs
+does not introduce Program-specific date storage, mutation paths, or resolution.
+Generic cross-domain scheduled-change extraction remains deferred until a second
+independent pricing domain proves the primitive.
 
 Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
 
@@ -255,9 +274,9 @@ That document does not reopen this runtime.
 
 ### Primitives NOT yet extracted (deferred)
 
-These belong to the Configuration Runtime eventually but are only Commercial-specific today:
+These may belong to the Configuration Runtime eventually but are only proven in one domain today:
 
-- Effective dating / scheduled changes
+- Generic effective-date and scheduled-change orchestration beyond the shared Commercial Pricing Runtime
 - Bulk rate operations
 - Compare locations
 - Cross-domain impact analysis

@@ -121,7 +121,11 @@ describe("Programs Publication workspace", () => {
 
         expect(container.querySelector('[data-testid="programs-publication-runtime"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-overview"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-overview-concerns"]')).not.toBeNull();
+        expect(container.querySelector('[data-testid="program-overview-attention"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="program-save-draft"]')).toBeNull();
+        expect(container.querySelector('[data-testid="program-detail-runtime-tab-configuration"]')).toBeNull();
+        expect(container.querySelector('[data-testid="program-detail-runtime-tab-attention"]')).toBeNull();
         expect(container.textContent).toContain("This Program defines a reusable service");
         expect(container.textContent).toContain("1 published · 1 draft or changed · 0 assigned");
 
@@ -138,8 +142,8 @@ describe("Programs Publication workspace", () => {
             ["availability", "program-availability-runtime"],
             ["offerings", "program-offerings-runtime"],
             ["pricing", "program-pricing-runtime"],
-            ["configuration", "program-configuration-runtime"],
-            ["attention", "program-attention-runtime"],
+            ["policies", "program-policies-runtime"],
+            ["relationships", "program-relationships-runtime"],
         ] as const) {
             await act(async () => {
                 (

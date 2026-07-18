@@ -13,15 +13,12 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     ConfigAssignmentRuntime,
-    ConfigAttentionPanel,
     ConfigCollectionRail,
     ConfigConsequenceLine,
     ConfigDetailRuntime,
     ConfigDistributionRuntime,
     ConfigHistoryTimeline,
     ConfigObjectHeader,
-    ConfigOperationalReadiness,
-    ConfigPublicationOverview,
     ConfigWorkspaceCard,
     type ConfigDetailTab,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
@@ -57,12 +54,14 @@ import {
 } from "@/lib/programs/programConfigurationSections";
 import {
     ProgramAvailabilitySection,
-    ProgramConfigurationSection as ProgramConfigurationRuntimeSection,
     ProgramOfferingsSection,
+    ProgramPoliciesSection,
     ProgramPricingSection,
+    ProgramRelationshipsSection,
     ProgramRequirementsSection,
     ProgramResourcesSection,
 } from "@/components/adminV2/settings/programs/ProgramDomainSections";
+import { ProgramOverviewSurface } from "@/components/adminV2/settings/programs/ProgramOverviewSurface";
 
 const ENDPOINT = "/api/admin/configuration/programs";
 
@@ -173,6 +172,74 @@ async function postAction(body: Record<string, unknown>): Promise<Record<string,
 
 function programSectionForRuntime(section: ConfigurationDetailSection): ProgramConfigurationSection {
     return normalizeProgramConfigurationSection(section);
+}
+
+const PROGRAM_CONCERN_GROUPS: Array<{
+    label: string;
+    keys: ProgramConfigurationSection[];
+}> = [
+    { label: "Program", keys: ["overview", "definition"] },
+    { label: "Service model", keys: ["offerings", "pricing"] },
+    { label: "Delivery", keys: ["availability", "requirements", "resources"] },
+    { label: "Governance", keys: ["policies", "relationships"] },
+    { label: "Lifecycle", keys: ["publication", "assignment", "history"] },
+];
+
+function ProgramConcernNavigation({
+    tabs,
+    activeSection,
+    onSectionChange,
+}: {
+    tabs: ConfigDetailTab<ProgramConfigurationSection>[];
+    activeSection: ProgramConfigurationSection;
+    onSectionChange: (section: ProgramConfigurationSection) => void;
+}) {
+    const tabByKey = new Map(tabs.map((tab) => [tab.key, tab]));
+    return (
+        <div
+            className="mt-3.5 grid gap-x-4 gap-y-3 border-t border-alloy-stone/25 pt-3 sm:grid-cols-2 2xl:grid-cols-3"
+            role="tablist"
+            aria-label="Program concerns"
+            data-testid="program-detail-runtime-tabs"
+        >
+            {PROGRAM_CONCERN_GROUPS.map((group) => (
+                <div key={group.label} role="presentation">
+                    <p className="px-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/35">
+                        {group.label}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1" role="presentation">
+                        {group.keys.map((key) => {
+                            const tab = tabByKey.get(key);
+                            if (!tab) return null;
+                            const selected = activeSection === key;
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={selected}
+                                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold ${
+                                        selected
+                                            ? "bg-alloy-bend-pine/[0.1] text-alloy-bend-pine"
+                                            : "text-alloy-midnight/55 hover:bg-alloy-stone/[0.08] hover:text-alloy-midnight/75"
+                                    }`}
+                                    onClick={() => onSectionChange(key)}
+                                    data-testid={`program-detail-runtime-tab-${key}`}
+                                >
+                                    {tab.label}
+                                    {tab.attentionCount && tab.attentionCount > 0 ?
+                                        <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-alloy-ember/10 px-1 text-[9px] text-alloy-ember">
+                                            {tab.attentionCount}
+                                        </span>
+                                    :   null}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
 }
 
 export default function ProgramsPublicationWorkspace(props: {
@@ -373,12 +440,13 @@ export default function ProgramsPublicationWorkspace(props: {
                       label: "Definition",
                       attentionCount: viewModel.runtime.attention.filter((item) => item.section === "draft").length,
                   },
-                  { key: "requirements", label: "Requirements" },
-                  { key: "resources", label: "Resources" },
-                  { key: "availability", label: "Availability" },
                   { key: "offerings", label: "Offerings" },
                   { key: "pricing", label: "Pricing" },
-                  { key: "configuration", label: "Configuration" },
+                  { key: "availability", label: "Availability" },
+                  { key: "requirements", label: "Requirements" },
+                  { key: "resources", label: "Resources" },
+                  { key: "policies", label: "Policies" },
+                  { key: "relationships", label: "Relationships" },
                   {
                       key: "publication",
                       label: "Publication",
@@ -390,11 +458,6 @@ export default function ProgramsPublicationWorkspace(props: {
                       attentionCount: viewModel.runtime.attention.filter((item) => item.section === "assignment").length,
                   },
                   { key: "history", label: "History" },
-                  {
-                      key: "attention",
-                      label: "Attention",
-                      attentionCount: viewModel.runtime.attention.filter((item) => item.grade !== "good").length,
-                  },
               ]
             : [];
     const revisionLabelByPublicationId = new Map(
@@ -517,11 +580,8 @@ export default function ProgramsPublicationWorkspace(props: {
                                         size="hero"
                                         name={selectedProgram.draft.label}
                                         status={{
-                                            label: viewModel.runtime.publication.label,
-                                            tone:
-                                                viewModel.runtime.attention.some((item) => item.grade === "fix")
-                                                    ? "attention"
-                                                    : "active",
+                                            label: selectedProgram.lifecycleStatus === "active" ? "Active" : "Retired",
+                                            tone: selectedProgram.lifecycleStatus === "active" ? "active" : "inactive",
                                         }}
                                         breadcrumb={
                                             <nav
@@ -541,8 +601,8 @@ export default function ProgramsPublicationWorkspace(props: {
                                         }
                                         facts={[
                                             `Key · ${selectedProgram.key}`,
-                                            viewModel.runtime.publication.activeRevisionLabel,
-                                            viewModel.runtime.assignment.label,
+                                            selectedProgram.draft.category ?? "Category not set",
+                                            audienceLabel(selectedProgram.draft),
                                         ]}
                                         actions={
                                             canManage && activeSection !== "definition" ?
@@ -559,35 +619,27 @@ export default function ProgramsPublicationWorkspace(props: {
                                 }
                                 consequence={
                                     <ConfigConsequenceLine>
-                                        Organization publishes Program identity. Locations consume an assigned revision while local offer state, evidence, resources, and schedules remain Location-owned.
+                                        This Program defines a reusable service across the Organization. Locations retain authority for local offer state, evidence, resources, capacity, and schedules.
                                     </ConfigConsequenceLine>
                                 }
                                 tabs={tabs}
+                                navigation={
+                                    <ProgramConcernNavigation
+                                        tabs={tabs}
+                                        activeSection={activeSection}
+                                        onSectionChange={setActiveSection}
+                                    />
+                                }
                                 activeSection={activeSection}
                                 onSectionChange={setActiveSection}
                                 testId="program-detail-runtime"
                             >
                                 {activeSection === "overview" ?
-                                    <ConfigPublicationOverview
-                                        model={viewModel.runtime}
-                                        activePublishedAt={selectedProgram.latestPublication?.publishedAt ?? null}
-                                        orientation={{
-                                            purpose: "This Program defines a reusable service the Organization can make available across Locations.",
-                                            ownership: "The Organization owns the published definition. Each assigned Location decides whether to offer it and owns local delivery details.",
-                                        }}
-                                        onOpenSection={(section) => setActiveSection(programSectionForRuntime(section))}
-                                        domainSummary={
-                                            <ProgramDefinitionSummary
-                                                definition={visibleDefinition}
-                                                label={
-                                                    activeRevision
-                                                        ? `Active Revision ${activeRevision.revisionNumber}`
-                                                        : "Working draft"
-                                                }
-                                                testId="program-overview-definition"
-                                            />
-                                        }
-                                        testId="program-overview"
+                                    <ProgramOverviewSurface
+                                        program={selectedProgram}
+                                        snapshot={snapshot}
+                                        viewModel={viewModel}
+                                        onOpenSection={setActiveSection}
                                     />
                                 : activeSection === "definition" ?
                                     <div className="space-y-4 pb-2" data-testid="program-draft-runtime">
@@ -796,13 +848,17 @@ export default function ProgramsPublicationWorkspace(props: {
                                         snapshot={snapshot}
                                         canManage={canManage}
                                         onReload={reload}
-                                        onError={setError}
                                     />
-                                : activeSection === "configuration" ?
-                                    <ProgramConfigurationRuntimeSection
+                                : activeSection === "policies" ?
+                                    <ProgramPoliciesSection
                                         program={selectedProgram}
                                         snapshot={snapshot}
                                         canManage={canManage}
+                                    />
+                                : activeSection === "relationships" ?
+                                    <ProgramRelationshipsSection
+                                        program={selectedProgram}
+                                        snapshot={snapshot}
                                     />
                                 : activeSection === "publication" ?
                                     <div className="space-y-4" data-testid="program-publication-runtime">
@@ -977,37 +1033,7 @@ export default function ProgramsPublicationWorkspace(props: {
                                         }
                                         testId="program-history-runtime"
                                     />
-                                :   <div className="space-y-4" data-testid="program-attention-runtime">
-                                        {viewModel.runtime.attention.some((item) => item.grade !== "good") ?
-                                            <ConfigAttentionPanel
-                                                items={viewModel.runtime.attention}
-                                                onResolve={(item) => {
-                                                    const runtimeItem = viewModel.runtime.attention.find(
-                                                        (candidate) => candidate.key === item.key,
-                                                    );
-                                                    setActiveSection(
-                                                        runtimeItem
-                                                            ? programSectionForRuntime(runtimeItem.section)
-                                                            : "overview",
-                                                    );
-                                                }}
-                                                testId="program-attention-list"
-                                            />
-                                        :   <ConfigWorkspaceCard
-                                                title="Configuration attention"
-                                                description="No unresolved publication, assignment, or setup issues."
-                                            >
-                                                <p className="text-sm font-semibold text-alloy-bend-pine">
-                                                    Everything looks good.
-                                                </p>
-                                            </ConfigWorkspaceCard>
-                                        }
-                                        <ConfigOperationalReadiness
-                                            percent={viewModel.runtime.readiness.percent}
-                                            areas={viewModel.runtime.readiness.areas}
-                                            testId="program-attention-readiness"
-                                        />
-                                    </div>
+                                :   null
                                 }
                             </ConfigDetailRuntime>
                         }

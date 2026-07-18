@@ -1,30 +1,30 @@
 export type ProgramConfigurationSection =
     | "overview"
     | "definition"
-    | "requirements"
-    | "resources"
-    | "availability"
     | "offerings"
     | "pricing"
-    | "configuration"
+    | "availability"
+    | "requirements"
+    | "resources"
+    | "policies"
+    | "relationships"
     | "publication"
     | "assignment"
-    | "history"
-    | "attention";
+    | "history";
 
 export const PROGRAM_CONFIGURATION_SECTIONS = new Set<ProgramConfigurationSection>([
     "overview",
     "definition",
-    "requirements",
-    "resources",
-    "availability",
     "offerings",
     "pricing",
-    "configuration",
+    "availability",
+    "requirements",
+    "resources",
+    "policies",
+    "relationships",
     "publication",
     "assignment",
     "history",
-    "attention",
 ]);
 
 export function normalizeProgramConfigurationSection(
@@ -32,6 +32,8 @@ export function normalizeProgramConfigurationSection(
 ): ProgramConfigurationSection {
     if (value === "draft") return "definition";
     if (value === "distribution") return "publication";
+    if (value === "configuration") return "policies";
+    if (value === "attention") return "overview";
     return value && PROGRAM_CONFIGURATION_SECTIONS.has(value as ProgramConfigurationSection)
         ? (value as ProgramConfigurationSection)
         : "overview";

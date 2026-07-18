@@ -8,6 +8,10 @@ supersedes: []
 
 # Programs Product Certification Realization Alignment
 
+> The capability translation remains accepted. Its final domain-first composition
+> is certified in
+> `programs-information-architecture-realization-2026-07.md`.
+
 **Completion date:** 2026-07-17
 **Canonical surface:** `/organization/programs`
 **Reference:** [`programs-commercial-capability-inventory-2026-07.md`](programs-commercial-capability-inventory-2026-07.md)
@@ -20,16 +24,16 @@ Organization Configuration object whose read-first detail contains:
 
 1. Overview
 2. Definition
-3. Requirements
-4. Resources
+3. Offerings
+4. Pricing
 5. Availability
-6. Offerings
-7. Pricing
-8. Configuration
-9. Publication
-10. Assignments
-11. History
-12. Attention
+6. Requirements
+7. Resources
+8. Policies
+9. Relationships
+10. Publication
+11. Assignments
+12. History
 
 Publication remains fully functional, but Distribution is composed inside that
 concern. Programs-owned offering and variant authoring now lives in the same
@@ -50,13 +54,13 @@ Location-owned projections with deep links.
 | Attendance offerings | Offerings | Preserved and translated; create, edit posture, order, dates, remove/archive |
 | Quantity variants | Offerings | Preserved and improved; presets, custom quantities, bulk create, edit lifecycle, protected remove/archive |
 | Organization and Location tuition | Pricing | Preserved and translated; inheritance, override, clear, not-offered, dates, comparison, and explicit copy |
-| Program/offering/variant policies | Configuration / Policies | Preserved and translated; registry-driven create, edit, enable/disable, remove |
-| Default policy references and commercial posture | Pricing / Related policies | Preserved and made visible |
-| Program-scoped fees, add-ons, and deposits | Configuration / Catalog | Preserved and translated with behavior, category, scope, dates, and revenue relationship |
-| Commercial category authoring | Configuration / Catalog | Preserved and translated |
-| Pricing execution simulator | Configuration / Pricing preview | Preserved and translated as read-only execution |
-| Revenue category / GL relationship | Configuration / Relationships | Preserved and improved with missing-mapping posture; account administration remains authoritative elsewhere |
-| Funding responsibility | Configuration / Relationships | Preserved handoff; authoring deferred to Processing |
+| Program/offering/variant policies | Policies | Preserved and translated; registry-driven create, edit, enable/disable, remove |
+| Default policy references and commercial posture | Policies | Preserved and made visible |
+| Program-scoped fees, add-ons, and deposits | Pricing / Fees & add-ons | Preserved and translated with behavior, category, scope, dates, and revenue relationship |
+| Commercial category authoring | Pricing / Fees & add-ons | Preserved and translated |
+| Pricing execution simulator | Pricing / Pricing preview | Preserved and translated as read-only execution |
+| Revenue category / GL relationship | Relationships | Preserved and improved with missing-mapping posture; account administration remains authoritative elsewhere |
+| Funding responsibility | Relationships | Preserved handoff; authoring deferred to Processing |
 | Draft save and validation | Definition | Preserved |
 | Immutable revisions | Publication | Preserved |
 | Distribution, failure, retry | Publication | Preserved and subordinated to Program identity |
@@ -70,10 +74,10 @@ Location-owned projections with deep links.
 
 - `ConfigDetailRuntime` accepts domain concern keys while retaining the shared
   section-navigation contract.
-- Configuration setup and Attention can point to rich domain concerns.
+- Setup and Attention point to directly named Program concerns and are summarized in Overview.
 - Programs composes Publication and Distribution as one product concern.
 - Collection readiness now assesses Definition, Requirements, Resources,
-  Offerings, Pricing, Configuration, Publication, Assignment, and Availability
+  Offerings, Pricing, Policies, Relationships, Publication, Assignment, and Availability
   when evidence is known.
 - Collection rows expose lifecycle, offering/rate/catalog density, publication,
   assignment, readiness, and Attention; filters include lifecycle posture.
@@ -81,7 +85,7 @@ Location-owned projections with deep links.
   offerings/variants and related Commercial rates, policies, and Program-scoped
   products.
 - Existing Commercial editors are focused to the selected Program and composed
-  into Pricing and Configuration rather than copied into a fork.
+  into Pricing, Policies, and Relationships rather than copied into a fork.
 - Related reads retain Organization and allowed-Location scope.
 - Managed Playwright storage state is supported without copying privileged
   credentials into the worktree.
@@ -111,11 +115,11 @@ Authenticated Chromium evidence is in
 | `03a-program-requirements.png` | Requirements as an understandable concern |
 | `03b-program-resources.png` | Organization requirement and Location ownership |
 | `03c-program-offerings.png` | Offering and variant capability in Configuration Runtime |
-| `03d-program-pricing.png` | Variant pricing and related policy context |
-| `03e-program-configuration-catalog.png` | Program-scoped fee/add-on/deposit catalog |
-| `03f-program-configuration-policies.png` | Registry-driven Program policy authoring |
-| `03g-program-configuration-preview.png` | Read-only Commercial execution preview |
-| `03h-program-configuration-relationships.png` | Accounting, operational, and funding handoffs |
+| `03d-program-pricing-rates.png` | Canonical rate editor and effective-date controls |
+| `03e-program-pricing-catalog.png` | Program-scoped fee/add-on/deposit catalog |
+| `03f-program-policies.png` | Registry-driven Program policy authoring |
+| `03g-program-pricing-preview.png` | Read-only Commercial execution preview |
+| `03h-program-relationships.png` | Accounting, operational, and funding handoffs |
 | `04-location-assignment-selection.png` | Assignment target selection |
 | `05-impact-preview.png` | Local-truth-preserving impact preview |
 | `06a-program-availability.png` | Assigned versus locally offered posture |

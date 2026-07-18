@@ -113,13 +113,16 @@ export function buildProgramPublicationViewModel(
                 section: "pricing",
             },
             {
-                key: "configuration",
-                label: "Supporting configuration",
-                complete:
-                    relatedPolicies.length === 0 && relatedProducts.length === 0
-                        ? null
-                        : true,
-                section: "configuration",
+                key: "policies",
+                label: "Program policies",
+                complete: relatedPolicies.length === 0 ? null : true,
+                section: "policies",
+            },
+            {
+                key: "relationships",
+                label: "Commercial relationships",
+                complete: relatedProducts.length === 0 ? null : true,
+                section: "relationships",
             },
             {
                 key: "publication",

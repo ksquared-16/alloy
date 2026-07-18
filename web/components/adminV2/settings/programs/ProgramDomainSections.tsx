@@ -18,7 +18,6 @@ import {
 import {
     describeVariant,
 } from "@/lib/programs/programOfferingVariants";
-import { formatRateCents, parseDollarsToCents } from "@/lib/commercial/tuitionRates";
 import {
     sortProducts,
     type CommercialCategory,
@@ -454,222 +453,14 @@ export function ProgramPricingSection({
     snapshot,
     canManage,
     onReload,
-    onError,
 }: {
     program: ProgramCatalogItem;
     snapshot: ProgramPublicationSnapshot;
     canManage: boolean;
     onReload: () => Promise<void>;
-    onError: (message: string) => void;
 }) {
-    const offerings = snapshot.offerings.filter((offering) => offering.program_key === program.key);
-    const offeringIds = new Set(offerings.map((offering) => offering.id));
-    const variants = snapshot.variants.filter((variant) => offeringIds.has(variant.offering_id));
-    const variantIds = new Set(variants.map((variant) => variant.id));
-    const rates = snapshot.tuitionRates.filter((rate) => variantIds.has(rate.variant_id));
-    const offeringById = new Map(offerings.map((offering) => [offering.id, offering]));
-    const variantById = new Map(variants.map((variant) => [variant.id, variant]));
-    const policies = snapshot.policies.filter((policy) =>
-        policy.programKey === program.key
-        || (policy.offeringId != null && offeringIds.has(policy.offeringId))
-        || (policy.variantId != null && variantIds.has(policy.variantId)),
-    );
-    const [rateVariantId, setRateVariantId] = useState(variants[0]?.id ?? "");
-    const [rateCadence, setRateCadence] = useState("monthly");
-    const [rateLocationId, setRateLocationId] = useState("");
-    const [rateAmount, setRateAmount] = useState("");
-    const [notOffered, setNotOffered] = useState(false);
-    const [savingRate, setSavingRate] = useState(false);
-
-    async function saveRate() {
-        const cents = notOffered ? 0 : parseDollarsToCents(rateAmount);
-        if (!rateVariantId || cents == null) {
-            onError("Choose a variant and enter a valid non-negative rate.");
-            return;
-        }
-        setSavingRate(true);
-        try {
-            await requestJson("/api/admin/commercial/tuition-rates", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    variant_id: rateVariantId,
-                    cadence_key: rateCadence,
-                    location_id: rateLocationId || null,
-                    rate_cents: cents,
-                    not_offered: notOffered,
-                }),
-            });
-            setRateAmount("");
-            await onReload();
-        } catch (error) {
-            onError(error instanceof Error ? error.message : "The rate could not be saved.");
-        } finally {
-            setSavingRate(false);
-        }
-    }
-    return (
-        <div className="space-y-4" data-testid="program-pricing-runtime">
-            <ConfigWorkspaceCard
-                title="Pricing"
-                description="Commercial pricing remains authoritative while this Program shows the rates and policies connected to its offerings."
-            >
-                <div className="divide-y divide-alloy-stone/20">
-                    {rates.map((rate) => {
-                        const variant = variantById.get(rate.variant_id);
-                        const offering = variant ? offeringById.get(variant.offering_id) : null;
-                        return (
-                            <div key={rate.id} className="grid gap-1 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-                                <span className="text-sm font-semibold text-alloy-midnight">
-                                    {offering?.label ?? "Offering"} · {variant ? describeVariant(variant) : "Variant"}
-                                </span>
-                                <span className="text-xs text-alloy-midnight/55">{rate.location_id ? "Location override" : "Organization default"}</span>
-                                <span className="text-sm font-semibold text-alloy-midnight">
-                                    {rate.not_offered ? "Not offered" : `${formatRateCents(rate.rate_cents)} · ${rate.cadence_key}`}
-                                </span>
-                            </div>
-                        );
-                    })}
-                    {rates.length === 0 ? <p className="py-3 text-sm text-alloy-midnight/50">No pricing configured.</p> : null}
-                </div>
-                {canManage && variants.length > 0 ?
-                    <div className="mt-4 grid gap-2 border-t border-alloy-stone/20 pt-4 sm:grid-cols-2 lg:grid-cols-5">
-                        <label>
-                            <span className="config-typo-field-label">Offering variant</span>
-                            <select
-                                className="config-runtime-select mt-1 text-xs"
-                                value={rateVariantId}
-                                onChange={(event) => setRateVariantId(event.target.value)}
-                            >
-                                {variants.map((variant) => (
-                                    <option key={variant.id} value={variant.id}>
-                                        {offeringById.get(variant.offering_id)?.label ?? "Offering"} · {describeVariant(variant)}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <label>
-                            <span className="config-typo-field-label">Scope</span>
-                            <select
-                                className="config-runtime-select mt-1 text-xs"
-                                value={rateLocationId}
-                                onChange={(event) => setRateLocationId(event.target.value)}
-                            >
-                                <option value="">Organization default</option>
-                                {snapshot.locations.map((location) => (
-                                    <option key={location.id} value={location.id}>{location.label}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <label>
-                            <span className="config-typo-field-label">Cadence</span>
-                            <select
-                                className="config-runtime-select mt-1 text-xs"
-                                value={rateCadence}
-                                onChange={(event) => setRateCadence(event.target.value)}
-                            >
-                                {["monthly", "weekly", "biweekly", "annual"].map((cadence) => (
-                                    <option key={cadence} value={cadence}>{cadence}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <label>
-                            <span className="config-typo-field-label">Rate</span>
-                            <input
-                                className="config-runtime-input mt-1 text-xs"
-                                value={rateAmount}
-                                placeholder="$0"
-                                disabled={notOffered}
-                                onChange={(event) => setRateAmount(event.target.value)}
-                            />
-                        </label>
-                        <div className="flex flex-wrap items-end gap-2">
-                            <label className="mb-2 flex items-center gap-1.5 text-xs text-alloy-midnight/60">
-                                <input
-                                    type="checkbox"
-                                    checked={notOffered}
-                                    onChange={(event) => setNotOffered(event.target.checked)}
-                                />
-                                Not offered
-                            </label>
-                            <ConfigurationPrimaryButton
-                                disabled={savingRate || (!notOffered && !rateAmount.trim())}
-                                onClick={() => void saveRate()}
-                            >
-                                {savingRate ? "Saving…" : "Save rate"}
-                            </ConfigurationPrimaryButton>
-                        </div>
-                    </div>
-                :   null}
-                <Link href="/settings/commercial" className="mt-3 inline-block text-sm font-semibold text-alloy-bend-pine">
-                    Open full pricing workspace →
-                </Link>
-            </ConfigWorkspaceCard>
-            <ConfigWorkspaceCard
-                title="Related policies"
-                description="Program, offering, and variant policies that participate in Commercial resolution."
-            >
-                <div className="mb-4 grid gap-4 border-b border-alloy-stone/20 pb-4 sm:grid-cols-2">
-                    <div>
-                        <p className="config-typo-field-label mb-1">Default policy references</p>
-                        <JsonSummary
-                            value={program.draft.defaultPolicyRefs}
-                            empty="No default policy references specified."
-                        />
-                    </div>
-                    <div>
-                        <p className="config-typo-field-label mb-1">Default commercial posture</p>
-                        <JsonSummary
-                            value={program.draft.defaultCommercialPosture}
-                            empty="No default commercial posture specified."
-                        />
-                    </div>
-                </div>
-                <div className="space-y-2">
-                    {policies.map((policy) => (
-                        <div key={policy.id} className="rounded-lg border border-alloy-stone/20 px-3 py-2">
-                            <p className="text-sm font-semibold text-alloy-midnight">{policy.label ?? policy.policyType.replaceAll("_", " ")}</p>
-                            <p className="text-xs text-alloy-midnight/50">{policy.scopeType} scope · {policy.active ? "Active" : "Inactive"}</p>
-                        </div>
-                    ))}
-                    {policies.length === 0 ? <p className="text-sm text-alloy-midnight/50">No related policies.</p> : null}
-                </div>
-                <Link href="/settings/commercial" className="mt-3 inline-block text-sm font-semibold text-alloy-bend-pine">
-                    Manage policies →
-                </Link>
-            </ConfigWorkspaceCard>
-            <ConfigWorkspaceCard
-                title="Pricing configuration"
-                description="Edit Organization defaults, inspect inheritance, compare Locations, clear overrides, copy defaults, and manage effective dates."
-            >
-                <TuitionGridWorkspace
-                    programKey={program.key}
-                    embedded
-                    canManage={canManage}
-                    scopedRates={snapshot.tuitionRates}
-                    scopedLocations={snapshot.locations.map((location) => ({
-                        id: location.id,
-                        name: location.label,
-                    }))}
-                    onReload={onReload}
-                />
-            </ConfigWorkspaceCard>
-        </div>
-    );
-}
-
-type ProgramConfigurationView = "catalog" | "policies" | "preview" | "relationships";
-
-export function ProgramConfigurationSection({
-    program,
-    snapshot,
-    canManage,
-}: {
-    program: ProgramCatalogItem;
-    snapshot: ProgramPublicationSnapshot;
-    canManage: boolean;
-}) {
-    const [activeView, setActiveView] = useState<ProgramConfigurationView>("catalog");
+    type ProgramPricingView = "rates" | "catalog" | "preview";
+    const [activeView, setActiveView] = useState<ProgramPricingView>("rates");
     const [products, setProducts] = useState<CommercialProduct[]>(() =>
         sortProducts(snapshot.products.filter((product) => product.program_key === program.key)),
     );
@@ -709,34 +500,35 @@ export function ProgramConfigurationSection({
 
     const programOption = [{ key: program.key, label: program.draft.label, siteCount: snapshot.locations.length }];
     const locationOptions = snapshot.locations.map((location) => ({ id: location.id, name: location.label }));
-    const revenueCategoryById = new Map(revenueCategories.map((category) => [category.id, category]));
-    const views: Array<{ key: ProgramConfigurationView; label: string }> = [
-        { key: "catalog", label: "Catalog" },
-        { key: "policies", label: "Policies" },
-        { key: "preview", label: "Pricing preview" },
-        { key: "relationships", label: "Relationships" },
+    const views: Array<{ key: ProgramPricingView; label: string; description: string }> = [
+        { key: "rates", label: "Tuition rates", description: "Canonical rate editor" },
+        { key: "catalog", label: "Fees & add-ons", description: "Program catalog" },
+        { key: "preview", label: "Pricing preview", description: "Read-only execution" },
     ];
 
     return (
-        <div className="space-y-4" data-testid="program-configuration-runtime">
+        <div className="space-y-4" data-testid="program-pricing-runtime">
             <ConfigWorkspaceCard
-                title="Supporting configuration"
-                description="Program-scoped products, policies, previews, and authority relationships from the mature Commercial domain."
+                title="Pricing"
+                description="Commercial owns pricing. Rates, Program-scoped fees, and execution preview are composed here as one discoverable concern."
             >
-                <div className="flex overflow-x-auto border-b border-alloy-stone/20">
+                <div className="grid gap-2 sm:grid-cols-3" role="tablist" aria-label="Program pricing concerns">
                     {views.map((view) => (
                         <button
                             key={view.key}
                             type="button"
-                            className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold ${
+                            role="tab"
+                            aria-selected={activeView === view.key}
+                            className={`rounded-lg border px-3 py-2 text-left ${
                                 activeView === view.key
-                                    ? "border-alloy-bend-pine text-alloy-bend-pine"
-                                    : "border-transparent text-alloy-midnight/50 hover:text-alloy-midnight/75"
+                                    ? "border-alloy-bend-pine/40 bg-alloy-bend-pine/[0.07] text-alloy-bend-pine"
+                                    : "border-alloy-stone/25 text-alloy-midnight/60 hover:border-alloy-bend-pine/30"
                             }`}
                             onClick={() => setActiveView(view.key)}
-                            data-testid={`program-configuration-${view.key}`}
+                            data-testid={`program-pricing-view-${view.key}`}
                         >
-                            {view.label}
+                            <span className="block text-xs font-semibold">{view.label}</span>
+                            <span className="mt-0.5 block text-[10px] text-current/65">{view.description}</span>
                         </button>
                     ))}
                 </div>
@@ -746,6 +538,23 @@ export function ProgramConfigurationSection({
                 <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                     {error}
                 </p>
+            : activeView === "rates" ?
+                <ConfigWorkspaceCard
+                    title="Tuition rate matrix"
+                    description="The sole tuition-rate editing surface. Edit Organization defaults, effective dates, inheritance, and Location differences here."
+                >
+                    <TuitionGridWorkspace
+                        programKey={program.key}
+                        embedded
+                        canManage={canManage}
+                        scopedRates={snapshot.tuitionRates}
+                        scopedLocations={snapshot.locations.map((location) => ({
+                            id: location.id,
+                            name: location.label,
+                        }))}
+                        onReload={onReload}
+                    />
+                </ConfigWorkspaceCard>
             : activeView === "catalog" ?
                 <CommercialCatalogPanel
                     products={products}
@@ -765,20 +574,7 @@ export function ProgramConfigurationSection({
                     onProductDeleted={(id) => setProducts((current) => current.filter((item) => item.id !== id))}
                     onCategoryCreated={(category) => setCategories((current) => [...current, category])}
                 />
-            : activeView === "policies" ?
-                <ConfigWorkspaceCard
-                    title="Program policies"
-                    description="Registry-driven rules scoped to this Program, its offerings, or its variants."
-                >
-                    <CommercialPoliciesPanel
-                        programs={programOption}
-                        locations={locationOptions}
-                        focusProgramKey={program.key}
-                        embedded
-                        canManage={canManage}
-                    />
-                </ConfigWorkspaceCard>
-            : activeView === "preview" ?
+            :
                 <ConfigWorkspaceCard
                     title="Pricing preview"
                     description="Read-only execution preview using this Program's current offerings, rates, products, and policies."
@@ -790,56 +586,131 @@ export function ProgramConfigurationSection({
                         embedded
                     />
                 </ConfigWorkspaceCard>
-            :   <div className="space-y-4" data-testid="program-configuration-relationships-panel">
-                    <ConfigWorkspaceCard
-                        title="Revenue and accounting"
-                        description="Commercial defines the charge; Accounting owns where revenue posts."
-                    >
-                        <div className="divide-y divide-alloy-stone/20">
-                            {products.map((product) => {
-                                const revenueCategory =
-                                    product.revenue_category_id
-                                        ? revenueCategoryById.get(product.revenue_category_id)
-                                        : null;
-                                return (
-                                    <div key={product.id} className="flex items-center justify-between gap-3 py-2.5">
-                                        <div>
-                                            <p className="text-sm font-semibold text-alloy-midnight">{product.name}</p>
-                                            <p className="text-xs text-alloy-midnight/50">
-                                                {revenueCategory?.label ?? product.revenue_category ?? "No revenue category"}
-                                            </p>
-                                        </div>
-                                        <span className={`text-xs font-semibold ${
-                                            revenueCategory?.mapped_gl_account_id
-                                                ? "text-alloy-bend-pine"
-                                                : "text-alloy-ember"
-                                        }`}>
-                                            {revenueCategory?.mapped_gl_account_id ? "Accounting mapped" : "Needs accounting mapping"}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                            {products.length === 0 ?
-                                <p className="py-3 text-sm text-alloy-midnight/50">No Program-scoped catalog items.</p>
-                            :   null}
-                        </div>
-                        <Link href="/settings/commercial" className="mt-3 inline-block text-sm font-semibold text-alloy-bend-pine">
-                            Open accounting configuration →
-                        </Link>
-                    </ConfigWorkspaceCard>
-                    <ConfigWorkspaceCard
-                        title="Operational consumers"
-                        description="Programs provide reusable definitions to downstream systems without moving their operational truth."
-                    >
-                        <ul className="space-y-2 text-sm text-alloy-midnight/65">
-                            <li>Enrollment uses Program identity, offering, and requirement context.</li>
-                            <li>Rooms, capacity, and schedules remain Location-owned.</li>
-                            <li>Waitlists and placement consume Program identity and Location availability.</li>
-                            <li>Funding responsibility remains owned by Processing.</li>
-                        </ul>
-                    </ConfigWorkspaceCard>
-                </div>
             }
+        </div>
+    );
+}
+
+export function ProgramPoliciesSection({
+    program,
+    snapshot,
+    canManage,
+}: {
+    program: ProgramCatalogItem;
+    snapshot: ProgramPublicationSnapshot;
+    canManage: boolean;
+}) {
+    const programs = [{ key: program.key, label: program.draft.label, siteCount: snapshot.locations.length }];
+    const locations = snapshot.locations.map((location) => ({ id: location.id, name: location.label }));
+    return (
+        <div className="space-y-4" data-testid="program-policies-runtime">
+            <ConfigWorkspaceCard
+                title="Policy posture"
+                description="Commercial owns policy resolution. Programs exposes the rules scoped to this Program, its offerings, and variants."
+            >
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <p className="config-typo-field-label mb-1">Default policy references</p>
+                        <JsonSummary value={program.draft.defaultPolicyRefs} empty="No default policy references specified." />
+                    </div>
+                    <div>
+                        <p className="config-typo-field-label mb-1">Default commercial posture</p>
+                        <JsonSummary value={program.draft.defaultCommercialPosture} empty="No default commercial posture specified." />
+                    </div>
+                </div>
+            </ConfigWorkspaceCard>
+            <ConfigWorkspaceCard
+                title="Program policies"
+                description="Registry-driven policy authoring remains on the authoritative Commercial mutation path."
+            >
+                <CommercialPoliciesPanel
+                    programs={programs}
+                    locations={locations}
+                    focusProgramKey={program.key}
+                    embedded
+                    canManage={canManage}
+                />
+            </ConfigWorkspaceCard>
+        </div>
+    );
+}
+
+export function ProgramRelationshipsSection({
+    program,
+    snapshot,
+}: {
+    program: ProgramCatalogItem;
+    snapshot: ProgramPublicationSnapshot;
+}) {
+    const products = sortProducts(snapshot.products.filter((product) => product.program_key === program.key));
+    const [revenueCategories, setRevenueCategories] = useState<CommercialRevenueCategory[]>([]);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        void fetch("/api/admin/commercial/revenue-categories")
+            .then(async (response) => {
+                if (!response.ok) throw new Error("Accounting relationships are temporarily unavailable.");
+                return response.json() as Promise<{ revenue_categories?: CommercialRevenueCategory[] }>;
+            })
+            .then((result) => {
+                if (!cancelled) setRevenueCategories(result.revenue_categories ?? []);
+            })
+            .catch((nextError) => {
+                if (!cancelled) setError(nextError instanceof Error ? nextError.message : "Accounting relationships are unavailable.");
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [program.key]);
+
+    const revenueCategoryById = new Map(revenueCategories.map((category) => [category.id, category]));
+    return (
+        <div className="space-y-4" data-testid="program-relationships-runtime">
+            <ConfigWorkspaceCard
+                title="Revenue and accounting"
+                description="Commercial defines each charge. Accounting remains authoritative for revenue mapping."
+            >
+                {error ? <p className="text-sm text-alloy-ember">{error}</p> : null}
+                <div className="divide-y divide-alloy-stone/20">
+                    {products.map((product) => {
+                        const revenueCategory =
+                            product.revenue_category_id ? revenueCategoryById.get(product.revenue_category_id) : null;
+                        return (
+                            <div key={product.id} className="flex items-center justify-between gap-3 py-2.5">
+                                <div>
+                                    <p className="text-sm font-semibold text-alloy-midnight">{product.name}</p>
+                                    <p className="text-xs text-alloy-midnight/50">
+                                        {revenueCategory?.label ?? product.revenue_category ?? "No revenue category"}
+                                    </p>
+                                </div>
+                                <span className={`text-xs font-semibold ${
+                                    revenueCategory?.mapped_gl_account_id ? "text-alloy-bend-pine" : "text-alloy-ember"
+                                }`}>
+                                    {revenueCategory?.mapped_gl_account_id ? "Accounting mapped" : "Needs accounting mapping"}
+                                </span>
+                            </div>
+                        );
+                    })}
+                    {products.length === 0 ?
+                        <p className="py-3 text-sm text-alloy-midnight/50">No Program-scoped catalog items.</p>
+                    :   null}
+                </div>
+                <Link href="/settings/commercial" className="mt-3 inline-block text-sm font-semibold text-alloy-bend-pine">
+                    Open accounting configuration →
+                </Link>
+            </ConfigWorkspaceCard>
+            <ConfigWorkspaceCard
+                title="Operational consumers"
+                description="Programs provide reusable definitions to downstream systems without moving their operational truth."
+            >
+                <ul className="space-y-2 text-sm text-alloy-midnight/65">
+                    <li>Enrollment uses Program identity, offering, and requirement context.</li>
+                    <li>Rooms, capacity, schedules, and local availability remain Location-owned.</li>
+                    <li>Waitlists and placement consume Program identity and Location availability.</li>
+                    <li>Funding responsibility remains owned by Processing.</li>
+                </ul>
+            </ConfigWorkspaceCard>
         </div>
     );
 }
