@@ -400,6 +400,8 @@ export async function composeWorkUnitProvisioningAnswer(
         focusPanelLayoutId: activeView.focus_panel_layout_id?.trim() || null,
         queueDefinition: wuRow.queue_definition,
         queueRowLayoutConfig: rowLayout?.config ?? null,
+        businessProcessKey: process.key,
+        workViewId: activeView.id,
     });
     timings.presentation_ms = now() - tPres;
 

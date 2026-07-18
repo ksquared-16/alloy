@@ -39,8 +39,9 @@
  * satisfy U-P7.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { LayoutDoc } from "@/lib/layout/layoutV2";
+import type { LayoutDoc, EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import { listOrgLayouts } from "@/lib/layout/entityLayoutsRepo";
+import { resolveSurfaceVariant, type SurfaceVariantCandidate } from "@/lib/layout/resolveSurfaceVariant";
 import {
     DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG,
     WORK_UNIT_HEADER_LAYOUT_KEY,
@@ -56,6 +57,30 @@ import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3
 /** Where the work-unit header surface config is published. Mirrors the canonical route's constants. */
 const WORKSPACE_SURFACE = "workspace" as const;
 const WORKSPACE_ENTITY_TYPE = "workspace";
+
+/**
+ * Map a published header `entity_layouts` row to a surface-variant candidate. Business-Process /
+ * Work-View / stage / status scoping is read from the layout's `metadata` when authored; an
+ * org-global header declares all-null constraints (a wildcard that applies to any context), so the
+ * shared resolver returns the highest-version published row — the former ad-hoc behaviour — until a
+ * scoped variant is published.
+ */
+function headerRecordToVariantCandidate(r: EntityLayoutRecord): SurfaceVariantCandidate {
+    const m = r.metadata ?? {};
+    const constraint = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : null);
+    return {
+        layoutId: r.id,
+        layoutKey: r.layoutKey,
+        entityType: WORKSPACE_ENTITY_TYPE,
+        surface: WORKSPACE_SURFACE,
+        status: r.status,
+        version: r.version,
+        businessProcessKey: constraint("businessProcessKey"),
+        workViewId: constraint("workViewId"),
+        stageKey: constraint("stageKey"),
+        statusKey: constraint("statusKey"),
+    };
+}
 
 /**
  * The canonical decode of a published header layout doc → config.
@@ -165,19 +190,34 @@ export async function resolveOperationalPresentation(args: {
     queueDefinition: unknown;
     /** Published queue-row layout config, when the org has one. */
     queueRowLayoutConfig: QueueRecordLayoutConfigV3 | null;
+    /** Applicability axes for the shared surface-variant resolver (P1: Header). */
+    businessProcessKey?: string | null;
+    workViewId?: string | null;
 }): Promise<OperationalPresentation> {
     const { supabase, orgId, fallbackTitle } = args;
 
-    // ── HEADER: published configuration, or the canonical builtin default. Never a fetch. ──
+    // ── HEADER: the ONE applicability resolver selects the published variant. Never a fetch. ──
     let headerConfig: WorkUnitHeaderSurfaceConfig = DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG;
     let headerSource: "published" | "builtin_default" = "builtin_default";
     try {
         const records = await listOrgLayouts(supabase, orgId, WORKSPACE_ENTITY_TYPE, WORKSPACE_SURFACE);
-        const published = records
-            .filter((r) => r.layoutKey === WORK_UNIT_HEADER_LAYOUT_KEY && r.status === "published")
-            .sort((a, b) => b.version - a.version)[0];
-        if (published) {
-            headerConfig = workUnitHeaderConfigFromLayoutDoc(published.doc);
+        const headerRecords = records.filter((r) => r.layoutKey === WORK_UNIT_HEADER_LAYOUT_KEY);
+        // One owner: `resolveSurfaceVariant` (published-only, deterministic, Work-View/Business-Process
+        // aware). For an org-global header every candidate is a wildcard, so it returns the highest
+        // published version — identical to the former filter+sort — while making authored BP/Work-View
+        // variants apply automatically. The former ad-hoc org-global lookup is deleted.
+        const resolution = resolveSurfaceVariant(
+            {
+                businessProcessKey: args.businessProcessKey ?? "",
+                workViewId: args.workViewId ?? null,
+                entityType: WORKSPACE_ENTITY_TYPE,
+                surface: WORKSPACE_SURFACE,
+            },
+            headerRecords.map(headerRecordToVariantCandidate),
+        );
+        const winner = resolution ? headerRecords.find((r) => r.id === resolution.candidate.layoutId) : null;
+        if (winner) {
+            headerConfig = workUnitHeaderConfigFromLayoutDoc(winner.doc);
             headerSource = "published";
         }
     } catch {
