@@ -33,6 +33,15 @@ alloy-ro runtime-containers <id|namespace>   # redacted: no command/env/secrets
 # explicit registration (mutating; outside alloy-ro; never infers ownership):
 alloy-runtime-register <namespace> --owner <mission-key> --class dedicated-disposable
 
+# Runtime Intent & Admission Contract V1 (R2) — DECLARE only (admission is NOT provisioning)
+# See RUNTIME-INTENT-ADMISSION.md
+alloy-ro runtime-policy                        # posture->isolation mapping + admission policy
+alloy-ro runtime-admission <slot|name>         # live admission decision (ephemeral; declares, never provisions)
+alloy-ro runtime-intent    <slot|name>         # inspect a recorded intent (or none) + staleness
+alloy-ro runtime-explain   <slot|name>         # posture resolution vs admission vs actual runtime state
+# record an immutable intent (mutating; outside alloy-ro; identity-checked; no slot-only targeting):
+alloy-runtime-intent <worktree> --mission <key> [--coordinate --coordination-reason "..."] [--supersede]
+
 # Phase 2 managed agent lifecycle
 alloy-agent-create my-initiative              # first free slot + default AI for that slot
 alloy-agent-create my-initiative claude

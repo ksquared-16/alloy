@@ -63,7 +63,7 @@
   },
   "read_only_subprocess_allowlist": {
     "git": ["rev-parse", "status --porcelain", "rev-list --count", "remote get-url", "config --get", "symbolic-ref", "show-ref", "for-each-ref", "cat-file", "describe"],
-    "other": ["lsof (inspection)", "ps (inspection)", "stat", "find (type f listing)", "awk", "basename", "cut", "sort", "seq", "kill -0 (existence check; delivers no signal)"]
+    "other": ["lsof (inspection)", "ps (inspection)", "stat", "find (type f listing)", "awk", "basename", "cut", "sort", "seq", "kill -0 (existence check; delivers no signal)", "node lib/manifest-io.mjs get (fixed toolkit JSON reader; parses a manifest field, never sources it, never writes)", "date -u (read the clock for an evaluated_at stamp)"]
   },
   "runtime_access": {
     "policy": "observe, never control — Runtime Registry & Inspection V1",
@@ -78,6 +78,18 @@
       "location": "<runtime-root>/runtimes/<runtime-id>.env",
       "parsed_not_sourced": true,
       "written_by": "alloy-runtime-register (explicit, mutating, OUTSIDE alloy-ro); alloy-ro never writes"
+    },
+    "intent_admission": {
+      "phase": "R2 — DECLARE (Runtime Intent & Admission Contract V1)",
+      "policy": "declare, never actuate — admission is NOT provisioning; an admitted runtime may not yet exist",
+      "posture_source": "<runtime-root>/manifests/<worktree>.json (canonical manifest; parsed via node lib/manifest-io.mjs get, never sourced)",
+      "intent_artifact": {
+        "location": "<runtime-root>/intents/<worktree>.env",
+        "parsed_not_sourced": true,
+        "written_by": "alloy-runtime-intent (explicit, mutating, identity-checked, OUTSIDE alloy-ro); alloy-ro never writes",
+        "reserves_capacity": false
+      },
+      "does_not": ["provision", "start", "stop", "attach", "detach", "lease", "reclaim", "touch Docker", "touch Supabase", "reserve capacity"]
     }
   },
   "verbs": {
@@ -150,6 +162,30 @@
     "runtime-containers": {
       "summary": "Redacted container list for a runtime. Never emits command/env/secrets.",
       "args": "<runtime-id|namespace>",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-policy": {
+      "summary": "Canonical posture->isolation mapping and admission policy (static + configured max). Declares, never actuates.",
+      "args": "",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-admission": {
+      "summary": "Live, ephemeral admission decision for a worktree from manifest posture + observed capacity. Admission is NOT provisioning; nothing is reserved, started, or attached.",
+      "args": "<slot|name|worktree>",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-intent": {
+      "summary": "Inspect a recorded runtime intent (parsed, never sourced) or report none. A recorded intent is a declaration, not a provisioned runtime.",
+      "args": "<slot|name|worktree>",
+      "reads": true, "writes": false, "network": false, "process_control": false,
+      "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
+    },
+    "runtime-explain": {
+      "summary": "Separate views: posture resolution, admission decision, and actual observed runtime state. Does not imply an admitted runtime exists.",
+      "args": "<slot|name|worktree>",
       "reads": true, "writes": false, "network": false, "process_control": false,
       "git_mutation": false, "deletion": false, "arbitrary_execution": false, "credential_access": false
     }

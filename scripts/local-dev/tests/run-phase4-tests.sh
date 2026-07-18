@@ -178,7 +178,9 @@ for f in \
   "$ROOT"/lib/ro-config.sh \
   "$ROOT"/lib/read-core.sh \
   "$ROOT"/lib/runtime-core.sh \
-  "$ROOT"/alloy-runtime-register
+  "$ROOT"/lib/admission-core.sh \
+  "$ROOT"/alloy-runtime-register \
+  "$ROOT"/alloy-runtime-intent
 do
   if [[ "$f" == *.mjs ]]; then node --check "$f"; else bash -n "$f"; fi
   pass "syntax $(basename "$f")"
@@ -367,6 +369,9 @@ assert_ok "runtime inspection tests" bash "$ROOT/tests/test-runtime-inspection.s
 
 echo "== Autonomous Inspection Surface (alloy-ro) =="
 assert_ok "alloy-ro constitution tests" bash "$ROOT/tests/test-alloy-ro.sh"
+
+echo "== Runtime Intent & Admission Contract V1 (R2) =="
+assert_ok "runtime admission tests" bash "$ROOT/tests/test-runtime-admission.sh"
 
 echo "== Runtime isolation =="
 assert_ok "runtime isolation focused tests" bash "$ROOT/tests/test-runtime-isolation.sh"

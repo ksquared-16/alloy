@@ -143,6 +143,7 @@ json_ok "worker-status --json" "$RO" worker-status --json
 json_ok "agent-status --json"  "$RO" agent-status --json
 json_ok "dev-status --json"    "$RO" dev-status --json
 json_ok "capabilities --json"  "$RO" capabilities --json
+json_ok "runtime-policy --json" "$RO" runtime-policy --json
 
 printf '== 10. not-found target yields exit 3 ==\n'
 assert_exit 3 "agent-status on absent slot 99"   -- "$RO" agent-status 99
@@ -163,7 +164,8 @@ if cap["surface_capabilities"].get("reads") is not True:
     errs.append("surface reads is not true")
 # per verb
 impl = {"root","runtime-paths","worker-status","agent-status","dev-status","agent-evidence","capabilities",
-        "runtime-list","runtime-status","runtime-capacity","runtime-discover","runtime-containers"}
+        "runtime-list","runtime-status","runtime-capacity","runtime-discover","runtime-containers",
+        "runtime-policy","runtime-admission","runtime-intent","runtime-explain"}
 declared = set(cap["verbs"].keys())
 if impl != declared:
     errs.append(f"verb set mismatch: impl-only={impl-declared} declared-only={declared-impl}")
