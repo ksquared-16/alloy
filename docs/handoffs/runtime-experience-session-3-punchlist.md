@@ -5,12 +5,24 @@ last_reviewed: 2026-07-18
 supersedes: []
 related:
   - docs/handoffs/runtime-experience-session-2-handoff.md
+  - docs/handoffs/runtime-experience-destination-identity-handoff.md
+  - docs/handoffs/runtime-experience-next-session-kickoff.md
 ---
 
 # Runtime Experience — Session 3 Punch List
 
 Branch `agent/claude/3-runtime-drawer-deletion` · managed Slot 3 · port **3013**. Keep commits
 local; no push/PR without Kelly's promotion authorization.
+
+> **⚠️ Current authoritative state → [`runtime-experience-destination-identity-handoff.md`](runtime-experience-destination-identity-handoff.md).**
+> Session 3b (this session) landed the atomic Focus Panel reveal, the config-read cache, and
+> commit-critical destination prep (Workspace entry **~100 ms, zero network**; adjacent warm row
+> **~63 ms**). **Three blockers remain** (QA-identified): (1) first-use Queue Row consistency +
+> immediate acknowledgment [optimistic ack landed, not yet certified], (2) canonical Operational
+> Destination Identity + reliable prepared-answer consumption, (3) Work Unit → Workspace return
+> re-cert (no white page). The **next session** builds a canonical destination identity + wires the
+> Phase B store — see the identity handoff and the kickoff file. Nothing pushed; tsc baseline = 10
+> (test files only), zero new.
 
 ## North star (unchanged)
 
