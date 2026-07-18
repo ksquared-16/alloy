@@ -278,6 +278,21 @@ Settlement — off the commit critical path.
 per-row/record wrappers), one renderer, one runtime/data owner, one mutation owner. Repository search confirms
 no second resolver/renderer/owner survives per region (see each region's audit block above).
 
+**Final perf (warm, slot 3, final HEAD, p50/p95):** ack 14/16 ms, legible 15/17 ms, commit 4712/5684 ms —
+within run-to-run warm variance across P1→P4 (commit p50 bounced 4658–4749 ms); critical-path provisioning
+**1 request / 0 duplicates**; 12/12 operational; 0 continuity breaks. No material regression.
+
+> **VERDICT — WORK UNIT CONFIGURATION RUNTIME · COMPLETE.**
+> Every visible Work Unit region — Header, Queue, Focus Panel, Editing, Actions — is driven by published
+> configuration through the single applicability resolver `resolveSurfaceVariant` (or its per-row/record
+> wrappers) and the published field/action policy; every mutation is Runtime-owned (`drawerOperatingSaveCoordinator`
+> → PATCH, action registry); every responsibility has exactly one owner; legacy ownership (the metric-placements
+> header path, the ad-hoc queue selector + drawer follower, the Focus Panel `highestVersion` pick + org-global
+> fetch, the dead `fieldEditabilityInDrawer` builders) is deleted; documentation matches reality; performance is
+> measured with no regression; and browser evidence proves config consumption (queue source, Focus Panel
+> resolution, editability policy) in the DOM. Remaining enhancement, not an ownership gap: config-driven
+> validation *presentation* (rules are already config-owned + server-enforced).
+
 ## Related
 - `resolveSurfaceVariant` — `web/lib/layout/resolveSurfaceVariant.ts` (the sole applicability resolver).
 - `docs/platform/operator/focus-panel-architecture-vocabulary.md` — operator vocabulary.
