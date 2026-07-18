@@ -55,7 +55,7 @@ Deleted legacy owner: the `metric_placements` Work Unit Header path (`workUnitHe
 metric_placements path is authoring-only (its builder is unmounted, its runtime strip retired) and is
 explicitly **not** a Work Unit Header authority.
 
-### Queue  — resolver + variants cut over (P2-A/B); certification in progress
+### Queue  — **CUT OVER & CERTIFIED (P2)**
 | Aspect | Owner |
 |---|---|
 | Configuration owner | Settings → Surfaces → `QueueRowSurfaceEditor` → published `entity_layouts(surface="queue")` |
@@ -89,6 +89,21 @@ or *independent scope* (→ one owner, N legitimate requests).
 `queue-view-totals` is a single owner serving two legitimate scopes. Forcing it to one HTTP request would
 stop the Workspace surface fetching its own totals when a Work Unit is active — deleting a distinct
 responsibility and changing Workspace behavior. That is out of scope and is not a dedup defect.
+
+**P2 constitutional audit (P2-I):**
+- **Current owner** — queue-level applicability: `resolveSurfaceVariant` (via `resolveQueueRowLayoutServer`, server-side, no HTTP). Per-row: `resolveQueueRowVariant`. Renderer: `CondensedQueueRow`. Runtime/data: the D1 provisioning answer.
+- **Deleted owner** — the ad-hoc queue-row `filter+sort` applicability selection (replaced by `resolveSurfaceVariant`) and the legacy queue-row→`openDrawer` follower (a second subject owner that produced 4418/4421 duplicate requests; deleted in `useCommittedWorkUnitSurfaceRuntime`). The drawer is not a queue authority.
+- **Files** — `lib/layout/runtime/queueRowLayoutServer.ts` (repoint), `lib/presentation/runtime/resolveQueueRowVariant.ts` + `queueRowVariantResolve.ts` (per-row), `lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot.ts` (P2-B wiring), `lib/runtime/provisioning/operationalPresentation.ts` + `workUnitProvisioningAnswer.ts` (threading BP/Work-View).
+- **Repo-search proof** — one applicability resolver (`resolveSurfaceVariant`) + one per-row resolver (`resolveQueueRowVariant`); `listOrgLayouts` is the candidate *data read*, not a competing selector; no surviving drawer follower for queue rows.
+- **Docs** — this region entry + the fallback ledger + the request-ownership ledger.
+- **Performance (P2-G, warm, slot 3, production-like)** — pre-P2 vs post-P2 p50: ack 13→13 ms, legible 14→14 ms, commit 4781→4749 ms (−32 ms, within noise). Critical-path provisioning **1 request / 0 duplicates** in both (20 post + 8 pre samples), 100% operational, 0 continuity breaks. Behavior-neutral: **no regression**.
+- **Browser evidence (P2-H)** — `playwright/tests/p2-queue-cert.spec.ts`: WU.QUEUE + rows render via the Presentation Runtime; selected-row Runtime-owned (`data-queue-row-active`, 1 active); Work View change re-resolves (`new_leads → new_work_view_2`); **0 drawer hosts inside WU.SURFACE**; Settings → Surfaces Queue Rows section is the config owner. 5 screenshots captured.
+- **Not live-captured, certified by unit suite instead** — authored per-row variant override and the empty-queue terminal (this tenant authors no queue variants and every view has rows; per the constraint, no uncontrolled tenant config was mutated to manufacture them). Covered by `queueRowVariantApplicability.test.ts` (7) + the authoritative-empty model path.
+
+> **VERDICT — WORK UNIT QUEUE CONFIGURATION RUNTIME · CUT OVER · CERTIFIED · DOCUMENTED · LEGACY QUEUE OWNERSHIP DELETED.**
+> One owner per responsibility (applicability, per-row variant, rendering, runtime/data); the ad-hoc
+> selector and the drawer follower are deleted; docs, performance (no regression), and browser evidence
+> are recorded. Request ownership is single-owner with duplicates deduped and independent scopes preserved.
 
 ### Focus Panel  — pending **P3** (subject ownership already cut over)
 | Aspect | Owner |
