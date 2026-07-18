@@ -89,6 +89,14 @@ The Configuration Runtime is the platform-owned layer that sits beneath all conf
 | Config workspace layout | `lib/adminV2/settingsPageLayout.ts` | All configuration surfaces |
 | Configuration workspace domains | `lib/adminV2/configurationWorkspaceDomains.ts` | Configuration landing and nav |
 | Configuration Domain Card | `components/adminV2/settings/configurationRuntime/workspace/ConfigDomainCard.tsx` | Organization and future publisher surfaces |
+| Publishable Collection Runtime | `ConfigCollectionRail.tsx` | Programs and future publishable catalogs |
+| Publishable Detail Runtime | `ConfigDetailRuntime.tsx` | Programs and future publishable objects |
+| Revision / Attention / Readiness | `ConfigPublicationOverview.tsx` + `lib/configPublication/runtimeModel.ts` | Publishable objects |
+| Durable Assignment Runtime | `ConfigAssignmentRuntime.tsx` | Assignable published objects |
+| Distribution Runtime | `ConfigDistributionRuntime.tsx` | Per-target outcomes and retry |
+| Configuration History | `ConfigHistoryTimeline.tsx` | Revisions, assignment, retry, failure |
+| Publication evidence loader | `lib/configPublication/evidenceService.ts` | Cross-revision publications, runs, attempts, consumption |
+| Configuration command rail | `ConfigurationCommandRailActions.tsx` | Locations, Programs, future Configuration objects |
 
 **Extraction rule:** Only proven primitives move here. A primitive is proven when it appears in two or more independent configuration domains. Do not move Commercial-specific patterns here prematurely.
 
@@ -134,6 +142,20 @@ compatibility hub until separately migrated. Locations choose Programs offered
 and own Rooms/Delivery Resources and local schedules; resource/runtime systems
 own capacity. Organization Runtime V2 does not implement or migrate those
 downstream domains.
+
+Programs now consumes the completed publishable Configuration Runtime rather
+than owning a page-specific publication console. The default detail posture is
+Overview; draft editing is intentional; active revision and working-draft state
+are distinct; durable consumption pointers project current assignment and
+revision drift; distribution failures project into Configuration Attention;
+and History spans publication, assignment, retry, and failure evidence across
+revisions. The Collection Runtime owns search, lifecycle filtering, Add,
+publication posture, assignment posture, readiness, and attention signals.
+
+Future publishable domains supply only their domain adapter: payload summary and
+editor, validation/publish mutations, setup evidence, target labels, and
+assignment impact language. They do not rebuild Collection, Detail, Attention,
+Assignment, Distribution, History, or shell command ownership.
 
 Locations remains frozen. Organization Runtime reuses its object-workspace grammar and references Location identity; it does not move Location-owned mutations into the organization landing.
 
@@ -197,6 +219,11 @@ registry and distribution-mode declarations. Programs is the V1 consumer that
 registers `distributionMode: "assignment"` and supplies the `programs.v1`
 adapter. Domains that need Apply continue to use the existing Apply plan/provider
 contract; Programs does not.
+
+**Expansion constitution (Product):** how remaining Organization domains
+participate — including Consumer #2 recommendation — is governed by
+`../foundation/configuration-platform-expansion-constitution.md` (ratified).
+That document does not reopen this runtime.
 
 ### Primitives NOT yet extracted (deferred)
 

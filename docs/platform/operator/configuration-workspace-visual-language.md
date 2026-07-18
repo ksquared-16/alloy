@@ -92,10 +92,18 @@ The object list (left rail) is a **persistent selector**, not a page. Rows carry
 
 On a top-level no-selection landing, presentation follows the collection's operator purpose. Organization uses equal-height Configuration Domain Cards for its domain catalog. Locations uses a quiet, divider-separated Location collection with search, inactive filtering, Add Location, and direct entry into each Location workspace. Supporting readiness and attention remain above the collection rather than becoming a second rail or a tile dashboard.
 
+Publishable Collections extend that selector with publication, assignment,
+readiness, and Attention evidence. They may reuse the platform selected-row
+geometry, but product language remains **Collection / object / assignment** —
+never queue, lane, work item, or record.
+
 ## Navigation (tabs & breadcrumb)
 
 - **Tabs** are the object's owned concerns. The active tab is Bend-Pine text over a Bend-Pine underline; idle tabs are muted with no underline. Tabs are quiet — they name concerns, not features.
 - **Breadcrumb** is the ownership path in business language (Configuration › Prototypes › … or Locations › Downtown Campus › Toddler Room), with the current object bold and ancestors as links. It reads as *where this object sits*, never as a URL.
+- A publishable object opens on **Overview**. Working Draft, Assignments,
+  Distribution, and History are separate owned concerns. The active revision is
+  ambient read evidence; an editor never replaces it.
 
 ## Badges & status
 

@@ -51,6 +51,25 @@ Future Configuration domains use the Configuration Domain Card and publisher/con
 
 ---
 
+## 2026-07 — Configuration Platform Expansion Constitution
+
+**Decision:**
+After Programs proves Publication Runtime (assignment), remaining Organization domains are governed by the Configuration Platform Expansion Constitution. Domains are classified as Organization-only, publishable, assignable, Location-consumed, override-capable, and/or effective-value resolved. Operational Calculations is the recommended Product Consumer #2 because it proves value inheritance and Controlled Difference complementary to Programs’ availability assignment. Fields and Statuses remain Organization-only vocabulary.
+
+**Why:**
+Expansion must reuse frozen runtimes without making every domain behave like Programs or inventing sibling infrastructure.
+
+**Consequences:**
+Future Configuration domain initiatives cite
+`docs/platform/foundation/configuration-platform-expansion-constitution.md`
+and do not reopen Programs, Assignment, Locations Runtime, or Configuration visual language.
+
+**Canonical owners:** [`configuration-platform-expansion-constitution.md`](configuration-platform-expansion-constitution.md), [`../modules/configuration-platform.md`](../modules/configuration-platform.md).
+
+**Status:** Active
+
+---
+
 ## 2026-07 — Organization Programs route is `/organization/programs`
 
 **Decision:**
