@@ -91,8 +91,11 @@ remains reconcilable via R1.
 
 A repeated request for an already-**succeeded** execution returns the prior terminal result
 with **no** repeated provider effect. A repeated request while the same execution is active
-returns `already-in-progress`. A new attempt after a *retryable* terminal result requires an
-explicit Director invocation and gets a new attempt id under the same execution id.
+returns `already-in-progress` and **mutates nothing** (the per-resource critical section —
+idempotency, reservation, claim, dispatch — is serialized under one durable per-resource
+lock). A redelivery of a *retryable/ambiguous* terminal (e.g. `timed_out`) is **reconciled
+via R1 first and reported**; R3 never silently re-dispatches a provider mutation — a genuine
+retry is Director's explicit decision, not an automatic effect of redelivery.
 
 ## Reservation & capacity (selective accounting)
 
@@ -107,9 +110,11 @@ active − live_held_reservation_units)`, so two contenders cannot both win one 
 
 Default **300 s** (code-owned toolkit setting `ALLOY_ACT_RESERVATION_TTL`, bounded 30..3600;
 never tenant/intent configuration). Semantics: TTL applies to an *unclaimed or demonstrably
-abandoned* reservation; a claimed execution is kept live by a durable claim identity + PID
-liveness, so it is **not** made available for duplicate execution merely because the original
-reservation timestamp elapsed. **Reservation expiry frees capacity bookkeeping only** — it
+abandoned* reservation; a claimed execution is kept live by a durable claim identity —
+**PID liveness AND an enforced claim lease** (a claim counts as live only while its PID is
+alive and its lease has not elapsed, which bounds a reused-PID false-live claim) — so it is
+**not** made available for duplicate execution merely because the original reservation
+timestamp elapsed. **Reservation expiry frees capacity bookkeeping only** — it
 does not mark an execution successful, cancel or kill a provider process, authorize teardown,
 or trigger a retry. An expired reservation tied to an ambiguous provider result enters
 reconciliation. Time is injectable for tests (`ALLOY_ACT_EVAL_NOW`).
