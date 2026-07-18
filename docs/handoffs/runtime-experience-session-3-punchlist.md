@@ -46,7 +46,22 @@ owner) or is a visible glitch surfaced while getting there.
 | A3 **zero** skeleton (cards at commit) | ⏳ server — needs default-subject drawer VM in the provisioning answer | — |
 | Settlement deferral (~14-req stall) | ⏳ open | — |
 | Phase B store into commit path (full generalization) | ⏳ open (Phase H done via K2 directly) | — |
-| Metric drift (Phase J) | ⏳ open — Workspace "7 Pipeline Children" vs work-unit "6" come from two paths (`workspaceHeaderCards`/`workspaceProcessSignal` vs `useWorkUnitSettlement`/`workUnitHeaderSurfaceConfig`); needs a data-consistency trace of both | — |
+| Metric drift (Phase J) | ⚠️ **ROOT-CAUSED — not a staleness bug.** See below. Product decision. | — |
+
+### Metric "drift" 7 vs 6 — root cause (not staleness)
+
+The tile labeled **"Pipeline Children"** is the metric key **`enrollment.lead_count`** (internal
+label "Lead count", `rolling_30d` window). Resolved live via `/api/admin/metrics/resolve`:
+- **workspace scope** (no `work_unit_id`) → **7** (process-wide 30d lead count)
+- **work-unit scope** (`work_unit_id=587de5bc…`) → **6** (this lens's 30d lead count)
+
+Both are FRESH and CORRECT for their scope — the same key, two scopes, the **same label**. So the
+7-vs-6 is not a staleness/invalidation defect; it is (a) two surfaces intentionally showing
+different scopes under an identical label, and (b) a **mislabel** — a lead-count metric titled
+"Pipeline Children". **Resolution is a product decision** (align scope, or relabel to disambiguate
+scope, or fix the label). The separate `#8` items "mutation invalidation / targeted refresh" are a
+real but distinct concern (metrics don't auto-refresh after a mutation) — implementable once the
+scope/label direction is set.
 
 A1/A5 show only on a genuinely slow load (warm dev resolves before the fallback streams) — confirm
 on a hard refresh. A2/A4 are verified in-browser.
