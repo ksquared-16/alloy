@@ -14,6 +14,13 @@ import {
 } from "@/lib/adminV2/workUnitBootstrapClientSession";
 import { tracePlatformPrefetch, tracePlatformRouteLoad } from "@/lib/perf/platformSurfacePerfTrace";
 
+// Blank-time removal: workspace tiles warm the exact K2 provisioning answer on hover/focus intent.
+// Re-exported here so all entry points share one warm-helpers import surface.
+export {
+    prefetchWorkUnitProvisioning,
+    prefetchWorkUnitProvisioningFromHref,
+} from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
+
 type SlugResolvedPayload = {
     kind: "work_unit_key" | "work_view" | "queue_lane_key";
     route_slug: string;

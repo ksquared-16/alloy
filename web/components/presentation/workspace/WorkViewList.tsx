@@ -8,7 +8,7 @@
 
 import Link from "next/link";
 import { useWorkUnitEntryGesture } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
-import { parseOperatorWorkUnitEntryHref, warmWorkUnitSlugRoute } from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { parseOperatorWorkUnitEntryHref, warmWorkUnitSlugRoute, prefetchWorkUnitProvisioningFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import type { WorkViewLinkModel } from "@/lib/presentation/runtime";
 import type { ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import { grainCountUnitLabel, type WorkViewGrainBucket } from "@/lib/lifecycle/stageGrainV1";
@@ -28,6 +28,8 @@ import { ProcessCardGlyph } from "./ProcessCardGlyph";
 function warmWorkViewRoute(href: string | null | undefined): void {
     const slug = href ? parseOperatorWorkUnitEntryHref(href).workUnitSlug : null;
     if (slug) void warmWorkUnitSlugRoute(slug, "workspace_work_view_row");
+    // Blank-time removal: warm the exact provisioning answer (target + this row's Work-View lens).
+    prefetchWorkUnitProvisioningFromHref(href);
 }
 
 function positive(n: number | null | undefined): number | null {

@@ -8,7 +8,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { parseOperatorWorkUnitEntryHref, warmWorkUnitSlugRoute } from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { parseOperatorWorkUnitEntryHref, warmWorkUnitSlugRoute, prefetchWorkUnitProvisioningFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import {
     PRESENTATION_RUNTIME_LABELS,
     runtimeLabelProps,
@@ -228,6 +228,7 @@ function HeaderKpiCard({
         const warmDrill = () => {
             const slug = kpi.drillHref ? parseOperatorWorkUnitEntryHref(kpi.drillHref).workUnitSlug : null;
             if (slug) void warmWorkUnitSlugRoute(slug, "workspace_header_kpi");
+            if (kpi.drillHref) prefetchWorkUnitProvisioningFromHref(kpi.drillHref);
         };
         return (
             <Link

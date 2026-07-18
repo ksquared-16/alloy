@@ -38,6 +38,7 @@ import { stripLegacyArtifactMarker } from "@/lib/admin/buildOperatorLifecycleLan
 import {
     parseOperatorWorkUnitEntryHref,
     warmWorkUnitSlugRoute,
+    prefetchWorkUnitProvisioningFromHref,
 } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import {
     PRESENTATION_RUNTIME_LABELS,
@@ -202,6 +203,8 @@ export function ProcessSummaryCard({
     );
     const warm = () => {
         if (slug) void warmWorkUnitSlugRoute(slug, "workspace_tile");
+        // Blank-time removal: warm the exact provisioning answer K2 will commit, so the click is instant.
+        prefetchWorkUnitProvisioningFromHref(drillHref);
     };
 
     // ── THE OPERATOR GESTURE — K1, not the router. ONE shared adapter (see

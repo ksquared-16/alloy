@@ -11,14 +11,24 @@
 import type { AttentionRef } from "./attention";
 import type { EntryResource } from "./provisioning";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { provisioningAnswerUrl, consumeFreshProvisioning } from "./workUnitProvisioningPrefetch";
 
 export function workUnitEntryResourceClient(): EntryResource {
     return async (ref: AttentionRef, signal: AbortSignal): Promise<ProvisioningAnswer> => {
-        const q = new URLSearchParams();
-        if (ref.lens) q.set("work_view_id", ref.lens);
-        if (ref.subject) q.set("subject_id", ref.subject);
-        const qs = q.toString();
-        const url = `/api/admin/work-units/${encodeURIComponent(ref.target)}/provisioning-answer${qs ? `?${qs}` : ""}`;
+        const url = provisioningAnswerUrl(ref.target, ref.lens, ref.subject);
+
+        // Blank-time removal: if operator intent (hover/focus) warmed this exact answer, K2's single
+        // round-trip resolves from the warm cache — the click commits immediately. A warm miss or a
+        // prefetch that errored falls through to the live fetch below; kernel semantics are unchanged.
+        const warm = consumeFreshProvisioning(url);
+        if (warm) {
+            try {
+                const answer = await warm;
+                if (answer.terminal !== "error") return answer;
+            } catch {
+                /* fall through to a fresh fetch */
+            }
+        }
 
         const res = await fetch(url, { signal, headers: { accept: "application/json" } });
         if (!res.ok) {
