@@ -45,7 +45,10 @@ import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
 import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
 import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
 import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
-import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
+import {
+  isExperienceBuilderStudioActive,
+  isExperienceBuilderStudioPath,
+} from "@/lib/layout/experienceBuilderStudioMode";
 import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
 /**
@@ -93,12 +96,12 @@ const workspaceContentAmbientStyle: CSSProperties = DEBUG_EXAGGERATE_WORKSPACE_A
 
 function AdminV2ShellInner({
   children,
+  experienceBuilderStudio,
 }: {
   children: React.ReactNode;
+  experienceBuilderStudio: boolean;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const experienceBuilderStudio = isExperienceBuilderStudioActive(pathname, searchParams);
   const isWorkspaceV2Route = isCanonicalWorkspacePath(pathname);
   const isAiActivityRoute = isCanonicalAiActivityPath(pathname);
   const isSettingsRoute = isCanonicalSettingsPath(pathname);
@@ -314,10 +317,34 @@ function AdminV2ShellInner({
   );
 }
 
+/**
+ * Studio-mode is the ONLY consumer of `useSearchParams()` in this shell, and it applies only on
+ * `/settings/surfaces|layouts`. Reading search params here (rather than unconditionally in the
+ * inner shell) confines the hydration-time Suspense boundary to studio-eligible routes.
+ */
+function AdminV2ShellStudioAware({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const experienceBuilderStudio = isExperienceBuilderStudioActive(pathname, searchParams);
+  return (
+    <AdminV2ShellInner experienceBuilderStudio={experienceBuilderStudio}>{children}</AdminV2ShellInner>
+  );
+}
+
 export default function AdminV2Shell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  // The operational path (`/workspace`, `/workspace/work-unit/*`) is never studio-eligible, so it
+  // never needs `useSearchParams()`. Reading it there would make this whole shell suspend during
+  // client hydration and re-paint AlloyOperationalBootShell a SECOND time — the duplicate
+  // midnight-blue loader (Anticipatory Operational Runtime §13). Gate the suspending read behind the
+  // pathname check (usePathname does not suspend) so the route-level `loading.tsx` boot shell stays
+  // the single preparation owner (§12) on the operational path.
+  if (!isExperienceBuilderStudioPath(pathname)) {
+    return <AdminV2ShellInner experienceBuilderStudio={false}>{children}</AdminV2ShellInner>;
+  }
   return (
     <Suspense fallback={<AlloyOperationalBootShell variant="workspace" />}>
-      <AdminV2ShellInner>{children}</AdminV2ShellInner>
+      <AdminV2ShellStudioAware>{children}</AdminV2ShellStudioAware>
     </Suspense>
   );
 }

@@ -673,6 +673,16 @@ static composition pointers) — so a new operational surface is *authored + pub
     prefetch map — that swap lands under the flag once warm-commit ~150 ms is re-certified (§16 row B
     rollback boundary: keep prefetch as-is behind the flag until proven).
 
+- **Phase K/L (partial) — duplicate boot shell on REFRESH · LANDED.**
+  - Fix: `app/adminV2/components/AdminV2Shell.tsx` gated the `useSearchParams()` read (the sole
+    hydration-suspension trigger) behind `isExperienceBuilderStudioPath(pathname)`, so the operational
+    path never suspends → the route-level `loading.tsx` boot shell is the single owner on refresh; the
+    redundant `AdminV2Shell:319` Suspense boot-shell fallback no longer paints on `/workspace`.
+  - Test: `web/tests/adminV2/adminV2ShellStudioGating.test.ts` (3 cases) pins the gating invariant.
+  - Scope note: this fixes the REFRESH duplicate only. Live-navigation blank frames, the initial
+    work-unit **two-skeleton** focus panel, mixed-subject row-click, and the Settlement waterfall are
+    separate felt problems addressed by the sequence below (browser-diagnosed against :3013, authed).
+
 ### Plan
 
 
