@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { prefetchWorkUnitProvisioningFromHref } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
@@ -363,6 +364,36 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         rightRailActions,
         defaultDepartmentId,
     ]);
+
+    // ── #2 WORKSPACE OPERATIONAL PREPARATION ─────────────────────────────────────────────────────
+    // The Workspace's most likely next move is into a process's primary Work Unit. Rather than wait
+    // for the operator to hover a tile, prepare each process's canonical entry destination on idle
+    // once the Workspace has settled — the same K2 provisioning answer the click will REUSE (deduped
+    // by the prefetch cache + K2 key), so entering the first work unit commits from prepared state.
+    // Bounded to the process entries (a handful), idle-scheduled so it never competes with the
+    // Workspace's own settlement, and keyed on the stable entry-href set so re-renders don't re-fire.
+    const processEntryHrefs = (visibleProcessSnapshot?.processes ?? [])
+        .map((p) => p.entryHref)
+        .filter((h): h is string => Boolean(h))
+        .slice(0, 6)
+        .join("\n");
+    useEffect(() => {
+        if (!fullyCommitted || !processEntryHrefs || typeof window === "undefined") return;
+        const hrefs = processEntryHrefs.split("\n");
+        const run = () => {
+            for (const href of hrefs) prefetchWorkUnitProvisioningFromHref(href);
+        };
+        const w = window as Window & {
+            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+        if (w.requestIdleCallback) {
+            const handle = w.requestIdleCallback(run, { timeout: 2500 });
+            return () => w.cancelIdleCallback?.(handle);
+        }
+        const timer = window.setTimeout(run, 500);
+        return () => window.clearTimeout(timer);
+    }, [fullyCommitted, processEntryHrefs]);
 
     // A retained return is composition-ready the instant the seed paints: the retained snapshot +
     // header are already complete, so we never re-show the skeleton while the background SWR runs.
