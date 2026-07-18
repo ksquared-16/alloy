@@ -105,22 +105,52 @@ responsibility and changing Workspace behavior. That is out of scope and is not 
 > selector and the drawer follower are deleted; docs, performance (no regression), and browser evidence
 > are recorded. Request ownership is single-owner with duplicates deduped and independent scopes preserved.
 
-### Focus Panel  — pending **P3** (subject ownership already cut over)
+### Focus Panel  — **CUT OVER & CERTIFIED (P3)**
 | Aspect | Owner |
 |---|---|
 | Configuration owner | Settings → Surfaces → `FocusPanelSummarySurfaceEditor` → published `entity_layouts(focus_panel_summary)` |
-| Resolver | `usePublishedFocusPanelSummaryDoc` → **to be repointed to `resolveSurfaceVariant` (P3)** |
-| Renderer | `FocusPanelCardGrid` (registered cards chosen + ordered by config) |
+| Variant selection | **`resolveSurfaceVariant`** (via `resolvePublishedFocusPanelSummaryRecord` in the focus-panel-summary endpoint, P3-A) — published-only, deterministic, Business-Process / Work-View aware. The former ad-hoc `highestVersion(published)` org-global pick is deleted (it survives only for the editor's *draft*). |
+| Applicability context | committed **Work View + stage** threaded from `OperationalSubjectContext` via `FocusPanelSummaryDocProvider` (P3-B); resolved once, shared by the grid, the pending skeleton, and the nested cards |
+| Renderer | `OpportunityFocusPanelModeGrid` / `FocusPanelCardGrid` (registered cards chosen + ordered by the resolved doc) |
 | Runtime owner | `useRecordWorkRuntime(committedSubjectId)` — subject from Runtime Focus (sole owner) |
 | Data owner | record VM (`loadOpportunityDrawerViaViewModel`) + Settlement |
 | Mutation owner | `drawerOperatingSaveCoordinator` → `PATCH /api/admin/opportunities/{id}` |
-| Applicable variant | summary mode published today; P3 brings work/activity modes under the published variant |
-| Fallback | `FOCUS_PANEL_SUMMARY_DEFAULT_DOC` |
-| Performance boundary | atomic visible swap on **commit-critical** coherence; deferred Settlement fills after; no mixed-subject frame |
+| Fallback | `FOCUS_PANEL_SUMMARY_DEFAULT_DOC` (code-built default when no published doc applies) |
+| Performance boundary | doc resolution is **post-commit Settlement** (off the critical path); atomic visible swap on commit-critical coherence; deferred Settlement fills after; no mixed-subject frame |
 
-Person / Child / Household / Enrollment are **entity contexts rendered as configured cards inside the
-Opportunity Focus Panel**, bound to the committed subject graph — **not** separate subjects or hosts.
-Opportunity is the only committed operational subject.
+Person / Child / Household / Enrollment / Current Work / Activity are **entity contexts rendered as
+configured cards inside the Opportunity Focus Panel**, bound to the committed subject graph — **not**
+separate subjects or hosts. Opportunity is the only committed operational subject.
+
+**Focus Panel fallback ledger (P3-C — audit complete, no dead fallbacks):**
+- `FOCUS_PANEL_SUMMARY_DEFAULT_DOC` — **live & required** canonical default (code-built); the "never unavailable" guarantee when no published doc applies. Consumed by the grid + pending skeleton + editor seed. Not legacy.
+- `highestVersion(draft)` in the endpoint — **authoring-only**: selects the editor's continue-editing draft, never a runtime variant (drafts never resolve at runtime; `resolveSurfaceVariant` is published-only). Not a second runtime resolver.
+- Work / Activity modes render via the derived grid (`deriveOpportunityFocusPanelPresentation`), not the published summary surface — runtime-derived render modes, not a competing config resolver. *Forward:* bring these under the published variant.
+
+**Focus Panel request ownership (P3-E):**
+| Request | Owner | Classification | Requests |
+|---|---|---|---|
+| `focus-panel-summary` | `FocusPanelSummaryDocProvider` (per-scope module cache) | **independent scope** — one resolution per committed `(workView, stage)`; deduped within scope, shared by all consumers | **1 per committed scope** (verified: 1 on commit, 1 on Work-View change) |
+
+Same doctrine as the Queue (P2-E): the second request on a Work-View change is a **distinct applicability
+scope**, not a duplicate; the provider serves one shared resolution per scope, never one fetch per consumer.
+
+**P3 constitutional audit (P3-I):**
+- **Current owner** — applicability: `resolveSurfaceVariant` (via `resolvePublishedFocusPanelSummaryRecord`, server-side in the endpoint). Context: `FocusPanelSummaryDocProvider` (committed Work-View + stage). Renderer: `OpportunityFocusPanelModeGrid`. Runtime/data: `useRecordWorkRuntime` + Settlement.
+- **Deleted owner** — the endpoint's ad-hoc `highestVersion(published)` org-global selection (replaced by `resolveSurfaceVariant`); the org-global context-free fetch (replaced by the per-scope provider). The drawer is not a Focus Panel authority (the record renders inline; `recordDrawerHostCount === 0`).
+- **Files** — `app/api/admin/entity-layouts/focus-panel-summary/route.ts` (repoint), `lib/adminV2/runtime/focusPanel/resolveFocusPanelSummaryVariant.ts` (selector), `lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc.ts` (provider + per-scope cache), `components/presentation/workUnit/InlineOpportunityFocusPanel.tsx` (provider mount).
+- **Repo-search proof** — one applicability resolver (`resolveSurfaceVariant`); no competing published-doc selection (`highestVersion` serves only the draft); `FOCUS_PANEL_SUMMARY_DEFAULT_DOC` is the canonical default, not a second resolver.
+- **Docs** — this region entry + the fallback ledger + the request-ownership ledger.
+- **Performance (P3-G, warm, slot 3)** — post-P2 vs post-P3 p50: ack 13→13 ms, legible 14→14 ms, commit 4749→4658 ms (−91 ms, within noise). Critical-path provisioning **1 request / 0 duplicates** both; 14/14 operational, 0 continuity breaks. Doc resolution is post-commit Settlement, off the critical path — **no regression**.
+- **Browser evidence (P3-H)** — `playwright/tests/p3-focuspanel-cert.spec.ts`: Focus Panel resolves on subject commit; **0 drawer/modal hosts render the record**; the focus-panel-summary request carries the committed `workViewId`+`stageKey`; a Work-View change (`new_leads → new_work_view_2`) triggers exactly one fresh scoped re-resolution; card content settles (4 cards, real content, 0 skeleton pulses).
+- **Applicability certified by unit suite** — `focusPanelVariantApplicability.test.ts` (8): behavior-neutrality, published-only, deterministic tie-break, Work-View scope, Business-Process gating, order-independence, no-stale after movement.
+
+> **VERDICT — WORK UNIT FOCUS PANEL CONFIGURATION RUNTIME · CUT OVER · CERTIFIED · DOCUMENTED · LEGACY FOCUS PANEL OWNERSHIP DELETED.**
+> One owner per responsibility (applicability `resolveSurfaceVariant`, context provider, rendering,
+> runtime/data); the ad-hoc `highestVersion` selector and the context-free org-global fetch are deleted;
+> Opportunity remains the sole committed subject and Person/Child/Household/Enrollment/Work/Activity remain
+> configured cards; docs, performance (no regression), and browser evidence are recorded. Request ownership
+> is single-owner with independent applicability scopes preserved.
 
 ### Actions  — configuration-driven today
 Config owner: `action_placements` + `action_definitions` (Settings → Surfaces). Resolver:
