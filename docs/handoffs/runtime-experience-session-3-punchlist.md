@@ -49,6 +49,21 @@ owner) or is a visible glitch surfaced while getting there.
 A1/A5 show only on a genuinely slow load (warm dev resolves before the fallback streams) — confirm
 on a hard refresh. A2/A4 are verified in-browser.
 
+## Server-side finding — provisioning-answer over budget (documented, not yet fixed)
+
+Measured cold `provisioning-answer` (new-leads, dev): networkMs ~2.9–4.2s, server `total_ms`
+~1.5–2s, payload only 12KB. Split:
+- **~half is Next.js dev-server overhead** (network minus server; not transport — payload is tiny).
+  Largely gone in a production build (`next build && next start`); dev perf is noisy.
+- **~half is genuine server composition, 4–5× over the composer's own ratified ≤400ms p75 budget**
+  (`workUnitProvisioningAnswer.ts:8`). Dominated by **`resolveQueueRowLayoutServer` (~700ms)** — the
+  queue-row **surface-config layout** DB read — plus `work_unit_ms` (~330ms) and `configuration_ms`
+  (~350ms). These are published **config** reads (revision-keyed, rarely change) re-fetched from the
+  DB on every answer.
+- **Highest-value real fix:** revision-keyed server-side caching of the surface-config/layout reads.
+  Warm-on-hover + the "Thinking…" loader already hide it in normal use; a cold/direct load pays it.
+  (Kelly: keep going on the presentation list for now; revisit server caching later.)
+
 ## A. Live felt problems — Kelly, Session 3 browser (:3013, Firefly tenant)
 
 1. **Refresh duplicate shell.** On a refresh, a blue left rail + header render **duplicated inside

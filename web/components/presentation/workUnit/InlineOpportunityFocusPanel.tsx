@@ -489,11 +489,15 @@ export function InlineOpportunityFocusPanel() {
                             onHeaderAction={onActionSelect}
                             onModeChange={setFocusPanelMode}
                         />
-                    : subjectPending ?
-                        // Pending final-layout load: the published-grid skeleton (same
-                        // strategy + cell positions as resolved) — never a centered spinner.
-                        <FocusPanelSummarySkeleton mode={focusPanelMode} />
-                        : null}
+                    :
+                        // Pending final-layout load: the published-grid skeleton (same strategy +
+                        // cell positions as resolved) — never a centered spinner, and never a null
+                        // gap. The old `subjectPending ? skeleton : null` rendered an EMPTY bordered
+                        // box in the brief frame where the reveal reads resolved (id caught up) but the
+                        // atomic `committedVisible` has not — that empty box read as a SECOND skeleton
+                        // phase (Kelly A3). A subject is always selected here (the component returns
+                        // null above when it is not), so the skeleton is always the correct pending fill.
+                        <FocusPanelSummarySkeleton mode={focusPanelMode} />}
                     </div>
                 </div>
                 {resolved ?
