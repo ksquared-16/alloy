@@ -1,6 +1,14 @@
 # Runtime Actuation V1 (R3) — Implementation Plan
 
-> **Status:** PLAN — awaiting explicit authorization. No implementation has begun.
+> **Status:** IMPLEMENTED (plan approved with Decisions 1–4). Hermetic suite
+> `tests/test-runtime-actuator.sh` = 35/35; real local-Docker certification
+> `tests/cert-runtime-actuator-local-docker.sh` = 13/13 against an isolated namespace,
+> no canonical/foreign runtime touched. Canonical doctrine:
+> `scripts/local-dev/RUNTIME-ACTUATION.md`. R0–R2 contracts unchanged. No promotion.
+>
+> _(original pre-implementation plan preserved below)_
+
+> **Status (original):** PLAN — awaiting explicit authorization. No implementation has begun.
 > **Sprint:** `runtime-actuator-r3` · slot 6 · branch `agent/claude/6-runtime-actuator-r3` · base `c6836c595`
 > **Scope of this document:** architecture discovery + design for the Runtime Actuator. This is a
 > sprint execution doc (`docs/sprints/active/…`), **not** canonical doctrine. The authoritative
