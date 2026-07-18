@@ -62,18 +62,24 @@ export type PreparationTerminal = {
 export const PROVISIONING_DEADLINE_MS = 10_000;
 
 /**
- * The scope at which the Work Unit entry Preparation Contract is declared.
+ * The scope at which coarser-movement SUPERSESSION is normalised: a movement at LENS scope or coarser
+ * supersedes finer preparation within the context it leaves. This constant is that boundary — it is
+ * NOT the preparation identity.
  *
- * The D1 answer is bounded to (target, lens): it already contains the evaluated page, so a SUBJECT or
- * ASPECT movement inside the same lens requires NO new preparation — it reuses this one. Normalising
- * finer attention to the contract's scope is what makes subject movement reuse rather than refetch,
- * and is why the Kernel key contains `lens` but not `subject`.
+ * The D1 answer's Record of Attention IS the Operational Subject (U-P4/U-O3): the committed snapshot
+ * must resolve the subject that Attention names, so the preparation is bounded to (target, lens,
+ * SUBJECT). A subject movement is therefore a distinct preparation whose snapshot resolves that
+ * subject; reuse is per (target, lens, subject) — a revisited subject reuses its OWN completed answer
+ * and never serves one subject's snapshot as if it were another's. (An earlier key omitted `subject`,
+ * which made every in-lens subject click reuse the first subject's frozen snapshot — the committed
+ * queue advanced while the Focus Panel never left the entry record.)
  */
 const ENTRY_PREPARATION_SCOPE: AttentionScope = ATTENTION_SCOPE.LENS;
 
 /**
- * The frozen Kernel key: (scope, target, lens, principal, tenant).
- * Never keyed from pathname, component instance, DOM identity, request id, Queue Lane, or
+ * The Kernel key: (scope-normalised, target, lens, subject, principal, tenant). Subject is part of the
+ * identity because Record of Attention is the Operational Subject and the committed snapshot must
+ * resolve it. Never keyed from pathname, component instance, DOM identity, request id, Queue Lane, or
  * Queue Definition.
  */
 export function provisioningKey(ref: AttentionRef): string {
@@ -81,6 +87,7 @@ export function provisioningKey(ref: AttentionRef): string {
         scope: ENTRY_PREPARATION_SCOPE,
         target: ref.target,
         lens: ref.lens ?? null,
+        subject: ref.subject ?? null,
         principal: ref.principal,
         tenant: ref.tenant,
     });
@@ -284,8 +291,9 @@ export class ProvisioningRuntime {
         if (done.invalidated) return false;
         // Tenant/principal isolation is absolute — a retained context may never cross a tenant.
         if (done.tenant !== ref.tenant || done.principal !== ref.principal) return false;
-        // The snapshot must answer attention no newer than itself at a coarser-or-equal scope.
-        // A finer movement (subject/aspect) inside the same lens legitimately reuses the lens answer.
+        // A coarser (SURFACE) movement must never reuse a lens/subject snapshot — it left that context.
+        // Same-key finer movement (an ASPECT change within the same subject) legitimately reuses; a
+        // subject change has a different key and so never lands here.
         if (ref.scope < ENTRY_PREPARATION_SCOPE) return false;
         return done.terminal.outcome === "operational" || done.terminal.outcome === "empty";
     }

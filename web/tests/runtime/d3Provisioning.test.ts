@@ -2,8 +2,10 @@
  * D3 — K2 Provisioning Runtime.
  *
  * Governing: docs/platform/runtime/alloy-runtime-kernel.md §K2 (:167–228).
- *   keyed by (scope, target, lens, principal, tenant) · one answer · terminate exactly once
+ *   keyed by (scope, target, lens, subject, principal, tenant) · one answer · terminate exactly once
  *   · deadline product is `error` only · a superseded response never lands.
+ *   Subject is part of the key because Record of Attention is the Operational Subject: the committed
+ *   snapshot must resolve the subject Attention names (see test 17).
  */
 import { describe, it, expect, vi } from "vitest";
 import { AttentionOwner, ATTENTION_SCOPE, type AttentionRef } from "@/lib/runtime/kernel/attention";
@@ -199,17 +201,46 @@ describe("D3 — K2 Provisioning Runtime", () => {
         expect(k2.peekCompleted(provisioningKey(ref))).not.toBeNull();
     });
 
-    it("17. Record of Attention change preserves lens and Context Frame — and REUSES the lens answer", async () => {
-        const entry = vi.fn(resolves());
+    it("17. Record of Attention change preserves lens and Context Frame, and RESOLVES the new subject", async () => {
+        // The committed snapshot's Record of Attention IS the Operational Subject, so a subject movement
+        // is its own preparation: the lens/Context Frame stay stable, but the resolved subject follows.
+        // (Previously the key omitted subject and this reused the first subject's frozen snapshot — the
+        // queue committed while the Focus Panel never left the entry record. See provisioning.ts key.)
+        const seen: (string | undefined)[] = [];
+        const entry = vi.fn<EntryResource>((ref) => {
+            seen.push(ref.subject);
+            const a = answer("operational") as unknown as Record<string, unknown>;
+            // Echo the requested subject into Record of Attention, exactly as D1 composes it.
+            a.recordOfAttention = { id: ref.subject ?? "opp-1", strategy: "requested", strategySource: "attention" };
+            return Promise.resolve(a as unknown as ProvisioningAnswer);
+        });
         const k2 = runtimeWith(entry);
         const o = owner("new_leads");
-        await k2.onAttentionMoved({ type: "attention.moved", ref: refAt(o), supersedes: null, t0: 0 });
+        const lensRef = refAt(o); // captured BEFORE the subject move (o.get() tracks the latest ref)
+        await k2.onAttentionMoved({ type: "attention.moved", ref: lensRef, supersedes: null, t0: 0 });
         const subject = o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "opp-2", source: "subject_selection" });
         const t = await k2.onAttentionMoved({ type: "attention.moved", ref: subject, supersedes: null, t0: 0 });
-        // The Kernel key contains lens, not subject: subject movement reuses the lens preparation.
-        expect(entry).toHaveBeenCalledTimes(1);
+        // A subject movement is a distinct preparation — it does not serve the prior subject's snapshot.
+        expect(entry).toHaveBeenCalledTimes(2);
+        expect(provisioningKey(lensRef)).not.toBe(provisioningKey(subject));
+        // Lens and Context Frame remain stable…
         expect(subject.lens).toBe("new_leads");
         expect(t?.snapshot.terminal === "operational" && t.snapshot.contextFrame.workViewId).toBe("new_leads");
+        // …but Record of Attention now resolves the selected subject.
+        expect(t?.snapshot.terminal === "operational" && t.snapshot.recordOfAttention?.id).toBe("opp-2");
+    });
+
+    it("17b. a revisited subject reuses ITS OWN completed answer — not a refetch, not another subject's", async () => {
+        const entry = vi.fn(resolves());
+        const onReused = vi.fn();
+        const k2 = runtimeWith(entry, { onReused });
+        const o = owner("new_leads");
+        const a = o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "opp-2", source: "subject_selection" });
+        await k2.onAttentionMoved({ type: "attention.moved", ref: a, supersedes: null, t0: 0 });
+        const b = o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "opp-2", source: "subject_selection" });
+        await k2.onAttentionMoved({ type: "attention.moved", ref: b, supersedes: null, t0: 0 });
+        expect(entry).toHaveBeenCalledTimes(1); // same subject → its own reuse
+        expect(onReused).toHaveBeenCalledTimes(1);
     });
 
     it("18. the Queue Lane failure is unreachable from K2", () => {
