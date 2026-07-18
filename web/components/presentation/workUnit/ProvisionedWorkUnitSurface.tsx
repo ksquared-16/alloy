@@ -76,7 +76,14 @@ export function ProvisionedWorkUnitSurface() {
             data-operational-at-first-sight={committed.outcome === "operational" ? "true" : "false"}
         >
             <div
-                key={committed.surfaceId}
+                // Key by the WORK UNIT (target), NOT the full surfaceId (target::lens). A Work View
+                // pill is a LENS move — same work unit, new lens — and keying by surfaceId remounted the
+                // entire body (header + pills + queue + focus panel) on every pill click, so the shell
+                // visibly "reloaded" as if it were a new page (Kelly). Keyed by target, a pill switch
+                // keeps the header + pill strip mounted and fixed; only the model changes, so the queue
+                // and Focus Panel swap in place while the chrome stays put. A real Work Unit change
+                // (different target) still changes the key → the surface-enter animation still plays.
+                key={committed.ref.target}
                 className="motion-surface-enter-forward flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:items-stretch"
             >
                 {/* The Focus Panel's operational truth comes from the COMMITTED SNAPSHOT — not from
