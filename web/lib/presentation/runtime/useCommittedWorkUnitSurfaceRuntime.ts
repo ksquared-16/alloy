@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
+import { prepareOperationalDestination } from "@/lib/runtime/prep/prepareOperationalDestination";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
@@ -110,7 +111,13 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         (workViewId: string) => {
             const current = kernel.attention.get();
             if (!current || current.lens === workViewId) return;
-            void kernel.provisioning.prepare({ ...current, lens: workViewId, scope: ATTENTION_SCOPE.LENS });
+            // Prepare the sibling view's provisioning answer AND its default subject's complete VM —
+            // so a pill switch commits a complete Focus Panel, not just a warm queue (Kelly Blocker 2).
+            void prepareOperationalDestination(kernel, {
+                ...current,
+                lens: workViewId,
+                scope: ATTENTION_SCOPE.LENS,
+            });
         },
         [kernel],
     );

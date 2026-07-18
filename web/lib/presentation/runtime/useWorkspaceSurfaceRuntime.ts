@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { prefetchWorkUnitProvisioningFromHref } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
+import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
@@ -366,22 +367,36 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     ]);
 
     // ── #2 WORKSPACE OPERATIONAL PREPARATION ─────────────────────────────────────────────────────
-    // The Workspace's most likely next move is into a process's primary Work Unit. Rather than wait
-    // for the operator to hover a tile, prepare each process's canonical entry destination on idle
-    // once the Workspace has settled — the same K2 provisioning answer the click will REUSE (deduped
-    // by the prefetch cache + K2 key), so entering the first work unit commits from prepared state.
-    // Bounded to the process entries (a handful), idle-scheduled so it never competes with the
-    // Workspace's own settlement, and keyed on the stable entry-href set so re-renders don't re-fire.
+    // The Workspace's most likely next move is into a process's primary Work Unit. Once the tiles are
+    // available, prepare each process's canonical entry DESTINATION on idle: warm its provisioning
+    // answer into the URL cache the entry gesture's K2 EntryResource CONSUMES (`consumeFreshProvisioning`)
+    // AND, chaining off that same answer, prewarm its default subject's complete VM (VM + stage-work).
+    // So entering the first work unit commits from a warm provisioning answer AND reveals a complete
+    // Focus Panel with no cold fetch (Kelly Blocker 2). NOTE: a cross-surface `kernel.provisioning.prepare`
+    // cannot be used here — K2 disposes a preparation for a target other than the current attention
+    // (Workspace) at its emit boundary, so it would never be stored. Bounded, idle-scheduled, keyed on
+    // the stable entry-href set so re-renders don't re-fire.
     const processEntryHrefs = (visibleProcessSnapshot?.processes ?? [])
         .map((p) => p.entryHref)
         .filter((h): h is string => Boolean(h))
         .slice(0, 6)
         .join("\n");
     useEffect(() => {
-        if (!fullyCommitted || !processEntryHrefs || typeof window === "undefined") return;
+        if (!processEntryHrefs || typeof window === "undefined") return;
         const hrefs = processEntryHrefs.split("\n");
         const run = () => {
-            for (const href of hrefs) prefetchWorkUnitProvisioningFromHref(href);
+            for (const href of hrefs) {
+                const answerPromise = prefetchWorkUnitProvisioningFromHref(href);
+                if (!answerPromise) continue;
+                // Chain the default subject off the SAME prepared answer — no second fetch, one identity.
+                void answerPromise
+                    .then((answer) => {
+                        if (answer && answer.terminal === "operational" && answer.recordOfAttention?.id) {
+                            void prewarmRecordWork(String(answer.recordOfAttention.id));
+                        }
+                    })
+                    .catch(() => {});
+            }
         };
         const w = window as Window & {
             requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
@@ -393,7 +408,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         }
         const timer = window.setTimeout(run, 500);
         return () => window.clearTimeout(timer);
-    }, [fullyCommitted, processEntryHrefs]);
+    }, [processEntryHrefs]);
 
     // A retained return is composition-ready the instant the seed paints: the retained snapshot +
     // header are already complete, so we never re-show the skeleton while the background SWR runs.
