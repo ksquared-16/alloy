@@ -53,7 +53,7 @@ import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActi
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useRecordWorkRuntime } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { useOperationalSubject, isOperationallyResolved } from "./OperationalSubjectContext";
-import LayoutRuntimeCurrentWorkWidget from "@/components/layout/LayoutRuntimeCurrentWorkWidget";
+import OpportunityFocusPanelCommitCriticalBody from "@/components/admin/focusPanel/OpportunityFocusPanelCommitCriticalBody";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
 import { focusPanelScrollScope } from "@/lib/presentation/runtime/workUnitOperatorContext";
@@ -490,20 +490,35 @@ export function InlineOpportunityFocusPanel() {
                             onHeaderAction={onActionSelect}
                             onModeChange={setFocusPanelMode}
                         />
-                    : operational.stageWorkRuntime ?
-                        // COMMIT-CRITICAL CURRENT WORK from the D1 answer ALONE (Kelly's doctrine). The
-                        // provisioning answer OWNS the operational Current Work projection, so the useful
-                        // Focus Panel is operational AT COMMIT — the first meaningful action is possible
-                        // with Header + Queue, without waiting for the drawer VM. There is no multi-second
-                        // "Thinking…" after Header + Queue. The drawer VM only ENRICHES the surrounding
-                        // Settlement cards afterward, filling reserved space; the Current Work widget
-                        // re-renders from the SAME stage-work runtime (`workspace.stage_work_runtime`),
-                        // so its content does not change and the primary work card does not resize.
+                    : operationallyResolved ?
+                        // ATOMIC COMMIT-CRITICAL FOCUS PANEL (A). The COMPLETE canonical Work-mode grid —
+                        // the SAME grid + SAME CurrentWorkCard the enriched drawer VM feeds — built from
+                        // the committed answer. Current Work renders ready; every settlement-owned card
+                        // reserves its geometry and the drawer VM fills it in place. No standalone preview,
+                        // no alternate layout, no card-by-card assembly, no composition change on Settlement.
                         <div className={MOTION_SETTLE.className} data-focus-panel-operational-current-work="true">
-                            <LayoutRuntimeCurrentWorkWidget
-                                record={{ _stage_work_runtime: operational.stageWorkRuntime } as unknown as Parameters<typeof LayoutRuntimeCurrentWorkWidget>[0]["record"]}
-                                opportunityId={operationalSubjectId ?? ""}
+                            <OpportunityFocusPanelCommitCriticalBody
+                                mode={focusPanelMode}
+                                subjectId={operationalSubjectId ?? ""}
+                                title={seedTitle}
+                                statusLabel={statusLabel}
+                                statusKey={drawer.opportunityQueuePreviewSeed?.statusKey ?? null}
                                 canMutate={statusCanMutate}
+                                stageWorkRuntime={operational.stageWorkRuntime}
+                                publishedStageInputs={operational.publishedStageInputs}
+                                situation={
+                                    operational.situation
+                                        ? {
+                                              stageKey: operational.situation.stageKey,
+                                              stageLabel: operational.situation.stageLabel,
+                                              purpose: operational.situation.purpose,
+                                          }
+                                        : null
+                                }
+                                primaryAction={operational.action}
+                                onSelectTab={selectFromDrawerTab}
+                                onHeaderAction={onActionSelect}
+                                onModeChange={setFocusPanelMode}
                             />
                         </div>
                     :

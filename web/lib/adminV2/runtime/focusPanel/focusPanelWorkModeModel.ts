@@ -23,6 +23,7 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import type { FocusPanelCardModel, FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 /**
  * Per-configured-card readiness. The grid renders geometry from this, never from data presence.
@@ -53,6 +54,12 @@ export type FocusPanelWorkModeModel = {
     cardModels: ReadonlyMap<FocusPanelCardKey, FocusPanelCardModel>;
     /** Per-configured-card readiness — drives reserved geometry. */
     cardReadiness: ReadonlyMap<FocusPanelCardKey, FocusPanelCardReadiness>;
+    /**
+     * Primary commands (the operator's next actions). Commit-critical: the truthful primary action at
+     * commit; the enriched producer carries the full resolved command set. Drives the primary-next-action
+     * invoke and the communications composer.
+     */
+    commands: ResolvedActionForClient[];
     title: string;
     statusLabel: string | null;
     canMutate: boolean;

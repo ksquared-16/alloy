@@ -86,19 +86,17 @@ export function deriveFocusPanelSummaryCompositionInputs(
         });
     });
 
+    // COMPOSITION IS CONFIGURATION-DRIVEN (A). Every published cell is included, ALWAYS — a missing
+    // settlement value RESERVES the cell, it never removes it. `visible:false` no longer drops a
+    // configured card; per-card readiness (not data presence) decides content vs reserved geometry.
+    void cards;
     const gridRows = grid.rows
         .map((row) => ({
-            cells: row.cells
-                .filter((cell) =>
-                    // Only the resolved body applies the visibility filter; the skeleton
-                    // (no cards) includes every published cell.
-                    cards ? cards.get(cell.key as FocusPanelCardKey)?.visible !== false : true,
-                )
-                .map((cell) => ({
-                    key: cell.instanceKey ?? cell.key,
-                    span: cell.span,
-                    density: cell.density,
-                })),
+            cells: row.cells.map((cell) => ({
+                key: cell.instanceKey ?? cell.key,
+                span: cell.span,
+                density: cell.density,
+            })),
         }))
         .filter((row) => row.cells.length > 0);
 

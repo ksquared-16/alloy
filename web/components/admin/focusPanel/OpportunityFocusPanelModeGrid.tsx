@@ -5,8 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import OpportunityFocusPanelEmbeddedWorkspace from "@/components/admin/focusPanel/OpportunityFocusPanelEmbeddedWorkspace";
-import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
-import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+import { resolveFocusPanelModeGrid } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import {
     deriveFocusPanelGridFromLayoutDoc,
     deriveFocusPanelInstanceMap,
@@ -35,8 +34,7 @@ import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPan
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
-import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
+import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { resolveCommunicationsComposerAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCommunicationsComposerAction";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
@@ -45,46 +43,55 @@ import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard
 /** Reverse-zoom dismiss window — matches CSS `--alloy-os-fp-depth-ms` (240ms). */
 const FOCUS_PANEL_DEPTH_MS = 240;
 
+/**
+ * RESERVED cell — a configured card whose data is not yet settled (or not applicable). It holds the
+ * cell's geometry (card shell + min-height) so Settlement fills it IN PLACE with no reflow, and never
+ * removes a configured cell. Mirrors `FocusPanelSummarySkeleton`'s reserved region exactly, so the
+ * pending → enriched transition changes only content, never composition or geometry.
+ */
+function ReservedFocusPanelCell() {
+    return (
+        <div
+            className="alloy-os-ucard"
+            data-focus-panel-cell-reserved="true"
+            aria-hidden="true"
+            style={{ minHeight: "7.5rem", padding: "0.875rem" }}
+        />
+    );
+}
+
 type Props = {
-    mode: FocusPanelMode;
-    displayVm: OpportunityDrawerViewModel;
-    drawerId: string;
-    record: Record<string, unknown>;
-    title: string;
-    perspective: RuntimePerspective | null;
-    statusLabel: string | null;
-    canMutate: boolean;
+    model: FocusPanelWorkModeModel;
     onSelectTab: (tab: DrawerTabKey) => void;
     onHeaderAction?: (action: ResolvedActionForClient) => void;
     onModeChange?: (mode: FocusPanelMode) => void;
 };
 
-/** Renders a mode grid from derived Universal Card models — never from layout sections. */
+/** Renders a mode grid from a source-agnostic `FocusPanelWorkModeModel` — never the drawer VM. */
 export default function OpportunityFocusPanelModeGrid({
-    mode,
-    displayVm,
-    drawerId,
-    record,
-    title,
-    perspective,
-    statusLabel,
-    canMutate,
+    model,
     onSelectTab,
     onHeaderAction,
     onModeChange,
 }: Props) {
-    const { grid: defaultGrid, cards } = useMemo(
-        () =>
-            deriveOpportunityFocusPanelPresentation({
-                mode,
-                displayVm,
-                record,
-                title,
-                perspective,
-                statusLabel,
-            }),
-        [mode, displayVm, record, title, perspective, statusLabel],
-    );
+    // Source-agnostic: the model is produced identically from the provisioning answer (commit-critical)
+    // or the drawer VM (enriched). The grid never knows which — configuration determines composition,
+    // readiness determines each cell's content state.
+    const {
+        mode,
+        context: operationalContext,
+        cardModels: cards,
+        cardReadiness,
+        commands,
+        title,
+        statusLabel,
+        perspective,
+        canMutate,
+    } = model;
+    const drawerId = model.subject.id;
+    const record = operationalContext.truth;
+    const workflowActive = operationalContext.stageWorkRuntime?.primary?.state === "open";
+    const defaultGrid = useMemo(() => resolveFocusPanelModeGrid(mode, workflowActive), [mode, workflowActive]);
 
     // Summary is the configurable surface: read the org's PUBLISHED LayoutDoc (or
     // the code-built default — visually identical) and resolve per-instance config.
@@ -109,8 +116,8 @@ export default function OpportunityFocusPanelModeGrid({
     // Here the resolved `cards` map is passed so the visibility filter applies exactly as
     // before (behavior-preserving extraction). Non-summary modes keep the legacy grid path.
     const summaryInputs = useMemo(
-        () => (isSummary ? deriveFocusPanelSummaryCompositionInputs(activeDoc, { cards }) : null),
-        [isSummary, activeDoc, cards],
+        () => (isSummary ? deriveFocusPanelSummaryCompositionInputs(activeDoc) : null),
+        [isSummary, activeDoc],
     );
     // Operator-published explicit layout (source of truth). When present the runtime
     // renders these exact rows/widths; otherwise it falls back to auto-composition.
@@ -136,21 +143,6 @@ export default function OpportunityFocusPanelModeGrid({
         (w.__focusPanelLayoutLog ||= []).push(entry);
     }, [isSummary, publishedDoc, publishedLayout, activeDoc]);
 
-    // Adapter seam: composed subject payload → Operational Context. Cards consume
-    // this boundary, never the drawer VM directly. Built once; observed by cards.
-    const operationalContext = useMemo(
-        () =>
-            buildOperationalContext({
-                subjectId: drawerId,
-                title,
-                subjectVm: displayVm,
-                truth: record,
-                perspective,
-                statusLabel,
-                canMutate,
-            }),
-        [drawerId, title, displayVm, record, perspective, statusLabel, canMutate],
-    );
 
     // Cross-card handoff orchestration: a referencing card (e.g. Readiness) asks an
     // owner card (e.g. Children) to open a Perspective. We record the request with a
@@ -317,11 +309,6 @@ export default function OpportunityFocusPanelModeGrid({
         return () => window.removeEventListener("keydown", onKey, true);
     }, [activeDepth, closeCurrentWorkWorkspace, currentWorkWorkspace.open, dismiss]);
 
-    const workflowActive = Boolean(
-        displayVm.workspace.work_intent_runtime?.state === "open" ||
-            displayVm.workspace.stage_work_runtime?.primary?.state === "open",
-    );
-
     /** cellKey (instance) → { typeKey, config } for model + config resolution. */
     const legacyCellResolution = useMemo(() => {
         const map = new Map<string, { typeKey: FocusPanelCardKey; config: FocusPanelCardConfig | null }>();
@@ -346,44 +333,39 @@ export default function OpportunityFocusPanelModeGrid({
         () =>
             grid.rows
                 .map((row) => ({
-                    cells: row.cells
-                        .filter((cell) => cards.get(cell.key as FocusPanelCardKey)?.visible !== false)
-                        .map((cell) => ({
-                            key: cell.instanceKey ?? cell.key,
-                            span: cell.span,
-                            density: cell.density,
-                        })),
+                    // Configuration-driven: every configured cell is present; readiness decides content.
+                    cells: row.cells.map((cell) => ({
+                        key: cell.instanceKey ?? cell.key,
+                        span: cell.span,
+                        density: cell.density,
+                    })),
                 }))
                 .filter((row) => row.cells.length > 0),
-        [grid, cards],
+        [grid],
     );
     const gridRows = isSummary ? summaryInputs!.gridRows : legacyGridRows;
 
     const focusTargets = useMemo(() => {
         const set = new Set<FocusPanelCardKey>();
+        // Only READY cards can receive focus; reserved/not-applicable cells hold geometry only.
         for (const row of gridRows) {
             for (const cell of row.cells) {
                 const typeKey = (cellResolution.get(cell.key)?.typeKey ?? cell.key) as FocusPanelCardKey;
-                if (cards.get(typeKey)?.visible !== false) {
-                    set.add(typeKey);
-                }
+                if (cardReadiness.get(typeKey) === "ready") set.add(typeKey);
             }
         }
         if (publishedLayout) {
             for (const cardKey of publishedLayoutReadingOrder(publishedLayout)) {
                 const typeKey = cardKey as FocusPanelCardKey;
-                if (cards.get(typeKey)?.visible !== false) {
-                    set.add(typeKey);
-                }
+                if (cardReadiness.get(typeKey) === "ready") set.add(typeKey);
             }
         }
         return set;
-    }, [gridRows, cellResolution, cards, publishedLayout]);
+    }, [gridRows, cellResolution, cardReadiness, publishedLayout]);
 
-    const headerMenuActions = displayVm.actions.header_menu;
     const resolveCommsAction = useCallback(
-        () => resolveCommunicationsComposerAction(headerMenuActions),
-        [headerMenuActions],
+        () => resolveCommunicationsComposerAction(commands),
+        [commands],
     );
 
     const coordination = useMemo<FocusPanelCoordination>(
@@ -441,7 +423,7 @@ export default function OpportunityFocusPanelModeGrid({
             <OpportunityFocusPanelEmbeddedWorkspace
                 drawerId={drawerId}
                 record={record}
-                displayVm={displayVm}
+                communicationsPreview={operationalContext.communicationsPreview ?? null}
                 onSelectTab={onSelectTab}
             />
         );
@@ -505,24 +487,30 @@ export default function OpportunityFocusPanelModeGrid({
                 renderCell={(key) => {
                     const resolution = cellResolution.get(key);
                     const typeKey = (resolution?.typeKey ?? key) as FocusPanelCardKey;
+                    // Configuration-driven composition: a configured cell is ALWAYS present. Readiness
+                    // decides content — reserved / not_applicable hold the cell's geometry (settlement
+                    // fills in place) and NEVER remove it.
+                    const readiness = cardReadiness.get(typeKey) ?? "reserved";
                     const baseModel = cards.get(typeKey);
-                    if (!baseModel) return null;
-                    const model = composeEffectiveCardModel(baseModel, resolution?.config ?? null, record);
+                    if (readiness !== "ready" || !baseModel) {
+                        return <ReservedFocusPanelCell />;
+                    }
+                    const cardModel = composeEffectiveCardModel(baseModel, resolution?.config ?? null, record);
                     const receded = mode === "work" && workflowActive && typeKey === "work_launcher";
                     return (
                         <FocusPanelCardRenderer
-                            model={model}
+                            model={cardModel}
                             context={operationalContext}
                             focusPanelMode={mode}
-                            onPrimaryAction={(key) => {
-                                if (key === "primary_next_action" && displayVm.actions.header_menu[0]) {
-                                    onHeaderAction?.(displayVm.actions.header_menu[0]);
+                            onPrimaryAction={(actionKey) => {
+                                if (actionKey === "primary_next_action" && commands[0]) {
+                                    onHeaderAction?.(commands[0]);
                                 }
                             }}
                             receded={receded}
                             coordination={coordination}
                             mutation={mutation}
-                            compat={{ subjectVm: displayVm, onSelectTab }}
+                            compat={{ onSelectTab }}
                         />
                     );
                 }}

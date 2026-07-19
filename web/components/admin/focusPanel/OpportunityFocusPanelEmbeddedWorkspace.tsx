@@ -8,7 +8,7 @@ import LayoutRuntimeActivityTimelineWidget from "@/components/layout/LayoutRunti
 import LayoutRuntimeTasksWidget from "@/components/layout/LayoutRuntimeTasksWidget";
 import { resolveLayoutRuntimeActivityTimeline } from "@/lib/layout/runtime/resolveLayoutRuntimeActivityTimeline";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
-import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
@@ -16,7 +16,8 @@ import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerF
 type Props = {
     drawerId: string;
     record: Record<string, unknown>;
-    displayVm: OpportunityDrawerViewModel;
+    /** Settlement projection from the context — the comms preview seed (null at commit). */
+    communicationsPreview: FamilyCommunicationWorkspacePreviewVM | null;
     onSelectTab: (tab: DrawerTabKey) => void;
 };
 
@@ -45,7 +46,7 @@ const RIBBON_EVENT_COUNT = 3;
 export default function OpportunityFocusPanelEmbeddedWorkspace({
     drawerId,
     record,
-    displayVm,
+    communicationsPreview,
     onSelectTab,
 }: Props) {
     const [workTab, setWorkTab] = useState<WorkTab>("items");
@@ -124,7 +125,7 @@ export default function OpportunityFocusPanelEmbeddedWorkspace({
                         <CommunicationsDrawerSection
                             apiEntityType="opportunities"
                             entityId={drawerId}
-                            initialPreviewVm={displayVm.activity?.communicationsPreviewVm ?? null}
+                            initialPreviewVm={communicationsPreview}
                             embedded
                             embeddedHeaderMode="description_only"
                             surfaceVariant="activity_embed"

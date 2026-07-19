@@ -437,7 +437,7 @@ export default function FocusPanelRuntimeComposerCanvas({
                         focusPanelMode="summary"
                         coordination={coordination}
                         mutation={mutation}
-                        compat={{ subjectVm: vm, onSelectTab: () => {} }}
+                        compat={{ onSelectTab: () => {} }}
                     />
                 </ComposerCellShell>
             );

@@ -43,10 +43,12 @@ describe("deriveFocusPanelSummaryCompositionInputs", () => {
         );
     });
 
-    it("applies the visibility filter ONLY when cards are provided (a hidden card drops)", () => {
+    it("keeps a configured cell even when its card model is hidden (composition is configuration-driven)", () => {
+        // A (Runtime V1): composition comes from the published configuration, NEVER from data presence.
+        // A `visible:false` card no longer drops the cell — readiness (not visibility) decides content;
+        // the configured cell reserves geometry and is filled in place. This is what stops the panel
+        // from visibly assembling card-by-card as Settlement arrives.
         const cards = demoCards();
-        const firstSection = FOCUS_PANEL_SUMMARY_DEFAULT_DOC.sections[0]!;
-        // Derive the type key placed in the first published cell and mark its model hidden.
         const withoutCards = deriveFocusPanelSummaryCompositionInputs(FOCUS_PANEL_SUMMARY_DEFAULT_DOC);
         const firstTypeKey = withoutCards.composeCards[0]!.typeKey;
         const hiddenCards = new Map(cards);
@@ -57,14 +59,15 @@ describe("deriveFocusPanelSummaryCompositionInputs", () => {
         const withHidden = deriveFocusPanelSummaryCompositionInputs(FOCUS_PANEL_SUMMARY_DEFAULT_DOC, {
             cards: hiddenCards,
         });
-        // The hidden type is dropped from the filtered surface but present in the skeleton.
-        expect(withHidden.composeCards.some((c) => c.typeKey === firstTypeKey)).toBe(false);
-        expect(withoutCards.composeCards.some((c) => c.typeKey === firstTypeKey)).toBe(true);
-        // Non-record inputs stay identical regardless of the filter.
+        // The configured cell is STILL present — a hidden card never removes it. Composition matches
+        // the unfiltered surface exactly (same cells, same order, same layout).
+        expect(withHidden.composeCards.some((c) => c.typeKey === firstTypeKey)).toBe(true);
+        expect(withHidden.composeCards.map((c) => c.typeKey)).toEqual(
+            withoutCards.composeCards.map((c) => c.typeKey),
+        );
         expect(withHidden.publishedLayout).toEqual(withoutCards.publishedLayout);
         expect([...withHidden.cellResolution.keys()].sort()).toEqual(
             [...withoutCards.cellResolution.keys()].sort(),
         );
-        void firstSection;
     });
 });

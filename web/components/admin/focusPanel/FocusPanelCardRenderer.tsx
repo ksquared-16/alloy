@@ -14,14 +14,12 @@ import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
-import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { system5ArchetypeSuppressesFooterAction } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
-import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 
 /**
@@ -34,9 +32,7 @@ import type { DrawerTabKey } from "@/lib/entityPresentation";
  * @see focus-panel-runtime-cutover-report.md
  */
 export type FocusPanelCardCompat = {
-    /** Composed subject VM — consumed only by the lifecycle-rail + drawer-tab drill cards. */
-    subjectVm: OperationalSubjectViewModel;
-    /** Drawer-tab drill navigation — migrates out with the tab-pane cards. */
+    /** Drawer-tab drill navigation — the last compat dependency; migrates out with the tab-pane cards. */
     onSelectTab: (tab: DrawerTabKey) => void;
 };
 
@@ -173,10 +169,9 @@ export default function FocusPanelCardRenderer({
     const drawerId = context.subject.id;
     const record = context.truth;
 
-    const lifecycleRailModel = buildOpportunityVmLifecycleRailModel({
-        displayVm: compat.subjectVm,
-        drawerId,
-    });
+    // The lifecycle rail is a SETTLEMENT projection carried on the context (built by the enriched
+    // adapter). At commit it is null → `workflow_steps` renders reserved; the drawer VM fills it.
+    const lifecycleRailModel = context.lifecycleRail ?? null;
     const drillDownAllowed = model.density === "standard" || model.density === "expanded";
     const suppressFooter = system5ArchetypeSuppressesFooterAction(model.archetype);
     const isLauncher = model.archetype === "launcher";

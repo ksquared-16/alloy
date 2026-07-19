@@ -17,6 +17,7 @@ import { NULL_BILLING_SIGNAL, type OperationalContext } from "@/lib/adminV2/runt
 import { buildCurrentWorkCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
@@ -102,6 +103,24 @@ export function focusPanelWorkModeModelFromProvisioningAnswer(
     ]);
     const cardReadiness = new Map<FocusPanelCardKey, FocusPanelCardReadiness>([["current_work", "ready"]]);
 
+    // Commit-critical commands: the truthful primary action (U-O5) as one resolved command. The
+    // enriched producer carries the full resolved command set.
+    const commands: ResolvedActionForClient[] = input.primaryAction
+        ? [
+              {
+                  key: input.primaryAction.actionRef,
+                  label: input.primaryAction.label,
+                  description: null,
+                  action_type: "workflow",
+                  icon: null,
+                  style: null,
+                  display_style: "button",
+                  payload: {},
+                  workflow_id: null,
+              },
+          ]
+        : [];
+
     return {
         source: "provisioning_answer",
         mode: input.mode,
@@ -109,6 +128,7 @@ export function focusPanelWorkModeModelFromProvisioningAnswer(
         context,
         cardModels,
         cardReadiness,
+        commands,
         title: input.title,
         statusLabel: input.statusLabel,
         canMutate: input.canMutate,

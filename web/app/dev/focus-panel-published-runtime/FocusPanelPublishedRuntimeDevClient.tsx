@@ -9,6 +9,7 @@ import { focusPanelDomChain } from "@/lib/adminV2/runtime/focusPanel/debug/focus
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
+import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
 import { buildDemoFocusPanelSummaryViewModel } from "@/lib/adminV2/runtime/focusPanel/demoFocusPanelSummaryViewModel";
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
@@ -77,7 +78,7 @@ export default function FocusPanelPublishedRuntimeDevClient() {
                 model={model}
                 context={context}
                 focusPanelMode="summary"
-                compat={{ subjectVm: vm, onSelectTab: () => {} }}
+                compat={{ onSelectTab: () => {} }}
             />
         );
     };
@@ -136,14 +137,15 @@ export default function FocusPanelPublishedRuntimeDevClient() {
 
             <Frame label="C · Real OpportunityFocusPanelModeGrid (summary) @ 1040px" width={1040}>
                 <OpportunityFocusPanelModeGrid
-                    mode="summary"
-                    displayVm={vm}
-                    drawerId={String(vm.entity.id)}
-                    record={record}
-                    title={vm.header.title}
-                    perspective={null}
-                    statusLabel="Tour scheduled"
-                    canMutate={false}
+                    model={focusPanelWorkModeModelFromDrawerVm({
+                        mode: "summary",
+                        displayVm: vm,
+                        record,
+                        title: vm.header.title,
+                        perspective: null,
+                        statusLabel: "Tour scheduled",
+                        canMutate: false,
+                    })}
                     onSelectTab={() => {}}
                 />
             </Frame>

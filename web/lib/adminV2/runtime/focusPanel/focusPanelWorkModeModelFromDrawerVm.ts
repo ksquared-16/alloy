@@ -69,6 +69,7 @@ export function focusPanelWorkModeModelFromDrawerVm(
         context,
         cardModels: cards,
         cardReadiness,
+        commands: displayVm.actions.header_menu,
         title,
         statusLabel,
         canMutate,

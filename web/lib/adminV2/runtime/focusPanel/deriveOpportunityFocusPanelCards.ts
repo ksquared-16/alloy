@@ -882,12 +882,15 @@ export function deriveOpportunityFocusPanelPresentation(input: {
         input.displayVm.workspace.work_intent_runtime?.state === "open" ||
             input.displayVm.workspace.stage_work_runtime?.primary?.state === "open",
     );
+    return { grid: resolveFocusPanelModeGrid(input.mode, workflowActive), cards };
+}
 
-    if (input.mode === "work") {
-        return { grid: workflowActive ? WORK_GRID_ACTIVE : WORK_GRID_SPLIT, cards };
-    }
-    if (input.mode === "activity") {
-        return { grid: ACTIVITY_GRID, cards };
-    }
-    return { grid: SUMMARY_GRID, cards };
+/**
+ * The code default grid-spec for a mode — the source-agnostic composition selector the grid uses when
+ * it consumes a `FocusPanelWorkModeModel` (Summary composition is overridden by the published doc).
+ */
+export function resolveFocusPanelModeGrid(mode: FocusPanelMode, workflowActive: boolean): FocusPanelCardGridSpec {
+    if (mode === "work") return workflowActive ? WORK_GRID_ACTIVE : WORK_GRID_SPLIT;
+    if (mode === "activity") return ACTIVITY_GRID;
+    return SUMMARY_GRID;
 }
