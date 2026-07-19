@@ -16,6 +16,43 @@ related:
 Worktree: `/Users/Kelly/Code/alloy-worktrees/wt3-runtime-drawer-deletion` (managed **Slot 3**,
 sanctioned). Server: `alloy-dev-start wt3-runtime-drawer-deletion` → http://localhost:3013.
 
+## Session 4 update (2026-07-18) — corrected audit, queue fix, canonical resolver landed
+
+**New evidence (measured on :3013, Enrollment / `new-leads`, faithful clicks):**
+- **Workspace → Work Unit (warm prep):** ~47 ms, **zero network** — prepared HIT. ✓
+- **Queue Row FIRST-USE (Wenc→Kurzman, 5 s prep window):** commit **5,723 ms → 115 ms** after the
+  fix below; ack + complete reveal land together (atomic). ✓
+- **WU → Workspace (left-nav):** ~29 ms, **zero network**, retained shell, no blank frame. ✓
+  (Blocker 3's white-page complaint is disproven for the left-nav path; browser Back has
+  `replaceState` shell semantics — one history slot — and was not cleanly certifiable without
+  polluting history. Not a reproduced defect.)
+
+**Root cause of #2, proven (not the handoff's earlier hypothesis):** `provisioningKey` INCLUDES
+`subject`, so a first-use row is a distinct K2 preparation with no completed answer to reuse. The ±2
+adjacency prep warmed only the drawer VM + stage-work (`prewarmRecordWork`), never the per-subject
+provisioning answer — so first-use rows paid the cold `provisioning-answer?subject_id=` round-trip.
+The "warm 63 ms adjacent" only ever held for RE-VISITED subjects (completed-answer reuse).
+
+**Landed this session (committed, local):**
+- `perf(queue)` — `prewarmSubjectDestination` warms the per-subject provisioning answer (into the URL
+  cache K2 consumes) alongside the VM, on hover + ±2 adjacency. Certified 5,723 ms → 115 ms.
+- `feat(runtime)` — **`lib/runtime/graph/resolveOperationalDestination.ts`**: the ONE URL→DestinationId
+  resolver (server precedence `work_unit_key→work_view→queue_lane` + `firstVisibleWorkView` default).
+  **Collapse guarantee, unit-tested (5 green):** the work-unit-key slug, the view's own slug, and an
+  explicit `?work_view_id=` for a default view all resolve to ONE byte-identical `DestinationId`.
+
+**The identity fracture is real but LATENT in this tenant** (the tile CTA slug `new-leads` and the
+default view slug coincide), which is why the warm paths measure clean. The resolver makes the
+fracture structurally impossible ONCE producers/consumers key on the resolved `DestinationId`.
+
+**Remaining wire (Kelly's directive — runtime consumes DestinationId, never the URL):** K1 AttentionRef
+must carry the resolved `DestinationId`; prewarm, `consumeFreshProvisioning`, K2 `provisioningKey`, and
+the Prepared store must key on `destinationIdKey`; `urlFromAttention` projects it back to a clean URL.
+Open architecture choice: how the resolved identity reaches the client — **server-stamped on Workspace
+links** (matches the server-authored-graph doctrine; the landing builder already resolves
+`(workUnitId, workViewId)`) vs a **client-held catalog** the client resolves against. Recommend
+server-stamped.
+
 ## Mission summary
 
 Make Runtime Experience transitions **genuinely immediate**, not just visually clean. The prior work
