@@ -83,10 +83,17 @@ const ENTRY_PREPARATION_SCOPE: AttentionScope = ATTENTION_SCOPE.LENS;
  * Queue Definition.
  */
 export function provisioningKey(ref: AttentionRef): string {
+    // CANONICAL identity when resolved: key on (workUnitId, workViewId) so a bare default-view entry
+    // (`lens:null`) and its explicit Work-View pill (`lens:new_leads`) — which resolve to the SAME D1
+    // answer — share ONE preparation instead of two. Falls back to the route-derived (target, lens)
+    // only before a destination has been resolved (cold direct URL / history). Subject stays part of
+    // the identity (Record of Attention is the Operational Subject); a subject movement inherits the
+    // destination, so its key is (workUnitId, workViewId, subject).
+    const dest = ref.destination;
     return JSON.stringify({
         scope: ENTRY_PREPARATION_SCOPE,
-        target: ref.target,
-        lens: ref.lens ?? null,
+        workUnit: dest ? dest.workUnitId : ref.target,
+        workView: dest ? dest.workViewId : ref.lens ?? null,
         subject: ref.subject ?? null,
         principal: ref.principal,
         tenant: ref.tenant,

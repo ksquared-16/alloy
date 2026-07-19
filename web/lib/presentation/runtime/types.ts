@@ -17,6 +17,8 @@ import type {
     OperatorLifecycleWorkQueuePreview,
 } from "@/lib/admin/buildOperatorLifecycleLanding";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import type { DestinationId } from "@/lib/runtime/graph/destinationId";
+import { nodeDestinationId } from "@/lib/runtime/graph/destinationId";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
@@ -87,6 +89,15 @@ export type WorkViewLinkModel = {
     /** Presentation unit label derived from grain kind + count (e.g. `Family`, `Children`). */
     primaryGrainLabel?: string | null;
     supportingGrainLabel?: string | null;
+    /**
+     * The CANONICAL Operational Destination this link resolves to — server-resolved
+     * `(workUnitId, workViewId)`. The runtime keys surface identity / preparation / provisioning on
+     * THIS (via the entry gesture → K1 AttentionRef.destination), never on the route slug, so two URL
+     * forms of the same destination can never fracture. Null only when the host unit could not resolve.
+     * Stamped on Workspace entry rows; absent on Work-Unit pills (they select via a LENS move that
+     * inherits the destination) and on snapshot-derived models.
+     */
+    destination?: DestinationId | null;
 };
 
 /** A process tile — the collapsed state of a process on the Workspace surface. */
@@ -98,6 +109,8 @@ export type ProcessTileModel = {
     description: string;
     /** Canonical slug entry (`/workspace/work-unit/<slug>`). */
     entryHref: string;
+    /** Canonical destination the tile's primary CTA enters — the process's default Work View. */
+    destination?: DestinationId | null;
     activeRecordCount: number | null;
     needsAttentionCount: number | null;
     workViews: WorkViewLinkModel[];
@@ -376,6 +389,12 @@ export function workViewLinkFromWorkQueuePreview(
             supportingKind != null && typeof supportingCount === "number"
                 ? grainCountUnitLabel(supportingKind, supportingCount)
                 : null,
+        // Server-resolved canonical identity (host Work Unit + this Work View), stamped so the entry
+        // gesture carries it into K1 — the runtime never re-derives identity from the slug.
+        destination:
+            entry.host_work_unit_id && entry.work_view_id
+                ? nodeDestinationId(entry.host_work_unit_id, entry.work_view_id)
+                : null,
     };
 }
 
@@ -449,21 +468,26 @@ export function processTileModelFromLandingCard(
         supportingSignal?: PrimarySignalModel | null;
     },
 ): ProcessTileModel {
+    const workViews = card.workQueues.map((entry) =>
+        workViewLinkFromWorkQueuePreview(
+            entry,
+            args?.countForWorkView?.(entry) ?? null,
+            args?.iconForWorkView?.(entry) ?? null,
+        ),
+    );
     return {
         id: card.id,
         processKey: card.processKey,
         label: card.label,
         description: card.description,
         entryHref: card.entryHref,
+        // The tile CTA enters the process's DEFAULT Work View — the first configured view, the same
+        // one the bare entry slug resolves to server-side. Carry its canonical destination so the CTA
+        // and its default-view row can never key differently.
+        destination: workViews[0]?.destination ?? null,
         activeRecordCount: card.activeRecordCount,
         needsAttentionCount: card.needsAttentionCount,
-        workViews: card.workQueues.map((entry) =>
-            workViewLinkFromWorkQueuePreview(
-                entry,
-                args?.countForWorkView?.(entry) ?? null,
-                args?.iconForWorkView?.(entry) ?? null,
-            ),
-        ),
+        workViews,
         primarySignal: args?.primarySignal ?? null,
         supportingSignal: args?.supportingSignal ?? null,
     };

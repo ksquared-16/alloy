@@ -188,7 +188,7 @@ function WorkViewRowLink({
     processAccent: ProcessCardAccent | null;
     showCounts: boolean;
 }) {
-    const onGesture = useWorkUnitEntryGesture(view.href);
+    const onGesture = useWorkUnitEntryGesture(view.href, view.destination);
     if (!view.href) return null;
     return (
                         <Link

@@ -18,6 +18,7 @@
 import { useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { useRuntimeKernelOptional } from "./RuntimeKernelContext";
 import { ATTENTION_SCOPE } from "./attention";
+import type { DestinationId } from "@/lib/runtime/graph/destinationId";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
 
@@ -41,7 +42,16 @@ export function attentionTargetFromEntryHref(href: string): { target: string; le
  * own attention from the URL on cold load — Art 2.4). Only NORMAL in-app activation is intercepted,
  * and it becomes an attention movement rather than a navigation.
  */
-export function useWorkUnitEntryGesture(href: string | null | undefined) {
+export function useWorkUnitEntryGesture(
+    href: string | null | undefined,
+    /**
+     * The link's SERVER-RESOLVED canonical destination `(workUnitId, workViewId)`. Carried into K1 so
+     * every runtime owner (surface identity, K2 preparation, prepared-store lookup, history) keys on
+     * the canonical destination, never the route slug — two URL forms of the same destination collapse
+     * to one identity. Null on links whose host could not be resolved (falls back to slug-derived).
+     */
+    destination?: DestinationId | null,
+) {
     const kernel = useRuntimeKernelOptional();
     const { orgId, principalUserId } = useWorkspaceOrg();
 
@@ -65,6 +75,7 @@ export function useWorkUnitEntryGesture(href: string | null | undefined) {
                     principal: principalUserId ?? "",
                     target: t.target,
                     lens: t.lens,
+                    destination: destination ?? null,
                     source: "direct_url",
                 });
                 return;
@@ -73,10 +84,11 @@ export function useWorkUnitEntryGesture(href: string | null | undefined) {
                 scope: ATTENTION_SCOPE.SURFACE,
                 target: t.target,
                 lens: t.lens,
+                destination: destination ?? null,
                 source: "pointer",
             });
         },
-        [kernel, href, orgId, principalUserId],
+        [kernel, href, destination, orgId, principalUserId],
     );
 }
 

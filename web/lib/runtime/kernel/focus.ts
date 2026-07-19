@@ -25,6 +25,7 @@
 import type { AttentionRef } from "./attention";
 import { supersedes } from "./attention";
 import type { PreparationTerminal, PreparationOutcome } from "./provisioning";
+import { destinationNodeKey } from "@/lib/runtime/graph/destinationId";
 
 /**
  * The phase of a scope's visible world.
@@ -97,6 +98,14 @@ export type FocusInstrumentation = {
  * subject movement neither refetches nor rebuilds.
  */
 export function surfaceIdFor(ref: AttentionRef): string {
+    // CANONICAL when the resolved destination is known: the surface identity is the (workUnitId,
+    // workViewId) node, NOT the route slug. Two URL forms of the same operational destination — a
+    // bare default-view entry (`lens:null`) and its explicit Work-View pill (`lens:new_leads`) — MUST
+    // produce ONE surfaceId, or the Host treats them as different surfaces and rebuilds instead of
+    // restoring (and the desired/current comparison mis-detects a mixed destination). Falls back to
+    // the route-derived `(target, lens)` only before a destination has been resolved (cold direct URL
+    // / history), where there is no prepared counterpart to fracture against.
+    if (ref.destination) return destinationNodeKey(ref.destination);
     return `${ref.target}::${ref.lens ?? ""}`;
 }
 

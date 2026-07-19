@@ -210,7 +210,7 @@ export function ProcessSummaryCard({
     // ── THE OPERATOR GESTURE — K1, not the router. ONE shared adapter (see
     // useWorkUnitEntryGesture): the Workspace has more than one entry point to the same Work Unit,
     // and any entry point not wired to K1 navigates into a seed-only route and blanks the surface.
-    const onGesture = useWorkUnitEntryGesture(drillHref);
+    const onGesture = useWorkUnitEntryGesture(drillHref, process.destination);
 
     const todaysWork = useMemo(
         () => applyTodaysWorkConfig(process.workViews, config),
