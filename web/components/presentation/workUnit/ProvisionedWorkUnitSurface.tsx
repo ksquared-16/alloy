@@ -116,7 +116,11 @@ export function ProvisionedWorkUnitSurface() {
                     action={op ? { actionRef: op.primaryAction.actionRef, label: op.primaryAction.label } : null}
                     // COMMIT-CRITICAL Current Work — the answer OWNS this projection; the Focus Panel
                     // renders Current Work from it at commit, the drawer VM only enriches (Settlement).
+                    // The published stage config + work-intent runtime travel with it so the atomic
+                    // commit-critical Focus Panel renders the SAME CurrentWorkCard the resolved VM does (A).
                     stageWorkRuntime={op ? op.focusPanelStageWork?.stage_work_runtime ?? null : null}
+                    publishedStageInputs={op ? op.focusPanelStageWork?.published_stage_inputs ?? null : null}
+                    workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}
                 >
                     <WorkUnitSurfaceBodyFromModel model={model} intents={intents} />
                 </OperationalSubjectProvider>

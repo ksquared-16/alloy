@@ -19,6 +19,8 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
+import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
+import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
 
 export type OperationalSubject = {
     /** Record of Attention — the committed subject, from the frozen snapshot. Null = none committed. */
@@ -66,11 +68,20 @@ export type OperationalSubject = {
      * Null when the answer did not resolve it (the panel degrades to the drawer-VM load).
      */
     stageWorkRuntime: StageWorkRuntimeProjection | null;
+    /**
+     * Commit-critical Current Work companions to `stageWorkRuntime` — the published stage config
+     * (operating plan + catalog + field rules) and the work-intent runtime the canonical
+     * `CurrentWorkCard` reads. Carried by the answer's `focusPanelStageWork` slice so the ATOMIC
+     * commit-critical Focus Panel renders the SAME card the resolved VM does (A). Null when the answer
+     * did not resolve them (the panel degrades to the drawer-VM load).
+     */
+    publishedStageInputs: PublishedStageInputsForCurrentWork | null;
+    workIntentRuntime: WorkIntentRuntimeProjection | null;
 };
 
 const EMPTY: OperationalSubject = {
     subjectId: null, entityType: null, identitySeed: null, situation: null, decision: null, action: null,
-    stageWorkRuntime: null,
+    stageWorkRuntime: null, publishedStageInputs: null, workIntentRuntime: null,
 };
 const Ctx = createContext<OperationalSubject>(EMPTY);
 
@@ -82,6 +93,8 @@ export function OperationalSubjectProvider({
     decision,
     action,
     stageWorkRuntime,
+    publishedStageInputs,
+    workIntentRuntime,
     children,
 }: {
     subjectId: string | null;
@@ -90,6 +103,8 @@ export function OperationalSubjectProvider({
     decision?: OperationalSubject["decision"];
     action?: OperationalSubject["action"];
     stageWorkRuntime?: StageWorkRuntimeProjection | null;
+    publishedStageInputs?: PublishedStageInputsForCurrentWork | null;
+    workIntentRuntime?: WorkIntentRuntimeProjection | null;
     children: ReactNode;
 }) {
     const value = useMemo<OperationalSubject>(
@@ -101,8 +116,10 @@ export function OperationalSubjectProvider({
             decision: decision ?? null,
             action: action ?? null,
             stageWorkRuntime: stageWorkRuntime ?? null,
+            publishedStageInputs: publishedStageInputs ?? null,
+            workIntentRuntime: workIntentRuntime ?? null,
         }),
-        [subjectId, identitySeed, situation, decision, action, stageWorkRuntime],
+        [subjectId, identitySeed, situation, decision, action, stageWorkRuntime, publishedStageInputs, workIntentRuntime],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
