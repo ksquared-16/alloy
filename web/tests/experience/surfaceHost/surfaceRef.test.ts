@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-    isSameSurface,
-    surfaceRefFromPath,
-    surfaceRefToPath,
-} from "@/lib/experience/surfaceHost/surfaceRef";
+import { surfaceRefFromPath } from "@/lib/experience/surfaceHost/surfaceRef";
 
 /**
  * Deep-link hydration (Phase 1B): the URL is READ into a SurfaceRef via the canonical parser.
@@ -32,16 +28,12 @@ describe("surfaceRefFromPath — deep-link hydration", () => {
         const noRecord = surfaceRefFromPath("/workspace/work-unit/active-pipeline");
         expect(withRecord.recordId).toBe("opp-123");
         expect(withRecord.key).toBe(noRecord.key); // record does NOT change the surface
-        expect(isSameSurface(withRecord, noRecord)).toBe(true);
     });
 
     it("different work units are different surfaces", () => {
-        expect(
-            isSameSurface(
-                surfaceRefFromPath("/workspace/work-unit/a"),
-                surfaceRefFromPath("/workspace/work-unit/b"),
-            ),
-        ).toBe(false);
+        expect(surfaceRefFromPath("/workspace/work-unit/a").key).not.toBe(
+            surfaceRefFromPath("/workspace/work-unit/b").key,
+        );
     });
 
     it("defensive: null / garbage / non-operator paths default to workspace (fallback)", () => {
@@ -49,15 +41,5 @@ describe("surfaceRefFromPath — deep-link hydration", () => {
         expect(surfaceRefFromPath(undefined).kind).toBe("workspace");
         expect(surfaceRefFromPath("").kind).toBe("workspace");
         expect(surfaceRefFromPath("/settings/whatever").kind).toBe("workspace");
-    });
-
-    it("round-trips through the URL projection (surfaceRefToPath ∘ surfaceRefFromPath)", () => {
-        for (const p of [
-            "/workspace",
-            "/workspace/work-unit/active-pipeline",
-            "/workspace/work-unit/active-pipeline/opp-123",
-        ]) {
-            expect(surfaceRefToPath(surfaceRefFromPath(p))).toBe(p);
-        }
     });
 });

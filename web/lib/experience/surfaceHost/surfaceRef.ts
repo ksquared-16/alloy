@@ -16,10 +16,6 @@ import {
     normalizeOperatorPathname,
     parseOperatorWorkUnitPath,
 } from "@/lib/admin/canonicalOperatorRoutes";
-import {
-    CANONICAL_OPERATOR_BASE,
-    CANONICAL_OPERATOR_WORK_UNIT_PREFIX,
-} from "@/lib/admin/canonicalAdminRoutes";
 
 export type SurfaceKind = "workspace" | "work-unit";
 
@@ -58,21 +54,4 @@ export function surfaceRefFromPath(pathname: string | null | undefined): Surface
     } catch {
         return WORKSPACE_REF;
     }
-}
-
-/**
- * Project a SurfaceRef back to its canonical URL. NOT wired in Phase 1 (the Host does not own the
- * URL yet); defined so the projection contract has a home and can be round-trip tested.
- */
-export function surfaceRefToPath(ref: SurfaceRef): string {
-    if (ref.kind === "work-unit" && ref.workUnitSlug) {
-        const base = `${CANONICAL_OPERATOR_WORK_UNIT_PREFIX}/${encodeURIComponent(ref.workUnitSlug)}`;
-        return ref.recordId ? `${base}/${encodeURIComponent(ref.recordId)}` : base;
-    }
-    return CANONICAL_OPERATOR_BASE;
-}
-
-/** Same operational surface (kind + slug). Record differences do not change the surface. */
-export function isSameSurface(a: SurfaceRef, b: SurfaceRef): boolean {
-    return a.key === b.key;
 }
