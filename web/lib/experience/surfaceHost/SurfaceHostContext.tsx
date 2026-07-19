@@ -30,6 +30,9 @@ import { surfaceHostShouldRenderWorkUnit } from "@/lib/experience/surfaceHost/su
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { attentionFromUrl, ATTENTION_SCOPE, WORKSPACE_ATTENTION_TARGET } from "@/lib/runtime/kernel/attention";
 import { surfaceIdFor } from "@/lib/runtime/kernel/focus";
+import { destinationIdKey, nodeDestinationId } from "@/lib/runtime/graph/destinationId";
+import { destinationIdFromAnswer } from "@/lib/runtime/provisioning/provisioningAnswerDestination";
+import { readHistoryDestination, stampHistoryDestination } from "@/lib/experience/surfaceHost/historyDestination";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { subscribeWorkspaceReturn } from "@/lib/experience/surfaceHost/workspaceReturnIntent";
 import { ProvisionedWorkUnitSurface } from "@/components/presentation/workUnit/ProvisionedWorkUnitSurface";
@@ -73,16 +76,43 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
                 "history",
             );
             if (!h) return;
+            // B2 — restore the CANONICAL destination K3 stamped into this history entry at commit,
+            // not the URL's ambiguous slug. The stamp carries (workUnit, workView[, subject]); the URL
+            // cannot express a pill view. When absent (an older entry, or a bare cold Back) we fall
+            // back to the URL exactly as before — no regression.
+            const stamped = readHistoryDestination(window.history.state);
+            const lens = stamped?.workViewId ?? h.lens ?? null;
+            const subject = stamped?.subjectId ?? h.subject ?? null;
+            const nodeDestination = stamped
+                ? nodeDestinationId(stamped.workUnitId, stamped.workViewId)
+                : undefined;
+
             if (!kernel.attention.get()) {
-                kernel.attention.hydrate(h);
+                // A cold Back INTO the app: one hydration establishes surface + lens + subject at once
+                // (hydrate derives its scope from the finest field present).
+                kernel.attention.hydrate({ ...h, lens, subject, destination: nodeDestination });
                 return;
             }
+            // A SURFACE movement keyed on the canonical node identity: `surfaceIdFor` now matches the
+            // committed surface, so Back/Forward across pill views neither rebuilds nor shows a mixed
+            // frame. A finer SUBJECT movement then re-pins the exact Record of Attention (the URL's
+            // default-subject strategy could otherwise restore a different row). The intermediate
+            // surface terminal is superseded by the newer subject movement, so there is no default-
+            // subject flash — only the pinned subject commits.
             kernel.attention.move({
                 scope: ATTENTION_SCOPE.SURFACE,
                 target: h.target,
-                lens: h.lens ?? null,
+                lens,
+                destination: nodeDestination,
                 source: "history",
             });
+            if (subject) {
+                kernel.attention.move({
+                    scope: ATTENTION_SCOPE.SUBJECT,
+                    subject,
+                    source: "history",
+                });
+            }
         };
         window.addEventListener("popstate", onPopState);
         return () => window.removeEventListener("popstate", onPopState);
@@ -127,11 +157,39 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     //    Workspace: it has no committed surface to project from, so when the operator is on it the
     //    address is its bare path rather than the stale (retained) Work Unit's slug URL.
     useEffect(() => {
+        if (typeof window === "undefined") return;
         const url = desiredIsWorkspace ? WORKSPACE_URL : focus.projectedUrl;
-        if (!url || typeof window === "undefined") return;
-        if (window.location.pathname + window.location.search === url) return;
-        window.history.replaceState(window.history.state, "", url);
-    }, [focus.projectedUrl, desiredIsWorkspace]);
+        if (!url) return;
+        // B2 — stamp the committed CANONICAL destination into history.state so Back/Forward can
+        // restore the exact destination (incl. pill views the URL cannot express). Prefer the
+        // attention's producer-resolved destination; fall back to the one the answer resolved (a
+        // direct/history entry carries none). The Workspace has no committed destination, so its
+        // entry is stamped null — a return Home never leaves a stale destination behind.
+        // Node identity: the producer-resolved destination, or the one the answer resolved on a
+        // direct/history entry. The committed Record of Attention is `ref.subject` (a node-level
+        // destination keeps `subjectId` null even after a subject movement) — stamp it so Back
+        // restores the exact row; a null subject means "on the default", which re-resolves deterministically.
+        const committedSurface = focus.current;
+        const node =
+            desiredIsWorkspace || !committedSurface
+                ? null
+                : (committedSurface.ref.destination ?? destinationIdFromAnswer(committedSurface.snapshot));
+        const dest =
+            node && committedSurface
+                ? {
+                      workUnitId: node.workUnitId,
+                      workViewId: node.workViewId,
+                      subjectId: committedSurface.ref.subject ?? null,
+                      focusMode: committedSurface.ref.destination?.focusMode ?? node.focusMode ?? null,
+                  }
+                : null;
+        const destKey = dest ? destinationIdKey(dest) : null;
+        const prevDest = readHistoryDestination(window.history.state);
+        const prevKey = prevDest ? destinationIdKey(prevDest) : null;
+        const addressUnchanged = window.location.pathname + window.location.search === url;
+        if (addressUnchanged && destKey === prevKey) return;
+        window.history.replaceState(stampHistoryDestination(window.history.state, dest), "", url);
+    }, [focus.projectedUrl, desiredIsWorkspace, focus.current]);
 
     // ── THE VISIBLE DECISION — committed Focus, and nothing else. ──
     // Not the pathname, not a mount, not a readiness conjunction, not a timer.
