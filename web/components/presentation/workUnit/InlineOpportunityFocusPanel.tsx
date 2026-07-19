@@ -494,6 +494,7 @@ export function InlineOpportunityFocusPanel() {
                                                 }
                                               : null,
                                           primaryAction: operational.action,
+                                          subjectSnapshot: operational.subjectSnapshot,
                                       }
                                     : null
                             }

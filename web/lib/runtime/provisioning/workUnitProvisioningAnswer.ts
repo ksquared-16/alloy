@@ -156,6 +156,21 @@ export type WorkUnitActionsProjection = {
 
 const EMPTY_ACTIONS_PROJECTION: WorkUnitActionsProjection = { count: 0, actions: [] };
 
+/**
+ * COMMIT-CRITICAL SUBJECT SNAPSHOT (A — preparation completeness). The default subject's
+ * first-operational relationship identity — primary contact reachability + the children roster —
+ * carried in the answer so the committed Focus Panel renders Household + Children as MEANINGFUL cards
+ * at commit, not blank reserved rectangles. Sourced entirely from data the composer already resolved
+ * for the subject row (enriched primary contact + the row's `metadata.inquiry_children`) — NO extra
+ * DB read. Deeper family (secondary parents, emergency, address) + per-child settlement detail remain
+ * Settlement (the drawer VM fills them in place).
+ */
+export type FocusPanelSubjectSnapshot = {
+    primaryContact: { name: string | null; phone: string | null; email: string | null };
+    /** Raw `opportunity.metadata.inquiry_children` — the Children card's `truth._inquiry_children`. */
+    inquiryChildren: unknown;
+};
+
 export type ProvisioningAnswer =
     | {
           terminal: "operational";
@@ -196,6 +211,8 @@ export type ProvisioningAnswer =
            * unresolved (degrades to the drawer-VM load; never an operational failure).
            */
           focusPanelStageWork: OpportunityStageWorkSlice | null;
+          /** A — commit-critical Household + Children snapshot (see {@link FocusPanelSubjectSnapshot}). */
+          focusPanelSubjectSnapshot: FocusPanelSubjectSnapshot | null;
           /**
            * U-P7 — the RESOLVED operational presentation composition, sufficient to render
            * U-O1…U-O5 in FINAL layout with no further configuration request. Identifiers survive
@@ -662,6 +679,22 @@ export async function composeWorkUnitProvisioningAnswer(
         /* stage-work is additive to the commit — never fail the operational answer on it */
     }
 
+    // A — COMMIT-CRITICAL SUBJECT SNAPSHOT. The default subject's Household + Children first-operational
+    // identity, from data ALREADY resolved for its row: the enriched queue-row `primary_contact` and the
+    // row's `metadata.inquiry_children`. No extra DB read. Lets the committed Focus Panel render Household
+    // and Children as MEANINGFUL cards, not blank reserved rectangles.
+    const chosenRowContext = (rows.find((r) => r.id === chosen.entityId)?.context ?? {}) as Record<string, unknown>;
+    const chosenPrimaryContact = (chosenRowContext.primary_contact ?? {}) as Record<string, unknown>;
+    const subjectMetadata = (subjectRow as Record<string, unknown>).metadata as Record<string, unknown> | null | undefined;
+    const focusPanelSubjectSnapshot: FocusPanelSubjectSnapshot = {
+        primaryContact: {
+            name: strOrNull(chosenPrimaryContact.display_name),
+            phone: strOrNull(chosenPrimaryContact.phone),
+            email: strOrNull(chosenPrimaryContact.email),
+        },
+        inquiryChildren: subjectMetadata?.inquiry_children ?? null,
+    };
+
     const answer: ProvisioningAnswer = {
         terminal: "operational",
         orgId: req.orgId,
@@ -690,6 +723,7 @@ export async function composeWorkUnitProvisioningAnswer(
             workTemplateKey: template.template_key,
         },
         focusPanelStageWork,
+        focusPanelSubjectSnapshot,
         presentation,
         settlement,
         actionsProjection,

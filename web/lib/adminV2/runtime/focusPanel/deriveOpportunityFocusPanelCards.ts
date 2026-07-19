@@ -411,6 +411,44 @@ function healthInsight(displayVm: OpportunityDrawerViewModel): {
     return { insight: "On track", tone: "ready", chip: chip("ready") };
 }
 
+/**
+ * Canonical Household card model — SHARED by both Focus Panel Work-mode producers (drawer VM AND
+ * provisioning answer), so the card is identical pending → enriched (A). Reads only the paint record;
+ * the commit-critical producer supplies the same household keys the answer carries, so this is READY
+ * at commit — never a blank reserved rectangle.
+ */
+export function buildHouseholdCardModel(record: Record<string, unknown>, title: string): FocusPanelCardModel {
+    return card({
+        key: "household",
+        title: "Household",
+        insight: householdInsight(record, title),
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        payload: { profileFields: householdProfileFields(record) },
+    });
+}
+
+/** Canonical Children card model — SHARED by both producers (see {@link buildHouseholdCardModel}). */
+export function buildChildrenCardModel(record: Record<string, unknown>): FocusPanelCardModel {
+    const children = childrenInsight(record);
+    const childCollection = childrenCollectionItems(record);
+    return card({
+        key: "children",
+        title: "Children",
+        insight: children.insight,
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        primaryAction: childCollection.items.length > 0 ? { label: "View all →", variant: "secondary" } : null,
+        payload:
+            childCollection.items.length > 0
+                ? { collectionItems: childCollection.items, overflowCount: childCollection.overflowCount }
+                : undefined,
+        secondaryInsight: childCollection.items.length === 0 ? children.detail : null,
+    });
+}
+
 function buildCardModels(input: {
     displayVm: OpportunityDrawerViewModel;
     record: Record<string, unknown>;
@@ -550,40 +588,8 @@ function buildCardModels(input: {
         }),
     );
 
-    map.set(
-        "household",
-        card({
-            key: "household",
-            title: "Household",
-            insight: householdInsight(record, title),
-            tier: "reference",
-            span: 2,
-            density: "compact",
-            payload: { profileFields: householdFields },
-        }),
-    );
-
-    map.set(
-        "children",
-        card({
-            key: "children",
-            title: "Children",
-            insight: children.insight,
-            tier: "reference",
-            span: 2,
-            density: "compact",
-            primaryAction: childCollection.items.length > 0 ? { label: "View all →", variant: "secondary" } : null,
-            payload:
-                childCollection.items.length > 0
-                    ? {
-                          collectionItems: childCollection.items,
-                          overflowCount: childCollection.overflowCount,
-                      }
-                    : undefined,
-            secondaryInsight:
-                childCollection.items.length === 0 ? children.detail : null,
-        }),
-    );
+    map.set("household", buildHouseholdCardModel(record, title));
+    map.set("children", buildChildrenCardModel(record));
 
     map.set(
         "communications",

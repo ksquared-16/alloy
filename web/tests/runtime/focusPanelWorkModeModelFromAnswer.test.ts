@@ -25,6 +25,10 @@ function input(overrides: Partial<FocusPanelWorkModeFromAnswerInput> = {}): Focu
         publishedStageInputs: null,
         situation: { stageKey: "lead", stageLabel: "New Lead", purpose: "Reach the family" },
         primaryAction: { actionRef: "contact_family", label: "Contact Family" },
+        subjectSnapshot: {
+            primaryContact: { name: "Taryn Wenc", phone: "(408) 885-9652", email: "tarynw@hotmail.com" },
+            inquiryChildren: [{ display_name: "Ava Wenc", outcome_status_key: "new", age: "3" }],
+        },
         ...overrides,
     };
 }
@@ -51,13 +55,35 @@ describe("focusPanelWorkModeModelFromProvisioningAnswer (A — commit-critical p
         expect(ctx.recordHeaderActions).toBeNull();
     });
 
-    it("marks ONLY current_work ready, via the SHARED card-model builder (identical to the enriched card)", () => {
+    it("builds current_work via the SHARED card-model builder (byte-identical to the enriched card)", () => {
         const model = focusPanelWorkModeModelFromProvisioningAnswer(input());
         expect(model.source).toBe("provisioning_answer");
-        expect([...model.cardReadiness.entries()]).toEqual([["current_work", "ready"]]);
+        expect(model.cardReadiness.get("current_work")).toBe("ready");
         expect(model.cardModels.get("current_work")).toEqual(
             buildCurrentWorkCardModel({ stageWorkRuntime: stageWork, nextActionLabel: "Contact Family" }),
         );
+    });
+
+    it("renders Household + Children READY at commit from the subject snapshot (not blank reserved cells)", () => {
+        const model = focusPanelWorkModeModelFromProvisioningAnswer(input());
+        // Preparation completeness: Household + Children are commit-critical, sourced from the answer.
+        expect(model.cardReadiness.get("household")).toBe("ready");
+        expect(model.cardReadiness.get("children")).toBe("ready");
+        expect(model.cardModels.get("household")?.key).toBe("household");
+        expect(model.cardModels.get("children")?.key).toBe("children");
+        // The evidence keys the cards read are present in truth.
+        expect(model.context.truth["person.primary_contact_name"]).toBe("Taryn Wenc");
+        expect(model.context.truth._inquiry_children).toBeTruthy();
+        // Genuinely settlement cards stay reserved (absent from readiness → grid reserves them).
+        expect(model.cardReadiness.get("tour_summary")).toBeUndefined();
+        expect(model.cardReadiness.get("communications")).toBeUndefined();
+    });
+
+    it("reserves Household + Children when the answer carries no subject snapshot (honest, not fabricated)", () => {
+        const model = focusPanelWorkModeModelFromProvisioningAnswer(input({ subjectSnapshot: null }));
+        expect(model.cardReadiness.get("household")).toBeUndefined();
+        expect(model.cardReadiness.get("children")).toBeUndefined();
+        expect(model.cardReadiness.get("current_work")).toBe("ready");
     });
 
     it("degrades honestly when the answer resolved no Current Work (still ready, empty stage work)", () => {

@@ -121,6 +121,8 @@ export function ProvisionedWorkUnitSurface() {
                     stageWorkRuntime={op ? op.focusPanelStageWork?.stage_work_runtime ?? null : null}
                     publishedStageInputs={op ? op.focusPanelStageWork?.published_stage_inputs ?? null : null}
                     workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}
+                    // A — commit-critical Household + Children snapshot (renders those cards meaningful at commit).
+                    subjectSnapshot={op ? op.focusPanelSubjectSnapshot ?? null : null}
                 >
                     <WorkUnitSurfaceBodyFromModel model={model} intents={intents} />
                 </OperationalSubjectProvider>
