@@ -21,38 +21,7 @@ import { WorkspaceHeader } from "./WorkspaceHeader";
 import { ProcessGrid } from "./ProcessGrid";
 import { WorkspaceRightRailActions } from "@/components/presentation/rightRail/WorkspaceRightRailActions";
 import { CreateLeadEventHost } from "@/components/presentation/rightRail/CreateLeadEventHost";
-
-/** House loading style: neutral blocks, no spinners. */
-function WorkspaceSurfaceSkeleton() {
-    return (
-        <div className="flex flex-col gap-5" aria-busy="true" aria-label="Preparing workspace">
-            <div className="flex flex-wrap items-start justify-between gap-6">
-                <div className="space-y-1.5">
-                    <span className="block h-7 w-56 animate-pulse rounded bg-alloy-stone/16" aria-hidden />
-                    <span className="block h-4 w-36 animate-pulse rounded bg-alloy-stone/12" aria-hidden />
-                </div>
-                <div className="flex gap-8">
-                    {Array.from({ length: 3 }, (_, i) => (
-                        <span
-                            key={`ws-kpi-skel-${i}`}
-                            className="block h-12 w-20 animate-pulse rounded bg-alloy-stone/12"
-                            aria-hidden
-                        />
-                    ))}
-                </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {Array.from({ length: 3 }, (_, i) => (
-                    <span
-                        key={`ws-tile-skel-${i}`}
-                        className="block min-h-[10rem] animate-pulse rounded-lg border border-alloy-stone/18 bg-alloy-stone/8"
-                        aria-hidden
-                    />
-                ))}
-            </div>
-        </div>
-    );
-}
+import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
 
 export function WorkspaceSurface() {
     const model = useWorkspaceSurfaceRuntime();
@@ -74,7 +43,12 @@ export function WorkspaceSurface() {
             className={`flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto${model.ready ? " motion-surface-enter-back" : ""}`}
         >
             {!model.ready ? (
-                <WorkspaceSurfaceSkeleton />
+                // ONE canonical operational-canvas loading owner — the SAME centered enlarged
+                // "Thinking…" the Work Unit uses (AlloyOperationalBootShell content mode), never a
+                // faint skeleton that reads as an empty white canvas (Kelly Blocker 3). A VISITED
+                // Workspace is `ready` immediately from its retained seed, so this shows ONLY on a
+                // genuine cold Workspace, then the surface reveals atomically.
+                <AlloyOperationalBootShell variant="workspace" chrome="content" />
             ) : (
                 <>
                     {/* Workspace Header (title / subtitle / org KPIs) + one ProcessSummaryCard
