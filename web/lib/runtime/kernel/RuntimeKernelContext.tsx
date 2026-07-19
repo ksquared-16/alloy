@@ -23,6 +23,7 @@ import { ProvisioningRuntime } from "./provisioning";
 import { FocusOwner, type FocusState } from "./focus";
 import { workUnitEntryResourceClient } from "./workUnitEntryResourceClient";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
+import { markFocusPanelDestinationCommit } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
 
 export type RuntimeKernel = {
     attention: AttentionOwner;
@@ -85,6 +86,9 @@ export function RuntimeKernelProvider({
                 onYieldStart: () => markPerceived("work_unit_establish", "hold_start"),
                 onCommitCompleted: () => {
                     markPerceived("work_unit_establish", "reveal");
+                    // The same commit moment anchors the Focus Panel commit-chain epoch
+                    // (model → per-card ready → settlement all report since_commit_ms from here).
+                    markFocusPanelDestinationCommit();
                     notify();
                 },
                 onStaleCommitPrevented: () => markPerceived("work_unit_establish", "hold_end"),

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
+import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
 import { focusPanelWorkModeModelFromProvisioningAnswer } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
@@ -94,6 +95,12 @@ export default function OpportunityFocusPanelBody({
         }
         return null;
     }, [mode, title, statusLabel, canMutate, enriched, commitCritical, perspective]);
+
+    // Timing boundary — fires only when the model identity changes (commit-critical arrival,
+    // per-card ready set, settlement), never per render frame. Dev/staging gated inside.
+    useEffect(() => {
+        if (model) markFocusPanelWorkModeModel(model);
+    }, [model]);
 
     if (!model) return null;
 
