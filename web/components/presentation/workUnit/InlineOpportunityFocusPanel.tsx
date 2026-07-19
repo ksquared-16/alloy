@@ -47,13 +47,12 @@ import { markPerceived } from "@/lib/perf/perceivedPerf";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
 import OpportunityFocusPanelHeader from "@/components/admin/focusPanel/OpportunityFocusPanelHeader";
-import OpportunityFocusPanelModeBody from "@/components/admin/focusPanel/OpportunityFocusPanelModeBody";
+import OpportunityFocusPanelBody from "@/components/admin/focusPanel/OpportunityFocusPanelBody";
 import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/OpportunityDrawerBodySaveBar";
 import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActionModalsPortal";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useRecordWorkRuntime } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { useOperationalSubject, isOperationallyResolved } from "./OperationalSubjectContext";
-import OpportunityFocusPanelCommitCriticalBody from "@/components/admin/focusPanel/OpportunityFocusPanelCommitCriticalBody";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
 import { focusPanelScrollScope } from "@/lib/presentation/runtime/workUnitOperatorContext";
@@ -352,8 +351,12 @@ export function InlineOpportunityFocusPanel() {
     // grid in — opacity-only, into the same layout. A same-record re-render (save/patch)
     // keeps the key, so edits never trigger a fade. Continuity (held-prior grid + the
     // synchronous seed header) is unchanged; this only softens the final hand-off cut.
+    // STABLE across commit-critical → enriched for the SAME subject (A): the key is the committed
+    // subject id, which equals the settled VM's entity id — so the ONE Focus Panel body + grid persist
+    // through the transition (a model prop change, never a remount → no resize, no card-by-card).
+    // Held-prior (subject switch) keeps the prior subject's id until the new subject settles.
     const bodyRenderKey = String(
-        resolved?.displayVm.entity.id ?? heldPrior?.displayVm.entity.id ?? "pending",
+        visible?.displayVm.entity.id ?? operationalSubjectId ?? "pending",
     );
     const isActivityMode = focusPanelMode === "activity";
     const activityBodyFillClass = "flex min-h-0 flex-1 flex-col overflow-hidden";
@@ -463,64 +466,41 @@ export function InlineOpportunityFocusPanel() {
                                 Retry
                             </button>
                         </div>
-                    : resolved ?
-                        <OpportunityFocusPanelModeBody
+                    : resolved || heldPrior || operationallyResolved ?
+                        // THE ONE Focus Panel body (A — atomic commit). Commit-critical (from the answer)
+                        // OR enriched (from the drawer VM), rendered by the SAME grid instance under a
+                        // stable subject key (bodyRenderKey). The pending → enriched transition is a model
+                        // PROP CHANGE, never a remount: one commit, one geometry, one card composition,
+                        // one readiness boundary, zero resize, zero card-by-card assembly. Settlement only
+                        // fills reserved cells in place.
+                        <OpportunityFocusPanelBody
                             mode={focusPanelMode}
-                            displayVm={resolved.displayVm}
-                            drawerId={String(resolved.displayVm.entity.id)}
-                            record={resolved.record}
-                            drawerTitle={drawerTitle}
+                            title={visible ? drawerTitle : seedTitle}
                             statusLabel={statusLabel}
                             canMutate={statusCanMutate}
+                            enriched={visible ? { displayVm: visible.displayVm, record: visible.record } : null}
+                            commitCritical={
+                                !visible && operationallyResolved
+                                    ? {
+                                          subjectId: operationalSubjectId ?? "",
+                                          statusKey: drawer.opportunityQueuePreviewSeed?.statusKey ?? null,
+                                          stageWorkRuntime: operational.stageWorkRuntime,
+                                          publishedStageInputs: operational.publishedStageInputs,
+                                          situation: operational.situation
+                                              ? {
+                                                    stageKey: operational.situation.stageKey,
+                                                    stageLabel: operational.situation.stageLabel,
+                                                    purpose: operational.situation.purpose,
+                                                }
+                                              : null,
+                                          primaryAction: operational.action,
+                                      }
+                                    : null
+                            }
                             onSelectTab={selectFromDrawerTab}
                             onHeaderAction={onActionSelect}
                             onModeChange={setFocusPanelMode}
                         />
-                    : heldPrior ?
-                        // Hold the prior resolved grid during a row → row switch (no flash).
-                        <OpportunityFocusPanelModeBody
-                            mode={focusPanelMode}
-                            displayVm={heldPrior.displayVm}
-                            drawerId={String(heldPrior.displayVm.entity.id)}
-                            record={heldPrior.record}
-                            drawerTitle={drawerTitle}
-                            statusLabel={statusLabel}
-                            canMutate={statusCanMutate}
-                            onSelectTab={selectFromDrawerTab}
-                            onHeaderAction={onActionSelect}
-                            onModeChange={setFocusPanelMode}
-                        />
-                    : operationallyResolved ?
-                        // ATOMIC COMMIT-CRITICAL FOCUS PANEL (A). The COMPLETE canonical Work-mode grid —
-                        // the SAME grid + SAME CurrentWorkCard the enriched drawer VM feeds — built from
-                        // the committed answer. Current Work renders ready; every settlement-owned card
-                        // reserves its geometry and the drawer VM fills it in place. No standalone preview,
-                        // no alternate layout, no card-by-card assembly, no composition change on Settlement.
-                        <div className={MOTION_SETTLE.className} data-focus-panel-operational-current-work="true">
-                            <OpportunityFocusPanelCommitCriticalBody
-                                mode={focusPanelMode}
-                                subjectId={operationalSubjectId ?? ""}
-                                title={seedTitle}
-                                statusLabel={statusLabel}
-                                statusKey={drawer.opportunityQueuePreviewSeed?.statusKey ?? null}
-                                canMutate={statusCanMutate}
-                                stageWorkRuntime={operational.stageWorkRuntime}
-                                publishedStageInputs={operational.publishedStageInputs}
-                                situation={
-                                    operational.situation
-                                        ? {
-                                              stageKey: operational.situation.stageKey,
-                                              stageLabel: operational.situation.stageLabel,
-                                              purpose: operational.situation.purpose,
-                                          }
-                                        : null
-                                }
-                                primaryAction={operational.action}
-                                onSelectTab={selectFromDrawerTab}
-                                onHeaderAction={onActionSelect}
-                                onModeChange={setFocusPanelMode}
-                            />
-                        </div>
                     :
                         // COLD pending fill (the answer did not resolve stage-work, e.g. an empty/degraded
                         // slice): a single quiet "Thinking…" owner, NOT a card-grid skeleton. On a row →
