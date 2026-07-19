@@ -144,7 +144,9 @@ describe("CurrentWorkCard", () => {
         );
         expect(html).toContain("Contact Family");
         expect(html).toContain("Make contact and record outcome");
-        expect(html).toContain("Recent activity");
+        // Recent-activity preview is a workspace-level (settlement) affordance — it moved to the
+        // drill-in workspace and is NOT in the committed summary (product doctrine: summary first).
+        expect(html).not.toContain("Recent activity");
         expect(html).not.toContain("Review Lead");
         expect(html).toContain('data-current-work-surface="true"');
         expect(html).toContain('data-work-card-perspective="summary"');

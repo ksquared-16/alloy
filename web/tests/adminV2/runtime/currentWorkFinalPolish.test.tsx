@@ -193,7 +193,11 @@ describe("Progress bar and density", () => {
         expect(vm.progress.percent).toBe(0);
     });
 
-    it("collapsed summary shows Quick actions, collapsed transitions, and Open Work", () => {
+    // SUMMARY IS THE FIRST OPERATIONAL EXPERIENCE (product doctrine). The committed Current Work
+    // summary presents progress + Open Workspace only; the workspace-level, settlement-derived
+    // affordances (Quick actions / Other transitions / recent activity) are NOT in the summary — they
+    // moved to the drill-in workspace (presentation="workspace"). See CurrentWorkCard SummaryBody.
+    it("collapsed summary shows progress and Open Work, not workspace-level affordances", () => {
         const published = resolvePublishedStageInputsForCurrentWork({
             departmentMetadata: enrollmentLeadWithFieldRulesPublishedDepartmentMetadata(),
             builderStageKey: "lead",
@@ -210,13 +214,14 @@ describe("Progress bar and density", () => {
                 })}
             />,
         );
-        expect(html).toContain("Quick actions");
+        // Commit-critical operational summary: progress + the open-workspace affordance.
+        expect(html).toContain('data-work-progress="true"');
+        expect(html).toContain('data-work-action="open-work"');
+        // Workspace-level / settlement-derived affordances are NOT committed in the summary.
+        expect(html).not.toContain("Quick actions");
+        expect(html).not.toContain("Other transitions");
         expect(html).not.toContain("Helpful actions");
         expect(html).not.toContain("Alternate paths");
-        expect(html).toContain("Other transitions");
-        expect(html).toContain('aria-expanded="false"');
-        expect(html).toContain('data-work-action="open-work"');
-        expect(html).toContain('data-work-progress="true"');
         expect(html).not.toContain("Work items:");
         expect(html).not.toContain('data-work-operator-guidance="true">');
         expect(html).not.toMatch(/alloy-os-currentwork__summary[^>]*overflow:\s*auto/);
