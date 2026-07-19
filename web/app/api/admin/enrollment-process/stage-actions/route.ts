@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { invalidateConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
@@ -177,6 +178,8 @@ export async function POST(request: NextRequest) {
             created.push(placement.id);
         }
 
+        // B — a stage-action publish changes the `act:` projection the Work Unit answer caches (see B5).
+        invalidateConfigReadCache(`act:${ctx.orgId}:`);
         return NextResponse.json({
             ok: true,
             placements_created: created.length,

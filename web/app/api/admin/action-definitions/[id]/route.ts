@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
+import { invalidateConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 
 /** PATCH org-owned action definition label only (Settings V1). Admin only. */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -62,6 +63,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     } catch {
         /* non-fatal */
     }
+    // B — bust the cached `act:` action projection so the Work Unit answer reflects the publish (see B5).
+    invalidateConfigReadCache(`act:${ctx.orgId}:`);
 
     return NextResponse.json({ definition: updated });
 }

@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
+import { invalidateConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 import {
     ActionPlacementValidationError,
     validateActionPlacementCreate,
@@ -94,6 +95,9 @@ export async function POST(request: NextRequest) {
     } catch {
         /* non-fatal */
     }
+    // B — an action publish changes the `act:` projection the Work Unit answer caches. Bust it now so
+    // the next operator navigation reflects the publish without waiting for the TTL (parity with B5).
+    invalidateConfigReadCache(`act:${ctx.orgId}:`);
 
     return NextResponse.json({ placement: inserted }, { status: 201 });
 }
